@@ -8,6 +8,8 @@ import {
   CircularProgress,
   useTheme,
   Button,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -15,8 +17,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import SummaryCards from '../components/SummaryCards';
-import CostBreakdownPanel from '../components/CostBreakdownPanel';
-import IncomeBreakdownPanel from '../components/IncomeBreakdownPanel';
+import BreakdownPanel from '../components/BreakdownPanel';
 
 interface DashboardData {
   dateRange: { start: Date; end: Date };
@@ -43,21 +44,40 @@ type AggregationPeriod = 'daily' | 'weekly' | 'monthly';
 const HomePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData | null>(null);
-  const [incomeData, setIncomeData] = useState<any | null>(null);
+  const [breakdownData, setBreakdownData] = useState<Record<'expense' | 'income' | 'investment', any>>({
+    expense: null,
+    income: null,
+    investment: null,
+  });
+  const [breakdownLoading, setBreakdownLoading] = useState<Record<'expense' | 'income' | 'investment', boolean>>({
+    expense: false,
+    income: false,
+    investment: false,
+  });
   // Default to last full month
   const lastMonthStart = startOfMonth(subMonths(new Date(), 1));
   const lastMonthEnd = endOfMonth(subMonths(new Date(), 1));
   const [startDate, setStartDate] = useState<Date>(lastMonthStart);
   const [endDate, setEndDate] = useState<Date>(lastMonthEnd);
   const [aggregationPeriod, setAggregationPeriod] = useState<AggregationPeriod>('daily');
+  const [selectedBreakdownType, setSelectedBreakdownType] = useState<'expense' | 'income' | 'investment'>('expense');
   const [budgetUsage, setBudgetUsage] = useState<number | undefined>();
   const theme = useTheme();
 
   useEffect(() => {
+    setBreakdownData(prev => ({ ...prev, investment: null }));
+    setBreakdownLoading(prev => ({ ...prev, investment: false }));
     fetchDashboardData();
-    fetchIncomeData();
+    fetchBreakdownData('expense');
+    fetchBreakdownData('income');
     fetchBudgetUsage();
-  }, [startDate, endDate, aggregationPeriod]);
+  }, [startDate, endDate, aggregationPeriod, selectedBreakdownType]);
+
+  useEffect(() => {
+    if (selectedBreakdownType === 'investment' && !breakdownData.investment && !breakdownLoading.investment) {
+      fetchBreakdownData('investment');
+    }
+  }, [selectedBreakdownType, breakdownData.investment, breakdownLoading.investment]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -66,7 +86,6 @@ const HomePage: React.FC = () => {
         `/api/analytics/dashboard?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&aggregation=${aggregationPeriod}`
       );
       const result = await response.json();
-      console.log('Dashboard data:', result); // Debug log
       setData(result);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -75,16 +94,26 @@ const HomePage: React.FC = () => {
     }
   };
 
-  const fetchIncomeData = async () => {
+  const fetchBreakdownData = async (type: 'expense' | 'income' | 'investment') => {
+    setBreakdownLoading(prev => ({ ...prev, [type]: true }));
+
     try {
-      const response = await fetch(
-        `/api/analytics/income-breakdown?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`
-      );
+      const params = new URLSearchParams({
+        type,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      });
+      const response = await fetch(`/api/analytics/breakdown?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ${type} breakdown`);
+      }
       const result = await response.json();
-      console.log('Income data:', result);
-      setIncomeData(result);
+      setBreakdownData(prev => ({ ...prev, [type]: result }));
     } catch (error) {
-      console.error('Error fetching income data:', error);
+      console.error(`Error fetching ${type} breakdown:`, error);
+      setBreakdownData(prev => ({ ...prev, [type]: null }));
+    } finally {
+      setBreakdownLoading(prev => ({ ...prev, [type]: false }));
     }
   };
 
@@ -244,23 +273,44 @@ const HomePage: React.FC = () => {
         </ResponsiveContainer>
       </Paper>
 
-      {/* Income Breakdown */}
-      {incomeData && incomeData.summary && incomeData.summary.totalIncome > 0 && (
-        <Box sx={{ mb: 3 }}>
-          <IncomeBreakdownPanel
-            data={incomeData}
-            startDate={startDate}
-            endDate={endDate}
-          />
-        </Box>
-      )}
-
-      {/* Cost Breakdown - Interactive */}
-      <CostBreakdownPanel
-        breakdowns={data.breakdowns}
-        startDate={startDate}
-        endDate={endDate}
-      />
+      <Box sx={{ mb: 3 }}>
+        <Paper>
+          <Tabs
+            value={selectedBreakdownType}
+            onChange={(event, newValue) => newValue && setSelectedBreakdownType(newValue)}
+            variant="fullWidth"
+          >
+            <Tab label="Cost" value="expense" />
+            <Tab label="Income" value="income" />
+            <Tab label="Investment" value="investment" />
+          </Tabs>
+          <Box sx={{ p: 3 }}>
+            {(['expense', 'income', 'investment'] as const).map((type) => (
+              <Box key={type} sx={{ display: selectedBreakdownType === type ? 'block' : 'none' }}>
+                {breakdownLoading[type] ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+                    <CircularProgress size={32} />
+                  </Box>
+                ) : breakdownData[type] ? (
+                  <BreakdownPanel
+                    breakdowns={breakdownData[type].breakdowns}
+                    summary={breakdownData[type].summary}
+                    startDate={startDate}
+                    endDate={endDate}
+                    categoryType={type}
+                  />
+                ) : (
+                  <Typography color="text.secondary">
+                    {type === 'investment'
+                      ? 'Investment breakdown coming soon.'
+                      : 'No breakdown data available for this period.'}
+                  </Typography>
+                )}
+              </Box>
+            ))}
+          </Box>
+        </Paper>
+      </Box>
     </Box>
   );
 };

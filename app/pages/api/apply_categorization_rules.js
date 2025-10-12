@@ -21,7 +21,7 @@ const handler = createApiHandler({
     try {
       // Get all active rules with category_definition_id
       const rulesResult = await client.query(`
-        SELECT id, name_pattern, target_category, category_definition_id
+        SELECT id, name_pattern, target_category, category_definition_id, category_type
         FROM categorization_rules
         WHERE is_active = true
         ORDER BY priority DESC, id
