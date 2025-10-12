@@ -6,7 +6,7 @@ const Index: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Clarify - Expense Management</title>
+  <title>ShekelSync - Expense Management</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       <MainLayout />
