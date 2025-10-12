@@ -1,4 +1,5 @@
 import pool from '../db.js';
+import { buildDuplicateFilter } from '../analytics/utils.js';
 
 /**
  * API endpoint for managing hierarchical categories
@@ -79,17 +80,21 @@ async function handleGet(req, res) {
       ORDER BY cd.category_type, cd.display_order, cd.name
     `;
 
+    const duplicateFilter = await buildDuplicateFilter(pool, 't');
+
     const [categoryResult, uncategorizedSummary, uncategorizedRecent] = await Promise.all([
       pool.query(query, params),
       pool.query(
         `SELECT COUNT(*) AS total_transactions, COALESCE(SUM(ABS(price)), 0) AS total_amount
-         FROM transactions
-         WHERE category_definition_id IS NULL`
+         FROM transactions t
+         WHERE t.category_definition_id IS NULL
+         ${duplicateFilter}`
       ),
       pool.query(
         `SELECT identifier, vendor, name, date, price, account_number
-         FROM transactions
-         WHERE category_definition_id IS NULL
+         FROM transactions t
+         WHERE t.category_definition_id IS NULL
+         ${duplicateFilter}
          ORDER BY date DESC
          LIMIT 50`
       ),
