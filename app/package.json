@@ -1,0 +1,48 @@
+{
+  "name": "clarify",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "scrape": "ts-node --esm scrapers/index.ts"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.13.3",
+    "@emotion/styled": "^11.13.0",
+    "@fontsource/roboto": "^5.1.0",
+    "@mui/icons-material": "^6.1.4",
+    "@mui/material": "^6.1.4",
+    "@mui/styled-engine-sc": "^6.1.4",
+    "@mui/x-charts": "^7.29.1",
+    "@mui/x-date-pickers": "^8.3.1",
+    "date-fns": "^4.1.0",
+    "dotenv": "^16.5.0",
+    "israeli-bank-scrapers": "^6.2.3",
+    "next": "^14.2.29",
+    "next-auth": "^4.24.11",
+    "pg": "^8.16.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-icons": "^5.5.0",
+    "recharts": "^3.2.1",
+    "styled-components": "^6.1.18"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.49",
+    "@types/pg": "^8.15.2",
+    "@types/react": "^18.3.21",
+    "@types/react-dom": "^18.3.7",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.0.0",
+    "eslint-config-next": "14.2.15",
+    "postcss": "^8.4.47",
+    "prettier": "^3.5.1",
+    "tailwindcss": "^3.4.14",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.0"
+  }
+}

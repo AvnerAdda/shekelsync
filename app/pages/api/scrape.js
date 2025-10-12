@@ -1,0 +1,395 @@
+import { CompanyTypes, createScraper } from 'israeli-bank-scrapers';
+import crypto from 'crypto';
+import { getDB } from './db';
+import { BANK_VENDORS, SPECIAL_BANK_VENDORS } from '../../utils/constants';
+
+async function insertTransaction(txn, client, companyId, isBank, accountNumber) {
+  const uniqueId = `${txn.identifier}-${companyId}-${txn.processedDate}-${txn.description}`;
+  const hash = crypto.createHash('sha1');
+  hash.update(uniqueId);
+  txn.identifier = hash.digest('hex');
+
+  let amount = txn.chargedAmount;
+  let category = txn.category;
+  let parentCategory = null;
+  let subcategory = null;
+
+  if (!isBank){
+    amount = txn.chargedAmount * -1;
+
+    // First, try to map Hebrew category from scraper using category_mapping table
+    if (txn.category) {
+      const mappingResult = await client.query(
+        `SELECT parent_category, subcategory FROM category_mapping WHERE hebrew_category = $1`,
+        [txn.category]
+      );
+
+      if (mappingResult.rows.length > 0) {
+        parentCategory = mappingResult.rows[0].parent_category;
+        subcategory = mappingResult.rows[0].subcategory;
+        category = subcategory || parentCategory;
+      }
+    }
+
+    // If no mapping found, try to categorize using merchant catalog
+    if (!parentCategory) {
+      const categorization = await autoCategorizeTransaction(txn.description, client);
+      if (categorization.success) {
+        parentCategory = categorization.parent_category;
+        subcategory = categorization.subcategory;
+        category = subcategory || parentCategory;
+      }
+    }
+  }else{
+    category = "Bank";
+    parentCategory = "Bank";
+  }
+
+  try {
+    await client.query(
+      `INSERT INTO transactions (
+        identifier,
+        vendor,
+        date,
+        name,
+        price,
+        category,
+        parent_category,
+        subcategory,
+        merchant_name,
+        auto_categorized,
+        confidence_score,
+        type,
+        processed_date,
+        original_amount,
+        original_currency,
+        charged_currency,
+        memo,
+        status,
+        installments_number,
+        installments_total,
+        account_number
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+      ON CONFLICT (identifier, vendor) DO NOTHING`,
+      [
+        txn.identifier,
+        companyId,
+        new Date(txn.date),
+        txn.description,
+        amount,
+        category || 'N/A',
+        parentCategory,
+        subcategory,
+        txn.description,
+        parentCategory ? true : false,
+        parentCategory ? 0.8 : 0.0,
+        txn.type,
+        txn.processedDate,
+        txn.originalAmount,
+        txn.originalCurrency,
+        txn.chargedCurrency,
+        txn.memo,
+        txn.status,
+        txn.installments?.number,
+        txn.installments?.total,
+        accountNumber
+      ]
+    );
+  } catch (error) {
+    console.error("Error inserting transaction:", error);
+    throw error;
+  }
+}
+
+async function autoCategorizeTransaction(transactionName, client) {
+  try {
+    const cleanName = transactionName.toLowerCase().trim();
+
+    // Query merchant catalog for matching patterns
+    const catalogResult = await client.query(
+      `SELECT
+        merchant_pattern,
+        parent_category,
+        subcategory,
+        confidence
+       FROM merchant_catalog
+       WHERE is_active = true
+       AND $1 ILIKE '%' || merchant_pattern || '%'
+       ORDER BY
+         LENGTH(merchant_pattern) DESC,
+         confidence DESC
+       LIMIT 1`,
+      [cleanName]
+    );
+
+    if (catalogResult.rows.length > 0) {
+      const match = catalogResult.rows[0];
+      return {
+        success: true,
+        parent_category: match.parent_category,
+        subcategory: match.subcategory,
+        confidence: match.confidence
+      };
+    }
+
+    return { success: false };
+  } catch (error) {
+    console.error('Error in auto-categorization:', error);
+    return { success: false };
+  }
+}
+
+async function applyCategorizationRules(client) {
+  try {
+    // Get all active categorization rules
+    const rulesResult = await client.query(`
+      SELECT id, name_pattern, target_category, parent_category, subcategory, priority
+      FROM categorization_rules
+      WHERE is_active = true
+      ORDER BY priority DESC, id
+    `);
+
+    const rules = rulesResult.rows;
+    let totalUpdated = 0;
+
+    // Apply each rule to transactions that don't already have the target category
+    for (const rule of rules) {
+      const pattern = `%${rule.name_pattern}%`;
+
+      // Determine what to set based on rule configuration
+      const parentCat = rule.parent_category || rule.target_category;
+      const subcat = rule.subcategory;
+      const category = subcat || parentCat;
+
+      const updateResult = await client.query(`
+        UPDATE transactions
+        SET
+          category = $2,
+          parent_category = $3,
+          subcategory = $4
+        WHERE LOWER(name) LIKE LOWER($1)
+        AND category != $2
+        AND category IS NOT NULL
+        AND parent_category != 'Bank'
+        AND category != 'Income'
+      `, [pattern, category, parentCat, subcat]);
+
+      totalUpdated += updateResult.rowCount;
+    }
+
+    console.log(`Applied ${rules.length} rules to ${totalUpdated} transactions`);
+    return { rulesApplied: rules.length, transactionsUpdated: totalUpdated };
+  } catch (error) {
+    console.error('Error applying categorization rules:', error);
+    throw error;
+  }
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: 'Method not allowed' });
+  }
+
+  const client = await getDB();
+  try {
+    const { options, credentials } = req.body;
+
+    console.log('Received scrape request:');
+    console.log('  Company ID:', options.companyId);
+    console.log('  Start Date:', options.startDate);
+    console.log('  Credentials keys:', Object.keys(credentials));
+    console.log('  Credentials (masked):', {
+      ...credentials,
+      password: credentials.password ? '***' : undefined,
+      id: credentials.id ? credentials.id.substring(0, 3) + '***' : undefined
+    });
+
+    const companyId = CompanyTypes[options.companyId];
+    if (!companyId) {
+      throw new Error('Invalid company ID');
+    }
+
+    let isBank = false;
+    if (BANK_VENDORS.includes(options.companyId) || SPECIAL_BANK_VENDORS.includes(options.companyId)){
+      isBank = true;
+    }
+
+    // Prepare credentials based on company type
+    let scraperCredentials;
+
+    if (options.companyId === 'visaCal' || options.companyId === 'max') {
+      // Visa Cal and Max use username + password
+      scraperCredentials = {
+        username: credentials.username,
+        password: credentials.password
+      };
+    } else if (options.companyId === 'discount' || options.companyId === 'mercantile') {
+      // Discount and Mercantile require id, password, and num (identification code)
+      scraperCredentials = {
+        id: credentials.id,
+        password: credentials.password,
+        num: credentials.num || credentials.identification_code
+      };
+    } else if (options.companyId === 'hapoalim') {
+      // Hapoalim uses userCode instead of username
+      scraperCredentials = {
+        userCode: credentials.username,
+        password: credentials.password
+      };
+    } else if (options.companyId === 'yahav') {
+      // Yahav uses username, password, and nationalID
+      scraperCredentials = {
+        username: credentials.username,
+        password: credentials.password,
+        nationalID: credentials.nationalID || credentials.id
+      };
+    } else if (BANK_VENDORS.includes(options.companyId)) {
+      // Other banks use username + password
+      scraperCredentials = {
+        username: credentials.username,
+        password: credentials.password,
+        bankAccountNumber: credentials.bankAccountNumber || undefined
+      };
+    } else if (options.companyId === 'amex') {
+      // Amex uses username (ID number), card6Digits, and password
+      scraperCredentials = {
+        username: credentials.id,
+        card6Digits: credentials.card6Digits,
+        password: credentials.password
+      };
+    } else {
+      // Isracard and other credit cards use id, card6Digits, and password
+      scraperCredentials = {
+        id: credentials.id,
+        card6Digits: credentials.card6Digits,
+        password: credentials.password
+      };
+    }
+
+    console.log('Prepared scraper credentials (masked):');
+    console.log('  Keys:', Object.keys(scraperCredentials));
+    console.log('  Values:', {
+      ...scraperCredentials,
+      password: scraperCredentials.password ? '***' : undefined,
+      id: scraperCredentials.id ? scraperCredentials.id.substring(0, 3) + '***' : undefined,
+      num: scraperCredentials.num ? scraperCredentials.num.substring(0, 3) + '***' : undefined
+    });
+
+    const scraper = createScraper({
+      ...options,
+      companyId,
+      startDate: new Date(options.startDate),
+      showBrowser: isBank,
+      verbose: true, // Enable verbose logging
+      timeout: 120000, // 2 minutes timeout
+      executablePath: '/usr/bin/chromium-browser',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu'
+      ]
+    });
+
+    // Insert audit row: started
+    const triggeredBy = credentials?.username || credentials?.id || credentials?.nickname || 'unknown';
+    const insertAudit = await client.query(
+      `INSERT INTO scrape_events (triggered_by, vendor, start_date, status, message)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [
+        triggeredBy,
+        options.companyId,
+        new Date(options.startDate),
+        'started',
+        'Scrape initiated'
+      ]
+    );
+    const auditId = insertAudit.rows[0]?.id;
+
+    let result;
+    try {
+      console.log('Starting scrape operation...');
+      result = await scraper.scrape(scraperCredentials);
+      console.log('Scrape operation completed');
+    } catch (scrapeError) {
+      console.error('Scrape operation threw an error:', scrapeError);
+      throw scrapeError;
+    }
+
+    console.log('Scraping result:');
+    console.log(JSON.stringify(result, null, 2));
+
+    if (!result.success) {
+      console.error('Scraping failed with details:');
+      console.error('  Error Type:', result.errorType);
+      console.error('  Error Message:', result.errorMessage);
+
+      // Update audit as failed
+      if (auditId) {
+        await client.query(
+          `UPDATE scrape_events SET status = $1, message = $2 WHERE id = $3`,
+          ['failed', `${result.errorType}: ${result.errorMessage || 'No message'}`, auditId]
+        );
+      }
+
+      // Return more detailed error to client
+      return res.status(400).json({
+        message: 'Scraping failed',
+        errorType: result.errorType,
+        errorMessage: result.errorMessage,
+        error: result.errorMessage || result.errorType || 'Scraping failed'
+      });
+    }
+    
+    let bankTransactions = 0;
+    for (const account of result.accounts) {
+      for (const txn of account.txns) {
+        if (isBank){
+          bankTransactions++;
+        }
+        await insertTransaction(txn, client, options.companyId, isBank, account.accountNumber);
+      }
+    }
+
+    await applyCategorizationRules(client);
+
+    console.log(`Scraped ${bankTransactions} bank transactions`);
+
+    // Update audit as success
+    if (auditId) {
+      const accountsCount = Array.isArray(result.accounts) ? result.accounts.length : 0;
+      const message = `Success: accounts=${accountsCount}, bankTxns=${bankTransactions}`;
+      await client.query(
+        `UPDATE scrape_events SET status = $1, message = $2 WHERE id = $3`,
+        ['success', message, auditId]
+      );
+    }
+
+    res.status(200).json({
+      message: 'Scraping and database update completed successfully',
+      accounts: result.accounts
+    });
+  } catch (error) {
+    console.error('Scraping failed:', error);
+    // Attempt to log failure if an audit row exists in scope
+    try {
+      if (typeof auditId !== 'undefined' && auditId) {
+        await client.query(
+          `UPDATE scrape_events SET status = $1, message = $2 WHERE id = $3`,
+          ['failed', error instanceof Error ? error.message : 'Unknown error', auditId]
+        );
+      }
+    } catch (e) {
+      // noop - avoid masking original error
+    }
+    res.status(500).json({ 
+      message: 'Scraping failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  } finally {
+    client.release();
+  }
+} 
