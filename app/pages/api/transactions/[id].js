@@ -8,8 +8,20 @@ const handler = createApiHandler({
     if (!req.query.id) {
       return "ID parameter is required";
     }
-    if (req.method === 'PUT' && !req.body?.price && !req.body?.category) {
-      return "Either price or category is required for updates";
+    if (
+      req.method === 'PUT' &&
+      ![
+        'price',
+        'category',
+        'parent_category',
+        'subcategory',
+        'category_definition_id',
+        'category_type',
+        'auto_categorized',
+        'confidence_score',
+      ].some((field) => req.body?.[field] !== undefined)
+    ) {
+      return "At least one updatable field is required";
     }
   },
   query: async (req) => {
@@ -42,6 +54,44 @@ const handler = createApiHandler({
       params.push(req.body.category);
       paramIndex++;
     }
+
+    if (req.body.parent_category !== undefined) {
+      updates.push(`parent_category = $${paramIndex}`);
+      params.push(req.body.parent_category);
+      paramIndex++;
+    }
+
+    if (req.body.subcategory !== undefined) {
+      updates.push(`subcategory = $${paramIndex}`);
+      params.push(req.body.subcategory);
+      paramIndex++;
+    }
+
+    if (req.body.category_definition_id !== undefined) {
+      updates.push(`category_definition_id = $${paramIndex}`);
+      params.push(req.body.category_definition_id);
+      paramIndex++;
+    }
+
+    if (req.body.category_type !== undefined) {
+      updates.push(`category_type = $${paramIndex}`);
+      params.push(req.body.category_type);
+      paramIndex++;
+    }
+
+    if (req.body.auto_categorized !== undefined) {
+      updates.push(`auto_categorized = $${paramIndex}`);
+      params.push(req.body.auto_categorized);
+      paramIndex++;
+    }
+
+    if (req.body.confidence_score !== undefined) {
+      updates.push(`confidence_score = $${paramIndex}`);
+      params.push(req.body.confidence_score);
+      paramIndex++;
+    }
+
+    updates.push('updated_at = CURRENT_TIMESTAMP');
 
     return {
       sql: `
