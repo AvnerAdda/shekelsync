@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   const client = await getDB();
 
   try {
-    const { category, parentId, subcategoryId, startDate, endDate } = req.query;
+    const { category, parentId, subcategoryId, startDate, endDate, type = 'expense' } = req.query;
 
     if (!category && !parentId && !subcategoryId) {
       return res.status(400).json({ error: 'Category identifier is required' });
@@ -16,6 +16,9 @@ export default async function handler(req, res) {
 
     const start = startDate ? new Date(startDate) : new Date(0);
     const end = endDate ? new Date(endDate) : new Date();
+
+    // Determine price filter based on type
+    const priceFilter = type === 'income' ? 'price > 0' : 'price < 0';
 
     // Build WHERE clause based on what's provided
     let categoryFilter;
@@ -47,7 +50,7 @@ export default async function handler(req, res) {
         MAX(ABS(price)) as max_amount
       FROM transactions
       WHERE ${categoryFilter}
-      AND price < 0
+      AND ${priceFilter}
       AND date >= $${categoryParams.length + 1}
       AND date <= $${categoryParams.length + 2}`,
       [...categoryParams, start, end]
@@ -61,7 +64,7 @@ export default async function handler(req, res) {
         SUM(ABS(price)) as total
       FROM transactions
       WHERE ${categoryFilter}
-      AND price < 0
+      AND ${priceFilter}
       AND date >= $${categoryParams.length + 1}
       AND date <= $${categoryParams.length + 2}
       GROUP BY vendor
@@ -78,7 +81,7 @@ export default async function handler(req, res) {
         SUM(ABS(price)) as total
       FROM transactions
       WHERE ${categoryFilter}
-      AND price < 0
+      AND ${priceFilter}
       AND date >= $${categoryParams.length + 1}
       AND date <= $${categoryParams.length + 2}
       AND account_number IS NOT NULL
@@ -99,7 +102,7 @@ export default async function handler(req, res) {
         FROM transactions t
         JOIN category_definitions cd ON t.category_definition_id = cd.id
         WHERE cd.parent_id = $1
-        AND t.price < 0
+        AND t.${priceFilter}
         AND t.date >= $2
         AND t.date <= $3
         GROUP BY cd.id, cd.name
@@ -121,7 +124,7 @@ export default async function handler(req, res) {
         account_number
       FROM transactions
       WHERE ${categoryFilter}
-      AND price < 0
+      AND ${priceFilter}
       AND date >= $${categoryParams.length + 1}
       AND date <= $${categoryParams.length + 2}
       ORDER BY date DESC
@@ -137,7 +140,7 @@ export default async function handler(req, res) {
         COUNT(*) as count
       FROM transactions
       WHERE ${categoryFilter}
-      AND price < 0
+      AND ${priceFilter}
       AND date >= $${categoryParams.length + 1}
       AND date <= $${categoryParams.length + 2}
       GROUP BY TO_CHAR(date, 'YYYY-MM')
