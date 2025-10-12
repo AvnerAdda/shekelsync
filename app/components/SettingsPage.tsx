@@ -378,13 +378,13 @@ const SettingsPage: React.FC = () => {
       {/* App Info */}
       <Paper sx={{ p: 3 }}>
         <Typography variant="h6" gutterBottom>
-          About Clarify
+          About ShekelSync
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
           Version: 2.0.0 (Personal Intelligence Edition)
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          Clarify is a personal finance tracking application for Israeli bank accounts and credit cards.
+          ShekelSync is a personal finance tracking application for Israeli bank accounts and credit cards.
           It automatically scrapes transactions, categorizes expenses, and provides AI-powered analytics
           to help you manage your finances better.
         </Typography>
@@ -399,7 +399,7 @@ const SettingsPage: React.FC = () => {
           <li>📈 Peer comparisons based on age, income, and location</li>
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          Made with ❤️ for better financial clarity
+          Made with ❤️ for better financial sync
         </Typography>
       </Paper>
     </Box>

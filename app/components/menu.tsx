@@ -165,7 +165,7 @@ function ResponsiveAppBar() {
               }}
             >
               <AccountBalanceWalletIcon sx={{ fontSize: '20px' }} />
-              Clarify
+              ShekelSync
             </Logo>
 
             <Box sx={{ 

@@ -182,7 +182,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         >
           {open && (
             <Box sx={{ fontWeight: 'bold', fontSize: '1.25rem' }}>
-              Clarify
+              ShekelSync
             </Box>
           )}
           <IconButton onClick={handleDrawerToggle}>
