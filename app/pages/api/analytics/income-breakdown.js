@@ -132,32 +132,78 @@ export default async function handler(req, res) {
       [start, end]
     );
 
-    // Get breakdown by income type (categorized by transaction name patterns)
-    // Common Israeli income patterns
+    // Get hierarchical income breakdown using category_definitions
+    // Try hierarchical categories first
     const incomeTypesResult = await client.query(
-      `SELECT
-        CASE
-          WHEN LOWER(name) LIKE '%משכורת%' OR LOWER(name) LIKE '%שכר%' THEN 'Salary'
-          WHEN LOWER(name) LIKE '%בונוס%' OR LOWER(name) LIKE '%פרמיה%' THEN 'Bonus'
-          WHEN LOWER(name) LIKE '%זיכוי%' OR LOWER(name) LIKE '%החזר%' THEN 'Refund'
-          WHEN LOWER(name) LIKE '%הפקדה%' THEN 'Deposit'
-          WHEN LOWER(name) LIKE '%ריבית%' THEN 'Interest'
-          WHEN LOWER(name) LIKE '%דיבידנד%' THEN 'Dividend'
-          WHEN LOWER(name) LIKE '%מתנה%' THEN 'Gift'
-          WHEN LOWER(name) LIKE '%העברה%' THEN 'Transfer'
-          ELSE 'Other Income'
-        END as income_type,
-        COUNT(*) as count,
-        SUM(price) as total,
-        AVG(price) as average
-      FROM transactions
-      WHERE price > 0
-      AND date >= $1 AND date <= $2
-      ${duplicateFilter}
-      GROUP BY income_type
-      ORDER BY total DESC`,
+      `WITH parent_totals AS (
+        SELECT
+          cd_parent.id as parent_id,
+          cd_parent.name as parent_name,
+          COUNT(t.identifier) as count,
+          SUM(t.price) as total
+        FROM transactions t
+        JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
+        JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
+        WHERE t.date >= $1 AND t.date <= $2
+        AND t.price > 0
+        AND cd_parent.category_type = 'income'
+        ${duplicateFilter.replace(/transactions\./g, 't.')}
+        GROUP BY cd_parent.id, cd_parent.name
+      ),
+      subcategory_breakdown AS (
+        SELECT
+          cd_parent.id as parent_id,
+          cd_parent.name as parent_name,
+          cd_child.id as subcategory_id,
+          cd_child.name as subcategory_name,
+          COUNT(t.identifier) as count,
+          SUM(t.price) as total
+        FROM transactions t
+        JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
+        JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
+        WHERE t.date >= $1 AND t.date <= $2
+        AND t.price > 0
+        AND cd_parent.category_type = 'income'
+        ${duplicateFilter.replace(/transactions\./g, 't.')}
+        GROUP BY cd_parent.id, cd_parent.name, cd_child.id, cd_child.name
+      )
+      SELECT
+        pt.parent_id,
+        pt.parent_name as category,
+        pt.count,
+        pt.total,
+        json_agg(
+          json_build_object(
+            'id', sb.subcategory_id,
+            'name', sb.subcategory_name,
+            'count', sb.count,
+            'total', sb.total
+          ) ORDER BY sb.total DESC
+        ) as subcategories
+      FROM parent_totals pt
+      LEFT JOIN subcategory_breakdown sb ON pt.parent_id = sb.parent_id
+      GROUP BY pt.parent_id, pt.parent_name, pt.count, pt.total
+      ORDER BY pt.total DESC`,
       [start, end]
     );
+
+    // Fallback: if no hierarchical categories, show by old category field
+    let fallbackTypesResult = { rows: [] };
+    if (incomeTypesResult.rows.length === 0) {
+      fallbackTypesResult = await client.query(
+        `SELECT
+          COALESCE(parent_category, category, 'Uncategorized') as category,
+          COUNT(*) as count,
+          SUM(price) as total
+        FROM transactions
+        WHERE price > 0
+        AND date >= $1 AND date <= $2
+        ${duplicateFilter}
+        GROUP BY COALESCE(parent_category, category, 'Uncategorized')
+        ORDER BY total DESC`,
+        [start, end]
+      );
+    }
 
     // Get recent income transactions (last 20)
     const recentTransactionsResult = await client.query(
@@ -237,12 +283,21 @@ export default async function handler(req, res) {
           count: parseInt(row.count),
           average: parseFloat(row.average)
         })),
-        byType: incomeTypesResult.rows.map(row => ({
-          type: row.income_type,
-          count: parseInt(row.count),
-          total: parseFloat(row.total),
-          average: parseFloat(row.average)
-        })),
+        byType: incomeTypesResult.rows.length > 0
+          ? incomeTypesResult.rows.map(row => ({
+              parentId: row.parent_id,
+              category: row.category,
+              count: parseInt(row.count),
+              total: parseFloat(row.total),
+              subcategories: row.subcategories || []
+            }))
+          : fallbackTypesResult.rows.map((row, index) => ({
+              parentId: index + 1000, // Use fake IDs for fallback
+              category: row.category,
+              count: parseInt(row.count),
+              total: parseFloat(row.total),
+              subcategories: []
+            })),
         byAccount: byAccountResult.rows.map(row => ({
           vendor: row.vendor,
           accountNumber: row.account_number,

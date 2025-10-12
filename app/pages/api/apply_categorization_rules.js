@@ -36,6 +36,15 @@ const handler = createApiHandler({
 
         // Update using category_definition_id if available, otherwise use legacy category field
         if (rule.category_definition_id) {
+          // Build price condition based on category type
+          let priceCondition = '';
+          if (rule.category_type === 'income') {
+            priceCondition = 'AND price > 0';
+          } else if (rule.category_type === 'expense') {
+            priceCondition = 'AND price < 0';
+          }
+          // If category_type is null, apply to all transactions (backward compatibility)
+
           const updateResult = await client.query(`
             UPDATE transactions
             SET category_definition_id = $2,
@@ -47,7 +56,7 @@ const handler = createApiHandler({
                   WHERE cd.id = $2
                 )
             WHERE LOWER(name) LIKE LOWER($1)
-            AND price < 0
+            ${priceCondition}
             AND (category_definition_id IS NULL OR category_definition_id != $2)
           `, [pattern, rule.category_definition_id, rule.target_category]);
 
