@@ -95,6 +95,21 @@ interface PatternPreview {
   matchedTransactions: TransactionMatch[];
 }
 
+interface UncategorizedTransaction {
+  identifier: string;
+  vendor: string;
+  date: string;
+  name: string;
+  price: number;
+  accountNumber?: string;
+}
+
+interface UncategorizedSummary {
+  totalCount: number;
+  totalAmount: number;
+  recentTransactions: UncategorizedTransaction[];
+}
+
 interface CategoryHierarchyModalProps {
   open: boolean;
   onClose: () => void;
@@ -113,6 +128,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
   // Category Hierarchy State
   const [categories, setCategories] = useState<CategoryDefinition[]>([]);
+  const [uncategorized, setUncategorized] = useState<UncategorizedSummary | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [editingCategory, setEditingCategory] = useState<CategoryDefinition | null>(null);
   const [newCategory, setNewCategory] = useState<Partial<CategoryDefinition>>({
@@ -139,6 +155,23 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [newRulePreview, setNewRulePreview] = useState<PatternPreview | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
 
+  const formatCurrency = (value: number) => {
+    const amount = Number.isFinite(value) ? Math.abs(value) : 0;
+    const formatted = amount.toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+    return `${value < 0 ? '-' : ''}₪${formatted}`;
+  };
+
+  const formatDate = (value: string) => {
+    if (!value) {
+      return 'Unknown date';
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? 'Unknown date' : parsed.toLocaleDateString('en-IL');
+  };
+
   useEffect(() => {
     if (open) {
       fetchCategories();
@@ -152,8 +185,19 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       const response = await fetch('/api/categories/hierarchy');
       if (!response.ok) throw new Error('Failed to fetch categories');
 
-      const data = await response.json();
-      setCategories(buildCategoryTree(data));
+      const payload = await response.json();
+      const categoryList = Array.isArray(payload) ? payload : payload?.categories;
+      setCategories(buildCategoryTree(categoryList || []));
+
+      if (!Array.isArray(payload) && payload?.uncategorized) {
+        setUncategorized({
+          totalCount: payload.uncategorized.totalCount ?? 0,
+          totalAmount: payload.uncategorized.totalAmount ?? 0,
+          recentTransactions: payload.uncategorized.recentTransactions ?? [],
+        });
+      } else {
+        setUncategorized(null);
+      }
     } catch (error) {
       console.error('Error fetching categories:', error);
       setError('Failed to load categories');
@@ -162,7 +206,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     }
   };
 
-  const buildCategoryTree = (flatCategories: CategoryDefinition[]): CategoryDefinition[] => {
+  const buildCategoryTree = (flatCategories: CategoryDefinition[] = []): CategoryDefinition[] => {
     const categoryMap = new Map<number, CategoryDefinition>();
     const rootCategories: CategoryDefinition[] = [];
 
@@ -655,9 +699,47 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     const expenseCategories = categories.filter(c => c.category_type === 'expense');
     const investmentCategories = categories.filter(c => c.category_type === 'investment');
     const incomeCategories = categories.filter(c => c.category_type === 'income');
+    const uncategorizedPreview = uncategorized?.recentTransactions?.slice(0, 10) ?? [];
 
     return (
       <Box>
+        {uncategorized && (
+          <Paper sx={{ p: 2, mb: 3 }}>
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              Unassigned Transactions
+            </Typography>
+            {uncategorized.totalCount === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                All transactions are currently assigned to categories.
+              </Typography>
+            ) : (
+              <>
+                <Typography variant="body2" color="text.secondary">
+                  {`You have ${uncategorized.totalCount.toLocaleString()} transaction${uncategorized.totalCount !== 1 ? 's' : ''} waiting for categorization.`}
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5, mb: 1 }}>
+                  {`Total pending amount: ${formatCurrency(uncategorized.totalAmount)}`}
+                </Typography>
+                <List dense>
+                  {uncategorizedPreview.map((txn: UncategorizedTransaction) => (
+                    <ListItem key={`${txn.identifier}-${txn.vendor}-${txn.date}`} sx={{ py: 0.75 }}>
+                      <ListItemText
+                        primary={txn.name || 'Unknown transaction'}
+                        secondary={`${txn.vendor || 'Unknown vendor'} • ${formatDate(txn.date)} • ${formatCurrency(txn.price)}`}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+                {uncategorized.totalCount > uncategorizedPreview.length && (
+                  <Typography variant="caption" color="text.secondary">
+                    {`Showing the latest ${uncategorizedPreview.length} of ${uncategorized.totalCount.toLocaleString()} transactions.`}
+                  </Typography>
+                )}
+              </>
+            )}
+          </Paper>
+        )}
+
         {/* Create New Category */}
         <Paper sx={{ p: 2, mb: 3 }}>
           <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
