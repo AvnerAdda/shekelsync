@@ -35,6 +35,7 @@ import {
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
 } from '@mui/icons-material';
+import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
 interface BankTransaction {
   identifier: string;
@@ -86,6 +87,7 @@ const ManualResolutionPanel: React.FC<ManualResolutionPanelProps> = ({ onTransac
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [bulkReason, setBulkReason] = useState('duplicate');
   const [bulkCategory, setBulkCategory] = useState('');
+  const { formatCurrency } = useFinancePrivacy();
 
   useEffect(() => {
     fetchTransactions();
@@ -258,9 +260,8 @@ const ManualResolutionPanel: React.FC<ManualResolutionPanelProps> = ({ onTransac
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return `₪${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
-  };
+  const formatCurrencyValue = (value: number) =>
+    formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -415,7 +416,7 @@ const ManualResolutionPanel: React.FC<ManualResolutionPanelProps> = ({ onTransac
                     </TableCell>
                     <TableCell align="right">
                       <Typography variant="body2" fontWeight="medium">
-                        {formatCurrency(txn.price)}
+                        {formatCurrencyValue(txn.price)}
                       </Typography>
                     </TableCell>
                     <TableCell>

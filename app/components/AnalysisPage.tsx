@@ -29,6 +29,7 @@ import {
   AccountBalance as BalanceIcon,
   PsychologyAlt as PsychologyAltIcon,
 } from '@mui/icons-material';
+import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
 interface PersonalIntelligence {
   temporalIntelligence: any;
@@ -48,6 +49,7 @@ const AnalysisPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [intelligence, setIntelligence] = useState<PersonalIntelligence | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { formatCurrency } = useFinancePrivacy();
 
   const fetchIntelligence = async () => {
     setLoading(true);
@@ -134,6 +136,17 @@ const AnalysisPage: React.FC = () => {
     healthBreakdown
   } = intelligence;
 
+  const formatCurrencyValue = (
+    value: number,
+    options?: { absolute?: boolean; showSign?: boolean; minimumFractionDigits?: number; maximumFractionDigits?: number }
+  ) =>
+    formatCurrency(value, {
+      maximumFractionDigits: options?.maximumFractionDigits ?? 0,
+      minimumFractionDigits: options?.minimumFractionDigits ?? 0,
+      ...(options?.absolute !== undefined ? { absolute: options.absolute } : {}),
+      ...(options?.showSign ? { showSign: true } : {}),
+    });
+
   return (
     <Box>
       {/* Header */}
@@ -202,7 +215,7 @@ const AnalysisPage: React.FC = () => {
               <Typography variant="body2">{rec.message}</Typography>
               <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
                 💡 {rec.action}
-                {rec.potentialSavings && ` (Save up to ₪${rec.potentialSavings}/month)`}
+                {rec.potentialSavings && ` (Save up to ${formatCurrencyValue(rec.potentialSavings)}/month)`}
               </Typography>
             </Alert>
           ))}
@@ -225,7 +238,7 @@ const AnalysisPage: React.FC = () => {
               <Box sx={{ mb: 2 }}>
                 <Typography variant="body2" color="text.secondary">Daily Burn Rate</Typography>
                 <Typography variant="h4" color="primary.main">
-                  ₪{temporal.dailyBurnRate}/day
+                  {formatCurrencyValue(temporal.dailyBurnRate)}/day
                 </Typography>
               </Box>
 
@@ -251,11 +264,11 @@ const AnalysisPage: React.FC = () => {
                 <Box sx={{ display: 'flex', gap: 2 }}>
                   <Box flex={1}>
                     <Typography variant="caption">Early Month</Typography>
-                    <Typography variant="h6" color="primary.main">₪{temporal.earlyMonthSpend}</Typography>
+                    <Typography variant="h6" color="primary.main">{formatCurrencyValue(temporal.earlyMonthSpend)}</Typography>
                   </Box>
                   <Box flex={1}>
                     <Typography variant="caption">Late Month</Typography>
-                    <Typography variant="h6">₪{temporal.lateMonthSpend}</Typography>
+                    <Typography variant="h6">{formatCurrencyValue(temporal.lateMonthSpend)}</Typography>
                   </Box>
                 </Box>
                 <LinearProgress
@@ -271,8 +284,8 @@ const AnalysisPage: React.FC = () => {
               <Box>
                 <Typography variant="body2" color="text.secondary" gutterBottom>Weekend vs Weekday</Typography>
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Chip label={`Weekend: ₪${temporal.weekendVsWeekday.weekendSpend}`} size="small" />
-                  <Chip label={`Weekday: ₪${temporal.weekendVsWeekday.weekdaySpend}`} size="small" variant="outlined" />
+                  <Chip label={`Weekend: ${formatCurrencyValue(temporal.weekendVsWeekday.weekendSpend)}`} size="small" />
+                  <Chip label={`Weekday: ${formatCurrencyValue(temporal.weekendVsWeekday.weekdaySpend)}`} size="small" variant="outlined" />
                 </Box>
               </Box>
             </CardContent>
@@ -340,7 +353,7 @@ const AnalysisPage: React.FC = () => {
               <Box>
                 <Typography variant="body2" color="text.secondary">Average Transaction Size</Typography>
                 <Typography variant="h5">
-                  ₪{behavioral.averageTransactionSize}
+                  {formatCurrencyValue(behavioral.averageTransactionSize)}
                 </Typography>
               </Box>
             </CardContent>
@@ -363,9 +376,9 @@ const AnalysisPage: React.FC = () => {
               <Box sx={{ mb: 2 }}>
                 <Typography variant="body2" color="text.secondary">Age Group ({comparative.ageGroup.bracket})</Typography>
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'baseline' }}>
-                  <Typography variant="h5">₪{comparative.ageGroup.yourExpense}</Typography>
+                  <Typography variant="h5">{formatCurrencyValue(comparative.ageGroup.yourExpense)}</Typography>
                   <Typography variant="body2" color={comparative.ageGroup.difference > 0 ? 'error.main' : 'success.main'}>
-                    {comparative.ageGroup.difference > 0 ? '+' : ''}₪{comparative.ageGroup.difference} vs avg
+                    {`${formatCurrencyValue(comparative.ageGroup.difference, { showSign: true })} vs avg`}
                   </Typography>
                 </Box>
               </Box>
@@ -386,7 +399,7 @@ const AnalysisPage: React.FC = () => {
                   Cost of Living Index: {comparative.location.costOfLivingIndex}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  City average: ₪{comparative.location.avgExpense}/month
+                  City average: {formatCurrencyValue(comparative.location.avgExpense)}/month
                 </Typography>
               </Box>
 
@@ -417,7 +430,7 @@ const AnalysisPage: React.FC = () => {
                   ☕ Coffee Index
                 </Typography>
                 <Typography variant="h4" color="warning.main">
-                  ₪{micro.coffeeIndex.yearlyProjection}
+                  {formatCurrencyValue(micro.coffeeIndex.yearlyProjection)}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   per year ({micro.coffeeIndex.transactionCount} purchases)
@@ -436,7 +449,7 @@ const AnalysisPage: React.FC = () => {
                     <Typography variant="body2" noWrap sx={{ maxWidth: '60%' }}>
                       {sub.name}
                     </Typography>
-                    <Chip label={`₪${sub.monthlyAmount}/mo`} size="small" />
+                    <Chip label={`${formatCurrencyValue(sub.monthlyAmount)}/mo`} size="small" />
                   </Box>
                 ))}
                 {micro.subscriptions.length > 3 && (
@@ -476,10 +489,10 @@ const AnalysisPage: React.FC = () => {
                   End of Month Forecast
                 </Typography>
                 <Typography variant="h4" color="primary.main">
-                  ₪{predictive.forecastEndMonth}
+                  {formatCurrencyValue(predictive.forecastEndMonth)}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Based on current velocity: ₪{predictive.spendingVelocity}/day
+                  Based on current velocity: {formatCurrencyValue(predictive.spendingVelocity)}/day
                 </Typography>
               </Box>
 
@@ -488,10 +501,10 @@ const AnalysisPage: React.FC = () => {
                   6-Month Savings Trajectory
                 </Typography>
                 <Typography variant="h5" color={predictive.savingsTrajectory6m > 0 ? 'success.main' : 'error.main'}>
-                  {predictive.savingsTrajectory6m > 0 ? '+' : ''}₪{predictive.savingsTrajectory6m}
+                  {formatCurrencyValue(predictive.savingsTrajectory6m, { showSign: true })}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Monthly savings: ₪{predictive.monthlySavings}
+                  Monthly savings: {formatCurrencyValue(predictive.monthlySavings)}
                 </Typography>
               </Box>
             </CardContent>
@@ -515,7 +528,7 @@ const AnalysisPage: React.FC = () => {
                   Your Time Exchange Rate
                 </Typography>
                 <Typography variant="h5">
-                  ₪{psychological.hourlyWage}/hour
+                  {formatCurrencyValue(psychological.hourlyWage)}/hour
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   Average transaction = {psychological.avgTransactionInHours} hours of work
@@ -539,7 +552,7 @@ const AnalysisPage: React.FC = () => {
               {psychological.opportunityCosts.map((opp: any, idx: number) => (
                 <Box key={idx} sx={{ mb: 1, p: 1, bgcolor: '#f5f5f5', borderRadius: 1 }}>
                   <Typography variant="body2">
-                    <strong>{opp.category}:</strong> ₪{opp.monthlySpend}/mo
+                    <strong>{opp.category}:</strong> {formatCurrencyValue(opp.monthlySpend)}/mo
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     = {opp.equivalentTo}

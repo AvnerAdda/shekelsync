@@ -39,6 +39,7 @@ import {
   Delete as DeleteIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
+import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
 // Pattern from /api/patterns (snake_case from DB)
 interface Pattern {
@@ -253,9 +254,10 @@ const PatternSuggestionsPanel: React.FC<PatternSuggestionsPanelProps> = ({ onDup
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return `₪${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
-  };
+  const { formatCurrency } = useFinancePrivacy();
+
+  const formatCurrencyValue = (value: number) =>
+    formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -486,7 +488,7 @@ const PatternSuggestionsPanel: React.FC<PatternSuggestionsPanelProps> = ({ onDup
                               </TableCell>
                               <TableCell align="right">
                                 <Typography variant="body2" fontWeight="medium">
-                                  {formatCurrency(match.price)}
+                                  {formatCurrencyValue(match.price)}
                                 </Typography>
                               </TableCell>
                             </TableRow>

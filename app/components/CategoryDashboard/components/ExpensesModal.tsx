@@ -15,7 +15,7 @@ import Autocomplete from '@mui/material/Autocomplete';
 import CheckIcon from '@mui/icons-material/Check';
 import EditIcon from '@mui/icons-material/Edit';
 import { ExpensesModalProps, Expense } from '../types';
-import { formatNumber } from '../utils/format';
+import { useFinancePrivacy } from '../../../contexts/FinancePrivacyContext';
 import { dateUtils } from '../utils/dateUtils';
 import dynamic from 'next/dynamic';
 const LineChart = dynamic(() => import('@mui/x-charts').then(m => m.LineChart), { ssr: false });
@@ -35,6 +35,18 @@ const ExpensesModal: React.FC<ExpensesModalProps> = ({ open, onClose, data, colo
   const [editPrice, setEditPrice] = React.useState<string>('');
   const [editCategory, setEditCategory] = React.useState<string>('');
   const [availableCategories, setAvailableCategories] = React.useState<string[]>([]);
+  const { formatCurrency } = useFinancePrivacy();
+
+  const formatCurrencyValue = (
+    value: number,
+    options?: { showSign?: boolean; absolute?: boolean; minimumFractionDigits?: number; maximumFractionDigits?: number }
+  ) =>
+    formatCurrency(value, {
+      minimumFractionDigits: options?.minimumFractionDigits ?? 2,
+      maximumFractionDigits: options?.maximumFractionDigits ?? 2,
+      ...(options?.showSign ? { showSign: true } : {}),
+      ...(options?.absolute !== undefined ? { absolute: options.absolute } : {}),
+    });
 
   // Fetch available categories when component mounts
   React.useEffect(() => {
@@ -261,7 +273,7 @@ const ExpensesModal: React.FC<ExpensesModalProps> = ({ open, onClose, data, colo
                 yAxis={[
                   {
                     tickLabelStyle: { fill: '#666' },
-                    valueFormatter: (value) => `₪${formatNumber(value)}`,
+                    valueFormatter: (value) => formatCurrencyValue(Number(value)),
                   },
                 ]}
                 series={[
@@ -430,9 +442,9 @@ const ExpensesModal: React.FC<ExpensesModalProps> = ({ open, onClose, data, colo
                       }}
                     />
                   ) : (
-                    data.type === "Bank Transactions" 
-                      ? `${expense.price >= 0 ? '+' : ''}₪${formatNumber(Math.abs(expense.price))}`
-                      : `₪${formatNumber(Math.abs(expense.price))}`
+                    data.type === "Bank Transactions"
+                      ? formatCurrencyValue(expense.price, { showSign: true })
+                      : formatCurrencyValue(expense.price, { absolute: true })
                   )}
                 </TableCell>
                 <TableCell style={{ color: '#333', borderBottom: '1px solid #e2e8f0' }}>

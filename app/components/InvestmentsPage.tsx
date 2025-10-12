@@ -27,6 +27,7 @@ import {
   ShowChart as ChartIcon,
 } from '@mui/icons-material';
 import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
 interface InvestmentData {
   summary: {
@@ -71,6 +72,7 @@ const InvestmentsPage: React.FC = () => {
   const [data, setData] = useState<InvestmentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<'all' | '3m' | '6m' | '1y'>('all');
+  const { formatCurrency, maskAmounts } = useFinancePrivacy();
 
   useEffect(() => {
     fetchData();
@@ -111,8 +113,14 @@ const InvestmentsPage: React.FC = () => {
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return `₪${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
+  const formatCurrencyValue = (value: number) =>
+    formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
+
+  const formatCurrencyThousands = (value: number) => {
+    if (maskAmounts) {
+      return formatCurrencyValue(value);
+    }
+    return `₪${(value / 1000).toFixed(0)}k`;
   };
 
   const formatDate = (date: string) => {
@@ -209,7 +217,7 @@ const InvestmentsPage: React.FC = () => {
                 </Typography>
               </Box>
               <Typography variant="h5" fontWeight="bold">
-                {formatCurrency(data.summary.totalInvested)}
+                {formatCurrencyValue(data.summary.totalInvested)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {data.summary.investmentCount} transactions
@@ -228,7 +236,7 @@ const InvestmentsPage: React.FC = () => {
                 </Typography>
               </Box>
               <Typography variant="h5" fontWeight="bold">
-                {formatCurrency(data.summary.totalSavings)}
+                {formatCurrencyValue(data.summary.totalSavings)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {data.summary.savingsCount} transactions
@@ -247,7 +255,7 @@ const InvestmentsPage: React.FC = () => {
                 </Typography>
               </Box>
               <Typography variant="h5" fontWeight="bold">
-                {formatCurrency(data.summary.totalInvested + data.summary.totalSavings)}
+                {formatCurrencyValue(data.summary.totalInvested + data.summary.totalSavings)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {data.summary.totalCount} transactions
@@ -291,7 +299,7 @@ const InvestmentsPage: React.FC = () => {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, value }) => `${name}: ${formatCurrency(value as number)}`}
+                   label={({ name, value }) => `${name}: ${formatCurrencyValue(value as number)}`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
@@ -300,7 +308,7 @@ const InvestmentsPage: React.FC = () => {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                 <Tooltip formatter={(value: number) => formatCurrencyValue(value)} />
               </PieChart>
             </ResponsiveContainer>
           </Paper>
@@ -315,9 +323,9 @@ const InvestmentsPage: React.FC = () => {
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={barData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" angle={-15} textAnchor="end" height={80} />
-                <YAxis tickFormatter={(value) => `₪${(value / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                 <XAxis dataKey="name" angle={-15} textAnchor="end" height={80} />
+                 <YAxis tickFormatter={(value) => formatCurrencyThousands(Number(value))} />
+                 <Tooltip formatter={(value: number) => formatCurrencyValue(value)} />
                 <Bar dataKey="amount" fill="#3b82f6" />
               </BarChart>
             </ResponsiveContainer>
@@ -334,8 +342,8 @@ const InvestmentsPage: React.FC = () => {
               <LineChart data={lineData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
-                <YAxis tickFormatter={(value) => `₪${(value / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                 <YAxis tickFormatter={(value) => formatCurrencyThousands(Number(value))} />
+                 <Tooltip formatter={(value: number) => formatCurrencyValue(value)} />
                 <Legend />
                 <Line type="monotone" dataKey="Investment" stroke="#3b82f6" strokeWidth={2} />
                 <Line type="monotone" dataKey="Savings" stroke="#10b981" strokeWidth={2} />
@@ -382,7 +390,7 @@ const InvestmentsPage: React.FC = () => {
                   </TableCell>
                   <TableCell align="right">
                     <Typography variant="body2" fontWeight="medium">
-                      {formatCurrency(txn.price)}
+                      {formatCurrencyValue(txn.price)}
                     </Typography>
                   </TableCell>
                   <TableCell>

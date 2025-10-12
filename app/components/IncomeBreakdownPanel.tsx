@@ -36,6 +36,7 @@ import {
   CalendarToday as CalendarIcon,
   Category as CategoryIcon,
 } from '@mui/icons-material';
+import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
 const COLORS = [
   '#4caf50', '#66bb6a', '#81c784', '#a5d6a7', '#c8e6c9',
@@ -80,10 +81,14 @@ const IncomeBreakdownPanel: React.FC<IncomeBreakdownPanelProps> = ({
 }) => {
   const [view, setView] = useState<'overview' | 'type' | 'source' | 'timeline'>('overview');
   const theme = useTheme();
+  const { formatCurrency } = useFinancePrivacy();
 
-  const formatCurrency = (value: number) => {
-    return `₪${value.toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
-  };
+  const formatCurrencyValue = (value: number, options?: Partial<{ minimumFractionDigits: number; maximumFractionDigits: number }>) =>
+    formatCurrency(value, {
+      absolute: true,
+      minimumFractionDigits: options?.minimumFractionDigits ?? 0,
+      maximumFractionDigits: options?.maximumFractionDigits ?? 0,
+    });
 
   const renderOverview = () => {
     const typeData = data.breakdowns.byType.map(item => ({
@@ -106,7 +111,7 @@ const IncomeBreakdownPanel: React.FC<IncomeBreakdownPanelProps> = ({
                     Total Income
                   </Typography>
                   <Typography variant="h5" fontWeight="bold" color="success.main">
-                    {formatCurrency(data.summary.totalIncome)}
+                    {formatCurrencyValue(data.summary.totalIncome)}
                   </Typography>
                 </CardContent>
               </Card>
@@ -130,7 +135,7 @@ const IncomeBreakdownPanel: React.FC<IncomeBreakdownPanelProps> = ({
                     Average
                   </Typography>
                   <Typography variant="h5" fontWeight="bold">
-                    {formatCurrency(data.summary.averageIncome)}
+                    {formatCurrencyValue(data.summary.averageIncome)}
                   </Typography>
                 </CardContent>
               </Card>
@@ -142,7 +147,7 @@ const IncomeBreakdownPanel: React.FC<IncomeBreakdownPanelProps> = ({
                     Largest
                   </Typography>
                   <Typography variant="h5" fontWeight="bold">
-                    {formatCurrency(data.summary.maxIncome)}
+                    {formatCurrencyValue(data.summary.maxIncome)}
                   </Typography>
                 </CardContent>
               </Card>
@@ -178,7 +183,7 @@ const IncomeBreakdownPanel: React.FC<IncomeBreakdownPanelProps> = ({
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: number) => formatCurrency(value)}
+                  formatter={(value: number) => formatCurrencyValue(value)}
                   contentStyle={{
                     backgroundColor: theme.palette.background.paper,
                     border: `1px solid ${theme.palette.divider}`,
@@ -222,7 +227,7 @@ const IncomeBreakdownPanel: React.FC<IncomeBreakdownPanelProps> = ({
                             {item.name}
                           </Typography>
                           <Typography variant="body2" fontWeight="bold" color="success.main">
-                            {formatCurrency(item.value)}
+                            {formatCurrencyValue(item.value)}
                           </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -256,7 +261,7 @@ const IncomeBreakdownPanel: React.FC<IncomeBreakdownPanelProps> = ({
             <XAxis type="number" tickFormatter={formatCurrency} />
             <YAxis type="category" dataKey="name" width={120} />
             <Tooltip
-              formatter={(value: number) => formatCurrency(value)}
+              formatter={(value: number) => formatCurrencyValue(value)}
               contentStyle={{
                 backgroundColor: theme.palette.background.paper,
                 border: `1px solid ${theme.palette.divider}`,
@@ -289,7 +294,7 @@ const IncomeBreakdownPanel: React.FC<IncomeBreakdownPanelProps> = ({
                   {item.name}
                 </Typography>
                 <Typography variant="h4" fontWeight="bold">
-                  {formatCurrency(item.value)}
+                  {formatCurrencyValue(item.value)}
                 </Typography>
               </CardContent>
             </Card>
@@ -309,7 +314,7 @@ const IncomeBreakdownPanel: React.FC<IncomeBreakdownPanelProps> = ({
           <XAxis dataKey="month" />
           <YAxis tickFormatter={formatCurrency} />
           <Tooltip
-            formatter={(value: number) => formatCurrency(value)}
+            formatter={(value: number) => formatCurrencyValue(value)}
             contentStyle={{
               backgroundColor: theme.palette.background.paper,
               border: `1px solid ${theme.palette.divider}`,
@@ -392,7 +397,7 @@ const IncomeBreakdownPanel: React.FC<IncomeBreakdownPanelProps> = ({
                     secondary={`${new Date(txn.date).toLocaleDateString()} • ${txn.vendor}`}
                   />
                   <Typography variant="body2" fontWeight="bold" color="success.main">
-                    {formatCurrency(txn.price)}
+                    {formatCurrencyValue(txn.price)}
                   </Typography>
                 </ListItem>
                 {index < data.recentTransactions.slice(0, 10).length - 1 && <Divider />}
