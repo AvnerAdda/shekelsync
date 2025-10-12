@@ -173,12 +173,12 @@ export default async function handler(req, res) {
           t2.category as cat2,
           t2.account_number as acc2,
           ABS(t1.price - t2.price) as price_diff,
-          ABS(EXTRACT(EPOCH FROM (t1.date - t2.date)) / 86400) as days_apart
+          ABS((t1.date::timestamp - t2.date::timestamp) / INTERVAL '1 day') as days_apart
         FROM transactions t1
         INNER JOIN transactions t2 ON (
           t1.identifier != t2.identifier
           AND ABS(t1.price - t2.price) < GREATEST(ABS(t1.price) * 0.05, 20)
-          AND ABS(EXTRACT(EPOCH FROM (t1.date - t2.date)) / 86400) <= 7
+          AND ABS((t1.date::timestamp - t2.date::timestamp) / INTERVAL '1 day') <= 7
           AND t1.price < 0 AND t2.price < 0
           AND ABS(t1.price) > 500
         )
