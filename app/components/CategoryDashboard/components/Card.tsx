@@ -1,7 +1,7 @@
 import React from 'react';
 import { SvgIconComponent } from '@mui/icons-material';
 import CircularProgress from '@mui/material/CircularProgress';
-import { formatNumber } from '../utils/format';
+import { useFinancePrivacy } from '../../../contexts/FinancePrivacyContext';
 
 interface CardProps {
   title: string;
@@ -34,10 +34,13 @@ const Card: React.FC<CardProps> = ({
   const padding = size === 'large' ? '32px' : '20px';
   const titleSize = size === 'large' ? '16px' : '20px';
   const valueSize = size === 'large' ? '36px' : '24px';
-  const secondaryValueSize = size === 'large' ? '20px' : '16px';
   const iconSize = size === 'large' ? '24px' : '24px';
   const iconPadding = size === 'large' ? '10px' : '12px';
   const iconBorderRadius = size === 'large' ? '12px' : '16px';
+  const { formatCurrency } = useFinancePrivacy();
+
+  const formatCurrencyValue = (amount: number) =>
+    formatCurrency(amount, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <div
@@ -127,7 +130,7 @@ const Card: React.FC<CardProps> = ({
               letterSpacing: '-0.02em',
               fontFamily: 'Assistant, sans-serif'
             }}>
-              ₪{formatNumber(value || 0)}
+              {formatCurrencyValue(value || 0)}
             </span>
             {secondaryValue !== undefined && (
               <>
@@ -147,7 +150,7 @@ const Card: React.FC<CardProps> = ({
                   letterSpacing: '-0.02em',
                   fontFamily: 'Assistant, sans-serif'
                 }}>
-                  {secondaryLabel && `${secondaryLabel}: `}₪{formatNumber(secondaryValue)}
+                  {secondaryLabel && `${secondaryLabel}: `}{formatCurrencyValue(secondaryValue)}
                 </span>
               </>
             )}

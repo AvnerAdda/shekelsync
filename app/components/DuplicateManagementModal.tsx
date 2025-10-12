@@ -32,6 +32,7 @@ import {
   Warning as WarningIcon,
   Info as InfoIcon,
 } from '@mui/icons-material';
+import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import ManualResolutionPanel from './ManualResolutionPanel';
 import PatternSuggestionsPanel from './PatternSuggestionsPanel';
 
@@ -65,6 +66,7 @@ const DuplicateManagementModal: React.FC<DuplicateManagementModalProps> = ({
   const [suggestions, setSuggestions] = useState<DuplicatePair[]>([]);
   const [confirmed, setConfirmed] = useState<DuplicatePair[]>([]);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const { formatCurrency } = useFinancePrivacy();
 
   useEffect(() => {
     if (open) {
@@ -184,9 +186,8 @@ const DuplicateManagementModal: React.FC<DuplicateManagementModalProps> = ({
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return `₪${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
-  };
+  const formatCurrencyValue = (value: number) =>
+    formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -304,7 +305,7 @@ const DuplicateManagementModal: React.FC<DuplicateManagementModalProps> = ({
                   </Typography>
                 </Box>
                 <Typography variant="h6" color="error.main" gutterBottom>
-                  {formatCurrency(cc.totalAmount)}
+                  {formatCurrencyValue(cc.totalAmount)}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block">
                   {cc.vendor} • {cc.accountNumber ? `****${cc.accountNumber}` : 'N/A'}
@@ -321,7 +322,7 @@ const DuplicateManagementModal: React.FC<DuplicateManagementModalProps> = ({
                     <Typography variant="caption" fontWeight="bold">Sample transactions:</Typography>
                     {cc.sampleTransactions.slice(0, 3).map((txn: any, idx: number) => (
                       <Typography key={idx} variant="caption" display="block" sx={{ pl: 1 }}>
-                        • {formatDate(txn.date)}: {txn.name} ({formatCurrency(txn.price)})
+                        • {formatDate(txn.date)}: {txn.name} ({formatCurrencyValue(txn.price)})
                       </Typography>
                     ))}
                   </Box>
@@ -339,7 +340,7 @@ const DuplicateManagementModal: React.FC<DuplicateManagementModalProps> = ({
                   </Typography>
                 </Box>
                 <Typography variant="h6" color="primary.main" gutterBottom>
-                  {formatCurrency(bank.price)}
+                  {formatCurrencyValue(bank.price)}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block">
                   {bank.vendor} • {bank.accountNumber ? `****${bank.accountNumber}` : 'N/A'}
@@ -354,7 +355,7 @@ const DuplicateManagementModal: React.FC<DuplicateManagementModalProps> = ({
                 {duplicate.amountDifference !== undefined && duplicate.amountDifference > 0 && (
                   <Alert severity="info" sx={{ mt: 1, py: 0 }}>
                     <Typography variant="caption">
-                      Difference: {formatCurrency(duplicate.amountDifference)}
+                      Difference: {formatCurrencyValue(duplicate.amountDifference)}
                     </Typography>
                   </Alert>
                 )}
@@ -451,7 +452,7 @@ const DuplicateManagementModal: React.FC<DuplicateManagementModalProps> = ({
                   Transaction 1
                 </Typography>
                 <Typography variant="h6" gutterBottom>
-                  {formatCurrency(txn1.price)}
+                  {formatCurrencyValue(txn1.price)}
                 </Typography>
                 <Typography variant="body2" gutterBottom>
                   {txn1.name}
@@ -477,7 +478,7 @@ const DuplicateManagementModal: React.FC<DuplicateManagementModalProps> = ({
                   Transaction 2
                 </Typography>
                 <Typography variant="h6" gutterBottom>
-                  {formatCurrency(txn2.price)}
+                  {formatCurrencyValue(txn2.price)}
                 </Typography>
                 <Typography variant="body2" gutterBottom>
                   {txn2.name}
@@ -500,7 +501,7 @@ const DuplicateManagementModal: React.FC<DuplicateManagementModalProps> = ({
           {duplicate.amountDifference !== undefined && duplicate.amountDifference > 0 && (
             <Alert severity="info" sx={{ mt: 2 }}>
               <Typography variant="caption">
-                Amount difference: {formatCurrency(duplicate.amountDifference)}
+                Amount difference: {formatCurrencyValue(duplicate.amountDifference)}
                 {duplicate.daysApart && ` • ${duplicate.daysApart} days apart`}
               </Typography>
             </Alert>

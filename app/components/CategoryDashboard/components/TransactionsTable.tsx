@@ -4,7 +4,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import { formatNumber } from '../utils/formatUtils';
+import { useFinancePrivacy } from '../../../contexts/FinancePrivacyContext';
 import { dateUtils } from '../utils/dateUtils';
 
 interface Transaction {
@@ -29,6 +29,17 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({ transactions, isL
   const [editPrice, setEditPrice] = React.useState<string>('');
   const [editCategory, setEditCategory] = React.useState<string>('');
   const [availableCategories, setAvailableCategories] = React.useState<string[]>([]);
+  const { formatCurrency } = useFinancePrivacy();
+
+  const formatCurrencyValue = (
+    value: number,
+    options?: { absolute?: boolean; minimumFractionDigits?: number; maximumFractionDigits?: number }
+  ) =>
+    formatCurrency(value, {
+      minimumFractionDigits: options?.minimumFractionDigits ?? 2,
+      maximumFractionDigits: options?.maximumFractionDigits ?? 2,
+      ...(options?.absolute ? { absolute: true } : {}),
+    });
 
   // Fetch available categories when component mounts
   React.useEffect(() => {
@@ -235,7 +246,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({ transactions, isL
                     }}
                   />
                 ) : (
-                  `₪${formatNumber(Math.abs(transaction.price))}`
+                  formatCurrencyValue(transaction.price, { absolute: true })
                 )}
               </TableCell>
               <TableCell style={{ color: '#333', borderBottom: '1px solid #e2e8f0' }}>

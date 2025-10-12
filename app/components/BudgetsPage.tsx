@@ -28,6 +28,7 @@ import {
   Warning as WarningIcon,
   CheckCircle as CheckIcon,
 } from '@mui/icons-material';
+import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
 interface Budget {
   id: number;
@@ -55,6 +56,7 @@ const BudgetsPage: React.FC = () => {
     budget_limit: '',
   });
   const theme = useTheme();
+  const { formatCurrency } = useFinancePrivacy();
 
   useEffect(() => {
     fetchBudgets();
@@ -163,9 +165,8 @@ const BudgetsPage: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return `₪${amount.toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
-  };
+  const formatCurrencyValue = (amount: number) =>
+    formatCurrency(amount, { absolute: true, maximumFractionDigits: 0 });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -247,10 +248,10 @@ const BudgetsPage: React.FC = () => {
                   <Box sx={{ mb: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                       <Typography variant="body2">
-                        Spent: {formatCurrency(budget.spent)}
+                        Spent: {formatCurrencyValue(budget.spent)}
                       </Typography>
                       <Typography variant="body2">
-                        Limit: {formatCurrency(budget.budget_limit)}
+                        Limit: {formatCurrencyValue(budget.budget_limit)}
                       </Typography>
                     </Box>
                     <LinearProgress
@@ -275,19 +276,19 @@ const BudgetsPage: React.FC = () => {
 
                   {budget.status === 'exceeded' && (
                     <Alert severity="error" icon={<WarningIcon />} sx={{ mb: 1 }}>
-                      Budget exceeded by {formatCurrency(Math.abs(budget.remaining))}
+                      Budget exceeded by {formatCurrencyValue(Math.abs(budget.remaining))}
                     </Alert>
                   )}
 
                   {budget.status === 'warning' && (
                     <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 1 }}>
-                      {formatCurrency(budget.remaining)} remaining
+                      {formatCurrencyValue(budget.remaining)} remaining
                     </Alert>
                   )}
 
                   {budget.status === 'good' && (
                     <Alert severity="success" icon={<CheckIcon />} sx={{ mb: 1 }}>
-                      {formatCurrency(budget.remaining)} remaining
+                      {formatCurrencyValue(budget.remaining)} remaining
                     </Alert>
                   )}
                 </CardContent>

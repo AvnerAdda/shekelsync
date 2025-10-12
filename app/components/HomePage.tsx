@@ -17,6 +17,7 @@ import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import SummaryCards from '../components/SummaryCards';
 import CostBreakdownPanel from '../components/CostBreakdownPanel';
 import IncomeBreakdownPanel from '../components/IncomeBreakdownPanel';
+import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
 interface DashboardData {
   dateRange: { start: Date; end: Date };
@@ -52,6 +53,7 @@ const HomePage: React.FC = () => {
   const [aggregationPeriod, setAggregationPeriod] = useState<AggregationPeriod>('daily');
   const [budgetUsage, setBudgetUsage] = useState<number | undefined>();
   const theme = useTheme();
+  const { formatCurrency } = useFinancePrivacy();
 
   useEffect(() => {
     fetchDashboardData();
@@ -132,9 +134,8 @@ const HomePage: React.FC = () => {
     );
   }
 
-  const formatCurrency = (value: number) => {
-    return `₪${value.toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
-  };
+  const formatCurrencyValue = (value: number) =>
+    formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
 
   const formatXAxis = (value: string) => {
     if (aggregationPeriod === 'monthly') {
@@ -216,10 +217,10 @@ const HomePage: React.FC = () => {
             />
             <YAxis
               tick={{ fill: theme.palette.text.secondary }}
-              tickFormatter={formatCurrency}
+              tickFormatter={formatCurrencyValue}
             />
             <Tooltip
-              formatter={(value: number) => formatCurrency(value)}
+              formatter={(value: number) => formatCurrencyValue(value)}
               contentStyle={{
                 backgroundColor: theme.palette.background.paper,
                 border: `1px solid ${theme.palette.divider}`,

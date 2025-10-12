@@ -16,6 +16,8 @@ import {
   useTheme,
   Grid,
   InputAdornment,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -28,8 +30,10 @@ import {
   LocationOn as LocationIcon,
   Cake as AgeIcon,
   AttachMoney as MoneyIcon,
+  VisibilityOff as MaskIcon,
 } from '@mui/icons-material';
 import { useThemeMode } from '../contexts/ThemeContext';
+import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
 interface UserProfile {
   id?: number;
@@ -58,6 +62,7 @@ const SettingsPage: React.FC = () => {
   const [saveError, setSaveError] = useState('');
   const { mode, setMode } = useThemeMode();
   const theme = useTheme();
+  const { maskAmounts, setMaskAmounts } = useFinancePrivacy();
 
   useEffect(() => {
     fetchProfile();
@@ -370,6 +375,37 @@ const SettingsPage: React.FC = () => {
         <Alert severity="info">
           Current theme: <strong>{theme.palette.mode}</strong>
           {mode === 'system' && ' (following system preference)'}
+        </Alert>
+      </Paper>
+
+      <Divider sx={{ my: 4 }} />
+
+      {/* Privacy Settings */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <MaskIcon color="primary" />
+          <Typography variant="h6">Privacy Controls</Typography>
+        </Box>
+
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Toggle amount masking to obscure all financial figures across the application. Useful when sharing your screen or working in public spaces.
+        </Typography>
+
+        <FormControlLabel
+          control={
+            <Switch
+              checked={maskAmounts}
+              onChange={(event) => setMaskAmounts(event.target.checked)}
+              color="primary"
+            />
+          }
+          label={maskAmounts ? 'Masking enabled' : 'Masking disabled'}
+        />
+
+        <Alert severity="info" sx={{ mt: 2 }}>
+          {maskAmounts
+            ? 'All currency amounts are currently replaced with asterisks.'
+            : 'Currency amounts will display their full values until masking is enabled.'}
         </Alert>
       </Paper>
 

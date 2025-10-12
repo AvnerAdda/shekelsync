@@ -13,6 +13,7 @@ import {
   AccountBalance as BalanceIcon,
   PieChart as BudgetIcon,
 } from '@mui/icons-material';
+import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
 interface SummaryCardsProps {
   totalIncome: number;
@@ -28,18 +29,15 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   budgetUsage,
 }) => {
   const theme = useTheme();
+  const { formatCurrency } = useFinancePrivacy();
 
-  const formatCurrency = (amount: number) => {
-    return `₪${Math.abs(amount).toLocaleString('en-US', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    })}`;
-  };
+  const formatCurrencyValue = (amount: number) =>
+    formatCurrency(amount, { absolute: true, maximumFractionDigits: 0 });
 
   const cards = [
     {
       title: 'Total Income',
-      value: formatCurrency(totalIncome),
+  value: formatCurrencyValue(totalIncome),
       icon: <IncomeIcon sx={{ fontSize: 40 }} />,
       color: theme.palette.success.main,
       bgColor: theme.palette.mode === 'dark'
@@ -48,7 +46,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     },
     {
       title: 'Total Expenses',
-      value: formatCurrency(totalExpenses),
+  value: formatCurrencyValue(totalExpenses),
       icon: <ExpenseIcon sx={{ fontSize: 40 }} />,
       color: theme.palette.error.main,
       bgColor: theme.palette.mode === 'dark'
@@ -57,7 +55,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     },
     {
       title: 'Net Balance',
-      value: formatCurrency(netBalance),
+  value: formatCurrencyValue(netBalance),
       icon: <BalanceIcon sx={{ fontSize: 40 }} />,
       color: netBalance >= 0 ? theme.palette.success.main : theme.palette.error.main,
       bgColor: netBalance >= 0

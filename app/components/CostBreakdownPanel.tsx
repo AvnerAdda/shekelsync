@@ -46,6 +46,7 @@ import {
   ChevronRight as ChevronRightIcon,
   ZoomIn as ZoomInIcon,
 } from '@mui/icons-material';
+import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
 const COLORS = [
   '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8',
@@ -106,10 +107,10 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [isZooming, setIsZooming] = useState(false);
   const theme = useTheme();
+  const { formatCurrency } = useFinancePrivacy();
 
-  const formatCurrency = (value: number) => {
-    return `₪${value.toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
-  };
+  const formatCurrencyValue = (value: number) =>
+    formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
 
   const fetchCategoryDetails = async (parentId?: number, subcategoryId?: number, categoryName?: string) => {
     console.log('Fetching details for:', { parentId, subcategoryId, categoryName });
@@ -322,7 +323,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number) => formatCurrency(value)}
+                    formatter={(value: number) => formatCurrencyValue(value)}
                     contentStyle={{
                       backgroundColor: theme.palette.background.paper,
                       border: `1px solid ${theme.palette.divider}`,
@@ -385,7 +386,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
                                 {item.name}
                               </Typography>
                               <Typography variant="body2" fontWeight="bold">
-                                {formatCurrency(item.value)}
+                                {formatCurrencyValue(item.value)}
                               </Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -420,7 +421,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
             <XAxis type="number" tickFormatter={formatCurrency} />
             <YAxis type="category" dataKey="name" width={150} />
             <Tooltip
-              formatter={(value: number) => formatCurrency(value)}
+              formatter={(value: number) => formatCurrencyValue(value)}
               contentStyle={{
                 backgroundColor: theme.palette.background.paper,
                 border: `1px solid ${theme.palette.divider}`,
@@ -453,7 +454,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
                   {item.name}
                 </Typography>
                 <Typography variant="h4" fontWeight="bold">
-                  {formatCurrency(item.value)}
+                  {formatCurrencyValue(item.value)}
                 </Typography>
               </CardContent>
             </Card>
@@ -473,7 +474,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
           <XAxis dataKey="month" />
           <YAxis tickFormatter={formatCurrency} />
           <Tooltip
-            formatter={(value: number) => formatCurrency(value)}
+            formatter={(value: number) => formatCurrencyValue(value)}
             contentStyle={{
               backgroundColor: theme.palette.background.paper,
               border: `1px solid ${theme.palette.divider}`,
@@ -574,7 +575,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
                         Total Spent
                       </Typography>
                       <Typography variant="h6" fontWeight="bold">
-                        {formatCurrency(categoryDetails.summary.total)}
+                        {formatCurrencyValue(categoryDetails.summary.total)}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -598,7 +599,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
                         Average
                       </Typography>
                       <Typography variant="h6" fontWeight="bold">
-                        {formatCurrency(categoryDetails.summary.average)}
+                        {formatCurrencyValue(categoryDetails.summary.average)}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -639,7 +640,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
                           </Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Typography variant="body2" fontWeight="bold">
-                              {formatCurrency(sub.total)}
+                              {formatCurrencyValue(sub.total)}
                             </Typography>
                             <ChevronRightIcon color="action" />
                           </Box>
@@ -670,7 +671,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
                         >
                           <Typography variant="body2">{vendor.vendor}</Typography>
                           <Typography variant="body2" fontWeight="bold">
-                            {formatCurrency(vendor.total)}
+                            {formatCurrencyValue(vendor.total)}
                           </Typography>
                         </Box>
                       </Grid>
@@ -707,7 +708,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
                             </Typography>
                           </Box>
                           <Typography variant="body2" fontWeight="bold">
-                            {formatCurrency(card.total)}
+                            {formatCurrencyValue(card.total)}
                           </Typography>
                         </Box>
                       </Grid>
@@ -746,7 +747,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
                         secondary={`${new Date(txn.date).toLocaleDateString()} • ${txn.vendor}`}
                       />
                       <Typography variant="body2" fontWeight="bold">
-                        {formatCurrency(Math.abs(txn.price))}
+                        {formatCurrencyValue(Math.abs(txn.price))}
                       </Typography>
                     </ListItem>
                     {index < categoryDetails.transactions.length - 1 && <Divider />}
