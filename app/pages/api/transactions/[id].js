@@ -91,8 +91,6 @@ const handler = createApiHandler({
       paramIndex++;
     }
 
-    updates.push('updated_at = CURRENT_TIMESTAMP');
-
     return {
       sql: `
         UPDATE transactions 
