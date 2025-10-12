@@ -83,7 +83,15 @@ interface BreakdownData {
     subcategories: Subcategory[];
   }>;
   byVendor: Array<{ vendor: string; total: number; count: number }>;
-  byMonth: Array<{ month: string; income: number; expenses: number }>;
+  byMonth: Array<{ month: string; total: number; inflow?: number; outflow?: number }>;
+}
+
+interface BreakdownSummary {
+  total: number;
+  count: number;
+  average: number;
+  min: number;
+  max: number;
 }
 
 interface DetailedTransaction {
@@ -101,6 +109,7 @@ interface BreakdownPanelProps {
   startDate: Date;
   endDate: Date;
   categoryType: 'expense' | 'income' | 'investment';
+  summary?: BreakdownSummary;
 }
 
 interface DrillLevel {
@@ -116,6 +125,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
   startDate,
   endDate,
   categoryType,
+  summary,
 }) => {
   const [view, setView] = useState<'overview' | 'category' | 'vendor' | 'timeline'>('overview');
   const [drillStack, setDrillStack] = useState<DrillLevel[]>([]);
@@ -123,6 +133,9 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [isZooming, setIsZooming] = useState(false);
   const theme = useTheme();
+  const categoryBreakdown = breakdowns?.byCategory ?? [];
+  const vendorBreakdown = breakdowns?.byVendor ?? [];
+  const monthlyBreakdown = breakdowns?.byMonth ?? [];
 
   // Get colors based on category type
   const COLORS = categoryType === 'expense' ? EXPENSE_COLORS : categoryType === 'income' ? INCOME_COLORS : INVESTMENT_COLORS;
@@ -134,28 +147,26 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
       chartTitle: 'Expenses by Category',
       icon: <ShoppingIcon sx={{ mr: 0.5, fontSize: 18 }} />,
       color: 'error' as const,
-      priceFilter: 'price < 0',
     },
     income: {
       title: 'Income Breakdown',
       chartTitle: 'Income by Category',
       icon: <IncomeIcon sx={{ mr: 0.5, fontSize: 18 }} />,
       color: 'success' as const,
-      priceFilter: 'price > 0',
     },
     investment: {
       title: 'Investment Breakdown',
       chartTitle: 'Investments by Category',
       icon: <InvestmentIcon sx={{ mr: 0.5, fontSize: 18 }} />,
       color: 'primary' as const,
-      priceFilter: 'price < 0',
     },
   };
 
   const currentConfig = config[categoryType];
 
   const formatCurrency = (value: number) => {
-    return `₪${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
+    const amount = Number.isFinite(value) ? Math.abs(value) : 0;
+    return `₪${amount.toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
   };
 
   const fetchCategoryDetails = async (parentId?: number, subcategoryId?: number, categoryName?: string) => {
@@ -257,7 +268,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
 
     if (!currentLevel) {
       // Top level: show parent categories
-      return breakdowns.byCategory.map(item => ({
+      return categoryBreakdown.map(item => ({
         id: item.parentId,
         name: item.category,
         value: Math.abs(item.total),
@@ -320,7 +331,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
 
   const renderOverview = () => {
     const data = getCurrentData();
-    const totalAmount = data.reduce((sum, item) => sum + item.value, 0);
+  const totalAmount = data.reduce((sum: number, item: { value: number }) => sum + item.value, 0);
     const currentLevel = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
     const isSubcategoryLevel = currentLevel?.type === 'subcategory';
 
@@ -347,6 +358,9 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
                     cy="50%"
                     outerRadius={100}
                     label={(entry: any) => {
+                      if (!totalAmount) {
+                        return '0%';
+                      }
                       const percent = ((entry.value / totalAmount) * 100).toFixed(0);
                       return `${percent}%`;
                     }}
@@ -391,7 +405,9 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
           <Grid item xs={12} md={6}>
             <Box sx={{ maxHeight: 400, overflowY: 'auto', pr: 1 }}>
               {data.map((item, index) => {
-                const percentage = ((item.value / totalAmount) * 100).toFixed(1);
+                const percentage = totalAmount
+                  ? ((item.value / totalAmount) * 100).toFixed(1)
+                  : '0.0';
                 return (
                   <Zoom in={!isZooming} timeout={200} style={{ transitionDelay: `${index * 50}ms` }} key={index}>
                     <Card
@@ -494,7 +510,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
   };
 
   const renderVendorView = () => {
-    const data = breakdowns.byVendor.map(item => ({
+    const data = vendorBreakdown.map(item => ({
       name: item.vendor,
       value: Math.abs(item.total),
     }));
@@ -524,7 +540,16 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
   };
 
   const renderTimelineView = () => {
-    const data = breakdowns.byMonth;
+    const data = monthlyBreakdown.map(item => ({
+      month: item.month,
+      total: item.total,
+      inflow: item.inflow ?? (categoryType === 'income' ? item.total : 0),
+      outflow: item.outflow ?? (categoryType === 'expense' ? item.total : 0),
+    }));
+
+    const hasInflow = data.some(entry => (entry.inflow ?? 0) > 0);
+    const hasOutflow = data.some(entry => (entry.outflow ?? 0) > 0);
+    const shouldFallbackToTotal = !hasInflow && !hasOutflow;
 
     return (
       <ResponsiveContainer width="100%" height={400}>
@@ -540,20 +565,36 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
             }}
           />
           <Legend />
-          <Line
-            type="monotone"
-            dataKey="expenses"
-            stroke={theme.palette.error.main}
-            strokeWidth={2}
-            name={currentConfig.title}
-          />
-          <Line
-            type="monotone"
-            dataKey="income"
-            stroke={theme.palette.success.main}
-            strokeWidth={2}
-            name="Income"
-          />
+          {shouldFallbackToTotal ? (
+            <Line
+              type="monotone"
+              dataKey="total"
+              stroke={theme.palette.primary.main}
+              strokeWidth={2}
+              name={currentConfig.title}
+            />
+          ) : (
+            <>
+              {hasOutflow && (
+                <Line
+                  type="monotone"
+                  dataKey="outflow"
+                  stroke={theme.palette.error.main}
+                  strokeWidth={2}
+                  name={categoryType === 'income' ? 'Outflow' : currentConfig.title}
+                />
+              )}
+              {hasInflow && (
+                <Line
+                  type="monotone"
+                  dataKey="inflow"
+                  stroke={theme.palette.success.main}
+                  strokeWidth={2}
+                  name={categoryType === 'expense' ? 'Income' : 'Inflow'}
+                />
+              )}
+            </>
+          )}
         </LineChart>
       </ResponsiveContainer>
     );
@@ -561,6 +602,46 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
 
   return (
     <Paper sx={{ p: 3 }}>
+      {summary && (
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid item xs={12} sm={4}>
+            <Card variant="outlined">
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  Total {categoryType === 'income' ? 'Income' : categoryType === 'investment' ? 'Movement' : 'Spent'}
+                </Typography>
+                <Typography variant="h6" fontWeight="bold">
+                  {formatCurrency(summary.total)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <Card variant="outlined">
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  Transactions
+                </Typography>
+                <Typography variant="h6" fontWeight="bold">
+                  {summary.count}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <Card variant="outlined">
+              <CardContent>
+                <Typography variant="caption" color="text.secondary">
+                  Average
+                </Typography>
+                <Typography variant="h6" fontWeight="bold">
+                  {formatCurrency(summary.average)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {drillStack.length > 0 && (
