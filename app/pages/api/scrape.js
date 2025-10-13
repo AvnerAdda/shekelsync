@@ -105,30 +105,30 @@ async function autoCategorizeTransaction(transactionName, client) {
   try {
     const cleanName = transactionName.toLowerCase().trim();
 
-    // Query merchant catalog for matching patterns
-    const catalogResult = await client.query(
+    // Query categorization rules for matching patterns (unified with former merchant_catalog)
+    const rulesResult = await client.query(
       `SELECT
-        merchant_pattern,
+        name_pattern,
         parent_category,
         subcategory,
-        confidence
-       FROM merchant_catalog
+        priority
+       FROM categorization_rules
        WHERE is_active = true
-       AND $1 ILIKE '%' || merchant_pattern || '%'
+       AND $1 ILIKE '%' || name_pattern || '%'
        ORDER BY
-         LENGTH(merchant_pattern) DESC,
-         confidence DESC
+         priority DESC,
+         LENGTH(name_pattern) DESC
        LIMIT 1`,
       [cleanName]
     );
 
-    if (catalogResult.rows.length > 0) {
-      const match = catalogResult.rows[0];
+    if (rulesResult.rows.length > 0) {
+      const match = rulesResult.rows[0];
       return {
         success: true,
-        parent_category: match.parent_category,
+        parent_category: match.parent_category || match.name_pattern,
         subcategory: match.subcategory,
-        confidence: match.confidence
+        confidence: 0.8 // Default confidence for rule-based categorization
       };
     }
 
