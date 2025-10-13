@@ -249,7 +249,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
         >
           All Categories
         </Link>
-        {drillStack.map((level, index) => (
+        {drillStack.map((level: DrillLevel, index: number) => (
           <Link
             key={index}
             component="button"
@@ -273,7 +273,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
 
   const renderOverview = () => {
     const data = getCurrentData();
-    const totalExpenses = data.reduce((sum, item) => sum + item.value, 0);
+    const totalExpenses = data.reduce((sum: number, item: any) => sum + item.value, 0);
     const currentLevel = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
     const isSubcategoryLevel = currentLevel?.type === 'subcategory';
 
@@ -305,7 +305,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
                     }}
                     cursor={!isSubcategoryLevel ? 'pointer' : 'default'}
                   >
-                    {data.map((entry, index) => (
+                    {data.map((entry: any, index: number) => (
                       <Cell
                         key={`cell-${index}`}
                         fill={COLORS[index % COLORS.length]}
@@ -343,7 +343,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
           {/* Category Cards */}
           <Grid item xs={12} md={6}>
             <Box sx={{ maxHeight: 400, overflowY: 'auto', pr: 1 }}>
-              {data.map((item, index) => {
+              {data.map((item: any, index: number) => {
                 const percentage = ((item.value / totalExpenses) * 100).toFixed(1);
                 return (
                   <Zoom in={!isZooming} timeout={200} style={{ transitionDelay: `${index * 50}ms` }} key={index}>
@@ -428,7 +428,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
               }}
             />
             <Bar dataKey="value" fill={theme.palette.primary.main}>
-              {data.map((entry, index) => (
+              {data.map((entry: any, index: number) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Bar>
@@ -446,7 +446,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
 
     return (
       <Grid container spacing={2}>
-        {data.map((item, index) => (
+        {data.map((item: any, index: number) => (
           <Grid item xs={12} sm={6} md={4} key={index}>
             <Card>
               <CardContent>

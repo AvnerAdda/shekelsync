@@ -370,7 +370,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
                     }}
                     cursor={!isSubcategoryLevel ? 'pointer' : 'default'}
                   >
-                    {data.map((entry, index) => (
+                    {data.map((entry: any, index: number) => (
                       <Cell
                         key={`cell-${index}`}
                         fill={COLORS[index % COLORS.length]}
@@ -408,7 +408,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
           {/* Category Cards */}
           <Grid item xs={12} md={6}>
             <Box sx={{ maxHeight: 400, overflowY: 'auto', pr: 1 }}>
-              {data.map((item, index) => {
+              {data.map((item: any, index: number) => {
                 const percentage = totalAmount
                   ? ((item.value / totalAmount) * 100).toFixed(1)
                   : '0.0';
@@ -503,7 +503,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
               }}
             />
             <Bar dataKey="value" fill={theme.palette.primary.main}>
-              {data.map((entry, index) => (
+              {data.map((entry: any, index: number) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Bar>
