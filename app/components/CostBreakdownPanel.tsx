@@ -418,7 +418,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
         <ResponsiveContainer width="100%" height={400}>
           <BarChart data={data} layout="vertical">
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis type="number" tickFormatter={formatCurrency} />
+            <XAxis type="number" tickFormatter={(value: number) => formatCurrencyValue(value)} />
             <YAxis type="category" dataKey="name" width={150} />
             <Tooltip
               formatter={(value: number) => formatCurrencyValue(value)}
@@ -472,7 +472,7 @@ const CostBreakdownPanel: React.FC<CostBreakdownPanelProps> = ({
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="month" />
-          <YAxis tickFormatter={formatCurrency} />
+          <YAxis tickFormatter={(value: number) => formatCurrencyValue(value)} />
           <Tooltip
             formatter={(value: number) => formatCurrencyValue(value)}
             contentStyle={{

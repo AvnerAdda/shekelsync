@@ -1,4 +1,5 @@
 import pool from '../db.js';
+import { buildDuplicateFilter } from '../analytics/utils.js';
 
 /**
  * API endpoint for managing hierarchical categories
@@ -79,8 +80,43 @@ async function handleGet(req, res) {
       ORDER BY cd.category_type, cd.display_order, cd.name
     `;
 
-    const result = await pool.query(query, params);
-    return res.status(200).json(result.rows);
+    const duplicateFilter = await buildDuplicateFilter(pool, 't');
+
+    const [categoryResult, uncategorizedSummary, uncategorizedRecent] = await Promise.all([
+      pool.query(query, params),
+      pool.query(
+        `SELECT COUNT(*) AS total_transactions, COALESCE(SUM(ABS(price)), 0) AS total_amount
+         FROM transactions t
+         WHERE t.category_definition_id IS NULL
+         ${duplicateFilter}`
+      ),
+      pool.query(
+        `SELECT identifier, vendor, name, date, price, account_number
+         FROM transactions t
+         WHERE t.category_definition_id IS NULL
+         ${duplicateFilter}
+         ORDER BY date DESC
+         LIMIT 50`
+      ),
+    ]);
+
+    const summaryRow = uncategorizedSummary.rows[0] || { total_transactions: 0, total_amount: 0 };
+
+    return res.status(200).json({
+      categories: categoryResult.rows,
+      uncategorized: {
+        totalCount: parseInt(summaryRow.total_transactions, 10) || 0,
+        totalAmount: parseFloat(summaryRow.total_amount) || 0,
+        recentTransactions: uncategorizedRecent.rows.map(row => ({
+          identifier: row.identifier,
+          vendor: row.vendor,
+          name: row.name,
+          date: row.date,
+          price: parseFloat(row.price),
+          accountNumber: row.account_number,
+        })),
+      },
+    });
   } catch (error) {
     console.error('Error fetching categories:', error);
     throw error;
