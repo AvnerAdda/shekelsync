@@ -1,4 +1,5 @@
 import { getDB } from '../db.js';
+import { buildDuplicateFilter } from './utils.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -8,7 +9,7 @@ export default async function handler(req, res) {
   const client = await getDB();
 
   try {
-    const { category, parentId, subcategoryId, startDate, endDate } = req.query;
+    const { category, parentId, subcategoryId, startDate, endDate, type = 'expense', excludeDuplicates = 'true' } = req.query;
 
     if (!category && !parentId && !subcategoryId) {
       return res.status(400).json({ error: 'Category identifier is required' });
@@ -17,23 +18,39 @@ export default async function handler(req, res) {
     const start = startDate ? new Date(startDate) : new Date(0);
     const end = endDate ? new Date(endDate) : new Date();
 
+    const duplicateFilter = excludeDuplicates === 'true'
+      ? await buildDuplicateFilter(client, 't')
+      : '';
+
+    // Determine price filter based on type
+    let priceFilter;
+    if (type === 'income') {
+      priceFilter = 't.price > 0';
+    } else if (type === 'investment') {
+      priceFilter = '';
+    } else {
+      priceFilter = 't.price < 0';
+    }
+  const priceFilterClause = priceFilter ? `AND ${priceFilter}` : '';
+  const amountExpression = type === 'income' ? 't.price' : 'ABS(t.price)';
+
     // Build WHERE clause based on what's provided
     let categoryFilter;
     let categoryParams;
 
     if (subcategoryId) {
       // Viewing a specific subcategory
-      categoryFilter = 'category_definition_id = $1';
+      categoryFilter = 't.category_definition_id = $1';
       categoryParams = [subcategoryId];
     } else if (parentId) {
       // Viewing all subcategories under a parent
-      categoryFilter = `category_definition_id IN (
+      categoryFilter = `t.category_definition_id IN (
         SELECT id FROM category_definitions WHERE parent_id = $1
       )`;
       categoryParams = [parentId];
     } else {
       // Legacy: fallback to category name
-      categoryFilter = 'COALESCE(parent_category, category) = $1';
+      categoryFilter = 'COALESCE(t.parent_category, t.category) = $1';
       categoryParams = [category];
     }
 
@@ -41,30 +58,32 @@ export default async function handler(req, res) {
     const summaryResult = await client.query(
       `SELECT
         COUNT(*) as count,
-        SUM(ABS(price)) as total,
-        AVG(ABS(price)) as average,
-        MIN(ABS(price)) as min_amount,
-        MAX(ABS(price)) as max_amount
-      FROM transactions
+  SUM(${amountExpression}) as total,
+  AVG(${amountExpression}) as average,
+  MIN(${amountExpression}) as min_amount,
+  MAX(${amountExpression}) as max_amount
+      FROM transactions t
       WHERE ${categoryFilter}
-      AND price < 0
-      AND date >= $${categoryParams.length + 1}
-      AND date <= $${categoryParams.length + 2}`,
+      ${priceFilterClause}
+      AND t.date >= $${categoryParams.length + 1}
+      AND t.date <= $${categoryParams.length + 2}
+      ${duplicateFilter}`,
       [...categoryParams, start, end]
     );
 
     // Get breakdown by vendor for this category
     const vendorResult = await client.query(
       `SELECT
-        vendor,
+        t.vendor,
         COUNT(*) as count,
-        SUM(ABS(price)) as total
-      FROM transactions
+  SUM(${amountExpression}) as total
+      FROM transactions t
       WHERE ${categoryFilter}
-      AND price < 0
-      AND date >= $${categoryParams.length + 1}
-      AND date <= $${categoryParams.length + 2}
-      GROUP BY vendor
+      ${priceFilterClause}
+      AND t.date >= $${categoryParams.length + 1}
+      AND t.date <= $${categoryParams.length + 2}
+      ${duplicateFilter}
+      GROUP BY t.vendor
       ORDER BY total DESC`,
       [...categoryParams, start, end]
     );
@@ -72,17 +91,18 @@ export default async function handler(req, res) {
     // Get breakdown by card (account_number) for this category
     const cardResult = await client.query(
       `SELECT
-        account_number,
-        vendor,
+        t.account_number,
+        t.vendor,
         COUNT(*) as count,
-        SUM(ABS(price)) as total
-      FROM transactions
+  SUM(${amountExpression}) as total
+      FROM transactions t
       WHERE ${categoryFilter}
-      AND price < 0
-      AND date >= $${categoryParams.length + 1}
-      AND date <= $${categoryParams.length + 2}
-      AND account_number IS NOT NULL
-      GROUP BY account_number, vendor
+      ${priceFilterClause}
+      AND t.date >= $${categoryParams.length + 1}
+      AND t.date <= $${categoryParams.length + 2}
+      AND t.account_number IS NOT NULL
+      ${duplicateFilter}
+      GROUP BY t.account_number, t.vendor
       ORDER BY total DESC`,
       [...categoryParams, start, end]
     );
@@ -95,13 +115,14 @@ export default async function handler(req, res) {
           cd.id,
           cd.name,
           COUNT(t.identifier) as count,
-          SUM(ABS(t.price)) as total
+          SUM(${amountExpression}) as total
         FROM transactions t
         JOIN category_definitions cd ON t.category_definition_id = cd.id
         WHERE cd.parent_id = $1
-        AND t.price < 0
+        ${priceFilterClause}
         AND t.date >= $2
         AND t.date <= $3
+        ${duplicateFilter}
         GROUP BY cd.id, cd.name
         ORDER BY total DESC`,
         [parentId, start, end]
@@ -112,19 +133,20 @@ export default async function handler(req, res) {
     // Get recent transactions for this category
     const transactionsResult = await client.query(
       `SELECT
-        date,
-        name,
-        price,
-        vendor,
-        category,
-        parent_category,
-        account_number
-      FROM transactions
+        t.date,
+        t.name,
+        t.price,
+        t.vendor,
+        t.category,
+        t.parent_category,
+        t.account_number
+      FROM transactions t
       WHERE ${categoryFilter}
-      AND price < 0
-      AND date >= $${categoryParams.length + 1}
-      AND date <= $${categoryParams.length + 2}
-      ORDER BY date DESC
+      ${priceFilterClause}
+      AND t.date >= $${categoryParams.length + 1}
+      AND t.date <= $${categoryParams.length + 2}
+      ${duplicateFilter}
+      ORDER BY t.date DESC
       LIMIT 20`,
       [...categoryParams, start, end]
     );
@@ -132,20 +154,21 @@ export default async function handler(req, res) {
     // Get spending trend by month for this category
     const trendResult = await client.query(
       `SELECT
-        TO_CHAR(date, 'YYYY-MM') as month,
-        SUM(ABS(price)) as total,
+        TO_CHAR(t.date, 'YYYY-MM') as month,
+        SUM(${amountExpression}) as total,
         COUNT(*) as count
-      FROM transactions
+      FROM transactions t
       WHERE ${categoryFilter}
-      AND price < 0
-      AND date >= $${categoryParams.length + 1}
-      AND date <= $${categoryParams.length + 2}
-      GROUP BY TO_CHAR(date, 'YYYY-MM')
+      ${priceFilterClause}
+      AND t.date >= $${categoryParams.length + 1}
+      AND t.date <= $${categoryParams.length + 2}
+      ${duplicateFilter}
+      GROUP BY TO_CHAR(t.date, 'YYYY-MM')
       ORDER BY month ASC`,
       [...categoryParams, start, end]
     );
 
-    const summary = summaryResult.rows[0];
+  const summary = summaryResult.rows[0] || {};
 
     res.status(200).json({
       category: category || null,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -95,6 +95,29 @@ interface PatternPreview {
   matchedTransactions: TransactionMatch[];
 }
 
+interface UncategorizedTransaction {
+  identifier: string;
+  vendor: string;
+  date: string;
+  name: string;
+  price: number;
+  accountNumber?: string;
+}
+
+interface UncategorizedSummary {
+  totalCount: number;
+  totalAmount: number;
+  recentTransactions: UncategorizedTransaction[];
+}
+
+type CategoryType = 'expense' | 'investment' | 'income';
+
+interface TransactionAssignment {
+  type: CategoryType;
+  parentId: number | null;
+  categoryId: number | null;
+}
+
 interface CategoryHierarchyModalProps {
   open: boolean;
   onClose: () => void;
@@ -113,6 +136,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
   // Category Hierarchy State
   const [categories, setCategories] = useState<CategoryDefinition[]>([]);
+  const [uncategorized, setUncategorized] = useState<UncategorizedSummary | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [editingCategory, setEditingCategory] = useState<CategoryDefinition | null>(null);
   const [newCategory, setNewCategory] = useState<Partial<CategoryDefinition>>({
@@ -138,6 +162,56 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [rulePreviewData, setRulePreviewData] = useState<Map<number, PatternPreview>>(new Map());
   const [newRulePreview, setNewRulePreview] = useState<PatternPreview | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, TransactionAssignment>>({});
+  const [savingAssignments, setSavingAssignments] = useState<Record<string, boolean>>({});
+
+  const formatCurrency = (value: number) => {
+    const amount = Number.isFinite(value) ? Math.abs(value) : 0;
+    const formatted = amount.toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+    return `${value < 0 ? '-' : ''}₪${formatted}`;
+  };
+
+  const formatDate = (value: string) => {
+    if (!value) {
+      return 'Unknown date';
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? 'Unknown date' : parsed.toLocaleDateString('en-IL');
+  };
+
+  const categoryLookup = useMemo(() => {
+    const map = new Map<number, CategoryDefinition>();
+    const traverse = (nodes: CategoryDefinition[]) => {
+      nodes.forEach(node => {
+        map.set(node.id, node);
+        if (node.children && node.children.length > 0) {
+          traverse(node.children);
+        }
+      });
+    };
+
+    traverse(categories);
+    return map;
+  }, [categories]);
+
+  const categoryRootsByType = useMemo(() => {
+    const result: Record<CategoryType, CategoryDefinition[]> = {
+      expense: [],
+      investment: [],
+      income: [],
+    };
+
+    categories.forEach((root: CategoryDefinition) => {
+      result[root.category_type as CategoryType].push(root);
+    });
+
+    return result;
+  }, [categories]);
+
+  const getTransactionKey = (txn: UncategorizedTransaction) => `${txn.identifier}|${txn.vendor}`;
 
   useEffect(() => {
     if (open) {
@@ -152,8 +226,19 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       const response = await fetch('/api/categories/hierarchy');
       if (!response.ok) throw new Error('Failed to fetch categories');
 
-      const data = await response.json();
-      setCategories(buildCategoryTree(data));
+      const payload = await response.json();
+      const categoryList = Array.isArray(payload) ? payload : payload?.categories;
+      setCategories(buildCategoryTree(categoryList || []));
+
+      if (!Array.isArray(payload) && payload?.uncategorized) {
+        setUncategorized({
+          totalCount: payload.uncategorized.totalCount ?? 0,
+          totalAmount: payload.uncategorized.totalAmount ?? 0,
+          recentTransactions: payload.uncategorized.recentTransactions ?? [],
+        });
+      } else {
+        setUncategorized(null);
+      }
     } catch (error) {
       console.error('Error fetching categories:', error);
       setError('Failed to load categories');
@@ -162,7 +247,116 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     }
   };
 
-  const buildCategoryTree = (flatCategories: CategoryDefinition[]): CategoryDefinition[] => {
+  useEffect(() => {
+    if (!uncategorized?.recentTransactions || uncategorized.recentTransactions.length === 0) {
+      setAssignmentDrafts({});
+      setSavingAssignments({});
+      return;
+    }
+
+    setAssignmentDrafts((prev: Record<string, TransactionAssignment>) => {
+      const next: Record<string, TransactionAssignment> = {};
+
+      uncategorized.recentTransactions.forEach((txn: UncategorizedTransaction) => {
+        const key = getTransactionKey(txn);
+        if (prev[key]) {
+          next[key] = prev[key];
+        } else {
+          const defaultType: CategoryType = txn.price >= 0 ? 'income' : 'expense';
+          next[key] = {
+            type: defaultType,
+            parentId: null,
+            categoryId: null,
+          };
+        }
+      });
+
+      return next;
+    });
+  }, [uncategorized]);
+
+  const updateAssignmentDraft = (key: string, updates: Partial<TransactionAssignment>) => {
+    setAssignmentDrafts((prev: Record<string, TransactionAssignment>) => ({
+      ...prev,
+      [key]: {
+        type: updates.type ?? prev[key]?.type ?? 'expense',
+        parentId: updates.parentId ?? prev[key]?.parentId ?? null,
+        categoryId: updates.categoryId ?? prev[key]?.categoryId ?? null,
+      },
+    }));
+  };
+
+  const handleAssignmentTypeChange = (key: string, type: CategoryType) => {
+    updateAssignmentDraft(key, { type, parentId: null, categoryId: null });
+  };
+
+  const handleAssignmentParentChange = (key: string, parentId: number | null) => {
+    updateAssignmentDraft(key, { parentId, categoryId: null });
+  };
+
+  const handleAssignmentSubcategoryChange = (key: string, categoryId: number | null) => {
+    updateAssignmentDraft(key, { categoryId });
+  };
+
+  const handleSaveAssignment = async (txn: UncategorizedTransaction) => {
+    const key = getTransactionKey(txn);
+    const draft = assignmentDrafts[key];
+
+    if (!draft || !draft.parentId) {
+      setError('Please select at least a parent category.');
+      return;
+    }
+
+    const parentDefinition = categoryLookup.get(draft.parentId);
+    if (!parentDefinition) {
+      setError('Selected category is no longer available.');
+      return;
+    }
+
+    const selectedCategoryId = draft.categoryId ?? draft.parentId;
+    const categoryDefinition = categoryLookup.get(selectedCategoryId);
+
+  setSavingAssignments((prev: Record<string, boolean>) => ({ ...prev, [key]: true }));
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/transactions/${encodeURIComponent(`${txn.identifier}|${txn.vendor}`)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category_definition_id: selectedCategoryId,
+          category_type: draft.type,
+          parent_category: parentDefinition.name,
+          subcategory: categoryDefinition && categoryDefinition.id !== parentDefinition.id ? categoryDefinition.name : null,
+          category: categoryDefinition ? categoryDefinition.name : parentDefinition.name,
+          auto_categorized: false,
+          confidence_score: null,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        throw new Error(errorPayload?.error || 'Failed to categorize transaction');
+      }
+
+      setSuccess('Transaction categorized successfully');
+      setTimeout(() => setSuccess(null), 3000);
+
+      await fetchCategories();
+      onCategoriesUpdated();
+    } catch (assignmentError) {
+      console.error('Error categorizing transaction:', assignmentError);
+      setError(assignmentError instanceof Error ? assignmentError.message : 'Failed to categorize transaction');
+    } finally {
+      setSavingAssignments((prev: Record<string, boolean>) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
+  const buildCategoryTree = (flatCategories: CategoryDefinition[] = []): CategoryDefinition[] => {
     const categoryMap = new Map<number, CategoryDefinition>();
     const rootCategories: CategoryDefinition[] = [];
 
@@ -652,12 +846,159 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   };
 
   const renderHierarchyTab = () => {
-    const expenseCategories = categories.filter(c => c.category_type === 'expense');
-    const investmentCategories = categories.filter(c => c.category_type === 'investment');
-    const incomeCategories = categories.filter(c => c.category_type === 'income');
+  const expenseCategories = categories.filter((c: CategoryDefinition) => c.category_type === 'expense');
+  const investmentCategories = categories.filter((c: CategoryDefinition) => c.category_type === 'investment');
+  const incomeCategories = categories.filter((c: CategoryDefinition) => c.category_type === 'income');
+    const uncategorizedPreview = uncategorized?.recentTransactions?.slice(0, 10) ?? [];
 
     return (
       <Box>
+        {uncategorized && (
+          <Paper sx={{ p: 2, mb: 3 }}>
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              Unassigned Transactions
+            </Typography>
+            {uncategorized.totalCount === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                All transactions are currently assigned to categories.
+              </Typography>
+            ) : (
+              <>
+                <Typography variant="body2" color="text.secondary">
+                  {`You have ${uncategorized.totalCount.toLocaleString()} transaction${uncategorized.totalCount !== 1 ? 's' : ''} waiting for categorization.`}
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5, mb: 1 }}>
+                  {`Total pending amount: ${formatCurrency(uncategorized.totalAmount)}`}
+                </Typography>
+                <List dense sx={{ pt: 0 }}>
+                  {uncategorizedPreview.map((txn: UncategorizedTransaction) => {
+                    const key = getTransactionKey(txn);
+                    const draft = assignmentDrafts[key];
+                    const parentOptions = categoryRootsByType[draft?.type ?? 'expense'];
+                    const parentDefinition = draft?.parentId ? categoryLookup.get(draft.parentId) : undefined;
+                    const childOptions = parentDefinition?.children ?? [];
+                    const subcategoryValue = draft?.categoryId ?? '';
+                    const isSaving = Boolean(savingAssignments[key]);
+
+                    return (
+                      <ListItem
+                        key={`${txn.identifier}-${txn.vendor}-${txn.date}`}
+                        alignItems="flex-start"
+                        sx={{
+                          flexDirection: 'column',
+                          alignItems: 'stretch',
+                          gap: 1,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          borderRadius: 2,
+                          mb: 1,
+                          py: 1.5,
+                          px: 2,
+                        }}
+                      >
+                        <Box display="flex" justifyContent="space-between" width="100%">
+                          <Box>
+                            <Typography variant="subtitle2" fontWeight="600">
+                              {txn.name || 'Unknown transaction'}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {(txn.vendor || 'Unknown vendor')}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {formatDate(txn.date)}
+                              {txn.accountNumber ? ` • ****${txn.accountNumber}` : ''}
+                            </Typography>
+                          </Box>
+                          <Typography variant="subtitle2" fontWeight="bold">
+                            {formatCurrency(txn.price)}
+                          </Typography>
+                        </Box>
+
+                        <Grid container spacing={1} alignItems="center">
+                          <Grid item xs={12} md={3}>
+                            <FormControl fullWidth size="small">
+                              <InputLabel>Type</InputLabel>
+                              <Select
+                                value={draft?.type ?? 'expense'}
+                                label="Type"
+                                onChange={(event: any) =>
+                                  handleAssignmentTypeChange(key, event.target.value as CategoryType)
+                                }
+                              >
+                                <MenuItem value="expense">Expense</MenuItem>
+                                <MenuItem value="investment">Investment</MenuItem>
+                                <MenuItem value="income">Income</MenuItem>
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} md={4}>
+                            <FormControl fullWidth size="small">
+                              <InputLabel>Parent Category</InputLabel>
+                              <Select
+                                value={draft?.parentId ?? ''}
+                                label="Parent Category"
+                                onChange={(event: any) => {
+                                  const value = event.target.value;
+                                  handleAssignmentParentChange(key, value === '' ? null : Number(value));
+                                }}
+                              >
+                                <MenuItem value="">Select parent</MenuItem>
+                                {parentOptions.map((parent: CategoryDefinition) => (
+                                  <MenuItem key={parent.id} value={parent.id}>
+                                    {parent.name}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} md={3}>
+                            <FormControl fullWidth size="small" disabled={!draft?.parentId || childOptions.length === 0}>
+                              <InputLabel>Subcategory</InputLabel>
+                              <Select
+                                value={subcategoryValue}
+                                label="Subcategory"
+                                onChange={(event: any) => {
+                                  const value = event.target.value;
+                                  handleAssignmentSubcategoryChange(key, value === '' ? null : Number(value));
+                                }}
+                                displayEmpty
+                              >
+                                <MenuItem value="">None</MenuItem>
+                                {childOptions.map((child: CategoryDefinition) => (
+                                  <MenuItem key={child.id} value={child.id}>
+                                    {child.name}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} md={2}>
+                            <Button
+                              fullWidth
+                              variant="contained"
+                              size="small"
+                              onClick={() => handleSaveAssignment(txn)}
+                              disabled={!draft?.parentId || isSaving}
+                              startIcon={isSaving ? <CircularProgress color="inherit" size={16} /> : undefined}
+                            >
+                              {isSaving ? 'Saving' : 'Assign'}
+                            </Button>
+                          </Grid>
+                        </Grid>
+                      </ListItem>
+                    );
+                  })}
+                </List>
+                {uncategorized.totalCount > uncategorizedPreview.length && (
+                  <Typography variant="caption" color="text.secondary">
+                    {`Showing the latest ${uncategorizedPreview.length} of ${uncategorized.totalCount.toLocaleString()} transactions.`}
+                  </Typography>
+                )}
+              </>
+            )}
+          </Paper>
+        )}
+
         {/* Create New Category */}
         <Paper sx={{ p: 2, mb: 3 }}>
           <Typography variant="subtitle1" fontWeight="bold" gutterBottom>

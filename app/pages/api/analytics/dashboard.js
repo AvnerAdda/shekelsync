@@ -1,5 +1,6 @@
 import { getDB } from '../db.js';
-import { subMonths, startOfWeek, startOfMonth, format } from 'date-fns';
+import { startOfWeek, startOfMonth, format } from 'date-fns';
+import { buildDuplicateFilter, resolveDateRange } from './utils.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -11,15 +12,7 @@ export default async function handler(req, res) {
   try {
     const { startDate, endDate, months = 3, aggregation = 'daily', excludeDuplicates = 'true' } = req.query;
 
-    // Calculate date range
-    let start, end;
-    if (startDate && endDate) {
-      start = new Date(startDate);
-      end = new Date(endDate);
-    } else {
-      end = new Date();
-      start = subMonths(end, parseInt(months));
-    }
+    const { start, end } = resolveDateRange({ startDate, endDate, months });
 
     // Determine aggregation SQL based on period
     let dateGroupBy, dateSelect;
@@ -40,63 +33,10 @@ export default async function handler(req, res) {
 
     // Build duplicate exclusion clause
     // Check both transaction_duplicates and manual_exclusions tables
-    let shouldExcludeDuplicates = excludeDuplicates === 'true';
-    let duplicateFilter = '';
-
-    if (shouldExcludeDuplicates) {
-      try {
-        // Check if tables exist
-        const duplicatesTableCheck = await client.query(`
-          SELECT EXISTS (
-            SELECT FROM information_schema.tables
-            WHERE table_name = 'transaction_duplicates'
-          );
-        `);
-
-        const manualExclusionsTableCheck = await client.query(`
-          SELECT EXISTS (
-            SELECT FROM information_schema.tables
-            WHERE table_name = 'manual_exclusions'
-          );
-        `);
-
-        const hasDuplicatesTable = duplicatesTableCheck.rows[0].exists;
-        const hasManualExclusions = manualExclusionsTableCheck.rows[0].exists;
-
-        if (hasDuplicatesTable || hasManualExclusions) {
-          let conditions = [];
-
-          if (hasDuplicatesTable) {
-            conditions.push(`
-              NOT EXISTS (
-                SELECT 1 FROM transaction_duplicates td
-                WHERE td.exclude_from_totals = true
-                AND (
-                  (td.transaction1_identifier = transactions.identifier AND td.transaction1_vendor = transactions.vendor) OR
-                  (td.transaction2_identifier = transactions.identifier AND td.transaction2_vendor = transactions.vendor)
-                )
-              )
-            `);
-          }
-
-          if (hasManualExclusions) {
-            conditions.push(`
-              NOT EXISTS (
-                SELECT 1 FROM manual_exclusions me
-                WHERE me.transaction_identifier = transactions.identifier
-                AND me.transaction_vendor = transactions.vendor
-              )
-            `);
-          }
-
-          if (conditions.length > 0) {
-            duplicateFilter = `AND (${conditions.join(' AND ')})`;
-          }
-        }
-      } catch (err) {
-        console.log('Duplicate filtering not available:', err.message);
-      }
-    }
+    const shouldExcludeDuplicates = excludeDuplicates === 'true';
+    const duplicateFilter = shouldExcludeDuplicates
+      ? await buildDuplicateFilter(client, 'transactions')
+      : '';
 
     // Get transaction history with aggregation
     const historyResult = await client.query(
@@ -115,10 +55,7 @@ export default async function handler(req, res) {
     // Get breakdown by category (EXPENSES ONLY - negative prices)
     // Return hierarchical structure: parent categories with their subcategories
     // Build the duplicate filter with 't' alias
-    let categoryDuplicateFilter = '';
-    if (duplicateFilter) {
-      categoryDuplicateFilter = duplicateFilter.replace(/transactions\./g, 't.');
-    }
+    const categoryDuplicateFilter = duplicateFilter ? duplicateFilter.replace(/transactions\./g, 't.') : '';
 
     const categoryResult = await client.query(
       `WITH parent_totals AS (
