@@ -19,6 +19,7 @@ interface SummaryCardsProps {
   totalIncome: number;
   totalExpenses: number;
   netBalance: number;
+  netInvestments?: number;
   budgetUsage?: number; // percentage
 }
 
@@ -26,6 +27,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   totalIncome,
   totalExpenses,
   netBalance,
+  netInvestments,
   budgetUsage,
 }) => {
   const theme = useTheme();
@@ -68,6 +70,23 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     },
   ];
 
+  // Add Net Investments card if investment data is available
+  if (netInvestments !== undefined) {
+    cards.push({
+      title: 'Net Investments',
+      value: formatCurrencyValue(netInvestments),
+      icon: <BalanceIcon sx={{ fontSize: 40 }} />,
+      color: netInvestments >= 0 ? theme.palette.info.main : theme.palette.warning.main,
+      bgColor: netInvestments >= 0
+        ? (theme.palette.mode === 'dark'
+          ? 'rgba(2, 136, 209, 0.1)'
+          : 'rgba(2, 136, 209, 0.05)')
+        : (theme.palette.mode === 'dark'
+          ? 'rgba(237, 108, 2, 0.1)'
+          : 'rgba(237, 108, 2, 0.05)'),
+    });
+  }
+
   if (budgetUsage !== undefined) {
     cards.push({
       title: 'Budget Usage',
@@ -95,7 +114,13 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   return (
     <Grid container spacing={3}>
       {cards.map((card, index) => (
-        <Grid item xs={12} sm={6} md={budgetUsage !== undefined ? 3 : 4} key={index}>
+        <Grid 
+          item 
+          xs={12} 
+          sm={6} 
+          md={cards.length === 3 ? 4 : cards.length === 4 ? 3 : cards.length === 5 ? 2.4 : 3} 
+          key={index}
+        >
           <Card
             sx={{
               height: '100%',

@@ -54,6 +54,7 @@ import ModalHeader from './ModalHeader';
 interface CategoryDefinition {
   id: number;
   name: string;
+  name_en?: string;
   parent_id: number | null;
   category_type: 'expense' | 'investment' | 'income';
   icon?: string;
@@ -153,7 +154,9 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     name_pattern: '',
     category_type: 'expense',
   });
-  const [selectedCategoryForRule, setSelectedCategoryForRule] = useState<number | null>(null);
+  const [newRuleType, setNewRuleType] = useState<CategoryType>('expense');
+  const [newRuleParentId, setNewRuleParentId] = useState<number | null>(null);
+  const [newRuleCategoryId, setNewRuleCategoryId] = useState<number | null>(null);
   const [isApplyingRules, setIsApplyingRules] = useState(false);
 
   // Transaction Preview State
@@ -204,8 +207,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       income: [],
     };
 
+    // Get actual parent categories (level 2) - children of root categories
+    // Root categories (level 1) are: הוצאות, השקעות, הכנסות
     categories.forEach((root: CategoryDefinition) => {
-      result[root.category_type as CategoryType].push(root);
+      if (root.children && root.children.length > 0) {
+        // Add the children (level 2 - actual parent categories) to the list
+        result[root.category_type as CategoryType].push(...root.children);
+      }
     });
 
     return result;
@@ -592,10 +600,19 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   };
 
   const handleCreateRule = async () => {
-    if (!newRule.name_pattern?.trim() || !selectedCategoryForRule) {
+    if (!newRule.name_pattern?.trim() || !newRuleParentId) {
       setError('Please enter a pattern and select a category');
       return;
     }
+
+    const parentDefinition = categoryLookup.get(newRuleParentId);
+    if (!parentDefinition) {
+      setError('Selected category is no longer available.');
+      return;
+    }
+
+    const selectedCategoryId = newRuleCategoryId ?? newRuleParentId;
+    const categoryDefinition = categoryLookup.get(selectedCategoryId);
 
     try {
       setLoading(true);
@@ -605,8 +622,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...newRule,
-          category_definition_id: selectedCategoryForRule,
+          name_pattern: newRule.name_pattern,
+          category_definition_id: selectedCategoryId,
+          category_type: newRuleType,
+          is_active: true,
         }),
       });
 
@@ -617,7 +636,9 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       setSuccess('Rule created successfully');
       setNewRule({ name_pattern: '', category_type: 'expense' });
-      setSelectedCategoryForRule(null);
+      setNewRuleType('expense');
+      setNewRuleParentId(null);
+      setNewRuleCategoryId(null);
       await fetchRules();
 
       setTimeout(() => setSuccess(null), 3000);
@@ -933,19 +954,19 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                           </Grid>
                           <Grid item xs={12} md={4}>
                             <FormControl fullWidth size="small">
-                              <InputLabel>Parent Category</InputLabel>
+                              <InputLabel>Category</InputLabel>
                               <Select
                                 value={draft?.parentId ?? ''}
-                                label="Parent Category"
+                                label="Category"
                                 onChange={(event: any) => {
                                   const value = event.target.value;
                                   handleAssignmentParentChange(key, value === '' ? null : Number(value));
                                 }}
                               >
-                                <MenuItem value="">Select parent</MenuItem>
+                                <MenuItem value="">Select category</MenuItem>
                                 {parentOptions.map((parent: CategoryDefinition) => (
                                   <MenuItem key={parent.id} value={parent.id}>
-                                    {parent.name}
+                                    {parent.name} {parent.name_en ? `(${parent.name_en})` : ''}
                                   </MenuItem>
                                 ))}
                               </Select>
@@ -953,10 +974,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                           </Grid>
                           <Grid item xs={12} md={3}>
                             <FormControl fullWidth size="small" disabled={!draft?.parentId || childOptions.length === 0}>
-                              <InputLabel>Subcategory</InputLabel>
+                              <InputLabel>Subcategory (Optional)</InputLabel>
                               <Select
                                 value={subcategoryValue}
-                                label="Subcategory"
+                                label="Subcategory (Optional)"
                                 onChange={(event: any) => {
                                   const value = event.target.value;
                                   handleAssignmentSubcategoryChange(key, value === '' ? null : Number(value));
@@ -966,7 +987,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                                 <MenuItem value="">None</MenuItem>
                                 {childOptions.map((child: CategoryDefinition) => (
                                   <MenuItem key={child.id} value={child.id}>
-                                    {child.name}
+                                    {child.name} {child.name_en ? `(${child.name_en})` : ''}
                                   </MenuItem>
                                 ))}
                               </Select>
@@ -1039,10 +1060,26 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 >
                   <MenuItem value="">None (Top Level)</MenuItem>
                   {categories
-                    .filter(c => c.category_type === newCategory.category_type && !c.parent_id)
-                    .map(c => (
-                      <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                    ))}
+                    .filter(c => c.category_type === newCategory.category_type)
+                    .map(c => {
+                      // Show root and its children as potential parents
+                      const items = [
+                        <MenuItem key={c.id} value={c.id}>
+                          {c.name} {c.name_en ? `(${c.name_en})` : ''}
+                        </MenuItem>
+                      ];
+                      if (c.children && c.children.length > 0) {
+                        c.children.forEach(child => {
+                          items.push(
+                            <MenuItem key={child.id} value={child.id} sx={{ pl: 4 }}>
+                              ↳ {child.name} {child.name_en ? `(${child.name_en})` : ''}
+                            </MenuItem>
+                          );
+                        });
+                      }
+                      return items;
+                    })
+                    .flat()}
                 </Select>
               </FormControl>
             </Grid>
@@ -1144,6 +1181,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   };
 
   const renderPatternRulesTab = () => {
+    const parentOptions = categoryRootsByType[newRuleType];
+    const parentDefinition = newRuleParentId ? categoryLookup.get(newRuleParentId) : undefined;
+    const childOptions = parentDefinition?.children ?? [];
+    const subcategoryValue = newRuleCategoryId ?? '';
+
     return (
       <Box>
         <Paper sx={{ p: 2, mb: 3 }}>
@@ -1154,7 +1196,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             Create rules to automatically categorize transactions based on merchant names
           </Typography>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={5}>
+            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 label="Merchant Pattern"
@@ -1169,34 +1211,73 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 }
               />
             </Grid>
-            <Grid item xs={12} md={5}>
+            <Grid item xs={12} md={2}>
               <FormControl fullWidth size="small">
-                <InputLabel>Assign to Category</InputLabel>
+                <InputLabel>Type</InputLabel>
                 <Select
-                  value={selectedCategoryForRule || ''}
-                  onChange={(e) => setSelectedCategoryForRule(Number(e.target.value))}
-                  label="Assign to Category"
+                  value={newRuleType}
+                  label="Type"
+                  onChange={(e) => {
+                    setNewRuleType(e.target.value as CategoryType);
+                    setNewRuleParentId(null);
+                    setNewRuleCategoryId(null);
+                  }}
                 >
-                  {categories.map(parent => [
-                    <MenuItem key={parent.id} value={parent.id} sx={{ fontWeight: 'bold' }}>
-                      {parent.name} ({parent.category_type})
-                    </MenuItem>,
-                    ...(parent.children || []).map(child => (
-                      <MenuItem key={child.id} value={child.id} sx={{ pl: 4 }}>
-                        └ {child.name}
-                      </MenuItem>
-                    ))
-                  ]).flat()}
+                  <MenuItem value="expense">Expense</MenuItem>
+                  <MenuItem value="investment">Investment</MenuItem>
+                  <MenuItem value="income">Income</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Category</InputLabel>
+                <Select
+                  value={newRuleParentId ?? ''}
+                  label="Category"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewRuleParentId(value === '' ? null : Number(value));
+                    setNewRuleCategoryId(null);
+                  }}
+                >
+                  <MenuItem value="">Select category</MenuItem>
+                  {parentOptions.map((parent: CategoryDefinition) => (
+                    <MenuItem key={parent.id} value={parent.id}>
+                      {parent.name} {parent.name_en ? `(${parent.name_en})` : ''}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
             <Grid item xs={12} md={2}>
+              <FormControl fullWidth size="small" disabled={!newRuleParentId || childOptions.length === 0}>
+                <InputLabel>Subcategory (Optional)</InputLabel>
+                <Select
+                  value={subcategoryValue}
+                  label="Subcategory (Optional)"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewRuleCategoryId(value === '' ? null : Number(value));
+                  }}
+                  displayEmpty
+                >
+                  <MenuItem value="">None</MenuItem>
+                  {childOptions.map((child: CategoryDefinition) => (
+                    <MenuItem key={child.id} value={child.id}>
+                      {child.name} {child.name_en ? `(${child.name_en})` : ''}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={1}>
               <Button
                 fullWidth
                 variant="contained"
                 startIcon={<AddIcon />}
                 onClick={handleCreateRule}
-                disabled={loading || !newRule.name_pattern || !selectedCategoryForRule}
+                disabled={loading || !newRule.name_pattern || !newRuleParentId}
                 sx={{ height: '40px' }}
               >
                 Add

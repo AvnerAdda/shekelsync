@@ -43,6 +43,7 @@ async function handleGet(req, res) {
       SELECT
         cd.id,
         cd.name,
+        cd.name_en,
         cd.parent_id,
         cd.category_type,
         cd.display_order,
@@ -75,7 +76,7 @@ async function handleGet(req, res) {
     }
 
     query += `
-      GROUP BY cd.id, cd.name, cd.parent_id, cd.category_type, cd.display_order,
+      GROUP BY cd.id, cd.name, cd.name_en, cd.parent_id, cd.category_type, cd.display_order,
                cd.icon, cd.color, cd.description, cd.is_active, cd.created_at, cd.updated_at
       ORDER BY cd.category_type, cd.display_order, cd.name
     `;

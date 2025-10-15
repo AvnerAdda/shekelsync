@@ -1,7 +1,7 @@
 import { getDB } from '../db.js';
 
 /**
- * Get investment analytics
+ * Get investment analytics using category_type = 'investment'
  * GET /api/analytics/investments
  */
 export default async function handler(req, res) {
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       params.push(startDate, endDate);
     }
 
-    // Get all investment and savings transactions
+    // Get all investment transactions (using new category system)
     const transactionsQuery = `
       SELECT
         t.identifier,
@@ -32,15 +32,15 @@ export default async function handler(req, res) {
         t.price,
         t.category as original_category,
         t.account_number,
-        me.override_category,
-        me.exclusion_reason,
-        me.notes,
-        me.created_at as excluded_at
+        cd.name as category_name,
+        cd.name_en as category_name_en,
+        cd.parent_id,
+        parent.name as parent_name,
+        parent.name_en as parent_name_en
       FROM transactions t
-      JOIN manual_exclusions me ON
-        me.transaction_identifier = t.identifier AND
-        me.transaction_vendor = t.vendor
-      WHERE me.override_category IN ('Investment', 'Savings')
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
+      WHERE cd.category_type = 'investment'
       ${dateFilter}
       ORDER BY t.date DESC
     `;
@@ -50,105 +50,82 @@ export default async function handler(req, res) {
 
     // Calculate summary statistics
     const summary = {
-      totalInvested: 0,
-      totalSavings: 0,
+      totalMovement: 0,      // Total absolute value of all transactions
+      investmentOutflow: 0,  // Money going out (deposits)
+      investmentInflow: 0,   // Money coming in (withdrawals)
+      netInvestments: 0,     // Net amount invested (outflow - inflow)
       totalCount: transactions.length,
-      investmentCount: 0,
-      savingsCount: 0,
     };
 
-    // Breakdown by type
-    const byType = {
-      Investment: { total: 0, count: 0 },
-      Savings: { total: 0, count: 0 },
-    };
-
-    // Breakdown by platform/name pattern
-    const byPlatform = {};
+    // Breakdown by category
+    const byCategory = {};
 
     transactions.forEach(txn => {
-      const amount = Math.abs(txn.price);
-      const type = txn.override_category;
+      const amount = parseFloat(txn.price);
+      const absAmount = Math.abs(amount);
+      const categoryName = txn.category_name || 'Unknown';
+      const categoryNameEn = txn.category_name_en || 'Unknown';
 
       // Update summary
-      if (type === 'Investment') {
-        summary.totalInvested += amount;
-        summary.investmentCount++;
-      } else if (type === 'Savings') {
-        summary.totalSavings += amount;
-        summary.savingsCount++;
+      summary.totalMovement += absAmount;
+      if (amount < 0) {
+        summary.investmentOutflow += absAmount;
+      } else {
+        summary.investmentInflow += absAmount;
       }
 
-      // Update by type
-      if (byType[type]) {
-        byType[type].total += amount;
-        byType[type].count++;
+      // Breakdown by category
+      if (!byCategory[categoryName]) {
+        byCategory[categoryName] = {
+          name: categoryName,
+          name_en: categoryNameEn,
+          total: 0,
+          count: 0,
+          outflow: 0,
+          inflow: 0,
+        };
       }
-
-      // Determine platform from transaction name
-      let platform = 'Other';
-      const name = txn.name.toLowerCase();
-
-      if (name.includes('interactive') || name.includes('brokers')) {
-        platform = 'Interactive Brokers';
-      } else if (name.includes('bits of gold')) {
-        platform = 'Bits of Gold';
-      } else if (name.includes('פיקדון')) {
-        platform = 'פיקדון';
-      } else if (name.includes('קופת גמל')) {
-        platform = 'קופת גמל';
-      } else if (name.includes('חיסכון')) {
-        platform = 'חיסכון';
+      byCategory[categoryName].total += absAmount;
+      byCategory[categoryName].count++;
+      if (amount < 0) {
+        byCategory[categoryName].outflow += absAmount;
+      } else {
+        byCategory[categoryName].inflow += absAmount;
       }
-
-      if (!byPlatform[platform]) {
-        byPlatform[platform] = { total: 0, count: 0, type };
-      }
-      byPlatform[platform].total += amount;
-      byPlatform[platform].count++;
     });
+
+    summary.netInvestments = summary.investmentOutflow - summary.investmentInflow;
 
     // Timeline data (monthly aggregation)
     const timelineQuery = `
       SELECT
         DATE_TRUNC('month', t.date) as month,
-        me.override_category as type,
-        SUM(ABS(t.price)) as total,
+        SUM(CASE WHEN t.price < 0 THEN ABS(t.price) ELSE 0 END) as outflow,
+        SUM(CASE WHEN t.price > 0 THEN t.price ELSE 0 END) as inflow,
         COUNT(*) as count
       FROM transactions t
-      JOIN manual_exclusions me ON
-        me.transaction_identifier = t.identifier AND
-        me.transaction_vendor = t.vendor
-      WHERE me.override_category IN ('Investment', 'Savings')
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      WHERE cd.category_type = 'investment'
       ${dateFilter}
-      GROUP BY DATE_TRUNC('month', t.date), me.override_category
+      GROUP BY DATE_TRUNC('month', t.date)
       ORDER BY month DESC
     `;
 
     const timelineResult = await client.query(timelineQuery, params);
     const timeline = timelineResult.rows.map(row => ({
       month: row.month,
-      type: row.type,
-      total: parseFloat(row.total),
+      outflow: parseFloat(row.outflow),
+      inflow: parseFloat(row.inflow),
+      net: parseFloat(row.outflow) - parseFloat(row.inflow),
       count: parseInt(row.count),
     }));
 
-    // Format platform data for response
-    const platformsArray = Object.entries(byPlatform).map(([name, data]) => ({
-      platform: name,
-      total: data.total,
-      count: data.count,
-      type: data.type,
-    })).sort((a, b) => b.total - a.total);
+    // Format category data for response
+    const categoriesArray = Object.values(byCategory).sort((a, b) => b.total - a.total);
 
     res.status(200).json({
       summary,
-      byType: Object.entries(byType).map(([type, data]) => ({
-        type,
-        total: data.total,
-        count: data.count,
-      })),
-      byPlatform: platformsArray,
+      byCategory: categoriesArray,
       timeline,
       transactions: transactions.map(txn => ({
         ...txn,
