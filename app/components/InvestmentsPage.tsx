@@ -31,27 +31,25 @@ import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
 interface InvestmentData {
   summary: {
-    totalInvested: number;
-    totalSavings: number;
+    totalMovement: number;
+    investmentOutflow: number;
+    investmentInflow: number;
+    netInvestments: number;
     totalCount: number;
-    investmentCount: number;
-    savingsCount: number;
   };
-  byType: Array<{
-    type: string;
+  byCategory: Array<{
+    name: string;
+    name_en: string;
     total: number;
     count: number;
-  }>;
-  byPlatform: Array<{
-    platform: string;
-    total: number;
-    count: number;
-    type: string;
+    outflow: number;
+    inflow: number;
   }>;
   timeline: Array<{
     month: string;
-    type: string;
-    total: number;
+    outflow: number;
+    inflow: number;
+    net: number;
     count: number;
   }>;
   transactions: Array<{
@@ -60,9 +58,11 @@ interface InvestmentData {
     date: string;
     name: string;
     price: number;
-    override_category: string;
+    category_name?: string;
+    category_name_en?: string;
+    parent_name?: string;
+    parent_name_en?: string;
     account_number?: string;
-    notes?: string;
   }>;
 }
 
@@ -150,45 +150,40 @@ const InvestmentsPage: React.FC = () => {
     return (
       <Box sx={{ p: 3 }}>
         <Typography variant="h4" gutterBottom fontWeight="bold">
-          Investments & Savings
+          Investments
         </Typography>
         <Alert severity="info">
-          No investment or savings transactions found. Use the Duplicate Management modal to mark transactions as investments or savings.
+          No investment transactions found.
         </Alert>
       </Box>
     );
   }
 
-  const pieData = data.byType.map(item => ({
-    name: item.type,
+  const pieData = data.byCategory.map(item => ({
+    name: item.name_en || item.name,
     value: item.total,
   }));
 
-  const barData = data.byPlatform.map(item => ({
-    name: item.platform,
+  const barData = data.byCategory.map(item => ({
+    name: item.name_en || item.name,
     amount: item.total,
     count: item.count,
   }));
 
-  // Aggregate timeline by month (combine Investment + Savings)
-  const timelineMap = new Map<string, { month: string; Investment: number; Savings: number }>();
-  data.timeline.forEach(item => {
-    const month = formatMonth(item.month);
-    if (!timelineMap.has(month)) {
-      timelineMap.set(month, { month, Investment: 0, Savings: 0 });
-    }
-    const entry = timelineMap.get(month)!;
-    if (item.type === 'Investment') entry.Investment = item.total;
-    if (item.type === 'Savings') entry.Savings = item.total;
-  });
-  const lineData = Array.from(timelineMap.values()).reverse();
+  // Timeline data - already aggregated by month
+  const lineData = data.timeline.map(item => ({
+    month: formatMonth(item.month),
+    Outflow: item.outflow,
+    Inflow: item.inflow,
+    Net: item.net,
+  })).reverse();
 
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" fontWeight="bold">
-          Investments & Savings
+          Investments
         </Typography>
         <FormControl size="small" sx={{ minWidth: 120 }}>
           <InputLabel>Date Range</InputLabel>
@@ -208,19 +203,43 @@ const InvestmentsPage: React.FC = () => {
       {/* Summary Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ 
+            background: data.summary.netInvestments >= 0 
+              ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+              : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            color: 'white'
+          }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <TrendingUpIcon sx={{ mr: 1 }} />
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  Net Investments
+                </Typography>
+              </Box>
+              <Typography variant="h4" fontWeight="bold">
+                {formatCurrencyValue(data.summary.netInvestments)}
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                {data.summary.netInvestments >= 0 ? 'Actively investing' : 'Withdrawing'}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <TrendingUpIcon sx={{ mr: 1, color: '#3b82f6' }} />
+                <MoneyIcon sx={{ mr: 1, color: '#ef4444' }} />
                 <Typography variant="body2" color="text.secondary">
-                  Total Invested
+                  Total Outflow
                 </Typography>
               </Box>
               <Typography variant="h5" fontWeight="bold">
-                {formatCurrencyValue(data.summary.totalInvested)}
+                {formatCurrencyValue(data.summary.investmentOutflow)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {data.summary.investmentCount} transactions
+                Deposits & purchases
               </Typography>
             </CardContent>
           </Card>
@@ -232,14 +251,14 @@ const InvestmentsPage: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <SavingsIcon sx={{ mr: 1, color: '#10b981' }} />
                 <Typography variant="body2" color="text.secondary">
-                  Total Savings
+                  Total Inflow
                 </Typography>
               </Box>
               <Typography variant="h5" fontWeight="bold">
-                {formatCurrencyValue(data.summary.totalSavings)}
+                {formatCurrencyValue(data.summary.investmentInflow)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {data.summary.savingsCount} transactions
+                Withdrawals & returns
               </Typography>
             </CardContent>
           </Card>
@@ -249,35 +268,16 @@ const InvestmentsPage: React.FC = () => {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <MoneyIcon sx={{ mr: 1, color: '#f59e0b' }} />
+                <ChartIcon sx={{ mr: 1, color: '#f59e0b' }} />
                 <Typography variant="body2" color="text.secondary">
-                  Combined Total
+                  Total Movement
                 </Typography>
               </Box>
               <Typography variant="h5" fontWeight="bold">
-                {formatCurrencyValue(data.summary.totalInvested + data.summary.totalSavings)}
+                {formatCurrencyValue(data.summary.totalMovement)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {data.summary.totalCount} transactions
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <ChartIcon sx={{ mr: 1, color: '#8b5cf6' }} />
-                <Typography variant="body2" color="text.secondary">
-                  Platforms
-                </Typography>
-              </Box>
-              <Typography variant="h5" fontWeight="bold">
-                {data.byPlatform.length}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Active platforms
               </Typography>
             </CardContent>
           </Card>
@@ -286,11 +286,14 @@ const InvestmentsPage: React.FC = () => {
 
       {/* Charts */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Pie Chart - By Type */}
+        {/* Pie Chart - By Category */}
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2, height: '100%' }}>
             <Typography variant="h6" gutterBottom>
-              By Type
+              Investment Breakdown
+            </Typography>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Investments by Category
             </Typography>
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
@@ -314,11 +317,11 @@ const InvestmentsPage: React.FC = () => {
           </Paper>
         </Grid>
 
-        {/* Bar Chart - By Platform */}
+        {/* Bar Chart - By Category */}
         <Grid item xs={12} md={8}>
           <Paper sx={{ p: 2, height: '100%' }}>
             <Typography variant="h6" gutterBottom>
-              By Platform
+              By Category
             </Typography>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={barData}>
@@ -336,7 +339,7 @@ const InvestmentsPage: React.FC = () => {
         <Grid item xs={12}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>
-              Timeline
+              Investment Timeline
             </Typography>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={lineData}>
@@ -345,8 +348,9 @@ const InvestmentsPage: React.FC = () => {
                  <YAxis tickFormatter={(value) => formatCurrencyThousands(Number(value))} />
                  <Tooltip formatter={(value: number) => formatCurrencyValue(value)} />
                 <Legend />
-                <Line type="monotone" dataKey="Investment" stroke="#3b82f6" strokeWidth={2} />
-                <Line type="monotone" dataKey="Savings" stroke="#10b981" strokeWidth={2} />
+                <Line type="monotone" dataKey="Outflow" stroke="#ef4444" strokeWidth={2} name="Deposits" />
+                <Line type="monotone" dataKey="Inflow" stroke="#10b981" strokeWidth={2} name="Withdrawals" />
+                <Line type="monotone" dataKey="Net" stroke="#3b82f6" strokeWidth={3} name="Net Investments" />
               </LineChart>
             </ResponsiveContainer>
           </Paper>
@@ -375,21 +379,26 @@ const InvestmentsPage: React.FC = () => {
                   <TableCell>{formatDate(txn.date)}</TableCell>
                   <TableCell>
                     <Typography variant="body2">{txn.name}</Typography>
-                    {txn.notes && (
+                    {txn.category_name && (
                       <Typography variant="caption" color="text.secondary">
-                        {txn.notes}
+                        {txn.category_name_en || txn.category_name}
+                        {txn.parent_name && ` • ${txn.parent_name_en || txn.parent_name}`}
                       </Typography>
                     )}
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={txn.override_category}
-                      color={txn.override_category === 'Investment' ? 'primary' : 'success'}
+                      label={txn.price < 0 ? 'Deposit' : 'Withdrawal'}
+                      color={txn.price < 0 ? 'error' : 'success'}
                       size="small"
                     />
                   </TableCell>
                   <TableCell align="right">
-                    <Typography variant="body2" fontWeight="medium">
+                    <Typography 
+                      variant="body2" 
+                      fontWeight="medium"
+                      color={txn.price < 0 ? 'error.main' : 'success.main'}
+                    >
                       {formatCurrencyValue(txn.price)}
                     </Typography>
                   </TableCell>

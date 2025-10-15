@@ -26,6 +26,9 @@ interface DashboardData {
     totalIncome: number;
     totalExpenses: number;
     netBalance: number;
+    investmentOutflow: number;
+    investmentInflow: number;
+    netInvestments: number;
     totalAccounts: number;
   };
   history: Array<{
@@ -183,6 +186,7 @@ const HomePage: React.FC = () => {
           totalIncome={data.summary.totalIncome}
           totalExpenses={data.summary.totalExpenses}
           netBalance={data.summary.netBalance}
+          netInvestments={data.summary.netInvestments}
           budgetUsage={budgetUsage}
         />
       </Box>

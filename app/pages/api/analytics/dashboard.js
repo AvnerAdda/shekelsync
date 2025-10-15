@@ -38,15 +38,22 @@ export default async function handler(req, res) {
       ? await buildDuplicateFilter(client, 'transactions')
       : '';
 
-    // Get transaction history with aggregation
+    // Get transaction history with aggregation - separated by category type
     const historyResult = await client.query(
       `SELECT
         ${dateSelect},
-        SUM(CASE WHEN price > 0 THEN price ELSE 0 END) as income,
-        SUM(CASE WHEN price < 0 THEN ABS(price) ELSE 0 END) as expenses
-      FROM transactions
-      WHERE date >= $1 AND date <= $2
-      ${duplicateFilter}
+        SUM(CASE 
+          WHEN cd.category_type = 'income' AND t.price > 0 THEN t.price 
+          ELSE 0 
+        END) as income,
+        SUM(CASE 
+          WHEN cd.category_type = 'expense' AND t.price < 0 THEN ABS(t.price) 
+          ELSE 0 
+        END) as expenses
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      WHERE t.date >= $1 AND t.date <= $2
+      ${duplicateFilter.replace(/transactions\./g, 't.')}
       GROUP BY ${dateGroupBy}
       ORDER BY date ASC`,
       [start, end]
@@ -125,41 +132,69 @@ export default async function handler(req, res) {
       [start, end]
     );
 
-    // Get breakdown by month
+    // Get breakdown by month - separated by category type
     const monthResult = await client.query(
       `SELECT
-        TO_CHAR(date, 'YYYY-MM') as month,
-        SUM(CASE WHEN price > 0 THEN price ELSE 0 END) as income,
-        SUM(CASE WHEN price < 0 THEN ABS(price) ELSE 0 END) as expenses
-      FROM transactions
-      WHERE date >= $1 AND date <= $2
-      ${duplicateFilter}
-      GROUP BY TO_CHAR(date, 'YYYY-MM')
+        TO_CHAR(t.date, 'YYYY-MM') as month,
+        SUM(CASE 
+          WHEN cd.category_type = 'income' AND t.price > 0 THEN t.price 
+          ELSE 0 
+        END) as income,
+        SUM(CASE 
+          WHEN cd.category_type = 'expense' AND t.price < 0 THEN ABS(t.price) 
+          ELSE 0 
+        END) as expenses
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      WHERE t.date >= $1 AND t.date <= $2
+      ${duplicateFilter.replace(/transactions\./g, 't.')}
+      GROUP BY TO_CHAR(t.date, 'YYYY-MM')
       ORDER BY month ASC`,
       [start, end]
     );
 
-    // Get summary stats
+    // Get summary stats - properly separated by category type
     const summaryResult = await client.query(
       `SELECT
-        SUM(CASE WHEN price > 0 THEN price ELSE 0 END) as total_income,
-        SUM(CASE WHEN price < 0 THEN ABS(price) ELSE 0 END) as total_expenses,
-        COUNT(DISTINCT vendor) as total_accounts
-      FROM transactions
-      WHERE date >= $1 AND date <= $2
-      ${duplicateFilter}`,
+        SUM(CASE 
+          WHEN cd.category_type = 'income' AND t.price > 0 THEN t.price 
+          ELSE 0 
+        END) as total_income,
+        SUM(CASE 
+          WHEN cd.category_type = 'expense' AND t.price < 0 THEN ABS(t.price) 
+          ELSE 0 
+        END) as total_expenses,
+        SUM(CASE 
+          WHEN cd.category_type = 'investment' AND t.price < 0 THEN ABS(t.price) 
+          ELSE 0 
+        END) as investment_outflow,
+        SUM(CASE 
+          WHEN cd.category_type = 'investment' AND t.price > 0 THEN t.price 
+          ELSE 0 
+        END) as investment_inflow,
+        COUNT(DISTINCT t.vendor) as total_accounts
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      WHERE t.date >= $1 AND t.date <= $2
+      ${duplicateFilter.replace(/transactions\./g, 't.')}`,
       [start, end]
     );
 
     const summary = summaryResult.rows[0];
     const totalIncome = parseFloat(summary.total_income || 0);
     const totalExpenses = parseFloat(summary.total_expenses || 0);
+    const investmentOutflow = parseFloat(summary.investment_outflow || 0);
+    const investmentInflow = parseFloat(summary.investment_inflow || 0);
+    const netInvestments = investmentOutflow - investmentInflow; // Positive = net investment, Negative = net withdrawal
     const netBalance = totalIncome - totalExpenses;
 
     console.log('Summary calculation:', {
       totalIncome,
       totalExpenses,
       netBalance,
+      investmentOutflow,
+      investmentInflow,
+      netInvestments,
       raw: summary
     });
 
@@ -169,6 +204,9 @@ export default async function handler(req, res) {
         totalIncome,
         totalExpenses,
         netBalance,
+        investmentOutflow,
+        investmentInflow,
+        netInvestments,
         totalAccounts: parseInt(summary.total_accounts || 0)
       },
       history: historyResult.rows.map(row => ({
