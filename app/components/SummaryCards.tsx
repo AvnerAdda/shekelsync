@@ -12,6 +12,7 @@ import {
   TrendingDown as ExpenseIcon,
   AccountBalance as BalanceIcon,
   PieChart as BudgetIcon,
+  Savings as PortfolioIcon,
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
@@ -20,6 +21,7 @@ interface SummaryCardsProps {
   totalExpenses: number;
   netBalance: number;
   netInvestments?: number;
+  portfolioValue?: number | null;
   budgetUsage?: number; // percentage
 }
 
@@ -28,6 +30,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   totalExpenses,
   netBalance,
   netInvestments,
+  portfolioValue,
   budgetUsage,
 }) => {
   const theme = useTheme();
@@ -87,6 +90,19 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     });
   }
 
+  // Add Portfolio Value card if available
+  if (portfolioValue !== undefined && portfolioValue !== null && portfolioValue > 0) {
+    cards.push({
+      title: 'Portfolio Value',
+      value: formatCurrencyValue(portfolioValue),
+      icon: <PortfolioIcon sx={{ fontSize: 40 }} />,
+      color: theme.palette.success.main,
+      bgColor: theme.palette.mode === 'dark'
+        ? 'rgba(46, 125, 50, 0.1)'
+        : 'rgba(46, 125, 50, 0.05)',
+    });
+  }
+
   if (budgetUsage !== undefined) {
     cards.push({
       title: 'Budget Usage',
@@ -118,7 +134,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
           item 
           xs={12} 
           sm={6} 
-          md={cards.length === 3 ? 4 : cards.length === 4 ? 3 : cards.length === 5 ? 2.4 : 3} 
+          md={cards.length <= 3 ? 4 : cards.length === 4 ? 3 : cards.length === 5 ? 2.4 : 2} 
           key={index}
         >
           <Card
