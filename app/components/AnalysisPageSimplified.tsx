@@ -26,9 +26,6 @@ import {
   CompareArrows as CompareIcon,
   Timeline as TimelineIcon,
 } from '@mui/icons-material';
-import { BarChart } from '@mui/x-charts/BarChart';
-import { LineChart } from '@mui/x-charts/LineChart';
-import { SparkLineChart } from '@mui/x-charts/SparkLineChart';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import ActionabilitySetupModal from './AnalysisPage/ActionabilitySetupModal';
 import RecurringTransactionManager from './AnalysisPage/RecurringTransactionManager';
@@ -312,55 +309,24 @@ const AnalysisPage: React.FC = () => {
                     </Typography>
                   </Box>
                   
-                  {/* Hourly Spending Heatmap */}
-                  {temporal.hourlyHeatmap && temporal.hourlyHeatmap.length > 0 && (
-                    <Box sx={{ mb: 2, height: 80 }}>
-                      <Typography variant="caption" color="text.secondary" gutterBottom>
-                        Spending by Hour of Day
-                      </Typography>
-                      <BarChart
-                        height={60}
-                        margin={{ top: 5, bottom: 5, left: 0, right: 0 }}
-                        xAxis={[{ 
-                          data: Array.from({ length: 24 }, (_, i) => i),
-                          scaleType: 'band',
-                          tickMinStep: 6,
-                          hideTooltip: false
-                        }]}
-                        series={[{
-                          data: temporal.hourlyHeatmap,
-                          color: '#1976d2',
-                        }]}
-                        tooltip={{ trigger: 'item' }}
-                        slotProps={{
-                          legend: { hidden: true },
-                        }}
-                      />
-                    </Box>
-                  )}
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary">Most Active Day</Typography>
+                    <Typography variant="h6">{temporal.mostActiveDay}</Typography>
+                  </Box>
 
-                  <Grid container spacing={1}>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">Financial Runway</Typography>
-                      <Typography variant="h6">{temporal.financialRunwayDays || 0} days</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">Daily Burn Rate</Typography>
-                      <Typography variant="h6">{formatCurrencyValue(temporal.dailyBurnRate || 0)}</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">Peak Hour</Typography>
-                      <Typography variant="body2">
-                        {temporal.peakSpendingHour !== undefined ? `${temporal.peakSpendingHour}:00` : 'N/A'}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">Payday Effect</Typography>
-                      <Typography variant="body2">
-                        {Math.round(temporal.paydayEffect || 0)}%
-                      </Typography>
-                    </Grid>
-                  </Grid>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary">Spending Pattern</Typography>
+                    <Typography variant="body2">
+                      {temporal.monthPhaseSpending?.beginning}% Beginning · {' '}
+                      {temporal.monthPhaseSpending?.middle}% Middle · {' '}
+                      {temporal.monthPhaseSpending?.end}% End of Month
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Average Per Day</Typography>
+                    <Typography variant="h6">{formatCurrencyValue(temporal.avgDailySpend)}</Typography>
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
@@ -376,66 +342,23 @@ const AnalysisPage: React.FC = () => {
                     </Typography>
                   </Box>
 
-                  {/* Impulse vs Planned Visual */}
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="caption" color="text.secondary">Spending Style</Typography>
-                    <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, mb: 1 }}>
-                      <Box
-                        sx={{
-                          flex: behavioral.impulseSpendingScore || 0,
-                          height: 8,
-                          bgcolor: 'warning.main',
-                          borderRadius: 1,
-                          transition: 'all 0.3s'
-                        }}
-                      />
-                      <Box
-                        sx={{
-                          flex: 100 - (behavioral.impulseSpendingScore || 0),
-                          height: 8,
-                          bgcolor: 'success.main',
-                          borderRadius: 1,
-                          transition: 'all 0.3s'
-                        }}
-                      />
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="warning.main">
-                        {Math.round(behavioral.impulseSpendingScore || 0)}% Impulse
-                      </Typography>
-                      <Typography variant="caption" color="success.main">
-                        {Math.round(100 - (behavioral.impulseSpendingScore || 0))}% Planned
-                      </Typography>
-                    </Box>
+                    <Typography variant="body2">
+                      {behavioral.impulsePurchaseRate}% Impulse · {' '}
+                      {100 - behavioral.impulsePurchaseRate}% Planned
+                    </Typography>
                   </Box>
 
-                  <Grid container spacing={1}>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">Avg Transaction</Typography>
-                      <Typography variant="h6">{formatCurrencyValue(behavioral.averageTransactionSize || 0)}</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">Small Purchases</Typography>
-                      <Typography variant="h6">{behavioral.smallTransactionCount || 0}</Typography>
-                    </Grid>
-                    <Grid item xs={12}>
-                      <Typography variant="caption" color="text.secondary">FOMO Score</Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <LinearProgress
-                          variant="determinate"
-                          value={behavioral.fomoScore || 0}
-                          sx={{ flex: 1, height: 6, borderRadius: 3 }}
-                          color={behavioral.fomoScore > 70 ? 'error' : behavioral.fomoScore > 40 ? 'warning' : 'success'}
-                        />
-                        <Typography variant="body2" fontWeight="bold">
-                          {behavioral.fomoScore || 0}/100
-                        </Typography>
-                      </Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-                        Weekend entertainment spending indicator
-                      </Typography>
-                    </Grid>
-                  </Grid>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary">Favorite Category</Typography>
+                    <Typography variant="h6">{behavioral.favoriteCategory}</Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Shopping Frequency</Typography>
+                    <Typography variant="body2">{behavioral.avgTransactionsPerDay} times/day</Typography>
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
@@ -451,52 +374,24 @@ const AnalysisPage: React.FC = () => {
                     </Typography>
                   </Box>
 
-                  {/* 6-Month Trajectory Sparkline */}
                   <Box sx={{ mb: 2 }}>
-                    <Typography variant="caption" color="text.secondary">6-Month Savings Trajectory</Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography 
-                        variant="h6" 
-                        color={predictive.savingsTrajectory6m > 0 ? 'success.main' : 'error.main'}
-                      >
-                        {formatCurrencyValue(predictive.savingsTrajectory6m, { showSign: true })}
-                      </Typography>
-                      <Box sx={{ flex: 1, height: 30 }}>
-                        <SparkLineChart
-                          data={Array.from({ length: 6 }, (_, i) => 
-                            (predictive.monthlySavings || 0) * (i + 1)
-                          )}
-                          height={30}
-                          curve="natural"
-                          area
-                          colors={[predictive.savingsTrajectory6m > 0 ? '#4caf50' : '#f44336']}
-                          margin={{ top: 2, bottom: 2, left: 2, right: 2 }}
-                        />
-                      </Box>
-                    </Box>
+                    <Typography variant="caption" color="text.secondary">End of Month Forecast</Typography>
+                    <Typography variant="h6" color="primary.main">
+                      {formatCurrencyValue(predictive.forecastEndMonth)}
+                    </Typography>
                   </Box>
 
-                  <Grid container spacing={1}>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">End of Month</Typography>
-                      <Typography variant="h6" color="primary.main">
-                        {formatCurrencyValue(predictive.forecastEndMonth)}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">Monthly Savings</Typography>
-                      <Typography 
-                        variant="h6" 
-                        color={predictive.monthlySavings > 0 ? 'success.main' : 'error.main'}
-                      >
-                        {formatCurrencyValue(predictive.monthlySavings, { showSign: true })}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12}>
-                      <Typography variant="caption" color="text.secondary">Daily Velocity</Typography>
-                      <Typography variant="body2">{formatCurrencyValue(predictive.spendingVelocity)}/day</Typography>
-                    </Grid>
-                  </Grid>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary">6-Month Trajectory</Typography>
+                    <Typography variant="h6" color={predictive.savingsTrajectory6m > 0 ? 'success.main' : 'error.main'}>
+                      {formatCurrencyValue(predictive.savingsTrajectory6m, { showSign: true })}
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Daily Spend Rate</Typography>
+                    <Typography variant="body2">{formatCurrencyValue(predictive.spendingVelocity)}/day</Typography>
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
@@ -514,21 +409,15 @@ const AnalysisPage: React.FC = () => {
 
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="caption" color="text.secondary">Your Time = Money</Typography>
-                    <Typography variant="h6">{formatCurrencyValue(psychological.hourlyWage || 0)}/hour</Typography>
+                    <Typography variant="h6">{formatCurrencyValue(psychological.hourlyWage)}/hour</Typography>
                     <Typography variant="caption">
-                      Avg purchase = {typeof psychological.avgTransactionInHours === 'number' 
-                        ? psychological.avgTransactionInHours.toFixed(1) 
-                        : psychological.avgTransactionInHours} hours of work
+                      Avg purchase = {psychological.avgTransactionInHours} hours of work
                     </Typography>
                   </Box>
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">Biggest Purchase This Month</Typography>
-                    <Typography variant="body2">
-                      {typeof psychological.biggestPurchaseHours === 'number' 
-                        ? Math.round(psychological.biggestPurchaseHours) 
-                        : psychological.biggestPurchaseHours} hours of work
-                    </Typography>
+                    <Typography variant="body2">{psychological.biggestPurchaseHours} hours of work</Typography>
                   </Box>
                 </CardContent>
               </Card>
