@@ -10,11 +10,12 @@ import {
   Button,
   Tabs,
   Tab,
+  Grid,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import SummaryCards from '../components/SummaryCards';
 import BreakdownPanel from '../components/BreakdownPanel';
@@ -45,10 +46,37 @@ interface DashboardData {
 
 type AggregationPeriod = 'daily' | 'weekly' | 'monthly';
 
+interface Transaction {
+  identifier: string;
+  vendor: string;
+  price: number;
+  description: string;
+  date: string;
+  category: string;
+  parentCategory: string;
+  categoryType: string;
+}
+
+interface PortfolioBreakdownItem {
+  name: string;
+  value: number;
+  percentage: number;
+  [key: string]: any;
+}
+
+interface MonthlyFlowItem {
+  name: string;
+  value: number;
+  [key: string]: any;
+}
+
+const CHART_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF6B9D'];
+
 const HomePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData | null>(null);
   const [portfolioValue, setPortfolioValue] = useState<number | null>(null);
+  const [portfolioBreakdown, setPortfolioBreakdown] = useState<PortfolioBreakdownItem[]>([]);
   const [breakdownData, setBreakdownData] = useState<Record<'expense' | 'income' | 'investment', any>>({
     expense: null,
     income: null,
@@ -65,8 +93,11 @@ const HomePage: React.FC = () => {
   const [startDate, setStartDate] = useState<Date>(lastMonthStart);
   const [endDate, setEndDate] = useState<Date>(lastMonthEnd);
   const [aggregationPeriod, setAggregationPeriod] = useState<AggregationPeriod>('daily');
-  const [selectedBreakdownType, setSelectedBreakdownType] = useState<'expense' | 'income' | 'investment'>('expense');
+  const [selectedBreakdownType, setSelectedBreakdownType] = useState<'overall' | 'expense' | 'income' | 'investment'>('overall');
   const [budgetUsage, setBudgetUsage] = useState<number | undefined>();
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
+  const [dateTransactions, setDateTransactions] = useState<Transaction[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
 
@@ -85,6 +116,72 @@ const HomePage: React.FC = () => {
       fetchBreakdownData('investment');
     }
   }, [selectedBreakdownType, breakdownData.investment, breakdownLoading.investment]);
+
+  const fetchTransactionsByDate = async (date: string) => {
+    setLoadingTransactions(true);
+    console.log('fetchTransactionsByDate called with:', date);
+    try {
+      const formattedDate = format(new Date(date), 'yyyy-MM-dd');
+      console.log('Formatted date for API:', formattedDate);
+      const response = await fetch(`/api/analytics/transactions-by-date?date=${formattedDate}`);
+      if (response.ok) {
+        const result = await response.json();
+        console.log('API response:', result);
+        setDateTransactions(result.transactions || []);
+      } else {
+        console.error('API error:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('Error fetching transactions by date:', error);
+      setDateTransactions([]);
+    } finally {
+      setLoadingTransactions(false);
+    }
+  };
+
+  const handleChartClick = (data: any, index: number) => {
+    console.log('Dot click - data:', data, 'index:', index);
+    // The actual payload is in the index parameter when clicking dots
+    if (index && (index as any).payload && (index as any).payload.date) {
+      const clickedDate = (index as any).payload.date;
+      console.log('Fetching transactions for date:', clickedDate);
+      fetchTransactionsByDate(clickedDate);
+      setHoveredDate(clickedDate);
+    }
+  };
+
+  const handleChartAreaClick = (data: any) => {
+    console.log('Chart area click - data:', data);
+    // For chart area click, use activeLabel which has the date
+    if (data && data.activeLabel) {
+      const clickedDate = data.activeLabel;
+      console.log('Fetching transactions for date:', clickedDate);
+      fetchTransactionsByDate(clickedDate);
+      setHoveredDate(clickedDate);
+    }
+  };
+
+  // Custom dot component that handles clicks
+  const CustomDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    return (
+      <circle
+        cx={cx}
+        cy={cy}
+        r={4}
+        fill={props.stroke}
+        style={{ cursor: 'pointer' }}
+        onClick={() => {
+          console.log('Custom dot clicked, payload:', payload);
+          if (payload && payload.date) {
+            console.log('Fetching transactions for date:', payload.date);
+            fetchTransactionsByDate(payload.date);
+            setHoveredDate(payload.date);
+          }
+        }}
+      />
+    );
+  };
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -107,6 +204,14 @@ const HomePage: React.FC = () => {
       if (response.ok) {
         const result = await response.json();
         setPortfolioValue(result.summary.totalPortfolioValue);
+        // Set portfolio breakdown for pie chart
+        if (result.breakdown && result.breakdown.length > 0) {
+          setPortfolioBreakdown(result.breakdown.map((item: any) => ({
+            name: item.name || item.type,
+            value: item.totalValue,
+            percentage: item.percentage,
+          })));
+        }
       }
     } catch (error) {
       console.error('Error fetching portfolio value:', error);
@@ -192,6 +297,33 @@ const HomePage: React.FC = () => {
     return format(new Date(value), 'dd');
   };
 
+  // Custom tooltip for transaction history chart
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const dateStr = payload[0].payload.date;
+      const income = payload.find((p: any) => p.dataKey === 'income')?.value || 0;
+      const expenses = payload.find((p: any) => p.dataKey === 'expenses')?.value || 0;
+
+      return (
+        <Paper sx={{ p: 2, border: `1px solid ${theme.palette.divider}` }}>
+          <Typography variant="body2" fontWeight="bold">
+            {format(new Date(dateStr), 'MMM dd, yyyy')}
+          </Typography>
+          <Typography variant="body2" color="success.main">
+            Income: {formatCurrencyValue(income)}
+          </Typography>
+          <Typography variant="body2" color="error.main">
+            Expenses: {formatCurrencyValue(expenses)}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+            Click to see transactions
+          </Typography>
+        </Paper>
+      );
+    }
+    return null;
+  };
+
   return (
     <Box>
       {/* Summary Cards */}
@@ -256,7 +388,7 @@ const HomePage: React.FC = () => {
           </ToggleButtonGroup>
         </Box>
         <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={data.history}>
+          <LineChart data={data.history} onClick={handleChartAreaClick} style={{ cursor: 'pointer' }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="date"
@@ -267,13 +399,7 @@ const HomePage: React.FC = () => {
               tick={{ fill: theme.palette.text.secondary }}
               tickFormatter={formatCurrencyValue}
             />
-            <Tooltip
-              formatter={(value: number) => formatCurrencyValue(value)}
-              contentStyle={{
-                backgroundColor: theme.palette.background.paper,
-                border: `1px solid ${theme.palette.divider}`,
-              }}
-            />
+            <Tooltip content={<CustomTooltip />} />
             <Legend />
             <Line
               type="monotone"
@@ -281,6 +407,8 @@ const HomePage: React.FC = () => {
               stroke={theme.palette.success.main}
               name="Income"
               strokeWidth={2}
+              dot={<CustomDot stroke={theme.palette.success.main} />}
+              activeDot={{ r: 8, cursor: 'pointer' }}
             />
             <Line
               type="monotone"
@@ -288,9 +416,57 @@ const HomePage: React.FC = () => {
               stroke={theme.palette.error.main}
               name="Expenses"
               strokeWidth={2}
+              dot={<CustomDot stroke={theme.palette.error.main} />}
+              activeDot={{ r: 8, cursor: 'pointer' }}
             />
           </LineChart>
         </ResponsiveContainer>
+        
+        {/* Transaction List for Selected Date */}
+        {hoveredDate && (
+          <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Transactions on {format(new Date(hoveredDate), 'MMM dd, yyyy')}:
+            </Typography>
+            {loadingTransactions ? (
+              <CircularProgress size={20} />
+            ) : dateTransactions.length > 0 ? (
+              <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
+                {dateTransactions.map((txn, idx) => (
+                  <Box
+                    key={txn.identifier || idx}
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      py: 1,
+                      borderBottom: idx < dateTransactions.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
+                    }}
+                  >
+                    <Box>
+                      <Typography variant="body2" fontWeight="medium">
+                        {txn.vendor}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {txn.parentCategory} → {txn.category}
+                      </Typography>
+                    </Box>
+                    <Typography
+                      variant="body2"
+                      fontWeight="bold"
+                      color={txn.price > 0 ? 'success.main' : 'error.main'}
+                    >
+                      {formatCurrencyValue(Math.abs(txn.price))}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No transactions found for this date.
+              </Typography>
+            )}
+          </Box>
+        )}
       </Paper>
 
       <Box sx={{ mb: 3 }}>
@@ -300,11 +476,140 @@ const HomePage: React.FC = () => {
             onChange={(event, newValue) => newValue && setSelectedBreakdownType(newValue)}
             variant="fullWidth"
           >
+            <Tab label="Overall" value="overall" />
             <Tab label="Cost" value="expense" />
             <Tab label="Income" value="income" />
             <Tab label="Investment" value="investment" />
           </Tabs>
           <Box sx={{ p: 3 }}>
+            {/* Overall Tab - Pie Charts */}
+            {selectedBreakdownType === 'overall' && (
+              <Grid container spacing={3}>
+                {/* Monthly Breakdown Pie Chart */}
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2, height: '100%' }}>
+                    <Typography variant="h6" gutterBottom>
+                      Monthly Financial Flow
+                    </Typography>
+                    {data?.summary ? (
+                      <>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <PieChart>
+                            <Pie
+                              data={(() => {
+                                // Show breakdown of where income goes: Expenses, Investments, and what stays in account
+                                const totalIncome = data.summary.totalIncome;
+                                const expenses = data.summary.totalExpenses;
+                                const investments = data.summary.netInvestments;
+                                const staysInAccount = Math.max(0, totalIncome - expenses - investments);
+                                
+                                const items: MonthlyFlowItem[] = [
+                                  { name: 'Expenses', value: expenses },
+                                  { name: 'Investments', value: investments },
+                                  { name: 'Stays in Account', value: staysInAccount },
+                                ];
+                                return items.filter(item => item.value > 0);
+                              })()}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={(entry: any) => {
+                                const item = entry as MonthlyFlowItem;
+                                const percentage = data.summary.totalIncome > 0 
+                                  ? ((item.value / data.summary.totalIncome) * 100).toFixed(1)
+                                  : '0';
+                                return `${item.name}: ${percentage}%`;
+                              }}
+                              outerRadius={80}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {(() => {
+                                const totalIncome = data.summary.totalIncome;
+                                const expenses = data.summary.totalExpenses;
+                                const investments = data.summary.netInvestments;
+                                const staysInAccount = Math.max(0, totalIncome - expenses - investments);
+                                
+                                const items: MonthlyFlowItem[] = [
+                                  { name: 'Expenses', value: expenses },
+                                  { name: 'Investments', value: investments },
+                                  { name: 'Stays in Account', value: staysInAccount },
+                                ];
+                                return items.filter(item => item.value > 0).map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                                ));
+                              })()}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => formatCurrencyValue(value)} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <Box sx={{ mt: 2 }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            Total Income: {formatCurrencyValue(data.summary.totalIncome)}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Period: {format(startDate, 'MMM dd, yyyy')} - {format(endDate, 'MMM dd, yyyy')}
+                          </Typography>
+                        </Box>
+                      </>
+                    ) : (
+                      <CircularProgress />
+                    )}
+                  </Paper>
+                </Grid>
+
+                {/* Portfolio Distribution Pie Chart */}
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2, height: '100%' }}>
+                    <Typography variant="h6" gutterBottom>
+                      Portfolio Distribution
+                    </Typography>
+                    {portfolioBreakdown.length > 0 ? (
+                      <>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <PieChart>
+                            <Pie
+                              data={portfolioBreakdown}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={(entry: any) => {
+                                const item = entry as PortfolioBreakdownItem;
+                                return `${item.name}: ${item.percentage.toFixed(1)}%`;
+                              }}
+                              outerRadius={80}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {portfolioBreakdown.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => formatCurrencyValue(value)} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <Box sx={{ mt: 2 }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            Total Portfolio Value: {formatCurrencyValue(portfolioValue || 0)}
+                          </Typography>
+                        </Box>
+                      </>
+                    ) : (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          No portfolio data available
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                          Add investment accounts to see distribution
+                        </Typography>
+                      </Box>
+                    )}
+                  </Paper>
+                </Grid>
+              </Grid>
+            )}
+
+            {/* Existing breakdown panels */}
             {(['expense', 'income', 'investment'] as const).map((type) => (
               <Box key={type} sx={{ display: selectedBreakdownType === type ? 'block' : 'none' }}>
                 {breakdownLoading[type] ? (
