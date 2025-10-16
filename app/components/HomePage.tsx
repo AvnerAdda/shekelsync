@@ -48,6 +48,7 @@ type AggregationPeriod = 'daily' | 'weekly' | 'monthly';
 const HomePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData | null>(null);
+  const [portfolioValue, setPortfolioValue] = useState<number | null>(null);
   const [breakdownData, setBreakdownData] = useState<Record<'expense' | 'income' | 'investment', any>>({
     expense: null,
     income: null,
@@ -73,6 +74,7 @@ const HomePage: React.FC = () => {
     setBreakdownData(prev => ({ ...prev, investment: null }));
     setBreakdownLoading(prev => ({ ...prev, investment: false }));
     fetchDashboardData();
+    fetchPortfolioValue();
     fetchBreakdownData('expense');
     fetchBreakdownData('income');
     fetchBudgetUsage();
@@ -96,6 +98,18 @@ const HomePage: React.FC = () => {
       console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPortfolioValue = async () => {
+    try {
+      const response = await fetch('/api/investments/summary');
+      if (response.ok) {
+        const result = await response.json();
+        setPortfolioValue(result.summary.totalPortfolioValue);
+      }
+    } catch (error) {
+      console.error('Error fetching portfolio value:', error);
     }
   };
 
@@ -187,6 +201,7 @@ const HomePage: React.FC = () => {
           totalExpenses={data.summary.totalExpenses}
           netBalance={data.summary.netBalance}
           netInvestments={data.summary.netInvestments}
+          portfolioValue={portfolioValue}
           budgetUsage={budgetUsage}
         />
       </Box>
