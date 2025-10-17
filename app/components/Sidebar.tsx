@@ -237,15 +237,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                 <Button
                   variant="outlined"
                   size="small"
-                  startIcon={<SyncIcon />}
-                  onClick={() => setScrapeModalOpen(true)}
-                  fullWidth
-                >
-                  Scrape Data
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
                   startIcon={<CategoryIcon />}
                   onClick={() => setCategoryModalOpen(true)}
                   fullWidth
@@ -274,7 +265,22 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     {stats.totalAccounts} Accounts
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    cursor: 'pointer',
+                    '&:hover': {
+                      backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                      borderRadius: 1,
+                    },
+                    padding: '4px',
+                    borderRadius: 1,
+                    transition: 'background-color 0.2s',
+                  }}
+                  onClick={() => setAccountsModalOpen(true)}
+                >
                   <SyncIcon fontSize="small" color="action" />
                   <Typography variant="caption" color="text.secondary">
                     {formatLastSync()}
@@ -316,11 +322,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             <Tooltip title="Add Account" placement="right">
               <IconButton size="small" onClick={() => setAccountsModalOpen(true)}>
                 <AddIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Scrape Data" placement="right">
-              <IconButton size="small" onClick={() => setScrapeModalOpen(true)}>
-                <SyncIcon />
               </IconButton>
             </Tooltip>
             <Tooltip title="Categories" placement="right">

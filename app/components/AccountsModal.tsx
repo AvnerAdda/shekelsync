@@ -16,6 +16,8 @@ import {
   styled,
   Typography,
   Divider,
+  Chip,
+  Tooltip,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -23,6 +25,9 @@ import AddIcon from '@mui/icons-material/Add';
 import SyncIcon from '@mui/icons-material/Sync';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ScrapeModal from './ScrapeModal';
 import { CREDIT_CARD_VENDORS, BANK_VENDORS, SPECIAL_BANK_VENDORS } from '../utils/constants';
 import { dateUtils } from './CategoryDashboard/utils/dateUtils';
@@ -40,6 +45,8 @@ interface Account {
   nickname?: string;
   password?: string;
   created_at: string;
+  lastUpdate?: string;
+  lastScrapeStatus?: string;
 }
 
 interface AccountsModalProps {
@@ -57,17 +64,27 @@ const SectionHeader = styled(Box)(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   gap: '12px',
-  padding: '16px 0',
-  marginBottom: '16px',
+  padding: '20px 0 16px 0',
+  marginBottom: '20px',
   borderBottom: '2px solid #e2e8f0',
+  background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+  borderRadius: '8px 8px 0 0',
+  marginLeft: '-16px',
+  marginRight: '-16px',
+  paddingLeft: '16px',
+  paddingRight: '16px',
   '& .MuiTypography-root': {
     fontWeight: 600,
-    fontSize: '18px',
+    fontSize: '20px',
   },
 }));
 
 const AccountSection = styled(Box)(({ theme }) => ({
-  marginBottom: '32px',
+  marginBottom: '40px',
+  padding: '16px',
+  borderRadius: '12px',
+  border: '1px solid #e2e8f0',
+  backgroundColor: '#fafbfc',
   '&:last-child': {
     marginBottom: 0,
   },
@@ -103,13 +120,32 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const fetchAccounts = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/credentials');
+      // Fetch accounts with last update information
+      const response = await fetch('/api/accounts/last-update');
       if (!response.ok) {
         throw new Error('Failed to fetch accounts');
       }
-      const data = await response.json();
-      console.log('Fetched accounts:', data);
-      setAccounts(data);
+      const accountsWithUpdates = await response.json();
+
+      // Also fetch complete account info for password and other fields
+      const credentialsResponse = await fetch('/api/credentials');
+      if (!credentialsResponse.ok) {
+        throw new Error('Failed to fetch credentials');
+      }
+      const credentials = await credentialsResponse.json();
+
+      // Merge the data
+      const mergedAccounts = accountsWithUpdates.map(account => {
+        const credential = credentials.find(c => c.id === account.id);
+        return {
+          ...credential,
+          lastUpdate: account.lastUpdate,
+          lastScrapeStatus: account.lastScrapeStatus,
+        };
+      });
+
+      console.log('Fetched accounts with updates:', mergedAccounts);
+      setAccounts(mergedAccounts);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -233,6 +269,48 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const handleScrapeSuccess = () => {
     showNotification('Scraping process completed successfully!', 'success');
     window.dispatchEvent(new CustomEvent('dataRefresh'));
+    fetchAccounts(); // Refresh accounts to update last sync dates
+  };
+
+  const formatLastUpdate = (lastUpdate: string, status?: string) => {
+    if (!lastUpdate) return { text: 'Never', color: 'default' as const };
+
+    const date = new Date(lastUpdate);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+
+    let text = '';
+    let color: 'success' | 'warning' | 'error' | 'default' = 'default';
+
+    if (diffDays === 0) {
+      if (diffHours === 0) {
+        text = 'Just now';
+        color = 'success';
+      } else {
+        text = `${diffHours}h ago`;
+        color = diffHours < 12 ? 'success' : 'warning';
+      }
+    } else if (diffDays === 1) {
+      text = 'Yesterday';
+      color = 'warning';
+    } else if (diffDays < 7) {
+      text = `${diffDays} days ago`;
+      color = 'warning';
+    } else {
+      text = dateUtils.formatDate(lastUpdate);
+      color = 'error';
+    }
+
+    // Override color based on status
+    if (status === 'success') {
+      color = diffDays < 1 ? 'success' : diffDays < 7 ? 'warning' : 'error';
+    } else if (status === 'failed') {
+      color = 'error';
+    }
+
+    return { text, color };
   };
 
   useEffect(() => {
@@ -261,55 +339,107 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
 
     return (
-      <Table>
+      <Table sx={{ backgroundColor: 'white', borderRadius: '8px', overflow: 'hidden' }}>
         <TableHead>
-          <TableRow>
-            <TableCell>Nickname</TableCell>
-            <TableCell>Vendor</TableCell>
-            <TableCell>{type === 'bank' ? 'Username' : 'ID Number'}</TableCell>
+          <TableRow sx={{ backgroundColor: '#f8fafc' }}>
+            <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Nickname</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Vendor</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: '#374151' }}>
+              {type === 'bank' ? 'Username' : 'ID Number'}
+            </TableCell>
             {type === 'bank' ? (
-              <TableCell>Account Number</TableCell>
+              <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Account Number</TableCell>
             ) : (
-              <TableCell>Card Last Digits</TableCell>
+              <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Card Last Digits</TableCell>
             )}
-            <TableCell>Created At</TableCell>
-            <TableCell align="right">Actions</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Last Update</TableCell>
+            <TableCell align="right" sx={{ fontWeight: 600, color: '#374151' }}>Actions</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          {accounts.map((account) => (
-            <StyledTableRow key={account.id}>
-              <TableCell>{account.nickname}</TableCell>
-              <TableCell>{account.vendor}</TableCell>
-              <TableCell>{account.username || account.id_number}</TableCell>
-              <TableCell>{type === 'bank' ? account.bank_account_number : (account.card6_digits || '-')}</TableCell>
-              <TableCell>{dateUtils.formatDate(account.created_at)}</TableCell>
-              <TableCell align="right">
-                <IconButton
-                  onClick={() => handleScrape(account)}
-                  sx={{ 
-                    color: '#3b82f6',
-                    '&:hover': {
-                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    },
-                  }}
-                >
-                  <SyncIcon />
-                </IconButton>
-                <IconButton 
-                  onClick={() => handleDelete(account.id)}
-                  sx={{ 
-                    color: '#ef4444',
-                    '&:hover': {
-                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    },
-                  }}
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </TableCell>
-            </StyledTableRow>
-          ))}
+          {accounts.map((account) => {
+            const lastUpdateInfo = formatLastUpdate(account.lastUpdate || '', account.lastScrapeStatus);
+            return (
+              <StyledTableRow key={account.id}>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" fontWeight={500}>
+                      {account.nickname}
+                    </Typography>
+                    {account.lastScrapeStatus === 'success' && (
+                      <CheckCircleIcon sx={{ color: 'success.main', fontSize: 16 }} />
+                    )}
+                    {account.lastScrapeStatus === 'failed' && (
+                      <ErrorIcon sx={{ color: 'error.main', fontSize: 16 }} />
+                    )}
+                  </Box>
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    label={account.vendor}
+                    size="small"
+                    variant="outlined"
+                    sx={{
+                      textTransform: 'capitalize',
+                      borderColor: type === 'bank' ? '#3b82f6' : '#8b5cf6',
+                      color: type === 'bank' ? '#3b82f6' : '#8b5cf6',
+                    }}
+                  />
+                </TableCell>
+                <TableCell>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    {account.username || account.id_number}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    {type === 'bank' ? account.bank_account_number : (account.card6_digits || '-')}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    label={lastUpdateInfo.text}
+                    size="small"
+                    color={lastUpdateInfo.color}
+                    variant="outlined"
+                    icon={
+                      lastUpdateInfo.color === 'success' ? <CheckCircleIcon /> :
+                      lastUpdateInfo.color === 'error' ? <ErrorIcon /> :
+                      <AccessTimeIcon />
+                    }
+                  />
+                </TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Refresh Account Data">
+                    <IconButton
+                      onClick={() => handleScrape(account)}
+                      sx={{
+                        color: '#3b82f6',
+                        '&:hover': {
+                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        },
+                      }}
+                    >
+                      <SyncIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete Account">
+                    <IconButton
+                      onClick={() => handleDelete(account.id)}
+                      sx={{
+                        color: '#ef4444',
+                        '&:hover': {
+                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        },
+                      }}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
+              </StyledTableRow>
+            );
+          })}
         </TableBody>
       </Table>
     );
