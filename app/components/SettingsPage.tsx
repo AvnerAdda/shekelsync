@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { useThemeMode } from '../contexts/ThemeContext';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import DataExportPanel from './DataExportPanel';
 
 interface UserProfile {
   id?: number;
@@ -377,6 +378,13 @@ const SettingsPage: React.FC = () => {
           {mode === 'system' && ' (following system preference)'}
         </Alert>
       </Paper>
+
+      <Divider sx={{ my: 4 }} />
+
+      {/* Data Export */}
+      <Box sx={{ mb: 4 }}>
+        <DataExportPanel />
+      </Box>
 
       <Divider sx={{ my: 4 }} />
 
