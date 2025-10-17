@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="240" fill="#2E7D32" stroke="#1B5E20" stroke-width="8"/>
+
+  <!-- Shekel Symbol (₪) -->
+  <g fill="#FFFFFF" stroke="#FFFFFF" stroke-width="4">
+    <!-- Left vertical line -->
+    <rect x="160" y="140" width="20" height="232" rx="10"/>
+
+    <!-- Right vertical line -->
+    <rect x="332" y="140" width="20" height="232" rx="10"/>
+
+    <!-- Top horizontal line connecting left to middle -->
+    <rect x="160" y="160" width="112" height="16" rx="8"/>
+
+    <!-- Bottom horizontal line connecting middle to right -->
+    <rect x="240" y="336" width="112" height="16" rx="8"/>
+
+    <!-- Center vertical connector -->
+    <rect x="248" y="160" width="16" height="192" rx="8"/>
+  </g>
+
+  <!-- App Name -->
+  <text x="256" y="420" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="32" font-weight="bold">
+    ShekelSync
+  </text>
+
+  <!-- Sync Arrow -->
+  <g fill="#4CAF50">
+    <path d="M200,100 L240,80 L240,95 L280,95 L280,105 L240,105 L240,120 Z"/>
+    <path d="M312,120 L272,100 L272,115 L232,115 L232,125 L272,125 L272,140 Z"/>
+  </g>
+</svg>

@@ -1,14 +1,22 @@
 {
-  "name": "clarify",
+  "name": "shekelsync",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
+  "main": "electron/main.js",
+  "homepage": "./",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build-electron": "BUILD_MODE=electron next build && electron-builder",
     "start": "next start",
     "lint": "next lint",
-    "scrape": "ts-node --esm scrapers/index.ts"
+    "scrape": "ts-node --esm scrapers/index.ts",
+    "electron": "electron ../electron/main.js",
+    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron ../electron/main.js\"",
+    "dist": "BUILD_MODE=electron npm run build && electron-builder --publish=never",
+    "pack": "BUILD_MODE=electron npm run build && electron-builder --dir",
+    "release": "BUILD_MODE=electron npm run build && electron-builder --publish=always",
+    "clean": "rm -rf out build dist"
   },
   "dependencies": {
     "@emotion/react": "^11.13.3",
@@ -19,8 +27,11 @@
     "@mui/styled-engine-sc": "^6.1.4",
     "@mui/x-charts": "^7.29.1",
     "@mui/x-date-pickers": "^8.3.1",
+    "cors": "^2.8.5",
     "date-fns": "^4.1.0",
     "dotenv": "^16.5.0",
+    "electron-updater": "^6.6.2",
+    "express": "^5.1.0",
     "israeli-bank-scrapers": "^6.2.3",
     "next": "^14.2.29",
     "next-auth": "^4.24.11",
@@ -37,12 +48,85 @@
     "@types/react": "^18.3.21",
     "@types/react-dom": "^18.3.7",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.1",
+    "electron": "^38.3.0",
+    "electron-builder": "^26.0.12",
     "eslint": "^8.0.0",
     "eslint-config-next": "14.2.15",
     "postcss": "^8.4.47",
     "prettier": "^3.5.1",
     "tailwindcss": "^3.4.14",
     "ts-node": "^10.9.2",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "wait-on": "^9.0.1"
+  },
+  "build": {
+    "appId": "com.shekelsync.finance",
+    "productName": "ShekelSync",
+    "directories": {
+      "output": "../dist",
+      "buildResources": "../build-resources"
+    },
+    "files": [
+      "out/**/*",
+      "electron/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "out",
+        "to": "app/out"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "requestedExecutionLevel": "asInvoker",
+      "artifactName": "${productName}-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "displayLanguageSelector": false
+    },
+    "mac": {
+      "category": "public.app-category.finance",
+      "icon": "../build-resources/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "../build-resources/icon.png",
+      "category": "Office"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "your-username",
+      "repo": "finance-israel"
+    }
   }
 }
