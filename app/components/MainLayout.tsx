@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, useTheme, AppBar, Toolbar, Typography, useMediaQuery } from '@mui/material';
+import { Box, useTheme, AppBar, Toolbar, Typography } from '@mui/material';
 import Sidebar from './Sidebar';
 import HomePage from './HomePage';
 import AnalysisPage from './AnalysisPage';
@@ -10,14 +10,11 @@ import FinancialChatbot from './FinancialChatbot';
 import SmartNotifications from './SmartNotifications';
 
 const DRAWER_WIDTH_COLLAPSED = 65;
-const DRAWER_WIDTH = 260;
 
 const MainLayout: React.FC = () => {
   const [currentPage, setCurrentPage] = useState('home');
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const handleDataRefresh = () => {
     setDataRefreshKey(prev => prev + 1);

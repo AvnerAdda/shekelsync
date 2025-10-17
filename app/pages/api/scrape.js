@@ -9,13 +9,33 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
   hash.update(uniqueId);
   txn.identifier = hash.digest('hex');
 
-  let amount = txn.chargedAmount;
+  // Use originalAmount if chargedAmount is not available (for MAX and other cards)
+  let amount = txn.chargedAmount || txn.originalAmount || 0;
+
+  // Log warning if amount calculation uses fallback
+  if (!txn.chargedAmount && txn.originalAmount) {
+    console.log(`Using originalAmount for ${companyId} transaction: ${txn.description}`);
+  }
+
   let category = txn.category;
   let parentCategory = null;
   let subcategory = null;
 
   if (!isBank){
-    amount = txn.chargedAmount * -1;
+    // Ensure amount is negative for credit card transactions (expenses)
+    // Handle cases where originalAmount might already be negative
+    const rawAmount = txn.chargedAmount || txn.originalAmount || 0;
+    amount = rawAmount > 0 ? rawAmount * -1 : rawAmount;
+
+    // Validate amount is not zero for credit card transactions
+    if (amount === 0) {
+      console.warn(`Warning: Zero amount detected for ${companyId} transaction: ${txn.description}`, {
+        chargedAmount: txn.chargedAmount,
+        originalAmount: txn.originalAmount,
+        finalAmount: amount,
+        txn: txn
+      });
+    }
 
     // First, try to map Hebrew category from scraper using category_mapping table
     if (txn.category) {
@@ -38,6 +58,22 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
         parentCategory = categorization.parent_category;
         subcategory = categorization.subcategory;
         category = subcategory || parentCategory;
+      }
+    }
+
+    // If we still don't have a parent category, but we have a category, try to find parent from category_definitions
+    if (!parentCategory && category && category !== 'N/A') {
+      const parentLookup = await client.query(
+        `SELECT parent_cd.name as parent_name
+         FROM category_definitions cd
+         JOIN category_definitions parent_cd ON cd.parent_id = parent_cd.id
+         WHERE cd.name = $1`,
+        [category]
+      );
+
+      if (parentLookup.rows.length > 0) {
+        parentCategory = parentLookup.rows[0].parent_name;
+        console.log(`Found parent category for ${category}: ${parentCategory}`);
       }
     }
   }else{
@@ -66,10 +102,8 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
         charged_currency,
         memo,
         status,
-        installments_number,
-        installments_total,
         account_number
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       ON CONFLICT (identifier, vendor) DO NOTHING`,
       [
         txn.identifier,
@@ -90,8 +124,6 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
         txn.chargedCurrency,
         txn.memo,
         txn.status,
-        txn.installments?.number,
-        txn.installments?.total,
         accountNumber
       ]
     );
@@ -185,6 +217,84 @@ async function applyCategorizationRules(client) {
   }
 }
 
+async function autoMarkCreditCardPaymentDuplicates(client) {
+  try {
+    // Auto-mark credit card payment transactions as duplicates
+    const duplicateResult = await client.query(`
+      INSERT INTO transaction_duplicates (
+        transaction1_identifier,
+        transaction1_vendor,
+        transaction2_identifier,
+        transaction2_vendor,
+        match_type,
+        confidence,
+        exclude_from_totals,
+        is_confirmed,
+        created_at,
+        notes
+      )
+      SELECT
+        t.identifier,
+        t.vendor,
+        t.identifier,
+        t.vendor,
+        'credit_card_payment',
+        1.0,
+        true,
+        true,
+        CURRENT_TIMESTAMP,
+        'Auto-detected credit card payment transaction - exclude from totals to avoid double counting'
+      FROM transactions t
+      WHERE (t.name LIKE '%חיוב לכרטיס ויזה%' OR t.name LIKE '%חיוב לכרטיס ממקס%')
+        AND t.category = 'Bank'
+        AND t.price < 0
+        AND NOT EXISTS (
+          SELECT 1 FROM transaction_duplicates td
+          WHERE td.transaction1_identifier = t.identifier
+          AND td.transaction1_vendor = t.vendor
+        )
+      ON CONFLICT DO NOTHING
+    `);
+
+    const markedCount = duplicateResult.rowCount;
+    if (markedCount > 0) {
+      console.log(`Auto-marked ${markedCount} credit card payment transactions as duplicates`);
+    }
+
+    return { duplicatesMarked: markedCount };
+  } catch (error) {
+    console.error('Error auto-marking credit card payment duplicates:', error);
+    // Don't throw - this is a non-critical operation
+    return { duplicatesMarked: 0, error: error.message };
+  }
+}
+
+async function linkTransactionsToCategoryDefinitions(client) {
+  try {
+    // Link transactions to category_definitions by matching category names
+    const linkResult = await client.query(`
+      UPDATE transactions
+      SET category_definition_id = cd.id
+      FROM category_definitions cd
+      WHERE transactions.category_definition_id IS NULL
+        AND transactions.category = cd.name
+        AND transactions.category != 'Bank'
+        AND cd.is_active = true
+    `);
+
+    const linkedCount = linkResult.rowCount;
+    if (linkedCount > 0) {
+      console.log(`Linked ${linkedCount} transactions to category definitions`);
+    }
+
+    return { transactionsLinked: linkedCount };
+  } catch (error) {
+    console.error('Error linking transactions to category definitions:', error);
+    // Don't throw - this is a non-critical operation
+    return { transactionsLinked: 0, error: error.message };
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
@@ -275,6 +385,16 @@ export default async function handler(req, res) {
       num: scraperCredentials.num ? scraperCredentials.num.substring(0, 3) + '***' : undefined
     });
 
+    // Get Puppeteer's Chrome path dynamically
+    let executablePath;
+    try {
+      const puppeteer = require('puppeteer');
+      executablePath = puppeteer.executablePath();
+    } catch (error) {
+      console.warn('Could not find Puppeteer Chrome, using system browser');
+      executablePath = undefined; // Let Puppeteer find its own browser
+    }
+
     const scraper = createScraper({
       ...options,
       companyId,
@@ -282,7 +402,7 @@ export default async function handler(req, res) {
       showBrowser: isBank,
       verbose: true, // Enable verbose logging
       timeout: 120000, // 2 minutes timeout
-      executablePath: '/usr/bin/chromium-browser',
+      executablePath: executablePath,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -355,6 +475,14 @@ export default async function handler(req, res) {
     }
 
     await applyCategorizationRules(client);
+
+    // Auto-detect and mark credit card payment duplicates
+    if (isBank) {
+      await autoMarkCreditCardPaymentDuplicates(client);
+    }
+
+    // Link transactions to category_definitions
+    await linkTransactionsToCategoryDefinitions(client);
 
     console.log(`Scraped ${bankTransactions} bank transactions`);
 

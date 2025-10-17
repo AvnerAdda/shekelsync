@@ -180,11 +180,20 @@ const handler = createApiHandler({
           }
         }
 
-        // Insert the rule
+        // Insert the rule with duplicate handling
         const insertResult = await client.query(
           `INSERT INTO categorization_rules
             (name_pattern, target_category, parent_category, subcategory, category_definition_id, category_type, priority)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
+          ON CONFLICT (name_pattern, target_category)
+          DO UPDATE SET
+            parent_category = EXCLUDED.parent_category,
+            subcategory = EXCLUDED.subcategory,
+            category_definition_id = EXCLUDED.category_definition_id,
+            category_type = EXCLUDED.category_type,
+            priority = EXCLUDED.priority,
+            is_active = true,
+            updated_at = CURRENT_TIMESTAMP
           RETURNING id, name_pattern, target_category, parent_category, subcategory, category_definition_id, category_type, is_active, priority, created_at, updated_at`,
           [
             name_pattern,
