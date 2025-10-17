@@ -1070,29 +1070,6 @@ const InvestmentsPage: React.FC = () => {
           </Button>
         </Paper>
       )}
-
-      {/* Enhanced Floating Action Buttons */}
-      <Box sx={{ position: 'fixed', bottom: 24, right: 24, display: 'flex', flexDirection: 'column', gap: 1, zIndex: 1000 }}>
-        {data && data.summary.totalCount > 0 && (
-          <Tooltip
-            title={activeTab === 0 ? "Show detailed transaction history" : "Hide transaction history"}
-            placement="left"
-            arrow
-          >
-            <Fab
-              color="info"
-              size="small"
-              onClick={() => setActiveTab(activeTab === 0 ? 1 : 0)}
-              sx={{
-                '&:hover': { transform: 'scale(1.1)' },
-                transition: 'all 0.2s ease-in-out'
-              }}
-            >
-              {activeTab === 0 ? <ViewIcon /> : <HideIcon />}
-            </Fab>
-          </Tooltip>
-        )}
-      </Box>
     </Box>
   );
 };
