@@ -15,6 +15,10 @@ import {
   AccordionSummary,
   AccordionDetails,
   Divider,
+  Tooltip,
+  Skeleton,
+  Fab,
+  Collapse,
 } from '@mui/material';
 import {
   TrendingUp as TrendIcon,
@@ -25,6 +29,20 @@ import {
   AttachMoney as MoneyIcon,
   CompareArrows as CompareIcon,
   Timeline as TimelineIcon,
+  Savings as SavingsIcon,
+  Diversity3 as DiversityIcon,
+  ShoppingCart as ImpulseIcon,
+  Schedule as RunwayIcon,
+  HelpOutline as HelpIcon,
+  Refresh as RefreshIcon,
+  Warning as WarningIcon,
+  CheckCircle as CheckIcon,
+  Assignment as ActionIcon,
+  Repeat as RecurringIcon,
+  Lightbulb as OpportunityIcon,
+  Analytics as InsightsIcon,
+  Speed as DashboardIcon,
+  PriorityHigh as PriorityIcon,
 } from '@mui/icons-material';
 import { BarChart } from '@mui/x-charts/BarChart';
 import { LineChart } from '@mui/x-charts/LineChart';
@@ -56,7 +74,12 @@ const AnalysisPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [roadmapModalOpen, setRoadmapModalOpen] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<string | false>('actions');
+  const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({
+    actions: true,
+    recurring: false,
+    opportunities: false,
+    insights: false
+  });
   const { formatCurrency } = useFinancePrivacy();
 
   const fetchIntelligence = async () => {
@@ -90,6 +113,36 @@ const AnalysisPage: React.FC = () => {
     return '#f44336';
   };
 
+  const getHealthMetricIcon = (key: string) => {
+    switch (key.toLowerCase()) {
+      case 'savingsscore': return <SavingsIcon />;
+      case 'diversityscore': return <DiversityIcon />;
+      case 'impulsescore': return <ImpulseIcon />;
+      case 'runwayscore': return <RunwayIcon />;
+      default: return <MoneyIcon />;
+    }
+  };
+
+  const getHealthMetricName = (key: string) => {
+    switch (key.toLowerCase()) {
+      case 'savingsscore': return 'Savings';
+      case 'diversityscore': return 'Diversity';
+      case 'impulsescore': return 'Impulse Control';
+      case 'runwayscore': return 'Runway';
+      default: return key.replace('Score', '').replace(/([A-Z])/g, ' $1').trim();
+    }
+  };
+
+  const getHealthMetricTooltip = (key: string) => {
+    switch (key.toLowerCase()) {
+      case 'savingsscore': return 'Measures your savings rate as a percentage of income. Higher scores indicate better financial discipline and future security.';
+      case 'diversityscore': return 'Evaluates how well-balanced your spending is across different categories. A higher score suggests better financial diversification.';
+      case 'impulsescore': return 'Assesses your ability to control spontaneous purchases. Higher scores indicate better spending discipline and financial planning.';
+      case 'runwayscore': return 'Calculates how long your current savings would sustain your lifestyle. Higher scores mean better financial resilience.';
+      default: return 'A key indicator of your financial health and stability';
+    }
+  };
+
   const formatCurrencyValue = (
     value: number,
     options?: { absolute?: boolean; showSign?: boolean; minimumFractionDigits?: number; maximumFractionDigits?: number }
@@ -101,15 +154,58 @@ const AnalysisPage: React.FC = () => {
       ...(options?.showSign ? { showSign: true } : {}),
     });
 
-  if (loading && !intelligence) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress size={60} />
-        <Typography variant="h6" sx={{ ml: 3 }}>
-          Analyzing your financial DNA...
-        </Typography>
+  // Skeleton Loading Component
+  const SkeletonLoader = () => (
+    <Box sx={{ width: '100%', p: 3 }}>
+      {/* Header Skeleton */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Skeleton variant="text" width={300} height={48} />
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Skeleton variant="rectangular" width={80} height={36} sx={{ borderRadius: 1 }} />
+          <Skeleton variant="rectangular" width={90} height={36} sx={{ borderRadius: 1 }} />
+        </Box>
       </Box>
-    );
+
+      {/* Health Score Skeleton */}
+      <Paper sx={{ p: 3, mb: 2, borderRadius: 2 }}>
+        <Grid container spacing={3} alignItems="center">
+          <Grid item xs={12} md={4}>
+            <Box textAlign="center">
+              <Skeleton variant="circular" width={120} height={120} sx={{ mx: 'auto', mb: 1 }} />
+              <Skeleton variant="rectangular" width={120} height={36} sx={{ borderRadius: 2, mx: 'auto', mt: 2 }} />
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={8}>
+            <Grid container spacing={2}>
+              {[1, 2, 3, 4].map((i) => (
+                <Grid item xs={6} sm={3} key={i}>
+                  <Card variant="outlined" sx={{ p: 1.5, textAlign: 'center' }}>
+                    <Skeleton variant="circular" width={60} height={60} sx={{ mx: 'auto', mb: 1 }} />
+                    <Skeleton variant="text" width={80} height={20} sx={{ mx: 'auto' }} />
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* Critical Action Skeleton */}
+      <Skeleton variant="rectangular" width="100%" height={80} sx={{ borderRadius: 1, mb: 2 }} />
+
+      {/* Accordions Skeleton */}
+      {[1, 2, 3, 4].map((i) => (
+        <Paper key={i} variant="outlined" sx={{ mb: 1 }}>
+          <Box sx={{ p: 2 }}>
+            <Skeleton variant="text" width={200} height={32} />
+          </Box>
+        </Paper>
+      ))}
+    </Box>
+  );
+
+  if (loading && !intelligence) {
+    return <SkeletonLoader />;
   }
 
   if (error) {
@@ -164,12 +260,16 @@ const AnalysisPage: React.FC = () => {
           </Button>
           <Button
             variant="outlined"
-            startIcon={loading ? <CircularProgress size={16} /> : <TrendIcon />}
+            startIcon={loading ? <CircularProgress size={16} /> : <RefreshIcon />}
             onClick={fetchIntelligence}
             disabled={loading}
             size="small"
+            sx={{
+              minWidth: 100,
+              textTransform: 'none'
+            }}
           >
-            Refresh
+            {loading ? 'Refreshing...' : 'Refresh'}
           </Button>
         </Box>
       </Box>
@@ -187,117 +287,408 @@ const AnalysisPage: React.FC = () => {
         currentScore={overallHealthScore}
       />
 
-      {/* Health Score Overview - Compact */}
-      <Paper sx={{ p: 2, mb: 2, background: `linear-gradient(135deg, ${getHealthScoreColor(overallHealthScore)}15 0%, ${getHealthScoreColor(overallHealthScore)}05 100%)` }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={3}>
+      {/* Enhanced Health Score Overview */}
+      <Paper sx={{
+        p: 3,
+        mb: 2,
+        background: `linear-gradient(135deg, ${getHealthScoreColor(overallHealthScore)}15 0%, ${getHealthScoreColor(overallHealthScore)}05 100%)`,
+        borderRadius: 2,
+        border: `1px solid ${getHealthScoreColor(overallHealthScore)}30`
+      }}>
+        <Grid container spacing={3} alignItems="center">
+          {/* Overall Health Score */}
+          <Grid item xs={12} md={4}>
             <Box textAlign="center">
-              <Typography variant="h3" fontWeight="bold" color={getHealthScoreColor(overallHealthScore)}>
-                {overallHealthScore}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Health Score
-              </Typography>
-              <Box sx={{ mt: 1 }}>
-                <Button 
-                  variant="contained" 
-                  color="primary" 
-                  size="small"
-                  fullWidth
+              <Box sx={{ position: 'relative', display: 'inline-flex', mb: 1 }}>
+                <CircularProgress
+                  variant="determinate"
+                  value={overallHealthScore}
+                  size={120}
+                  thickness={6}
+                  sx={{
+                    color: getHealthScoreColor(overallHealthScore),
+                    '& .MuiCircularProgress-circle': {
+                      strokeLinecap: 'round',
+                    },
+                  }}
+                />
+                <Box
+                  sx={{
+                    top: 0,
+                    left: 0,
+                    bottom: 0,
+                    right: 0,
+                    position: 'absolute',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <Typography variant="h3" fontWeight="bold" color={getHealthScoreColor(overallHealthScore)}>
+                    {overallHealthScore}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.5rem' }}>
+                    Health Score
+                  </Typography>
+                </Box>
+              </Box>
+              <Box sx={{ mt: 2 }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="medium"
                   startIcon={<TrendIcon />}
                   onClick={() => setRoadmapModalOpen(true)}
+                  sx={{
+                    borderRadius: 2,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    px: 3
+                  }}
                 >
-                  Improve
+                  Improve Score
                 </Button>
               </Box>
             </Box>
           </Grid>
-          <Grid item xs={12} sm={9}>
-            <Grid container spacing={1}>
-              {Object.entries(healthBreakdown).slice(0, 4).map(([key, value]) => (
-                <Grid item xs={6} md={3} key={key}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {key.replace('Score', '').replace(/([A-Z])/g, ' $1').trim()}
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <LinearProgress
-                        variant="determinate"
-                        value={value as number}
-                        sx={{ flex: 1, height: 4, borderRadius: 2 }}
-                      />
-                      <Typography variant="caption" fontWeight="bold">
-                        {String(value)}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Grid>
-              ))}
+
+          {/* Health Breakdown Metrics */}
+          <Grid item xs={12} md={8}>
+            <Grid container spacing={2}>
+              {Object.entries(healthBreakdown).slice(0, 4).map(([key, value]) => {
+                const score = value as number;
+                const color = getHealthScoreColor(score);
+
+                return (
+                  <Grid item xs={6} sm={3} key={key}>
+                    <Tooltip
+                      title={getHealthMetricTooltip(key)}
+                      placement="top"
+                      arrow
+                    >
+                      <Card
+                        variant="outlined"
+                        sx={{
+                          p: 1.5,
+                          textAlign: 'center',
+                          cursor: 'help',
+                          transition: 'all 0.2s ease-in-out',
+                          '&:hover': {
+                            transform: 'translateY(-2px)',
+                            boxShadow: 2,
+                            borderColor: color + '80'
+                          },
+                          borderColor: color + '40'
+                        }}
+                      >
+                        <Box sx={{ position: 'relative', display: 'inline-flex', mb: 1 }}>
+                          <CircularProgress
+                            variant="determinate"
+                            value={score}
+                            size={60}
+                            thickness={5}
+                            sx={{
+                              color: color,
+                              '& .MuiCircularProgress-circle': {
+                                strokeLinecap: 'round',
+                              },
+                            }}
+                          />
+                          <Box
+                            sx={{
+                              top: 0,
+                              left: 0,
+                              bottom: 0,
+                              right: 0,
+                              position: 'absolute',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Typography variant="h6" fontWeight="bold" color={color}>
+                              {score}
+                            </Typography>
+                          </Box>
+                        </Box>
+
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, mb: 0.5 }}>
+                          <Box sx={{ color: color, display: 'flex', fontSize: '0.9rem' }}>
+                            {getHealthMetricIcon(key)}
+                          </Box>
+                          <HelpIcon sx={{ fontSize: '0.7rem', color: 'text.disabled' }} />
+                        </Box>
+
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            fontSize: '0.7rem',
+                            fontWeight: 500,
+                            lineHeight: 1.2
+                          }}
+                        >
+                          {getHealthMetricName(key)}
+                        </Typography>
+                      </Card>
+                    </Tooltip>
+                  </Grid>
+                );
+              })}
             </Grid>
           </Grid>
         </Grid>
       </Paper>
 
-      {/* Critical Actions First */}
+      {/* Enhanced Critical Actions */}
       {recommendations.length > 0 && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          <Typography variant="subtitle2" fontWeight="bold">
-            ⚡ {recommendations[0].title}
-          </Typography>
-          <Typography variant="body2">{recommendations[0].message}</Typography>
-          {recommendations[0].potentialSavings && (
-            <Typography variant="caption">
-              💰 Potential savings: {formatCurrencyValue(recommendations[0].potentialSavings)}/month
-            </Typography>
-          )}
-        </Alert>
+        <Card
+          sx={{
+            mb: 3,
+            background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)',
+            border: '2px solid #ff9800',
+            borderRadius: 2,
+            position: 'relative',
+            overflow: 'visible'
+          }}
+        >
+          <Box
+            sx={{
+              position: 'absolute',
+              top: -8,
+              left: 20,
+              bgcolor: '#ff9800',
+              color: 'white',
+              px: 2,
+              py: 0.5,
+              borderRadius: 1,
+              fontSize: '0.75rem',
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5
+            }}
+          >
+            <WarningIcon sx={{ fontSize: '1rem' }} />
+            PRIORITY ACTION
+          </Box>
+          <CardContent sx={{ pt: 3 }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={8}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <PriorityIcon color="warning" />
+                  <Typography variant="h6" fontWeight="bold" color="primary">
+                    {recommendations[0].title}
+                  </Typography>
+                </Box>
+                <Typography variant="body1" sx={{ mb: 1 }}>
+                  {recommendations[0].message}
+                </Typography>
+                {recommendations[0].potentialSavings && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <MoneyIcon color="success" />
+                    <Typography variant="body2" fontWeight="bold" color="success.main">
+                      Potential savings: {formatCurrencyValue(recommendations[0].potentialSavings)}/month
+                    </Typography>
+                  </Box>
+                )}
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Box sx={{ textAlign: { xs: 'left', md: 'right' } }}>
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    size="large"
+                    startIcon={<CheckIcon />}
+                    sx={{
+                      borderRadius: 2,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      px: 3,
+                      py: 1.5
+                    }}
+                  >
+                    Take Action
+                  </Button>
+                </Box>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Main Action Sections - Collapsible */}
-      <Accordion 
-        expanded={expandedSection === 'actions'} 
-        onChange={() => setExpandedSection(expandedSection === 'actions' ? false : 'actions')}
-        defaultExpanded
+      {/* Enhanced Action Sections with Multi-Expand */}
+      <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <DashboardIcon color="primary" sx={{ fontSize: 28 }} />
+            <Box>
+              <Typography variant="h5" fontWeight="bold" color="primary.dark">
+                Financial Analysis Dashboard
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Comprehensive insights and actionable recommendations
+              </Typography>
+            </Box>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Tooltip title="Expand all sections for full view">
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => setExpandedSections({
+                  actions: true,
+                  recurring: true,
+                  opportunities: true,
+                  insights: true
+                })}
+                sx={{ textTransform: 'none' }}
+                startIcon={<ExpandMoreIcon />}
+              >
+                Expand All
+              </Button>
+            </Tooltip>
+            <Tooltip title="Collapse all sections to summary view">
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => setExpandedSections({
+                  actions: true,
+                  recurring: false,
+                  opportunities: false,
+                  insights: false
+                })}
+                sx={{ textTransform: 'none' }}
+                startIcon={<ExpandMoreIcon sx={{ transform: 'rotate(180deg)' }} />}
+              >
+                Collapse All
+              </Button>
+            </Tooltip>
+          </Box>
+        </Box>
+      </Paper>
+
+      <Accordion
+        expanded={expandedSections.actions}
+        onChange={() => setExpandedSections(prev => ({ ...prev, actions: !prev.actions }))}
+        sx={{
+          mb: 2,
+          borderRadius: 2,
+          '&:before': { display: 'none' },
+          boxShadow: expandedSections.actions ? 2 : 1,
+          transition: 'all 0.2s ease-in-out'
+        }}
       >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="h6">🎯 Your Action Items</Typography>
+        <AccordionSummary
+          expandIcon={<ExpandMoreIcon />}
+          sx={{
+            borderRadius: 2,
+            bgcolor: expandedSections.actions ? 'primary.main' : 'background.paper',
+            color: expandedSections.actions ? 'white' : 'text.primary',
+            '&:hover': { bgcolor: expandedSections.actions ? 'primary.dark' : 'grey.50' }
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ActionIcon sx={{ fontSize: 20 }} />
+            <Typography variant="h6" fontWeight="bold">Your Action Items</Typography>
+            <Chip
+              label="Priority"
+              size="small"
+              color={expandedSections.actions ? 'secondary' : 'primary'}
+              variant={expandedSections.actions ? 'filled' : 'outlined'}
+            />
+          </Box>
         </AccordionSummary>
         <AccordionDetails>
           <ActionItemsDashboard />
         </AccordionDetails>
       </Accordion>
 
-      <Accordion 
-        expanded={expandedSection === 'recurring'} 
-        onChange={() => setExpandedSection(expandedSection === 'recurring' ? false : 'recurring')}
+      <Accordion
+        expanded={expandedSections.recurring}
+        onChange={() => setExpandedSections(prev => ({ ...prev, recurring: !prev.recurring }))}
+        sx={{
+          mb: 2,
+          borderRadius: 2,
+          '&:before': { display: 'none' },
+          boxShadow: expandedSections.recurring ? 2 : 1,
+          transition: 'all 0.2s ease-in-out'
+        }}
       >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="h6">🔄 Recurring Charges</Typography>
+        <AccordionSummary
+          expandIcon={<ExpandMoreIcon />}
+          sx={{
+            borderRadius: 2,
+            bgcolor: expandedSections.recurring ? 'info.main' : 'background.paper',
+            color: expandedSections.recurring ? 'white' : 'text.primary',
+            '&:hover': { bgcolor: expandedSections.recurring ? 'info.dark' : 'grey.50' }
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <RecurringIcon sx={{ fontSize: 20 }} />
+            <Typography variant="h6" fontWeight="bold">Recurring Charges</Typography>
+          </Box>
         </AccordionSummary>
         <AccordionDetails>
           <RecurringTransactionManager months={3} />
         </AccordionDetails>
       </Accordion>
 
-      <Accordion 
-        expanded={expandedSection === 'opportunities'} 
-        onChange={() => setExpandedSection(expandedSection === 'opportunities' ? false : 'opportunities')}
+      <Accordion
+        expanded={expandedSections.opportunities}
+        onChange={() => setExpandedSections(prev => ({ ...prev, opportunities: !prev.opportunities }))}
+        sx={{
+          mb: 2,
+          borderRadius: 2,
+          '&:before': { display: 'none' },
+          boxShadow: expandedSections.opportunities ? 2 : 1,
+          transition: 'all 0.2s ease-in-out'
+        }}
       >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="h6">💡 Spending Opportunities</Typography>
+        <AccordionSummary
+          expandIcon={<ExpandMoreIcon />}
+          sx={{
+            borderRadius: 2,
+            bgcolor: expandedSections.opportunities ? 'success.main' : 'background.paper',
+            color: expandedSections.opportunities ? 'white' : 'text.primary',
+            '&:hover': { bgcolor: expandedSections.opportunities ? 'success.dark' : 'grey.50' }
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <OpportunityIcon sx={{ fontSize: 20 }} />
+            <Typography variant="h6" fontWeight="bold">Spending Opportunities</Typography>
+          </Box>
         </AccordionSummary>
         <AccordionDetails>
           <CategoryOpportunitiesPanel />
         </AccordionDetails>
       </Accordion>
 
-      {/* Insights - Grouped & Compact */}
-      <Accordion 
-        expanded={expandedSection === 'insights'} 
-        onChange={() => setExpandedSection(expandedSection === 'insights' ? false : 'insights')}
+      <Accordion
+        expanded={expandedSections.insights}
+        onChange={() => setExpandedSections(prev => ({ ...prev, insights: !prev.insights }))}
+        sx={{
+          mb: 2,
+          borderRadius: 2,
+          '&:before': { display: 'none' },
+          boxShadow: expandedSections.insights ? 2 : 1,
+          transition: 'all 0.2s ease-in-out'
+        }}
       >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="h6">📊 Financial Insights</Typography>
+        <AccordionSummary
+          expandIcon={<ExpandMoreIcon />}
+          sx={{
+            borderRadius: 2,
+            bgcolor: expandedSections.insights ? 'secondary.main' : 'background.paper',
+            color: expandedSections.insights ? 'white' : 'text.primary',
+            '&:hover': { bgcolor: expandedSections.insights ? 'secondary.dark' : 'grey.50' }
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <InsightsIcon sx={{ fontSize: 20 }} />
+            <Typography variant="h6" fontWeight="bold">Financial Insights</Typography>
+          </Box>
         </AccordionSummary>
         <AccordionDetails>
           <Grid container spacing={2}>
@@ -536,6 +927,22 @@ const AnalysisPage: React.FC = () => {
           </Grid>
         </AccordionDetails>
       </Accordion>
+
+      {/* Floating Action Button for Quick Refresh */}
+      <Fab
+        color="primary"
+        aria-label="refresh"
+        onClick={fetchIntelligence}
+        disabled={loading}
+        sx={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          zIndex: 1000
+        }}
+      >
+        {loading ? <CircularProgress size={24} color="inherit" /> : <RefreshIcon />}
+      </Fab>
     </Box>
   );
 };

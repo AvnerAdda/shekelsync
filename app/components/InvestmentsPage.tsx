@@ -14,6 +14,7 @@ import {
   TableHead,
   TableRow,
   Chip,
+  LinearProgress,
   Alert,
   FormControl,
   InputLabel,
@@ -33,9 +34,12 @@ import {
   Collapse,
   ToggleButtonGroup,
   ToggleButton,
+  Skeleton,
+  Fab,
+  Badge,
+  Tooltip,
 } from '@mui/material';
 import {
-  TrendingUp as TrendingUpIcon,
   AccountBalance as AccountIcon,
   AttachMoney as MoneyIcon,
   ShowChart as StockIcon,
@@ -49,8 +53,14 @@ import {
   Pattern as PatternIcon,
   Timeline as TimelineIcon,
   Close as CloseIcon,
+  Refresh as RefreshIcon,
+  Dashboard as DashboardIcon,
+  Visibility as ViewIcon,
+  VisibilityOff as HideIcon,
+  Add as AddIcon,
+  Analytics as AnalyticsIcon,
 } from '@mui/icons-material';
-import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import UnifiedPortfolioModal from './UnifiedPortfolioModal';
 
@@ -141,6 +151,13 @@ const InvestmentsPage: React.FC = () => {
   const [showOverallChart, setShowOverallChart] = useState(false);
   const [selectedAccountsFilter, setSelectedAccountsFilter] = useState<number[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<'summary' | 'detailed'>('summary');
+  const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({
+    portfolio: true,
+    performance: false,
+    transactions: false
+  });
 
   useEffect(() => {
     fetchData();
@@ -293,6 +310,111 @@ const InvestmentsPage: React.FC = () => {
     fetchData();
   };
 
+  const handleRefreshAll = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        fetchData(),
+        fetchPortfolioData(),
+        portfolioData && portfolioData.summary.totalAccounts > 0 ? fetchHistoryData() : Promise.resolve()
+      ]);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Enhanced Skeleton Loading Component
+  const InvestmentsSkeleton = () => (
+    <Box sx={{ p: 3 }}>
+      {/* Header Skeleton */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Skeleton variant="text" width={200} height={48} />
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Skeleton variant="rectangular" width={140} height={40} sx={{ borderRadius: 1 }} />
+          <Skeleton variant="rectangular" width={120} height={40} sx={{ borderRadius: 1 }} />
+        </Box>
+      </Box>
+
+      {/* Portfolio Cards Skeleton */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={5}>
+          <Card sx={{ height: 180 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
+                <Skeleton variant="text" width={150} height={20} />
+              </Box>
+              <Skeleton variant="text" width={200} height={48} sx={{ mb: 2 }} />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Box>
+                  <Skeleton variant="text" width={60} height={16} />
+                  <Skeleton variant="text" width={80} height={20} />
+                </Box>
+                <Box>
+                  <Skeleton variant="text" width={80} height={16} />
+                  <Skeleton variant="text" width={70} height={20} />
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3.5}>
+          <Card sx={{ height: 180 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
+                <Skeleton variant="text" width={120} height={20} />
+              </Box>
+              <Skeleton variant="text" width={120} height={48} sx={{ mb: 1 }} />
+              <Skeleton variant="text" width={100} height={16} />
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3.5}>
+          <Card sx={{ height: 180 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
+                <Skeleton variant="text" width={130} height={20} />
+              </Box>
+              <Skeleton variant="text" width={100} height={48} sx={{ mb: 1 }} />
+              <Skeleton variant="text" width={120} height={16} />
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Portfolio Breakdown Skeleton */}
+      <Paper sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Skeleton variant="text" width={180} height={32} />
+          <Skeleton variant="rectangular" width={140} height={32} sx={{ borderRadius: 1 }} />
+        </Box>
+
+        {/* Accordion Skeletons */}
+        {[1, 2, 3].map((i) => (
+          <Paper key={i} variant="outlined" sx={{ mb: 1, borderRadius: 1 }}>
+            <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Skeleton variant="circular" width={40} height={40} />
+                <Box>
+                  <Skeleton variant="text" width={120} height={20} />
+                  <Skeleton variant="text" width={80} height={16} />
+                </Box>
+              </Box>
+              <Box sx={{ textAlign: 'right' }}>
+                <Skeleton variant="text" width={100} height={24} />
+                <Skeleton variant="text" width={80} height={16} />
+              </Box>
+            </Box>
+          </Paper>
+        ))}
+      </Paper>
+    </Box>
+  );
+
   // Render mini sparkline chart
   const renderSparkline = (history: any[]) => {
     if (!history || history.length === 0) {
@@ -358,7 +480,7 @@ const InvestmentsPage: React.FC = () => {
               tick={{ fontSize: 12 }}
               tickFormatter={(value) => maskAmounts ? '***' : `₪${(value / 1000).toFixed(0)}k`}
             />
-            <Tooltip 
+            <RechartsTooltip
               formatter={(value: any) => formatCurrencyValue(value)}
               labelStyle={{ color: '#000' }}
             />
@@ -386,11 +508,7 @@ const InvestmentsPage: React.FC = () => {
   };
 
   if (loading || portfolioLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <InvestmentsSkeleton />;
   }
 
   const pieData = data?.byCategory.map(item => ({
@@ -421,133 +539,216 @@ const InvestmentsPage: React.FC = () => {
         defaultTab={portfolioModalTab}
       />
 
-      {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" fontWeight="bold">
-          Investments
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<SettingsIcon />}
-            onClick={() => {
-              setPortfolioModalTab(0);
-              setPortfolioModalOpen(true);
-            }}
-          >
-            Portfolio Setup
-          </Button>
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>Date Range</InputLabel>
-            <Select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value as any)}
-              label="Date Range"
+      {/* Enhanced Header */}
+      <Box sx={{ mb: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+          <Box>
+            <Typography variant="h4" fontWeight="bold" gutterBottom>
+              Investments Dashboard
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Track your portfolio performance and investment transactions
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Tooltip title="Refresh all data">
+              <Button
+                variant="outlined"
+                startIcon={refreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
+                onClick={handleRefreshAll}
+                disabled={refreshing}
+                size="small"
+                sx={{ textTransform: 'none', minWidth: 100 }}
+              >
+                {refreshing ? 'Refreshing...' : 'Refresh'}
+              </Button>
+            </Tooltip>
+            <Button
+              variant="outlined"
+              startIcon={<SettingsIcon />}
+              onClick={() => {
+                setPortfolioModalTab(0);
+                setPortfolioModalOpen(true);
+              }}
+              size="small"
+              sx={{ textTransform: 'none' }}
             >
-              <MenuItem value="all">All Time</MenuItem>
-              <MenuItem value="3m">Last 3 Months</MenuItem>
-              <MenuItem value="6m">Last 6 Months</MenuItem>
-              <MenuItem value="1y">Last Year</MenuItem>
-            </Select>
-          </FormControl>
+              Portfolio Setup
+            </Button>
+          </Box>
         </Box>
+
+        {/* Enhanced Control Bar */}
+        <Paper sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, bgcolor: 'grey.50' }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Tooltip title="Filter investment data by time period">
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <InputLabel>Date Range</InputLabel>
+                <Select
+                  value={dateRange}
+                  onChange={(e) => setDateRange(e.target.value as any)}
+                  label="Date Range"
+                >
+                  <MenuItem value="all">All Time</MenuItem>
+                  <MenuItem value="3m">Last 3 Months</MenuItem>
+                  <MenuItem value="6m">Last 6 Months</MenuItem>
+                  <MenuItem value="1y">Last Year</MenuItem>
+                </Select>
+              </FormControl>
+            </Tooltip>
+
+            <Tooltip title="Switch between summary and detailed view modes">
+              <ToggleButtonGroup
+                value={viewMode}
+                exclusive
+                onChange={(e, newMode) => newMode && setViewMode(newMode)}
+                size="small"
+              >
+                <ToggleButton value="summary" aria-label="summary view">
+                  <DashboardIcon fontSize="small" sx={{ mr: 0.5 }} />
+                  Summary
+                </ToggleButton>
+                <ToggleButton value="detailed" aria-label="detailed view">
+                  <AnalyticsIcon fontSize="small" sx={{ mr: 0.5 }} />
+                  Detailed
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Tooltip>
+          </Box>
+        </Paper>
       </Box>
 
       {/* Portfolio Overview Section */}
       {portfolioData && portfolioData.summary.totalAccounts > 0 && (
         <Box sx={{ mb: 3 }}>
-          {/* Compact Portfolio Summary Cards */}
-          <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} md={5}>
-              <Card sx={{ 
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: 'white',
-                height: '100%'
-              }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <AccountIcon sx={{ mr: 1 }} />
-                    <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                      Total Portfolio Value
-                    </Typography>
-                  </Box>
-                  <Typography variant="h3" fontWeight="bold">
+          {/* Optimized Portfolio Summary */}
+          <Card sx={{
+            p: 3,
+            border: '1px solid',
+            borderColor: 'divider',
+            '&:hover': {
+              transition: 'box-shadow 0.2s ease-in-out'
+            }
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+              <AccountIcon sx={{ mr: 2, fontSize: 32, color: 'primary.main' }} />
+              <Box>
+                <Typography variant="h5" fontWeight="bold">
+                  Portfolio Overview
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {portfolioData.summary.accountsWithValues} active accounts • Last updated {portfolioData.summary.newestUpdateDate ?
+                    new Date(portfolioData.summary.newestUpdateDate).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric'
+                    }) : 'N/A'}
+                </Typography>
+              </Box>
+            </Box>
+
+            <Grid container spacing={4}>
+              {/* Primary Metric - Total Value */}
+              <Grid item xs={12} md={4}>
+                <Box sx={{ textAlign: 'center', p: 2 }}>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    TOTAL PORTFOLIO VALUE
+                  </Typography>
+                  <Typography variant="h3" fontWeight="bold" color="primary.main" sx={{ mb: 1 }}>
                     {formatCurrencyValue(portfolioData.summary.totalPortfolioValue)}
                   </Typography>
-                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography variant="caption" sx={{ opacity: 0.8 }} display="block">
-                        Invested
+                  <Chip
+                    label={`${portfolioData.summary.accountsWithValues} accounts`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontSize: '0.75rem' }}
+                  />
+                </Box>
+              </Grid>
+
+              {/* Secondary Metrics */}
+              <Grid item xs={12} md={8}>
+                <Grid container spacing={3}>
+                  {/* Cost Basis */}
+                  <Grid item xs={6} sm={4}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        COST BASIS
                       </Typography>
-                      <Typography variant="body2" fontWeight="medium">
+                      <Typography variant="h6" fontWeight="medium" sx={{ mb: 1 }}>
                         {formatCurrencyValue(portfolioData.summary.totalCostBasis)}
                       </Typography>
+                      <Box sx={{
+                        width: '100%',
+                        height: 4,
+                        bgcolor: 'grey.200',
+                        borderRadius: 1,
+                        mt: 1
+                      }}>
+                        <Box sx={{
+                          width: '85%',
+                          height: '100%',
+                          bgcolor: 'grey.400',
+                          borderRadius: 1
+                        }} />
+                      </Box>
                     </Box>
-                    <Box sx={{ textAlign: 'right' }}>
-                      <Typography variant="caption" sx={{ opacity: 0.8 }} display="block">
-                        {portfolioData.summary.accountsWithValues} accounts
+                  </Grid>
+
+                  {/* Unrealized P&L */}
+                  <Grid item xs={6} sm={4}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        UNREALIZED P&L
                       </Typography>
-                      <Typography variant="body2" fontWeight="medium">
-                        Updated {portfolioData.summary.newestUpdateDate ? 
-                          new Date(portfolioData.summary.newestUpdateDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) 
-                          : 'N/A'}
+                      <Typography
+                        variant="h6"
+                        fontWeight="medium"
+                        color={portfolioData.summary.unrealizedGainLoss >= 0 ? 'success.main' : 'error.main'}
+                        sx={{ mb: 1 }}
+                      >
+                        {portfolioData.summary.unrealizedGainLoss >= 0 ? '+' : ''}
+                        {formatCurrencyValue(portfolioData.summary.unrealizedGainLoss)}
                       </Typography>
+                      <Chip
+                        label={portfolioData.summary.unrealizedGainLoss >= 0 ? 'Gains' : 'Losses'}
+                        size="small"
+                        color={portfolioData.summary.unrealizedGainLoss >= 0 ? 'success' : 'error'}
+                        variant="outlined"
+                        sx={{ fontSize: '0.7rem' }}
+                      />
                     </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
+                  </Grid>
 
-            <Grid item xs={12} sm={6} md={3.5}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <TrendingUpIcon sx={{ 
-                      mr: 1, 
-                      color: portfolioData.summary.unrealizedGainLoss >= 0 ? '#10b981' : '#ef4444' 
-                    }} />
-                    <Typography variant="body2" color="text.secondary">
-                      Unrealized Gains/Loss
-                    </Typography>
-                  </Box>
-                  <Typography 
-                    variant="h4" 
-                    fontWeight="bold"
-                    color={portfolioData.summary.unrealizedGainLoss >= 0 ? 'success.main' : 'error.main'}
-                  >
-                    {formatCurrencyValue(portfolioData.summary.unrealizedGainLoss)}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {portfolioData.summary.unrealizedGainLoss >= 0 ? '+' : ''}
-                    {formatCurrencyValue(portfolioData.summary.unrealizedGainLoss)} from cost basis
-                  </Typography>
-                </CardContent>
-              </Card>
+                  {/* ROI */}
+                  <Grid item xs={12} sm={4}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        RETURN ON INVESTMENT
+                      </Typography>
+                      <Typography
+                        variant="h6"
+                        fontWeight="medium"
+                        color={portfolioData.summary.roi >= 0 ? 'success.main' : 'error.main'}
+                        sx={{ mb: 1 }}
+                      >
+                        {portfolioData.summary.roi >= 0 ? '+' : ''}{portfolioData.summary.roi.toFixed(2)}%
+                      </Typography>
+                      <LinearProgress
+                        variant="determinate"
+                        value={Math.min(Math.abs(portfolioData.summary.roi), 100)}
+                        color={portfolioData.summary.roi >= 0 ? 'success' : 'error'}
+                        sx={{
+                          height: 4,
+                          borderRadius: 1,
+                          bgcolor: 'grey.200'
+                        }}
+                      />
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Grid>
             </Grid>
-
-            <Grid item xs={12} sm={6} md={3.5}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <StockIcon sx={{ mr: 1, color: '#f59e0b' }} />
-                    <Typography variant="body2" color="text.secondary">
-                      Return on Investment
-                    </Typography>
-                  </Box>
-                  <Typography 
-                    variant="h4" 
-                    fontWeight="bold"
-                    color={portfolioData.summary.roi >= 0 ? 'success.main' : 'error.main'}
-                  >
-                    {portfolioData.summary.roi >= 0 ? '+' : ''}{portfolioData.summary.roi.toFixed(2)}%
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Overall portfolio performance
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
+          </Card>
 
           {/* Compact Account Breakdown */}
           <Paper sx={{ p: 2 }}>
@@ -845,12 +1046,53 @@ const InvestmentsPage: React.FC = () => {
         </Paper>
       )}
 
-      {/* No data state */}
+      {/* Enhanced No Data State */}
       {(!data || data.summary.totalCount === 0) && (!portfolioData || portfolioData.summary.totalAccounts === 0) && (
-        <Alert severity="info">
-          No investment data found. Click "Portfolio Setup" to add your investment accounts and track your portfolio.
-        </Alert>
+        <Paper sx={{ p: 4, textAlign: 'center', mt: 4 }}>
+          <AccountIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+          <Typography variant="h5" gutterBottom fontWeight="medium">
+            Get Started with Your Investment Portfolio
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+            Track your investment performance across multiple accounts. Connect your brokerage, pension, and savings accounts to see your complete financial picture.
+          </Typography>
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setPortfolioModalTab(0);
+              setPortfolioModalOpen(true);
+            }}
+            sx={{ borderRadius: 2, textTransform: 'none', px: 4 }}
+          >
+            Setup Portfolio
+          </Button>
+        </Paper>
       )}
+
+      {/* Enhanced Floating Action Buttons */}
+      <Box sx={{ position: 'fixed', bottom: 24, right: 24, display: 'flex', flexDirection: 'column', gap: 1, zIndex: 1000 }}>
+        {data && data.summary.totalCount > 0 && (
+          <Tooltip
+            title={activeTab === 0 ? "Show detailed transaction history" : "Hide transaction history"}
+            placement="left"
+            arrow
+          >
+            <Fab
+              color="info"
+              size="small"
+              onClick={() => setActiveTab(activeTab === 0 ? 1 : 0)}
+              sx={{
+                '&:hover': { transform: 'scale(1.1)' },
+                transition: 'all 0.2s ease-in-out'
+              }}
+            >
+              {activeTab === 0 ? <ViewIcon /> : <HideIcon />}
+            </Fab>
+          </Tooltip>
+        )}
+      </Box>
     </Box>
   );
 };

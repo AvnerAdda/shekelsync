@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, useTheme } from '@mui/material';
+import { Box, useTheme, AppBar, Toolbar, Typography, useMediaQuery } from '@mui/material';
 import Sidebar from './Sidebar';
 import HomePage from './HomePage';
 import AnalysisPage from './AnalysisPage';
@@ -7,20 +7,24 @@ import InvestmentsPage from './InvestmentsPage';
 import BudgetsPage from './BudgetsPage';
 import SettingsPage from './SettingsPage';
 import FinancialChatbot from './FinancialChatbot';
+import SmartNotifications from './SmartNotifications';
 
 const DRAWER_WIDTH_COLLAPSED = 65;
+const DRAWER_WIDTH = 260;
 
 const MainLayout: React.FC = () => {
   const [currentPage, setCurrentPage] = useState('home');
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const handleDataRefresh = () => {
     setDataRefreshKey(prev => prev + 1);
     // Trigger custom event for backward compatibility
     window.dispatchEvent(new Event('dataRefresh'));
   };
-
+  
   const renderPage = () => {
     switch (currentPage) {
       case 'home':
@@ -39,28 +43,49 @@ const MainLayout: React.FC = () => {
   };
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      {/* Sidebar with integrated controls */}
-      <Sidebar
-        currentPage={currentPage}
-        onPageChange={setCurrentPage}
-        onDataRefresh={handleDataRefresh}
-      />
-
-      {/* Main Content */}
-      <Box
-        component="main"
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      {/* Top AppBar with Smart Notifications */}
+      <AppBar
+        position="fixed"
         sx={{
-          flexGrow: 1,
-          p: 3,
-          ml: { xs: 0, md: `${DRAWER_WIDTH_COLLAPSED}px` },
-          transition: theme.transitions.create(['margin'], {
-            easing: theme.transitions.easing.sharp,
-            duration: theme.transitions.duration.leavingScreen,
-          }),
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          backgroundColor: 'background.paper',
+          color: 'text.primary',
+          boxShadow: 1,
+          borderBottom: `1px solid ${theme.palette.divider}`,
         }}
       >
-        {renderPage()}
+        <Toolbar sx={{ justifyContent: 'space-between' }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
+            ShekelSync
+          </Typography>
+          <SmartNotifications />
+        </Toolbar>
+      </AppBar>
+
+      <Box sx={{ display: 'flex', flexGrow: 1, mt: 8 }}>
+        {/* Sidebar with integrated controls */}
+        <Sidebar
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+          onDataRefresh={handleDataRefresh}
+        />
+
+        {/* Main Content */}
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
+            p: 3,
+            ml: { xs: 0, md: `${DRAWER_WIDTH_COLLAPSED}px` },
+            transition: theme.transitions.create(['margin'], {
+              easing: theme.transitions.easing.sharp,
+              duration: theme.transitions.duration.leavingScreen,
+            }),
+          }}
+        >
+          {renderPage()}
+        </Box>
       </Box>
 
       {/* Financial Chatbot - Floating Button */}

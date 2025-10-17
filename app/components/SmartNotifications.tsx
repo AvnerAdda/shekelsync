@@ -1,0 +1,351 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Paper,
+  Typography,
+  Badge,
+  IconButton,
+  Popover,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Button,
+  Chip,
+  Divider,
+  Alert,
+  CircularProgress,
+  Tooltip,
+  Stack,
+  Avatar,
+} from '@mui/material';
+import {
+  Notifications as NotificationsIcon,
+  Warning as WarningIcon,
+  Error as CriticalIcon,
+  Info as InfoIcon,
+  TrendingUp as BudgetIcon,
+  ShoppingCart as SpendingIcon,
+  Store as VendorIcon,
+  MonetizationOn as HighTransactionIcon,
+  Timeline as CashFlowIcon,
+  CheckCircle as GoalIcon,
+  Close as CloseIcon,
+  Refresh as RefreshIcon,
+} from '@mui/icons-material';
+import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
+import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+
+interface Notification {
+  id: string;
+  type: string;
+  severity: 'info' | 'warning' | 'critical';
+  title: string;
+  message: string;
+  data: any;
+  timestamp: string;
+  actionable: boolean;
+  actions?: Array<{
+    label: string;
+    action: string;
+    params?: any;
+  }>;
+}
+
+interface NotificationSummary {
+  total: number;
+  by_type: Record<string, number>;
+  by_severity: Record<string, number>;
+}
+
+const SmartNotifications: React.FC = () => {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [summary, setSummary] = useState<NotificationSummary | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
+  const [lastFetch, setLastFetch] = useState<Date | null>(null);
+  const { formatCurrency } = useFinancePrivacy();
+
+  const open = Boolean(anchorEl);
+
+  useEffect(() => {
+    fetchNotifications();
+
+    // Set up periodic refresh (every 5 minutes)
+    const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchNotifications = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/notifications?limit=20');
+      const data = await response.json();
+
+      if (data.success) {
+        setNotifications(data.data.notifications);
+        setSummary(data.data.summary);
+        setLastFetch(new Date());
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAnchorEl(event.currentTarget);
+    if (notifications.length === 0) {
+      fetchNotifications();
+    }
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const getNotificationIcon = (type: string, severity: string) => {
+    const iconProps = {
+      fontSize: 'small' as const,
+      color: severity === 'critical' ? 'error' as const :
+             severity === 'warning' ? 'warning' as const : 'info' as const
+    };
+
+    switch (type) {
+      case 'budget_warning':
+      case 'budget_exceeded':
+        return <BudgetIcon {...iconProps} />;
+      case 'unusual_spending':
+        return <SpendingIcon {...iconProps} />;
+      case 'high_transaction':
+        return <HighTransactionIcon {...iconProps} />;
+      case 'new_vendor':
+        return <VendorIcon {...iconProps} />;
+      case 'cash_flow_alert':
+        return <CashFlowIcon {...iconProps} />;
+      case 'goal_milestone':
+        return <GoalIcon {...iconProps} />;
+      default:
+        return severity === 'critical' ? <CriticalIcon {...iconProps} /> :
+               severity === 'warning' ? <WarningIcon {...iconProps} /> :
+               <InfoIcon {...iconProps} />;
+    }
+  };
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'critical': return 'error';
+      case 'warning': return 'warning';
+      default: return 'info';
+    }
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    if (isToday(date)) {
+      return `Today ${format(date, 'HH:mm')}`;
+    } else if (isYesterday(date)) {
+      return `Yesterday ${format(date, 'HH:mm')}`;
+    } else {
+      return formatDistanceToNow(date, { addSuffix: true });
+    }
+  };
+
+  const handleNotificationAction = (action: string, params?: any) => {
+    // Handle different notification actions
+    switch (action) {
+      case 'view_category':
+        // Navigate to category view
+        console.log('Navigate to category:', params?.category);
+        break;
+      case 'edit_budget':
+        // Open budget editing
+        console.log('Edit budget for:', params?.category);
+        break;
+      case 'view_transaction':
+        // Navigate to transaction details
+        console.log('View transaction:', params?.id);
+        break;
+      case 'view_budgets':
+        // Navigate to budgets page
+        console.log('Navigate to budgets');
+        break;
+      case 'view_analytics':
+        // Navigate to analytics
+        console.log('Navigate to analytics');
+        break;
+      default:
+        console.log('Unknown action:', action, params);
+    }
+    handleClose();
+  };
+
+  const criticalCount = summary?.by_severity?.critical || 0;
+  const warningCount = summary?.by_severity?.warning || 0;
+  const totalAlerts = criticalCount + warningCount;
+
+  return (
+    <>
+      <Tooltip title="Smart Alerts">
+        <IconButton
+          color="inherit"
+          onClick={handleClick}
+          sx={{
+            color: totalAlerts > 0 ? 'warning.main' : 'inherit',
+            '&:hover': {
+              backgroundColor: 'action.hover',
+            }
+          }}
+        >
+          <Badge badgeContent={totalAlerts} color="error" max={99}>
+            <NotificationsIcon />
+          </Badge>
+        </IconButton>
+      </Tooltip>
+
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={handleClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+        PaperProps={{
+          sx: { width: 400, maxHeight: 600 }
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">Smart Alerts</Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Tooltip title="Refresh">
+                <IconButton size="small" onClick={fetchNotifications} disabled={loading}>
+                  {loading ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+              <IconButton size="small" onClick={handleClose}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          </Box>
+
+          {summary && (
+            <Box sx={{ mb: 2 }}>
+              <Stack direction="row" spacing={1}>
+                {criticalCount > 0 && (
+                  <Chip
+                    size="small"
+                    icon={<CriticalIcon />}
+                    label={`${criticalCount} Critical`}
+                    color="error"
+                    variant="outlined"
+                  />
+                )}
+                {warningCount > 0 && (
+                  <Chip
+                    size="small"
+                    icon={<WarningIcon />}
+                    label={`${warningCount} Warning`}
+                    color="warning"
+                    variant="outlined"
+                  />
+                )}
+                {summary.by_severity.info > 0 && (
+                  <Chip
+                    size="small"
+                    icon={<InfoIcon />}
+                    label={`${summary.by_severity.info} Info`}
+                    color="info"
+                    variant="outlined"
+                  />
+                )}
+              </Stack>
+            </Box>
+          )}
+
+          {notifications.length === 0 ? (
+            <Alert severity="success" sx={{ textAlign: 'center' }}>
+              <Typography variant="body2">
+                🎉 All good! No alerts at the moment.
+              </Typography>
+            </Alert>
+          ) : (
+            <List sx={{ maxHeight: 400, overflow: 'auto', p: 0 }}>
+              {notifications.map((notification, index) => (
+                <React.Fragment key={notification.id}>
+                  <ListItem
+                    sx={{
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      p: 2,
+                      bgcolor: notification.severity === 'critical' ? 'error.light' :
+                               notification.severity === 'warning' ? 'warning.light' :
+                               'transparent',
+                      borderRadius: 1,
+                      mb: 1
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', width: '100%', gap: 1 }}>
+                      <Avatar
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          bgcolor: `${getSeverityColor(notification.severity)}.main`
+                        }}
+                      >
+                        {getNotificationIcon(notification.type, notification.severity)}
+                      </Avatar>
+
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                          {notification.title}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                          {notification.message}
+                        </Typography>
+                        <Typography variant="caption" color="text.disabled">
+                          {formatTimestamp(notification.timestamp)}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {notification.actionable && notification.actions && (
+                      <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
+                        {notification.actions.map((action, actionIndex) => (
+                          <Button
+                            key={actionIndex}
+                            size="small"
+                            variant="outlined"
+                            onClick={() => handleNotificationAction(action.action, action.params)}
+                            sx={{ fontSize: '0.75rem' }}
+                          >
+                            {action.label}
+                          </Button>
+                        ))}
+                      </Box>
+                    )}
+                  </ListItem>
+                  {index < notifications.length - 1 && <Divider />}
+                </React.Fragment>
+              ))}
+            </List>
+          )}
+
+          {lastFetch && (
+            <Typography variant="caption" color="text.disabled" sx={{ display: 'block', textAlign: 'center', mt: 2 }}>
+              Last updated: {formatDistanceToNow(lastFetch, { addSuffix: true })}
+            </Typography>
+          )}
+        </Box>
+      </Popover>
+    </>
+  );
+};
+
+export default SmartNotifications;
