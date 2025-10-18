@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   try {
     // Get all active accounts with their latest holdings
     const accountsQuery = `
-      SELECT 
+      SELECT
         ia.id,
         ia.account_name,
         ia.account_type,
@@ -22,6 +22,8 @@ export default async function handler(req, res) {
         ia.account_number,
         ia.currency,
         ia.notes,
+        ia.is_liquid,
+        ia.investment_category,
         ih.current_value,
         ih.cost_basis,
         ih.as_of_date,
@@ -37,7 +39,7 @@ export default async function handler(req, res) {
         LIMIT 1
       ) ih ON true
       WHERE ia.is_active = true
-      ORDER BY ia.account_type, ia.account_name
+      ORDER BY ia.investment_category, ia.account_type, ia.account_name
     `;
 
     const accountsResult = await client.query(accountsQuery);
@@ -63,19 +65,41 @@ export default async function handler(req, res) {
     let oldestDate = null;
     let newestDate = null;
 
+    // Separate totals by investment category
+    let liquidTotal = { value: 0, cost: 0, accounts: 0 };
+    let restrictedTotal = { value: 0, cost: 0, accounts: 0 };
+
     const accountsByType = {};
+    const accountsByCategory = { liquid: [], restricted: [] };
 
     accountsResult.rows.forEach(account => {
       const value = account.current_value ? parseFloat(account.current_value) : 0;
       const cost = account.cost_basis ? parseFloat(account.cost_basis) : 0;
+      const category = account.investment_category;
 
       if (value > 0) {
         totalPortfolioValue += value;
         accountsWithValues++;
+
+        // Add to category totals
+        if (category === 'liquid') {
+          liquidTotal.value += value;
+          liquidTotal.accounts++;
+        } else if (category === 'restricted') {
+          restrictedTotal.value += value;
+          restrictedTotal.accounts++;
+        }
       }
 
       if (cost > 0) {
         totalCostBasis += cost;
+
+        // Add to category costs
+        if (category === 'liquid') {
+          liquidTotal.cost += cost;
+        } else if (category === 'restricted') {
+          restrictedTotal.cost += cost;
+        }
       }
 
       if (account.as_of_date) {
@@ -98,15 +122,22 @@ export default async function handler(req, res) {
         };
       }
 
-      accountsByType[account.account_type].accounts.push({
+      const processedAccount = {
         ...account,
         current_value: value,
         cost_basis: cost,
         units: account.units ? parseFloat(account.units) : null,
-      });
+      };
+
+      accountsByType[account.account_type].accounts.push(processedAccount);
       accountsByType[account.account_type].totalValue += value;
       accountsByType[account.account_type].totalCost += cost;
       accountsByType[account.account_type].count++;
+
+      // Group by investment category
+      if (category === 'liquid' || category === 'restricted') {
+        accountsByCategory[category].push(processedAccount);
+      }
     });
 
     // Group assets by account
@@ -154,18 +185,21 @@ export default async function handler(req, res) {
       gainLoss: parseFloat(row.total_value) - (row.total_cost ? parseFloat(row.total_cost) : 0),
     }));
 
-    // Format account types for display
+    // Enhanced account types with Israeli financial terminology
     const accountTypeLabels = {
-      pension: { name: 'Pension Fund', name_he: 'קרן פנסיה' },
-      provident: { name: 'Provident Fund', name_he: 'קרן השתלמות' },
-      study_fund: { name: 'Study Fund', name_he: 'קופת גמל' },
-      savings: { name: 'Savings', name_he: 'פיקדון' },
-      brokerage: { name: 'Brokerage', name_he: 'ברוקר' },
-      crypto: { name: 'Crypto', name_he: 'קריפטו' },
-      mutual_fund: { name: 'Mutual Funds', name_he: 'קרנות נאמנות' },
-      bonds: { name: 'Bonds', name_he: 'אג"ח' },
-      real_estate: { name: 'Real Estate', name_he: 'נדל"ן' },
-      other: { name: 'Other', name_he: 'אחר' },
+      // Restricted long-term savings (קופות גמל ופנסיה)
+      pension: { name: 'Pension Fund', name_he: 'קרן פנסיה', category: 'restricted' },
+      provident: { name: 'Provident Fund', name_he: 'קרן השתלמות', category: 'restricted' },
+      study_fund: { name: 'Study Fund', name_he: 'קופת גמל לחינוך', category: 'restricted' },
+
+      // Liquid investments (השקעות נזילות)
+      brokerage: { name: 'Brokerage Account', name_he: 'חשבון ברוקר', category: 'liquid' },
+      crypto: { name: 'Cryptocurrency', name_he: 'מטבעות דיגיטליים', category: 'liquid' },
+      savings: { name: 'High-Yield Savings', name_he: 'פיקדון בריבית גבוהה', category: 'liquid' },
+      mutual_fund: { name: 'Mutual Funds', name_he: 'קרנות נאמנות', category: 'liquid' },
+      bonds: { name: 'Bonds & Fixed Income', name_he: 'אג"ח והלוואות', category: 'liquid' },
+      real_estate: { name: 'Real Estate', name_he: 'נדל"ן והשקעות רע"ן', category: 'liquid' },
+      other: { name: 'Other Investments', name_he: 'השקעות אחרות', category: 'liquid' },
     };
 
     const breakdown = Object.values(accountsByType).map(group => ({
@@ -186,9 +220,27 @@ export default async function handler(req, res) {
         accountsWithValues,
         oldestUpdateDate: oldestDate,
         newestUpdateDate: newestDate,
+        // Category-based totals
+        liquid: {
+          totalValue: liquidTotal.value,
+          totalCost: liquidTotal.cost,
+          unrealizedGainLoss: liquidTotal.value - liquidTotal.cost,
+          roi: liquidTotal.cost > 0 ? ((liquidTotal.value - liquidTotal.cost) / liquidTotal.cost) * 100 : 0,
+          accountsCount: liquidTotal.accounts,
+        },
+        restricted: {
+          totalValue: restrictedTotal.value,
+          totalCost: restrictedTotal.cost,
+          unrealizedGainLoss: restrictedTotal.value - restrictedTotal.cost,
+          roi: restrictedTotal.cost > 0 ? ((restrictedTotal.value - restrictedTotal.cost) / restrictedTotal.cost) * 100 : 0,
+          accountsCount: restrictedTotal.accounts,
+        },
       },
       breakdown,
       timeline,
+      // Category-based breakdowns
+      liquidAccounts: accountsByCategory.liquid,
+      restrictedAccounts: accountsByCategory.restricted,
       accounts: accountsResult.rows.map(acc => ({
         ...acc,
         current_value: acc.current_value ? parseFloat(acc.current_value) : null,
