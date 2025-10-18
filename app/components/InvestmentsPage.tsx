@@ -110,6 +110,20 @@ interface PortfolioSummary {
     totalAccounts: number;
     accountsWithValues: number;
     newestUpdateDate: string | null;
+    liquid: {
+      totalValue: number;
+      totalCost: number;
+      unrealizedGainLoss: number;
+      roi: number;
+      accountsCount: number;
+    };
+    restricted: {
+      totalValue: number;
+      totalCost: number;
+      unrealizedGainLoss: number;
+      roi: number;
+      accountsCount: number;
+    };
   };
   breakdown: Array<{
     type: string;
@@ -128,6 +142,8 @@ interface PortfolioSummary {
     gainLoss: number;
   }>;
   accounts: any[];
+  liquidAccounts: any[];
+  restrictedAccounts: any[];
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
@@ -287,21 +303,41 @@ const InvestmentsPage: React.FC = () => {
     });
   };
 
-  const getAccountTypeIcon = (type: string) => {
+  const getAccountTypeIcon = (type: string, investmentCategory?: string) => {
+    // Enhanced icons with category-based coloring
+    const iconProps = {
+      fontSize: 'medium' as const,
+      sx: {
+        color: investmentCategory === 'liquid' ? 'info.main' :
+               investmentCategory === 'restricted' ? 'warning.main' : 'primary.main'
+      }
+    };
+
     switch (type) {
+      // Restricted long-term savings
       case 'pension':
-        return <AccountIcon />;
+        return <AccountIcon {...iconProps} />;
       case 'provident':
+        return <SchoolIcon {...iconProps} />;
       case 'study_fund':
-        return <SchoolIcon />;
-      case 'savings':
-        return <PiggyBankIcon />;
+        return <SchoolIcon {...iconProps} />;
+
+      // Liquid investments
       case 'brokerage':
-        return <StockIcon />;
+        return <StockIcon {...iconProps} />;
       case 'crypto':
-        return <CryptoIcon />;
+        return <CryptoIcon {...iconProps} />;
+      case 'savings':
+        return <PiggyBankIcon {...iconProps} />;
+      case 'mutual_fund':
+        return <TimelineIcon {...iconProps} />;
+      case 'bonds':
+        return <CardIcon {...iconProps} />;
+      case 'real_estate':
+        return <DashboardIcon {...iconProps} />;
+
       default:
-        return <MoneyIcon />;
+        return <MoneyIcon {...iconProps} />;
     }
   };
 
@@ -618,23 +654,16 @@ const InvestmentsPage: React.FC = () => {
         </Paper>
       </Box>
 
-      {/* Portfolio Overview Section */}
+      {/* Separated Investment Categories */}
       {portfolioData && portfolioData.summary.totalAccounts > 0 && (
         <Box sx={{ mb: 3 }}>
-          {/* Optimized Portfolio Summary */}
-          <Card sx={{
-            p: 3,
-            border: '1px solid',
-            borderColor: 'divider',
-            '&:hover': {
-              transition: 'box-shadow 0.2s ease-in-out'
-            }
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-              <AccountIcon sx={{ mr: 2, fontSize: 32, color: 'primary.main' }} />
+          {/* Overall Portfolio Summary */}
+          <Card sx={{ p: 3, mb: 3, bgcolor: 'grey.50' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <AccountIcon sx={{ mr: 2, fontSize: 28, color: 'primary.main' }} />
               <Box>
                 <Typography variant="h5" fontWeight="bold">
-                  Portfolio Overview
+                  Total Portfolio
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {portfolioData.summary.accountsWithValues} active accounts • Last updated {portfolioData.summary.newestUpdateDate ?
@@ -645,107 +674,121 @@ const InvestmentsPage: React.FC = () => {
                 </Typography>
               </Box>
             </Box>
-
-            <Grid container spacing={4}>
-              {/* Primary Metric - Total Value */}
-              <Grid item xs={12} md={4}>
-                <Box sx={{ textAlign: 'center', p: 2 }}>
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    TOTAL PORTFOLIO VALUE
-                  </Typography>
-                  <Typography variant="h3" fontWeight="bold" color="primary.main" sx={{ mb: 1 }}>
-                    {formatCurrencyValue(portfolioData.summary.totalPortfolioValue)}
-                  </Typography>
-                  <Chip
-                    label={`${portfolioData.summary.accountsWithValues} accounts`}
-                    size="small"
-                    variant="outlined"
-                    sx={{ fontSize: '0.75rem' }}
-                  />
-                </Box>
+            <Grid container spacing={3}>
+              <Grid item xs={6} md={3}>
+                <Typography variant="caption" color="text.secondary">TOTAL VALUE</Typography>
+                <Typography variant="h4" fontWeight="bold" color="primary.main">
+                  {formatCurrencyValue(portfolioData.summary.totalPortfolioValue)}
+                </Typography>
               </Grid>
+              <Grid item xs={6} md={3}>
+                <Typography variant="caption" color="text.secondary">TOTAL COST</Typography>
+                <Typography variant="h5" fontWeight="medium">
+                  {formatCurrencyValue(portfolioData.summary.totalCostBasis)}
+                </Typography>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Typography variant="caption" color="text.secondary">UNREALIZED P&L</Typography>
+                <Typography variant="h5" fontWeight="medium"
+                  color={portfolioData.summary.unrealizedGainLoss >= 0 ? 'success.main' : 'error.main'}>
+                  {portfolioData.summary.unrealizedGainLoss >= 0 ? '+' : ''}
+                  {formatCurrencyValue(portfolioData.summary.unrealizedGainLoss)}
+                </Typography>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Typography variant="caption" color="text.secondary">OVERALL ROI</Typography>
+                <Typography variant="h5" fontWeight="medium"
+                  color={portfolioData.summary.roi >= 0 ? 'success.main' : 'error.main'}>
+                  {portfolioData.summary.roi >= 0 ? '+' : ''}{portfolioData.summary.roi.toFixed(2)}%
+                </Typography>
+              </Grid>
+            </Grid>
+          </Card>
 
-              {/* Secondary Metrics */}
-              <Grid item xs={12} md={8}>
-                <Grid container spacing={3}>
-                  {/* Cost Basis */}
-                  <Grid item xs={6} sm={4}>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        COST BASIS
-                      </Typography>
-                      <Typography variant="h6" fontWeight="medium" sx={{ mb: 1 }}>
-                        {formatCurrencyValue(portfolioData.summary.totalCostBasis)}
-                      </Typography>
-                      <Box sx={{
-                        width: '100%',
-                        height: 4,
-                        bgcolor: 'grey.200',
-                        borderRadius: 1,
-                        mt: 1
-                      }}>
-                        <Box sx={{
-                          width: '85%',
-                          height: '100%',
-                          bgcolor: 'grey.400',
-                          borderRadius: 1
-                        }} />
-                      </Box>
-                    </Box>
-                  </Grid>
+          {/* Liquid Investments Section */}
+          <Card sx={{ p: 3, mb: 2, border: '2px solid', borderColor: 'info.light' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+              <StockIcon sx={{ mr: 2, fontSize: 28, color: 'info.main' }} />
+              <Box>
+                <Typography variant="h5" fontWeight="bold" color="info.main">
+                  Liquid Investments
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Accessible investments • {portfolioData.summary.liquid.accountsCount} accounts
+                </Typography>
+              </Box>
+            </Box>
+            <Grid container spacing={3}>
+              <Grid item xs={6} md={3}>
+                <Typography variant="caption" color="text.secondary">CURRENT VALUE</Typography>
+                <Typography variant="h4" fontWeight="bold" color="info.main">
+                  {formatCurrencyValue(portfolioData.summary.liquid.totalValue)}
+                </Typography>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Typography variant="caption" color="text.secondary">COST BASIS</Typography>
+                <Typography variant="h6" fontWeight="medium">
+                  {formatCurrencyValue(portfolioData.summary.liquid.totalCost)}
+                </Typography>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Typography variant="caption" color="text.secondary">UNREALIZED P&L</Typography>
+                <Typography variant="h6" fontWeight="medium"
+                  color={portfolioData.summary.liquid.unrealizedGainLoss >= 0 ? 'success.main' : 'error.main'}>
+                  {portfolioData.summary.liquid.unrealizedGainLoss >= 0 ? '+' : ''}
+                  {formatCurrencyValue(portfolioData.summary.liquid.unrealizedGainLoss)}
+                </Typography>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Typography variant="caption" color="text.secondary">ROI</Typography>
+                <Typography variant="h6" fontWeight="medium"
+                  color={portfolioData.summary.liquid.roi >= 0 ? 'success.main' : 'error.main'}>
+                  {portfolioData.summary.liquid.roi >= 0 ? '+' : ''}{portfolioData.summary.liquid.roi.toFixed(2)}%
+                </Typography>
+              </Grid>
+            </Grid>
+          </Card>
 
-                  {/* Unrealized P&L */}
-                  <Grid item xs={6} sm={4}>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        UNREALIZED P&L
-                      </Typography>
-                      <Typography
-                        variant="h6"
-                        fontWeight="medium"
-                        color={portfolioData.summary.unrealizedGainLoss >= 0 ? 'success.main' : 'error.main'}
-                        sx={{ mb: 1 }}
-                      >
-                        {portfolioData.summary.unrealizedGainLoss >= 0 ? '+' : ''}
-                        {formatCurrencyValue(portfolioData.summary.unrealizedGainLoss)}
-                      </Typography>
-                      <Chip
-                        label={portfolioData.summary.unrealizedGainLoss >= 0 ? 'Gains' : 'Losses'}
-                        size="small"
-                        color={portfolioData.summary.unrealizedGainLoss >= 0 ? 'success' : 'error'}
-                        variant="outlined"
-                        sx={{ fontSize: '0.7rem' }}
-                      />
-                    </Box>
-                  </Grid>
-
-                  {/* ROI */}
-                  <Grid item xs={12} sm={4}>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        RETURN ON INVESTMENT
-                      </Typography>
-                      <Typography
-                        variant="h6"
-                        fontWeight="medium"
-                        color={portfolioData.summary.roi >= 0 ? 'success.main' : 'error.main'}
-                        sx={{ mb: 1 }}
-                      >
-                        {portfolioData.summary.roi >= 0 ? '+' : ''}{portfolioData.summary.roi.toFixed(2)}%
-                      </Typography>
-                      <LinearProgress
-                        variant="determinate"
-                        value={Math.min(Math.abs(portfolioData.summary.roi), 100)}
-                        color={portfolioData.summary.roi >= 0 ? 'success' : 'error'}
-                        sx={{
-                          height: 4,
-                          borderRadius: 1,
-                          bgcolor: 'grey.200'
-                        }}
-                      />
-                    </Box>
-                  </Grid>
-                </Grid>
+          {/* Restricted Long-term Savings Section */}
+          <Card sx={{ p: 3, mb: 2, border: '2px solid', borderColor: 'warning.light' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+              <SchoolIcon sx={{ mr: 2, fontSize: 28, color: 'warning.main' }} />
+              <Box>
+                <Typography variant="h5" fontWeight="bold" color="warning.main">
+                  Long-term Savings
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Pension, provident & study funds • {portfolioData.summary.restricted.accountsCount} accounts
+                </Typography>
+              </Box>
+            </Box>
+            <Grid container spacing={3}>
+              <Grid item xs={6} md={3}>
+                <Typography variant="caption" color="text.secondary">CURRENT VALUE</Typography>
+                <Typography variant="h4" fontWeight="bold" color="warning.main">
+                  {formatCurrencyValue(portfolioData.summary.restricted.totalValue)}
+                </Typography>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Typography variant="caption" color="text.secondary">COST BASIS</Typography>
+                <Typography variant="h6" fontWeight="medium">
+                  {formatCurrencyValue(portfolioData.summary.restricted.totalCost)}
+                </Typography>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Typography variant="caption" color="text.secondary">UNREALIZED P&L</Typography>
+                <Typography variant="h6" fontWeight="medium"
+                  color={portfolioData.summary.restricted.unrealizedGainLoss >= 0 ? 'success.main' : 'error.main'}>
+                  {portfolioData.summary.restricted.unrealizedGainLoss >= 0 ? '+' : ''}
+                  {formatCurrencyValue(portfolioData.summary.restricted.unrealizedGainLoss)}
+                </Typography>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Typography variant="caption" color="text.secondary">ROI</Typography>
+                <Typography variant="h6" fontWeight="medium"
+                  color={portfolioData.summary.restricted.roi >= 0 ? 'success.main' : 'error.main'}>
+                  {portfolioData.summary.restricted.roi >= 0 ? '+' : ''}{portfolioData.summary.restricted.roi.toFixed(2)}%
+                </Typography>
               </Grid>
             </Grid>
           </Card>

@@ -13,31 +13,45 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       // Get all investment accounts
-      const { includeInactive = 'false' } = req.query;
-      
+      const { includeInactive = 'false', category } = req.query;
+
+      let whereConditions = [];
+      if (includeInactive === 'false') {
+        whereConditions.push('ia.is_active = true');
+      }
+      if (category && ['liquid', 'restricted'].includes(category)) {
+        whereConditions.push(`ia.investment_category = '${category}'`);
+      }
+
+      const whereClause = whereConditions.length > 0
+        ? `WHERE ${whereConditions.join(' AND ')}`
+        : '';
+
       const query = `
-        SELECT 
+        SELECT
           ia.*,
           COUNT(DISTINCT ih.id) as holdings_count,
           MAX(ih.as_of_date) as last_update_date,
-          (SELECT current_value FROM investment_holdings 
-           WHERE account_id = ia.id 
-           ORDER BY as_of_date DESC 
+          (SELECT current_value FROM investment_holdings
+           WHERE account_id = ia.id
+           ORDER BY as_of_date DESC
            LIMIT 1) as current_value
         FROM investment_accounts ia
         LEFT JOIN investment_holdings ih ON ia.id = ih.account_id
-        ${includeInactive === 'false' ? 'WHERE ia.is_active = true' : ''}
+        ${whereClause}
         GROUP BY ia.id
-        ORDER BY ia.account_type, ia.account_name
+        ORDER BY ia.investment_category, ia.account_type, ia.account_name
       `;
 
       const result = await client.query(query);
-      
+
       return res.status(200).json({
         accounts: result.rows.map(row => ({
           ...row,
           current_value: row.current_value ? parseFloat(row.current_value) : null,
           holdings_count: parseInt(row.holdings_count),
+          is_liquid: row.is_liquid,
+          investment_category: row.investment_category,
         }))
       });
     }
@@ -66,10 +80,26 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: `Invalid account_type. Must be one of: ${validTypes.join(', ')}` });
       }
 
+      // Determine investment category based on account type
+      const liquidTypes = ['brokerage', 'crypto', 'mutual_fund', 'bonds', 'real_estate', 'savings', 'other'];
+      const restrictedTypes = ['pension', 'provident', 'study_fund'];
+
+      let isLiquid = null;
+      let investmentCategory = null;
+
+      if (liquidTypes.includes(account_type)) {
+        isLiquid = true;
+        investmentCategory = 'liquid';
+      } else if (restrictedTypes.includes(account_type)) {
+        isLiquid = false;
+        investmentCategory = 'restricted';
+      }
+
       const insertQuery = `
         INSERT INTO investment_accounts (
-          account_name, account_type, institution, account_number, currency, notes
-        ) VALUES ($1, $2, $3, $4, $5, $6)
+          account_name, account_type, institution, account_number, currency, notes,
+          is_liquid, investment_category
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *
       `;
 
@@ -80,6 +110,8 @@ export default async function handler(req, res) {
         account_number || null,
         currency,
         notes || null,
+        isLiquid,
+        investmentCategory,
       ]);
 
       return res.status(201).json({ account: result.rows[0] });
@@ -113,6 +145,22 @@ export default async function handler(req, res) {
       if (account_type !== undefined) {
         updates.push(`account_type = $${paramCount++}`);
         values.push(account_type);
+
+        // Auto-update investment category when account_type changes
+        const liquidTypes = ['brokerage', 'crypto', 'mutual_fund', 'bonds', 'real_estate', 'savings', 'other'];
+        const restrictedTypes = ['pension', 'provident', 'study_fund'];
+
+        if (liquidTypes.includes(account_type)) {
+          updates.push(`is_liquid = $${paramCount++}`);
+          values.push(true);
+          updates.push(`investment_category = $${paramCount++}`);
+          values.push('liquid');
+        } else if (restrictedTypes.includes(account_type)) {
+          updates.push(`is_liquid = $${paramCount++}`);
+          values.push(false);
+          updates.push(`investment_category = $${paramCount++}`);
+          values.push('restricted');
+        }
       }
       if (institution !== undefined) {
         updates.push(`institution = $${paramCount++}`);
