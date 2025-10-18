@@ -135,8 +135,8 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       const credentials = await credentialsResponse.json();
 
       // Merge the data
-      const mergedAccounts = accountsWithUpdates.map(account => {
-        const credential = credentials.find(c => c.id === account.id);
+      const mergedAccounts = accountsWithUpdates.map((account: any) => {
+        const credential = credentials.find((c: any) => c.id === account.id);
         return {
           ...credential,
           lastUpdate: account.lastUpdate,
