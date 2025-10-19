@@ -153,7 +153,8 @@ const HomePage: React.FC = () => {
     try {
       const formattedDate = format(new Date(date), 'yyyy-MM-dd');
       console.log('Formatted date for API:', formattedDate);
-      const response = await fetch(`/api/analytics/transactions-by-date?date=${formattedDate}`);
+      // Don't exclude duplicates when viewing detailed transactions for a specific date
+      const response = await fetch(`/api/analytics/transactions-by-date?date=${formattedDate}&excludeDuplicates=false`);
       if (response.ok) {
         const result = await response.json();
         console.log('API response:', result);
@@ -500,37 +501,60 @@ const HomePage: React.FC = () => {
         {/* Transaction List for Selected Date */}
         {hoveredDate && (
           <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              Transactions on {format(new Date(hoveredDate), 'MMM dd, yyyy')}:
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="subtitle2">
+                Transactions on {format(new Date(hoveredDate), 'MMM dd, yyyy')} ({dateTransactions.length} transactions):
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => setHoveredDate(null)}
+                sx={{ minWidth: 'auto', px: 1 }}
+              >
+                ✕
+              </Button>
+            </Box>
             {loadingTransactions ? (
               <CircularProgress size={20} />
             ) : dateTransactions.length > 0 ? (
-              <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
+              <Box sx={{ maxHeight: 400, overflowY: 'auto' }}>
                 {dateTransactions.map((txn, idx) => (
                   <Box
-                    key={txn.identifier || idx}
+                    key={`${txn.identifier}-${txn.vendor}-${idx}`}
                     sx={{
                       display: 'flex',
                       justifyContent: 'space-between',
-                      py: 1,
+                      alignItems: 'center',
+                      py: 1.5,
+                      px: 1,
                       borderBottom: idx < dateTransactions.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
                     }}
                   >
-                    <Box>
-                      <Typography variant="body2" fontWeight="medium">
-                        {txn.vendor}
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
+                        {txn.description || txn.vendor}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {txn.parentCategory} → {txn.category}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {format(new Date(txn.date), 'HH:mm')}
+                        </Typography>
+                        {txn.parentCategory && txn.category && (
+                          <>
+                            <Typography variant="caption" color="text.secondary">•</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {txn.category}
+                            </Typography>
+                          </>
+                        )}
+                      </Box>
                     </Box>
                     <Typography
                       variant="body2"
                       fontWeight="bold"
                       color={txn.price > 0 ? 'success.main' : 'error.main'}
+                      sx={{ ml: 2 }}
                     >
-                      {formatCurrencyValue(Math.abs(txn.price))}
+                      {txn.price > 0 ? '+' : ''}{formatCurrency(Math.abs(txn.price), { maximumFractionDigits: 0 })}
                     </Typography>
                   </Box>
                 ))}
