@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
+  DialogActions,
   IconButton,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  TableContainer,
   Box,
   Button,
   TextField,
@@ -23,6 +26,9 @@ import {
   CardHeader,
   Grid,
   Alert,
+  AlertTitle,
+  InputAdornment,
+  Paper,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -35,7 +41,10 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import LockIcon from '@mui/icons-material/Lock';
 import BusinessIcon from '@mui/icons-material/Business';
-import PortfolioIcon from '@mui/icons-material/AccountBalanceWallet';\nimport EditIcon from '@mui/icons-material/Edit';\nimport CircularProgress from '@mui/material/CircularProgress';
+import PortfolioIcon from '@mui/icons-material/AccountBalanceWallet';
+import CloseIcon from '@mui/icons-material/Close';
+import EditIcon from '@mui/icons-material/Edit';
+import CircularProgress from '@mui/material/CircularProgress';
 import ScrapeModal from './ScrapeModal';
 import {
   CREDIT_CARD_VENDORS,
@@ -47,6 +56,8 @@ import {
 import { dateUtils } from './CategoryDashboard/utils/dateUtils';
 import { useNotification } from './NotificationContext';
 import ModalHeader from './ModalHeader';
+import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { matchAccount, calculateSimilarity } from '../utils/account-matcher';
 
 interface Account {
   id: number;
@@ -130,6 +141,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const [activeTab, setActiveTab] = useState(0);
   const [currentAccountType, setCurrentAccountType] = useState<'banking' | 'investment'>('banking');
   const { showNotification } = useNotification();
+  const { formatCurrency } = useFinancePrivacy();
   const [newAccount, setNewAccount] = useState<Account>({
     vendor: 'isracard',
     username: '',
@@ -170,7 +182,36 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
   const [existingInvestments, setExistingInvestments] = useState<any>(null);
 
+  // Additional modal states for new features
+  const [showValueUpdateModal, setShowValueUpdateModal] = useState(false);
+  const [showAssetModal, setShowAssetModal] = useState(false);
+  const [assetTab, setAssetTab] = useState(0);
+  const [isAddingAsset, setIsAddingAsset] = useState(false);
+
+  // Value update state
+  const [valueUpdate, setValueUpdate] = useState({
+    accountId: '',
+    currentValue: '',
+    asOfDate: new Date().toISOString().split('T')[0],
+    costBasis: '',
+    currency: 'ILS',
+    notes: '',
+  });
+
+  // Cost basis suggestions state
+  const [costBasisSuggestions, setCostBasisSuggestions] = useState<any[]>([]);
+
   // Asset tracking state
+  const [assets, setAssets] = useState<any[]>([]);
+  const [assetHistory, setAssetHistory] = useState<any[]>([]);
+  const [newAsset, setNewAsset] = useState({
+    accountId: '',
+    symbol: '',
+    quantity: '',
+    avgPrice: '',
+    asOfDate: new Date().toISOString().split('T')[0],
+  });
+
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [currentAsset, setCurrentAsset] = useState<{
     asset_symbol: string;
@@ -190,8 +231,18 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     if (isOpen) {
       fetchAccounts();
       fetchInvestmentAccounts();
+      loadExistingInvestments();
     }
   }, [isOpen]);
+
+  // Load cost basis suggestion when account is selected for value update
+  useEffect(() => {
+    if (selectedInvestmentAccount && isValueModalOpen) {
+      loadCostBasisSuggestion(selectedInvestmentAccount.id!);
+    } else {
+      setCostBasisSuggestion(null);
+    }
+  }, [selectedInvestmentAccount, isValueModalOpen]);
 
   const fetchAccounts = async () => {
     try {
@@ -391,6 +442,180 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
   };
 
+  // Add Value Update functionality
+  const handleAddValueUpdate = (account: InvestmentAccount) => {
+    setSelectedInvestmentAccount(account);
+    setCurrentHolding({
+      current_value: '',
+      cost_basis: '',
+      as_of_date: new Date().toISOString().split('T')[0],
+      notes: '',
+    });
+    setIsValueModalOpen(true);
+  };
+
+  const handleSaveValueUpdate = async () => {
+    if (!selectedInvestmentAccount || !currentHolding.current_value || !currentHolding.as_of_date) {
+      setError('Please enter current value and date');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/investments/holdings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          account_id: selectedInvestmentAccount.id,
+          current_value: Number(currentHolding.current_value),
+          cost_basis: currentHolding.cost_basis ? Number(currentHolding.cost_basis) : null,
+          as_of_date: currentHolding.as_of_date,
+          notes: currentHolding.notes,
+          save_history: true,
+        }),
+      });
+
+      if (response.ok) {
+        await fetchInvestmentAccounts(); // Refresh to show updated values
+        setIsValueModalOpen(false);
+        setSelectedInvestmentAccount(null);
+        showNotification('Value update saved successfully!', 'success');
+      } else {
+        throw new Error('Failed to save value update');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
+  // Cost basis suggestion functionality
+  const loadCostBasisSuggestion = async (accountId: number) => {
+    setLoadingSuggestion(true);
+    setCostBasisSuggestion(null);
+
+    try {
+      const response = await fetch(`/api/investments/suggest-cost-basis?account_id=${accountId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.suggestion.has_new_transactions) {
+          setCostBasisSuggestion(data);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading cost basis suggestion:', err);
+    } finally {
+      setLoadingSuggestion(false);
+    }
+  };
+
+  const applyCostBasisSuggestion = () => {
+    if (costBasisSuggestion) {
+      setCurrentHolding({
+        ...currentHolding,
+        cost_basis: costBasisSuggestion.suggestion.suggested_cost_basis,
+      });
+    }
+  };
+
+  // Existing investments matching functionality
+  const loadExistingInvestments = async () => {
+    try {
+      const response = await fetch('/api/investments/check-existing');
+      if (response.ok) {
+        const data = await response.json();
+        setExistingInvestments(data);
+      }
+    } catch (err) {
+      console.error('Error loading existing investments:', err);
+    }
+  };
+
+  // Check if account name matches existing investment transactions
+  const isExistingInvestment = (accountName: string, accountType?: string): { match: boolean; category?: string; count?: number; confidence?: number } => {
+    if (!existingInvestments || !accountName) return { match: false };
+
+    // PRIORITY 1: Check if account has actual linked transactions
+    const linkedAccounts = existingInvestments.linkedAccounts || [];
+    for (const linked of linkedAccounts) {
+      const nameSimilarity = calculateSimilarity(accountName, linked.accountName);
+
+      if (nameSimilarity > 0.8) {
+        return {
+          match: true,
+          category: linked.accountType || 'Investment',
+          count: linked.linkCount,
+          confidence: 1.0 // High confidence - actual linked transactions
+        };
+      }
+    }
+
+    // PRIORITY 2: Try to match against vendor names (less reliable)
+    const vendors = existingInvestments.vendors || [];
+    for (const vendor of vendors) {
+      const vendorSimilarity = calculateSimilarity(accountName, vendor.name);
+      const nameSimilarity = calculateSimilarity(accountName, vendor.vendor);
+
+      if (vendorSimilarity > 0.7 || nameSimilarity > 0.7) {
+        return {
+          match: true,
+          category: vendor.subcategory || vendor.category,
+          count: vendor.transactionCount,
+          confidence: Math.max(vendorSimilarity, nameSimilarity)
+        };
+      }
+    }
+
+    return { match: false };
+  };
+
+  // Asset management functionality
+  const handleAddAssets = (account: InvestmentAccount) => {
+    if (account.account_type !== 'brokerage') {
+      setError('Asset tracking is only available for brokerage accounts');
+      return;
+    }
+    setSelectedInvestmentAccount(account);
+    setCurrentAsset({
+      asset_symbol: '',
+      asset_name: '',
+      asset_type: 'stock',
+      units: '',
+      currency: 'USD',
+    });
+    setIsAssetModalOpen(true);
+  };
+
+  const handleSaveAsset = async () => {
+    if (!selectedInvestmentAccount || !currentAsset.asset_name || !currentAsset.units) {
+      setError('Please enter asset name and units');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/investments/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          account_id: selectedInvestmentAccount.id,
+          asset_symbol: currentAsset.asset_symbol,
+          asset_name: currentAsset.asset_name,
+          asset_type: currentAsset.asset_type,
+          units: Number(currentAsset.units),
+          currency: currentAsset.currency,
+        }),
+      });
+
+      if (response.ok) {
+        setIsAssetModalOpen(false);
+        setSelectedInvestmentAccount(null);
+        showNotification('Asset added successfully!', 'success');
+      } else {
+        throw new Error('Failed to save asset');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
   const handleScrape = (account: Account) => {
     console.log('Selected account for scraping:', account);
     setSelectedAccount(account);
@@ -401,6 +626,106 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     showNotification('Scraping process completed successfully!', 'success');
     window.dispatchEvent(new CustomEvent('dataRefresh'));
     fetchAccounts(); // Refresh accounts to update last sync dates
+  };
+
+  // Handler for value update modal
+  const handleValueUpdate = async () => {
+    if (!valueUpdate.accountId || !valueUpdate.currentValue || !valueUpdate.asOfDate) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/investments/holdings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          account_id: valueUpdate.accountId,
+          current_value: parseFloat(valueUpdate.currentValue),
+          cost_basis: valueUpdate.costBasis ? parseFloat(valueUpdate.costBasis) : null,
+          as_of_date: valueUpdate.asOfDate,
+          currency: valueUpdate.currency,
+          notes: valueUpdate.notes,
+        }),
+      });
+
+      if (response.ok) {
+        showNotification('Value update added successfully!', 'success');
+        setShowValueUpdateModal(false);
+        setValueUpdate({
+          accountId: '',
+          currentValue: '',
+          asOfDate: new Date().toISOString().split('T')[0],
+          costBasis: '',
+          currency: 'ILS',
+          notes: '',
+        });
+        // Refresh investment accounts to show updated values
+        fetchInvestmentAccounts();
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to add value update');
+      }
+    } catch (error) {
+      console.error('Error adding value update:', error);
+      setError('Network error occurred');
+    }
+  };
+
+  // Handler for adding new assets
+  const handleAddAsset = async () => {
+    if (!newAsset.accountId || !newAsset.symbol || !newAsset.quantity || !newAsset.asOfDate) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/investments/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          account_id: newAsset.accountId,
+          symbol: newAsset.symbol,
+          quantity: parseFloat(newAsset.quantity),
+          avg_price: newAsset.avgPrice ? parseFloat(newAsset.avgPrice) : null,
+          as_of_date: newAsset.asOfDate,
+        }),
+      });
+
+      if (response.ok) {
+        showNotification('Asset added successfully!', 'success');
+        setIsAddingAsset(false);
+        setNewAsset({
+          accountId: '',
+          symbol: '',
+          quantity: '',
+          avgPrice: '',
+          asOfDate: new Date().toISOString().split('T')[0],
+        });
+        // Refresh assets list
+        fetchAssets();
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to add asset');
+      }
+    } catch (error) {
+      console.error('Error adding asset:', error);
+      setError('Network error occurred');
+    }
+  };
+
+  // Function to load assets and asset history
+  const fetchAssets = async () => {
+    try {
+      const response = await fetch('/api/investments/assets');
+      if (response.ok) {
+        const data = await response.json();
+        setAssets(data.assets || []);
+        setAssetHistory(data.history || []);
+      }
+    } catch (error) {
+      console.error('Error fetching assets:', error);
+    }
   };
 
   const formatLastUpdate = (lastUpdate: string, status?: string) => {
@@ -529,6 +854,10 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                 <TableCell align="right">
                   <Tooltip title="Add Value Update">
                     <IconButton
+                      onClick={() => {
+                        setValueUpdate({ ...valueUpdate, accountId: account.id?.toString() || '' });
+                        setShowValueUpdateModal(true);
+                      }}
                       sx={{
                         color: '#388e3c',
                         '&:hover': {
@@ -539,6 +868,24 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                       <TrendingUpIcon />
                     </IconButton>
                   </Tooltip>
+                  {account.account_type === 'brokerage' && (
+                    <Tooltip title="Manage Assets">
+                      <IconButton
+                        onClick={() => {
+                          fetchAssets(); // Load current assets
+                          setShowAssetModal(true);
+                        }}
+                        sx={{
+                          color: '#2196f3',
+                          '&:hover': {
+                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                          },
+                        }}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                   <Tooltip title="Delete Account">
                     <IconButton
                       onClick={() => handleDeleteInvestmentAccount(account.id!)}
@@ -1022,13 +1369,48 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   <CardContent>
                     <Grid container spacing={2}>
                       <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          label="Account Name"
-                          value={newInvestmentAccount.account_name}
-                          onChange={(e) => setNewInvestmentAccount({ ...newInvestmentAccount, account_name: e.target.value })}
-                          required
-                        />
+                        {(() => {
+                          const investmentMatch = newInvestmentAccount.account_name ? isExistingInvestment(newInvestmentAccount.account_name, newInvestmentAccount.account_type) : { match: false };
+                          return (
+                            <Box>
+                              <TextField
+                                fullWidth
+                                label="Account Name"
+                                value={newInvestmentAccount.account_name}
+                                onChange={(e) => setNewInvestmentAccount({ ...newInvestmentAccount, account_name: e.target.value })}
+                                placeholder="e.g., Interactive Brokers, Migdal Pension"
+                                required
+                                sx={{
+                                  '& .MuiOutlinedInput-root': {
+                                    '& fieldset': {
+                                      borderColor: investmentMatch.match ? '#4caf50' : undefined,
+                                      borderWidth: investmentMatch.match ? '2px' : '1px',
+                                    },
+                                  },
+                                }}
+                              />
+                              {investmentMatch.match && (
+                                <Alert severity="success" sx={{ mt: 1, py: 0.5 }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                      ✓ Found in transactions!
+                                    </Typography>
+                                    <Chip
+                                      label={investmentMatch.category || 'Investment'}
+                                      size="small"
+                                      sx={{ bgcolor: '#4caf50', color: 'white', height: '20px', fontSize: '0.65rem' }}
+                                    />
+                                    {investmentMatch.count && (
+                                      <Typography variant="caption" color="text.secondary">
+                                        {investmentMatch.count} transactions
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                </Alert>
+                              )}
+                            </Box>
+                          );
+                        })()}
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <TextField
@@ -1139,6 +1521,328 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Value Update Modal */}
+      <Dialog open={showValueUpdateModal} onClose={() => setShowValueUpdateModal(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Add Value Update
+          <IconButton
+            onClick={() => setShowValueUpdateModal(false)}
+            sx={{ position: 'absolute', right: 8, top: 8 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Investment Account"
+                  value={valueUpdate.accountId}
+                  onChange={(e) => setValueUpdate({ ...valueUpdate, accountId: e.target.value })}
+                  required
+                >
+                  {investmentAccounts.map((account) => (
+                    <MenuItem key={account.id} value={account.id}>
+                      {account.account_name} ({account.account_type})
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Current Value"
+                  value={valueUpdate.currentValue}
+                  onChange={(e) => setValueUpdate({ ...valueUpdate, currentValue: e.target.value })}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">₪</InputAdornment>,
+                  }}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="As of Date"
+                  value={valueUpdate.asOfDate}
+                  onChange={(e) => setValueUpdate({ ...valueUpdate, asOfDate: e.target.value })}
+                  InputLabelProps={{ shrink: true }}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Cost Basis (Optional)"
+                  value={valueUpdate.costBasis}
+                  onChange={(e) => setValueUpdate({ ...valueUpdate, costBasis: e.target.value })}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">₪</InputAdornment>,
+                  }}
+                  helperText="Total amount invested"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Currency"
+                  value={valueUpdate.currency}
+                  onChange={(e) => setValueUpdate({ ...valueUpdate, currency: e.target.value })}
+                >
+                  <MenuItem value="ILS">ILS (₪)</MenuItem>
+                  <MenuItem value="USD">USD ($)</MenuItem>
+                  <MenuItem value="EUR">EUR (€)</MenuItem>
+                </TextField>
+              </Grid>
+              {costBasisSuggestions.length > 0 && (
+                <Grid item xs={12}>
+                  <Alert severity="info" sx={{ mt: 1 }}>
+                    <AlertTitle>Cost Basis Suggestions</AlertTitle>
+                    <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {costBasisSuggestions.map((suggestion, index) => (
+                        <Chip
+                          key={index}
+                          label={`₪${suggestion.amount.toLocaleString()} (${suggestion.count} transactions)`}
+                          onClick={() => setValueUpdate({ ...valueUpdate, costBasis: suggestion.amount.toString() })}
+                          clickable
+                          size="small"
+                          sx={{ bgcolor: '#e3f2fd', '&:hover': { bgcolor: '#bbdefb' } }}
+                        />
+                      ))}
+                    </Box>
+                  </Alert>
+                </Grid>
+              )}
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={2}
+                  label="Notes (Optional)"
+                  value={valueUpdate.notes}
+                  onChange={(e) => setValueUpdate({ ...valueUpdate, notes: e.target.value })}
+                  placeholder="Any additional notes about this update..."
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowValueUpdateModal(false)}>Cancel</Button>
+          <Button
+            onClick={handleValueUpdate}
+            variant="contained"
+            disabled={!valueUpdate.accountId || !valueUpdate.currentValue || !valueUpdate.asOfDate}
+          >
+            Add Update
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Asset Management Modal */}
+      <Dialog open={showAssetModal} onClose={() => setShowAssetModal(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          Manage Assets
+          <IconButton
+            onClick={() => setShowAssetModal(false)}
+            sx={{ position: 'absolute', right: 8, top: 8 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Tabs value={assetTab} onChange={(e, v) => setAssetTab(v)} sx={{ mb: 3 }}>
+              <Tab label="Individual Assets" />
+              <Tab label="Asset History" />
+            </Tabs>
+
+            {assetTab === 0 && (
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6">Individual Assets</Typography>
+                  <Button
+                    startIcon={<AddIcon />}
+                    onClick={() => setIsAddingAsset(true)}
+                    variant="outlined"
+                  >
+                    Add Asset
+                  </Button>
+                </Box>
+
+                {isAddingAsset && (
+                  <Card sx={{ mb: 3, bgcolor: '#f8f9fa' }}>
+                    <CardContent>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            select
+                            label="Investment Account"
+                            value={newAsset.accountId}
+                            onChange={(e) => setNewAsset({ ...newAsset, accountId: e.target.value })}
+                            required
+                          >
+                            {investmentAccounts.filter(acc => acc.account_type === 'brokerage').map((account) => (
+                              <MenuItem key={account.id} value={account.id}>
+                                {account.account_name}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            label="Asset Symbol/Name"
+                            value={newAsset.symbol}
+                            onChange={(e) => setNewAsset({ ...newAsset, symbol: e.target.value })}
+                            placeholder="e.g., AAPL, Tesla Inc."
+                            required
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <TextField
+                            fullWidth
+                            type="number"
+                            label="Quantity"
+                            value={newAsset.quantity}
+                            onChange={(e) => setNewAsset({ ...newAsset, quantity: e.target.value })}
+                            required
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <TextField
+                            fullWidth
+                            type="number"
+                            label="Average Price"
+                            value={newAsset.avgPrice}
+                            onChange={(e) => setNewAsset({ ...newAsset, avgPrice: e.target.value })}
+                            InputProps={{
+                              startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <TextField
+                            fullWidth
+                            type="date"
+                            label="As of Date"
+                            value={newAsset.asOfDate}
+                            onChange={(e) => setNewAsset({ ...newAsset, asOfDate: e.target.value })}
+                            InputLabelProps={{ shrink: true }}
+                            required
+                          />
+                        </Grid>
+                        <Grid item xs={12}>
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Button onClick={handleAddAsset} variant="contained" size="small">
+                              Add Asset
+                            </Button>
+                            <Button onClick={() => setIsAddingAsset(false)} size="small">
+                              Cancel
+                            </Button>
+                          </Box>
+                        </Grid>
+                      </Grid>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {assets.length > 0 ? (
+                  <TableContainer component={Paper}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Symbol</TableCell>
+                          <TableCell align="right">Quantity</TableCell>
+                          <TableCell align="right">Avg Price</TableCell>
+                          <TableCell align="right">Total Value</TableCell>
+                          <TableCell>Account</TableCell>
+                          <TableCell>Last Updated</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {assets.map((asset) => (
+                          <TableRow key={asset.id}>
+                            <TableCell sx={{ fontWeight: 500 }}>{asset.symbol}</TableCell>
+                            <TableCell align="right">{asset.quantity}</TableCell>
+                            <TableCell align="right">${asset.avg_price}</TableCell>
+                            <TableCell align="right">
+                              ${(asset.quantity * asset.avg_price).toLocaleString()}
+                            </TableCell>
+                            <TableCell>
+                              {investmentAccounts.find(acc => acc.id === asset.account_id)?.account_name}
+                            </TableCell>
+                            <TableCell>{new Date(asset.as_of_date).toLocaleDateString()}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                    <Typography>No individual assets tracked yet</Typography>
+                  </Box>
+                )}
+              </Box>
+            )}
+
+            {assetTab === 1 && (
+              <Box>
+                <Typography variant="h6" gutterBottom>Asset History</Typography>
+                {assetHistory.length > 0 ? (
+                  <TableContainer component={Paper}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Account</TableCell>
+                          <TableCell>Symbol</TableCell>
+                          <TableCell align="right">Quantity</TableCell>
+                          <TableCell align="right">Price</TableCell>
+                          <TableCell align="right">Total Value</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {assetHistory.map((record) => (
+                          <TableRow key={record.id}>
+                            <TableCell>{new Date(record.as_of_date).toLocaleDateString()}</TableCell>
+                            <TableCell>
+                              {investmentAccounts.find(acc => acc.id === record.account_id)?.account_name}
+                            </TableCell>
+                            <TableCell>{record.symbol}</TableCell>
+                            <TableCell align="right">{record.quantity}</TableCell>
+                            <TableCell align="right">${record.avg_price}</TableCell>
+                            <TableCell align="right">
+                              ${(record.quantity * record.avg_price).toLocaleString()}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                    <Typography>No asset history available</Typography>
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowAssetModal(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
       <ScrapeModal
         isOpen={isScrapeModalOpen}
         onClose={() => {
