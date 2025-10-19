@@ -16,6 +16,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import SankeyChart from './SankeyChart';
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import SummaryCards from '../components/SummaryCards';
 import BreakdownPanel from '../components/BreakdownPanel';
@@ -70,6 +71,30 @@ interface MonthlyFlowItem {
   [key: string]: any;
 }
 
+interface WaterfallFlowData {
+  summary: {
+    totalIncome: number;
+    totalExpenses: number;
+    netInvestments: number;
+    netBalance: number;
+    totalTransactions: number;
+  };
+  waterfallData: Array<{
+    name: string;
+    value: number;
+    type: 'income' | 'expense' | 'investment' | 'net';
+    cumulative: number;
+    startValue: number;
+    color: string;
+    count: number;
+  }>;
+  breakdown: {
+    income: any[];
+    expenses: any[];
+    investments: any[];
+  };
+}
+
 const CHART_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF6B9D'];
 
 const HomePage: React.FC = () => {
@@ -77,6 +102,10 @@ const HomePage: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [portfolioValue, setPortfolioValue] = useState<number | null>(null);
   const [portfolioBreakdown, setPortfolioBreakdown] = useState<PortfolioBreakdownItem[]>([]);
+  const [waterfallData, setWaterfallData] = useState<WaterfallFlowData | null>(null);
+  const [waterfallLoading, setWaterfallLoading] = useState(true);
+  const [liquidPortfolio, setLiquidPortfolio] = useState<PortfolioBreakdownItem[]>([]);
+  const [restrictedPortfolio, setRestrictedPortfolio] = useState<PortfolioBreakdownItem[]>([]);
   const [breakdownData, setBreakdownData] = useState<Record<'expense' | 'income' | 'investment', any>>({
     expense: null,
     income: null,
@@ -106,6 +135,7 @@ const HomePage: React.FC = () => {
     setBreakdownLoading(prev => ({ ...prev, investment: false }));
     fetchDashboardData();
     fetchPortfolioValue();
+    fetchWaterfallData();
     fetchBreakdownData('expense');
     fetchBreakdownData('income');
     fetchBudgetUsage();
@@ -204,17 +234,62 @@ const HomePage: React.FC = () => {
       if (response.ok) {
         const result = await response.json();
         setPortfolioValue(result.summary.totalPortfolioValue);
-        // Set portfolio breakdown for pie chart
+
+        // Set overall portfolio breakdown
         if (result.breakdown && result.breakdown.length > 0) {
           setPortfolioBreakdown(result.breakdown.map((item: any) => ({
             name: item.name || item.type,
             value: item.totalValue,
             percentage: item.percentage,
+            category: item.category
           })));
+
+          // Separate liquid and restricted portfolios
+          const liquidItems = result.breakdown
+            .filter((item: any) => item.category === 'liquid')
+            .map((item: any) => ({
+              name: item.name || item.type,
+              value: item.totalValue,
+              percentage: result.summary.liquid.totalValue > 0
+                ? (item.totalValue / result.summary.liquid.totalValue) * 100
+                : 0,
+              category: item.category
+            }));
+
+          const restrictedItems = result.breakdown
+            .filter((item: any) => item.category === 'restricted')
+            .map((item: any) => ({
+              name: item.name || item.type,
+              value: item.totalValue,
+              percentage: result.summary.restricted.totalValue > 0
+                ? (item.totalValue / result.summary.restricted.totalValue) * 100
+                : 0,
+              category: item.category
+            }));
+
+          setLiquidPortfolio(liquidItems);
+          setRestrictedPortfolio(restrictedItems);
         }
       }
     } catch (error) {
       console.error('Error fetching portfolio value:', error);
+    }
+  };
+
+  const fetchWaterfallData = async () => {
+    setWaterfallLoading(true);
+    try {
+      const response = await fetch(
+        `/api/analytics/waterfall-flow?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`
+      );
+      if (response.ok) {
+        const result = await response.json();
+        setWaterfallData(result);
+      }
+    } catch (error) {
+      console.error('Error fetching waterfall data:', error);
+    } finally {
+      setWaterfallLoading(false);
     }
   };
 
@@ -477,75 +552,27 @@ const HomePage: React.FC = () => {
             variant="fullWidth"
           >
             <Tab label="Overall" value="overall" />
-            <Tab label="Cost" value="expense" />
             <Tab label="Income" value="income" />
+            <Tab label="Expenses" value="expense" />
             <Tab label="Investment" value="investment" />
           </Tabs>
           <Box sx={{ p: 3 }}>
-            {/* Overall Tab - Pie Charts */}
+            {/* Overall Tab - Enhanced Charts */}
             {selectedBreakdownType === 'overall' && (
               <Grid container spacing={3}>
-                {/* Monthly Breakdown Pie Chart */}
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2, height: '100%' }}>
-                    <Typography variant="h6" gutterBottom>
-                      Monthly Financial Flow
-                    </Typography>
-                    {data?.summary ? (
+                {/* Sankey Financial Flow Chart */}
+                <Grid item xs={12}>
+                  <Paper sx={{ p: 2 }}>
+                    {waterfallLoading ? (
+                      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+                        <CircularProgress />
+                      </Box>
+                    ) : waterfallData?.waterfallData && waterfallData.waterfallData.length > 0 ? (
                       <>
-                        <ResponsiveContainer width="100%" height={300}>
-                          <PieChart>
-                            <Pie
-                              data={(() => {
-                                // Show breakdown of where income goes: Expenses, Investments, and what stays in account
-                                const totalIncome = data.summary.totalIncome;
-                                const expenses = data.summary.totalExpenses;
-                                const investments = data.summary.netInvestments;
-                                const staysInAccount = Math.max(0, totalIncome - expenses - investments);
-                                
-                                const items: MonthlyFlowItem[] = [
-                                  { name: 'Expenses', value: expenses },
-                                  { name: 'Investments', value: investments },
-                                  { name: 'Stays in Account', value: staysInAccount },
-                                ];
-                                return items.filter(item => item.value > 0);
-                              })()}
-                              cx="50%"
-                              cy="50%"
-                              labelLine={false}
-                              label={(entry: any) => {
-                                const item = entry as MonthlyFlowItem;
-                                const percentage = data.summary.totalIncome > 0 
-                                  ? ((item.value / data.summary.totalIncome) * 100).toFixed(1)
-                                  : '0';
-                                return `${item.name}: ${percentage}%`;
-                              }}
-                              outerRadius={80}
-                              fill="#8884d8"
-                              dataKey="value"
-                            >
-                              {(() => {
-                                const totalIncome = data.summary.totalIncome;
-                                const expenses = data.summary.totalExpenses;
-                                const investments = data.summary.netInvestments;
-                                const staysInAccount = Math.max(0, totalIncome - expenses - investments);
-                                
-                                const items: MonthlyFlowItem[] = [
-                                  { name: 'Expenses', value: expenses },
-                                  { name: 'Investments', value: investments },
-                                  { name: 'Stays in Account', value: staysInAccount },
-                                ];
-                                return items.filter(item => item.value > 0).map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                                ));
-                              })()}
-                            </Pie>
-                            <Tooltip formatter={(value: number) => formatCurrencyValue(value)} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                        <Box sx={{ mt: 2 }}>
+                        <SankeyChart data={waterfallData.waterfallData} height={600} />
+                        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
                           <Typography variant="body2" fontWeight="bold">
-                            Total Income: {formatCurrencyValue(data.summary.totalIncome)}
+                            Total Income: {formatCurrencyValue(waterfallData.summary.totalIncome)}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
                             Period: {format(startDate, 'MMM dd, yyyy')} - {format(endDate, 'MMM dd, yyyy')}
@@ -553,54 +580,118 @@ const HomePage: React.FC = () => {
                         </Box>
                       </>
                     ) : (
-                      <CircularProgress />
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          No financial flow data available for this period
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                          Add income and expense transactions to see flow diagram
+                        </Typography>
+                      </Box>
                     )}
                   </Paper>
                 </Grid>
 
-                {/* Portfolio Distribution Pie Chart */}
+                {/* Liquid Investments Chart */}
                 <Grid item xs={12} md={6}>
                   <Paper sx={{ p: 2, height: '100%' }}>
-                    <Typography variant="h6" gutterBottom>
-                      Portfolio Distribution
+                    <Typography variant="h6" gutterBottom sx={{ color: 'info.main' }}>
+                      Liquid Investments
                     </Typography>
-                    {portfolioBreakdown.length > 0 ? (
+                    {liquidPortfolio.length > 0 ? (
                       <>
                         <ResponsiveContainer width="100%" height={300}>
                           <PieChart>
                             <Pie
-                              data={portfolioBreakdown}
+                              data={liquidPortfolio}
                               cx="50%"
                               cy="50%"
+                              innerRadius={60}
+                              outerRadius={90}
                               labelLine={false}
                               label={(entry: any) => {
                                 const item = entry as PortfolioBreakdownItem;
                                 return `${item.name}: ${item.percentage.toFixed(1)}%`;
                               }}
-                              outerRadius={80}
                               fill="#8884d8"
                               dataKey="value"
                             >
-                              {portfolioBreakdown.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                              {liquidPortfolio.map((entry, index) => (
+                                <Cell key={`liquid-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                               ))}
                             </Pie>
                             <Tooltip formatter={(value: number) => formatCurrencyValue(value)} />
                           </PieChart>
                         </ResponsiveContainer>
-                        <Box sx={{ mt: 2 }}>
-                          <Typography variant="body2" fontWeight="bold">
-                            Total Portfolio Value: {formatCurrencyValue(portfolioValue || 0)}
+                        <Box sx={{ mt: 2, textAlign: 'center' }}>
+                          <Typography variant="body2" fontWeight="bold" color="info.main">
+                            Total Liquid: {formatCurrencyValue(liquidPortfolio.reduce((sum, item) => sum + item.value, 0))}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Accessible investments
                           </Typography>
                         </Box>
                       </>
                     ) : (
                       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300 }}>
                         <Typography variant="body2" color="text.secondary">
-                          No portfolio data available
+                          No liquid investments
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                          Add investment accounts to see distribution
+                          Add brokerage, crypto, or savings accounts
+                        </Typography>
+                      </Box>
+                    )}
+                  </Paper>
+                </Grid>
+
+                {/* Long-term Savings Chart */}
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 2, height: '100%' }}>
+                    <Typography variant="h6" gutterBottom sx={{ color: 'warning.main' }}>
+                      Long-term Savings
+                    </Typography>
+                    {restrictedPortfolio.length > 0 ? (
+                      <>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <PieChart>
+                            <Pie
+                              data={restrictedPortfolio}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={90}
+                              labelLine={false}
+                              label={(entry: any) => {
+                                const item = entry as PortfolioBreakdownItem;
+                                return `${item.name}: ${item.percentage.toFixed(1)}%`;
+                              }}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {restrictedPortfolio.map((entry, index) => (
+                                <Cell key={`restricted-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => formatCurrencyValue(value)} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <Box sx={{ mt: 2, textAlign: 'center' }}>
+                          <Typography variant="body2" fontWeight="bold" color="warning.main">
+                            Total Restricted: {formatCurrencyValue(restrictedPortfolio.reduce((sum, item) => sum + item.value, 0))}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Pension, provident & study funds
+                          </Typography>
+                        </Box>
+                      </>
+                    ) : (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          No long-term savings
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                          Add pension, provident, or study fund accounts
                         </Typography>
                       </Box>
                     )}

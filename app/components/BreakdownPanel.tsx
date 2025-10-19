@@ -145,7 +145,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
   // Get configuration based on category type
   const config = {
     expense: {
-      title: 'Cost Breakdown',
+      title: 'Expenses Breakdown',
       chartTitle: 'Expenses by Category',
       icon: <ShoppingIcon sx={{ mr: 0.5, fontSize: 18 }} />,
       color: 'error' as const,
