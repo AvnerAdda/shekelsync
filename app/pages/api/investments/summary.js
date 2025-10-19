@@ -44,6 +44,20 @@ export default async function handler(req, res) {
 
     const accountsResult = await client.query(accountsQuery);
 
+    // Get bank account balances from vendor_credentials
+    const bankAccountsQuery = `
+      SELECT
+        vendor,
+        nickname,
+        current_balance,
+        balance_updated_at
+      FROM vendor_credentials
+      WHERE current_balance > 0
+      ORDER BY vendor, nickname
+    `;
+
+    const bankAccountsResult = await client.query(bankAccountsQuery);
+
     // Get individual assets for brokerage accounts
     const assetsQuery = `
       SELECT 
@@ -72,6 +86,7 @@ export default async function handler(req, res) {
     const accountsByType = {};
     const accountsByCategory = { liquid: [], restricted: [] };
 
+    // Process investment accounts
     accountsResult.rows.forEach(account => {
       const value = account.current_value ? parseFloat(account.current_value) : 0;
       const cost = account.cost_basis ? parseFloat(account.cost_basis) : 0;
@@ -140,6 +155,72 @@ export default async function handler(req, res) {
       }
     });
 
+    // Process bank accounts and add them to liquid savings
+    bankAccountsResult.rows.forEach(bankAccount => {
+      const balance = parseFloat(bankAccount.current_balance);
+
+      if (balance > 0) {
+        // Add to total portfolio value and liquid totals
+        totalPortfolioValue += balance;
+        liquidTotal.value += balance;
+        liquidTotal.accounts++;
+        accountsWithValues++;
+
+        // Bank accounts are treated as cost basis = current value (no gain/loss)
+        totalCostBasis += balance;
+        liquidTotal.cost += balance;
+
+        // Create a savings account type group if it doesn't exist
+        if (!accountsByType['savings']) {
+          accountsByType['savings'] = {
+            type: 'savings',
+            accounts: [],
+            totalValue: 0,
+            totalCost: 0,
+            count: 0,
+          };
+        }
+
+        // Create bank account object in investment account format
+        const bankAccountFormatted = {
+          id: `bank_${bankAccount.vendor}_${bankAccount.nickname || 'default'}`,
+          account_name: bankAccount.nickname || `${bankAccount.vendor} Account`,
+          account_type: 'savings',
+          institution: bankAccount.vendor,
+          account_number: null,
+          currency: 'ILS',
+          notes: 'Bank Account Balance',
+          is_liquid: true,
+          investment_category: 'liquid',
+          current_value: balance,
+          cost_basis: balance,
+          as_of_date: bankAccount.balance_updated_at,
+          units: null,
+          asset_name: 'Cash',
+          asset_type: 'cash'
+        };
+
+        // Add to savings type group
+        accountsByType['savings'].accounts.push(bankAccountFormatted);
+        accountsByType['savings'].totalValue += balance;
+        accountsByType['savings'].totalCost += balance;
+        accountsByType['savings'].count++;
+
+        // Add to liquid category
+        accountsByCategory.liquid.push(bankAccountFormatted);
+
+        // Update date tracking
+        if (bankAccount.balance_updated_at) {
+          if (!oldestDate || bankAccount.balance_updated_at < oldestDate) {
+            oldestDate = bankAccount.balance_updated_at;
+          }
+          if (!newestDate || bankAccount.balance_updated_at > newestDate) {
+            newestDate = bankAccount.balance_updated_at;
+          }
+        }
+      }
+    });
+
     // Group assets by account
     const assetsByAccount = {};
     assetsResult.rows.forEach(asset => {
@@ -195,7 +276,7 @@ export default async function handler(req, res) {
       // Liquid investments (השקעות נזילות)
       brokerage: { name: 'Brokerage Account', name_he: 'חשבון ברוקר', category: 'liquid' },
       crypto: { name: 'Cryptocurrency', name_he: 'מטבעות דיגיטליים', category: 'liquid' },
-      savings: { name: 'High-Yield Savings', name_he: 'פיקדון בריבית גבוהה', category: 'liquid' },
+      savings: { name: 'Bank Savings & Cash', name_he: 'חשבונות בנק ומזומן', category: 'liquid' },
       mutual_fund: { name: 'Mutual Funds', name_he: 'קרנות נאמנות', category: 'liquid' },
       bonds: { name: 'Bonds & Fixed Income', name_he: 'אג"ח והלוואות', category: 'liquid' },
       real_estate: { name: 'Real Estate', name_he: 'נדל"ן והשקעות רע"ן', category: 'liquid' },

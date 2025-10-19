@@ -72,6 +72,10 @@ interface Account {
   created_at: string;
   lastUpdate?: string;
   lastScrapeStatus?: string;
+  current_balance?: number;
+  balance_updated_at?: string;
+  suggestedStartDate?: string;
+  startDateMessage?: string;
 }
 
 interface InvestmentAccount {
@@ -211,6 +215,14 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     avgPrice: '',
     asOfDate: new Date().toISOString().split('T')[0],
   });
+
+  // Confirmation dialog state
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [accountToDelete, setAccountToDelete] = useState<{
+    id: number;
+    type: 'banking' | 'investment';
+    name: string;
+  } | null>(null);
 
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [currentAsset, setCurrentAsset] = useState<{
@@ -412,6 +424,21 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
   };
 
+  // Show confirmation dialog before deleting
+  const confirmDelete = (account: Account | InvestmentAccount, type: 'banking' | 'investment') => {
+    const accountName = type === 'banking'
+      ? (account as Account).nickname || 'Unnamed Account'
+      : (account as InvestmentAccount).account_name || 'Unnamed Investment';
+
+    setAccountToDelete({
+      id: account.id!,
+      type,
+      name: accountName
+    });
+    setConfirmDeleteOpen(true);
+  };
+
+  // Actual delete functions
   const handleDelete = async (accountID: number) => {
     try {
       const response = await fetch(`/api/credentials/${accountID}`, {
@@ -419,6 +446,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       });
       if (response.ok) {
         setAccounts(accounts.filter((account) => account.id !== accountID));
+        showNotification('Banking account deleted successfully', 'success');
       } else {
         throw new Error('Failed to delete account');
       }
@@ -434,12 +462,27 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       });
       if (response.ok) {
         setInvestmentAccounts(investmentAccounts.filter((account) => account.id !== accountID));
+        showNotification('Investment account deleted successfully', 'success');
       } else {
         throw new Error('Failed to delete investment account');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     }
+  };
+
+  // Handle confirmed deletion
+  const handleConfirmDelete = async () => {
+    if (!accountToDelete) return;
+
+    if (accountToDelete.type === 'banking') {
+      await handleDelete(accountToDelete.id);
+    } else {
+      await handleDeleteInvestmentAccount(accountToDelete.id);
+    }
+
+    setConfirmDeleteOpen(false);
+    setAccountToDelete(null);
   };
 
   // Add Value Update functionality
@@ -616,9 +659,29 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
   };
 
-  const handleScrape = (account: Account) => {
+  const handleScrape = async (account: Account) => {
     console.log('Selected account for scraping:', account);
     setSelectedAccount(account);
+
+    // Fetch the last transaction date for this vendor to set as default start date
+    try {
+      const response = await fetch(`/api/accounts/last-transaction-date?vendor=${account.vendor}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`Auto-setting start date for ${account.vendor}:`, data.message);
+
+        // Update the account with the suggested start date
+        setSelectedAccount({
+          ...account,
+          suggestedStartDate: data.lastTransactionDate,
+          startDateMessage: data.message
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch last transaction date:', error);
+      // Continue with default behavior if API fails
+    }
+
     setIsScrapeModalOpen(true);
   };
 
@@ -888,7 +951,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   )}
                   <Tooltip title="Delete Account">
                     <IconButton
-                      onClick={() => handleDeleteInvestmentAccount(account.id!)}
+                      onClick={() => confirmDelete(account, 'investment')}
                       sx={{
                         color: '#ef4444',
                         '&:hover': {
@@ -937,6 +1000,9 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
             ) : (
               <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Card Last Digits</TableCell>
             )}
+            {type === 'bank' && (
+              <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Balance</TableCell>
+            )}
             <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Last Update</TableCell>
             <TableCell align="right" sx={{ fontWeight: 600, color: '#374151' }}>Actions</TableCell>
           </TableRow>
@@ -981,6 +1047,21 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     {type === 'bank' ? account.bank_account_number : (account.card6_digits || '-')}
                   </Typography>
                 </TableCell>
+                {type === 'bank' && (
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                      {account.current_balance !== null && account.current_balance !== undefined
+                        ? `₪${account.current_balance.toLocaleString()}`
+                        : '-'
+                      }
+                    </Typography>
+                    {account.balance_updated_at && (
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                        Updated: {new Date(account.balance_updated_at).toLocaleDateString()}
+                      </Typography>
+                    )}
+                  </TableCell>
+                )}
                 <TableCell>
                   <Chip
                     label={lastUpdateInfo.text}
@@ -1010,7 +1091,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   </Tooltip>
                   <Tooltip title="Delete Account">
                     <IconButton
-                      onClick={() => handleDelete(account.id)}
+                      onClick={() => confirmDelete(account, 'banking')}
                       sx={{
                         color: '#ef4444',
                         '&:hover': {
@@ -1853,7 +1934,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         initialConfig={selectedAccount ? {
           options: {
             companyId: selectedAccount.vendor,
-            startDate: new Date(),
+            startDate: selectedAccount.suggestedStartDate ? new Date(selectedAccount.suggestedStartDate) : new Date(),
             combineInstallments: false,
             showBrowser: true,
             additionalTransactionInformation: true
@@ -1869,6 +1950,56 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           }
         } : undefined}
       />
+
+      {/* Confirmation Dialog for Delete Operations */}
+      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Confirm Account Deletion
+          <IconButton
+            onClick={() => setConfirmDeleteOpen(false)}
+            sx={{ position: 'absolute', right: 8, top: 8 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Typography variant="body1" gutterBottom>
+              Are you sure you want to delete this account?
+            </Typography>
+            <Box sx={{
+              bgcolor: '#fff3cd',
+              border: '1px solid #ffeaa7',
+              borderRadius: 1,
+              p: 2,
+              mt: 2
+            }}>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                Account: {accountToDelete?.name}
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+                Type: {accountToDelete?.type === 'banking' ? 'Banking Account' : 'Investment Account'}
+              </Typography>
+            </Box>
+            <Typography variant="body2" sx={{ mt: 2, color: 'error.main' }}>
+              ⚠️ This action cannot be undone. All associated data will be permanently removed.
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeleteOpen(false)} variant="outlined">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDelete}
+            variant="contained"
+            color="error"
+            startIcon={<DeleteIcon />}
+          >
+            Delete Account
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }
