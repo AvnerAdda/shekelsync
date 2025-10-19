@@ -30,7 +30,7 @@ export default async function handler(req, res) {
         t.identifier,
         t.vendor,
         t.price,
-        t.description,
+        t.name as description,
         t.date,
         cd_child.name as category,
         cd_parent.name as parent_category,
