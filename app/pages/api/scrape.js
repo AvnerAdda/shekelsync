@@ -102,8 +102,10 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
         charged_currency,
         memo,
         status,
-        account_number
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        account_number,
+        transaction_datetime,
+        processed_datetime
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       ON CONFLICT (identifier, vendor) DO NOTHING`,
       [
         txn.identifier,
@@ -124,7 +126,9 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
         txn.chargedCurrency,
         txn.memo,
         txn.status,
-        accountNumber
+        accountNumber,
+        new Date(txn.date), // Full datetime for transaction
+        txn.processedDate ? new Date(txn.processedDate) : new Date() // Full datetime for processed
       ]
     );
   } catch (error) {
@@ -466,12 +470,47 @@ export default async function handler(req, res) {
     
     let bankTransactions = 0;
     for (const account of result.accounts) {
+      // Store account balance if available (primarily for bank accounts)
+      if (account.balance !== undefined && account.balance !== null) {
+        try {
+          await client.query(`
+            UPDATE vendor_credentials
+            SET current_balance = $1,
+                balance_updated_at = CURRENT_TIMESTAMP,
+                last_scrape_success = CURRENT_TIMESTAMP,
+                last_scrape_status = 'success'
+            WHERE vendor = $2 AND (
+              bank_account_number = $3 OR
+              card6_digits = $3
+            )`,
+            [account.balance, options.companyId, account.accountNumber]
+          );
+          console.log(`Updated balance for ${options.companyId} account ${account.accountNumber}: ${account.balance}`);
+        } catch (balanceError) {
+          console.error(`Failed to update balance for account ${account.accountNumber}:`, balanceError);
+        }
+      }
+
       for (const txn of account.txns) {
         if (isBank){
           bankTransactions++;
         }
         await insertTransaction(txn, client, options.companyId, isBank, account.accountNumber);
       }
+    }
+
+    // Update last scrape attempt for this vendor (regardless of balance availability)
+    try {
+      await client.query(`
+        UPDATE vendor_credentials
+        SET last_scrape_attempt = CURRENT_TIMESTAMP,
+            last_scrape_success = CURRENT_TIMESTAMP,
+            last_scrape_status = 'success'
+        WHERE vendor = $1`,
+        [options.companyId]
+      );
+    } catch (updateError) {
+      console.error(`Failed to update scrape timestamps for vendor ${options.companyId}:`, updateError);
     }
 
     await applyCategorizationRules(client);
@@ -502,6 +541,23 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error('Scraping failed:', error);
+
+    // Update vendor credentials to track failed scrape
+    try {
+      const { options } = req.body;
+      if (options && options.companyId) {
+        await client.query(`
+          UPDATE vendor_credentials
+          SET last_scrape_attempt = CURRENT_TIMESTAMP,
+              last_scrape_status = 'failed'
+          WHERE vendor = $1`,
+          [options.companyId]
+        );
+      }
+    } catch (updateError) {
+      console.error('Failed to update scrape failure status:', updateError);
+    }
+
     // Attempt to log failure if an audit row exists in scope
     try {
       if (typeof auditId !== 'undefined' && auditId) {
@@ -513,7 +569,7 @@ export default async function handler(req, res) {
     } catch (e) {
       // noop - avoid masking original error
     }
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Scraping failed',
       error: error instanceof Error ? error.message : 'Unknown error'
     });

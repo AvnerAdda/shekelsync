@@ -25,7 +25,14 @@ const handler = createApiHandler({
           };
         }
         return {
-          sql: 'SELECT * FROM vendor_credentials ORDER BY vendor'
+          sql: `SELECT *,
+                       CASE
+                         WHEN last_scrape_status = 'success' THEN 'success'
+                         WHEN last_scrape_status = 'failed' THEN 'failed'
+                         ELSE 'never'
+                       END as lastScrapeStatus,
+                       last_scrape_success as lastUpdate
+                FROM vendor_credentials ORDER BY vendor`
         };
       }
       if (req.method === 'POST') {
@@ -77,7 +84,12 @@ const handler = createApiHandler({
         identification_code: row.identification_code ? decrypt(row.identification_code) : null,
         nickname: row.nickname,
         bank_account_number: row.bank_account_number,
-        created_at: row.created_at
+        created_at: row.created_at,
+        current_balance: row.current_balance,
+        balance_updated_at: row.balance_updated_at,
+        lastUpdate: row.lastupdate,
+        lastScrapeStatus: row.lastscrapestatus,
+        last_scrape_attempt: row.last_scrape_attempt
       }));
     }
     return result;
