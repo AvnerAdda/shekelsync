@@ -1,4 +1,5 @@
 import { getDB } from '../db.js';
+import { dialect } from '../../../lib/sql-dialect.js';
 
 /**
  * Get investment analytics using category_type = 'investment'
@@ -18,8 +19,10 @@ export default async function handler(req, res) {
     const params = [];
 
     if (startDate && endDate) {
+      const startStr = new Date(startDate).toISOString().split('T')[0];
+      const endStr = new Date(endDate).toISOString().split('T')[0];
       dateFilter = 'AND t.date >= $1 AND t.date <= $2';
-      params.push(startDate, endDate);
+      params.push(startStr, endStr);
     }
 
     // Get all investment transactions (using new category system)
@@ -97,9 +100,10 @@ export default async function handler(req, res) {
     summary.netInvestments = summary.investmentOutflow - summary.investmentInflow;
 
     // Timeline data (monthly aggregation)
+    const monthExpr = dialect.dateTrunc('month', 't.date');
     const timelineQuery = `
       SELECT
-        DATE_TRUNC('month', t.date) as month,
+        ${monthExpr} as month,
         SUM(CASE WHEN t.price < 0 THEN ABS(t.price) ELSE 0 END) as outflow,
         SUM(CASE WHEN t.price > 0 THEN t.price ELSE 0 END) as inflow,
         COUNT(*) as count
@@ -107,18 +111,22 @@ export default async function handler(req, res) {
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE cd.category_type = 'investment'
       ${dateFilter}
-      GROUP BY DATE_TRUNC('month', t.date)
+      GROUP BY ${monthExpr}
       ORDER BY month DESC
     `;
 
-    const timelineResult = await client.query(timelineQuery, params);
-    const timeline = timelineResult.rows.map(row => ({
-      month: row.month,
-      outflow: parseFloat(row.outflow),
-      inflow: parseFloat(row.inflow),
-      net: parseFloat(row.outflow) - parseFloat(row.inflow),
-      count: parseInt(row.count),
-    }));
+    const timelineResult = await client.query(timelineQuery, [...params]);
+    const timeline = timelineResult.rows.map(row => {
+      const outflow = parseFloat(row.outflow || 0);
+      const inflow = parseFloat(row.inflow || 0);
+      return {
+        month: row.month,
+        outflow,
+        inflow,
+        net: outflow - inflow,
+        count: parseInt(row.count),
+      };
+    });
 
     // Format category data for response
     const categoriesArray = Object.values(byCategory).sort((a, b) => b.total - a.total);

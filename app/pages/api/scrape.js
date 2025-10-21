@@ -150,7 +150,7 @@ async function autoCategorizeTransaction(transactionName, client) {
         priority
        FROM categorization_rules
        WHERE is_active = true
-       AND $1 ILIKE '%' || name_pattern || '%'
+       AND LOWER($1) LIKE '%' || LOWER(name_pattern) || '%'
        ORDER BY
          priority DESC,
          LENGTH(name_pattern) DESC

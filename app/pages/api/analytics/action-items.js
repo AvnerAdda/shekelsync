@@ -76,12 +76,13 @@ async function getActionItems(req, res) {
     // Get progress history if requested
     if (includeProgress === 'true' && items.length > 0) {
       const itemIds = items.map(item => item.id);
+      const placeholders = itemIds.map((_, idx) => `$${idx + 1}`).join(', ');
       const progressQuery = `
         SELECT * FROM action_item_progress
-        WHERE action_item_id = ANY($1)
+        WHERE action_item_id IN (${placeholders})
         ORDER BY month DESC
       `;
-      const progressResult = await pool.query(progressQuery, [itemIds]);
+      const progressResult = await pool.query(progressQuery, itemIds);
 
       // Attach progress to items
       items.forEach(item => {
@@ -250,12 +251,16 @@ async function updateActionItem(req, res) {
           target_amount,
           achieved_savings,
           progress_percentage
-        ) VALUES ($1, DATE_TRUNC('month', CURRENT_DATE), $2, $3, $4, $5)
+        ) VALUES ($1, $2, $3, $4, $5, $6)
       `;
+      const currentMonth = new Date();
+      currentMonth.setDate(1);
+      const monthValue = currentMonth.toISOString().split('T')[0];
 
       const item = result.rows[0];
       await pool.query(progressQuery, [
         id,
+        monthValue,
         actual_amount,
         item.target_amount,
         achieved_savings,

@@ -39,15 +39,20 @@ export default async function handler(req, res) {
       include_dismissed = 'false'
     } = req.query;
 
+    const limitInt = parseInt(limit, 10) || 50;
+
     const notifications = [];
     const now = new Date();
     const currentMonth = {
       start: startOfMonth(now),
       end: endOfMonth(now)
     };
+    const currentMonthStartStr = currentMonth.start.toISOString().split('T')[0];
+    const currentMonthEndStr = currentMonth.end.toISOString().split('T')[0];
 
     // Get duplicate filter for accurate calculations
     const duplicateFilter = await buildDuplicateFilter(client, 't');
+    const duplicateClause = duplicateFilter || '';
 
     // 1. Budget Warnings & Exceeded Alerts
     if (type === 'all' || type === NOTIFICATION_TYPES.BUDGET_WARNING || type === NOTIFICATION_TYPES.BUDGET_EXCEEDED) {
@@ -60,7 +65,7 @@ export default async function handler(req, res) {
           WHERE t.date >= $1
           AND t.date <= $2
           AND t.price < 0
-          ${duplicateFilter}
+          ${duplicateClause}
           GROUP BY COALESCE(t.parent_category, t.category)
         ),
         budget_usage AS (
@@ -77,21 +82,26 @@ export default async function handler(req, res) {
         SELECT * FROM budget_usage
         WHERE usage_percentage >= 75
         ORDER BY usage_percentage DESC
-      `, [currentMonth.start, currentMonth.end]);
+      `, [currentMonthStartStr, currentMonthEndStr]);
 
       budgetAlertsResult.rows.forEach(budget => {
-        const isExceeded = budget.usage_percentage >= 100;
+        const spent = parseFloat(budget.spent || 0);
+        const budgetLimit = parseFloat(budget.budget_limit || 0);
+        const usagePercentage = budgetLimit > 0
+          ? (spent / budgetLimit) * 100
+          : 0;
+        const isExceeded = usagePercentage >= 100;
         notifications.push({
           id: `budget_${budget.category}`,
           type: isExceeded ? NOTIFICATION_TYPES.BUDGET_EXCEEDED : NOTIFICATION_TYPES.BUDGET_WARNING,
           severity: isExceeded ? SEVERITY_LEVELS.CRITICAL : SEVERITY_LEVELS.WARNING,
           title: isExceeded ? 'Budget Exceeded!' : 'Budget Warning',
-          message: `${budget.category}: ${budget.usage_percentage.toFixed(1)}% of budget used (₪${budget.spent.toLocaleString()} / ₪${budget.budget_limit.toLocaleString()})`,
+          message: `${budget.category}: ${usagePercentage.toFixed(1)}% of budget used (₪${spent.toLocaleString()} / ₪${budgetLimit.toLocaleString()})`,
           data: {
             category: budget.category,
-            spent: budget.spent,
-            budget: budget.budget_limit,
-            percentage: budget.usage_percentage
+            spent,
+            budget: budgetLimit,
+            percentage: usagePercentage
           },
           timestamp: now.toISOString(),
           actionable: true,
@@ -105,153 +115,162 @@ export default async function handler(req, res) {
 
     // 2. Unusual Spending Detection
     if (type === 'all' || type === NOTIFICATION_TYPES.UNUSUAL_SPENDING) {
-      const recentTransactionsResult = await client.query(`
-        WITH category_averages AS (
-          SELECT
-            COALESCE(t.parent_category, t.category) as category,
-            AVG(ABS(t.price)) as avg_amount,
-            STDDEV(ABS(t.price)) as std_amount
-          FROM transactions t
-          WHERE t.date >= $1
-          AND t.price < 0
-          ${duplicateFilter}
-          GROUP BY COALESCE(t.parent_category, t.category)
-          HAVING COUNT(*) >= 5
-        ),
-        recent_transactions AS (
-          SELECT
-            t.identifier,
-            t.vendor,
-            t.name,
-            t.date,
-            ABS(t.price) as amount,
-            COALESCE(t.parent_category, t.category) as category
-          FROM transactions t
-          WHERE t.date >= $2
-          AND t.price < 0
-          ${duplicateFilter}
-        )
-        SELECT
-          rt.*,
-          ca.avg_amount,
-          ca.std_amount,
-          (rt.amount - ca.avg_amount) / NULLIF(ca.std_amount, 0) as z_score
-        FROM recent_transactions rt
-        JOIN category_averages ca ON rt.category = ca.category
-        WHERE (rt.amount - ca.avg_amount) / NULLIF(ca.std_amount, 0) > 2.5
-        ORDER BY z_score DESC
-        LIMIT 10
-      `, [subDays(now, 90), subDays(now, 7)]);
+      const ninetyDaysStr = subDays(now, 90).toISOString().split('T')[0];
+      const sevenDaysAgo = subDays(now, 7);
 
-      recentTransactionsResult.rows.forEach(txn => {
-        notifications.push({
-          id: `unusual_${txn.identifier}`,
-          type: NOTIFICATION_TYPES.UNUSUAL_SPENDING,
-          severity: SEVERITY_LEVELS.WARNING,
-          title: 'Unusual Spending Detected',
-          message: `₪${txn.amount.toLocaleString()} spent at ${txn.vendor} (${txn.category}) - ${(txn.z_score * 100).toFixed(0)}% above average`,
-          data: {
-            transaction_id: txn.identifier,
-            vendor: txn.vendor,
-            amount: txn.amount,
-            category: txn.category,
-            date: txn.date,
-            deviation: txn.z_score
-          },
-          timestamp: txn.date,
-          actionable: true,
-          actions: [
-            { label: 'View Transaction', action: 'view_transaction', params: { id: txn.identifier } },
-            { label: 'Categorize', action: 'categorize_transaction', params: { id: txn.identifier } }
-          ]
-        });
-      });
-    }
-
-    // 3. High Value Transactions
-    if (type === 'all' || type === NOTIFICATION_TYPES.HIGH_TRANSACTION) {
-      const highTransactionsResult = await client.query(`
-        WITH spending_threshold AS (
-          SELECT PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY ABS(price)) as threshold
-          FROM transactions t
-          WHERE t.date >= $1
-          AND t.price < 0
-          ${duplicateFilter}
-        )
-        SELECT
+      const transactionsResult = await client.query(
+        `SELECT
           t.identifier,
           t.vendor,
           t.name,
           t.date,
           ABS(t.price) as amount,
           COALESCE(t.parent_category, t.category) as category
-        FROM transactions t, spending_threshold st
-        WHERE t.date >= $2
-        AND t.price < 0
-        AND ABS(t.price) >= st.threshold
-        ${duplicateFilter}
+        FROM transactions t
+        WHERE t.date >= $1
+          AND t.price < 0
+          ${duplicateClause}
         ORDER BY t.date DESC
-        LIMIT 5
-      `, [subDays(now, 30), subDays(now, 3)]);
+        LIMIT 1000`,
+        [ninetyDaysStr]
+      );
 
-      highTransactionsResult.rows.forEach(txn => {
-        notifications.push({
-          id: `high_${txn.identifier}`,
-          type: NOTIFICATION_TYPES.HIGH_TRANSACTION,
-          severity: SEVERITY_LEVELS.INFO,
-          title: 'Large Transaction',
-          message: `₪${txn.amount.toLocaleString()} transaction at ${txn.vendor} on ${format(new Date(txn.date), 'MMM dd')}`,
-          data: {
-            transaction_id: txn.identifier,
-            vendor: txn.vendor,
-            amount: txn.amount,
-            category: txn.category,
-            date: txn.date
-          },
-          timestamp: txn.date,
-          actionable: true,
-          actions: [
-            { label: 'View Details', action: 'view_transaction', params: { id: txn.identifier } }
-          ]
+      const transactions = transactionsResult.rows.map(row => ({
+        ...row,
+        date: new Date(row.date),
+        amount: parseFloat(row.amount),
+        category: row.category || 'Unknown',
+      }));
+
+      const categoryStats = computeCategoryStatsForNotifications(transactions, 5);
+
+      transactions
+        .filter(txn => txn.date >= sevenDaysAgo)
+        .forEach(txn => {
+          const stats = categoryStats.get(txn.category);
+          if (!stats || stats.stdDev <= 0) return;
+          const zScore = (txn.amount - stats.mean) / stats.stdDev;
+          if (zScore <= 2.5) return;
+
+          notifications.push({
+            id: `unusual_${txn.identifier}`,
+            type: NOTIFICATION_TYPES.UNUSUAL_SPENDING,
+            severity: SEVERITY_LEVELS.WARNING,
+            title: 'Unusual Spending Detected',
+            message: `₪${txn.amount.toLocaleString()} spent at ${txn.vendor} (${txn.category}) - ${(zScore * 100).toFixed(0)}% above average`,
+            data: {
+              transaction_id: txn.identifier,
+              vendor: txn.vendor,
+              amount: txn.amount,
+              category: txn.category,
+              date: txn.date,
+              deviation: zScore,
+            },
+            timestamp: txn.date.toISOString(),
+            actionable: true,
+            actions: [
+              { label: 'View Transaction', action: 'view_transaction', params: { id: txn.identifier } },
+              { label: 'Categorize', action: 'categorize_transaction', params: { id: txn.identifier } },
+            ],
+          });
         });
-      });
+    }
+
+    // 3. High Value Transactions
+    if (type === 'all' || type === NOTIFICATION_TYPES.HIGH_TRANSACTION) {
+      const thirtyDaysStr = subDays(now, 30).toISOString().split('T')[0];
+      const threeDaysAgo = subDays(now, 3);
+
+      const highTxResult = await client.query(
+        `SELECT
+          t.identifier,
+          t.vendor,
+          t.name,
+          t.date,
+          ABS(t.price) as amount,
+          COALESCE(t.parent_category, t.category) as category
+        FROM transactions t
+        WHERE t.date >= $1
+          AND t.price < 0
+          ${duplicateClause}
+        ORDER BY t.date DESC
+        LIMIT 1000`,
+        [thirtyDaysStr]
+      );
+
+      const highTransactions = highTxResult.rows.map(row => ({
+        ...row,
+        date: new Date(row.date),
+        amount: parseFloat(row.amount),
+        category: row.category || 'Unknown',
+      }));
+
+      const amountList = highTransactions.map(txn => txn.amount).sort((a, b) => a - b);
+      if (amountList.length > 0) {
+        const threshold = percentile(amountList, 0.95);
+        highTransactions
+          .filter(txn => txn.date >= threeDaysAgo && txn.amount >= threshold)
+          .slice(0, 5)
+          .forEach(txn => {
+            notifications.push({
+              id: `high_${txn.identifier}`,
+              type: NOTIFICATION_TYPES.HIGH_TRANSACTION,
+              severity: SEVERITY_LEVELS.INFO,
+              title: 'Large Transaction',
+              message: `₪${txn.amount.toLocaleString()} transaction at ${txn.vendor} on ${format(txn.date, 'MMM dd')}`,
+              data: {
+                transaction_id: txn.identifier,
+                vendor: txn.vendor,
+                amount: txn.amount,
+                category: txn.category,
+                date: txn.date,
+              },
+              timestamp: txn.date.toISOString(),
+              actionable: true,
+              actions: [
+                { label: 'View Details', action: 'view_transaction', params: { id: txn.identifier } },
+              ],
+            });
+          });
+      }
     }
 
     // 4. New Vendor Detection
     if (type === 'all' || type === NOTIFICATION_TYPES.NEW_VENDOR) {
-      const newVendorsResult = await client.query(`
-        WITH vendor_first_seen AS (
-          SELECT
-            vendor,
-            MIN(date) as first_transaction,
-            COUNT(*) as transaction_count,
-            SUM(ABS(price)) as total_amount
-          FROM transactions t
-          WHERE ${duplicateFilter.replace('AND', 'WHERE').substring(5)}
-          GROUP BY vendor
-        )
-        SELECT *
-        FROM vendor_first_seen
-        WHERE first_transaction >= $1
-        AND transaction_count >= 2
+      const newVendorThreshold = subDays(now, 7).toISOString().split('T')[0];
+      const newVendorsResult = await client.query(
+        `SELECT
+          t.vendor,
+          MIN(t.date) as first_transaction,
+          COUNT(*) as transaction_count,
+          SUM(ABS(t.price)) as total_amount
+        FROM transactions t
+        WHERE t.price < 0
+          ${duplicateClause}
+        GROUP BY t.vendor
+        HAVING MIN(t.date) >= $1 AND COUNT(*) >= 2
         ORDER BY first_transaction DESC
-        LIMIT 5
-      `, [subDays(now, 7)]);
+        LIMIT 5`,
+        [newVendorThreshold]
+      );
 
       newVendorsResult.rows.forEach(vendor => {
+        const totalAmount = parseFloat(vendor.total_amount || 0);
+        const transactionCount = parseInt(vendor.transaction_count || 0, 10);
+        const firstTransactionDate = new Date(vendor.first_transaction);
         notifications.push({
           id: `vendor_${vendor.vendor}`,
           type: NOTIFICATION_TYPES.NEW_VENDOR,
           severity: SEVERITY_LEVELS.INFO,
           title: 'New Vendor',
-          message: `First transaction with ${vendor.vendor} - ₪${vendor.total_amount.toLocaleString()} across ${vendor.transaction_count} transactions`,
+          message: `First transaction with ${vendor.vendor} - ₪${totalAmount.toLocaleString()} across ${transactionCount} transactions`,
           data: {
             vendor: vendor.vendor,
-            first_seen: vendor.first_transaction,
-            transaction_count: vendor.transaction_count,
-            total_amount: vendor.total_amount
+            first_seen: firstTransactionDate,
+            transaction_count: transactionCount,
+            total_amount: totalAmount
           },
-          timestamp: vendor.first_transaction,
+          timestamp: firstTransactionDate.toISOString(),
           actionable: true,
           actions: [
             { label: 'View Vendor', action: 'view_vendor', params: { vendor: vendor.vendor } },
@@ -271,7 +290,7 @@ export default async function handler(req, res) {
           FROM transactions t
           WHERE t.date >= $1
           AND t.date <= $2
-          ${duplicateFilter}
+          ${duplicateClause}
         ),
         recent_daily_spending AS (
           SELECT AVG(daily_spending) as avg_daily_spending
@@ -282,7 +301,7 @@ export default async function handler(req, res) {
             FROM transactions t
             WHERE t.date >= $3
             AND t.price < 0
-            ${duplicateFilter}
+            ${duplicateClause}
             GROUP BY DATE(date)
           ) daily_totals
         )
@@ -293,22 +312,29 @@ export default async function handler(req, res) {
           rds.avg_daily_spending,
           (mf.income - mf.expenses) / NULLIF(rds.avg_daily_spending, 0) as days_remaining
         FROM monthly_flow mf, recent_daily_spending rds
-      `, [currentMonth.start, currentMonth.end, subDays(now, 7)]);
+      `, [currentMonthStartStr, currentMonthEndStr, subDays(now, 7).toISOString().split('T')[0]]);
 
       const cashFlow = cashFlowResult.rows[0];
-      if (cashFlow && cashFlow.days_remaining < 10 && cashFlow.net_flow > 0) {
+      if (cashFlow) {
+        const income = parseFloat(cashFlow.income || 0);
+        const expenses = parseFloat(cashFlow.expenses || 0);
+        const netFlow = parseFloat(cashFlow.net_flow || 0);
+        const avgDailySpending = parseFloat(cashFlow.avg_daily_spending || 0);
+        const daysRemaining = parseFloat(cashFlow.days_remaining || 0);
+
+        if (daysRemaining < 10 && netFlow > 0) {
         notifications.push({
           id: 'cash_flow_warning',
           type: NOTIFICATION_TYPES.CASH_FLOW_ALERT,
           severity: SEVERITY_LEVELS.WARNING,
           title: 'Cash Flow Alert',
-          message: `At current spending rate, remaining budget will last ${Math.round(cashFlow.days_remaining)} days`,
+          message: `At current spending rate, remaining budget will last ${Math.round(daysRemaining)} days`,
           data: {
-            net_flow: cashFlow.net_flow,
-            daily_spending: cashFlow.avg_daily_spending,
-            days_remaining: cashFlow.days_remaining,
-            income: cashFlow.income,
-            expenses: cashFlow.expenses
+            net_flow: netFlow,
+            daily_spending: avgDailySpending,
+            days_remaining: daysRemaining,
+            income,
+            expenses
           },
           timestamp: now.toISOString(),
           actionable: true,
@@ -317,6 +343,7 @@ export default async function handler(req, res) {
             { label: 'Analyze Spending', action: 'view_analytics' }
           ]
         });
+        }
       }
     }
 
@@ -335,7 +362,7 @@ export default async function handler(req, res) {
     });
 
     // Apply limit
-    const limitedNotifications = filteredNotifications.slice(0, parseInt(limit));
+    const limitedNotifications = filteredNotifications.slice(0, limitInt);
 
     const response = standardizeResponse({
       notifications: limitedNotifications,
@@ -367,4 +394,39 @@ export default async function handler(req, res) {
   } finally {
     client.release();
   }
+}
+
+function computeCategoryStatsForNotifications(transactions, minCount) {
+  const stats = new Map();
+
+  transactions.forEach(txn => {
+    const category = txn.category || 'Unknown';
+    if (!stats.has(category)) {
+      stats.set(category, { sum: 0, sumSquares: 0, count: 0 });
+    }
+    const entry = stats.get(category);
+    entry.sum += txn.amount;
+    entry.sumSquares += txn.amount * txn.amount;
+    entry.count += 1;
+  });
+
+  const result = new Map();
+  stats.forEach((entry, category) => {
+    if (entry.count < (minCount || 1)) return;
+    const mean = entry.sum / entry.count;
+    const variance = entry.count > 1 ? entry.sumSquares / entry.count - mean * mean : 0;
+    const stdDev = variance > 0 ? Math.sqrt(variance) : 0;
+    result.set(category, { mean, stdDev, count: entry.count });
+  });
+
+  return result;
+}
+
+function percentile(values, fraction) {
+  if (!values.length) return 0;
+  const index = (values.length - 1) * fraction;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) return values[lower];
+  return values[lower] + (values[upper] - values[lower]) * (index - lower);
 }

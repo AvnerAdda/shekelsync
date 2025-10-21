@@ -8,16 +8,19 @@ const TYPE_CONFIG = {
     categoryType: 'expense',
     priceFilter: 't.price < 0',
     amountExpression: 'ABS(t.price)',
+    amountFn: (price) => Math.abs(price),
   },
   income: {
     categoryType: 'income',
     priceFilter: 't.price > 0',
     amountExpression: 't.price',
+    amountFn: (price) => price,
   },
   investment: {
     categoryType: 'investment',
     priceFilter: '',
     amountExpression: 'ABS(t.price)',
+    amountFn: (price) => Math.abs(price),
   },
 };
 
@@ -43,162 +46,145 @@ export default async function handler(req, res) {
 
     const config = TYPE_CONFIG[type];
     const { start, end } = resolveDateRange({ startDate, endDate, months });
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
 
     const duplicateFilter = excludeDuplicates === 'true'
       ? await buildDuplicateFilter(client, 't')
       : '';
+    const duplicateClause = duplicateFilter ? duplicateFilter.replace(/transactions\./g, 't.') : '';
 
     const priceFilterClause = config.priceFilter ? `AND ${config.priceFilter}` : '';
-
-    const summaryResult = await client.query(
+    const transactionsResult = await client.query(
       `SELECT
-        COUNT(*) as count,
-        SUM(${config.amountExpression}) as total,
-        AVG(${config.amountExpression}) as average,
-        MIN(${config.amountExpression}) as min,
-        MAX(${config.amountExpression}) as max
-      FROM transactions t
-      JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
-      JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
-      WHERE t.date >= $1 AND t.date <= $2
-      AND cd_parent.category_type = $3
-      ${priceFilterClause}
-      ${duplicateFilter}`,
-      [start, end, config.categoryType]
-    );
-
-    const byCategoryResult = await client.query(
-      `WITH parent_totals AS (
-        SELECT
-          cd_parent.id as parent_id,
-          cd_parent.name as parent_name,
-          COUNT(t.identifier) as count,
-          SUM(${config.amountExpression}) as total
-        FROM transactions t
-        JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
-        JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
-        WHERE t.date >= $1 AND t.date <= $2
-        AND cd_parent.category_type = $3
-        ${priceFilterClause}
-        ${duplicateFilter}
-        GROUP BY cd_parent.id, cd_parent.name
-      ),
-      subcategory_breakdown AS (
-        SELECT
-          cd_parent.id as parent_id,
-          cd_parent.name as parent_name,
-          cd_child.id as subcategory_id,
-          cd_child.name as subcategory_name,
-          COUNT(t.identifier) as count,
-          SUM(${config.amountExpression}) as total
-        FROM transactions t
-        JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
-        JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
-        WHERE t.date >= $1 AND t.date <= $2
-        AND cd_parent.category_type = $3
-        ${priceFilterClause}
-        ${duplicateFilter}
-        GROUP BY cd_parent.id, cd_parent.name, cd_child.id, cd_child.name
-      )
-      SELECT
-        pt.parent_id,
-        pt.parent_name,
-        pt.count,
-        pt.total,
-        json_agg(
-          json_build_object(
-            'id', sb.subcategory_id,
-            'name', sb.subcategory_name,
-            'count', sb.count,
-            'total', sb.total
-          )
-          ORDER BY sb.total DESC
-        ) as subcategories
-      FROM parent_totals pt
-      LEFT JOIN subcategory_breakdown sb ON pt.parent_id = sb.parent_id
-      GROUP BY pt.parent_id, pt.parent_name, pt.count, pt.total
-      ORDER BY pt.total DESC`,
-      [start, end, config.categoryType]
-    );
-
-    const byVendorResult = await client.query(
-      `SELECT
+        t.identifier,
         t.vendor,
-        COUNT(*) as count,
-        SUM(${config.amountExpression}) as total
+        t.date,
+        t.price,
+        cd_child.id as subcategory_id,
+        cd_child.name as subcategory_name,
+        cd_parent.id as parent_id,
+        cd_parent.name as parent_name
       FROM transactions t
       JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
       JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
       WHERE t.date >= $1 AND t.date <= $2
-      AND cd_parent.category_type = $3
-      ${priceFilterClause}
-      ${duplicateFilter}
-      GROUP BY t.vendor
-      ORDER BY total DESC`,
-      [start, end, config.categoryType]
+        AND cd_parent.category_type = $3
+        ${priceFilterClause}
+        ${duplicateClause}
+      ORDER BY t.date ASC`,
+      [startStr, endStr, config.categoryType]
     );
 
-    const byMonthResult = await client.query(
-      `SELECT
-        TO_CHAR(t.date, 'YYYY-MM') as month,
-        SUM(${config.amountExpression}) as total
-      FROM transactions t
-      JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
-      JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
-      WHERE t.date >= $1 AND t.date <= $2
-      AND cd_parent.category_type = $3
-      ${priceFilterClause}
-      ${duplicateFilter}
-      GROUP BY month
-      ORDER BY month ASC`,
-      [start, end, config.categoryType]
-    );
+    const transactions = transactionsResult.rows.map(row => ({
+      ...row,
+      price: parseFloat(row.price),
+      date: new Date(row.date),
+    }));
+    const amounts = transactions.map(tx => config.amountFn(tx.price));
 
-    const summaryRow = summaryResult.rows[0] || {};
+    const totalAmount = amounts.reduce((sum, value) => sum + value, 0);
+    const count = transactions.length;
+    const average = count > 0 ? totalAmount / count : 0;
+    const minAmount = count > 0 ? Math.min(...amounts) : 0;
+    const maxAmount = count > 0 ? Math.max(...amounts) : 0;
+
+    const categoryMap = new Map();
+    const vendorMap = new Map();
+    const monthMap = new Map();
+
+    transactions.forEach(tx => {
+      const amount = config.amountFn(tx.price);
+
+      // Categories
+      const parentKey = tx.parent_id ?? tx.parent_name ?? 'Uncategorized';
+      if (!categoryMap.has(parentKey)) {
+        categoryMap.set(parentKey, {
+          parentId: tx.parent_id,
+          category: tx.parent_name || 'Uncategorized',
+          count: 0,
+          total: 0,
+          subcategories: new Map(),
+        });
+      }
+      const parentEntry = categoryMap.get(parentKey);
+      parentEntry.count += 1;
+      parentEntry.total += amount;
+
+      const subKey = tx.subcategory_id ?? `${parentKey}::${tx.subcategory_name || 'Other'}`;
+      if (!parentEntry.subcategories.has(subKey)) {
+        parentEntry.subcategories.set(subKey, {
+          id: tx.subcategory_id,
+          name: tx.subcategory_name || 'Other',
+          count: 0,
+          total: 0,
+        });
+      }
+      const subEntry = parentEntry.subcategories.get(subKey);
+      subEntry.count += 1;
+      subEntry.total += amount;
+
+      // Vendors
+      if (!vendorMap.has(tx.vendor)) {
+        vendorMap.set(tx.vendor, { vendor: tx.vendor, count: 0, total: 0 });
+      }
+      const vendorEntry = vendorMap.get(tx.vendor);
+      vendorEntry.count += 1;
+      vendorEntry.total += amount;
+
+      // Months
+      const monthKey = tx.date.toISOString().slice(0, 7);
+      if (!monthMap.has(monthKey)) {
+        monthMap.set(monthKey, { month: monthKey, total: 0 });
+      }
+      monthMap.get(monthKey).total += amount;
+    });
+
+    const byCategory = Array.from(categoryMap.values()).map(entry => ({
+      parentId: entry.parentId,
+      category: entry.category,
+      count: entry.count,
+      total: entry.total,
+      subcategories: Array.from(entry.subcategories.values())
+        .sort((a, b) => b.total - a.total)
+        .map(sub => ({
+          id: sub.id,
+          name: sub.name,
+          count: sub.count,
+          total: sub.total,
+        })),
+    })).sort((a, b) => b.total - a.total);
+
+    const byVendor = Array.from(vendorMap.values())
+      .sort((a, b) => b.total - a.total)
+      .map(row => ({
+        vendor: row.vendor,
+        count: row.count,
+        total: row.total,
+      }));
+
+    const byMonth = Array.from(monthMap.values())
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .map(row => ({ month: row.month, total: row.total }));
     const response = {
       dateRange: { start, end },
       summary: {
-        total: parseFloat(summaryRow.total || 0),
-        count: parseInt(summaryRow.count || 0, 10),
-        average: parseFloat(summaryRow.average || 0),
-        min: parseFloat(summaryRow.min || 0),
-        max: parseFloat(summaryRow.max || 0),
+        total: totalAmount,
+        count,
+        average,
+        min: minAmount,
+        max: maxAmount,
       },
       breakdowns: {
-        byCategory: byCategoryResult.rows.map(row => ({
-          parentId: row.parent_id,
-          category: row.parent_name,
-          count: parseInt(row.count || 0, 10),
-          total: parseFloat(row.total || 0),
-          subcategories: Array.isArray(row.subcategories)
-            ? row.subcategories
-                .filter(Boolean)
-                .map(sub => ({
-                  id: sub.id,
-                  name: sub.name,
-                  count: parseInt(sub.count || 0, 10),
-                  total: parseFloat(sub.total || 0),
-                }))
-            : [],
-        })),
-        byVendor: byVendorResult.rows.map(row => ({
-          vendor: row.vendor,
-          count: parseInt(row.count || 0, 10),
-          total: parseFloat(row.total || 0),
-        })),
-        byMonth: byMonthResult.rows.map(row => ({
-          month: row.month,
-          total: parseFloat(row.total || 0),
+        byCategory,
+        byVendor,
+        byMonth: byMonth.map(entry => ({
+          ...entry,
+          inflow: type === 'expense' ? 0 : entry.total,
+          outflow: type === 'expense' ? entry.total : 0,
         })),
       },
     };
-
-    // Enrich monthly data with derived inflow/outflow depending on type
-    response.breakdowns.byMonth = response.breakdowns.byMonth.map(entry => ({
-      ...entry,
-      inflow: type === 'expense' ? 0 : entry.total,
-      outflow: type === 'expense' ? entry.total : 0,
-    }));
 
     res.status(200).json(response);
   } catch (error) {

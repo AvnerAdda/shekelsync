@@ -1,5 +1,6 @@
 import { getDB } from '../db.js';
 import { subMonths } from 'date-fns';
+import { dialect } from '../../../lib/sql-dialect.js';
 
 /**
  * Enhanced analytics dashboard with subcategory support and intelligent insights
@@ -24,6 +25,9 @@ export default async function handler(req, res) {
       start = subMonths(end, parseInt(months));
     }
 
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+
     // 1. Get hierarchical category breakdown (parent + subcategory)
     const hierarchicalBreakdown = await client.query(
       `SELECT
@@ -41,21 +45,21 @@ export default async function handler(req, res) {
       AND parent_category NOT IN ('Bank', 'Income')
       GROUP BY parent_category, subcategory
       ORDER BY total_amount DESC`,
-      [start, end]
+      [startStr, endStr]
     );
 
     // 2. Get auto-categorization statistics
     const autoCategoryStats = await client.query(
       `SELECT
-        COUNT(*) FILTER (WHERE auto_categorized = true) as auto_categorized_count,
-        COUNT(*) FILTER (WHERE auto_categorized = false OR auto_categorized IS NULL) as manual_count,
-        AVG(confidence_score) FILTER (WHERE auto_categorized = true) as avg_confidence,
+        SUM(CASE WHEN auto_categorized = true THEN 1 ELSE 0 END) as auto_categorized_count,
+        SUM(CASE WHEN auto_categorized = false OR auto_categorized IS NULL THEN 1 ELSE 0 END) as manual_count,
+        AVG(CASE WHEN auto_categorized = true THEN confidence_score ELSE NULL END) as avg_confidence,
         COUNT(*) as total_transactions
       FROM transactions
       WHERE date >= $1 AND date <= $2
       AND price < 0
       AND parent_category NOT IN ('Bank', 'Income')`,
-      [start, end]
+      [startStr, endStr]
     );
 
     // 3. Top merchants by spending
@@ -74,13 +78,14 @@ export default async function handler(req, res) {
       GROUP BY merchant_name, parent_category, subcategory
       ORDER BY total_spent DESC
       LIMIT 20`,
-      [start, end]
+      [startStr, endStr]
     );
 
     // 4. Monthly trends by category
+    const monthExpr = dialect.toChar('date', 'YYYY-MM');
     const monthlyTrends = await client.query(
       `SELECT
-        TO_CHAR(date, 'YYYY-MM') as month,
+        ${monthExpr} as month,
         parent_category,
         SUM(ABS(price)) as amount
       FROM transactions
@@ -88,9 +93,9 @@ export default async function handler(req, res) {
       AND price < 0
       AND parent_category IS NOT NULL
       AND parent_category NOT IN ('Bank', 'Income')
-      GROUP BY TO_CHAR(date, 'YYYY-MM'), parent_category
+      GROUP BY ${monthExpr}, parent_category
       ORDER BY month ASC, amount DESC`,
-      [start, end]
+      [startStr, endStr]
     );
 
     // 5. Uncategorized transactions that need attention
@@ -106,7 +111,7 @@ export default async function handler(req, res) {
       GROUP BY name
       ORDER BY total_amount DESC
       LIMIT 30`,
-      [start, end]
+      [startStr, endStr]
     );
 
     // 6. Category distribution (for pie charts)
@@ -122,19 +127,20 @@ export default async function handler(req, res) {
       AND parent_category NOT IN ('Bank', 'Income')
       GROUP BY parent_category
       ORDER BY total_amount DESC`,
-      [start, end]
+      [startStr, endStr]
     );
 
     // 7. Income vs Expenses summary
+    const activeDaysExpr = `COUNT(DISTINCT ${dialect.dateTrunc('day', 'date')})`;
     const summary = await client.query(
       `SELECT
         SUM(CASE WHEN price > 0 THEN price ELSE 0 END) as total_income,
         SUM(CASE WHEN price < 0 THEN ABS(price) ELSE 0 END) as total_expenses,
         COUNT(DISTINCT vendor) as total_accounts,
-        COUNT(DISTINCT DATE_TRUNC('day', date)) as active_days
+        ${activeDaysExpr} as active_days
       FROM transactions
       WHERE date >= $1 AND date <= $2`,
-      [start, end]
+      [startStr, endStr]
     );
 
     const summaryData = summary.rows[0];
@@ -147,8 +153,15 @@ export default async function handler(req, res) {
 
     // Check categorization health
     const autoStats = autoCategoryStats.rows[0];
-    const autoCategoryPercentage = (autoStats.auto_categorized_count / autoStats.total_transactions) * 100;
-    if (autoCategoryPercentage < 70) {
+    const totalTransactions = parseInt(autoStats.total_transactions || 0, 10);
+    const autoCategorizedCount = parseInt(autoStats.auto_categorized_count || 0, 10);
+    const manualCount = parseInt(autoStats.manual_count || 0, 10);
+    const avgConfidence = parseFloat(autoStats.avg_confidence || 0);
+    const autoCategoryPercentage = totalTransactions > 0
+      ? (autoCategorizedCount / totalTransactions) * 100
+      : 0;
+
+    if (totalTransactions > 0 && autoCategoryPercentage < 70) {
       insights.push({
         type: 'warning',
         title: 'Low Auto-Categorization',
@@ -202,10 +215,10 @@ export default async function handler(req, res) {
         totalAccounts: parseInt(summaryData.total_accounts || 0),
         activeDays: parseInt(summaryData.active_days || 0),
         autoCategoryStats: {
-          autoCategorized: parseInt(autoStats.auto_categorized_count),
-          manual: parseInt(autoStats.manual_count),
+          autoCategorized: autoCategorizedCount,
+          manual: manualCount,
           percentage: autoCategoryPercentage.toFixed(1),
-          avgConfidence: parseFloat(autoStats.avg_confidence || 0).toFixed(2)
+          avgConfidence: avgConfidence.toFixed(2)
         }
       },
       breakdowns: {

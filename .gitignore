@@ -67,3 +67,5 @@ coverage/
 
 # Miscellaneous
 .cache/
+
+.venv/

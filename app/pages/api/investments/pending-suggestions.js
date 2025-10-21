@@ -70,7 +70,7 @@ async function handleSuggestion(req, res, db) {
     // Update suggestion status
     const updateQuery = `
       UPDATE pending_transaction_suggestions 
-      SET status = $1, reviewed_at = NOW()
+      SET status = $1, reviewed_at = CURRENT_TIMESTAMP
       WHERE id = $2
       RETURNING *
     `;
@@ -106,9 +106,9 @@ async function handleSuggestion(req, res, db) {
       // Update the pattern match count (learning)
       const updatePatternQuery = `
         UPDATE account_transaction_patterns 
-        SET match_count = match_count + 1, last_matched = NOW()
+        SET match_count = match_count + 1, last_matched = CURRENT_TIMESTAMP
         WHERE account_id = $1 
-          AND $2 ILIKE pattern
+          AND LOWER($2) LIKE LOWER(pattern)
       `;
       await db.query(updatePatternQuery, [suggestion.suggested_account_id, suggestion.transaction_name]);
 

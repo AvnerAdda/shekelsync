@@ -1,6 +1,7 @@
 import { getDB } from '../db.js';
 import { startOfWeek, startOfMonth, format } from 'date-fns';
 import { buildDuplicateFilter, resolveDateRange } from './utils.js';
+import { dialect } from '../../../lib/sql-dialect.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -18,17 +19,17 @@ export default async function handler(req, res) {
     let dateGroupBy, dateSelect;
     switch (aggregation) {
       case 'weekly':
-        dateGroupBy = "DATE_TRUNC('week', date)";
-        dateSelect = "DATE_TRUNC('week', date) as date";
+        dateGroupBy = dialect.dateTrunc('week', 't.date');
+        dateSelect = `${dialect.dateTrunc('week', 't.date')} as date`;
         break;
       case 'monthly':
-        dateGroupBy = "DATE_TRUNC('month', date)";
-        dateSelect = "DATE_TRUNC('month', date) as date";
+        dateGroupBy = dialect.dateTrunc('month', 't.date');
+        dateSelect = `${dialect.dateTrunc('month', 't.date')} as date`;
         break;
       case 'daily':
       default:
-        dateGroupBy = 'date';
-        dateSelect = 'date';
+        dateGroupBy = 't.date';
+        dateSelect = 't.date as date';
     }
 
     // Build duplicate exclusion clause
@@ -37,6 +38,7 @@ export default async function handler(req, res) {
     const duplicateFilter = shouldExcludeDuplicates
       ? await buildDuplicateFilter(client, 'transactions')
       : '';
+    const duplicateClause = duplicateFilter ? duplicateFilter.replace(/transactions\./g, 't.') : '';
 
     // Get transaction history with aggregation - separated by category type
     const historyResult = await client.query(
@@ -53,7 +55,7 @@ export default async function handler(req, res) {
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE t.date >= $1 AND t.date <= $2
-      ${duplicateFilter.replace(/transactions\./g, 't.')}
+      ${duplicateClause}
       GROUP BY ${dateGroupBy}
       ORDER BY date ASC`,
       [start, end]
@@ -62,80 +64,48 @@ export default async function handler(req, res) {
     // Get breakdown by category (EXPENSES ONLY - negative prices)
     // Return hierarchical structure: parent categories with their subcategories
     // Build the duplicate filter with 't' alias
-    const categoryDuplicateFilter = duplicateFilter ? duplicateFilter.replace(/transactions\./g, 't.') : '';
+    const categoryDuplicateFilter = duplicateClause;
 
-    const categoryResult = await client.query(
-      `WITH parent_totals AS (
-        SELECT
-          cd_parent.id as parent_id,
-          cd_parent.name as parent_name,
-          COUNT(t.identifier) as count,
-          SUM(ABS(t.price)) as total
-        FROM transactions t
-        JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
-        JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
-        WHERE t.date >= $1 AND t.date <= $2
+    const categoryDataResult = await client.query(
+      `SELECT
+        cd_parent.id as parent_id,
+        cd_parent.name as parent_name,
+        cd_child.id as subcategory_id,
+        cd_child.name as subcategory_name,
+        COUNT(t.identifier) as count,
+        SUM(ABS(t.price)) as total
+      FROM transactions t
+      JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
+      JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
+      WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND cd_parent.category_type = 'expense'
         ${categoryDuplicateFilter}
-        GROUP BY cd_parent.id, cd_parent.name
-      ),
-      subcategory_breakdown AS (
-        SELECT
-          cd_parent.id as parent_id,
-          cd_parent.name as parent_name,
-          cd_child.id as subcategory_id,
-          cd_child.name as subcategory_name,
-          COUNT(t.identifier) as count,
-          SUM(ABS(t.price)) as total
-        FROM transactions t
-        JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
-        JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
-        WHERE t.date >= $1 AND t.date <= $2
-        AND t.price < 0
-        AND cd_parent.category_type = 'expense'
-        ${categoryDuplicateFilter}
-        GROUP BY cd_parent.id, cd_parent.name, cd_child.id, cd_child.name
-      )
-      SELECT
-        pt.parent_id,
-        pt.parent_name as category,
-        pt.count,
-        pt.total,
-        json_agg(
-          json_build_object(
-            'id', sb.subcategory_id,
-            'name', sb.subcategory_name,
-            'count', sb.count,
-            'total', sb.total
-          ) ORDER BY sb.total DESC
-        ) as subcategories
-      FROM parent_totals pt
-      LEFT JOIN subcategory_breakdown sb ON pt.parent_id = sb.parent_id
-      GROUP BY pt.parent_id, pt.parent_name, pt.count, pt.total
-      ORDER BY pt.total DESC`,
+      GROUP BY cd_parent.id, cd_parent.name, cd_child.id, cd_child.name
+      ORDER BY cd_parent.name, total DESC`,
       [start, end]
     );
 
     // Get breakdown by vendor (EXPENSES ONLY)
     const vendorResult = await client.query(
       `SELECT
-        vendor,
+        t.vendor,
         COUNT(*) as count,
         SUM(ABS(price)) as total
-      FROM transactions
-      WHERE date >= $1 AND date <= $2
-      AND price < 0
-      ${duplicateFilter}
-      GROUP BY vendor
+      FROM transactions t
+      WHERE t.date >= $1 AND t.date <= $2
+      AND t.price < 0
+      ${duplicateClause}
+      GROUP BY t.vendor
       ORDER BY total DESC`,
       [start, end]
     );
 
     // Get breakdown by month - separated by category type
+    const monthExpr = dialect.toChar('t.date', 'YYYY-MM');
     const monthResult = await client.query(
       `SELECT
-        TO_CHAR(t.date, 'YYYY-MM') as month,
+        ${monthExpr} as month,
         SUM(CASE 
           WHEN cd.category_type = 'income' AND t.price > 0 THEN t.price 
           ELSE 0 
@@ -147,8 +117,8 @@ export default async function handler(req, res) {
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE t.date >= $1 AND t.date <= $2
-      ${duplicateFilter.replace(/transactions\./g, 't.')}
-      GROUP BY TO_CHAR(t.date, 'YYYY-MM')
+      ${duplicateClause}
+      GROUP BY ${monthExpr}
       ORDER BY month ASC`,
       [start, end]
     );
@@ -176,7 +146,7 @@ export default async function handler(req, res) {
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE t.date >= $1 AND t.date <= $2
-      ${duplicateFilter.replace(/transactions\./g, 't.')}`,
+      ${duplicateClause}`,
       [start, end]
     );
 
@@ -215,13 +185,7 @@ export default async function handler(req, res) {
         expenses: parseFloat(row.expenses || 0)
       })),
       breakdowns: {
-        byCategory: categoryResult.rows.map(row => ({
-          parentId: row.parent_id,
-          category: row.category,
-          count: parseInt(row.count),
-          total: parseFloat(row.total),
-          subcategories: row.subcategories || []
-        })),
+        byCategory: buildCategoryBreakdown(categoryDataResult.rows),
         byVendor: vendorResult.rows.map(row => ({
           vendor: row.vendor,
           count: parseInt(row.count),
@@ -240,4 +204,43 @@ export default async function handler(req, res) {
   } finally {
     client.release();
   }
+}
+
+function buildCategoryBreakdown(rows) {
+  const parentMap = new Map();
+
+  rows.forEach(row => {
+    const parentId = row.parent_id;
+    if (!parentMap.has(parentId)) {
+      parentMap.set(parentId, {
+        parentId,
+        category: row.parent_name,
+        count: 0,
+        total: 0,
+        subcategories: [],
+      });
+    }
+
+    const parent = parentMap.get(parentId);
+    const count = parseInt(row.count);
+    const total = parseFloat(row.total);
+
+    parent.count += count;
+    parent.total += total;
+    parent.subcategories.push({
+      id: row.subcategory_id,
+      name: row.subcategory_name,
+      count,
+      total,
+    });
+  });
+
+  const result = Array.from(parentMap.values());
+
+  result.forEach(parent => {
+    parent.subcategories.sort((a, b) => b.total - a.total);
+  });
+
+  result.sort((a, b) => b.total - a.total);
+  return result;
 }

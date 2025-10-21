@@ -1,4 +1,5 @@
 import { getDB } from '../db.js';
+import { subMonths, differenceInCalendarDays } from 'date-fns';
 
 /**
  * Detect potential duplicate transactions
@@ -24,9 +25,58 @@ export default async function handler(req, res) {
       matchType
     } = req.query;
 
-    const start = startDate ? new Date(startDate) : new Date(new Date().setMonth(new Date().getMonth() - 3));
     const end = endDate ? new Date(endDate) : new Date();
+    const start = startDate ? new Date(startDate) : subMonths(end, 3);
+    const includeConfirmedBool = includeConfirmed === 'true';
     const minConf = parseFloat(minConfidence);
+
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+    const endBuffer = new Date(end);
+    endBuffer.setMonth(endBuffer.getMonth() + 1);
+    const endBufferStr = endBuffer.toISOString().split('T')[0];
+
+    const cards = new Set(['visaCal', 'max', 'isracard', 'amex']);
+
+    const confirmedDuplicatesResult = await client.query(
+      `SELECT transaction1_identifier, transaction1_vendor, transaction2_identifier, transaction2_vendor
+       FROM transaction_duplicates
+       WHERE is_confirmed = true`
+    );
+    const confirmedSet = new Set(
+      confirmedDuplicatesResult.rows.flatMap(row => {
+        const key1 = `${row.transaction1_identifier}||${row.transaction1_vendor}`;
+        const key2 = `${row.transaction2_identifier}||${row.transaction2_vendor}`;
+        return [key1, key2];
+      })
+    );
+
+    const transactionsResult = await client.query(
+      `SELECT
+        identifier,
+        vendor,
+        date,
+        price,
+        category,
+        parent_category,
+        account_number,
+        name
+      FROM transactions
+      WHERE date >= $1 AND date <= $2`,
+      [startStr, endBufferStr]
+    );
+
+    const transactions = transactionsResult.rows.map(row => ({
+      identifier: row.identifier,
+      vendor: row.vendor,
+      date: new Date(row.date),
+      dateStr: row.date,
+      price: parseFloat(row.price),
+      category: row.category,
+      parentCategory: row.parent_category,
+      accountNumber: row.account_number,
+      name: row.name || '',
+    }));
 
     const duplicates = [];
 
@@ -37,115 +87,104 @@ export default async function handler(req, res) {
     // These are the monthly debits from bank account to pay credit card bills
 
     if (!matchType || matchType === 'credit_card_payment') {
-      // Get monthly credit card totals per account_number
-      const ccMonthlyTotalsResult = await client.query(`
-        SELECT
-          TO_CHAR(date, 'YYYY-MM') as month,
-          vendor,
-          account_number,
-          SUM(ABS(price)) as total_spent,
-          COUNT(*) as transaction_count,
-          MIN(date) as first_transaction_date,
-          MAX(date) as last_transaction_date
-        FROM transactions
-        WHERE price < 0
-        AND category != 'Bank'
-        AND category != 'Income'
-        AND date >= $1 AND date <= $2
-        AND vendor IN ('visaCal', 'max', 'isracard', 'amex')
-        GROUP BY TO_CHAR(date, 'YYYY-MM'), vendor, account_number
-        HAVING SUM(ABS(price)) > 100
-        ORDER BY month DESC, vendor, account_number
-      `, [start, end]);
+      const cardGroups = new Map();
+      const sampleTransactionsMap = new Map();
 
-      // For each monthly credit card total, look for matching bank transactions in the following month
-      for (const ccTotal of ccMonthlyTotalsResult.rows) {
-        const monthDate = new Date(ccTotal.month + '-01');
+      transactions
+        .filter(txn => txn.price < 0 && txn.date >= start && txn.date <= end && cards.has(txn.vendor) && txn.category !== 'Bank' && txn.category !== 'Income')
+        .forEach(txn => {
+          const monthKey = txn.date.toISOString().slice(0, 7);
+          const key = `${monthKey}|${txn.vendor}|${txn.accountNumber || ''}`;
+          if (!cardGroups.has(key)) {
+            cardGroups.set(key, {
+              vendor: txn.vendor,
+              accountNumber: txn.accountNumber,
+              month: monthKey,
+              total: 0,
+              count: 0,
+              firstDate: txn.date,
+              lastDate: txn.date,
+            });
+            sampleTransactionsMap.set(key, []);
+          }
+          const group = cardGroups.get(key);
+          group.total += Math.abs(txn.price);
+          group.count += 1;
+          if (txn.date < group.firstDate) group.firstDate = txn.date;
+          if (txn.date > group.lastDate) group.lastDate = txn.date;
+
+          const samples = sampleTransactionsMap.get(key);
+          if (samples.length < 5) {
+            samples.push({
+              identifier: txn.identifier,
+              vendor: txn.vendor,
+              date: txn.dateStr,
+              name: txn.name,
+              price: Math.abs(txn.price),
+              accountNumber: txn.accountNumber,
+            });
+          }
+        });
+
+      const bankTransactions = transactions.filter(
+        txn => txn.price < 0 && txn.category === 'Bank'
+      );
+
+      for (const [key, group] of cardGroups.entries()) {
+        if (group.total <= 100) continue;
+        const amount = group.total;
+        const tolerance = Math.max(amount * 0.02, 10);
+
+        const [monthStr] = key.split('|');
+        const monthDate = new Date(`${monthStr}-01T00:00:00Z`);
         const nextMonthStart = new Date(monthDate);
         nextMonthStart.setMonth(nextMonthStart.getMonth() + 1);
         const nextMonthEnd = new Date(nextMonthStart);
         nextMonthEnd.setMonth(nextMonthEnd.getMonth() + 1);
 
-        const amount = parseFloat(ccTotal.total_spent);
-        const tolerance = Math.max(amount * 0.02, 10); // 2% tolerance or ₪10, whichever is larger
+        bankTransactions
+          .filter(txn => txn.date >= nextMonthStart && txn.date < nextMonthEnd)
+          .forEach(bankTxn => {
+            const bankAmount = Math.abs(bankTxn.price);
+            if (Math.abs(bankAmount - amount) > tolerance) return;
 
-        // Look for bank transactions matching this amount
-        const matchingBankTxns = await client.query(`
-          SELECT
-            identifier,
-            vendor,
-            date,
-            name,
-            price,
-            account_number
-          FROM transactions
-          WHERE price < 0
-          AND category = 'Bank'
-          AND date >= $1 AND date < $2
-          AND ABS(price) BETWEEN $3 AND $4
-          AND NOT EXISTS (
-            SELECT 1 FROM transaction_duplicates
-            WHERE (
-              (transaction1_identifier = identifier AND transaction1_vendor = vendor) OR
-              (transaction2_identifier = identifier AND transaction2_vendor = vendor)
-            )
-            AND is_confirmed = true
-          )
-        `, [nextMonthStart, nextMonthEnd, amount - tolerance, amount + tolerance]);
+            const key1 = `${bankTxn.identifier}||${bankTxn.vendor}`;
+            if (confirmedSet.has(key1)) return;
 
-        // Check if any credit card transactions from this total are already marked as duplicates
-        const ccTransactions = await client.query(`
-          SELECT identifier, vendor, date, name, price, account_number
-          FROM transactions
-          WHERE TO_CHAR(date, 'YYYY-MM') = $1
-          AND vendor = $2
-          AND account_number = $3
-          AND price < 0
-          AND category != 'Bank'
-          ORDER BY date ASC
-          LIMIT 5
-        `, [ccTotal.month, ccTotal.vendor, ccTotal.account_number]);
+            const amountDiff = Math.abs(bankAmount - amount);
+            const confidence = Math.max(0, 1 - amountDiff / amount);
+            if (confidence < minConf) return;
 
-        for (const bankTxn of matchingBankTxns.rows) {
-          const amountDiff = Math.abs(Math.abs(bankTxn.price) - amount);
-          const confidence = Math.max(0, 1 - (amountDiff / amount));
-
-          if (confidence >= minConf) {
             duplicates.push({
               type: 'credit_card_payment',
               confidence: parseFloat(confidence.toFixed(3)),
               creditCardTransaction: {
-                month: ccTotal.month,
-                vendor: ccTotal.vendor,
-                accountNumber: ccTotal.account_number,
+                month: group.month,
+                vendor: group.vendor,
+                accountNumber: group.accountNumber,
                 totalAmount: amount,
-                transactionCount: parseInt(ccTotal.transaction_count),
+                transactionCount: group.count,
                 dateRange: {
-                  start: ccTotal.first_transaction_date,
-                  end: ccTotal.last_transaction_date
+                  start: group.firstDate.toISOString(),
+                  end: group.lastDate.toISOString(),
                 },
-                sampleTransactions: ccTransactions.rows.map(tx => ({
-                  identifier: tx.identifier,
-                  vendor: tx.vendor,
-                  date: tx.date,
-                  name: tx.name,
-                  price: parseFloat(tx.price),
-                  accountNumber: tx.account_number
-                }))
+            sampleTransactions: sampleTransactionsMap.get(key).map(sample => ({
+              ...sample,
+              price: sample.price,
+            })),
               },
               bankTransaction: {
                 identifier: bankTxn.identifier,
                 vendor: bankTxn.vendor,
-                date: bankTxn.date,
+                date: bankTxn.dateStr,
                 name: bankTxn.name,
-                price: parseFloat(bankTxn.price),
-                accountNumber: bankTxn.account_number
+                price: bankTxn.price,
+                accountNumber: bankTxn.accountNumber,
               },
               amountDifference: parseFloat(amountDiff.toFixed(2)),
-              description: `Bank debit for ${ccTotal.vendor} credit card (${ccTotal.month})`
+              description: `Bank debit for ${group.vendor} credit card (${group.month})`,
             });
-          }
-        }
+          });
       }
     }
 
@@ -156,62 +195,37 @@ export default async function handler(req, res) {
     // Useful for rent, loan payments, investments
 
     if (!matchType || ['rent', 'investment', 'loan', 'transfer'].includes(matchType)) {
-      const similarAmountResult = await client.query(`
-        SELECT
-          t1.identifier as id1,
-          t1.vendor as vendor1,
-          t1.date as date1,
-          t1.name as name1,
-          t1.price as price1,
-          t1.category as cat1,
-          t1.account_number as acc1,
-          t2.identifier as id2,
-          t2.vendor as vendor2,
-          t2.date as date2,
-          t2.name as name2,
-          t2.price as price2,
-          t2.category as cat2,
-          t2.account_number as acc2,
-          ABS(t1.price - t2.price) as price_diff,
-          ABS((t1.date::timestamp - t2.date::timestamp) / INTERVAL '1 day') as days_apart
-        FROM transactions t1
-        INNER JOIN transactions t2 ON (
-          t1.identifier != t2.identifier
-          AND ABS(t1.price - t2.price) < GREATEST(ABS(t1.price) * 0.05, 20)
-          AND ABS((t1.date::timestamp - t2.date::timestamp) / INTERVAL '1 day') <= 7
-          AND t1.price < 0 AND t2.price < 0
-          AND ABS(t1.price) > 500
-        )
-        WHERE t1.date >= $1 AND t1.date <= $2
-        AND t2.date >= $1 AND t2.date <= $2
-        AND NOT EXISTS (
-          SELECT 1 FROM transaction_duplicates
-          WHERE (
-            (transaction1_identifier = t1.identifier AND transaction1_vendor = t1.vendor) OR
-            (transaction2_identifier = t1.identifier AND transaction2_vendor = t1.vendor)
-          )
-          AND is_confirmed = true
-        )
-        ORDER BY t1.date DESC, price_diff ASC
-        LIMIT 50
-      `, [start, end]);
+      const candidateTransactions = transactions
+        .filter(txn => txn.price < 0 && Math.abs(txn.price) > 500 && txn.date >= start && txn.date <= end)
+        .sort((a, b) => a.date - b.date);
 
-      for (const match of similarAmountResult.rows) {
-        const amountDiff = parseFloat(match.price_diff);
-        const amount = Math.abs(parseFloat(match.price1));
-        const daysApart = parseFloat(match.days_apart);
+      for (let i = 0; i < candidateTransactions.length; i++) {
+        const txn1 = candidateTransactions[i];
+        const amount1 = Math.abs(txn1.price);
+        const threshold = Math.max(amount1 * 0.05, 20);
 
-        // Calculate confidence based on amount similarity and time proximity
-        const amountSimilarity = 1 - (amountDiff / amount);
-        const timeProximity = 1 - (daysApart / 7);
-        const confidence = (amountSimilarity * 0.7 + timeProximity * 0.3);
+        for (let j = i + 1; j < candidateTransactions.length; j++) {
+          const txn2 = candidateTransactions[j];
+          const daysApart = Math.abs(differenceInCalendarDays(txn2.date, txn1.date));
+          if (daysApart > 7) break;
+          if (txn1.identifier === txn2.identifier && txn1.vendor === txn2.vendor) continue;
 
-        if (confidence >= minConf) {
-          // Infer match type based on category and transaction names
+          const amount2 = Math.abs(txn2.price);
+          const amountDiff = Math.abs(amount1 - amount2);
+          if (amountDiff >= threshold) continue;
+
+          const key1 = `${txn1.identifier}||${txn1.vendor}`;
+          const key2 = `${txn2.identifier}||${txn2.vendor}`;
+          if (confirmedSet.has(key1) || confirmedSet.has(key2)) continue;
+
+          const amountSimilarity = 1 - amountDiff / amount1;
+          const timeProximity = 1 - daysApart / 7;
+          const confidence = amountSimilarity * 0.7 + timeProximity * 0.3;
+          if (confidence < minConf) continue;
+
           let inferredType = 'manual';
-          const name1Lower = match.name1.toLowerCase();
-          const name2Lower = match.name2.toLowerCase();
-
+          const name1Lower = (txn1.name || '').toLowerCase();
+          const name2Lower = (txn2.name || '').toLowerCase();
           if (name1Lower.includes('שכירות') || name1Lower.includes('דיור') ||
               name2Lower.includes('שכירות') || name2Lower.includes('דיור')) {
             inferredType = 'rent';
@@ -223,33 +237,17 @@ export default async function handler(req, res) {
             inferredType = 'transfer';
           }
 
-          if (!matchType || matchType === inferredType) {
-            duplicates.push({
-              type: inferredType,
-              confidence: parseFloat(confidence.toFixed(3)),
-              transaction1: {
-                identifier: match.id1,
-                vendor: match.vendor1,
-                date: match.date1,
-                name: match.name1,
-                price: parseFloat(match.price1),
-                category: match.cat1,
-                accountNumber: match.acc1
-              },
-              transaction2: {
-                identifier: match.id2,
-                vendor: match.vendor2,
-                date: match.date2,
-                name: match.name2,
-                price: parseFloat(match.price2),
-                category: match.cat2,
-                accountNumber: match.acc2
-              },
-              amountDifference: parseFloat(amountDiff.toFixed(2)),
-              daysApart: parseFloat(daysApart.toFixed(1)),
-              description: `Similar amount transactions ${daysApart.toFixed(0)} days apart`
-            });
-          }
+          if (matchType && matchType !== inferredType && matchType !== 'manual') continue;
+
+          duplicates.push({
+            type: inferredType,
+            confidence: parseFloat(confidence.toFixed(3)),
+            transaction1: formatTxn(txn1),
+            transaction2: formatTxn(txn2),
+            amountDifference: parseFloat(amountDiff.toFixed(2)),
+            daysApart,
+            description: `Similar amount transactions ${daysApart} days apart`,
+          });
         }
       }
     }
@@ -259,7 +257,7 @@ export default async function handler(req, res) {
     // ============================================
     // Include already confirmed duplicates if requested
 
-    if (includeConfirmed === 'true') {
+    if (includeConfirmedBool) {
       const existingDuplicatesResult = await client.query(`
         SELECT
           td.id,
@@ -294,7 +292,7 @@ export default async function handler(req, res) {
         )
         WHERE t1.date >= $1 AND t1.date <= $2
         ORDER BY td.created_at DESC
-      `, [start, end]);
+      `, [startStr, endStr]);
 
       for (const dup of existingDuplicatesResult.rows) {
         duplicates.push({
@@ -328,7 +326,7 @@ export default async function handler(req, res) {
     }
 
     // Sort by confidence (highest first)
-    duplicates.sort((a, b) => b.confidence - a.confidence);
+    duplicates.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
 
     res.status(200).json({
       dateRange: { start, end },
@@ -345,4 +343,16 @@ export default async function handler(req, res) {
   } finally {
     client.release();
   }
+}
+
+function formatTxn(txn) {
+  return {
+    identifier: txn.identifier,
+    vendor: txn.vendor,
+    date: txn.dateStr,
+    name: txn.name,
+    price: parseFloat(txn.price.toFixed(2)),
+    category: txn.category || txn.parentCategory,
+    accountNumber: txn.accountNumber,
+  };
 }

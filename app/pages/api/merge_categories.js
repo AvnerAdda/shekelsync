@@ -15,15 +15,19 @@ const handler = createApiHandler({
   },
   query: async (req) => {
     const { sourceCategories, newCategoryName } = req.body;
-    
+    const trimmedName = newCategoryName.trim();
+    const placeholders = sourceCategories
+      .map((_, idx) => `$${idx + 2}`)
+      .join(', ');
+
     // Update all transactions from source categories to the new category
     return {
       sql: `
         UPDATE transactions 
         SET category = $1
-        WHERE category = ANY($2)
+        WHERE category IN (${placeholders})
       `,
-      params: [newCategoryName.trim(), sourceCategories]
+      params: [trimmedName, ...sourceCategories]
     };
   },
   transform: (result, req) => {
