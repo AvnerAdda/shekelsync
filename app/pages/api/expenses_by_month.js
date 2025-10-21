@@ -1,4 +1,5 @@
 import { createApiHandler } from "./utils/apiHandler";
+import { dialect } from "../../lib/sql-dialect.js";
 
 const handler = createApiHandler({
   validate: (req) => {
@@ -12,16 +13,22 @@ const handler = createApiHandler({
     const groupByYearBool = groupByYear === "true";
     const monthNumber = parseInt(month, 10);
 
+    const yearExpr = dialect.toChar("date", "YYYY");
+    const monthExpr = dialect.toChar("date", "MM");
+    const yearMonthExpr = dialect.toChar("date", "MM-YYYY");
+    const yearTrunc = dialect.dateTrunc("year", "date");
+    const monthTrunc = dialect.dateTrunc("month", "date");
+
     if (groupByYearBool) {
       return {
         sql: `
           SELECT
             SUM(price) AS amount,
-            TO_CHAR(date, 'YYYY') AS year,
-            DATE_TRUNC('year', date) AS year_sort
+            ${yearExpr} AS year,
+            ${yearTrunc} AS year_sort
           FROM transactions
           WHERE category != 'Bank'
-          GROUP BY TO_CHAR(date, 'YYYY'), DATE_TRUNC('year', date)
+          GROUP BY ${yearExpr}, ${yearTrunc}
           ORDER BY year_sort DESC
           LIMIT $1
         `,
@@ -33,17 +40,17 @@ const handler = createApiHandler({
       sql: `
         SELECT 
           SUM(price) AS amount,
-          TO_CHAR(date, 'YYYY') AS year,
-          TO_CHAR(date, 'MM') AS month,
-          TO_CHAR(date, 'MM-YYYY') AS year_month,
-          DATE_TRUNC('month', date) AS year_sort
+          ${yearExpr} AS year,
+          ${monthExpr} AS month,
+          ${yearMonthExpr} AS year_month,
+          ${monthTrunc} AS year_sort
         FROM transactions
         WHERE category != 'Bank'
         GROUP BY 
-          TO_CHAR(date, 'YYYY'),
-          TO_CHAR(date, 'MM'),
-          TO_CHAR(date, 'MM-YYYY'),
-          DATE_TRUNC('month', date)
+          ${yearExpr},
+          ${monthExpr},
+          ${yearMonthExpr},
+          ${monthTrunc}
         ORDER BY year_sort DESC
         LIMIT $1
       `,

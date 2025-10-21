@@ -1,4 +1,6 @@
 import { getDB } from '../db.js';
+import { subMonths } from 'date-fns';
+import { dialect } from '../../../lib/sql-dialect.js';
 
 /**
  * Investment Portfolio Summary API
@@ -13,6 +15,8 @@ export default async function handler(req, res) {
 
   try {
     // Get all active accounts with their latest holdings
+    const booleanTrue = dialect.useSqlite ? 1 : 'TRUE';
+
     const accountsQuery = `
       SELECT
         ia.id,
@@ -31,14 +35,15 @@ export default async function handler(req, res) {
         ih.asset_name,
         ih.asset_type
       FROM investment_accounts ia
-      LEFT JOIN LATERAL (
-        SELECT *
-        FROM investment_holdings
-        WHERE account_id = ia.id
-        ORDER BY as_of_date DESC
-        LIMIT 1
-      ) ih ON true
-      WHERE ia.is_active = true
+      LEFT JOIN investment_holdings ih
+        ON ih.id = (
+          SELECT ih2.id
+          FROM investment_holdings ih2
+          WHERE ih2.account_id = ia.id
+          ORDER BY ih2.as_of_date DESC
+          LIMIT 1
+        )
+      WHERE ia.is_active = ${booleanTrue}
       ORDER BY ia.investment_category, ia.account_type, ia.account_name
     `;
 
@@ -66,7 +71,7 @@ export default async function handler(req, res) {
         ia.account_type
       FROM investment_assets iasset
       JOIN investment_accounts ia ON iasset.account_id = ia.id
-      WHERE iasset.is_active = true AND ia.is_active = true
+      WHERE iasset.is_active = ${booleanTrue} AND ia.is_active = ${booleanTrue}
       ORDER BY ia.account_name, iasset.asset_name
     `;
 
@@ -244,27 +249,41 @@ export default async function handler(req, res) {
       : 0;
 
     // Get historical data for charts (last 12 months)
-    const historyQuery = `
-      SELECT 
+    const twelveMonthsAgo = subMonths(new Date(), 12).toISOString().split('T')[0];
+    const historyRowsResult = await client.query(
+      `SELECT 
         ihh.snapshot_date,
-        SUM(ihh.total_value) as total_value,
-        SUM(ihh.cost_basis) as total_cost
+        ihh.total_value,
+        ihh.cost_basis
       FROM investment_holdings_history ihh
       JOIN investment_accounts ia ON ihh.account_id = ia.id
       WHERE ia.is_active = true
-        AND ihh.snapshot_date >= CURRENT_DATE - INTERVAL '12 months'
-      GROUP BY ihh.snapshot_date
-      ORDER BY ihh.snapshot_date ASC
-    `;
+        AND ihh.snapshot_date >= $1
+      ORDER BY ihh.snapshot_date ASC`,
+      [twelveMonthsAgo]
+    );
 
-    const historyResult = await client.query(historyQuery);
+    const historyByDate = new Map();
+    historyRowsResult.rows.forEach(row => {
+      const dateKey = row.snapshot_date;
+      const totalValue = parseFloat(row.total_value || 0);
+      const totalCost = parseFloat(row.cost_basis || 0);
+      if (!historyByDate.has(dateKey)) {
+        historyByDate.set(dateKey, { totalValue: 0, totalCost: 0 });
+      }
+      const entry = historyByDate.get(dateKey);
+      entry.totalValue += totalValue;
+      entry.totalCost += totalCost;
+    });
 
-    const timeline = historyResult.rows.map(row => ({
-      date: row.snapshot_date,
-      totalValue: parseFloat(row.total_value),
-      totalCost: row.total_cost ? parseFloat(row.total_cost) : 0,
-      gainLoss: parseFloat(row.total_value) - (row.total_cost ? parseFloat(row.total_cost) : 0),
-    }));
+    const timeline = Array.from(historyByDate.entries())
+      .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
+      .map(([date, values]) => ({
+        date,
+        totalValue: values.totalValue,
+        totalCost: values.totalCost,
+        gainLoss: values.totalValue - values.totalCost,
+      }));
 
     // Enhanced account types with Israeli financial terminology
     const accountTypeLabels = {

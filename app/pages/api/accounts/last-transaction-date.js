@@ -20,12 +20,7 @@ export default async function handler(req, res) {
   try {
     // Get the most recent transaction date for this vendor
     const result = await client.query(`
-      SELECT MAX(
-        CASE
-          WHEN transaction_datetime IS NOT NULL THEN transaction_datetime
-          ELSE date::timestamp
-        END
-      ) as last_transaction_date
+      SELECT MAX(COALESCE(transaction_datetime, date)) as last_transaction_date
       FROM transactions
       WHERE vendor = $1`,
       [vendor]

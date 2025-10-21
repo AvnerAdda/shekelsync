@@ -1,5 +1,6 @@
 import { getDB } from '../db.js';
 import { subMonths } from 'date-fns';
+import { dialect } from '../../../lib/sql-dialect.js';
 
 /**
  * Smart budget recommendations based on historical spending patterns
@@ -33,41 +34,162 @@ export default async function handler(req, res) {
   }
 }
 
-async function generateBudgetRecommendations(client, monthsHistory, bufferPercentage) {
-  try {
-    const startDate = subMonths(new Date(), monthsHistory);
+async function fetchCategoryMonthlyTotals(client, startDateStr) {
+  if (!dialect.useSqlite) {
+    return [];
+  }
 
-    // 1. Calculate average monthly spending per category
-    const categoryAverages = await client.query(
-      `WITH monthly_spending AS (
-        SELECT
-          parent_category,
-          subcategory,
-          DATE_TRUNC('month', date) as month,
-          SUM(ABS(price)) as monthly_total
-        FROM transactions
-        WHERE date >= $1
-        AND price < 0
-        AND parent_category IS NOT NULL
-        AND parent_category NOT IN ('Bank', 'Income')
-        GROUP BY parent_category, subcategory, DATE_TRUNC('month', date)
-      )
+  const result = await client.query(
+    `
       SELECT
         parent_category,
         subcategory,
-        COUNT(DISTINCT month) as months_with_data,
-        AVG(monthly_total) as avg_monthly,
-        STDDEV(monthly_total) as std_dev,
-        MIN(monthly_total) as min_monthly,
-        MAX(monthly_total) as max_monthly,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY monthly_total) as median_monthly,
-        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY monthly_total) as p75_monthly
-      FROM monthly_spending
-      GROUP BY parent_category, subcategory
-      HAVING COUNT(DISTINCT month) >= 3
-      ORDER BY avg_monthly DESC`,
-      [startDate]
-    );
+        strftime('%Y-%m-01', date) AS month,
+        SUM(ABS(price)) AS monthly_total
+      FROM transactions
+      WHERE date >= $1
+        AND price < 0
+        AND parent_category IS NOT NULL
+        AND parent_category NOT IN ('Bank', 'Income')
+      GROUP BY parent_category, subcategory, month
+    `,
+    [startDateStr]
+  );
+
+  return result.rows.map(row => ({
+    parent_category: row.parent_category,
+    subcategory: row.subcategory,
+    month: row.month,
+    monthly_total: parseFloat(row.monthly_total),
+  }));
+}
+
+async function fetchCategoryAggregatesPostgres(client, startDateStr) {
+  const result = await client.query(
+    `WITH monthly_spending AS (
+      SELECT
+        parent_category,
+        subcategory,
+        DATE_TRUNC('month', date) AS month,
+        SUM(ABS(price)) AS monthly_total
+      FROM transactions
+      WHERE date >= $1::date
+        AND price < 0
+        AND parent_category IS NOT NULL
+        AND parent_category NOT IN ('Bank', 'Income')
+      GROUP BY parent_category, subcategory, DATE_TRUNC('month', date)
+    )
+    SELECT
+      parent_category,
+      subcategory,
+      COUNT(DISTINCT month) AS months_with_data,
+      AVG(monthly_total) AS avg_monthly,
+      STDDEV(monthly_total) AS std_dev,
+      MIN(monthly_total) AS min_monthly,
+      MAX(monthly_total) AS max_monthly,
+      PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY monthly_total) AS median_monthly,
+      PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY monthly_total) AS p75_monthly
+    FROM monthly_spending
+    GROUP BY parent_category, subcategory
+    HAVING COUNT(DISTINCT month) >= 3
+    ORDER BY avg_monthly DESC`,
+    [startDateStr]
+  );
+
+  return result.rows.map(row => ({
+    parent_category: row.parent_category,
+    subcategory: row.subcategory,
+    months_with_data: parseInt(row.months_with_data),
+    avg_monthly: parseFloat(row.avg_monthly),
+    std_dev: parseFloat(row.std_dev || 0),
+    min_monthly: parseFloat(row.min_monthly),
+    max_monthly: parseFloat(row.max_monthly),
+    median_monthly: parseFloat(row.median_monthly),
+    p75_monthly: parseFloat(row.p75_monthly),
+  }));
+}
+
+function computeCategoryStats(rows) {
+  const groups = new Map();
+
+  rows.forEach(row => {
+    const key = `${row.parent_category || ''}::${row.subcategory || ''}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        parent_category: row.parent_category,
+        subcategory: row.subcategory,
+        totalsByMonth: new Map(),
+      });
+    }
+    const group = groups.get(key);
+    group.totalsByMonth.set(row.month, row.monthly_total);
+  });
+
+  const results = [];
+
+  for (const group of groups.values()) {
+    const monthlyTotals = Array.from(group.totalsByMonth.values());
+    if (monthlyTotals.length < 3) continue;
+
+    const stats = calculateStats(monthlyTotals);
+    results.push({
+      parent_category: group.parent_category,
+      subcategory: group.subcategory,
+      months_with_data: monthlyTotals.length,
+      avg_monthly: stats.average,
+      std_dev: stats.stdDev,
+      min_monthly: stats.min,
+      max_monthly: stats.max,
+      median_monthly: stats.percentile50,
+      p75_monthly: stats.percentile75,
+    });
+  }
+
+  return results.sort((a, b) => b.avg_monthly - a.avg_monthly);
+}
+
+function calculateStats(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const count = sorted.length;
+  const sum = sorted.reduce((acc, val) => acc + val, 0);
+  const average = sum / count;
+  const min = sorted[0];
+  const max = sorted[sorted.length - 1];
+
+  const variance =
+    count > 1
+      ? sorted.reduce((acc, val) => acc + Math.pow(val - average, 2), 0) / (count - 1)
+      : 0;
+  const stdDev = Math.sqrt(variance);
+
+  const percentile = (p) => {
+    if (count === 0) return 0;
+    const index = (count - 1) * p;
+    const lower = Math.floor(index);
+    const upper = Math.ceil(index);
+    if (lower === upper) return sorted[lower];
+    return sorted[lower] + (sorted[upper] - sorted[lower]) * (index - lower);
+  };
+
+  return {
+    average,
+    min,
+    max,
+    stdDev,
+    percentile50: percentile(0.5),
+    percentile75: percentile(0.75),
+  };
+}
+
+async function generateBudgetRecommendations(client, monthsHistory, bufferPercentage) {
+  try {
+    const startDate = subMonths(new Date(), monthsHistory);
+    const startDateStr = startDate.toISOString().split('T')[0];
+
+    const categoryData = await fetchCategoryMonthlyTotals(client, startDateStr);
+    const categoryAverages = dialect.useSqlite
+      ? computeCategoryStats(categoryData)
+      : await fetchCategoryAggregatesPostgres(client, startDateStr);
 
     // 2. Get existing budgets to compare
     const existingBudgets = await client.query(
@@ -84,7 +206,7 @@ async function generateBudgetRecommendations(client, monthsHistory, bufferPercen
     // 3. Generate recommendations
     const recommendations = [];
 
-    for (const row of categoryAverages.rows) {
+    for (const row of categoryAverages) {
       const category = row.subcategory || row.parent_category;
       const avgMonthly = parseFloat(row.avg_monthly);
       const stdDev = parseFloat(row.std_dev || 0);

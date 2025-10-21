@@ -32,7 +32,7 @@ export default async function handler(req, res) {
         confidence
        FROM merchant_catalog
        WHERE is_active = true
-       AND $1 ILIKE '%' || merchant_pattern || '%'
+       AND LOWER($1) LIKE '%' || LOWER(merchant_pattern) || '%'
        ORDER BY
          LENGTH(merchant_pattern) DESC,  -- Longer patterns first (more specific)
          confidence DESC
@@ -156,7 +156,7 @@ export async function bulkCategorizeTransactions(client) {
            auto_categorized = true,
            confidence_score = $3
          WHERE
-           LOWER(name) LIKE '%' || $4 || '%'
+           LOWER(name) LIKE '%' || LOWER($4) || '%'
            AND category NOT IN ('Bank', 'Income')
            AND (
              parent_category IS NULL

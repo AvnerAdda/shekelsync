@@ -5,11 +5,30 @@ const { app } = require('electron');
 require('module').globalPaths.push(path.join(__dirname, '..', 'app', 'node_modules'));
 
 const { Pool } = require(path.join(__dirname, '..', 'app', 'node_modules', 'pg'));
+const SqliteDatabase = require(path.join(__dirname, '..', 'app', 'node_modules', 'better-sqlite3'));
+
+const PLACEHOLDER_REGEX = /\$(\d+)/g;
+const SELECT_LIKE_REGEX = /^\s*(WITH|SELECT|PRAGMA)/i;
+const RETURNING_REGEX = /\bRETURNING\b/i;
+
+function shouldUseSqlite() {
+  if (process.env.USE_SQLITE === 'true') return true;
+  if (process.env.USE_SQLCIPHER === 'true') return true;
+  if (process.env.SQLITE_DB_PATH) return true;
+  if (process.env.SQLCIPHER_DB_PATH) return true;
+  return false;
+}
+
+function replacePlaceholders(sql) {
+  return sql.replace(PLACEHOLDER_REGEX, '?');
+}
 
 class DatabaseManager {
   constructor() {
     this.pool = null;
     this.isConnected = false;
+    this.mode = shouldUseSqlite() ? 'sqlite' : 'postgres';
+    this.sqliteDb = null;
   }
 
   async initialize(config = null) {
@@ -22,30 +41,46 @@ class DatabaseManager {
         host: dbConfig.host,
         database: dbConfig.database,
         port: dbConfig.port,
-        user: dbConfig.user
-      });
-
-      this.pool = new Pool({
         user: dbConfig.user,
-        host: dbConfig.host,
-        database: dbConfig.database,
-        password: dbConfig.password,
-        port: dbConfig.port,
-        ssl: false,
-        max: 10, // Maximum number of clients in the pool
-        idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-        connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+        mode: this.mode
       });
 
-      // Test the connection
-      const client = await this.pool.connect();
-      console.log('Database connection successful');
+      if (this.mode === 'sqlite') {
+        const dbPath =
+          process.env.SQLITE_DB_PATH ||
+          process.env.SQLCIPHER_DB_PATH ||
+          path.join(app.getPath('userData'), 'clarify.sqlite');
 
-      // Test query
-      const result = await client.query('SELECT NOW()');
-      console.log('Database test query result:', result.rows[0]);
+        this.sqliteDb = new SqliteDatabase(dbPath, { fileMustExist: true });
+        if (process.env.SQLCIPHER_KEY) {
+          console.warn(
+            'SQLCIPHER_KEY is set but encryption is not enabled. Remove the key or switch back to SQLCipher.'
+          );
+        }
+        this.sqliteDb.pragma('foreign_keys = ON');
+        this.sqliteDb.pragma('journal_mode = WAL');
 
-      client.release();
+        // Simple sanity check
+        this.sqliteDb.prepare('SELECT 1').get();
+      } else {
+        this.pool = new Pool({
+          user: dbConfig.user,
+          host: dbConfig.host,
+          database: dbConfig.database,
+          password: dbConfig.password,
+          port: dbConfig.port,
+          ssl: false,
+          max: 10,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 2000,
+        });
+
+        const client = await this.pool.connect();
+        const result = await client.query('SELECT NOW()');
+        console.log('Database test query result:', result.rows[0]);
+        client.release();
+      }
+
       this.isConnected = true;
 
       return { success: true, message: 'Database connected successfully' };
@@ -72,24 +107,48 @@ class DatabaseManager {
   }
 
   async getClient() {
-    if (!this.pool || !this.isConnected) {
+    if (!this.isConnected) {
       throw new Error('Database not initialized. Call initialize() first.');
     }
 
-    try {
-      return await this.pool.connect();
-    } catch (error) {
-      console.error('Failed to get database client:', error);
-      throw error;
+    if (this.mode === 'sqlite') {
+      return {
+        query: (text, params = []) => this.query(text, params),
+        release: () => {},
+      };
     }
+
+    return await this.pool.connect();
   }
 
   async query(text, params = []) {
-    if (!this.pool || !this.isConnected) {
+    if (!this.isConnected) {
       throw new Error('Database not initialized. Call initialize() first.');
     }
 
-    const client = await this.getClient();
+    if (this.mode === 'sqlite') {
+      const convertedSql = replacePlaceholders(text);
+      const stmt = this.sqliteDb.prepare(convertedSql);
+      const normalizedParams = params.map((value) => {
+        if (value instanceof Date) return value.toISOString();
+        if (value === true) return 1;
+        if (value === false) return 0;
+        return value;
+      });
+      const trimmed = convertedSql.trim();
+      if (SELECT_LIKE_REGEX.test(trimmed) || RETURNING_REGEX.test(convertedSql)) {
+        const rows = stmt.all(normalizedParams);
+        return { rows, rowCount: rows.length };
+      }
+      if (/^\s*(BEGIN|COMMIT|ROLLBACK)/i.test(trimmed)) {
+        this.sqliteDb.exec(convertedSql);
+        return { rows: [], rowCount: 0 };
+      }
+      const info = stmt.run(normalizedParams);
+      return { rows: [], rowCount: info.changes ?? 0 };
+    }
+
+    const client = await this.pool.connect();
     try {
       const result = await client.query(text, params);
       return result;
@@ -111,6 +170,15 @@ class DatabaseManager {
   }
 
   async close() {
+    if (this.mode === 'sqlite') {
+      if (this.sqliteDb) {
+        this.sqliteDb.close();
+      }
+      this.sqliteDb = null;
+      this.isConnected = false;
+      return;
+    }
+
     if (this.pool) {
       console.log('Closing database connection pool...');
       await this.pool.end();
@@ -120,6 +188,18 @@ class DatabaseManager {
 
   // Get database statistics for debugging
   async getStats() {
+    if (this.mode === 'sqlite') {
+      if (!this.sqliteDb) {
+        return { error: 'SQLite connection not initialized' };
+      }
+      return {
+        totalCount: 1,
+        idleCount: 0,
+        waitingCount: 0,
+        isConnected: this.isConnected
+      };
+    }
+
     if (!this.pool) {
       return { error: 'Pool not initialized' };
     }

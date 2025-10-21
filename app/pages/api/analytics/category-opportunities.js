@@ -17,70 +17,22 @@ export default async function handler(req, res) {
 
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - monthsInt);
-
-    // Get spending by subcategory with transaction details
-    const spendingQuery = `
-      WITH monthly_spending AS (
-        SELECT 
-          cd.id as category_definition_id,
-          COALESCE(cd.name, cd.name_en, 'Unknown') as category_name,
-          COALESCE(parent.id, cd.id) as parent_id,
-          COALESCE(parent.name, parent.name_en, cd.name, cd.name_en) as parent_name,
-          DATE_TRUNC('month', t.date) as month,
-          COUNT(*) as transaction_count,
-          SUM(ABS(t.price)) as total_amount,
-          AVG(ABS(t.price)) as avg_amount,
-          STDDEV(ABS(t.price)) as stddev_amount,
-          MIN(ABS(t.price)) as min_amount,
-          MAX(ABS(t.price)) as max_amount
-        FROM transactions t
-        INNER JOIN category_definitions cd ON t.category_definition_id = cd.id
-        LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
-        WHERE t.date >= $1
-          AND t.price < 0
-          AND cd.category_type = 'expense'
-          AND cd.is_active = true
-        GROUP BY cd.id, cd.name, cd.name_en, parent.id, parent.name, parent.name_en, DATE_TRUNC('month', t.date)
-      ),
-      subcategory_summary AS (
-        SELECT 
-          category_definition_id,
-          category_name,
-          parent_id,
-          parent_name,
-          COUNT(DISTINCT month) as months_active,
-          SUM(transaction_count) as total_transactions,
-          AVG(total_amount) as avg_monthly_spending,
-          STDDEV(total_amount) as spending_variance,
-          SUM(total_amount) as total_spending,
-          AVG(avg_amount) as avg_transaction_amount,
-          MAX(max_amount) as highest_transaction
-        FROM monthly_spending
-        GROUP BY category_definition_id, category_name, parent_id, parent_name
-      )
-      SELECT 
-        ss.*,
-        CAST(COALESCE(cas.actionability_level, 'medium') AS TEXT) as actionability_level
-      FROM subcategory_summary ss
-      LEFT JOIN category_actionability_settings cas 
-        ON ss.category_definition_id = cas.category_definition_id
-      WHERE ss.total_transactions >= $2
-        AND ss.avg_monthly_spending > 0
-      ORDER BY ss.total_spending DESC;
-    `;
-
-    const spendingResult = await pool.query(spendingQuery, [startDate, minTxInt]);
+    const startDateStr = startDate.toISOString().split('T')[0];
 
     // Get transaction details for outlier detection
     const transactionsQuery = `
       SELECT 
         cd.id as category_definition_id,
+        COALESCE(cd.name, cd.name_en, 'Unknown') as category_name,
+        COALESCE(parent.id, cd.id) as parent_id,
+        COALESCE(parent.name, parent.name_en, cd.name, cd.name_en) as parent_name,
         t.date,
         ABS(t.price) as amount,
         t.vendor as merchant_name,
         t.name as description
       FROM transactions t
       INNER JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
       WHERE t.date >= $1
         AND t.price < 0
         AND cd.category_type = 'expense'
@@ -88,14 +40,28 @@ export default async function handler(req, res) {
       ORDER BY t.date DESC;
     `;
 
-    const transactionsResult = await pool.query(transactionsQuery, [startDate]);
+    const transactionsResult = await pool.query(transactionsQuery, [startDateStr]);
+
+    const actionabilityResult = await pool.query(
+      `SELECT category_definition_id, actionability_level
+       FROM category_actionability_settings`
+    );
+    const actionabilityMap = new Map(
+      actionabilityResult.rows.map(row => [
+        row.category_definition_id,
+        row.actionability_level || 'medium',
+      ])
+    );
+
+    const categorySummaries = calculateCategorySummaries(
+      transactionsResult.rows,
+      minTxInt,
+      actionabilityMap
+    );
 
     // Process opportunities
-    const opportunities = spendingResult.rows.map(subcategory => {
-      // Get transactions for this subcategory
-      const subTransactions = transactionsResult.rows.filter(
-        t => t.category_definition_id === subcategory.category_definition_id
-      );
+    const opportunities = categorySummaries.map(subcategory => {
+      const subTransactions = subcategory.transactions;
 
       // Detect outliers (transactions > 2 standard deviations from mean)
       const outliers = detectOutliers(subTransactions, subcategory.avg_transaction_amount);
@@ -175,6 +141,74 @@ export default async function handler(req, res) {
     console.error('Error analyzing category opportunities:', error);
     res.status(500).json({ error: 'Failed to analyze opportunities', details: error.message });
   }
+}
+
+function calculateCategorySummaries(transactions, minTransactions, actionabilityMap) {
+  const categories = new Map();
+
+  transactions.forEach(txn => {
+    const categoryId = txn.category_definition_id;
+    if (!categories.has(categoryId)) {
+      categories.set(categoryId, {
+        category_definition_id: categoryId,
+        category_name: txn.category_name,
+        parent_id: txn.parent_id,
+        parent_name: txn.parent_name,
+        actionability_level: actionabilityMap.get(categoryId) || 'medium',
+        transactions: [],
+        total_spending: 0,
+        total_transactions: 0,
+        highest_transaction: 0,
+        monthTotals: new Map(),
+      });
+    }
+
+    const summary = categories.get(categoryId);
+    summary.transactions.push(txn);
+    summary.total_spending += txn.amount;
+    summary.total_transactions += 1;
+    summary.highest_transaction = Math.max(summary.highest_transaction, txn.amount);
+
+    const monthKey = new Date(txn.date).toISOString().slice(0, 7);
+    summary.monthTotals.set(
+      monthKey,
+      (summary.monthTotals.get(monthKey) || 0) + txn.amount
+    );
+  });
+
+  const summaries = [];
+
+  categories.forEach(summary => {
+    const monthsActive = summary.monthTotals.size;
+    if (summary.total_transactions < minTransactions || monthsActive === 0) {
+      return;
+    }
+
+    const avgMonthlySpending = summary.total_spending / monthsActive;
+    const monthValues = Array.from(summary.monthTotals.values());
+    const spendingVariance = calculateStdDev(monthValues);
+    const avgTransactionAmount = summary.total_spending / summary.total_transactions;
+
+    summaries.push({
+      ...summary,
+      months_active: monthsActive,
+      avg_monthly_spending: avgMonthlySpending,
+      spending_variance: spendingVariance,
+      avg_transaction_amount: avgTransactionAmount,
+      highest_transaction: summary.highest_transaction,
+    });
+  });
+
+  summaries.sort((a, b) => b.total_spending - a.total_spending);
+  return summaries;
+}
+
+function calculateStdDev(values) {
+  if (!values || values.length === 0) return 0;
+  const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
+  const variance =
+    values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+  return Math.sqrt(variance);
 }
 
 /**

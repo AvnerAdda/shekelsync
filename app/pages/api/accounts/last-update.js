@@ -18,11 +18,17 @@ export default async function handler(req, res) {
       FROM vendor_credentials vc
       LEFT JOIN (
         SELECT
-          vendor,
-          MAX(created_at) FILTER (WHERE status = 'success') as last_successful_scrape,
-          (array_agg(status ORDER BY created_at DESC))[1] as status
-        FROM scrape_events
-        GROUP BY vendor
+          se.vendor,
+          MAX(CASE WHEN se.status = 'success' THEN se.created_at ELSE NULL END) as last_successful_scrape,
+          (
+            SELECT se2.status
+            FROM scrape_events se2
+            WHERE se2.vendor = se.vendor
+            ORDER BY se2.created_at DESC
+            LIMIT 1
+          ) as status
+        FROM scrape_events se
+        GROUP BY se.vendor
       ) last_scrapes ON vc.vendor = last_scrapes.vendor
       ORDER BY vc.nickname ASC
     `);

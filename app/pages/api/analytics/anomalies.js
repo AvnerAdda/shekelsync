@@ -79,66 +79,75 @@ async function detectAnomalies(client) {
   const anomalies = [];
 
   try {
-    // Step 1: Calculate spending patterns for each category
-    await calculateSpendingPatterns(client);
+    const now = new Date();
+    const sixMonthsAgo = subMonths(now, 6);
+    const oneMonthAgo = subMonths(now, 1);
+    const sixMonthsAgoStr = sixMonthsAgo.toISOString().split('T')[0];
 
-    // Step 2: Detect unusual amounts (> 2 standard deviations from mean)
-    const unusualAmounts = await client.query(
-      `WITH category_stats AS (
-        SELECT
-          parent_category,
-          subcategory,
-          AVG(ABS(price::numeric)) as avg_amount,
-          STDDEV(ABS(price::numeric)) as std_dev
-        FROM transactions
-        WHERE date >= $1::date
+    // Load transactions for analysis
+    const transactionsResult = await client.query(
+      `SELECT
+        identifier,
+        vendor,
+        name,
+        date,
+        parent_category,
+        subcategory,
+        ABS(price) as amount
+      FROM transactions
+      WHERE date >= $1
         AND price < 0
         AND parent_category IS NOT NULL
-        AND parent_category NOT IN ('Bank', 'Income')
-        GROUP BY parent_category, subcategory
-        HAVING COUNT(*) >= 5
-      )
-      SELECT
-        t.identifier,
-        t.vendor,
-        t.name,
-        t.parent_category,
-        t.subcategory,
-        ABS(t.price::numeric) as amount,
-        cs.avg_amount as expected_amount,
-        cs.std_dev,
-        ((ABS(t.price::numeric) - cs.avg_amount) / NULLIF(cs.std_dev, 0)) as z_score
-      FROM transactions t
-      JOIN category_stats cs ON
-        t.parent_category = cs.parent_category
-        AND (t.subcategory = cs.subcategory OR (t.subcategory IS NULL AND cs.subcategory IS NULL))
-      WHERE t.date >= $1::date
-      AND t.price < 0
-      AND cs.std_dev > 0
-      AND ABS((ABS(t.price::numeric) - cs.avg_amount) / cs.std_dev) > 2
-      ORDER BY z_score DESC
-      LIMIT 50`,
-      [subMonths(new Date(), 1).toISOString().split('T')[0]]
+        AND parent_category NOT IN ('Bank', 'Income')`,
+      [sixMonthsAgoStr]
     );
 
-    // Insert unusual amount anomalies
-    for (const row of unusualAmounts.rows) {
-      const deviation = ((row.amount - row.expected_amount) / row.expected_amount * 100).toFixed(1);
+    const transactions = transactionsResult.rows.map(row => ({
+      identifier: row.identifier,
+      vendor: row.vendor,
+      name: row.name,
+      date: new Date(row.date),
+      parent_category: row.parent_category,
+      subcategory: row.subcategory,
+      amount: parseFloat(row.amount),
+    }));
 
+    // Step 1: Calculate spending patterns for each category
+    await calculateSpendingPatterns(client, transactions);
+
+    // Step 2: Detect unusual amounts (> 2 standard deviations from mean)
+    const statsByCategory = computeTransactionStats(transactions);
+    const existingAnomaliesResult = await client.query(
+      `SELECT transaction_identifier, transaction_vendor
+       FROM spending_anomalies
+       WHERE anomaly_type = 'unusual_amount'`
+    );
+    const existingAnomalies = new Set(
+      existingAnomaliesResult.rows.map(
+        row => `${row.transaction_identifier}||${row.transaction_vendor}`
+      )
+    );
+
+    for (const txn of transactions) {
+      if (txn.date < oneMonthAgo) continue;
+      const key = `${txn.parent_category}||${txn.subcategory || ''}`;
+      const stats = statsByCategory.get(key);
+      if (!stats || stats.count < 5 || stats.stdDev === 0) {
+        continue;
+      }
+
+      const zScore = (txn.amount - stats.mean) / stats.stdDev;
+      if (Math.abs(zScore) <= 2) {
+        continue;
+      }
+
+      const deviation = ((txn.amount - stats.mean) / stats.mean) * 100;
       const severity =
-        Math.abs(row.z_score) > 3 ? 'high' :
-        Math.abs(row.z_score) > 2.5 ? 'medium' : 'low';
+        Math.abs(zScore) > 3 ? 'high' :
+        Math.abs(zScore) > 2.5 ? 'medium' : 'low';
 
-      // Check if anomaly already exists
-      const existing = await client.query(
-        `SELECT id FROM spending_anomalies
-         WHERE transaction_identifier = $1
-         AND transaction_vendor = $2
-         AND anomaly_type = 'unusual_amount'`,
-        [row.identifier, row.vendor]
-      );
-
-      if (existing.rowCount === 0) {
+      const anomalyKey = `${txn.identifier}||${txn.vendor}`;
+      if (!existingAnomalies.has(anomalyKey)) {
         await client.query(
           `INSERT INTO spending_anomalies
            (transaction_identifier, transaction_vendor, anomaly_type,
@@ -146,107 +155,74 @@ async function detectAnomalies(client) {
             deviation_percentage, severity)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [
-            row.identifier,
-            row.vendor,
+            txn.identifier,
+            txn.vendor,
             'unusual_amount',
-            row.parent_category,
-            row.subcategory,
-            parseFloat(row.expected_amount),
-            parseFloat(row.amount),
-            parseFloat(deviation),
-            severity
+            txn.parent_category,
+            txn.subcategory,
+            stats.mean,
+            txn.amount,
+            deviation,
+            severity,
           ]
         );
-
-        anomalies.push({
-          type: 'unusual_amount',
-          transaction: row.name,
-          category: row.parent_category,
-          subcategory: row.subcategory,
-          amount: parseFloat(row.amount),
-          expected: parseFloat(row.expected_amount),
-          deviation: parseFloat(deviation),
-          severity
-        });
+        existingAnomalies.add(anomalyKey);
       }
-    }
 
-    // Step 3: Detect category spending spikes (month-over-month)
-    const categorySpikes = await client.query(
-      `WITH monthly_spending AS (
-        SELECT
-          parent_category,
-          DATE_TRUNC('month', date::timestamp) as month,
-          SUM(ABS(price::numeric)) as monthly_total
-        FROM transactions
-        WHERE date >= $1::date
-        AND price < 0
-        AND parent_category IS NOT NULL
-        AND parent_category NOT IN ('Bank', 'Income')
-        GROUP BY parent_category, DATE_TRUNC('month', date::timestamp)
-      ),
-      category_avg AS (
-        SELECT
-          parent_category,
-          AVG(monthly_total) as avg_monthly,
-          STDDEV(monthly_total) as std_dev
-        FROM monthly_spending
-        GROUP BY parent_category
-        HAVING COUNT(*) >= 3
-      )
-      SELECT
-        ms.parent_category,
-        ms.month,
-        ms.monthly_total,
-        ca.avg_monthly,
-        ((ms.monthly_total - ca.avg_monthly) / ca.avg_monthly * 100) as deviation_pct
-      FROM monthly_spending ms
-      JOIN category_avg ca ON ms.parent_category = ca.parent_category
-      WHERE ms.month >= DATE_TRUNC('month', $2::timestamp)
-      AND ms.monthly_total > ca.avg_monthly * 1.3
-      ORDER BY deviation_pct DESC`,
-      [subMonths(new Date(), 6).toISOString().split('T')[0], subMonths(new Date(), 1).toISOString().split('T')[0]]
-    );
-
-    for (const row of categorySpikes.rows) {
       anomalies.push({
-        type: 'category_spike',
-        category: row.parent_category,
-        month: row.month,
-        amount: parseFloat(row.monthly_total),
-        expected: parseFloat(row.avg_monthly),
-        deviation: parseFloat(row.deviation_pct),
-        severity: parseFloat(row.deviation_pct) > 50 ? 'high' : 'medium'
+        type: 'unusual_amount',
+        transaction: txn.name,
+        category: txn.parent_category,
+        subcategory: txn.subcategory,
+        amount: txn.amount,
+        expected: stats.mean,
+        deviation,
+        severity,
       });
     }
 
+    // Step 3: Detect category spending spikes (month-over-month)
+    const categorySpikes = calculateCategorySpikes(transactions, oneMonthAgo);
+    anomalies.push(...categorySpikes);
+
     // Step 4: Detect missing recurring transactions
-    const missingRecurring = await client.query(
+    const recurringResult = await client.query(
       `SELECT
         merchant_name,
         parent_category,
         subcategory,
         expected_amount,
-        next_expected_date,
-        CURRENT_DATE - next_expected_date as days_overdue
+        next_expected_date
       FROM recurring_transactions
-      WHERE is_active = true
-      AND next_expected_date < CURRENT_DATE
-      AND next_expected_date >= $1::date`,
-      [subMonths(new Date(), 1).toISOString().split('T')[0]]
+      WHERE is_active = true`
     );
 
-    for (const row of missingRecurring.rows) {
+    const missingRecurring = recurringResult.rows
+      .map(row => ({
+        merchant_name: row.merchant_name,
+        parent_category: row.parent_category,
+        subcategory: row.subcategory,
+        expected_amount: parseFloat(row.expected_amount),
+        next_expected_date: row.next_expected_date ? new Date(row.next_expected_date) : null,
+      }))
+      .filter(row => row.next_expected_date)
+      .map(row => ({
+        ...row,
+        daysOverdue: diffInDays(now, row.next_expected_date),
+      }))
+      .filter(row => row.daysOverdue > 0 && row.next_expected_date >= oneMonthAgo);
+
+    missingRecurring.forEach(row => {
       anomalies.push({
         type: 'missing_recurring',
         merchant: row.merchant_name,
         category: row.parent_category,
         subcategory: row.subcategory,
-        expectedAmount: parseFloat(row.expected_amount),
-        daysOverdue: parseInt(row.days_overdue),
-        severity: parseInt(row.days_overdue) > 7 ? 'high' : 'medium'
+        expectedAmount: row.expected_amount,
+        daysOverdue: row.daysOverdue,
+        severity: row.daysOverdue > 7 ? 'high' : 'medium',
       });
-    }
+    });
 
     console.log(`Anomaly detection completed: found ${anomalies.length} anomalies`);
     return anomalies;
@@ -260,52 +236,148 @@ async function detectAnomalies(client) {
 /**
  * Calculate and store spending patterns for anomaly detection
  */
-async function calculateSpendingPatterns(client) {
-  try {
-    // Calculate monthly patterns for each category
-    await client.query(`
-      INSERT INTO spending_patterns
+async function calculateSpendingPatterns(client, transactions) {
+  const patterns = new Map();
+
+  transactions.forEach(txn => {
+    const key = `${txn.parent_category}||${txn.subcategory || ''}`;
+    if (!patterns.has(key)) {
+      patterns.set(key, {
+        category: txn.parent_category,
+        subcategory: txn.subcategory,
+        monthTotals: new Map(),
+        transactionCount: 0,
+      });
+    }
+    const pattern = patterns.get(key);
+    const monthKey = txn.date.toISOString().slice(0, 7);
+    pattern.monthTotals.set(
+      monthKey,
+      (pattern.monthTotals.get(monthKey) || 0) + txn.amount
+    );
+    pattern.transactionCount += 1;
+  });
+
+  for (const pattern of patterns.values()) {
+    const monthValues = Array.from(pattern.monthTotals.values());
+    if (monthValues.length < 3) continue;
+
+    const avgAmount = average(monthValues);
+    const stdDeviation = standardDeviation(monthValues);
+    const minAmount = Math.min(...monthValues);
+    const maxAmount = Math.max(...monthValues);
+
+    await client.query(
+      `INSERT INTO spending_patterns
         (category, subcategory, period_type, avg_amount, std_deviation,
          min_amount, max_amount, transaction_count, last_calculated)
-      SELECT
-        parent_category,
-        subcategory,
-        'monthly',
-        AVG(monthly_total),
-        STDDEV(monthly_total),
-        MIN(monthly_total),
-        MAX(monthly_total),
-        SUM(transaction_count),
-        CURRENT_TIMESTAMP
-      FROM (
-        SELECT
-          parent_category,
-          subcategory,
-          DATE_TRUNC('month', date) as month,
-          SUM(ABS(price)) as monthly_total,
-          COUNT(*) as transaction_count
-        FROM transactions
-        WHERE date >= $1
-        AND price < 0
-        AND parent_category IS NOT NULL
-        AND parent_category NOT IN ('Bank', 'Income')
-        GROUP BY parent_category, subcategory, DATE_TRUNC('month', date)
-      ) monthly_data
-      GROUP BY parent_category, subcategory
-      HAVING COUNT(*) >= 3
-      ON CONFLICT (category, subcategory, period_type)
-      DO UPDATE SET
-        avg_amount = EXCLUDED.avg_amount,
-        std_deviation = EXCLUDED.std_deviation,
-        min_amount = EXCLUDED.min_amount,
-        max_amount = EXCLUDED.max_amount,
-        transaction_count = EXCLUDED.transaction_count,
-        last_calculated = CURRENT_TIMESTAMP
-    `, [subMonths(new Date(), 6)]);
-
-    console.log('Spending patterns calculated successfully');
-  } catch (error) {
-    console.error('Error calculating spending patterns:', error);
-    throw error;
+       VALUES ($1, $2, 'monthly', $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+       ON CONFLICT (category, subcategory, period_type)
+       DO UPDATE SET
+         avg_amount = EXCLUDED.avg_amount,
+         std_deviation = EXCLUDED.std_deviation,
+         min_amount = EXCLUDED.min_amount,
+         max_amount = EXCLUDED.max_amount,
+         transaction_count = EXCLUDED.transaction_count,
+         last_calculated = CURRENT_TIMESTAMP`,
+      [
+        pattern.category,
+        pattern.subcategory,
+        avgAmount,
+        stdDeviation,
+        minAmount,
+        maxAmount,
+        pattern.transactionCount,
+      ]
+    );
   }
+}
+
+function computeTransactionStats(transactions) {
+  const stats = new Map();
+
+  transactions.forEach(txn => {
+    const key = `${txn.parent_category}||${txn.subcategory || ''}`;
+    if (!stats.has(key)) {
+      stats.set(key, { sum: 0, sumSquares: 0, count: 0 });
+    }
+    const entry = stats.get(key);
+    entry.sum += txn.amount;
+    entry.sumSquares += txn.amount * txn.amount;
+    entry.count += 1;
+  });
+
+  const result = new Map();
+  stats.forEach((entry, key) => {
+    if (entry.count === 0) return;
+    const mean = entry.sum / entry.count;
+    const variance =
+      entry.count > 1 ? entry.sumSquares / entry.count - mean * mean : 0;
+    const stdDev = variance > 0 ? Math.sqrt(variance) : 0;
+    result.set(key, { mean, stdDev, count: entry.count });
+  });
+
+  return result;
+}
+
+function calculateCategorySpikes(transactions, oneMonthAgo) {
+  const parentMap = new Map();
+
+  transactions.forEach(txn => {
+    const monthKey = txn.date.toISOString().slice(0, 7);
+    if (!parentMap.has(txn.parent_category)) {
+      parentMap.set(txn.parent_category, new Map());
+    }
+    const monthTotals = parentMap.get(txn.parent_category);
+    monthTotals.set(monthKey, (monthTotals.get(monthKey) || 0) + txn.amount);
+  });
+
+  const anomalies = [];
+  const startMonth = new Date(Date.UTC(oneMonthAgo.getUTCFullYear(), oneMonthAgo.getUTCMonth(), 1));
+
+  parentMap.forEach((monthTotals, parentCategory) => {
+    const values = Array.from(monthTotals.values());
+    if (values.length < 3) return;
+
+    const avgMonthly = average(values);
+    if (avgMonthly === 0) return;
+
+    monthTotals.forEach((total, monthKey) => {
+      const monthDate = new Date(`${monthKey}-01T00:00:00Z`);
+      if (monthDate < startMonth) return;
+
+      const deviationPct = ((total - avgMonthly) / avgMonthly) * 100;
+      if (deviationPct <= 30) return;
+
+      anomalies.push({
+        type: 'category_spike',
+        category: parentCategory,
+        month: monthDate.toISOString(),
+        amount: total,
+        expected: avgMonthly,
+        deviation: deviationPct,
+        severity: deviationPct > 50 ? 'high' : 'medium',
+      });
+    });
+  });
+
+  return anomalies;
+}
+
+function diffInDays(later, earlier) {
+  const msPerDay = 1000 * 60 * 60 * 24;
+  return Math.floor((later.getTime() - earlier.getTime()) / msPerDay);
+}
+
+function average(values) {
+  if (!values || values.length === 0) return 0;
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+function standardDeviation(values) {
+  if (!values || values.length === 0) return 0;
+  const mean = average(values);
+  const variance =
+    values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+  return Math.sqrt(variance);
 }

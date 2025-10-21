@@ -43,10 +43,10 @@ export default async function handler(req, res) {
           OR target_category LIKE '%מניות%'
           OR target_category LIKE '%ברוקר%'
           OR target_category LIKE '%קריפטו%'
-          OR name_pattern ILIKE '%INTERACTIVE%'
-          OR name_pattern ILIKE '%bits of gold%'
-          OR name_pattern ILIKE '%פיקדון%'
-          OR name_pattern ILIKE '%קופת גמל%'
+          OR LOWER(name_pattern) LIKE '%interactive%'
+          OR LOWER(name_pattern) LIKE '%bits of gold%'
+          OR LOWER(name_pattern) LIKE '%פיקדון%'
+          OR LOWER(name_pattern) LIKE '%קופת גמל%'
         )
     `);
 

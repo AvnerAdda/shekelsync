@@ -15,8 +15,11 @@ export default async function handler(req, res) {
 
   try {
     const { months = 3 } = req.query;
+    const monthsInt = Math.max(parseInt(months, 10) || 1, 1);
     const endDate = new Date();
-    const startDate = subMonths(endDate, parseInt(months));
+    const startDate = subMonths(endDate, monthsInt);
+    const startStr = startDate.toISOString().split('T')[0];
+    const endStr = endDate.toISOString().split('T')[0];
 
     // Fetch user profile for contextual benchmarking
     const profileResult = await client.query('SELECT * FROM user_profile LIMIT 1');
@@ -26,27 +29,37 @@ export default async function handler(req, res) {
     // 1. TEMPORAL INTELLIGENCE - "Your Financial Rhythm"
     // ============================================================
 
-    // Get all transactions with hour extraction (expenses only, excluding investments)
-    const transactionsResult = await client.query(`
+    // Get all transactions (expenses only, excluding investments)
+    const transactionsResult = await client.query(
+      `
       SELECT
         t.date,
         t.price,
         t.name,
         cd.name as category_name,
-        parent.name as parent_category,
-        EXTRACT(HOUR FROM t.date::timestamp) as hour,
-        EXTRACT(DOW FROM t.date) as day_of_week
+        parent.name as parent_category
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
       WHERE t.date >= $1 AND t.date <= $2
-      AND t.price < 0
-      AND (cd.category_type = 'expense' OR cd.category_type IS NULL)
+        AND t.price < 0
+        AND (cd.category_type = 'expense' OR cd.category_type IS NULL)
       ORDER BY t.date ASC
-    `, [startDate, endDate]);
+      `,
+      [startStr, endStr]
+    );
 
-    const transactions = transactionsResult.rows;
-    const totalExpenses = transactions.reduce((sum, t) => sum + Math.abs(parseFloat(t.price)), 0);
+    const transactions = transactionsResult.rows.map(row => {
+      const dateObj = new Date(row.date);
+      return {
+        ...row,
+        price: parseFloat(row.price),
+        date: dateObj,
+        hour: dateObj.getHours(),
+        day_of_week: dateObj.getDay(),
+      };
+    });
+    const totalExpenses = transactions.reduce((sum, t) => sum + Math.abs(t.price), 0);
     
     // Get period income and all-time balance (income - expenses, excluding investments)
     const balanceResult = await client.query(`
@@ -57,7 +70,7 @@ export default async function handler(req, res) {
         SUM(CASE WHEN cd.category_type = 'expense' AND t.price < 0 THEN ABS(t.price) ELSE 0 END) as total_expenses
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-    `, [startDate, endDate]);
+    `, [startStr, endStr]);
     const { period_income, period_expenses, total_income, total_expenses } = balanceResult.rows[0];
     const currentBalance = parseFloat(total_income || 0) - parseFloat(total_expenses || 0);
     
@@ -69,65 +82,69 @@ export default async function handler(req, res) {
     // Peak spending hours (heatmap data)
     const hourlySpending = Array(24).fill(0);
     transactions.forEach(t => {
-      const hour = parseInt(t.hour) || 12;
-      hourlySpending[hour] += Math.abs(parseFloat(t.price));
+      const hour = Number.isFinite(t.hour) ? t.hour : 12;
+      hourlySpending[hour] += Math.abs(t.price);
     });
     const peakHour = hourlySpending.indexOf(Math.max(...hourlySpending));
 
     // Payday effect (spending in first 7 days vs last 7 days of month)
     const earlyMonthSpend = transactions
-      .filter(t => new Date(t.date).getDate() <= 7)
-      .reduce((sum, t) => sum + Math.abs(parseFloat(t.price)), 0);
+      .filter(t => t.date.getDate() <= 7)
+      .reduce((sum, t) => sum + Math.abs(t.price), 0);
     const lateMonthSpend = transactions
-      .filter(t => new Date(t.date).getDate() >= 23)
-      .reduce((sum, t) => sum + Math.abs(parseFloat(t.price)), 0);
+      .filter(t => t.date.getDate() >= 23)
+      .reduce((sum, t) => sum + Math.abs(t.price), 0);
     const paydayEffect = earlyMonthSpend > 0 ? (earlyMonthSpend / (earlyMonthSpend + lateMonthSpend) * 100) : 50;
 
     // Weekend vs Weekday spending
     const weekendSpend = transactions
-      .filter(t => [0, 6].includes(parseInt(t.day_of_week)))
-      .reduce((sum, t) => sum + Math.abs(parseFloat(t.price)), 0);
+      .filter(t => [0, 6].includes(t.day_of_week))
+      .reduce((sum, t) => sum + Math.abs(t.price), 0);
     const weekdaySpend = totalExpenses - weekendSpend;
 
-    const temporalIntelligence = {
-      dailyBurnRate: Math.round(dailyBurnRate),
-      financialRunwayDays: financialRunwayDays > 0 ? financialRunwayDays : 0,
-      currentBalance: Math.round(currentBalance),
-      peakSpendingHour: peakHour,
-      hourlyHeatmap: hourlySpending.map(v => Math.round(v)),
-      paydayEffect: Math.round(paydayEffect),
-      earlyMonthSpend: Math.round(earlyMonthSpend),
-      lateMonthSpend: Math.round(lateMonthSpend),
-      weekendVsWeekday: {
-        weekendSpend: Math.round(weekendSpend),
-        weekdaySpend: Math.round(weekdaySpend),
-        weekendPercentage: Math.round((weekendSpend / totalExpenses) * 100)
-      }
-    };
+  const temporalIntelligence = {
+    dailyBurnRate: Math.round(dailyBurnRate),
+    financialRunwayDays: financialRunwayDays > 0 ? financialRunwayDays : 0,
+    currentBalance: Math.round(currentBalance),
+    peakSpendingHour: peakHour,
+    hourlyHeatmap: hourlySpending.map(v => Math.round(v)),
+    paydayEffect: Math.round(paydayEffect),
+    earlyMonthSpend: Math.round(earlyMonthSpend),
+    lateMonthSpend: Math.round(lateMonthSpend),
+    weekendVsWeekday: {
+      weekendSpend: Math.round(weekendSpend),
+      weekdaySpend: Math.round(weekdaySpend),
+      weekendPercentage: totalExpenses > 0
+        ? Math.round((weekendSpend / totalExpenses) * 100)
+        : 0
+    }
+  };
 
     // ============================================================
     // 2. BEHAVIORAL INTELLIGENCE - "Your Money Personality"
     // ============================================================
 
     // Impulse spending score (small transactions, rapid succession)
-    const smallTransactions = transactions.filter(t => Math.abs(parseFloat(t.price)) < 50);
+    const smallTransactions = transactions.filter(t => Math.abs(t.price) < 50);
     const impulseScore = Math.min(100, (smallTransactions.length / transactions.length) * 150);
 
     // Decision fatigue index (are evening transactions larger/smaller than morning?)
-    const morningTxns = transactions.filter(t => parseInt(t.hour) >= 6 && parseInt(t.hour) <= 12);
-    const eveningTxns = transactions.filter(t => parseInt(t.hour) >= 18 && parseInt(t.hour) <= 23);
-    const morningAvg = morningTxns.reduce((sum, t) => sum + Math.abs(parseFloat(t.price)), 0) / (morningTxns.length || 1);
-    const eveningAvg = eveningTxns.reduce((sum, t) => sum + Math.abs(parseFloat(t.price)), 0) / (eveningTxns.length || 1);
+    const morningTxns = transactions.filter(t => t.hour >= 6 && t.hour <= 12);
+    const eveningTxns = transactions.filter(t => t.hour >= 18 && t.hour <= 23);
+    const morningAvg = morningTxns.reduce((sum, t) => sum + Math.abs(t.price), 0) / (morningTxns.length || 1);
+    const eveningAvg = eveningTxns.reduce((sum, t) => sum + Math.abs(t.price), 0) / (eveningTxns.length || 1);
     const decisionFatigueIndex = eveningAvg > morningAvg ? ((eveningAvg / morningAvg - 1) * 100) : 0;
 
     // Financial FOMO (weekend entertainment spending)
     const weekendEntertainment = transactions
       .filter(t =>
-        [0, 6].includes(parseInt(t.day_of_week)) &&
+        [0, 6].includes(t.day_of_week) &&
         (t.parent_category === 'בילויים' || t.parent_category === 'אוכל')
       )
-      .reduce((sum, t) => sum + Math.abs(parseFloat(t.price)), 0);
-    const fomoScore = Math.round((weekendEntertainment / totalExpenses) * 200);
+      .reduce((sum, t) => sum + Math.abs(t.price), 0);
+    const fomoScore = totalExpenses > 0
+      ? Math.round((weekendEntertainment / totalExpenses) * 200)
+      : 0;
 
     const behavioralIntelligence = {
       impulseSpendingScore: Math.round(impulseScore),
@@ -149,8 +166,8 @@ export default async function handler(req, res) {
     // Calculate period-based metrics first (needed for comparative intelligence)
     const periodIncome = parseFloat(period_income || 0);
     const periodExpenses = parseFloat(period_expenses || 0);
-    const monthlyIncome = periodIncome / parseInt(months);
-    const monthlyExpenses = periodExpenses / parseInt(months);
+    const monthlyIncome = periodIncome / monthsInt;
+    const monthlyExpenses = periodExpenses / monthsInt;
     const monthlySavings = monthlyIncome - monthlyExpenses;
 
     // Realistic Israeli benchmarks (will be replaced with LLM later)
@@ -189,31 +206,17 @@ export default async function handler(req, res) {
       t.name?.toLowerCase().includes('aroma') ||
       t.name?.toLowerCase().includes('cofix')
     );
-    const coffeeSpend = coffeeTransactions.reduce((sum, t) => sum + Math.abs(parseFloat(t.price)), 0);
+    const coffeeSpend = coffeeTransactions.reduce((sum, t) => sum + Math.abs(t.price), 0);
     const coffeeYearly = Math.round((coffeeSpend / dayCount) * 365);
 
     // Recurring subscriptions detection (exclude investments)
-    const recurringResult = await client.query(`
-      SELECT
-        t.name,
-        COUNT(*) as occurrences,
-        AVG(ABS(t.price)) as avg_amount,
-        SUM(ABS(t.price)) as total_spent
-      FROM transactions t
-      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      WHERE t.date >= $1 AND t.date <= $2
-      AND t.price < 0
-      AND (cd.category_type = 'expense' OR cd.category_type IS NULL)
-      GROUP BY t.name
-      HAVING COUNT(*) >= 2
-      AND STDDEV(ABS(t.price)) < 10
-      ORDER BY total_spent DESC
-      LIMIT 10
-    `, [startDate, endDate]);
+    const recurringSubscriptions = detectRecurringSubscriptions(transactions);
 
     // Round number bias
-    const roundNumbers = transactions.filter(t => Math.abs(parseFloat(t.price)) % 10 === 0);
-    const roundNumberPercentage = Math.round((roundNumbers.length / transactions.length) * 100);
+    const roundNumbers = transactions.filter(t => Math.abs(t.price) % 10 === 0);
+    const roundNumberPercentage = transactions.length > 0
+      ? Math.round((roundNumbers.length / transactions.length) * 100)
+      : 0;
 
     const microInsights = {
       coffeeIndex: {
@@ -221,11 +224,11 @@ export default async function handler(req, res) {
         yearlyProjection: coffeeYearly,
         transactionCount: coffeeTransactions.length
       },
-      subscriptions: recurringResult.rows.map(s => ({
+      subscriptions: recurringSubscriptions.map(s => ({
         name: s.name,
-        monthlyAmount: Math.round(parseFloat(s.avg_amount)),
-        occurrences: parseInt(s.occurrences),
-        totalSpent: Math.round(parseFloat(s.total_spent))
+        monthlyAmount: Math.round(s.avg_amount),
+        occurrences: s.occurrences,
+        totalSpent: Math.round(s.total_spent)
       })),
       roundNumberBias: roundNumberPercentage
     };
@@ -247,23 +250,33 @@ export default async function handler(req, res) {
       AND cd.category_type = 'expense'
       AND parent.name IS NOT NULL
       GROUP BY parent.name
-    `, [startDate, endDate]);
+    `, [startStr, endStr]);
 
     const categoryCount = categoryBreakdown.rows.length;
-    const maxCategorySpend = Math.max(...categoryBreakdown.rows.map(c => parseFloat(c.amount)));
-    const financialDiversityScore = Math.round((1 - (maxCategorySpend / totalExpenses)) * 100);
+    const categoryTotals = categoryBreakdown.rows.map(c => parseFloat(c.amount));
+    const maxCategorySpend = categoryTotals.length > 0 ? Math.max(...categoryTotals) : 0;
+    const financialDiversityScore = totalExpenses > 0
+      ? Math.round((1 - (maxCategorySpend / totalExpenses)) * 100)
+      : 0;
 
     // Automation percentage (recurring vs one-time)
-    const recurringTotal = recurringResult.rows.reduce((sum, r) => sum + parseFloat(r.total_spent), 0);
-    const automationPercentage = Math.round((recurringTotal / totalExpenses) * 100);
+    const recurringTotal = recurringSubscriptions.reduce((sum, r) => sum + r.total_spent, 0);
+    const automationPercentage = totalExpenses > 0
+      ? Math.round((recurringTotal / totalExpenses) * 100)
+      : 0;
+
+    const safeDiv = (numerator, denominator) =>
+      denominator > 0 ? numerator / denominator : 0;
 
     const efficiencyMetrics = {
-      avgTransactionSize: Math.round(totalExpenses / transactions.length),
+      avgTransactionSize: Math.round(safeDiv(totalExpenses, transactions.length)),
       financialDiversityScore,
       categoryCount,
       automationPercentage,
-      costPerTransaction: Math.round(totalExpenses / transactions.length)
+      costPerTransaction: Math.round(safeDiv(totalExpenses, transactions.length))
     };
+
+    const savingsRate = monthlyIncome > 0 ? (monthlySavings / monthlyIncome) : 0;
 
     // ============================================================
     // 6. PREDICTIVE ANALYTICS - "Your Financial Future"
@@ -273,8 +286,8 @@ export default async function handler(req, res) {
     const currentDayOfMonth = new Date().getDate();
     const daysInMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate();
     const currentMonthSpend = transactions
-      .filter(t => new Date(t.date).getMonth() === endDate.getMonth())
-      .reduce((sum, t) => sum + Math.abs(parseFloat(t.price)), 0);
+      .filter(t => t.date.getMonth() === endDate.getMonth())
+      .reduce((sum, t) => sum + Math.abs(t.price), 0);
     const spendingVelocity = currentMonthSpend / currentDayOfMonth;
     const forecastEndMonth = Math.round(spendingVelocity * daysInMonth);
 
@@ -302,17 +315,17 @@ export default async function handler(req, res) {
       hourlyWage: Math.round(hourlyWage),
       avgTransactionInHours: Math.round(avgTransactionHours * 10) / 10, // Round to 1 decimal as number
       biggestPurchaseHours: transactions.length > 0
-        ? Math.round(Math.max(...transactions.map(t => Math.abs(parseFloat(t.price)))) / hourlyWage * 10) / 10
+        ? Math.round(Math.max(...transactions.map(t => Math.abs(t.price))) / hourlyWage * 10) / 10
         : 0,
       opportunityCosts: [
         {
           category: 'אוכל',
-          monthlySpend: Math.round(transactions.filter(t => t.parent_category === 'אוכל').reduce((s, t) => s + Math.abs(parseFloat(t.price)), 0)),
+          monthlySpend: Math.round(transactions.filter(t => t.parent_category === 'אוכל').reduce((s, t) => s + Math.abs(t.price), 0)),
           equivalentTo: 'טיסה לאירופה'
         },
         {
           category: 'בילויים',
-          monthlySpend: Math.round(transactions.filter(t => t.parent_category === 'בילויים').reduce((s, t) => s + Math.abs(parseFloat(t.price)), 0)),
+          monthlySpend: Math.round(transactions.filter(t => t.parent_category === 'בילויים').reduce((s, t) => s + Math.abs(t.price), 0)),
           equivalentTo: '2 חודשי Netflix + Spotify'
         }
       ]
@@ -325,13 +338,13 @@ export default async function handler(req, res) {
     const recommendations = [];
 
     // Subscription waste
-    if (recurringResult.rows.length > 5) {
-      const totalRecurring = recurringResult.rows.reduce((s, r) => s + parseFloat(r.total_spent), 0);
+    if (recurringSubscriptions.length > 5) {
+      const totalRecurring = recurringSubscriptions.reduce((s, r) => s + r.total_spent, 0);
       recommendations.push({
         type: 'subscription_audit',
         priority: 'high',
         title: 'Subscription Audit Recommended',
-        message: `Found ${recurringResult.rows.length} recurring charges totaling ₪${Math.round(totalRecurring)}/month`,
+        message: `Found ${recurringSubscriptions.length} recurring charges totaling ₪${Math.round(totalRecurring)}/month`,
         potentialSavings: Math.round(totalRecurring * 0.3),
         action: 'Review and cancel unused subscriptions'
       });
@@ -381,7 +394,6 @@ export default async function handler(req, res) {
     // ============================================================
 
     // Savings score based on monthly savings rate (capped at 100, minimum 0)
-    const savingsRate = monthlyIncome > 0 ? (monthlySavings / monthlyIncome) : 0;
     const savingsScore = Math.max(0, Math.min(100, savingsRate * 200)); // 50% savings = 100 score
     
     const diversityScore = financialDiversityScore;
@@ -393,7 +405,7 @@ export default async function handler(req, res) {
     // Response
     res.status(200).json({
       generatedAt: new Date().toISOString(),
-      period: { startDate, endDate, months: parseInt(months) },
+      period: { startDate, endDate, months: monthsInt },
       userProfile: userProfile || { message: 'Complete your profile for personalized insights' },
 
       temporalIntelligence,
@@ -423,4 +435,48 @@ export default async function handler(req, res) {
   } finally {
     client.release();
   }
+}
+
+function detectRecurringSubscriptions(transactions) {
+  const groups = new Map();
+
+  transactions.forEach(t => {
+    const name = t.name?.trim();
+    if (!name) return;
+    const key = name.toLowerCase();
+    if (!groups.has(key)) {
+      groups.set(key, { name, amounts: [] });
+    }
+    groups.get(key).amounts.push(Math.abs(t.price));
+  });
+
+  const subscriptions = [];
+  groups.forEach(({ name, amounts }) => {
+    if (amounts.length < 2) return;
+    const stdDev = standardDeviation(amounts);
+    if (stdDev >= 10) return;
+    const avgAmount = average(amounts);
+    const totalSpent = amounts.reduce((sum, val) => sum + val, 0);
+    subscriptions.push({
+      name,
+      occurrences: amounts.length,
+      avg_amount: avgAmount,
+      total_spent: totalSpent,
+    });
+  });
+
+  subscriptions.sort((a, b) => b.total_spent - a.total_spent);
+  return subscriptions.slice(0, 10);
+}
+
+function average(values) {
+  if (!values || values.length === 0) return 0;
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+function standardDeviation(values) {
+  if (!values || values.length === 0) return 0;
+  const mean = average(values);
+  const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+  return Math.sqrt(variance);
 }
