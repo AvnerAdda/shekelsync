@@ -242,6 +242,10 @@ const DuplicateManagementModal: React.FC<DuplicateManagementModalProps> = ({
     const pairId = JSON.stringify(duplicate);
     const isProcessing = processingId === pairId;
 
+    if (!cc || !bank) {
+      return null;
+    }
+
     return (
       <Card
         key={pairId}
@@ -461,7 +465,7 @@ const DuplicateManagementModal: React.FC<DuplicateManagementModalProps> = ({
                   {formatDate(txn1.date)} • {txn1.vendor}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block">
-                  Category: {txn1.category}
+                  Category: {txn1.category_name || txn1.parent_name || txn1.category || 'N/A'}
                 </Typography>
                 {txn1.accountNumber && (
                   <Typography variant="caption" color="text.secondary" display="block">
@@ -487,7 +491,7 @@ const DuplicateManagementModal: React.FC<DuplicateManagementModalProps> = ({
                   {formatDate(txn2.date)} • {txn2.vendor}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block">
-                  Category: {txn2.category}
+                  Category: {txn2.category_name || txn2.parent_name || txn2.category || 'N/A'}
                 </Typography>
                 {txn2.accountNumber && (
                   <Typography variant="caption" color="text.secondary" display="block">

@@ -2,6 +2,8 @@
  * Shared utility functions for database queries
  */
 
+import { BANK_CATEGORY_NAME } from '../../../lib/category-constants.js';
+
 // Import existing duplicate filter from analytics utils
 export { buildDuplicateFilter, resolveDateRange } from '../analytics/utils.js';
 
@@ -12,21 +14,27 @@ export { buildDuplicateFilter, resolveDateRange } from '../analytics/utils.js';
  * @returns {Object} - Price filter and amount expression
  */
 export function buildTypeFilters(type = 'expense') {
+  const bankExclusion = `
+    category_definition_id NOT IN (
+      SELECT id FROM category_definitions WHERE name = '${BANK_CATEGORY_NAME}'
+    )
+  `;
+
   const configs = {
     expense: {
       priceFilter: 'price < 0',
       amountExpression: 'ABS(price)',
-      categoryFilter: "category != 'Bank'"
+      categoryFilter: bankExclusion
     },
     income: {
       priceFilter: 'price > 0',
       amountExpression: 'price',
-      categoryFilter: "category = 'Income' OR category = 'Bank'"
+      categoryFilter: "category_type = 'income'"
     },
     investment: {
       priceFilter: '',
       amountExpression: 'ABS(price)',
-      categoryFilter: "category LIKE '%Investment%'"
+      categoryFilter: "category_type = 'investment'"
     }
   };
 

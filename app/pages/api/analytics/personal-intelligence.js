@@ -1,5 +1,6 @@
 import { getDB } from '../db.js';
 import { subMonths, differenceInDays, format, parseISO } from 'date-fns';
+import { BANK_CATEGORY_NAME } from '../../../lib/category-constants.js';
 
 /**
  * Personal Financial Intelligence API
@@ -29,7 +30,7 @@ export default async function handler(req, res) {
     // 1. TEMPORAL INTELLIGENCE - "Your Financial Rhythm"
     // ============================================================
 
-    // Get all transactions (expenses only, excluding investments)
+    // Get all transactions (expenses only, excluding investments and bank payments)
     const transactionsResult = await client.query(
       `
       SELECT
@@ -43,10 +44,12 @@ export default async function handler(req, res) {
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
-        AND (cd.category_type = 'expense' OR cd.category_type IS NULL)
+        AND cd.category_type = 'expense'
+        AND COALESCE(cd.name, '') != $3
+        AND COALESCE(parent.name, '') != $3
       ORDER BY t.date ASC
       `,
-      [startStr, endStr]
+      [startStr, endStr, BANK_CATEGORY_NAME]
     );
 
     const transactions = transactionsResult.rows.map(row => {
@@ -61,16 +64,17 @@ export default async function handler(req, res) {
     });
     const totalExpenses = transactions.reduce((sum, t) => sum + Math.abs(t.price), 0);
     
-    // Get period income and all-time balance (income - expenses, excluding investments)
+    // Get period income and all-time balance (income - expenses, excluding investments and bank payments)
     const balanceResult = await client.query(`
       SELECT
         SUM(CASE WHEN cd.category_type = 'income' AND t.price > 0 AND t.date >= $1 AND t.date <= $2 THEN t.price ELSE 0 END) as period_income,
-        SUM(CASE WHEN cd.category_type = 'expense' AND t.price < 0 AND t.date >= $1 AND t.date <= $2 THEN ABS(t.price) ELSE 0 END) as period_expenses,
+        SUM(CASE WHEN cd.category_type = 'expense' AND t.price < 0 AND t.date >= $1 AND t.date <= $2 AND COALESCE(cd.name, '') != $3 AND COALESCE(parent.name, '') != $3 THEN ABS(t.price) ELSE 0 END) as period_expenses,
         SUM(CASE WHEN cd.category_type = 'income' AND t.price > 0 THEN t.price ELSE 0 END) as total_income,
-        SUM(CASE WHEN cd.category_type = 'expense' AND t.price < 0 THEN ABS(t.price) ELSE 0 END) as total_expenses
+        SUM(CASE WHEN cd.category_type = 'expense' AND t.price < 0 AND COALESCE(cd.name, '') != $3 AND COALESCE(parent.name, '') != $3 THEN ABS(t.price) ELSE 0 END) as total_expenses
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-    `, [startStr, endStr]);
+      LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
+    `, [startStr, endStr, BANK_CATEGORY_NAME]);
     const { period_income, period_expenses, total_income, total_expenses } = balanceResult.rows[0];
     const currentBalance = parseFloat(total_income || 0) - parseFloat(total_expenses || 0);
     
@@ -249,8 +253,10 @@ export default async function handler(req, res) {
       AND t.price < 0
       AND cd.category_type = 'expense'
       AND parent.name IS NOT NULL
+      AND COALESCE(cd.name, '') != $3
+      AND COALESCE(parent.name, '') != $3
       GROUP BY parent.name
-    `, [startStr, endStr]);
+    `, [startStr, endStr, BANK_CATEGORY_NAME]);
 
     const categoryCount = categoryBreakdown.rows.length;
     const categoryTotals = categoryBreakdown.rows.map(c => parseFloat(c.amount));
@@ -395,10 +401,10 @@ export default async function handler(req, res) {
 
     // Savings score based on monthly savings rate (capped at 100, minimum 0)
     const savingsScore = Math.max(0, Math.min(100, savingsRate * 200)); // 50% savings = 100 score
-    
+
     const diversityScore = financialDiversityScore;
     const impulseHealthScore = Math.max(0, 100 - impulseScore);
-    const runwayScore = Math.min(100, financialRunwayDays / 60 * 100);
+    const runwayScore = Math.max(0, Math.min(100, financialRunwayDays / 60 * 100));
 
     const overallHealthScore = Math.round((savingsScore + diversityScore + impulseHealthScore + runwayScore) / 4);
 

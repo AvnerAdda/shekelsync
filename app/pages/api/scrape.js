@@ -2,6 +2,24 @@ import { CompanyTypes, createScraper } from 'israeli-bank-scrapers';
 import crypto from 'crypto';
 import { getDB } from './db';
 import { BANK_VENDORS, SPECIAL_BANK_VENDORS } from '../../utils/constants';
+import {
+  resolveCategory,
+  matchCategorizationRule,
+  findCategoryByName
+} from '../../lib/category-helpers.js';
+import { BANK_CATEGORY_NAME } from '../../lib/category-constants.js';
+
+let cachedBankCategory = null;
+
+async function getBankCategoryDefinition(client) {
+  if (cachedBankCategory) return cachedBankCategory;
+  const bankCategory = await findCategoryByName(BANK_CATEGORY_NAME, null, client);
+  if (!bankCategory) {
+    throw new Error(`Bank category '${BANK_CATEGORY_NAME}' not found in category_definitions`);
+  }
+  cachedBankCategory = bankCategory;
+  return bankCategory;
+}
 
 async function insertTransaction(txn, client, companyId, isBank, accountNumber) {
   const uniqueId = `${txn.identifier}-${companyId}-${txn.processedDate}-${txn.description}`;
@@ -20,14 +38,12 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
   let category = txn.category;
   let parentCategory = null;
   let subcategory = null;
+  let categoryDefinitionId = null;
 
-  if (!isBank){
-    // Ensure amount is negative for credit card transactions (expenses)
-    // Handle cases where originalAmount might already be negative
+  if (!isBank) {
     const rawAmount = txn.chargedAmount || txn.originalAmount || 0;
     amount = rawAmount > 0 ? rawAmount * -1 : rawAmount;
 
-    // Validate amount is not zero for credit card transactions
     if (amount === 0) {
       console.warn(`Warning: Zero amount detected for ${companyId} transaction: ${txn.description}`, {
         chargedAmount: txn.chargedAmount,
@@ -37,48 +53,24 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
       });
     }
 
-    // First, try to map Hebrew category from scraper using category_mapping table
-    if (txn.category) {
-      const mappingResult = await client.query(
-        `SELECT parent_category, subcategory FROM category_mapping WHERE hebrew_category = $1`,
-        [txn.category]
-      );
+    const resolved = await resolveCategory({
+      client,
+      rawCategory: txn.category,
+      transactionName: txn.description,
+    });
 
-      if (mappingResult.rows.length > 0) {
-        parentCategory = mappingResult.rows[0].parent_category;
-        subcategory = mappingResult.rows[0].subcategory;
-        category = subcategory || parentCategory;
-      }
+    if (resolved) {
+      categoryDefinitionId = resolved.categoryDefinitionId;
+      parentCategory = resolved.parentCategory;
+      subcategory = resolved.subcategory;
+      category = subcategory || parentCategory || category;
     }
-
-    // If no mapping found, try to categorize using merchant catalog
-    if (!parentCategory) {
-      const categorization = await autoCategorizeTransaction(txn.description, client);
-      if (categorization.success) {
-        parentCategory = categorization.parent_category;
-        subcategory = categorization.subcategory;
-        category = subcategory || parentCategory;
-      }
-    }
-
-    // If we still don't have a parent category, but we have a category, try to find parent from category_definitions
-    if (!parentCategory && category && category !== 'N/A') {
-      const parentLookup = await client.query(
-        `SELECT parent_cd.name as parent_name
-         FROM category_definitions cd
-         JOIN category_definitions parent_cd ON cd.parent_id = parent_cd.id
-         WHERE cd.name = $1`,
-        [category]
-      );
-
-      if (parentLookup.rows.length > 0) {
-        parentCategory = parentLookup.rows[0].parent_name;
-        console.log(`Found parent category for ${category}: ${parentCategory}`);
-      }
-    }
-  }else{
-    category = "Bank";
-    parentCategory = "Bank";
+  } else {
+    const bankCategory = await getBankCategoryDefinition(client);
+    categoryDefinitionId = bankCategory.id;
+    category = bankCategory.name;
+    parentCategory = bankCategory.parent_name || bankCategory.name;
+    subcategory = bankCategory.parent_id ? bankCategory.name : null;
   }
 
   try {
@@ -92,6 +84,7 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
         category,
         parent_category,
         subcategory,
+        category_definition_id,
         merchant_name,
         auto_categorized,
         confidence_score,
@@ -116,9 +109,10 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
         category || 'N/A',
         parentCategory,
         subcategory,
+        categoryDefinitionId,
         txn.description,
-        parentCategory ? true : false,
-        parentCategory ? 0.8 : 0.0,
+        categoryDefinitionId ? true : false,
+        categoryDefinitionId ? 0.8 : parentCategory ? 0.5 : 0.0,
         txn.type,
         txn.processedDate,
         txn.originalAmount,
@@ -139,36 +133,18 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
 
 async function autoCategorizeTransaction(transactionName, client) {
   try {
-    const cleanName = transactionName.toLowerCase().trim();
-
-    // Query categorization rules for matching patterns (unified with former merchant_catalog)
-    const rulesResult = await client.query(
-      `SELECT
-        name_pattern,
-        parent_category,
-        subcategory,
-        priority
-       FROM categorization_rules
-       WHERE is_active = true
-       AND LOWER($1) LIKE '%' || LOWER(name_pattern) || '%'
-       ORDER BY
-         priority DESC,
-         LENGTH(name_pattern) DESC
-       LIMIT 1`,
-      [cleanName]
-    );
-
-    if (rulesResult.rows.length > 0) {
-      const match = rulesResult.rows[0];
-      return {
-        success: true,
-        parent_category: match.parent_category || match.name_pattern,
-        subcategory: match.subcategory,
-        confidence: 0.8 // Default confidence for rule-based categorization
-      };
+    const match = await matchCategorizationRule(transactionName, client);
+    if (!match) {
+      return { success: false };
     }
 
-    return { success: false };
+    return {
+      success: true,
+      categoryDefinitionId: match.category_definition_id || null,
+      parentCategory: match.parent_category || null,
+      subcategory: match.subcategory || null,
+      confidence: 0.8
+    };
   } catch (error) {
     console.error('Error in auto-categorization:', error);
     return { success: false };
@@ -179,10 +155,21 @@ async function applyCategorizationRules(client) {
   try {
     // Get all active categorization rules
     const rulesResult = await client.query(`
-      SELECT id, name_pattern, target_category, parent_category, subcategory, priority
-      FROM categorization_rules
-      WHERE is_active = true
-      ORDER BY priority DESC, id
+      SELECT
+        cr.id,
+        cr.name_pattern,
+        cr.target_category,
+        cr.parent_category,
+        cr.subcategory,
+        cr.category_definition_id,
+        cd.name AS resolved_subcategory,
+        parent.name AS resolved_parent_category,
+        cr.priority
+      FROM categorization_rules cr
+      LEFT JOIN category_definitions cd ON cd.id = cr.category_definition_id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      WHERE cr.is_active = true
+      ORDER BY cr.priority DESC, cr.id
     `);
 
     const rules = rulesResult.rows;
@@ -191,24 +178,46 @@ async function applyCategorizationRules(client) {
     // Apply each rule to transactions that don't already have the target category
     for (const rule of rules) {
       const pattern = `%${rule.name_pattern}%`;
+      let categoryId = rule.category_definition_id;
+      let resolvedSub = rule.resolved_subcategory || rule.subcategory || null;
+      let resolvedParent =
+        rule.resolved_parent_category ||
+        rule.parent_category ||
+        (resolvedSub ? null : rule.target_category) ||
+        null;
 
-      // Determine what to set based on rule configuration
-      const parentCat = rule.parent_category || rule.target_category;
-      const subcat = rule.subcategory;
-      const category = subcat || parentCat;
+      if (!categoryId) {
+        const resolved = await resolveCategory({
+          client,
+          rawCategory: resolvedSub || resolvedParent || rule.target_category,
+          transactionName: rule.name_pattern,
+        });
+
+        if (resolved) {
+          categoryId = resolved.categoryDefinitionId;
+          resolvedParent = resolved.parentCategory || resolvedParent;
+          resolvedSub = resolved.subcategory || resolvedSub;
+        }
+      }
+
+      const categoryName = resolvedSub || resolvedParent || rule.target_category || rule.name_pattern;
+      const confidence = categoryId ? 0.8 : 0.5;
 
       const updateResult = await client.query(`
         UPDATE transactions
         SET
-          category = $2,
-          parent_category = $3,
-          subcategory = $4
+          category_definition_id = COALESCE($2, category_definition_id),
+          category = COALESCE($3, category),
+          parent_category = COALESCE($4, parent_category),
+          subcategory = COALESCE($5, subcategory),
+          auto_categorized = true,
+          confidence_score = GREATEST(confidence_score, $6)
         WHERE LOWER(name) LIKE LOWER($1)
-        AND category != $2
-        AND category IS NOT NULL
-        AND parent_category != 'Bank'
-        AND category != 'Income'
-      `, [pattern, category, parentCat, subcat]);
+          AND category_definition_id NOT IN (
+            SELECT id FROM category_definitions
+            WHERE name = $7 OR category_type = 'income'
+          )
+      `, [pattern, categoryId, categoryName, resolvedParent, resolvedSub, confidence, BANK_CATEGORY_NAME]);
 
       totalUpdated += updateResult.rowCount;
     }
@@ -250,7 +259,9 @@ async function autoMarkCreditCardPaymentDuplicates(client) {
         'Auto-detected credit card payment transaction - exclude from totals to avoid double counting'
       FROM transactions t
       WHERE (t.name LIKE '%חיוב לכרטיס ויזה%' OR t.name LIKE '%חיוב לכרטיס ממקס%')
-        AND t.category = 'Bank'
+        AND t.category_definition_id IN (
+          SELECT id FROM category_definitions WHERE name = $1
+        )
         AND t.price < 0
         AND NOT EXISTS (
           SELECT 1 FROM transaction_duplicates td
@@ -258,7 +269,7 @@ async function autoMarkCreditCardPaymentDuplicates(client) {
           AND td.transaction1_vendor = t.vendor
         )
       ON CONFLICT DO NOTHING
-    `);
+    `, [BANK_CATEGORY_NAME]);
 
     const markedCount = duplicateResult.rowCount;
     if (markedCount > 0) {
@@ -282,9 +293,9 @@ async function linkTransactionsToCategoryDefinitions(client) {
       FROM category_definitions cd
       WHERE transactions.category_definition_id IS NULL
         AND transactions.category = cd.name
-        AND transactions.category != 'Bank'
         AND cd.is_active = true
-    `);
+        AND cd.name != $1
+    `, [BANK_CATEGORY_NAME]);
 
     const linkedCount = linkResult.rowCount;
     if (linkedCount > 0) {

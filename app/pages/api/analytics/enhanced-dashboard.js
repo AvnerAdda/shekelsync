@@ -1,6 +1,7 @@
 import { getDB } from '../db.js';
 import { subMonths } from 'date-fns';
 import { dialect } from '../../../lib/sql-dialect.js';
+import { BANK_CATEGORY_NAME } from '../../../lib/category-constants.js';
 
 /**
  * Enhanced analytics dashboard with subcategory support and intelligent insights
@@ -31,84 +32,93 @@ export default async function handler(req, res) {
     // 1. Get hierarchical category breakdown (parent + subcategory)
     const hierarchicalBreakdown = await client.query(
       `SELECT
-        parent_category,
-        subcategory,
-        COUNT(*) as transaction_count,
-        SUM(ABS(price)) as total_amount,
-        AVG(ABS(price)) as avg_amount,
-        MIN(ABS(price)) as min_amount,
-        MAX(ABS(price)) as max_amount
-      FROM transactions
-      WHERE date >= $1 AND date <= $2
-      AND price < 0
-      AND parent_category IS NOT NULL
-      AND parent_category NOT IN ('Bank', 'Income')
-      GROUP BY parent_category, subcategory
+        COALESCE(parent.name, cd.name) AS parent_category,
+        CASE WHEN parent.id IS NOT NULL THEN cd.name ELSE NULL END AS subcategory,
+        COUNT(*) AS transaction_count,
+        SUM(ABS(t.price)) AS total_amount,
+        AVG(ABS(t.price)) AS avg_amount,
+        MIN(ABS(t.price)) AS min_amount,
+        MAX(ABS(t.price)) AS max_amount
+      FROM transactions t
+      JOIN category_definitions cd ON cd.id = t.category_definition_id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      WHERE t.date >= $1 AND t.date <= $2
+        AND t.price < 0
+        AND cd.category_type = 'expense'
+        AND cd.name != $3
+      GROUP BY parent.id, parent.name, cd.id, cd.name
       ORDER BY total_amount DESC`,
-      [startStr, endStr]
+      [startStr, endStr, BANK_CATEGORY_NAME]
     );
 
     // 2. Get auto-categorization statistics
     const autoCategoryStats = await client.query(
       `SELECT
-        SUM(CASE WHEN auto_categorized = true THEN 1 ELSE 0 END) as auto_categorized_count,
-        SUM(CASE WHEN auto_categorized = false OR auto_categorized IS NULL THEN 1 ELSE 0 END) as manual_count,
-        AVG(CASE WHEN auto_categorized = true THEN confidence_score ELSE NULL END) as avg_confidence,
-        COUNT(*) as total_transactions
-      FROM transactions
-      WHERE date >= $1 AND date <= $2
-      AND price < 0
-      AND parent_category NOT IN ('Bank', 'Income')`,
-      [startStr, endStr]
+        SUM(CASE WHEN t.auto_categorized = true THEN 1 ELSE 0 END) AS auto_categorized_count,
+        SUM(CASE WHEN t.auto_categorized = false OR t.auto_categorized IS NULL THEN 1 ELSE 0 END) AS manual_count,
+        AVG(CASE WHEN t.auto_categorized = true THEN t.confidence_score ELSE NULL END) AS avg_confidence,
+        COUNT(*) AS total_transactions
+      FROM transactions t
+      JOIN category_definitions cd ON cd.id = t.category_definition_id
+      WHERE t.date >= $1 AND t.date <= $2
+        AND t.price < 0
+        AND cd.category_type = 'expense'
+        AND cd.name != $3`,
+      [startStr, endStr, BANK_CATEGORY_NAME]
     );
 
     // 3. Top merchants by spending
     const topMerchants = await client.query(
       `SELECT
-        merchant_name,
-        parent_category,
-        subcategory,
-        COUNT(*) as transaction_count,
-        SUM(ABS(price)) as total_spent
-      FROM transactions
-      WHERE date >= $1 AND date <= $2
-      AND price < 0
-      AND merchant_name IS NOT NULL
-      AND parent_category NOT IN ('Bank', 'Income')
-      GROUP BY merchant_name, parent_category, subcategory
+        t.merchant_name,
+        COALESCE(parent.name, cd.name) AS parent_category,
+        CASE WHEN parent.id IS NOT NULL THEN cd.name ELSE NULL END AS subcategory,
+        COUNT(*) AS transaction_count,
+        SUM(ABS(t.price)) AS total_spent
+      FROM transactions t
+      JOIN category_definitions cd ON cd.id = t.category_definition_id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      WHERE t.date >= $1 AND t.date <= $2
+        AND t.price < 0
+        AND t.merchant_name IS NOT NULL
+        AND cd.category_type = 'expense'
+        AND cd.name != $3
+      GROUP BY t.merchant_name, parent.id, parent.name, cd.id, cd.name
       ORDER BY total_spent DESC
       LIMIT 20`,
-      [startStr, endStr]
+      [startStr, endStr, BANK_CATEGORY_NAME]
     );
 
     // 4. Monthly trends by category
-    const monthExpr = dialect.toChar('date', 'YYYY-MM');
+    const monthExpr = dialect.toChar('t.date', 'YYYY-MM');
     const monthlyTrends = await client.query(
       `SELECT
-        ${monthExpr} as month,
-        parent_category,
-        SUM(ABS(price)) as amount
-      FROM transactions
-      WHERE date >= $1 AND date <= $2
-      AND price < 0
-      AND parent_category IS NOT NULL
-      AND parent_category NOT IN ('Bank', 'Income')
-      GROUP BY ${monthExpr}, parent_category
+        ${monthExpr} AS month,
+        COALESCE(parent.name, cd.name) AS parent_category,
+        SUM(ABS(t.price)) AS amount
+      FROM transactions t
+      JOIN category_definitions cd ON cd.id = t.category_definition_id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      WHERE t.date >= $1 AND t.date <= $2
+        AND t.price < 0
+        AND cd.category_type = 'expense'
+        AND cd.name != $3
+      GROUP BY ${monthExpr}, parent.id, parent.name, cd.id, cd.name
       ORDER BY month ASC, amount DESC`,
-      [startStr, endStr]
+      [startStr, endStr, BANK_CATEGORY_NAME]
     );
 
     // 5. Uncategorized transactions that need attention
     const uncategorized = await client.query(
       `SELECT
-        name,
-        COUNT(*) as occurrences,
-        SUM(ABS(price)) as total_amount
-      FROM transactions
-      WHERE date >= $1 AND date <= $2
-      AND price < 0
-      AND (parent_category IS NULL OR category = 'N/A')
-      GROUP BY name
+        t.name,
+        COUNT(*) AS occurrences,
+        SUM(ABS(t.price)) AS total_amount
+      FROM transactions t
+      WHERE t.date >= $1 AND t.date <= $2
+        AND t.price < 0
+        AND t.category_definition_id IS NULL
+      GROUP BY t.name
       ORDER BY total_amount DESC
       LIMIT 30`,
       [startStr, endStr]
@@ -117,17 +127,19 @@ export default async function handler(req, res) {
     // 6. Category distribution (for pie charts)
     const categoryDistribution = await client.query(
       `SELECT
-        parent_category,
-        SUM(ABS(price)) as total_amount,
-        COUNT(*) as transaction_count
-      FROM transactions
-      WHERE date >= $1 AND date <= $2
-      AND price < 0
-      AND parent_category IS NOT NULL
-      AND parent_category NOT IN ('Bank', 'Income')
-      GROUP BY parent_category
+        COALESCE(parent.name, cd.name) AS parent_category,
+        SUM(ABS(t.price)) AS total_amount,
+        COUNT(*) AS transaction_count
+      FROM transactions t
+      JOIN category_definitions cd ON cd.id = t.category_definition_id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      WHERE t.date >= $1 AND t.date <= $2
+        AND t.price < 0
+        AND cd.category_type = 'expense'
+        AND cd.name != $3
+      GROUP BY parent.id, parent.name, cd.id, cd.name
       ORDER BY total_amount DESC`,
-      [startStr, endStr]
+      [startStr, endStr, BANK_CATEGORY_NAME]
     );
 
     // 7. Income vs Expenses summary

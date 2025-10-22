@@ -600,7 +600,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       if (vendorSimilarity > 0.7 || nameSimilarity > 0.7) {
         return {
           match: true,
-          category: vendor.subcategory || vendor.category,
+          category: vendor.categoryName || vendor.parentName || 'Investment',
           count: vendor.transactionCount,
           confidence: Math.max(vendorSimilarity, nameSimilarity)
         };

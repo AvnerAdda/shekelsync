@@ -30,28 +30,39 @@ import {
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
-interface Budget {
+interface BudgetBase {
   id: number;
-  category: string;
+  category_definition_id: number;
+  category_name: string;
+  category_name_en?: string | null;
+  parent_category_name: string | null;
+  parent_category_name_en?: string | null;
   period_type: 'weekly' | 'monthly' | 'yearly';
   budget_limit: number;
   is_active: boolean;
 }
 
-interface BudgetUsage extends Budget {
+interface BudgetUsage extends BudgetBase {
   spent: number;
   remaining: number;
   percentage: number;
   status: 'good' | 'warning' | 'exceeded';
 }
 
+interface CategoryOption {
+  id: number;
+  name: string;
+  parentName: string | null;
+  label: string;
+}
+
 const BudgetsPage: React.FC = () => {
   const [budgets, setBudgets] = useState<BudgetUsage[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+  const [editingBudget, setEditingBudget] = useState<BudgetBase | null>(null);
   const [formData, setFormData] = useState({
-    category: '',
+    category_definition_id: '',
     period_type: 'monthly' as 'weekly' | 'monthly' | 'yearly',
     budget_limit: '',
   });
@@ -79,16 +90,32 @@ const BudgetsPage: React.FC = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/analytics/dashboard?months=1');
+      const response = await fetch('/api/categories/hierarchy?type=expense');
       if (!response.ok) {
         throw new Error('Failed to fetch categories');
       }
       const data = await response.json();
-      if (data.breakdowns && Array.isArray(data.breakdowns.byCategory)) {
-        const uniqueCategories = data.breakdowns.byCategory
-          .map((item: any) => item.category)
-          .filter((cat: string) => cat !== 'Bank' && cat !== 'Income');
-        setCategories(uniqueCategories);
+
+      if (data.categories && Array.isArray(data.categories)) {
+        const map = new Map<number, any>();
+        data.categories.forEach((cat: any) => map.set(cat.id, cat));
+
+        const options: CategoryOption[] = data.categories
+          .filter((cat: any) => cat.is_active && cat.category_type === 'expense')
+          .map((cat: any) => {
+            const parent = cat.parent_id ? map.get(cat.parent_id) : null;
+            const displayName = cat.name_en ? `${cat.name} (${cat.name_en})` : cat.name;
+            const label = parent ? `${parent.name} › ${displayName}` : displayName;
+            return {
+              id: cat.id,
+              name: cat.name,
+              parentName: parent ? parent.name : null,
+              label,
+            };
+          })
+          .sort((a, b) => a.label.localeCompare(b.label));
+
+        setCategories(options);
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -96,18 +123,18 @@ const BudgetsPage: React.FC = () => {
     }
   };
 
-  const handleOpenDialog = (budget?: Budget) => {
+  const handleOpenDialog = (budget?: BudgetBase) => {
     if (budget) {
       setEditingBudget(budget);
       setFormData({
-        category: budget.category,
+        category_definition_id: budget.category_definition_id.toString(),
         period_type: budget.period_type,
         budget_limit: budget.budget_limit.toString(),
       });
     } else {
       setEditingBudget(null);
       setFormData({
-        category: '',
+        category_definition_id: '',
         period_type: 'monthly',
         budget_limit: '',
       });
@@ -123,10 +150,18 @@ const BudgetsPage: React.FC = () => {
   const handleSaveBudget = async () => {
     try {
       const payload = {
-        category: formData.category,
+        category_definition_id: parseInt(formData.category_definition_id, 10),
         period_type: formData.period_type,
         budget_limit: parseFloat(formData.budget_limit),
       };
+
+      if (Number.isNaN(payload.category_definition_id)) {
+        throw new Error('Invalid category selected');
+      }
+
+      if (Number.isNaN(payload.budget_limit) || payload.budget_limit <= 0) {
+        throw new Error('Budget limit must be greater than zero');
+      }
 
       if (editingBudget) {
         await fetch('/api/budgets', {
@@ -223,8 +258,15 @@ const BudgetsPage: React.FC = () => {
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                     <Box>
                       <Typography variant="h6" fontWeight="bold">
-                        {budget.category}
+                        {budget.category_name}
+                        {budget.category_name_en ? ` (${budget.category_name_en})` : ''}
                       </Typography>
+                      {budget.parent_category_name && (
+                        <Typography variant="caption" color="text.secondary">
+                          {budget.parent_category_name}
+                          {budget.parent_category_name_en ? ` (${budget.parent_category_name_en})` : ''}
+                        </Typography>
+                      )}
                       <Typography variant="caption" color="text.secondary">
                         {getPeriodLabel(budget.period_type)} Budget
                       </Typography>
@@ -308,15 +350,18 @@ const BudgetsPage: React.FC = () => {
             <FormControl fullWidth disabled={!!editingBudget}>
               <InputLabel>Category</InputLabel>
               <Select
-                value={formData.category}
+                value={formData.category_definition_id}
                 label="Category"
                 onChange={(e) =>
-                  setFormData({ ...formData, category: e.target.value })
+                  setFormData({ ...formData, category_definition_id: e.target.value })
                 }
               >
+                <MenuItem value="">
+                  <em>Select category</em>
+                </MenuItem>
                 {categories.map((cat) => (
-                  <MenuItem key={cat} value={cat}>
-                    {cat}
+                  <MenuItem key={cat.id} value={cat.id.toString()}>
+                    {cat.label}
                   </MenuItem>
                 ))}
               </Select>
@@ -357,7 +402,7 @@ const BudgetsPage: React.FC = () => {
           <Button
             onClick={handleSaveBudget}
             variant="contained"
-            disabled={!formData.category || !formData.budget_limit}
+            disabled={!formData.category_definition_id || !formData.budget_limit}
           >
             {editingBudget ? 'Update' : 'Create'}
           </Button>

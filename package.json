@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "init:sqlite": "node scripts/init_sqlite_db.js",
+    "migrate:schema-v2": "node scripts/migrate_schema_v2.js"
+  },
   "dependencies": {
     "electron-is-dev": "^3.0.1",
     "electron-reload": "^2.0.0-alpha.1",

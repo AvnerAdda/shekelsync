@@ -128,7 +128,7 @@ function ResponsiveAppBar() {
           amount: transactionData.amount,
           date: formattedDate,
           type: transactionData.type,
-          category: transactionData.category
+          categoryDefinitionId: transactionData.categoryDefinitionId
         }),
       });
 

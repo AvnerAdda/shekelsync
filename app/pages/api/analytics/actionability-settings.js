@@ -1,4 +1,5 @@
 import { getDB } from '../db.js';
+import { getCategoryInfo } from '../../../lib/category-helpers.js';
 
 /**
  * Category Actionability Settings API
@@ -39,24 +40,28 @@ export default async function handler(req, res) {
  * GET - Retrieve all actionability settings
  */
 async function handleGet(client, req, res) {
-  const result = await client.query(`
-    SELECT
-      cas.id,
-      cas.category_definition_id,
-      cas.parent_category,
-      cas.subcategory,
-      cas.actionability_level,
-      cas.monthly_average,
-      cas.transaction_count,
-      cas.is_default,
-      cas.user_notes,
-      cas.created_at,
-      cas.updated_at
-    FROM category_actionability_settings cas
-    ORDER BY cas.monthly_average DESC
-  `);
+    const result = await client.query(`
+      SELECT
+        cas.id,
+        cas.category_definition_id,
+        cas.actionability_level,
+        cas.monthly_average,
+        cas.transaction_count,
+        cas.is_default,
+        cas.user_notes,
+        cas.created_at,
+        cas.updated_at,
+        cd.name AS subcategory,
+        cd.name_en AS subcategory_en,
+        parent.name AS parent_category,
+        parent.name_en AS parent_category_en
+      FROM category_actionability_settings cas
+      JOIN category_definitions cd ON cd.id = cas.category_definition_id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      ORDER BY cas.monthly_average DESC, cd.display_order
+    `);
 
-  return res.status(200).json(result.rows);
+    return res.status(200).json(result.rows);
 }
 
 /**
@@ -77,8 +82,6 @@ async function handleBulkUpdate(client, req, res) {
     for (const setting of settings) {
       const {
         category_definition_id,
-        parent_category,
-        subcategory,
         actionability_level,
         monthly_average,
         transaction_count,
@@ -96,35 +99,39 @@ async function handleBulkUpdate(client, req, res) {
       const result = await client.query(`
         INSERT INTO category_actionability_settings (
           category_definition_id,
-          parent_category,
-          subcategory,
           actionability_level,
           monthly_average,
           transaction_count,
           is_default,
           user_notes
         )
-        VALUES ($1, $2, $3, $4, $5, $6, false, $7)
+        VALUES ($1, $2, $3, $4, false, $5)
         ON CONFLICT (category_definition_id)
         DO UPDATE SET
-          actionability_level = $4,
-          monthly_average = $5,
-          transaction_count = $6,
+          actionability_level = EXCLUDED.actionability_level,
+          monthly_average = EXCLUDED.monthly_average,
+          transaction_count = EXCLUDED.transaction_count,
           is_default = false,
-          user_notes = $7,
+          user_notes = EXCLUDED.user_notes,
           updated_at = CURRENT_TIMESTAMP
         RETURNING *
       `, [
         category_definition_id,
-        parent_category,
-        subcategory,
         actionability_level,
         monthly_average || 0,
         transaction_count || 0,
         user_notes || null
       ]);
 
-      results.push(result.rows[0]);
+      const persisted = result.rows[0];
+      const categoryInfo = await getCategoryInfo(persisted.category_definition_id, client);
+      results.push({
+        ...persisted,
+        subcategory: categoryInfo?.name || null,
+        subcategory_en: categoryInfo?.name_en || null,
+        parent_category: categoryInfo?.parent_name || null,
+        parent_category_en: categoryInfo?.parent_name_en || null
+      });
     }
 
     await client.query('COMMIT');
@@ -188,7 +195,15 @@ async function handleUpdate(client, req, res) {
     return res.status(404).json({ error: 'Setting not found' });
   }
 
-  return res.status(200).json(result.rows[0]);
+  const enriched = await getCategoryInfo(result.rows[0].category_definition_id, client);
+
+  return res.status(200).json({
+    ...result.rows[0],
+    subcategory: enriched?.name || null,
+    subcategory_en: enriched?.name_en || null,
+    parent_category: enriched?.parent_name || null,
+    parent_category_en: enriched?.parent_name_en || null
+  });
 }
 
 /**

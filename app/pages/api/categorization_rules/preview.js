@@ -41,18 +41,21 @@ export default async function handler(req, res) {
     // Use ILIKE for case-insensitive matching (same as categorization logic)
     const transactionsResult = await client.query(
       `SELECT
-        identifier,
-        vendor,
-        date,
-        name,
-        price,
-        category,
-        parent_category,
-        account_number,
-        memo
-      FROM transactions
-      WHERE LOWER(name) LIKE LOWER($1)
-      ORDER BY date DESC
+        t.identifier,
+        t.vendor,
+        t.date,
+        t.name,
+        t.price,
+        t.account_number,
+        t.memo,
+        cd.id as category_definition_id,
+        cd.name as category_name,
+        parent.name as parent_category_name
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
+      WHERE LOWER(t.name) LIKE LOWER($1)
+      ORDER BY t.date DESC
       LIMIT $2`,
       [patternWithWildcards, parseInt(limit)]
     );

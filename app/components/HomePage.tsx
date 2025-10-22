@@ -538,11 +538,11 @@ const HomePage: React.FC = () => {
                         <Typography variant="caption" color="text.secondary">
                           {format(new Date(txn.date), 'HH:mm')}
                         </Typography>
-                        {txn.parentCategory && txn.category && (
+                        {(txn.parent_name || txn.category_name) && (
                           <>
                             <Typography variant="caption" color="text.secondary">•</Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {txn.category}
+                              {txn.category_name || txn.parent_name}
                             </Typography>
                           </>
                         )}

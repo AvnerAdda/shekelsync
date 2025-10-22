@@ -1,9 +1,14 @@
 import { getDB } from './db.js';
+import {
+  resolveCategory,
+  matchCategorizationRule
+} from '../../lib/category-helpers.js';
+import { BANK_CATEGORY_NAME } from '../../lib/category-constants.js';
 
 /**
  * Intelligent transaction categorization using merchant catalog
  * This API attempts to auto-categorize a transaction based on its name
- * using pattern matching against the merchant_catalog
+ * using pattern matching against categorization rules (and optional merchant mappings)
  */
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -22,25 +27,27 @@ export default async function handler(req, res) {
     // Clean the transaction name for better matching
     const cleanName = transaction_name.toLowerCase().trim();
 
-    // Query merchant catalog for matching patterns
-    const catalogResult = await client.query(
+    const rulesResult = await client.query(
       `SELECT
-        id,
-        merchant_pattern,
-        parent_category,
-        subcategory,
-        confidence
-       FROM merchant_catalog
-       WHERE is_active = true
-       AND LOWER($1) LIKE '%' || LOWER(merchant_pattern) || '%'
+         cr.id,
+         cr.name_pattern,
+         cr.category_definition_id,
+         cd.name AS subcategory,
+         parent.name AS parent_category,
+         cr.priority
+       FROM categorization_rules cr
+       LEFT JOIN category_definitions cd ON cd.id = cr.category_definition_id
+       LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+       WHERE cr.is_active = true
+         AND LOWER($1) LIKE '%' || LOWER(cr.name_pattern) || '%'
        ORDER BY
-         LENGTH(merchant_pattern) DESC,  -- Longer patterns first (more specific)
-         confidence DESC
+         LENGTH(cr.name_pattern) DESC,
+         cr.priority DESC
        LIMIT 5`,
       [cleanName]
     );
 
-    const matches = catalogResult.rows;
+    const matches = rulesResult.rows;
 
     if (matches.length === 0) {
       return res.status(200).json({
@@ -53,30 +60,50 @@ export default async function handler(req, res) {
 
     // Get the best match (first one due to ordering)
     const bestMatch = matches[0];
-
-    // Calculate confidence based on pattern length and catalog confidence
-    const patternLength = bestMatch.merchant_pattern.length;
+    const patternLength = bestMatch.name_pattern.length;
     const nameLength = cleanName.length;
-    const lengthRatio = patternLength / nameLength;
-    const finalConfidence = bestMatch.confidence * Math.min(lengthRatio * 1.5, 1.0);
+    const lengthRatio = patternLength / (nameLength || 1);
+    const baseConfidence = bestMatch.category_definition_id ? 0.8 : 0.5;
+    const finalConfidence = Math.min(baseConfidence * Math.max(lengthRatio, 0.5), 1.0);
 
     // If transaction_id and vendor are provided, update the transaction
     if (transaction_id && vendor) {
+      let parentCategory = bestMatch.parent_category || null;
+      let subcategory = bestMatch.subcategory || null;
+      let categoryDefinitionId = bestMatch.category_definition_id || null;
+
+      if (!categoryDefinitionId) {
+        const resolved = await resolveCategory({
+          client,
+          rawCategory: bestMatch.subcategory || bestMatch.parent_category,
+          transactionName: transaction_name,
+        });
+        if (resolved) {
+          categoryDefinitionId = resolved.categoryDefinitionId;
+          parentCategory = resolved.parentCategory || parentCategory;
+          subcategory = resolved.subcategory || subcategory;
+        }
+      }
+
+      const categoryLabel = subcategory || parentCategory || transaction_name;
+
       const updateResult = await client.query(
         `UPDATE transactions
          SET
-           parent_category = $1,
-           subcategory = $2,
-           category = $3,
-           merchant_name = $4,
+           category_definition_id = COALESCE($1, category_definition_id),
+           parent_category = COALESCE($2, parent_category),
+           subcategory = COALESCE($3, subcategory),
+           category = COALESCE($4, category),
+           merchant_name = $5,
            auto_categorized = true,
-           confidence_score = $5
-         WHERE identifier = $6 AND vendor = $7
+           confidence_score = GREATEST(confidence_score, $6)
+         WHERE identifier = $7 AND vendor = $8
          RETURNING *`,
         [
-          bestMatch.parent_category,
-          bestMatch.subcategory,
-          bestMatch.subcategory || bestMatch.parent_category, // Fallback to parent if no subcategory
+          categoryDefinitionId,
+          parentCategory,
+          subcategory,
+          categoryLabel,
           transaction_name,
           finalConfidence,
           transaction_id,
@@ -89,13 +116,18 @@ export default async function handler(req, res) {
       }
 
       return res.status(200).json({
-        success: true,
-        message: 'Transaction categorized successfully',
-        transaction: updateResult.rows[0],
-        match: bestMatch,
-        confidence: finalConfidence,
-        all_matches: matches
-      });
+      success: true,
+      message: 'Transaction categorized successfully',
+      transaction: updateResult.rows[0],
+      match: {
+        ...bestMatch,
+        category_definition_id: categoryDefinitionId,
+        parent_category: parentCategory,
+        subcategory,
+      },
+      confidence: finalConfidence,
+      all_matches: matches
+    });
     }
 
     // If no transaction to update, just return the suggestions
@@ -104,16 +136,22 @@ export default async function handler(req, res) {
       message: 'Categorization suggestions found',
       transaction_name,
       best_match: {
+        category_definition_id: bestMatch.category_definition_id,
         parent_category: bestMatch.parent_category,
         subcategory: bestMatch.subcategory,
         confidence: finalConfidence,
-        pattern: bestMatch.merchant_pattern
+        pattern: bestMatch.name_pattern
       },
       all_matches: matches.map(m => ({
+        category_definition_id: m.category_definition_id,
         parent_category: m.parent_category,
         subcategory: m.subcategory,
-        confidence: m.confidence,
-        pattern: m.merchant_pattern
+        confidence: Math.min(
+          (m.category_definition_id ? 0.8 : 0.5) *
+            Math.max(m.name_pattern.length / (cleanName.length || 1), 0.5),
+          1.0
+        ),
+        pattern: m.name_pattern
       }))
     });
 
@@ -135,10 +173,18 @@ export async function bulkCategorizeTransactions(client) {
   try {
     // Get all active merchant patterns
     const patternsResult = await client.query(`
-      SELECT id, merchant_pattern, parent_category, subcategory, confidence
-      FROM merchant_catalog
-      WHERE is_active = true
-      ORDER BY LENGTH(merchant_pattern) DESC, confidence DESC
+      SELECT
+        cr.id,
+        cr.name_pattern,
+        cr.category_definition_id,
+        cd.name AS subcategory,
+        parent.name AS parent_category,
+        cr.priority
+      FROM categorization_rules cr
+      LEFT JOIN category_definitions cd ON cd.id = cr.category_definition_id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      WHERE cr.is_active = true
+      ORDER BY LENGTH(cr.name_pattern) DESC, cr.priority DESC
     `);
 
     const patterns = patternsResult.rows;
@@ -146,28 +192,55 @@ export async function bulkCategorizeTransactions(client) {
 
     // Apply each pattern to matching transactions
     for (const pattern of patterns) {
+      let categoryId = pattern.category_definition_id;
+      let parentCategory = pattern.parent_category || null;
+      let subcategory = pattern.subcategory || null;
+
+      if (!categoryId) {
+        const resolved = await resolveCategory({
+          client,
+          rawCategory: subcategory || parentCategory,
+          transactionName: pattern.name_pattern,
+        });
+        if (resolved) {
+          categoryId = resolved.categoryDefinitionId;
+          parentCategory = resolved.parentCategory || parentCategory;
+          subcategory = resolved.subcategory || subcategory;
+        }
+      }
+
+      const categoryLabel = subcategory || parentCategory || pattern.name_pattern;
+      const confidence = categoryId ? 0.8 : 0.5;
+
       const updateResult = await client.query(
         `UPDATE transactions
          SET
-           parent_category = $1,
-           subcategory = $2,
-           category = COALESCE($2, $1),
+           category_definition_id = COALESCE($2, category_definition_id),
+           parent_category = COALESCE($3, parent_category),
+           subcategory = COALESCE($4, subcategory),
+           category = COALESCE($5, category),
            merchant_name = name,
            auto_categorized = true,
-           confidence_score = $3
+           confidence_score = GREATEST(confidence_score, $6)
          WHERE
-           LOWER(name) LIKE '%' || LOWER($4) || '%'
-           AND category NOT IN ('Bank', 'Income')
+           LOWER(name) LIKE '%' || LOWER($1) || '%'
+           AND category_definition_id NOT IN (
+             SELECT id FROM category_definitions
+             WHERE name = $7 OR category_type = 'income'
+           )
            AND (
-             parent_category IS NULL
+             category_definition_id IS NULL
              OR auto_categorized = false
-             OR confidence_score < $3
+             OR confidence_score < $6
            )`,
         [
-          pattern.parent_category,
-          pattern.subcategory,
-          pattern.confidence,
-          pattern.merchant_pattern
+          pattern.name_pattern,
+          categoryId,
+          parentCategory,
+          subcategory,
+          categoryLabel,
+          confidence,
+          BANK_CATEGORY_NAME
         ]
       );
 

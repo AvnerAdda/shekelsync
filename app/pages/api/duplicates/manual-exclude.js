@@ -16,7 +16,7 @@ export default async function handler(req, res) {
       transactionIdentifier,
       transactionVendor,
       reason = 'duplicate',
-      overrideCategory = null,
+      overrideCategoryDefinitionId = null,
       notes = null
     } = req.body;
 
@@ -28,7 +28,9 @@ export default async function handler(req, res) {
 
     // Verify transaction exists
     const txnCheck = await client.query(
-      'SELECT identifier, vendor, name, price, category FROM transactions WHERE identifier = $1 AND vendor = $2',
+      `SELECT identifier, vendor, name, price, category_definition_id
+       FROM transactions
+       WHERE identifier = $1 AND vendor = $2`,
       [transactionIdentifier, transactionVendor]
     );
 
@@ -67,11 +69,12 @@ export default async function handler(req, res) {
         `UPDATE manual_exclusions
          SET exclusion_reason = $1,
              override_category = $2,
-             notes = $3,
+             override_category_definition_id = $3,
+             notes = $4,
              updated_at = NOW()
-         WHERE transaction_identifier = $4 AND transaction_vendor = $5
+         WHERE transaction_identifier = $5 AND transaction_vendor = $6
          RETURNING id`,
-        [reason, overrideCategory, notes, transactionIdentifier, transactionVendor]
+        [reason, overrideCategory, overrideCategoryId, notes, transactionIdentifier, transactionVendor]
       );
 
       return res.status(200).json({
@@ -81,7 +84,8 @@ export default async function handler(req, res) {
           ...transaction,
           isExcluded: true,
           exclusionReason: reason,
-          overrideCategory
+          overrideCategory,
+          overrideCategoryDefinitionId: overrideCategoryId
         }
       });
     }
@@ -111,10 +115,11 @@ export default async function handler(req, res) {
         transaction_vendor,
         exclusion_reason,
         override_category,
+        override_category_definition_id,
         notes
-      ) VALUES ($1, $2, $3, $4, $5)
+      ) VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING id`,
-      [transactionIdentifier, transactionVendor, reason, overrideCategory, notes]
+      [transactionIdentifier, transactionVendor, reason, overrideCategory, overrideCategoryId, notes]
     );
 
     const exclusionId = insertResult.rows[0].id;
@@ -126,7 +131,8 @@ export default async function handler(req, res) {
         ...transaction,
         isExcluded: true,
         exclusionReason: reason,
-        overrideCategory
+        overrideCategory,
+        overrideCategoryDefinitionId: overrideCategoryId
       }
     });
 
@@ -140,3 +146,20 @@ export default async function handler(req, res) {
     client.release();
   }
 }
+    let overrideCategory = null;
+    let overrideCategoryId = null;
+    if (overrideCategoryDefinitionId !== null) {
+      const categoryResult = await client.query(
+        `SELECT id, name
+         FROM category_definitions
+         WHERE id = $1`,
+        [overrideCategoryDefinitionId]
+      );
+
+      if (categoryResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Override category not found' });
+      }
+
+      overrideCategoryId = overrideCategoryDefinitionId;
+      overrideCategory = categoryResult.rows[0].name;
+    }
