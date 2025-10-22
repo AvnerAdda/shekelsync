@@ -70,21 +70,29 @@ async function getFinancialContext(client) {
   // Get category breakdown
   const categoriesResult = await client.query(`
     SELECT
-      COALESCE(parent_category, category) as category,
+      COALESCE(parent.name, cd.name) as category,
       SUM(ABS(price)) as total,
       COUNT(*) as count
-    FROM transactions
-    WHERE date >= $1 AND price < 0
-    GROUP BY COALESCE(parent_category, category)
+    FROM transactions t
+    LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+    LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
+    WHERE t.date >= $1 AND t.price < 0
+    GROUP BY COALESCE(parent.name, cd.name)
     ORDER BY total DESC
     LIMIT 10
   `, [threeMonthsAgo]);
 
   // Get recent transactions
   const recentResult = await client.query(`
-    SELECT name, price, date, parent_category
-    FROM transactions
-    ORDER BY date DESC
+    SELECT
+      t.name,
+      t.price,
+      t.date,
+      COALESCE(parent.name, cd.name) as parent_category
+    FROM transactions t
+    LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+    LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
+    ORDER BY t.date DESC
     LIMIT 20
   `);
 

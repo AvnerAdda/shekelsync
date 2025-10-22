@@ -1,5 +1,6 @@
 import { getDB } from '../db.js';
 import { subMonths } from 'date-fns';
+import { BANK_CATEGORY_NAME } from '../../../lib/category-constants.js';
 
 /**
  * Anomaly detection API - identifies unusual spending patterns
@@ -87,19 +88,21 @@ async function detectAnomalies(client) {
     // Load transactions for analysis
     const transactionsResult = await client.query(
       `SELECT
-        identifier,
-        vendor,
-        name,
-        date,
-        parent_category,
-        subcategory,
-        ABS(price) as amount
-      FROM transactions
-      WHERE date >= $1
-        AND price < 0
-        AND parent_category IS NOT NULL
-        AND parent_category NOT IN ('Bank', 'Income')`,
-      [sixMonthsAgoStr]
+        t.identifier,
+        t.vendor,
+        t.name,
+        t.date,
+        COALESCE(parent.name, cd.name) AS parent_category,
+        CASE WHEN parent.id IS NOT NULL THEN cd.name ELSE NULL END AS subcategory,
+        ABS(t.price) AS amount
+      FROM transactions t
+      JOIN category_definitions cd ON cd.id = t.category_definition_id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      WHERE t.date >= $1
+        AND t.price < 0
+        AND cd.category_type = 'expense'
+        AND cd.name != $2`,
+      [sixMonthsAgoStr, BANK_CATEGORY_NAME]
     );
 
     const transactions = transactionsResult.rows.map(row => ({

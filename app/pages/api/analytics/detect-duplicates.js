@@ -1,5 +1,6 @@
 import { getDB } from '../db.js';
 import { subMonths, differenceInCalendarDays } from 'date-fns';
+import { BANK_CATEGORY_NAME, CATEGORY_TYPES } from '../../../lib/category-constants.js';
 
 /**
  * Detect potential duplicate transactions
@@ -51,18 +52,28 @@ export default async function handler(req, res) {
       })
     );
 
+    const bankCategoryRow = await client.query(
+      `SELECT id FROM category_definitions WHERE name = $1 LIMIT 1`,
+      [BANK_CATEGORY_NAME]
+    );
+    const bankCategoryId = bankCategoryRow.rows[0]?.id || null;
+
     const transactionsResult = await client.query(
       `SELECT
-        identifier,
-        vendor,
-        date,
-        price,
-        category,
-        parent_category,
-        account_number,
-        name
-      FROM transactions
-      WHERE date >= $1 AND date <= $2`,
+        t.identifier,
+        t.vendor,
+        t.date,
+        t.price,
+        t.account_number,
+        t.name,
+        t.category_definition_id,
+        cd.category_type,
+        cd.name AS category_name,
+        parent.name AS parent_category
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      WHERE t.date >= $1 AND t.date <= $2`,
       [startStr, endBufferStr]
     );
 
@@ -72,7 +83,9 @@ export default async function handler(req, res) {
       date: new Date(row.date),
       dateStr: row.date,
       price: parseFloat(row.price),
-      category: row.category,
+      categoryDefinitionId: row.category_definition_id,
+      categoryType: row.category_type,
+      categoryName: row.category_name,
       parentCategory: row.parent_category,
       accountNumber: row.account_number,
       name: row.name || '',
@@ -91,7 +104,14 @@ export default async function handler(req, res) {
       const sampleTransactionsMap = new Map();
 
       transactions
-        .filter(txn => txn.price < 0 && txn.date >= start && txn.date <= end && cards.has(txn.vendor) && txn.category !== 'Bank' && txn.category !== 'Income')
+        .filter(txn =>
+          txn.price < 0 &&
+          txn.date >= start &&
+          txn.date <= end &&
+          cards.has(txn.vendor) &&
+          txn.categoryDefinitionId !== bankCategoryId &&
+          txn.categoryType !== CATEGORY_TYPES.INCOME
+        )
         .forEach(txn => {
           const monthKey = txn.date.toISOString().slice(0, 7);
           const key = `${monthKey}|${txn.vendor}|${txn.accountNumber || ''}`;
@@ -127,7 +147,9 @@ export default async function handler(req, res) {
         });
 
       const bankTransactions = transactions.filter(
-        txn => txn.price < 0 && txn.category === 'Bank'
+        txn =>
+          txn.price < 0 &&
+          (bankCategoryId ? txn.categoryDefinitionId === bankCategoryId : txn.categoryName === BANK_CATEGORY_NAME)
       );
 
       for (const [key, group] of cardGroups.entries()) {
@@ -272,24 +294,26 @@ export default async function handler(req, res) {
           t1.date as t1_date,
           t1.name as t1_name,
           t1.price as t1_price,
-          t1.category as t1_category,
+          cd1.name as t1_category,
           t1.account_number as t1_account,
           t2.identifier as t2_id,
           t2.vendor as t2_vendor,
           t2.date as t2_date,
           t2.name as t2_name,
           t2.price as t2_price,
-          t2.category as t2_category,
+          cd2.name as t2_category,
           t2.account_number as t2_account
         FROM transaction_duplicates td
         INNER JOIN transactions t1 ON (
           td.transaction1_identifier = t1.identifier
           AND td.transaction1_vendor = t1.vendor
         )
+        LEFT JOIN category_definitions cd1 ON t1.category_definition_id = cd1.id
         INNER JOIN transactions t2 ON (
           td.transaction2_identifier = t2.identifier
           AND td.transaction2_vendor = t2.vendor
         )
+        LEFT JOIN category_definitions cd2 ON t2.category_definition_id = cd2.id
         WHERE t1.date >= $1 AND t1.date <= $2
         ORDER BY td.created_at DESC
       `, [startStr, endStr]);
@@ -352,7 +376,7 @@ function formatTxn(txn) {
     date: txn.dateStr,
     name: txn.name,
     price: parseFloat(txn.price.toFixed(2)),
-    category: txn.category || txn.parentCategory,
+    category: txn.parentCategory || txn.categoryName || null,
     accountNumber: txn.accountNumber,
   };
 }

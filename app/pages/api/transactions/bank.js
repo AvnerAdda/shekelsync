@@ -1,4 +1,5 @@
 import { getDB } from '../db.js';
+import { BANK_CATEGORY_NAME } from '../../../lib/category-constants.js';
 
 /**
  * Fetch bank transactions with exclusion status
@@ -27,12 +28,11 @@ export default async function handler(req, res) {
 
     // Check if manual_exclusions table exists
     const tableCheck = await client.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables
-        WHERE table_name = 'manual_exclusions'
-      );
+      SELECT COUNT(*) as count
+      FROM sqlite_master
+      WHERE type = 'table' AND name = 'manual_exclusions'
     `);
-    const hasManualExclusions = tableCheck.rows[0].exists;
+    const hasManualExclusions = parseInt(tableCheck.rows[0].count) > 0;
 
     let query = `
       SELECT
@@ -41,17 +41,16 @@ export default async function handler(req, res) {
         t.date,
         t.name,
         t.price,
-        t.category,
+        t.category_definition_id,
         t.account_number,
         t.memo,
         ${hasManualExclusions ? `
         CASE
-          WHEN me.id IS NOT NULL THEN true
-          WHEN td.id IS NOT NULL THEN true
-          ELSE false
+          WHEN me.id IS NOT NULL THEN 1
+          WHEN td.id IS NOT NULL THEN 1
+          ELSE 0
         END as is_excluded,
         COALESCE(me.exclusion_reason, td.match_type) as exclusion_reason,
-        COALESCE(me.override_category, td.override_category) as override_category,
         COALESCE(me.notes, td.notes) as exclusion_notes,
         CASE
           WHEN me.id IS NOT NULL THEN 'manual'
@@ -59,9 +58,8 @@ export default async function handler(req, res) {
           ELSE NULL
         END as exclusion_type
         ` : `
-        false as is_excluded,
+        0 as is_excluded,
         NULL as exclusion_reason,
-        NULL as override_category,
         NULL as exclusion_notes,
         NULL as exclusion_type
         `}
@@ -78,7 +76,9 @@ export default async function handler(req, res) {
         )
       )
       ` : ''}
-      WHERE t.category = 'Bank'
+      WHERE t.category_definition_id IN (
+        SELECT id FROM category_definitions WHERE name = '${BANK_CATEGORY_NAME}'
+      )
       AND t.price < 0
       AND t.date >= $1
       AND t.date <= $2
@@ -117,7 +117,9 @@ export default async function handler(req, res) {
         )
       )
       ` : ''}
-      WHERE t.category = 'Bank'
+      WHERE t.category_definition_id IN (
+        SELECT id FROM category_definitions WHERE name = '${BANK_CATEGORY_NAME}'
+      )
       AND t.price < 0
       AND t.date >= $1
       AND t.date <= $2

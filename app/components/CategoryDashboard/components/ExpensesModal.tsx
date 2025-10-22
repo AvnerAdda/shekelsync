@@ -15,6 +15,7 @@ import Autocomplete from '@mui/material/Autocomplete';
 import CheckIcon from '@mui/icons-material/Check';
 import EditIcon from '@mui/icons-material/Edit';
 import { ExpensesModalProps, Expense } from '../types';
+import { BANK_CATEGORY_NAME } from '../../../lib/category-constants';
 import { useFinancePrivacy } from '../../../contexts/FinancePrivacyContext';
 import { dateUtils } from '../utils/dateUtils';
 import dynamic from 'next/dynamic';
@@ -66,6 +67,12 @@ const ExpensesModal: React.FC<ExpensesModalProps> = ({ open, onClose, data, colo
 
   React.useEffect(() => {
     if (data.type) {
+      const categoryQueryParam = data.category_definition_id
+        ? `categoryId=${data.category_definition_id}`
+        : data.type
+        ? `category=${encodeURIComponent(data.type)}`
+        : null;
+
       switch (data.type) {
         case "Total Expenses":
           fetch(`/api/expenses_by_month?month=10&groupByYear=false`)
@@ -84,13 +91,17 @@ const ExpensesModal: React.FC<ExpensesModalProps> = ({ open, onClose, data, colo
           setTimeSeriesData([]);
           break;
         default:
-          fetch(`/api/category_by_month?category=${data.type}&month=10&groupByYear=false`)
-            .then((response) => response.json())
-            .then((data) => setTimeSeriesData(data))
-            .catch((error) => console.error("Error fetching time series data:", error));
+          if (categoryQueryParam) {
+            fetch(`/api/category_by_month?${categoryQueryParam}&month=10&groupByYear=false`)
+              .then((response) => response.json())
+              .then((data) => setTimeSeriesData(data))
+              .catch((error) => console.error("Error fetching time series data:", error));
+          } else {
+            setTimeSeriesData([]);
+          }
       }
     }
-  }, [data.type, data.data]);
+  }, [data.type, data.data, data.category_definition_id]);
 
   const getFormattedMonths = () =>
     timeSeriesData.map((data) => {
@@ -208,7 +219,13 @@ const ExpensesModal: React.FC<ExpensesModalProps> = ({ open, onClose, data, colo
             name: expense.name,
             date: expense.date,
             price: expense.price,
-            category: data.type === "Bank Transactions" ? 'Bank' : (expense.category || data.type)
+            categoryDefinitionId: expense.category_definition_id || data.category_definition_id,
+            category:
+              expense.resolved_category_name ||
+              expense.category_name ||
+              expense.category ||
+              expense.legacy_category ||
+              (data.type === 'Bank Transactions' ? BANK_CATEGORY_NAME : data.type)
           }),
         });
         

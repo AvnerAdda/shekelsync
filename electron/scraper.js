@@ -19,6 +19,7 @@ try {
 }
 const crypto = require('crypto');
 const { dbManager } = require('./database');
+const { BANK_CATEGORY_NAME } = require('../app/lib/category-constants.js');
 
 // Import constants - need to handle ES module import in CommonJS
 const BANK_VENDORS = ['hapoalim', 'leumi', 'mizrahi', 'otsarHahayal', 'beinleumi', 'massad', 'yahav', 'union'];
@@ -30,46 +31,154 @@ class ElectronScraper {
     this.mainWindow = mainWindow;
   }
 
+  normalizeCategoryRecord(info) {
+    if (!info) return null;
+    if (info.id) {
+      return {
+        id: info.id,
+        name: info.name,
+        parentName: info.parent_name || null,
+        parentId: info.parent_id ?? null,
+      };
+    }
+
+    return {
+      id: info.category_definition_id || null,
+      name: info.subcategory || info.parent_category || null,
+      parentName: info.parent_category || null,
+      parentId: info.parent_id ?? null,
+    };
+  }
+
+  async getCategoryInfo(categoryId) {
+    if (!categoryId) return null;
+    const result = await dbManager.query(
+      `SELECT
+         cd.id,
+         cd.name,
+         cd.category_type,
+         cd.parent_id,
+         parent.name AS parent_name
+       FROM category_definitions cd
+       LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+       WHERE cd.id = $1`,
+      [categoryId]
+    );
+    return result.rows[0] || null;
+  }
+
+  async resolveCategoryFromMapping(term) {
+    if (!term) return null;
+    const mapping = await dbManager.query(
+      `SELECT
+         cm.category_definition_id,
+         cd.name AS subcategory,
+         cd.parent_id,
+         parent.name AS parent_category
+       FROM category_mapping cm
+       JOIN category_definitions cd ON cd.id = cm.category_definition_id
+       LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+       WHERE cm.hebrew_category = $1`,
+      [term]
+    );
+    return mapping.rows[0] || null;
+  }
+
+  async findCategoryByName(name, parentName) {
+    if (!name) return null;
+    const params = [name];
+    let query = `
+      SELECT
+        cd.id AS category_definition_id,
+        cd.name AS subcategory,
+        cd.parent_id,
+        parent.name AS parent_category
+      FROM category_definitions cd
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      WHERE LOWER(cd.name) = LOWER($1)
+    `;
+    if (parentName) {
+      params.push(parentName);
+      query += ' AND LOWER(parent.name) = LOWER($2)';
+    }
+    const result = await dbManager.query(query, params);
+    return result.rows[0] || null;
+  }
+
   async insertTransaction(txn, companyId, isBank, accountNumber) {
     const uniqueId = `${txn.identifier}-${companyId}-${txn.processedDate}-${txn.description}`;
     const hash = crypto.createHash('sha1');
     hash.update(uniqueId);
     txn.identifier = hash.digest('hex');
 
-    let amount = txn.chargedAmount;
+    let amount = txn.chargedAmount || txn.originalAmount || 0;
     let category = txn.category;
     let parentCategory = null;
     let subcategory = null;
+    let categoryDefinitionId = null;
+    let categoryInfo = null;
 
     if (!isBank) {
-      amount = txn.chargedAmount * -1;
+      const rawAmount = txn.chargedAmount || txn.originalAmount || 0;
+      amount = rawAmount > 0 ? rawAmount * -1 : rawAmount;
 
-      // First, try to map Hebrew category from scraper using category_mapping table
       if (txn.category) {
-        const mappingResult = await dbManager.query(
-          `SELECT parent_category, subcategory FROM category_mapping WHERE hebrew_category = $1`,
-          [txn.category]
+        categoryInfo = this.normalizeCategoryRecord(
+          await this.resolveCategoryFromMapping(txn.category)
         );
+      }
 
-        if (mappingResult.rows.length > 0) {
-          parentCategory = mappingResult.rows[0].parent_category;
-          subcategory = mappingResult.rows[0].subcategory;
-          category = subcategory || parentCategory;
+      if (!categoryInfo) {
+        const categorisation = await this.autoCategorizeTransaction(txn.description);
+        if (categorisation.success) {
+          if (categorisation.categoryDefinitionId) {
+            categoryInfo = this.normalizeCategoryRecord(
+              await this.getCategoryInfo(categorisation.categoryDefinitionId)
+            );
+          }
+          if (!categoryInfo && categorisation.subcategory) {
+            categoryInfo = this.normalizeCategoryRecord(
+              await this.findCategoryByName(
+                categorisation.subcategory,
+                categorisation.parentCategory
+              )
+            );
+          }
+          if (!categoryInfo && categorisation.parentCategory) {
+            categoryInfo = this.normalizeCategoryRecord(
+              await this.findCategoryByName(categorisation.parentCategory, null)
+            );
+          }
+
+          if (!categoryInfo) {
+            parentCategory = categorisation.parentCategory || parentCategory;
+            subcategory = categorisation.subcategory || subcategory;
+            category = categorisation.subcategory || categorisation.parentCategory || category;
+          }
         }
       }
 
-      // If no mapping found, try to categorize using merchant catalog
-      if (!parentCategory) {
-        const categorization = await this.autoCategorizeTransaction(txn.description);
-        if (categorization.success) {
-          parentCategory = categorization.parent_category;
-          subcategory = categorization.subcategory;
-          category = subcategory || parentCategory;
-        }
+      if (!categoryInfo && category && category !== 'N/A') {
+        categoryInfo = this.normalizeCategoryRecord(
+          await this.findCategoryByName(category, parentCategory)
+        );
+      }
+
+      if (categoryInfo && categoryInfo.id) {
+        categoryDefinitionId = categoryInfo.id;
+        const hasParent = Boolean(categoryInfo.parentName);
+        category = categoryInfo.name || category;
+        parentCategory = hasParent ? (categoryInfo.parentName || category) : (categoryInfo.name || category);
+        subcategory = hasParent ? (categoryInfo.name || subcategory || category) : null;
       }
     } else {
-      category = "Bank";
-      parentCategory = "Bank";
+      amount = txn.chargedAmount || txn.originalAmount || 0;
+      const bankCategory = await resolveBankCategory(dbManager);
+      categoryDefinitionId = bankCategory.id;
+      const hasParent = Boolean(bankCategory.parent_name);
+      category = bankCategory.name;
+      parentCategory = hasParent ? bankCategory.parent_name : bankCategory.name;
+      subcategory = hasParent ? bankCategory.name : null;
     }
 
     try {
@@ -83,6 +192,7 @@ class ElectronScraper {
           category,
           parent_category,
           subcategory,
+          category_definition_id,
           merchant_name,
           auto_categorized,
           confidence_score,
@@ -105,9 +215,10 @@ class ElectronScraper {
           category || 'N/A',
           parentCategory,
           subcategory,
+          categoryDefinitionId,
           txn.description,
-          parentCategory ? true : false,
-          parentCategory ? 0.8 : 0.0,
+          Boolean(categoryDefinitionId || parentCategory),
+          categoryDefinitionId ? 0.8 : parentCategory ? 0.5 : 0.0,
           txn.type,
           txn.processedDate,
           txn.originalAmount,
@@ -131,16 +242,20 @@ class ElectronScraper {
       // Query categorization rules for matching patterns
       const rulesResult = await dbManager.query(
         `SELECT
-          name_pattern,
-          parent_category,
-          subcategory,
-          priority
-         FROM categorization_rules
-         WHERE is_active = true
-         AND $1 ILIKE '%' || name_pattern || '%'
+          cr.name_pattern,
+          cr.category_definition_id,
+          cd.name AS subcategory,
+          cd.parent_id,
+          parent.name AS parent_category,
+          cr.priority
+         FROM categorization_rules cr
+         LEFT JOIN category_definitions cd ON cd.id = cr.category_definition_id
+         LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+         WHERE cr.is_active = true
+         AND $1 ILIKE '%' || cr.name_pattern || '%'
          ORDER BY
-           priority DESC,
-           LENGTH(name_pattern) DESC
+           cr.priority DESC,
+           LENGTH(cr.name_pattern) DESC
          LIMIT 1`,
         [cleanName]
       );
@@ -149,8 +264,9 @@ class ElectronScraper {
         const match = rulesResult.rows[0];
         return {
           success: true,
-          parent_category: match.parent_category || match.name_pattern,
-          subcategory: match.subcategory,
+          categoryDefinitionId: match.category_definition_id || null,
+          parentCategory: match.parent_category || null,
+          subcategory: match.subcategory || null,
           confidence: 0.8
         };
       }
@@ -166,10 +282,21 @@ class ElectronScraper {
     try {
       // Get all active categorization rules
       const rulesResult = await dbManager.query(`
-        SELECT id, name_pattern, target_category, parent_category, subcategory, priority
-        FROM categorization_rules
-        WHERE is_active = true
-        ORDER BY priority DESC, id
+        SELECT
+          cr.id,
+          cr.name_pattern,
+          cr.target_category,
+          cr.parent_category,
+          cr.subcategory,
+          cr.category_definition_id,
+          cd.name AS resolved_subcategory,
+          parent.name AS resolved_parent_category,
+          cr.priority
+        FROM categorization_rules cr
+        LEFT JOIN category_definitions cd ON cd.id = cr.category_definition_id
+        LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+        WHERE cr.is_active = true
+        ORDER BY cr.priority DESC, cr.id
       `);
 
       const rules = rulesResult.rows;
@@ -178,24 +305,46 @@ class ElectronScraper {
       // Apply each rule to transactions that don't already have the target category
       for (const rule of rules) {
         const pattern = `%${rule.name_pattern}%`;
+        let categoryId = rule.category_definition_id;
+        let resolvedSub = rule.resolved_subcategory || rule.subcategory || null;
+        let resolvedParent =
+          rule.resolved_parent_category ||
+          rule.parent_category ||
+          (resolvedSub ? null : rule.target_category) ||
+          null;
 
-        // Determine what to set based on rule configuration
-        const parentCat = rule.parent_category || rule.target_category;
-        const subcat = rule.subcategory;
-        const category = subcat || parentCat;
+        if (!categoryId) {
+          const fallback = this.normalizeCategoryRecord(
+            await this.findCategoryByName(
+              resolvedSub || resolvedParent || rule.target_category,
+              resolvedParent
+            )
+          );
+          if (fallback) {
+            categoryId = fallback.id;
+            resolvedParent = fallback.parentName || resolvedParent;
+            resolvedSub = fallback.parentId ? fallback.name : resolvedSub;
+          }
+        }
+
+        const categoryName = resolvedSub || resolvedParent || rule.target_category || rule.name_pattern;
+        const confidence = categoryId ? 0.8 : 0.5;
 
         const updateResult = await dbManager.query(`
           UPDATE transactions
           SET
-            category = $2,
-            parent_category = $3,
-            subcategory = $4
+            category_definition_id = COALESCE($2, category_definition_id),
+            category = COALESCE($3, category),
+            parent_category = COALESCE($4, parent_category),
+            subcategory = COALESCE($5, subcategory),
+            auto_categorized = true,
+            confidence_score = GREATEST(confidence_score, $6)
           WHERE LOWER(name) LIKE LOWER($1)
-          AND category != $2
-          AND category IS NOT NULL
-          AND parent_category != 'Bank'
-          AND category != 'Income'
-        `, [pattern, category, parentCat, subcat]);
+            AND category_definition_id NOT IN (
+              SELECT id FROM category_definitions
+              WHERE name = $7 OR category_type = 'income'
+            )
+        `, [pattern, categoryId, categoryName, resolvedParent, resolvedSub, confidence, BANK_CATEGORY_NAME]);
 
         totalUpdated += updateResult.rowCount;
       }
@@ -450,3 +599,27 @@ class ElectronScraper {
 }
 
 module.exports = { ElectronScraper };
+let bankCategoryCache = null;
+
+async function resolveBankCategory(client) {
+  if (bankCategoryCache) return bankCategoryCache;
+  const result = await client.query(
+    `SELECT
+       cd.id,
+       cd.name,
+       cd.parent_id,
+       parent.name AS parent_name
+     FROM category_definitions cd
+     LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+     WHERE cd.name = $1
+     LIMIT 1`,
+    [BANK_CATEGORY_NAME]
+  );
+
+  if (!result.rows.length) {
+    throw new Error(`Bank category '${BANK_CATEGORY_NAME}' not found`);
+  }
+
+  bankCategoryCache = result.rows[0];
+  return bankCategoryCache;
+}

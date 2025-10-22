@@ -6,15 +6,18 @@ import CreditCardIcon from '@mui/icons-material/CreditCard';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import Button from '@mui/material/Button';
-import { ResponseData, Expense, ModalData } from './types';
+import { CategorySummary, Expense, ModalData, CategorizedExpense, CategoryOption } from './types';
+import { BANK_CATEGORY_NAME } from '../../lib/category-constants';
 import { useCategoryIcons, useCategoryColors } from './utils/categoryUtils';
 import Card from './components/Card';
 import ExpensesModal from './components/ExpensesModal';
 import MetricsPanel from './components/MetricsPanel';
 import TransactionsTable from './components/TransactionsTable';
+import SavingsRateCard from './components/SavingsRateCard';
+import AlertBanner from './components/AlertBanner';
 
 const CategoryDashboard: React.FC = () => {
-  const [sumPerCategory, setSumPerCategory] = React.useState<ResponseData[]>([]);
+  const [sumPerCategory, setSumPerCategory] = React.useState<CategorySummary[]>([]);
   const [selectedYear, setSelectedYear] = React.useState<string>("");
   const [selectedMonth, setSelectedMonth] = React.useState<string>("");
   const [uniqueYears, setUniqueYears] = React.useState<string[]>([]);
@@ -22,15 +25,38 @@ const CategoryDashboard: React.FC = () => {
   const [bankTransactions, setBankTransactions] = React.useState({ income: 0, expenses: 0 });
   const [creditCardTransactions, setCreditCardTransactions] = React.useState(0);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
-  const [loadingCategory, setLoadingCategory] = React.useState<string | null>(null);
+  const [loadingCategory, setLoadingCategory] = React.useState<number | null>(null);
   const [loadingBankTransactions, setLoadingBankTransactions] = React.useState(false);
   const [modalData, setModalData] = React.useState<ModalData>();
   const [showTransactionsTable, setShowTransactionsTable] = React.useState(false);
-  const [transactions, setTransactions] = React.useState<any[]>([]);
+  const [transactions, setTransactions] = React.useState<CategorizedExpense[]>([]);
   const [loadingTransactions, setLoadingTransactions] = React.useState(false);
   const categoryIcons = useCategoryIcons();
   const categoryColors = useCategoryColors();
   const [allAvailableDates, setAllAvailableDates] = React.useState<string[]>([]);
+
+  const getDisplayCategory = React.useCallback((transaction: Expense | CategorizedExpense) =>
+    transaction.resolved_category_name ||
+    transaction.category_name ||
+    transaction.category ||
+    transaction.legacy_category ||
+    null,
+  []);
+
+  const getBankCategoryId = React.useCallback((transactions: Expense[]) => {
+    const match = transactions.find((transaction) =>
+      transaction.category_definition_id &&
+      getDisplayCategory(transaction) === BANK_CATEGORY_NAME
+    );
+    return match?.category_definition_id || null;
+  }, [getDisplayCategory]);
+
+  const isBankTransaction = React.useCallback((transaction: Expense, bankCategoryId: number | null) => (
+    bankCategoryId
+      ? transaction.category_definition_id === bankCategoryId
+      : getDisplayCategory(transaction) === BANK_CATEGORY_NAME
+  ), [getDisplayCategory]);
+  const [uncategorizedCount, setUncategorizedCount] = React.useState<number>(0);
 
   // Use refs to store current values for the event listener
   const currentYearRef = React.useRef(selectedYear);
@@ -167,7 +193,7 @@ const CategoryDashboard: React.FC = () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data: CategorySummary[] = await response.json();
       setSumPerCategory(data);
       
       // Fetch all transactions to calculate income and expenses properly
@@ -188,57 +214,61 @@ const CategoryDashboard: React.FC = () => {
         throw new Error(`HTTP error! status: ${allTransactionsResponse.status}`);
       }
 
-      const allTransactions = await allTransactionsResponse.json();
-      
-      // Calculate total income: Bank category with positive values
-      const totalIncome = allTransactions
-        .filter((transaction: any) => transaction.category === 'Bank' && transaction.price > 0)
-        .reduce((acc: number, transaction: any) => acc + transaction.price, 0);
-      
-      // Calculate total expenses: All negative values
-      const totalExpenses = allTransactions
-        .filter((transaction: any) => transaction.category === 'Bank' && transaction.price < 0)
-        .reduce((acc: number, transaction: any) => acc + Math.abs(transaction.price), 0);
-      
-      // Calculate credit card expenses: All transactions excluding Bank and Income categories
-      const creditCardTransactions = allTransactions.filter((transaction: any) => 
-        transaction.category !== 'Bank' && transaction.category !== 'Income'
+      const allTransactions: Expense[] = await allTransactionsResponse.json();
+
+      const bankCategoryId = getBankCategoryId(allTransactions);
+
+      const bankTransactionsList = allTransactions.filter((transaction) =>
+        isBankTransaction(transaction, bankCategoryId)
       );
-      
-      console.log('Credit card calculation debug:', {
-        allTransactionsCount: allTransactions.length,
-        creditCardTransactionsCount: creditCardTransactions.length,
-        creditCardTransactions: creditCardTransactions,
-        categories: creditCardTransactions.map((t: any) => ({ name: t.name, category: t.category, price: t.price }))
-      });
-      
-      const creditCardExpenses = creditCardTransactions
-        .reduce((acc: number, transaction: any) => acc + Math.abs(transaction.price), 0);
-      
-      console.log('Credit card expenses total:', creditCardExpenses);
-      
-      setBankTransactions({ income: totalIncome, expenses: totalExpenses });
+      const totalBankIncome = bankTransactionsList
+        .filter((transaction) => transaction.price > 0)
+        .reduce((acc, transaction) => acc + transaction.price, 0);
+
+      const totalBankExpenses = bankTransactionsList
+        .filter((transaction) => transaction.price < 0)
+        .reduce((acc, transaction) => acc + Math.abs(transaction.price), 0);
+
+      const creditCardTransactions = allTransactions.filter(
+        (transaction) =>
+          transaction.category_definition_id &&
+          transaction.category_type === 'expense' &&
+          transaction.price < 0 &&
+          !isBankTransaction(transaction, bankCategoryId)
+      );
+
+      const creditCardExpenses = creditCardTransactions.reduce(
+        (acc, transaction) => acc + Math.abs(transaction.price),
+        0
+      );
+
+      // Count uncategorized transactions
+      const uncategorized = allTransactions.filter(
+        (transaction) => !transaction.category_definition_id
+      ).length;
+
+      setBankTransactions({ income: totalBankIncome, expenses: totalBankExpenses });
       setCreditCardTransactions(creditCardExpenses);
+      setUncategorizedCount(uncategorized);
     } catch (error) {
       console.error("Error fetching data:", error);
       // Reset states in case of error
       setSumPerCategory([]);
       setBankTransactions({ income: 0, expenses: 0 });
       setCreditCardTransactions(0);
+      setUncategorizedCount(0);
     }
   };
   
-  const categories = sumPerCategory.map((item) => {
-    return {
-      name: item.name,
-      subtitle: item.subcategory || undefined,
-      value: item.value,
-      color: categoryColors[item.name] || '#94a3b8',
-      icon: categoryIcons[item.name] || MonetizationOnIcon,
-      autoCount: item.auto_count || 0,
-      transactionCount: item.transaction_count || 0
-    };
-  });
+  const categories = sumPerCategory.map((item) => ({
+    id: item.category_definition_id,
+    name: item.name,
+    value: item.expenses_total || Math.abs(item.value) || 0,
+    color: item.color || categoryColors[item.name] || '#94a3b8',
+    icon: categoryIcons[item.name] || MonetizationOnIcon,
+    autoCount: item.auto_count || 0,
+    transactionCount: item.transaction_count || 0
+  }));
 
   const handleBankTransactionsClick = async () => {
     setLoadingBankTransactions(true);
@@ -261,23 +291,20 @@ const CategoryDashboard: React.FC = () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const allTransactions = await response.json();
+      const allTransactions: Expense[] = await response.json();
       
       // Filter for Bank category transactions (both positive and negative)
-      const bankTransactions = allTransactions.filter((transaction: any) => 
-        transaction.category === 'Bank'
+      const bankCategoryId = getBankCategoryId(allTransactions);
+
+      const bankTransactions = allTransactions.filter((transaction) =>
+        isBankTransaction(transaction, bankCategoryId)
       );
-      
-      // Format the data correctly - include identifier and vendor for editing/deleting
+
       setModalData({
         type: "Bank Transactions",
-        data: bankTransactions.map((transaction: any) => ({
-          name: transaction.name,
-          price: transaction.price,
-          date: transaction.date,
-          category: transaction.category,
-          identifier: transaction.identifier,
-          vendor: transaction.vendor
+        data: bankTransactions.map((transaction) => ({
+          ...transaction,
+          category: getDisplayCategory(transaction) ?? BANK_CATEGORY_NAME
         }))
       });
       
@@ -310,23 +337,23 @@ const CategoryDashboard: React.FC = () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const allExpensesData = await response.json();
+      const allExpensesData: Expense[] = await response.json();
       
-      // Filter out 'Bank' and 'Income' category transactions to get credit card expenses
-      const creditCardData = allExpensesData.filter((transaction: any) => 
-        transaction.category !== 'Bank' && transaction.category !== 'Income'
+      const bankCategoryId = getBankCategoryId(allExpensesData);
+
+      const creditCardData = allExpensesData.filter(
+        (transaction) =>
+          transaction.category_definition_id &&
+          transaction.category_type === 'expense' &&
+          transaction.price < 0 &&
+          !isBankTransaction(transaction, bankCategoryId)
       );
-      
-      // Format the data correctly - include identifier and vendor for editing/deleting
+
       setModalData({
         type: "Credit Card Expenses",
-        data: creditCardData.map((transaction: any) => ({
-          name: transaction.name,
-          price: transaction.price,
-          date: transaction.date,
-          category: transaction.category,
-          identifier: transaction.identifier,
-          vendor: transaction.vendor
+        data: creditCardData.map((transaction) => ({
+          ...transaction,
+          category: getDisplayCategory(transaction) ?? 'Uncategorized'
         }))
       });
 
@@ -338,14 +365,14 @@ const CategoryDashboard: React.FC = () => {
     }
   };
 
-  const handleCategoryClick = async (category: string) => {
+  const handleCategoryClick = async (categoryId: number, categoryName: string) => {
     try {
-      setLoadingCategory(category);
+      setLoadingCategory(categoryId);
       const url = new URL("/api/category_expenses", window.location.origin);
       const params = new URLSearchParams();
       const fullMonth = `${selectedYear}-${selectedMonth}`;
       params.append("month", fullMonth);
-      params.append("category", category);
+      params.append("categoryId", String(categoryId));
       url.search = params.toString();
 
       const response = await fetch(url.toString(), {
@@ -355,11 +382,15 @@ const CategoryDashboard: React.FC = () => {
         },
       });
 
-      const data = await response.json();
+      const data: Expense[] = await response.json();
 
       setModalData({
-        type: category,
-        data: data,
+        type: categoryName,
+        category_definition_id: categoryId,
+        data: data.map((transaction) => ({
+          ...transaction,
+          category: getDisplayCategory(transaction) ?? 'Uncategorized'
+        })),
       });
 
       setIsModalOpen(true);
@@ -391,8 +422,13 @@ const CategoryDashboard: React.FC = () => {
       url.search = params.toString();
 
       const response = await fetch(url.toString());
-      const transactionsData = await response.json();
-      setTransactions(transactionsData);
+      const transactionsData: Expense[] = await response.json();
+      setTransactions(
+        transactionsData.map((transaction) => ({
+          ...transaction,
+          category: getDisplayCategory(transaction) ?? 'Uncategorized'
+        }))
+      );
     } catch (error) {
       console.error("Error fetching transactions data:", error);
     } finally {
@@ -400,7 +436,7 @@ const CategoryDashboard: React.FC = () => {
     }
   };
 
-  const handleDeleteTransaction = async (transaction: any) => {
+  const handleDeleteTransaction = async (transaction: CategorizedExpense) => {
     try {
       const response = await fetch(`/api/transactions/${transaction.identifier}|${transaction.vendor}`, {
         method: 'DELETE',
@@ -421,11 +457,16 @@ const CategoryDashboard: React.FC = () => {
     }
   };
 
-  const handleUpdateTransaction = async (transaction: any, newPrice: number, newCategory?: string) => {
+  const handleUpdateTransaction = async (transaction: CategorizedExpense, newPrice: number, newCategory?: CategoryOption) => {
     try {
       const updateData: any = { price: newPrice };
-      if (newCategory !== undefined) {
-        updateData.category = newCategory;
+      if (newCategory) {
+        updateData.category_definition_id = newCategory.id;
+        updateData.category = newCategory.name;
+        updateData.parent_category = newCategory.parentId ? newCategory.parentName : newCategory.name;
+        updateData.subcategory = newCategory.parentId ? newCategory.name : null;
+        updateData.category_type = newCategory.categoryType;
+        updateData.auto_categorized = false;
       }
 
       const response = await fetch(`/api/transactions/${transaction.identifier}|${transaction.vendor}`, {
@@ -437,13 +478,10 @@ const CategoryDashboard: React.FC = () => {
       });
       
       if (response.ok) {
-        // Update the transaction in the local state
-        setTransactions(transactions.map(t => 
-          t.identifier === transaction.identifier && t.vendor === transaction.vendor
-            ? { ...t, price: newPrice, ...(newCategory !== undefined && { category: newCategory }) }
-            : t
-        ));
-        // Refresh the data to update the metrics
+        // Refresh state to reflect updated category labels and amounts
+        if (showTransactionsTable) {
+          await fetchTransactions();
+        }
         fetchData(`${selectedYear}-${selectedMonth}`);
       } else {
         throw new Error('Failed to update transaction');
@@ -454,21 +492,67 @@ const CategoryDashboard: React.FC = () => {
   };
 
   return (
-    <div style={{ 
-      padding: '24px',
-      maxWidth: '1400px',
-      margin: '32px auto 0',
-      background: '#f8f9fa',
+    <div style={{
+      padding: '32px',
+      maxWidth: '1440px',
+      margin: '0 auto',
+      background: '#FAFBFC',
       minHeight: '100vh'
     }}>
       <MetricsPanel />
-      
+
+      {/* Alert Banner for Uncategorized Transactions */}
+      {uncategorizedCount > 0 && (
+        <AlertBanner
+          message="Transactions need categories"
+          count={uncategorizedCount}
+          onAction={() => setShowTransactionsTable(true)}
+          actionLabel="Review"
+          severity="warning"
+        />
+      )}
+
+      {/* Savings Rate + Bank/Credit Cards Row */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: '24px',
+        marginBottom: '32px'
+      }}>
+        <SavingsRateCard
+          income={bankTransactions.income}
+          totalExpenses={bankTransactions.expenses + creditCardTransactions}
+        />
+        <Card
+          title="Bank Transactions"
+          value={bankTransactions.income}
+          color="#10B981"
+          icon={MonetizationOnIcon}
+          onClick={handleBankTransactionsClick}
+          isLoading={loadingBankTransactions}
+          size="large"
+          secondaryValue={bankTransactions.expenses}
+          secondaryColor="#EF4444"
+          isExpense={false}
+        />
+        <Card
+          title="Credit Card Transactions"
+          value={creditCardTransactions}
+          color="#8B5CF6"
+          icon={CreditCardIcon}
+          onClick={handleTotalCreditCardExpensesClick}
+          isLoading={loadingBankTransactions}
+          size="large"
+          isExpense={true}
+        />
+      </div>
+
       <div style={{
         display: 'flex',
         justifyContent: 'flex-end',
         alignItems: 'center',
-        marginBottom: '16px',
-        marginTop: '16px',
+        marginBottom: '24px',
+        marginTop: '24px',
         gap: '12px'
       }}>
         <IconButton
@@ -476,10 +560,23 @@ const CategoryDashboard: React.FC = () => {
           style={{
             backgroundColor: '#ffffff',
             padding: '12px',
-            borderRadius: '16px',
-            border: '1px solid #e2e8f0',
-            color: '#888',
-            transition: 'all 0.2s ease-in-out'
+            borderRadius: '12px',
+            border: '1.5px solid #E2E8F0',
+            color: '#64748B',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = '#3B82F6';
+            e.currentTarget.style.color = '#3B82F6';
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.boxShadow = '0 4px 6px rgba(59, 130, 246, 0.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = '#E2E8F0';
+            e.currentTarget.style.color = '#64748B';
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
           }}
         >
           <RefreshIcon />
@@ -487,32 +584,49 @@ const CategoryDashboard: React.FC = () => {
         <IconButton
           onClick={handleTransactionsTableClick}
           style={{
-            backgroundColor: showTransactionsTable ? '#edf2f7' : '#ffffff',
+            backgroundColor: showTransactionsTable ? '#3B82F615' : '#ffffff',
             padding: '12px',
-            borderRadius: '16px',
-            border: '1px solid #e2e8f0',
-            color: showTransactionsTable ? '#333' : '#888',
-            transition: 'all 0.2s ease-in-out'
+            borderRadius: '12px',
+            border: `1.5px solid ${showTransactionsTable ? '#3B82F6' : '#E2E8F0'}`,
+            color: showTransactionsTable ? '#3B82F6' : '#64748B',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            boxShadow: showTransactionsTable ? '0 4px 6px rgba(59, 130, 246, 0.1)' : '0 1px 2px rgba(0, 0, 0, 0.05)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
           }}
         >
           <TableChartIcon />
         </IconButton>
-        <select 
+        <select
           value={selectedYear}
           onChange={handleYearChange}
           style={{
-            padding: '12px 24px',
-            borderRadius: '16px',
-            border: '1px solid #e2e8f0',
+            padding: '14px 20px',
+            borderRadius: '12px',
+            border: '1.5px solid #E2E8F0',
             backgroundColor: '#ffffff',
-            color: '#333',
+            color: '#1E293B',
             fontSize: '14px',
-            fontWeight: '500',
+            fontWeight: '600',
             cursor: 'pointer',
             outline: 'none',
             textAlign: 'right',
             direction: 'rtl',
-            minWidth: '100px'
+            minWidth: '100px',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = '#3B82F6';
+            e.currentTarget.style.boxShadow = '0 4px 6px rgba(59, 130, 246, 0.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = '#E2E8F0';
+            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
           }}
         >
           {uniqueYears.map((year) => (
@@ -521,22 +635,32 @@ const CategoryDashboard: React.FC = () => {
             </option>
           ))}
         </select>
-        <select 
+        <select
           value={selectedMonth}
           onChange={handleMonthChange}
           style={{
-            padding: '12px 24px',
-            borderRadius: '16px',
-            border: '1px solid #e2e8f0',
+            padding: '14px 20px',
+            borderRadius: '12px',
+            border: '1.5px solid #E2E8F0',
             backgroundColor: '#ffffff',
-            color: '#333',
+            color: '#1E293B',
             fontSize: '14px',
-            fontWeight: '500',
+            fontWeight: '600',
             cursor: 'pointer',
             outline: 'none',
             textAlign: 'right',
             direction: 'rtl',
-            minWidth: '120px'
+            minWidth: '140px',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = '#3B82F6';
+            e.currentTarget.style.boxShadow = '0 4px 6px rgba(59, 130, 246, 0.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = '#E2E8F0';
+            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
           }}
         >
           {uniqueMonths.map((month) => (
@@ -547,33 +671,6 @@ const CategoryDashboard: React.FC = () => {
         </select>
       </div>
 
-      <div style={{ 
-        display: 'flex',
-        gap: '24px',
-        marginBottom: '24px'
-      }}>
-        <Card
-          title="Bank Transactions" 
-          value={bankTransactions.income}
-          color="#4ADE80"
-          icon={MonetizationOnIcon}
-          onClick={handleBankTransactionsClick}
-          isLoading={loadingBankTransactions}
-          size="large"
-          secondaryValue={bankTransactions.expenses}
-          secondaryColor="#F87171"
-        />
-        <Card 
-          title="Credit Card Transactions" 
-          value={creditCardTransactions} 
-          color="#8B5CF6"
-          icon={CreditCardIcon}
-          onClick={handleTotalCreditCardExpensesClick}
-          isLoading={loadingBankTransactions}
-          size="large"
-        />
-      </div>
-
       {showTransactionsTable ? (
         <TransactionsTable 
           transactions={transactions} 
@@ -582,26 +679,24 @@ const CategoryDashboard: React.FC = () => {
           onUpdate={handleUpdateTransaction}
         />
       ) : (
-        <div style={{ 
+        <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-          columnGap: '64px',
-          rowGap: '32px',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gap: '24px',
           width: '100%',
-          maxWidth: '1360px',
+          maxWidth: '1400px',
           boxSizing: 'border-box'
         }}>
           {categories.length > 0 ? (
-            categories.map((category, index) => (
+            categories.map((category) => (
               <Card
-                key={"category-" + index}
+                key={`category-${category.id}`}
                 title={category.name}
-                subtitle={category.subtitle}
                 value={category.value}
                 color={category.color}
                 icon={category.icon}
-                onClick={() => handleCategoryClick(category.name)}
-                isLoading={loadingCategory === category.name}
+                onClick={() => handleCategoryClick(category.id, category.name)}
+                isLoading={loadingCategory === category.id}
                 size="medium"
               />
             ))

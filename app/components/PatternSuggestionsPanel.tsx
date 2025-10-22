@@ -32,14 +32,12 @@ import {
 } from '@mui/material';
 import {
   ExpandMore as ExpandMoreIcon,
-  Check as CheckIcon,
-  Clear as ClearIcon,
   Add as AddIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { CategoryOption } from './CategoryDashboard/types';
 
 // Pattern from /api/patterns (snake_case from DB)
 interface Pattern {
@@ -49,6 +47,8 @@ interface Pattern {
   description?: string;
   match_type: string;
   override_category?: string;
+  override_category_definition_id?: number | null;
+  override_category_name?: string | null;
   confidence: number;
   is_user_defined: boolean;
   is_auto_learned: boolean;
@@ -64,6 +64,8 @@ interface SuggestionPattern {
   description?: string;
   type: string;
   overrideCategory?: string;
+  overrideCategoryDefinitionId?: number | null;
+  overrideCategoryName?: string | null;
   confidence: number;
 }
 
@@ -98,8 +100,6 @@ const MATCH_TYPES = [
   { value: 'other', label: 'Other' },
 ];
 
-const CATEGORY_OVERRIDES = ['Investment', 'Transfer', 'Rent', 'Loan', 'Savings', 'Insurance', 'Other'];
-
 const PatternSuggestionsPanel: React.FC<PatternSuggestionsPanelProps> = ({ onDuplicatesChanged }) => {
   const [suggestions, setSuggestions] = useState<PatternSuggestion[]>([]);
   const [patterns, setPatterns] = useState<Pattern[]>([]);
@@ -111,12 +111,39 @@ const PatternSuggestionsPanel: React.FC<PatternSuggestionsPanelProps> = ({ onDup
     patternRegex: '',
     description: '',
     matchType: 'duplicate',
-    overrideCategory: '',
+    overrideCategoryDefinitionId: '',
   });
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
 
   useEffect(() => {
     fetchSuggestions();
     fetchPatterns();
+  }, []);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('/api/get_all_categories');
+        if (!response.ok) return;
+        const raw = await response.json();
+        const mapped: CategoryOption[] = Array.isArray(raw)
+          ? raw.map((cat: any) => ({
+              id: cat.id,
+              name: cat.name,
+              nameEn: cat.name_en ?? cat.nameEn ?? null,
+              categoryType: cat.category_type ?? cat.categoryType,
+              parentId: cat.parent_id ?? cat.parentId ?? null,
+              parentName: cat.parent_name ?? cat.parentName ?? null,
+              parentNameEn: cat.parent_name_en ?? cat.parentNameEn ?? null,
+            }))
+          : [];
+        setCategoryOptions(mapped.filter((cat) => cat.categoryType === 'expense'));
+      } catch (error) {
+        console.error('Error loading categories for patterns:', error);
+      }
+    };
+
+    fetchCategories();
   }, []);
 
   const fetchSuggestions = async () => {
@@ -144,10 +171,27 @@ const PatternSuggestionsPanel: React.FC<PatternSuggestionsPanelProps> = ({ onDup
 
   const handleAddPattern = async () => {
     try {
+      const overrideCategoryId = newPattern.overrideCategoryDefinitionId
+        ? parseInt(newPattern.overrideCategoryDefinitionId, 10)
+        : null;
+
+      if (newPattern.overrideCategoryDefinitionId && Number.isNaN(overrideCategoryId)) {
+        alert('Invalid override category selected');
+        return;
+      }
+
+      const payload = {
+        patternName: newPattern.patternName,
+        patternRegex: newPattern.patternRegex,
+        description: newPattern.description,
+        matchType: newPattern.matchType,
+        overrideCategoryDefinitionId: overrideCategoryId,
+      };
+
       const response = await fetch('/api/patterns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newPattern),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
@@ -157,7 +201,7 @@ const PatternSuggestionsPanel: React.FC<PatternSuggestionsPanelProps> = ({ onDup
           patternRegex: '',
           description: '',
           matchType: 'duplicate',
-          overrideCategory: '',
+          overrideCategoryDefinitionId: '',
         });
         await fetchPatterns();
         await fetchSuggestions();
@@ -239,7 +283,7 @@ const PatternSuggestionsPanel: React.FC<PatternSuggestionsPanelProps> = ({ onDup
             transactionIdentifier: match.identifier,
             transactionVendor: match.vendor,
             reason: pattern.type,
-            overrideCategory: pattern.overrideCategory,
+            overrideCategoryDefinitionId: pattern.overrideCategoryDefinitionId ?? null,
             notes: `Matched pattern: ${pattern.name}`,
           }),
         });
@@ -336,6 +380,11 @@ const PatternSuggestionsPanel: React.FC<PatternSuggestionsPanelProps> = ({ onDup
                     <Typography variant="caption" fontFamily="monospace">
                       {pattern.pattern_regex}
                     </Typography>
+                    {pattern.override_category_name && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Override: {pattern.override_category_name}
+                      </Typography>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Chip
@@ -400,8 +449,12 @@ const PatternSuggestionsPanel: React.FC<PatternSuggestionsPanelProps> = ({ onDup
                     color={getMatchTypeColor(suggestion.pattern.type)}
                     size="small"
                   />
-                  {suggestion.pattern.overrideCategory && (
-                    <Chip label={`→ ${suggestion.pattern.overrideCategory}`} size="small" variant="outlined" />
+                  {(suggestion.pattern.overrideCategoryName || suggestion.pattern.overrideCategory) && (
+                    <Chip
+                      label={`→ ${suggestion.pattern.overrideCategoryName || suggestion.pattern.overrideCategory}`}
+                      size="small"
+                      variant="outlined"
+                    />
                   )}
                 </Box>
               </AccordionSummary>
@@ -549,16 +602,16 @@ const PatternSuggestionsPanel: React.FC<PatternSuggestionsPanelProps> = ({ onDup
             <FormControl fullWidth>
               <InputLabel>Override Category (Optional)</InputLabel>
               <Select
-                value={newPattern.overrideCategory}
-                onChange={(e) => setNewPattern({ ...newPattern, overrideCategory: e.target.value })}
+                value={newPattern.overrideCategoryDefinitionId}
+                onChange={(e) => setNewPattern({ ...newPattern, overrideCategoryDefinitionId: e.target.value })}
                 label="Override Category (Optional)"
               >
                 <MenuItem value="">
                   <em>None</em>
                 </MenuItem>
-                {CATEGORY_OVERRIDES.map((cat) => (
-                  <MenuItem key={cat} value={cat}>
-                    {cat}
+                {categoryOptions.map((cat) => (
+                  <MenuItem key={cat.id} value={cat.id.toString()}>
+                    {cat.parentName ? `${cat.parentName} › ${cat.name}` : cat.name}
                   </MenuItem>
                 ))}
               </Select>

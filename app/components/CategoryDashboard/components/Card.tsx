@@ -2,6 +2,7 @@ import React from 'react';
 import { SvgIconComponent } from '@mui/icons-material';
 import CircularProgress from '@mui/material/CircularProgress';
 import { useFinancePrivacy } from '../../../contexts/FinancePrivacyContext';
+import TrendBadge from './TrendBadge';
 
 interface CardProps {
   title: string;
@@ -16,6 +17,8 @@ interface CardProps {
   secondaryValue?: number;
   secondaryColor?: string;
   secondaryLabel?: string;
+  trend?: number; // percentage change from previous period
+  isExpense?: boolean; // for trend color logic
 }
 
 const Card: React.FC<CardProps> = ({
@@ -29,46 +32,49 @@ const Card: React.FC<CardProps> = ({
   size = 'medium',
   secondaryValue,
   secondaryColor,
-  secondaryLabel
+  secondaryLabel,
+  trend,
+  isExpense = true
 }) => {
-  const padding = size === 'large' ? '32px' : '20px';
-  const titleSize = size === 'large' ? '16px' : '20px';
-  const valueSize = size === 'large' ? '36px' : '24px';
-  const iconSize = size === 'large' ? '24px' : '24px';
-  const iconPadding = size === 'large' ? '10px' : '12px';
-  const iconBorderRadius = size === 'large' ? '12px' : '16px';
+  const padding = size === 'large' ? '24px 20px' : '20px';
+  const titleSize = size === 'large' ? '13px' : '13px';
+  const valueSize = size === 'large' ? '36px' : '32px';
+  const iconSize = size === 'large' ? '22px' : '20px';
   const { formatCurrency } = useFinancePrivacy();
 
   const formatCurrencyValue = (amount: number) =>
-    formatCurrency(amount, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    formatCurrency(amount, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
   return (
     <div
       style={{
         backgroundColor: '#ffffff',
-        borderRadius: '24px',
+        borderRadius: '16px',
         padding: padding,
         width: '100%',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.02)',
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
-        overflow: 'hidden',
-        border: '1px solid rgba(0, 0, 0, 0.05)',
+        overflow: 'visible',
+        border: '1px solid #F1F3F5',
         cursor: onClick ? (isLoading ? 'default' : 'pointer') : 'default',
-        transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        minHeight: size === 'large' ? '140px' : '180px'
       }}
       onClick={isLoading ? undefined : onClick}
       onMouseEnter={(e) => {
-        if (!isLoading) {
-          (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.12)';
+        if (!isLoading && onClick) {
+          (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
+          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 8px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)';
+          (e.currentTarget as HTMLDivElement).style.borderColor = '#E5E7EB';
         }
       }}
       onMouseLeave={(e) => {
         if (!isLoading) {
           (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.08)';
+          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.02)';
+          (e.currentTarget as HTMLDivElement).style.borderColor = '#F1F3F5';
         }
       }}
     >
@@ -79,92 +85,106 @@ const Card: React.FC<CardProps> = ({
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 2,
-          borderRadius: '24px'
+          borderRadius: '16px'
         }}>
-          <CircularProgress size={40} style={{ color: color }} />
+          <CircularProgress size={32} style={{ color: '#6B7280' }} />
         </div>
       )}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        width: size === 'large' ? '100px' : '80px',
-        height: size === 'large' ? '100px' : '80px',
-        background: `radial-gradient(circle at top right, ${color}20, transparent 70%)`,
-        opacity: size === 'large' ? 0.5 : 0.3
-      }} />
+
+      {/* Trend Badge - Top Right */}
+      {trend !== undefined && trend !== 0 && !isLoading && (
+        <div style={{
+          position: 'absolute',
+          top: '12px',
+          right: '12px',
+          zIndex: 1
+        }}>
+          <TrendBadge change={trend} isExpense={isExpense} size="small" />
+        </div>
+      )}
+
       <div style={{
         display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: size === 'large' ? 'center' : 'flex-start',
-        gap: '16px'
+        flexDirection: 'column',
+        gap: '12px',
+        height: '100%'
       }}>
-        <div style={{ flex: 1 }}>
+        {/* Icon - Simple, minimal */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          marginBottom: '8px'
+        }}>
+          <Icon sx={{
+            fontSize: iconSize,
+            color: '#9CA3AF',
+            opacity: 0.5
+          }} />
           <h3 style={{
-            margin: '0 0 4px 0',
-            color: size === 'large' ? '#555' : '#333',
+            margin: 0,
+            color: '#6B7280',
             fontSize: titleSize,
-            fontWeight: size === 'large' ? '400' : '500',
-            letterSpacing: size === 'large' ? 'normal' : '-0.01em',
-            fontFamily: 'Assistant, sans-serif'
+            fontWeight: 500,
+            letterSpacing: '0.02em',
+            textTransform: 'uppercase',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            flex: 1
           }}>{title}</h3>
-          {subtitle && (
-            <p style={{
-              margin: '0 0 8px 0',
-              color: '#888',
-              fontSize: '12px',
-              fontWeight: '400',
-              fontFamily: 'Assistant, sans-serif'
-            }}>{subtitle}</p>
-          )}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px', marginTop: subtitle ? '4px' : '12px' }}>
-            <span style={{ 
-              fontSize: valueSize, 
-              fontWeight: size === 'large' ? '700' : '600', 
-              color: color,
-              letterSpacing: '-0.02em',
-              fontFamily: 'Assistant, sans-serif'
+        </div>
+
+        {/* Value - Large and prominent */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ marginBottom: subtitle || secondaryValue ? '6px' : '0' }}>
+            <span style={{
+              fontSize: valueSize,
+              fontWeight: '700',
+              color: '#0F1419',
+              letterSpacing: '-0.03em',
+              fontFamily: '"SF Mono", "IBM Plex Mono", ui-monospace, monospace',
+              fontFeatureSettings: '"tnum"'
             }}>
               {formatCurrencyValue(value || 0)}
             </span>
-            {secondaryValue !== undefined && (
-              <>
-                <span style={{ 
-                  fontSize: valueSize, 
-                  fontWeight: size === 'large' ? '700' : '600', 
-                  color: '#E5E7EB',
-                  letterSpacing: '-0.02em',
-                  fontFamily: 'Assistant, sans-serif'
-                }}>
-                  |
-                </span>
-                <span style={{ 
-                  fontSize: valueSize, 
-                  fontWeight: size === 'large' ? '700' : '600', 
-                  color: secondaryColor || '#666',
-                  letterSpacing: '-0.02em',
-                  fontFamily: 'Assistant, sans-serif'
-                }}>
-                  {secondaryLabel && `${secondaryLabel}: `}{formatCurrencyValue(secondaryValue)}
-                </span>
-              </>
-            )}
           </div>
-        </div>
-        <div style={{
-          backgroundColor: color + '20',
-          borderRadius: iconBorderRadius,
-          padding: iconPadding,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <Icon sx={{ fontSize: iconSize, color: color }} />
+
+          {/* Secondary Value */}
+          {secondaryValue !== undefined && (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <span style={{
+                fontSize: '14px',
+                fontWeight: 500,
+                color: '#9CA3AF'
+              }}>
+                {secondaryLabel || 'Expenses'}:
+              </span>
+              <span style={{
+                fontSize: '18px',
+                fontWeight: 700,
+                color: secondaryColor || '#EF4444',
+                fontFamily: '"SF Mono", "IBM Plex Mono", ui-monospace, monospace',
+                fontFeatureSettings: '"tnum"'
+              }}>
+                {formatCurrencyValue(secondaryValue)}
+              </span>
+            </div>
+          )}
+
+          {/* Subtitle */}
+          {subtitle && (
+            <p style={{
+              margin: '4px 0 0 0',
+              color: '#9CA3AF',
+              fontSize: '12px',
+              fontWeight: 400,
+              fontFamily: 'system-ui, -apple-system, sans-serif'
+            }}>{subtitle}</p>
+          )}
         </div>
       </div>
     </div>

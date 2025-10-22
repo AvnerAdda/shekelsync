@@ -1,5 +1,6 @@
 import { createApiHandler } from "./utils/apiHandler";
 import { dialect } from "../../lib/sql-dialect.js";
+import { BANK_CATEGORY_NAME } from "../../lib/category-constants.js";
 
 const handler = createApiHandler({
   validate: (req) => {
@@ -13,11 +14,11 @@ const handler = createApiHandler({
     const groupByYearBool = groupByYear === "true";
     const monthNumber = parseInt(month, 10);
 
-    const yearExpr = dialect.toChar("date", "YYYY");
-    const monthExpr = dialect.toChar("date", "MM");
-    const yearMonthExpr = dialect.toChar("date", "MM-YYYY");
-    const yearTrunc = dialect.dateTrunc("year", "date");
-    const monthTrunc = dialect.dateTrunc("month", "date");
+    const yearExpr = dialect.toChar("t.date", "YYYY");
+    const monthExpr = dialect.toChar("t.date", "MM");
+    const yearMonthExpr = dialect.toChar("t.date", "MM-YYYY");
+    const yearTrunc = dialect.dateTrunc("year", "t.date");
+    const monthTrunc = dialect.dateTrunc("month", "t.date");
 
     if (groupByYearBool) {
       return {
@@ -26,8 +27,10 @@ const handler = createApiHandler({
             SUM(price) AS amount,
             ${yearExpr} AS year,
             ${yearTrunc} AS year_sort
-          FROM transactions
-          WHERE category != 'Bank'
+          FROM transactions t
+          JOIN category_definitions cd ON cd.id = t.category_definition_id
+          WHERE cd.name != '${BANK_CATEGORY_NAME}'
+            AND cd.category_type = 'expense'
           GROUP BY ${yearExpr}, ${yearTrunc}
           ORDER BY year_sort DESC
           LIMIT $1
@@ -44,8 +47,10 @@ const handler = createApiHandler({
           ${monthExpr} AS month,
           ${yearMonthExpr} AS year_month,
           ${monthTrunc} AS year_sort
-        FROM transactions
-        WHERE category != 'Bank'
+        FROM transactions t
+        JOIN category_definitions cd ON cd.id = t.category_definition_id
+        WHERE cd.name != '${BANK_CATEGORY_NAME}'
+          AND cd.category_type = 'expense'
         GROUP BY 
           ${yearExpr},
           ${monthExpr},

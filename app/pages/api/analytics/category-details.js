@@ -1,5 +1,6 @@
 import { getDB } from '../db.js';
 import { buildDuplicateFilter } from './utils.js';
+import { dialect } from '../../../lib/sql-dialect.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -43,14 +44,29 @@ export default async function handler(req, res) {
       categoryFilter = 't.category_definition_id = $1';
       categoryParams = [subcategoryId];
     } else if (parentId) {
-      // Viewing all subcategories under a parent
+      // Viewing all subcategories under a parent (including parent itself)
       categoryFilter = `t.category_definition_id IN (
-        SELECT id FROM category_definitions WHERE parent_id = $1
+        WITH RECURSIVE category_tree AS (
+          SELECT id FROM category_definitions WHERE id = $1
+          UNION ALL
+          SELECT cd.id FROM category_definitions cd
+          JOIN category_tree ct ON cd.parent_id = ct.id
+        )
+        SELECT id FROM category_tree
       )`;
       categoryParams = [parentId];
     } else {
-      // Legacy: fallback to category name
-      categoryFilter = 'COALESCE(t.parent_category, t.category) = $1';
+      // Lookup by category name (search both name and name_en)
+      categoryFilter = `t.category_definition_id IN (
+        WITH RECURSIVE category_tree AS (
+          SELECT id FROM category_definitions
+          WHERE LOWER(name) = LOWER($1) OR LOWER(name_en) = LOWER($1)
+          UNION ALL
+          SELECT cd.id FROM category_definitions cd
+          JOIN category_tree ct ON cd.parent_id = ct.id
+        )
+        SELECT id FROM category_tree
+      )`;
       categoryParams = [category];
     }
 
@@ -137,10 +153,13 @@ export default async function handler(req, res) {
         t.name,
         t.price,
         t.vendor,
-        t.category,
-        t.parent_category,
-        t.account_number
+        t.account_number,
+        cd.id as category_definition_id,
+        cd.name as category_name,
+        parent.name as parent_name
       FROM transactions t
+      JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
       WHERE ${categoryFilter}
       ${priceFilterClause}
       AND t.date >= $${categoryParams.length + 1}
@@ -152,9 +171,10 @@ export default async function handler(req, res) {
     );
 
     // Get spending trend by month for this category
+    const monthExpr = dialect.toChar('t.date', 'YYYY-MM');
     const trendResult = await client.query(
       `SELECT
-        TO_CHAR(t.date, 'YYYY-MM') as month,
+        ${monthExpr} as month,
         SUM(${amountExpression}) as total,
         COUNT(*) as count
       FROM transactions t
@@ -163,7 +183,7 @@ export default async function handler(req, res) {
       AND t.date >= $${categoryParams.length + 1}
       AND t.date <= $${categoryParams.length + 2}
       ${duplicateFilter}
-      GROUP BY TO_CHAR(t.date, 'YYYY-MM')
+      GROUP BY ${monthExpr}
       ORDER BY month ASC`,
       [...categoryParams, start, end]
     );
@@ -203,9 +223,10 @@ export default async function handler(req, res) {
         name: row.name,
         price: parseFloat(row.price),
         vendor: row.vendor,
-        category: row.category,
-        parentCategory: row.parent_category,
-        account_number: row.account_number,
+        categoryDefinitionId: row.category_definition_id,
+        categoryName: row.category_name,
+        parentName: row.parent_name,
+        accountNumber: row.account_number,
       })),
       trend: trendResult.rows.map(row => ({
         month: row.month,

@@ -129,100 +129,226 @@ export default async function handler(req, res) {
     const { start, end } = resolveDateRange({ startDate, endDate, months });
     const duplicateFilter = excludeDuplicates === 'true' ? await buildDuplicateFilter(client, 't') : '';
 
+    const categoryValues = categories
+      ? (Array.isArray(categories) ? categories : categories.split(','))
+          .map((value) => value.trim())
+          .filter(Boolean)
+      : [];
+
+    const vendorList = vendors
+      ? (Array.isArray(vendors) ? vendors : vendors.split(','))
+          .map((value) => value.trim())
+          .filter(Boolean)
+      : [];
+
     let exportData = {};
     const timestamp = new Date().toISOString().split('T')[0];
 
     // Build type filters
     const typeFilters = [];
-    if (includeIncome === 'true') typeFilters.push("t.price > 0");
-    if (includeExpenses === 'true') typeFilters.push("t.price < 0");
+    if (includeIncome === 'true') typeFilters.push('t.price > 0');
+    if (includeExpenses === 'true') typeFilters.push('t.price < 0');
 
     const typeFilterClause = typeFilters.length > 0 ? `AND (${typeFilters.join(' OR ')})` : '';
 
-    // Build category filter
-    let categoryFilter = '';
-    if (categories) {
-      const categoryList = Array.isArray(categories) ? categories : categories.split(',');
-      const placeholders = categoryList.map((_, i) => `$${i + 3}`).join(',');
-      categoryFilter = `AND (t.category IN (${placeholders}) OR t.parent_category IN (${placeholders}))`;
+    const queryParams = [start, end];
+    let categoryFilterClause = '';
+    let vendorFilterClause = '';
+
+    if (categoryValues.length > 0) {
+      const { rows: categoryRows } = await client.query(
+        `
+          WITH provided AS (
+            SELECT LOWER(TRIM(identifier)) AS identifier
+            FROM UNNEST($1::text[]) AS provided(identifier)
+          ),
+          matched AS (
+            SELECT cd.id, cd.name, cd.name_en
+            FROM category_definitions cd
+            JOIN provided p ON
+              cd.id::text = p.identifier
+              OR LOWER(cd.name) = p.identifier
+              OR LOWER(cd.name_en) = p.identifier
+          ),
+          category_tree AS (
+            SELECT id, name, name_en
+            FROM matched
+            UNION ALL
+            SELECT child.id, child.name, child.name_en
+            FROM category_definitions child
+            JOIN category_tree ct ON child.parent_id = ct.id
+          )
+          SELECT DISTINCT id, name, name_en
+          FROM category_tree
+        `,
+        [categoryValues]
+      );
+
+      const categoryIdSet = new Set();
+      const categoryNameSet = new Set(categoryValues);
+
+      for (const row of categoryRows) {
+        const id = typeof row.id === 'number' ? row.id : Number(row.id);
+        if (Number.isFinite(id)) {
+          categoryIdSet.add(id);
+        }
+        if (row.name) {
+          categoryNameSet.add(row.name);
+        }
+        if (row.name_en) {
+          categoryNameSet.add(row.name_en);
+        }
+      }
+
+      const selectedCategoryIds = Array.from(categoryIdSet);
+
+      if (selectedCategoryIds.length > 0) {
+        queryParams.push(selectedCategoryIds);
+        const idsParamIndex = queryParams.length;
+
+        const categoryNames = Array.from(categoryNameSet).filter(Boolean);
+        let fallbackClause = '';
+
+        if (categoryNames.length > 0) {
+          queryParams.push(categoryNames);
+          const namesParamIndex = queryParams.length;
+          fallbackClause = `
+            OR (
+              t.category_definition_id IS NULL
+              AND (
+                t.category = ANY($${namesParamIndex}::text[])
+                OR t.parent_category = ANY($${namesParamIndex}::text[])
+              )
+            )
+          `;
+        }
+
+        categoryFilterClause = fallbackClause
+          ? `
+            AND (
+              t.category_definition_id = ANY($${idsParamIndex}::int[])
+              ${fallbackClause}
+            )
+          `
+          : `AND t.category_definition_id = ANY($${idsParamIndex}::int[])`;
+      } else {
+        queryParams.push(categoryValues);
+        const legacyParamIndex = queryParams.length;
+        categoryFilterClause = `
+          AND (
+            t.category = ANY($${legacyParamIndex}::text[])
+            OR t.parent_category = ANY($${legacyParamIndex}::text[])
+          )
+        `;
+      }
     }
 
-    // Build vendor filter
-    let vendorFilter = '';
-    const vendorList = vendors ? (Array.isArray(vendors) ? vendors : vendors.split(',')) : [];
     if (vendorList.length > 0) {
-      const vendorPlaceholders = vendorList.map((_, i) => `$${(categories ? categories.split(',').length : 0) + i + 3}`).join(',');
-      vendorFilter = `AND t.vendor IN (${vendorPlaceholders})`;
+      queryParams.push(vendorList);
+      const vendorParamIndex = queryParams.length;
+      vendorFilterClause = `AND t.vendor = ANY($${vendorParamIndex}::text[])`;
     }
-
-    const baseParams = [start, end];
-    if (categories) baseParams.push(...categories.split(','));
-    if (vendors) baseParams.push(...vendorList);
 
     if (dataType === 'transactions' || dataType === 'full') {
       // Export transactions
-      const transactionsResult = await client.query(`
-        SELECT
-          t.date,
-          t.vendor,
-          t.name,
-          t.price,
-          t.category,
-          t.parent_category,
-          t.type,
-          t.status,
-          t.account_number,
-          t.processed_date
-        FROM transactions t
-        WHERE t.date >= $1
-        AND t.date <= $2
-        ${typeFilterClause}
-        ${categoryFilter}
-        ${vendorFilter}
-        ${duplicateFilter}
-        ORDER BY t.date DESC, t.vendor, t.name
-      `, baseParams);
+      const transactionsResult = await client.query(
+        `
+          SELECT
+            t.date,
+            t.vendor,
+            t.name,
+            t.price,
+            COALESCE(cd.name, t.category) AS category,
+            COALESCE(parent.name, cd.name, t.parent_category) AS parent_category,
+            t.type,
+            t.status,
+            t.account_number,
+            t.processed_date,
+            t.category_definition_id,
+            cd.name AS category_name,
+            cd.name_en AS category_name_en,
+            parent.name AS parent_category_name,
+            parent.name_en AS parent_category_name_en,
+            cd.category_type,
+            t.category AS legacy_category,
+            t.parent_category AS legacy_parent_category
+          FROM transactions t
+          LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
+          LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+          WHERE t.date >= $1
+          AND t.date <= $2
+          ${typeFilterClause}
+          ${categoryFilterClause}
+          ${vendorFilterClause}
+          ${duplicateFilter}
+          ORDER BY t.date DESC, t.vendor, t.name
+        `,
+        queryParams
+      );
 
       exportData.transactions = transactionsResult.rows;
     }
 
     if (dataType === 'categories' || dataType === 'full') {
       // Export category summary
-      const categoriesResult = await client.query(`
-        SELECT
-          COALESCE(t.parent_category, t.category) as category,
-          t.parent_category,
-          COUNT(*) as transaction_count,
-          SUM(ABS(t.price)) as total_amount
-        FROM transactions t
-        WHERE t.date >= $1
-        AND t.date <= $2
-        ${typeFilterClause}
-        ${duplicateFilter}
-        GROUP BY COALESCE(t.parent_category, t.category), t.parent_category
-        ORDER BY total_amount DESC
-      `, [start, end]);
+      const categoriesResult = await client.query(
+        `
+          SELECT
+            COALESCE(parent.id, cd.id) AS category_definition_id,
+            COALESCE(parent.name, cd.name, t.parent_category, t.category, 'Uncategorized') AS category,
+            COALESCE(parent.name_en, cd.name_en, t.parent_category, t.category, 'Uncategorized') AS category_name_en,
+            parent.name AS parent_category,
+            parent.name_en AS parent_category_name_en,
+            COUNT(*) AS transaction_count,
+            SUM(ABS(t.price)) AS total_amount,
+            MAX(COALESCE(parent.category_type, cd.category_type)) AS category_type
+          FROM transactions t
+          LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
+          LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+          WHERE t.date >= $1
+          AND t.date <= $2
+          ${typeFilterClause}
+          ${categoryFilterClause}
+          ${vendorFilterClause}
+          ${duplicateFilter}
+          GROUP BY
+            COALESCE(parent.id, cd.id),
+            COALESCE(parent.name, cd.name, t.parent_category, t.category, 'Uncategorized'),
+            COALESCE(parent.name_en, cd.name_en, t.parent_category, t.category, 'Uncategorized'),
+            parent.name,
+            parent.name_en
+          ORDER BY total_amount DESC
+        `,
+        queryParams
+      );
 
       exportData.categories = categoriesResult.rows;
     }
 
     if (dataType === 'vendors' || dataType === 'full') {
       // Export vendor summary
-      const vendorsResult = await client.query(`
-        SELECT
-          t.vendor,
-          COUNT(*) as transaction_count,
-          SUM(ABS(t.price)) as total_amount,
-          MIN(t.date) as first_transaction,
-          MAX(t.date) as last_transaction
-        FROM transactions t
-        WHERE t.date >= $1
-        AND t.date <= $2
-        ${typeFilterClause}
-        ${duplicateFilter}
-        GROUP BY t.vendor
-        ORDER BY total_amount DESC
-      `, [start, end]);
+      const vendorsResult = await client.query(
+        `
+          SELECT
+            t.vendor,
+            COUNT(*) AS transaction_count,
+            SUM(ABS(t.price)) AS total_amount,
+            MIN(t.date) AS first_transaction,
+            MAX(t.date) AS last_transaction
+          FROM transactions t
+          LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
+          LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+          WHERE t.date >= $1
+          AND t.date <= $2
+          ${typeFilterClause}
+          ${categoryFilterClause}
+          ${vendorFilterClause}
+          ${duplicateFilter}
+          GROUP BY t.vendor
+          ORDER BY total_amount DESC
+        `,
+        queryParams
+      );
 
       exportData.vendors = vendorsResult.rows;
     }
@@ -231,14 +357,19 @@ export default async function handler(req, res) {
       // Export budgets
       const budgetsResult = await client.query(`
         SELECT
-          category,
-          period_type,
-          budget_limit,
-          is_active,
-          created_at,
-          updated_at
-        FROM category_budgets
-        ORDER BY category, period_type
+          cb.category_definition_id,
+          cd.name AS category_name,
+          parent.name AS parent_category_name,
+          parent.name_en AS parent_category_name_en,
+          cb.period_type,
+          cb.budget_limit,
+          cb.is_active,
+          cb.created_at,
+          cb.updated_at
+        FROM category_budgets cb
+        JOIN category_definitions cd ON cd.id = cb.category_definition_id
+        LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+        ORDER BY cd.category_type, parent.name, cd.name, cb.period_type
       `);
 
       exportData.budgets = budgetsResult.rows;
@@ -294,7 +425,7 @@ export default async function handler(req, res) {
         dataType,
         dateRange: { start, end },
         filters: {
-          categories: categories ? categories.split(',') : null,
+          categories: categoryValues.length > 0 ? categoryValues : null,
           vendors: vendorList.length > 0 ? vendorList : null,
           excludeDuplicates: excludeDuplicates === 'true',
           includeIncome: includeIncome === 'true',

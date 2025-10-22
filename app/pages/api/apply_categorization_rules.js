@@ -1,5 +1,6 @@
 import { createApiHandler } from "./utils/apiHandler";
 import { getDB } from "./db";
+import { BANK_CATEGORY_NAME } from '../../lib/category-constants.js';
 
 const handler = createApiHandler({
   validate: (req) => {
@@ -34,47 +35,84 @@ const handler = createApiHandler({
       for (const rule of rules) {
         const pattern = `%${rule.name_pattern}%`;
 
-        // Update using category_definition_id if available, otherwise use legacy category field
-        if (rule.category_definition_id) {
-          // Build price condition based on category type
-          let priceCondition = '';
-          if (rule.category_type === 'income') {
-            priceCondition = 'AND price > 0';
-          } else if (rule.category_type === 'expense') {
-            priceCondition = 'AND price < 0';
-          }
-          // If category_type is null, apply to all transactions (backward compatibility)
+        let categoryId = rule.category_definition_id || null;
+        let categoryRecord = null;
 
-          const updateResult = await client.query(`
-            UPDATE transactions
-            SET category_definition_id = $2,
-                category = $3,
-                parent_category = (
-                  SELECT parent_cd.name
-                  FROM category_definitions cd
-                  LEFT JOIN category_definitions parent_cd ON cd.parent_id = parent_cd.id
-                  WHERE cd.id = $2
-                )
-            WHERE LOWER(name) LIKE LOWER($1)
-            ${priceCondition}
-            AND (category_definition_id IS NULL OR category_definition_id != $2)
-          `, [pattern, rule.category_definition_id, rule.target_category]);
-
-          totalUpdated += updateResult.rowCount;
-        } else {
-          // Legacy support for old rules without category_definition_id
-          const updateResult = await client.query(`
-            UPDATE transactions
-            SET category = $2
-            WHERE LOWER(name) LIKE LOWER($1)
-            AND category != $2
-            AND category IS NOT NULL
-            AND category != 'Bank'
-            AND category != 'Income'
-          `, [pattern, rule.target_category]);
-
-          totalUpdated += updateResult.rowCount;
+        if (categoryId) {
+          const recordResult = await client.query(
+            `SELECT
+               cd.id,
+               cd.name,
+               cd.category_type,
+               cd.parent_id,
+               parent.name AS parent_name
+             FROM category_definitions cd
+             LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+             WHERE cd.id = $1`,
+            [categoryId]
+          );
+          categoryRecord = recordResult.rows[0] || null;
+        } else if (rule.target_category) {
+          const fallbackResult = await client.query(
+            `SELECT
+               cd.id,
+               cd.name,
+               cd.category_type,
+               cd.parent_id,
+               parent.name AS parent_name
+             FROM category_definitions cd
+             LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+             WHERE LOWER(cd.name) = LOWER($1)
+             LIMIT 1`,
+            [rule.target_category]
+          );
+          categoryRecord = fallbackResult.rows[0] || null;
+          categoryId = categoryRecord?.id || null;
         }
+
+        if (!categoryRecord || !categoryId) {
+          continue;
+        }
+
+        const priceCondition = categoryRecord.category_type === 'income'
+          ? 'AND price > 0'
+          : categoryRecord.category_type === 'expense'
+            ? 'AND price < 0'
+            : '';
+
+        const parentName = categoryRecord.parent_name || null;
+        const subcategory = categoryRecord.parent_id ? categoryRecord.name : null;
+        const categoryLabel = subcategory || categoryRecord.name;
+        const confidence = categoryRecord.category_type === 'income' ? 0.7 : 0.8;
+
+        const updateResult = await client.query(`
+          UPDATE transactions
+          SET
+            category_definition_id = $2,
+            category = $3,
+            parent_category = $4,
+            subcategory = $5,
+            category_type = $6,
+            auto_categorized = true,
+            confidence_score = GREATEST(confidence_score, $7)
+          WHERE LOWER(name) LIKE LOWER($1)
+            ${priceCondition}
+            AND category_definition_id NOT IN (
+              SELECT id FROM category_definitions
+              WHERE name = $8 OR category_type = 'income'
+            )
+        `, [
+          pattern,
+          categoryId,
+          categoryLabel,
+          parentName,
+          subcategory,
+          categoryRecord.category_type,
+          confidence,
+          BANK_CATEGORY_NAME
+        ]);
+
+        totalUpdated += updateResult.rowCount;
       }
       
       return {

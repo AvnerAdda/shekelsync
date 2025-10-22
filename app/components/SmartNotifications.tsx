@@ -157,11 +157,11 @@ const SmartNotifications: React.FC = () => {
     switch (action) {
       case 'view_category':
         // Navigate to category view
-        console.log('Navigate to category:', params?.category);
+        console.log('Navigate to category:', params?.category_definition_id || params?.category);
         break;
       case 'edit_budget':
         // Open budget editing
-        console.log('Edit budget for:', params?.category);
+        console.log('Edit budget for:', params?.category_definition_id || params?.category);
         break;
       case 'view_transaction':
         // Navigate to transaction details

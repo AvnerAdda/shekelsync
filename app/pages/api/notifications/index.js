@@ -24,6 +24,61 @@ const SEVERITY_LEVELS = {
   CRITICAL: 'critical'
 };
 
+function isMissingCategoryIdColumnError(error) {
+  if (!error || !error.message) return false;
+  return error.message.includes('category_definition_id');
+}
+
+async function calculateSpentForCategory(client, { categoryDefinitionId, categoryName }, startDate, endDate, duplicateClause) {
+  if (categoryDefinitionId) {
+    const result = await client.query(
+      `WITH RECURSIVE category_tree(id) AS (
+          SELECT id FROM category_definitions WHERE id = $1
+          UNION ALL
+          SELECT cd.id
+          FROM category_definitions cd
+          JOIN category_tree ct ON cd.parent_id = ct.id
+        )
+       SELECT COALESCE(SUM(ABS(price)), 0) AS spent
+       FROM transactions t
+       WHERE t.category_definition_id IN (SELECT id FROM category_tree)
+         AND t.price < 0
+         AND t.date >= $2
+         AND t.date <= $3
+         ${duplicateClause}`,
+      [categoryDefinitionId, startDate, endDate]
+    );
+
+    return parseFloat(result.rows[0].spent || 0);
+  }
+
+  if (!categoryName) {
+    return 0;
+  }
+
+  const fallbackResult = await client.query(
+    `WITH RECURSIVE category_tree AS (
+        SELECT id
+        FROM category_definitions
+        WHERE LOWER(name) = LOWER($1) OR LOWER(name_en) = LOWER($1)
+      UNION ALL
+        SELECT cd.id
+        FROM category_definitions cd
+        JOIN category_tree ct ON cd.parent_id = ct.id
+      )
+     SELECT COALESCE(SUM(ABS(t.price)), 0) AS spent
+     FROM transactions t
+     WHERE t.category_definition_id IN (SELECT id FROM category_tree)
+       AND t.price < 0
+       AND t.date >= $2
+       AND t.date <= $3
+       ${duplicateClause}`,
+    [categoryName, startDate, endDate]
+  );
+
+  return parseFloat(fallbackResult.rows[0].spent || 0);
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json(standardizeError('Method not allowed', 'METHOD_NOT_ALLOWED'));
@@ -56,61 +111,106 @@ export default async function handler(req, res) {
 
     // 1. Budget Warnings & Exceeded Alerts
     if (type === 'all' || type === NOTIFICATION_TYPES.BUDGET_WARNING || type === NOTIFICATION_TYPES.BUDGET_EXCEEDED) {
-      const budgetAlertsResult = await client.query(`
-        WITH monthly_spending AS (
-          SELECT
-            COALESCE(t.parent_category, t.category) as category,
-            SUM(ABS(t.price)) as spent
-          FROM transactions t
-          WHERE t.date >= $1
-          AND t.date <= $2
-          AND t.price < 0
-          ${duplicateClause}
-          GROUP BY COALESCE(t.parent_category, t.category)
-        ),
-        budget_usage AS (
-          SELECT
-            cb.category,
-            cb.budget_limit,
-            COALESCE(ms.spent, 0) as spent,
-            (COALESCE(ms.spent, 0) / cb.budget_limit * 100) as usage_percentage
-          FROM category_budgets cb
-          LEFT JOIN monthly_spending ms ON cb.category = ms.category
-          WHERE cb.is_active = true
-          AND cb.period_type = 'monthly'
-        )
-        SELECT * FROM budget_usage
-        WHERE usage_percentage >= 75
-        ORDER BY usage_percentage DESC
-      `, [currentMonthStartStr, currentMonthEndStr]);
+      let budgetsResult;
+      let legacyBudgetSchema = false;
+      let categoryLookupByName = null;
+      let categoryLookupById = null;
 
-      budgetAlertsResult.rows.forEach(budget => {
-        const spent = parseFloat(budget.spent || 0);
+      try {
+        budgetsResult = await client.query(
+          `SELECT
+             cb.id,
+             cb.category_definition_id,
+             cb.budget_limit,
+             cd.name AS category_name,
+             parent.name AS parent_category_name
+           FROM category_budgets cb
+           JOIN category_definitions cd ON cd.id = cb.category_definition_id
+           LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+           WHERE cb.is_active = true
+             AND cb.period_type = 'monthly'`
+        );
+      } catch (error) {
+        if (!isMissingCategoryIdColumnError(error)) {
+          throw error;
+        }
+
+        legacyBudgetSchema = true;
+        budgetsResult = await client.query(
+          `SELECT
+             cb.id,
+             cb.category AS legacy_category,
+             cb.budget_limit
+           FROM category_budgets cb
+           WHERE cb.is_active = true
+             AND cb.period_type = 'monthly'`
+        );
+
+        const categoryRows = await client.query(
+          `SELECT id, name, name_en, parent_id FROM category_definitions`
+        );
+        categoryLookupByName = new Map();
+        categoryLookupById = new Map();
+        categoryRows.rows.forEach((row) => {
+          categoryLookupByName.set(row.name, row);
+          categoryLookupById.set(row.id, row);
+        });
+      }
+
+      for (const budget of budgetsResult.rows) {
         const budgetLimit = parseFloat(budget.budget_limit || 0);
-        const usagePercentage = budgetLimit > 0
-          ? (spent / budgetLimit) * 100
-          : 0;
+        if (budgetLimit <= 0) continue;
+
+        let categoryId = budget.category_definition_id || null;
+        let categoryName = budget.category_name || null;
+        let parentCategoryName = budget.parent_category_name || null;
+
+        if (legacyBudgetSchema) {
+          const legacyCategory = budget.legacy_category;
+          const mappedCategory = legacyCategory ? categoryLookupByName.get(legacyCategory) : null;
+          categoryId = mappedCategory?.id || null;
+          categoryName = legacyCategory || mappedCategory?.name || null;
+          const parentRow = mappedCategory?.parent_id ? categoryLookupById.get(mappedCategory.parent_id) : null;
+          parentCategoryName = parentRow?.name || null;
+        }
+
+        const spent = await calculateSpentForCategory(
+          client,
+          { categoryDefinitionId: categoryId, categoryName },
+          currentMonthStartStr,
+          currentMonthEndStr,
+          duplicateClause
+        );
+
+        const usagePercentage = (spent / budgetLimit) * 100;
+        if (usagePercentage < 75) continue;
+
         const isExceeded = usagePercentage >= 100;
         notifications.push({
-          id: `budget_${budget.category}`,
+          id: `budget_${categoryId || budget.id}`,
           type: isExceeded ? NOTIFICATION_TYPES.BUDGET_EXCEEDED : NOTIFICATION_TYPES.BUDGET_WARNING,
           severity: isExceeded ? SEVERITY_LEVELS.CRITICAL : SEVERITY_LEVELS.WARNING,
           title: isExceeded ? 'Budget Exceeded!' : 'Budget Warning',
-          message: `${budget.category}: ${usagePercentage.toFixed(1)}% of budget used (₪${spent.toLocaleString()} / ₪${budgetLimit.toLocaleString()})`,
+          message: `${categoryName || 'Unknown Category'}: ${usagePercentage.toFixed(1)}% of budget used (₪${spent.toLocaleString()} / ₪${budgetLimit.toLocaleString()})`,
           data: {
-            category: budget.category,
+            category_definition_id: categoryId,
+            category_name: categoryName,
             spent,
             budget: budgetLimit,
             percentage: usagePercentage
           },
           timestamp: now.toISOString(),
           actionable: true,
-          actions: [
-            { label: 'View Details', action: 'view_category', params: { category: budget.category } },
-            { label: 'Adjust Budget', action: 'edit_budget', params: { category: budget.category } }
-          ]
+          actions: categoryId
+            ? [
+                { label: 'View Details', action: 'view_category', params: { category_definition_id: categoryId } },
+                { label: 'Adjust Budget', action: 'edit_budget', params: { category_definition_id: categoryId } }
+              ]
+            : [
+                { label: 'Adjust Budget', action: 'edit_budget', params: { category: categoryName } }
+              ]
         });
-      });
+      }
     }
 
     // 2. Unusual Spending Detection
@@ -124,9 +224,12 @@ export default async function handler(req, res) {
           t.vendor,
           t.name,
           t.date,
-          ABS(t.price) as amount,
-          COALESCE(t.parent_category, t.category) as category
+          ABS(t.price) AS amount,
+          COALESCE(parent.id, cd.id) AS resolved_category_id,
+          COALESCE(parent.name, cd.name, 'Uncategorized') AS resolved_category_name
         FROM transactions t
+        LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
+        LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
         WHERE t.date >= $1
           AND t.price < 0
           ${duplicateClause}
@@ -135,34 +238,55 @@ export default async function handler(req, res) {
         [ninetyDaysStr]
       );
 
-      const transactions = transactionsResult.rows.map(row => ({
-        ...row,
-        date: new Date(row.date),
-        amount: parseFloat(row.amount),
-        category: row.category || 'Unknown',
-      }));
+      const transactions = transactionsResult.rows.map((row) => {
+        const date = new Date(row.date);
+        const amount = parseFloat(row.amount);
+        const resolvedId = row.resolved_category_id;
+        const categoryDefinitionId =
+          resolvedId === null || resolvedId === undefined ? null : Number(resolvedId);
+        const normalizedCategoryId =
+          categoryDefinitionId !== null && !Number.isNaN(categoryDefinitionId) ? categoryDefinitionId : null;
+        const categoryName = row.resolved_category_name || 'Uncategorized';
+
+        return {
+          identifier: row.identifier,
+          vendor: row.vendor,
+          name: row.name,
+          date,
+          amount,
+          categoryDefinitionId: normalizedCategoryId,
+          categoryName,
+        };
+      });
 
       const categoryStats = computeCategoryStatsForNotifications(transactions, 5);
 
       transactions
-        .filter(txn => txn.date >= sevenDaysAgo)
-        .forEach(txn => {
-          const stats = categoryStats.get(txn.category);
+        .filter((txn) => txn.date >= sevenDaysAgo)
+        .forEach((txn) => {
+          const categoryKey =
+            typeof txn.categoryDefinitionId === 'number' && !Number.isNaN(txn.categoryDefinitionId)
+              ? `id:${txn.categoryDefinitionId}`
+              : `legacy:${txn.categoryName || 'Uncategorized'}`;
+          const stats = categoryStats.get(categoryKey);
           if (!stats || stats.stdDev <= 0) return;
           const zScore = (txn.amount - stats.mean) / stats.stdDev;
           if (zScore <= 2.5) return;
+
+          const categoryName = txn.categoryName || 'Uncategorized';
 
           notifications.push({
             id: `unusual_${txn.identifier}`,
             type: NOTIFICATION_TYPES.UNUSUAL_SPENDING,
             severity: SEVERITY_LEVELS.WARNING,
             title: 'Unusual Spending Detected',
-            message: `₪${txn.amount.toLocaleString()} spent at ${txn.vendor} (${txn.category}) - ${(zScore * 100).toFixed(0)}% above average`,
+            message: `₪${txn.amount.toLocaleString()} spent at ${txn.vendor} (${categoryName}) - ${(zScore * 100).toFixed(0)}% above average`,
             data: {
               transaction_id: txn.identifier,
               vendor: txn.vendor,
               amount: txn.amount,
-              category: txn.category,
+              category_definition_id: txn.categoryDefinitionId,
+              category_name: categoryName,
               date: txn.date,
               deviation: zScore,
             },
@@ -187,9 +311,12 @@ export default async function handler(req, res) {
           t.vendor,
           t.name,
           t.date,
-          ABS(t.price) as amount,
-          COALESCE(t.parent_category, t.category) as category
+          ABS(t.price) AS amount,
+          COALESCE(parent.id, cd.id) AS resolved_category_id,
+          COALESCE(parent.name, cd.name, 'Uncategorized') AS resolved_category_name
         FROM transactions t
+        LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
+        LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
         WHERE t.date >= $1
           AND t.price < 0
           ${duplicateClause}
@@ -198,20 +325,34 @@ export default async function handler(req, res) {
         [thirtyDaysStr]
       );
 
-      const highTransactions = highTxResult.rows.map(row => ({
-        ...row,
-        date: new Date(row.date),
-        amount: parseFloat(row.amount),
-        category: row.category || 'Unknown',
-      }));
+      const highTransactions = highTxResult.rows.map((row) => {
+        const date = new Date(row.date);
+        const amount = parseFloat(row.amount);
+        const resolvedId = row.resolved_category_id;
+        const categoryDefinitionId =
+          resolvedId === null || resolvedId === undefined ? null : Number(resolvedId);
+        const normalizedCategoryId =
+          categoryDefinitionId !== null && !Number.isNaN(categoryDefinitionId) ? categoryDefinitionId : null;
+        const categoryName = row.resolved_category_name || 'Uncategorized';
+
+        return {
+          identifier: row.identifier,
+          vendor: row.vendor,
+          name: row.name,
+          date,
+          amount,
+          categoryDefinitionId: normalizedCategoryId,
+          categoryName,
+        };
+      });
 
       const amountList = highTransactions.map(txn => txn.amount).sort((a, b) => a - b);
       if (amountList.length > 0) {
         const threshold = percentile(amountList, 0.95);
         highTransactions
-          .filter(txn => txn.date >= threeDaysAgo && txn.amount >= threshold)
+          .filter((txn) => txn.date >= threeDaysAgo && txn.amount >= threshold)
           .slice(0, 5)
-          .forEach(txn => {
+          .forEach((txn) => {
             notifications.push({
               id: `high_${txn.identifier}`,
               type: NOTIFICATION_TYPES.HIGH_TRANSACTION,
@@ -222,7 +363,8 @@ export default async function handler(req, res) {
                 transaction_id: txn.identifier,
                 vendor: txn.vendor,
                 amount: txn.amount,
-                category: txn.category,
+                category_definition_id: txn.categoryDefinitionId,
+                category_name: txn.categoryName,
                 date: txn.date,
               },
               timestamp: txn.date.toISOString(),
@@ -399,24 +541,43 @@ export default async function handler(req, res) {
 function computeCategoryStatsForNotifications(transactions, minCount) {
   const stats = new Map();
 
-  transactions.forEach(txn => {
-    const category = txn.category || 'Unknown';
-    if (!stats.has(category)) {
-      stats.set(category, { sum: 0, sumSquares: 0, count: 0 });
+  transactions.forEach((txn) => {
+    const categoryName = txn.categoryName || 'Uncategorized';
+    const categoryDefinitionId =
+      typeof txn.categoryDefinitionId === 'number' && !Number.isNaN(txn.categoryDefinitionId)
+        ? txn.categoryDefinitionId
+        : null;
+    const categoryKey =
+      categoryDefinitionId !== null ? `id:${categoryDefinitionId}` : `legacy:${categoryName}`;
+
+    if (!stats.has(categoryKey)) {
+      stats.set(categoryKey, {
+        sum: 0,
+        sumSquares: 0,
+        count: 0,
+        categoryName,
+        categoryDefinitionId,
+      });
     }
-    const entry = stats.get(category);
+    const entry = stats.get(categoryKey);
     entry.sum += txn.amount;
     entry.sumSquares += txn.amount * txn.amount;
     entry.count += 1;
   });
 
   const result = new Map();
-  stats.forEach((entry, category) => {
+  stats.forEach((entry, key) => {
     if (entry.count < (minCount || 1)) return;
     const mean = entry.sum / entry.count;
     const variance = entry.count > 1 ? entry.sumSquares / entry.count - mean * mean : 0;
     const stdDev = variance > 0 ? Math.sqrt(variance) : 0;
-    result.set(category, { mean, stdDev, count: entry.count });
+    result.set(key, {
+      mean,
+      stdDev,
+      count: entry.count,
+      categoryName: entry.categoryName,
+      categoryDefinitionId: entry.categoryDefinitionId,
+    });
   });
 
   return result;

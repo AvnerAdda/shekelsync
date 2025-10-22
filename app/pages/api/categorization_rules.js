@@ -34,9 +34,6 @@ const handler = createApiHandler({
           SELECT
             cr.id,
             cr.name_pattern,
-            cr.target_category,
-            cr.parent_category,
-            cr.subcategory,
             cr.category_definition_id,
             cr.category_type,
             cr.is_active,
@@ -44,7 +41,9 @@ const handler = createApiHandler({
             cr.created_at,
             cr.updated_at,
             cd.name as category_name,
-            parent_cd.name as parent_category_name
+            cd.name_en as category_name_en,
+            parent_cd.name as parent_category_name,
+            parent_cd.name_en as parent_category_name_en
           FROM categorization_rules cr
           LEFT JOIN category_definitions cd ON cr.category_definition_id = cd.id
           LEFT JOIN category_definitions parent_cd ON cd.parent_id = parent_cd.id

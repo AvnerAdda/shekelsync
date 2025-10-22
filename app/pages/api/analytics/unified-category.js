@@ -53,21 +53,87 @@ export default async function handler(req, res) {
     const { priceFilter, amountExpression, categoryFilter } = buildTypeFilters(type);
     const duplicateFilter = excludeDuplicates === 'true' ? await buildDuplicateFilter(client, 't') : '';
 
+    const parsedSubcategoryId =
+      subcategoryId !== undefined && subcategoryId !== null
+        ? parseInt(subcategoryId, 10)
+        : null;
+    if (subcategoryId !== undefined && (parsedSubcategoryId === null || Number.isNaN(parsedSubcategoryId))) {
+      return res.status(400).json(
+        standardizeError('Invalid subcategoryId parameter', 'INVALID_CATEGORY')
+      );
+    }
+
+    const parsedParentId =
+      parentId !== undefined && parentId !== null ? parseInt(parentId, 10) : null;
+    if (parentId !== undefined && (parsedParentId === null || Number.isNaN(parsedParentId))) {
+      return res.status(400).json(
+        standardizeError('Invalid parentId parameter', 'INVALID_CATEGORY')
+      );
+    }
+
     // Build category filter if specific category requested
-    let specificCategoryFilter = '';
+    let categoryFilterClause = '';
     let categoryParams = [];
 
-    if (subcategoryId) {
-      specificCategoryFilter = 'AND t.category_definition_id = $';
-      categoryParams = [subcategoryId];
-    } else if (parentId) {
-      specificCategoryFilter = `AND t.category_definition_id IN (
-        SELECT id FROM category_definitions WHERE parent_id = $
+    if (parsedSubcategoryId !== null) {
+      categoryFilterClause = 't.category_definition_id = $1';
+      categoryParams = [parsedSubcategoryId];
+    } else if (parsedParentId !== null) {
+      categoryFilterClause = `t.category_definition_id IN (
+        SELECT id FROM category_definitions WHERE parent_id = $1
       )`;
-      categoryParams = [parentId];
-    } else if (category) {
-      specificCategoryFilter = 'AND COALESCE(t.parent_category, t.category) = $';
-      categoryParams = [category];
+      categoryParams = [parsedParentId];
+    } else if (category && typeof category === 'string' && category.trim()) {
+      const normalizedCategoryName = category.trim();
+      const { rows: categoryRows } = await client.query(
+        `
+          WITH matched AS (
+            SELECT id
+            FROM category_definitions
+            WHERE LOWER(name) = LOWER($1) OR LOWER(name_en) = LOWER($1)
+          ),
+          hierarchy AS (
+            SELECT id FROM matched
+            UNION ALL
+            SELECT cd.id
+            FROM category_definitions cd
+            JOIN hierarchy h ON cd.parent_id = h.id
+          )
+          SELECT DISTINCT id FROM hierarchy
+        `,
+        [normalizedCategoryName]
+      );
+
+      const matchedIds = categoryRows
+        .map((row) => (typeof row.id === 'number' ? row.id : parseInt(row.id, 10)))
+        .filter((id) => Number.isFinite(id));
+
+      if (matchedIds.length > 0) {
+        // Use recursive CTE to include subcategories
+        categoryFilterClause = `t.category_definition_id IN (
+          WITH RECURSIVE category_tree AS (
+            SELECT id FROM category_definitions WHERE id = ANY($1::int[])
+            UNION ALL
+            SELECT cd.id FROM category_definitions cd
+            JOIN category_tree ct ON cd.parent_id = ct.id
+          )
+          SELECT id FROM category_tree
+        )`;
+        categoryParams = [matchedIds];
+      } else {
+        // Fallback: search by name with recursive CTE
+        categoryFilterClause = `t.category_definition_id IN (
+          WITH RECURSIVE category_tree AS (
+            SELECT id FROM category_definitions
+            WHERE LOWER(name) = LOWER($1) OR LOWER(name_en) = LOWER($1)
+            UNION ALL
+            SELECT cd.id FROM category_definitions cd
+            JOIN category_tree ct ON cd.parent_id = ct.id
+          )
+          SELECT id FROM category_tree
+        )`;
+        categoryParams = [normalizedCategoryName];
+      }
     }
 
     const paramOffset = categoryParams.length;
@@ -80,18 +146,21 @@ export default async function handler(req, res) {
     switch (groupBy) {
       case 'category':
         breakdownSelect = `
-          COALESCE(t.parent_category, t.category) as category,
-          t.category as subcategory
+          COALESCE(parent.name, cd.name) as category,
+          CASE WHEN parent.id IS NOT NULL THEN cd.name ELSE NULL END as subcategory,
+          COALESCE(parent.id, cd.id) as category_definition_id,
+          cd.id as subcategory_id
         `;
-        breakdownGroupBy = 'COALESCE(t.parent_category, t.category), t.category';
+        breakdownGroupBy = 'COALESCE(parent.name, cd.name), cd.name, COALESCE(parent.id, cd.id), cd.id, parent.id';
         break;
 
       case 'month':
+        const monthExpr = dialect.toChar('t.date', 'YYYY-MM');
         breakdownSelect = `
-          TO_CHAR(t.date, 'YYYY-MM') as month,
-          TO_CHAR(t.date, 'Mon YYYY') as month_name
+          ${monthExpr} as month,
+          ${monthExpr} as month_name
         `;
-        breakdownGroupBy = "TO_CHAR(t.date, 'YYYY-MM'), TO_CHAR(t.date, 'Mon YYYY')";
+        breakdownGroupBy = monthExpr;
         break;
 
       case 'vendor':
@@ -136,6 +205,8 @@ export default async function handler(req, res) {
         MIN(${amountExpression}) as min_amount,
         MAX(${amountExpression}) as max_amount
       FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
       ${whereClause}
     `, baseParams);
 
@@ -147,6 +218,8 @@ export default async function handler(req, res) {
         COUNT(*) as count,
         SUM(${amountExpression}) as total
       FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
       ${whereClause}
       GROUP BY ${breakdownGroupBy}
       ORDER BY total DESC
@@ -162,10 +235,13 @@ export default async function handler(req, res) {
           t.name,
           t.price,
           t.vendor,
-          t.category,
-          t.parent_category,
-          t.account_number
+          t.account_number,
+          cd.id as category_definition_id,
+          cd.name as category_name,
+          parent.name as parent_name
         FROM transactions t
+        LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+        LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
         ${whereClause}
         ORDER BY t.date DESC
         LIMIT 20
@@ -176,8 +252,9 @@ export default async function handler(req, res) {
         name: row.name,
         price: parseFloat(row.price),
         vendor: row.vendor,
-        category: row.category,
-        parentCategory: row.parent_category,
+        categoryDefinitionId: row.category_definition_id,
+        categoryName: row.category_name,
+        parentName: row.parent_name,
         accountNumber: row.account_number,
       }));
     }

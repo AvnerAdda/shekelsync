@@ -1,5 +1,6 @@
 import { getDB } from '../db.js';
 import { subMonths } from 'date-fns';
+import { dialect } from '../../../lib/sql-dialect.js';
 
 /**
  * Get category spending summary with subcategory breakdown
@@ -44,7 +45,7 @@ export default async function handler(req, res) {
       )
       SELECT
         cs.*,
-        ROUND(CAST(cs.total_amount / $3 AS numeric), 2) as monthly_average,
+        ROUND(${dialect.castNumeric('cs.total_amount / $3')}, 2) as monthly_average,
         cas.actionability_level,
         cas.user_notes,
         cas.is_default

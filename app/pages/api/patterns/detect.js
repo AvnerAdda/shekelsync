@@ -1,4 +1,5 @@
 import { getDB } from '../db.js';
+import { BANK_CATEGORY_NAME } from '../../../lib/category-constants.js';
 
 /**
  * Detect transactions matching duplicate patterns
@@ -17,33 +18,47 @@ export default async function handler(req, res) {
     const start = startDate ? new Date(startDate) : new Date(new Date().setMonth(new Date().getMonth() - 3));
     const end = endDate ? new Date(endDate) : new Date();
 
-    // Check if tables exist
+    // Check if tables exist (SQLite compatible)
     const patternsTableCheck = await client.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables
-        WHERE table_name = 'duplicate_patterns'
-      );
+      SELECT COUNT(*) as count
+      FROM sqlite_master
+      WHERE type = 'table' AND name = 'duplicate_patterns'
     `);
 
-    if (!patternsTableCheck.rows[0].exists) {
+    if (parseInt(patternsTableCheck.rows[0].count) === 0) {
       return res.status(500).json({
         error: 'Pattern-based duplicate detection not available. Run migration first.',
         suggestions: []
       });
     }
 
+    // Check if override_category_definition_id column exists
+    const columnsCheck = await client.query(`
+      SELECT sql FROM sqlite_master WHERE type='table' AND name='duplicate_patterns'
+    `);
+    const hasOverrideCategoryDefId = columnsCheck.rows[0]?.sql?.includes('override_category_definition_id');
+
     // Get active patterns
     let patternQuery = `
-      SELECT id, pattern_name, pattern_regex, match_type, override_category, confidence, description
-      FROM duplicate_patterns
-      WHERE is_active = true
+      SELECT
+        dp.id,
+        dp.pattern_name,
+        dp.pattern_regex,
+        dp.match_type,
+        dp.confidence,
+        dp.description${hasOverrideCategoryDefId ? `,
+        dp.override_category_definition_id,
+        cd.name AS override_category_name` : ''}
+      FROM duplicate_patterns dp${hasOverrideCategoryDefId ? `
+      LEFT JOIN category_definitions cd ON cd.id = dp.override_category_definition_id` : ''}
+      WHERE dp.is_active = true
     `;
 
     if (patternId) {
-      patternQuery += ` AND id = ${parseInt(patternId)}`;
+      patternQuery += ` AND dp.id = ${parseInt(patternId)}`;
     }
 
-    patternQuery += ` ORDER BY confidence DESC, match_count DESC`;
+    patternQuery += ` ORDER BY dp.confidence DESC, dp.match_count DESC`;
 
     const patternsResult = await client.query(patternQuery);
     const patterns = patternsResult.rows;
@@ -52,6 +67,10 @@ export default async function handler(req, res) {
 
     // For each pattern, find matching transactions
     for (const pattern of patterns) {
+      // Convert simple regex to LIKE pattern (basic support)
+      // For now, just use LIKE with pattern as-is (assuming patterns are simple text matches)
+      const likePattern = `%${pattern.pattern_regex.replace(/[.*+?^${}()|[\]\\]/g, '')}%`;
+
       const matchQuery = `
         SELECT
           t.identifier,
@@ -59,11 +78,14 @@ export default async function handler(req, res) {
           t.date,
           t.name,
           t.price,
-          t.category,
+          cd.name as category,
           t.account_number
         FROM transactions t
-        WHERE t.name ~* $1
-        AND t.category = 'Bank'
+        LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+        WHERE t.name LIKE $1
+        AND t.category_definition_id IN (
+          SELECT id FROM category_definitions WHERE name = $4
+        )
         AND t.price < 0
         AND t.date >= $2
         AND t.date <= $3
@@ -84,7 +106,7 @@ export default async function handler(req, res) {
         LIMIT 50
       `;
 
-      const matchesResult = await client.query(matchQuery, [pattern.pattern_regex, start, end]);
+      const matchesResult = await client.query(matchQuery, [likePattern, start, end, BANK_CATEGORY_NAME]);
 
       if (matchesResult.rows.length > 0) {
         suggestions.push({
@@ -93,7 +115,9 @@ export default async function handler(req, res) {
             name: pattern.pattern_name,
             regex: pattern.pattern_regex,
             type: pattern.match_type,
-            overrideCategory: pattern.override_category,
+            overrideCategory: pattern.override_category_name || pattern.override_category,
+            overrideCategoryDefinitionId: pattern.override_category_definition_id || null,
+            overrideCategoryName: pattern.override_category_name || null,
             confidence: pattern.confidence,
             description: pattern.description
           },

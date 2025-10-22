@@ -36,6 +36,7 @@ import {
   Cancel as CancelIcon,
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { CategoryOption } from './CategoryDashboard/types';
 
 interface BankTransaction {
   identifier: string;
@@ -44,10 +45,12 @@ interface BankTransaction {
   name: string;
   price: number;
   category: string;
+  category_definition_id?: number | null;
   account_number?: string;
   is_excluded: boolean;
   exclusion_reason?: string;
-  override_category?: string;
+  override_category?: string | null;
+  override_category_definition_id?: number | null;
   exclusion_notes?: string;
   exclusion_type?: 'manual' | 'duplicate';
 }
@@ -66,17 +69,6 @@ const EXCLUSION_REASONS = [
   { value: 'other', label: 'Other', color: 'default' },
 ];
 
-const CATEGORY_OVERRIDES = [
-  'Investment',
-  'Transfer',
-  'Rent',
-  'Loan',
-  'Savings',
-  'Insurance',
-  'Tax Payment',
-  'Other',
-];
-
 const ManualResolutionPanel: React.FC<ManualResolutionPanelProps> = ({ onTransactionsChanged }) => {
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -86,12 +78,39 @@ const ManualResolutionPanel: React.FC<ManualResolutionPanelProps> = ({ onTransac
   const [processingTxn, setProcessingTxn] = useState<string | null>(null);
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [bulkReason, setBulkReason] = useState('duplicate');
-  const [bulkCategory, setBulkCategory] = useState('');
+  const [bulkCategoryId, setBulkCategoryId] = useState<number | null>(null);
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
   const { formatCurrency } = useFinancePrivacy();
 
   useEffect(() => {
     fetchTransactions();
   }, [search, showExcluded]);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('/api/get_all_categories');
+        if (!response.ok) return;
+        const raw = await response.json();
+        const mapped: CategoryOption[] = Array.isArray(raw)
+          ? raw.map((cat: any) => ({
+              id: cat.id,
+              name: cat.name,
+              nameEn: cat.name_en ?? cat.nameEn ?? null,
+              categoryType: cat.category_type ?? cat.categoryType,
+              parentId: cat.parent_id ?? cat.parentId ?? null,
+              parentName: cat.parent_name ?? cat.parentName ?? null,
+              parentNameEn: cat.parent_name_en ?? cat.parentNameEn ?? null,
+            }))
+          : [];
+        setCategoryOptions(mapped.filter((cat) => cat.categoryType === 'expense'));
+      } catch (error) {
+        console.error('Error loading categories:', error);
+      }
+    };
+
+    fetchCategories();
+  }, []);
 
   const fetchTransactions = async () => {
     setLoading(true);
@@ -177,11 +196,20 @@ const ManualResolutionPanel: React.FC<ManualResolutionPanelProps> = ({ onTransac
     }
   };
 
-  const handleCategoryChange = async (txn: BankTransaction, newCategory: string) => {
+  const handleCategoryChange = async (txn: BankTransaction, newCategoryId: number | null) => {
     const key = getTxnKey(txn);
     setProcessingTxn(key);
 
     try {
+      const currentOptionId = txn.override_category
+        ? categoryOptions.find((cat) => cat.name === txn.override_category)?.id ?? null
+        : null;
+
+      if (currentOptionId === newCategoryId) {
+        setProcessingTxn(null);
+        return;
+      }
+
       const response = await fetch('/api/duplicates/manual-exclude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -189,7 +217,7 @@ const ManualResolutionPanel: React.FC<ManualResolutionPanelProps> = ({ onTransac
           transactionIdentifier: txn.identifier,
           transactionVendor: txn.vendor,
           reason: txn.exclusion_reason || 'duplicate',
-          overrideCategory: newCategory || null,
+          overrideCategoryDefinitionId: newCategoryId,
         }),
       });
 
@@ -245,7 +273,7 @@ const ManualResolutionPanel: React.FC<ManualResolutionPanelProps> = ({ onTransac
             transactionIdentifier: txn.identifier,
             transactionVendor: txn.vendor,
             reason: bulkReason,
-            overrideCategory: bulkCategory || null,
+            overrideCategoryDefinitionId: bulkCategoryId,
           }),
         });
       }
@@ -253,6 +281,7 @@ const ManualResolutionPanel: React.FC<ManualResolutionPanelProps> = ({ onTransac
       await fetchTransactions();
       onTransactionsChanged();
       setSelectedTransactions(new Set());
+      setBulkCategoryId(null);
       setBulkDialogOpen(false);
     } catch (error) {
       console.error('Error bulk excluding:', error);
@@ -426,21 +455,30 @@ const ManualResolutionPanel: React.FC<ManualResolutionPanelProps> = ({ onTransac
                       {txn.is_excluded && txn.exclusion_type === 'manual' ? (
                         <FormControl size="small" fullWidth disabled={isProcessing}>
                           <Select
-                            value={txn.override_category || ''}
-                            onChange={(e) => handleCategoryChange(txn, e.target.value)}
+                            value={(() => {
+                              if (txn.override_category_definition_id !== undefined && txn.override_category_definition_id !== null) {
+                                return txn.override_category_definition_id;
+                              }
+                              if (!txn.override_category) return '';
+                              const option = categoryOptions.find((cat) => cat.name === txn.override_category);
+                              return option ? option.id : '';
+                            })()}
+                            onChange={(e) => handleCategoryChange(txn, e.target.value === '' ? null : Number(e.target.value))}
                             displayEmpty
                           >
                             <MenuItem value="">
                               <em>Original ({txn.category})</em>
                             </MenuItem>
-                            {CATEGORY_OVERRIDES.map(cat => (
-                              <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                            {categoryOptions.map((cat) => (
+                              <MenuItem key={cat.id} value={cat.id}>
+                                {cat.parentName ? `${cat.parentName} › ${cat.name}` : cat.name}
+                              </MenuItem>
                             ))}
                           </Select>
                         </FormControl>
                       ) : (
                         <Typography variant="body2" color="text.secondary">
-                          {txn.category}
+                          {txn.override_category || txn.category}
                         </Typography>
                       )}
                     </TableCell>
@@ -499,15 +537,18 @@ const ManualResolutionPanel: React.FC<ManualResolutionPanelProps> = ({ onTransac
           <FormControl fullWidth sx={{ mt: 2 }}>
             <InputLabel>Override Category (Optional)</InputLabel>
             <Select
-              value={bulkCategory}
-              onChange={(e) => setBulkCategory(e.target.value)}
+              value={bulkCategoryId ?? ''}
+              onChange={(e) => setBulkCategoryId(e.target.value === '' ? null : Number(e.target.value))}
               label="Override Category (Optional)"
+              displayEmpty
             >
               <MenuItem value="">
-                <em>Keep Original</em>
+                <em>Keep original category</em>
               </MenuItem>
-              {CATEGORY_OVERRIDES.map(cat => (
-                <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+              {categoryOptions.map((cat) => (
+                <MenuItem key={cat.id} value={cat.id}>
+                  {cat.parentName ? `${cat.parentName} › ${cat.name}` : cat.name}
+                </MenuItem>
               ))}
             </Select>
           </FormControl>

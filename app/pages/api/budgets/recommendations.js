@@ -42,23 +42,28 @@ async function fetchCategoryMonthlyTotals(client, startDateStr) {
   const result = await client.query(
     `
       SELECT
-        parent_category,
-        subcategory,
-        strftime('%Y-%m-01', date) AS month,
-        SUM(ABS(price)) AS monthly_total
-      FROM transactions
-      WHERE date >= $1
-        AND price < 0
-        AND parent_category IS NOT NULL
-        AND parent_category NOT IN ('Bank', 'Income')
-      GROUP BY parent_category, subcategory, month
+        cd.id AS category_definition_id,
+        cd.name AS subcategory,
+        parent.id AS parent_id,
+        parent.name AS parent_category,
+        strftime('%Y-%m-01', t.date) AS month,
+        SUM(ABS(t.price)) AS monthly_total
+      FROM transactions t
+      JOIN category_definitions cd ON cd.id = t.category_definition_id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      WHERE t.date >= $1
+        AND t.price < 0
+        AND cd.category_type = 'expense'
+      GROUP BY cd.id, cd.name, parent.id, parent.name, month
     `,
     [startDateStr]
   );
 
   return result.rows.map(row => ({
-    parent_category: row.parent_category,
+    category_definition_id: row.category_definition_id,
     subcategory: row.subcategory,
+    parent_category_id: row.parent_id,
+    parent_category: row.parent_category,
     month: row.month,
     monthly_total: parseFloat(row.monthly_total),
   }));
@@ -68,18 +73,21 @@ async function fetchCategoryAggregatesPostgres(client, startDateStr) {
   const result = await client.query(
     `WITH monthly_spending AS (
       SELECT
-        parent_category,
-        subcategory,
-        DATE_TRUNC('month', date) AS month,
-        SUM(ABS(price)) AS monthly_total
-      FROM transactions
-      WHERE date >= $1::date
-        AND price < 0
-        AND parent_category IS NOT NULL
-        AND parent_category NOT IN ('Bank', 'Income')
-      GROUP BY parent_category, subcategory, DATE_TRUNC('month', date)
+        cd.id AS category_definition_id,
+        parent.name AS parent_category,
+        cd.name AS subcategory,
+        DATE_TRUNC('month', t.date) AS month,
+        SUM(ABS(t.price)) AS monthly_total
+      FROM transactions t
+      JOIN category_definitions cd ON cd.id = t.category_definition_id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      WHERE t.date >= $1::date
+        AND t.price < 0
+        AND cd.category_type = 'expense'
+      GROUP BY cd.id, cd.name, parent.name, DATE_TRUNC('month', t.date)
     )
     SELECT
+      category_definition_id,
       parent_category,
       subcategory,
       COUNT(DISTINCT month) AS months_with_data,
@@ -97,6 +105,7 @@ async function fetchCategoryAggregatesPostgres(client, startDateStr) {
   );
 
   return result.rows.map(row => ({
+    category_definition_id: row.category_definition_id,
     parent_category: row.parent_category,
     subcategory: row.subcategory,
     months_with_data: parseInt(row.months_with_data),
@@ -113,9 +122,10 @@ function computeCategoryStats(rows) {
   const groups = new Map();
 
   rows.forEach(row => {
-    const key = `${row.parent_category || ''}::${row.subcategory || ''}`;
+    const key = row.category_definition_id;
     if (!groups.has(key)) {
       groups.set(key, {
+        category_definition_id: row.category_definition_id,
         parent_category: row.parent_category,
         subcategory: row.subcategory,
         totalsByMonth: new Map(),
@@ -133,6 +143,7 @@ function computeCategoryStats(rows) {
 
     const stats = calculateStats(monthlyTotals);
     results.push({
+      category_definition_id: group.category_definition_id,
       parent_category: group.parent_category,
       subcategory: group.subcategory,
       months_with_data: monthlyTotals.length,
@@ -193,25 +204,31 @@ async function generateBudgetRecommendations(client, monthsHistory, bufferPercen
 
     // 2. Get existing budgets to compare
     const existingBudgets = await client.query(
-      `SELECT category, period_type, budget_limit
+      `SELECT category_definition_id, period_type, budget_limit
        FROM category_budgets
        WHERE is_active = true AND period_type = 'monthly'`
     );
 
-    const existingBudgetsMap = {};
+    const existingBudgetsMap = new Map();
     existingBudgets.rows.forEach(budget => {
-      existingBudgetsMap[budget.category] = parseFloat(budget.budget_limit);
+      existingBudgetsMap.set(budget.category_definition_id, parseFloat(budget.budget_limit));
     });
 
     // 3. Generate recommendations
     const recommendations = [];
 
     for (const row of categoryAverages) {
-      const category = row.subcategory || row.parent_category;
+      const categoryId = row.category_definition_id;
+      const categoryName = row.subcategory || row.parent_category;
+      if (!categoryId || !categoryName) continue;
       const avgMonthly = parseFloat(row.avg_monthly);
       const stdDev = parseFloat(row.std_dev || 0);
       const median = parseFloat(row.median_monthly);
       const p75 = parseFloat(row.p75_monthly);
+
+      if (!avgMonthly || !Number.isFinite(avgMonthly)) {
+        continue;
+      }
 
       // Use 75th percentile + buffer as recommended budget (more conservative than average + buffer)
       const recommendedBudget = Math.round(p75 * (1 + bufferPercentage / 100));
@@ -226,7 +243,8 @@ async function generateBudgetRecommendations(client, monthsHistory, bufferPercen
       if (coefficientOfVariation > 0.8 || row.months_with_data < 4) confidence = 'low';
 
       const recommendation = {
-        category,
+        category_definition_id: categoryId,
+        category: categoryName,
         parent_category: row.parent_category,
         subcategory: row.subcategory,
         recommended_monthly_budget: recommendedBudget,
@@ -241,14 +259,14 @@ async function generateBudgetRecommendations(client, monthsHistory, bufferPercen
           variability: coefficientOfVariation.toFixed(2)
         },
         confidence,
-        existing_budget: existingBudgetsMap[category] || null,
+        existing_budget: existingBudgetsMap.get(categoryId) || null,
         status: null,
         savings_opportunity: null
       };
 
       // Compare with existing budget
-      if (existingBudgetsMap[category]) {
-        const existing = existingBudgetsMap[category];
+      if (existingBudgetsMap.has(categoryId)) {
+        const existing = existingBudgetsMap.get(categoryId);
         const difference = existing - recommendedBudget;
         const percentDiff = ((difference / recommendedBudget) * 100).toFixed(1);
 

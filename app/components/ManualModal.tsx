@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   Button,
@@ -15,12 +14,12 @@ import {
   MenuItem,
   Typography,
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import IconButton from '@mui/material/IconButton';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import ModalHeader from './ModalHeader';
+import { BANK_CATEGORY_NAME } from '../lib/category-constants.js';
+import { CategoryOption } from './CategoryDashboard/types';
 
 interface ManualModalProps {
   open: boolean;
@@ -30,7 +29,7 @@ interface ManualModalProps {
     amount: number;
     date: Date;
     type: 'income' | 'expense';
-    category?: string;
+    categoryDefinitionId?: number;
   }) => void;
 }
 
@@ -65,11 +64,11 @@ const ManualModal: React.FC<ManualModalProps> = ({ open, onClose, onSave }) => {
   const [transactionName, setTransactionName] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [category, setCategory] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [nameError, setNameError] = useState(false);
   const [amountError, setAmountError] = useState(false);
   const [categoryError, setCategoryError] = useState(false);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
 
   // Fetch categories from database
@@ -78,26 +77,26 @@ const ManualModal: React.FC<ManualModalProps> = ({ open, onClose, onSave }) => {
       setLoadingCategories(true);
       try {
         const response = await fetch('/api/get_all_categories');
-        if (response.ok) {
-          const data = await response.json();
-          // Filter out 'Bank' category for expenses since it's used for income
-          const expenseCategories = data.filter((cat: string) => cat !== 'Bank');
-          setCategories(expenseCategories);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch categories (${response.status})`);
         }
+        const data = await response.json();
+        const mapped: CategoryOption[] = Array.isArray(data)
+          ? data.map((cat: any) => ({
+              id: cat.id,
+              name: cat.name,
+              nameEn: cat.name_en ?? cat.nameEn ?? null,
+              categoryType: cat.category_type ?? cat.categoryType,
+              parentId: cat.parent_id ?? cat.parentId ?? null,
+              parentName: cat.parent_name ?? cat.parentName ?? null,
+              parentNameEn: cat.parent_name_en ?? cat.parentNameEn ?? null,
+            }))
+          : [];
+        setCategories(mapped);
       } catch (error) {
         console.error('Error fetching categories:', error);
         // Fallback to default categories if API fails
-        setCategories([
-          'Food & Dining',
-          'Transportation',
-          'Shopping',
-          'Entertainment',
-          'Utilities',
-          'Healthcare',
-          'Education',
-          'Travel',
-          'Other'
-        ]);
+        setCategories([]);
       } finally {
         setLoadingCategories(false);
       }
@@ -134,7 +133,7 @@ const ManualModal: React.FC<ManualModalProps> = ({ open, onClose, onSave }) => {
     }
 
     // Only require category for expenses
-    if (tabValue === 1 && !category) {
+    if (tabValue === 1 && !categoryId) {
       setCategoryError(true);
       valid = false;
     } else {
@@ -150,14 +149,14 @@ const ManualModal: React.FC<ManualModalProps> = ({ open, onClose, onSave }) => {
         amount: transactionAmount,
         date: new Date(date),
         type: transactionType,
-        category: tabValue === 1 ? category : undefined
+        categoryDefinitionId: tabValue === 1 && categoryId ? Number(categoryId) : undefined
       });
 
       // Reset form
       setTransactionName('');
       setAmount('');
       setDate(new Date().toISOString().split('T')[0]);
-      setCategory('');
+      setCategoryId('');
       onClose();
     }
   };
@@ -167,7 +166,7 @@ const ManualModal: React.FC<ManualModalProps> = ({ open, onClose, onSave }) => {
     setTransactionName('');
     setAmount('');
     setDate(new Date().toISOString().split('T')[0]);
-    setCategory('');
+    setCategoryId('');
     setNameError(false);
     setAmountError(false);
     setCategoryError(false);
@@ -425,14 +424,13 @@ const ManualModal: React.FC<ManualModalProps> = ({ open, onClose, onSave }) => {
               }}
             />
 
-            <FormControl fullWidth error={categoryError}>
+            <FormControl fullWidth error={categoryError} disabled={loadingCategories}>
               <InputLabel style={{ color: '#666' }}>Category</InputLabel>
               <Select
-                value={category}
+                value={categoryId}
                 label="Category"
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(e) => setCategoryId(e.target.value)}
                 style={{ color: '#333' }}
-                disabled={loadingCategories}
                 sx={{
                   '& .MuiOutlinedInput-notchedOutline': {
                     borderColor: '#e2e8f0',
@@ -448,11 +446,22 @@ const ManualModal: React.FC<ManualModalProps> = ({ open, onClose, onSave }) => {
                 {loadingCategories ? (
                   <MenuItem disabled>Loading categories...</MenuItem>
                 ) : (
-                  categories.map((cat) => (
-                    <MenuItem key={cat} value={cat}>
-                      {cat}
-                    </MenuItem>
-                  ))
+                  categories
+                    .filter((cat) =>
+                      cat.categoryType === 'expense' &&
+                      cat.parentId &&
+                      cat.name !== BANK_CATEGORY_NAME
+                    )
+                    .map((cat) => {
+                      const label = cat.parentName
+                        ? `${cat.parentName} › ${cat.name}`
+                        : cat.name;
+                      return (
+                        <MenuItem key={cat.id} value={cat.id.toString()}>
+                          {label}
+                        </MenuItem>
+                      );
+                    })
                 )}
               </Select>
               {categoryError && (

@@ -6,29 +6,23 @@ import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import { useFinancePrivacy } from '../../../contexts/FinancePrivacyContext';
 import { dateUtils } from '../utils/dateUtils';
+import { CategorizedExpense, CategoryOption } from '../types';
 
-interface Transaction {
-  name: string;
-  price: number;
-  date: string;
-  category: string;
-  identifier: string;
-  vendor: string;
-  account_number?: string;
-}
+type Transaction = CategorizedExpense;
 
 interface TransactionsTableProps {
   transactions: Transaction[];
   isLoading?: boolean;
   onDelete?: (transaction: Transaction) => void;
-  onUpdate?: (transaction: Transaction, newPrice: number, newCategory?: string) => void;
+  onUpdate?: (transaction: Transaction, newPrice: number, newCategory?: CategoryOption) => void;
 }
 
 const TransactionsTable: React.FC<TransactionsTableProps> = ({ transactions, isLoading, onDelete, onUpdate }) => {
   const [editingTransaction, setEditingTransaction] = React.useState<Transaction | null>(null);
   const [editPrice, setEditPrice] = React.useState<string>('');
-  const [editCategory, setEditCategory] = React.useState<string>('');
-  const [availableCategories, setAvailableCategories] = React.useState<string[]>([]);
+  const [editCategoryId, setEditCategoryId] = React.useState<number | null>(null);
+  const [initialCategoryId, setInitialCategoryId] = React.useState<number | null>(null);
+  const [availableCategories, setAvailableCategories] = React.useState<CategoryOption[]>([]);
   const { formatCurrency } = useFinancePrivacy();
 
   const formatCurrencyValue = (
@@ -46,10 +40,20 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({ transactions, isL
     const fetchCategories = async () => {
       try {
         const response = await fetch('/api/get_all_categories');
-        if (response.ok) {
-          const categories = await response.json();
-          setAvailableCategories(categories);
-        }
+        if (!response.ok) return;
+        const raw = await response.json();
+        const categories: CategoryOption[] = Array.isArray(raw)
+          ? raw.map((cat: any) => ({
+              id: cat.id,
+              name: cat.name,
+              nameEn: cat.name_en ?? cat.nameEn ?? null,
+              categoryType: cat.category_type ?? cat.categoryType,
+              parentId: cat.parent_id ?? cat.parentId ?? null,
+              parentName: cat.parent_name ?? cat.parentName ?? null,
+              parentNameEn: cat.parent_name_en ?? cat.parentNameEn ?? null,
+            }))
+          : [];
+        setAvailableCategories(categories);
       } catch (error) {
         console.error('Error fetching categories:', error);
       }
@@ -60,7 +64,8 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({ transactions, isL
   const handleEditClick = (transaction: Transaction) => {
     setEditingTransaction(transaction);
     setEditPrice(Math.abs(transaction.price).toString());
-    setEditCategory(transaction.category);
+    setEditCategoryId(transaction.category_definition_id ?? null);
+    setInitialCategoryId(transaction.category_definition_id ?? null);
   };
 
   const handleSaveClick = () => {
@@ -68,14 +73,35 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({ transactions, isL
       const newPrice = parseFloat(editPrice);
       if (!isNaN(newPrice)) {
         const priceWithSign = editingTransaction.price < 0 ? -newPrice : newPrice;
-        onUpdate?.(editingTransaction, priceWithSign, editCategory);
+        const selectedCategory = editCategoryId !== null
+          ? availableCategories.find((cat) => cat.id === editCategoryId) ?? null
+          : null;
+        const categoryChanged = editCategoryId !== initialCategoryId;
+        const hasPriceChange = priceWithSign !== editingTransaction.price;
+
+        if (!hasPriceChange && !categoryChanged) {
+          setEditingTransaction(null);
+          setInitialCategoryId(null);
+          setEditCategoryId(null);
+          return;
+        }
+
+        onUpdate?.(
+          editingTransaction,
+          priceWithSign,
+          categoryChanged ? selectedCategory ?? undefined : undefined
+        );
         setEditingTransaction(null);
+        setInitialCategoryId(null);
+        setEditCategoryId(null);
       }
     }
   };
 
   const handleCancelClick = () => {
     setEditingTransaction(null);
+    setInitialCategoryId(null);
+    setEditCategoryId(null);
   };
 
   const handleRowClick = (transaction: Transaction) => {
@@ -135,11 +161,13 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({ transactions, isL
               </TableCell>
               <TableCell style={{ color: '#333', borderBottom: '1px solid #e2e8f0' }}>
                 {editingTransaction?.identifier === transaction.identifier ? (
-                  <Autocomplete
-                    value={editCategory}
-                    onChange={(event, newValue) => setEditCategory(newValue || '')}
-                    onInputChange={(event, newInputValue) => setEditCategory(newInputValue)}
-                    freeSolo
+                  <Autocomplete<CategoryOption>
+                    value={
+                      editCategoryId !== null
+                        ? availableCategories.find((cat) => cat.id === editCategoryId) ?? null
+                        : null
+                    }
+                    onChange={(event, newValue) => setEditCategoryId(newValue ? newValue.id : null)}
                     options={availableCategories}
                     size="small"
                     sx={{
@@ -156,10 +184,14 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({ transactions, isL
                         },
                       },
                     }}
+                    getOptionLabel={(option) =>
+                      option.parentName ? `${option.parentName} › ${option.name}` : option.name
+                    }
+                    isOptionEqualToValue={(option, value) => option.id === value.id}
                     renderInput={(params) => (
                       <TextField
                         {...params}
-                        placeholder="Enter category..."
+                        placeholder="Select category..."
                         sx={{
                           '& .MuiInputBase-input': {
                             fontSize: '14px',
