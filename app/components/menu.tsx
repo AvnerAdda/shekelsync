@@ -7,6 +7,7 @@ import Menu from "@mui/material/Menu";
 import Container from "@mui/material/Container";
 import Button from "@mui/material/Button";
 import { styled } from "@mui/material/styles";
+import Image from 'next/image';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import PersonIcon from '@mui/icons-material/Person';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -164,7 +165,13 @@ function ResponsiveAppBar() {
                 display: { xs: "none", md: "flex" },
               }}
             >
-              <AccountBalanceWalletIcon sx={{ fontSize: '20px' }} />
+              <Image 
+                src="/logo.svg" 
+                alt="ShekelSync Logo" 
+                width={24} 
+                height={24}
+                style={{ width: 24, height: 24 }}
+              />
               ShekelSync
             </Logo>
 
