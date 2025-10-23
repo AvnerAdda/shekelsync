@@ -73,6 +73,9 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
     subcategory = bankCategory.parent_id ? bankCategory.name : null;
   }
 
+  // Determine category_type based on transaction characteristics
+  const categoryType = isBank ? 'bank' : (category === 'Income' ? 'income' : 'expense');
+
   try {
     await client.query(
       `INSERT INTO transactions (
@@ -96,9 +99,10 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
         memo,
         status,
         account_number,
+        category_type,
         transaction_datetime,
         processed_datetime
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
       ON CONFLICT (identifier, vendor) DO NOTHING`,
       [
         txn.identifier,
@@ -121,6 +125,7 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
         txn.memo,
         txn.status,
         accountNumber,
+        categoryType,
         new Date(txn.date), // Full datetime for transaction
         txn.processedDate ? new Date(txn.processedDate) : new Date() // Full datetime for processed
       ]
