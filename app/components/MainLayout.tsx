@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Box, useTheme, AppBar, Toolbar, Typography } from '@mui/material';
+import Image from 'next/image';
 import Sidebar from './Sidebar';
 import HomePage from './HomePage';
 import AnalysisPage from './AnalysisPage';
@@ -53,9 +54,18 @@ const MainLayout: React.FC = () => {
         }}
       >
         <Toolbar sx={{ justifyContent: 'space-between' }}>
-          <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
-            ShekelSync
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Image 
+              src="/logo.svg" 
+              alt="ShekelSync Logo" 
+              width={32} 
+              height={32}
+              style={{ width: 32, height: 32 }}
+            />
+            <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
+              ShekelSync
+            </Typography>
+          </Box>
           <SmartNotifications />
         </Toolbar>
       </AppBar>
