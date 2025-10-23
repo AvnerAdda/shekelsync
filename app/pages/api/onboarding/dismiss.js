@@ -28,6 +28,8 @@ export default async function handler(req, res) {
       SELECT id FROM user_profile LIMIT 1
     `);
 
+    const now = new Date().toISOString();
+
     if (profileCheckResult.rows.length === 0) {
       // Create a minimal profile if it doesn't exist
       await client.query(`
@@ -37,23 +39,23 @@ export default async function handler(req, res) {
           onboarding_dismissed_at,
           last_active_at
         ) VALUES (
-          'User',
-          1,
-          datetime('now'),
-          datetime('now')
+          $1,
+          $2,
+          $3,
+          $4
         )
-      `);
+      `, ['User', 1, now, now]);
     } else {
       // Update existing profile
       await client.query(`
         UPDATE user_profile
         SET
-          onboarding_dismissed = 1,
-          onboarding_dismissed_at = datetime('now'),
-          last_active_at = datetime('now'),
-          updated_at = datetime('now')
-        WHERE id = $1
-      `, [profileCheckResult.rows[0].id]);
+          onboarding_dismissed = $1,
+          onboarding_dismissed_at = $2,
+          last_active_at = $3,
+          updated_at = $4
+        WHERE id = $5
+      `, [1, now, now, now, profileCheckResult.rows[0].id]);
     }
 
     return res.status(200).json({
