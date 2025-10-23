@@ -75,8 +75,32 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     fetchStats();
     checkDBStatus();
     const interval = setInterval(checkDBStatus, 30000); // Check DB every 30s
-    return () => clearInterval(interval);
-  }, []);
+
+    // Listen for onboarding custom events
+    const handleOpenProfile = () => {
+      // Navigate to settings page where profile setup should be
+      onPageChange('settings');
+    };
+
+    const handleOpenAccounts = () => {
+      setAccountsModalOpen(true);
+    };
+
+    const handleOpenScrape = () => {
+      setScrapeModalOpen(true);
+    };
+
+    window.addEventListener('openProfileSetup', handleOpenProfile);
+    window.addEventListener('openAccountsModal', handleOpenAccounts);
+    window.addEventListener('openScrapeModal', handleOpenScrape);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('openProfileSetup', handleOpenProfile);
+      window.removeEventListener('openAccountsModal', handleOpenAccounts);
+      window.removeEventListener('openScrapeModal', handleOpenScrape);
+    };
+  }, [onPageChange]);
 
   const fetchStats = async () => {
     try {

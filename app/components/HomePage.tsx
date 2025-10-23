@@ -12,6 +12,11 @@ import {
   Tab,
   Grid,
 } from '@mui/material';
+import {
+  AccountBalance as AccountBalanceIcon,
+  DateRange as DateRangeIcon,
+  Add as AddIcon
+} from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -21,6 +26,8 @@ import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import SummaryCards from '../components/SummaryCards';
 import BreakdownPanel from '../components/BreakdownPanel';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { useOnboarding } from '../contexts/OnboardingContext';
+import { EmptyState, OnboardingChecklist } from './EmptyState';
 
 interface DashboardData {
   dateRange: { start: Date; end: Date };
@@ -129,6 +136,7 @@ const HomePage: React.FC = () => {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
+  const { status: onboardingStatus } = useOnboarding();
 
   useEffect(() => {
     setBreakdownData(prev => ({ ...prev, investment: null }));
@@ -357,6 +365,95 @@ const HomePage: React.FC = () => {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  // Check for empty state (no transactions at all)
+  const hasNoTransactions = onboardingStatus && onboardingStatus.stats.transactionCount === 0;
+
+  if (hasNoTransactions) {
+    return (
+      <EmptyState
+        icon={<AccountBalanceIcon sx={{ fontSize: 96 }} />}
+        title="Welcome to ShekelSync!"
+        description="Let's get your finances organized. Follow these steps to start tracking your expenses and income."
+        showOnboardingChecklist={true}
+      >
+        <OnboardingChecklist
+          onProfileClick={() => {
+            // Profile modal will be handled by parent (MainLayout)
+            window.dispatchEvent(new CustomEvent('openProfileSetup'));
+          }}
+          onAccountsClick={() => {
+            window.dispatchEvent(new CustomEvent('openAccountsModal'));
+          }}
+          onScrapeClick={() => {
+            window.dispatchEvent(new CustomEvent('openScrapeModal'));
+          }}
+        />
+      </EmptyState>
+    );
+  }
+
+  // Check if date range has no data (but transactions exist)
+  const hasTransactionsButNotInRange =
+    data.history.length === 0 &&
+    onboardingStatus &&
+    onboardingStatus.stats.transactionCount > 0;
+
+  if (hasTransactionsButNotInRange) {
+    return (
+      <Box>
+        {/* Still show date picker */}
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">Date Range:</Typography>
+              <DatePicker
+                label="Start Date"
+                value={startDate}
+                onChange={(newValue) => newValue && setStartDate(newValue)}
+                slotProps={{ textField: { size: 'small' } }}
+              />
+              <DatePicker
+                label="End Date"
+                value={endDate}
+                onChange={(newValue) => newValue && setEndDate(newValue)}
+                slotProps={{ textField: { size: 'small' } }}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Button size="small" variant="outlined" onClick={() => setQuickRange('lastMonth')}>
+                Last Month
+              </Button>
+              <Button size="small" variant="outlined" onClick={() => setQuickRange('thisMonth')}>
+                This Month
+              </Button>
+              <Button size="small" variant="outlined" onClick={() => setQuickRange('last3Months')}>
+                Last 3 Months
+              </Button>
+            </Box>
+          </LocalizationProvider>
+        </Paper>
+
+        <EmptyState
+          icon={<DateRangeIcon sx={{ fontSize: 96 }} />}
+          title="No transactions in this date range"
+          description={`You have ${onboardingStatus.stats.transactionCount} transactions total, but none between ${format(startDate, 'MMM dd, yyyy')} and ${format(endDate, 'MMM dd, yyyy')}. Try selecting a different date range or scrape more recent data.`}
+          primaryAction={{
+            label: "Scrape Recent Transactions",
+            onClick: () => window.dispatchEvent(new CustomEvent('openScrapeModal')),
+            icon: <AddIcon />
+          }}
+          secondaryActions={[
+            {
+              label: "Reset to Last Month",
+              onClick: () => setQuickRange('lastMonth')
+            }
+          ]}
+          minHeight={300}
+        />
       </Box>
     );
   }

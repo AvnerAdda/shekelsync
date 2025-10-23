@@ -3,6 +3,7 @@ import type { AppProps } from 'next/app';
 import { ThemeContextProvider } from '../contexts/ThemeContext';
 import { FinancePrivacyProvider } from '../contexts/FinancePrivacyContext';
 import { NotificationProvider } from '../components/NotificationContext';
+import { OnboardingProvider } from '../contexts/OnboardingContext';
 import '@fontsource/roboto/300.css';
 import '@fontsource/roboto/400.css';
 import '@fontsource/roboto/500.css';
@@ -13,7 +14,9 @@ export default function App({ Component, pageProps }: AppProps) {
     <ThemeContextProvider>
       <FinancePrivacyProvider>
         <NotificationProvider>
-          <Component {...pageProps} />
+          <OnboardingProvider>
+            <Component {...pageProps} />
+          </OnboardingProvider>
         </NotificationProvider>
       </FinancePrivacyProvider>
     </ThemeContextProvider>
