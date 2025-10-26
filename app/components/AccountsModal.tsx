@@ -29,6 +29,9 @@ import {
   AlertTitle,
   InputAdornment,
   Paper,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -44,6 +47,7 @@ import BusinessIcon from '@mui/icons-material/Business';
 import PortfolioIcon from '@mui/icons-material/AccountBalanceWallet';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CircularProgress from '@mui/material/CircularProgress';
 import ScrapeModal from './ScrapeModal';
 import {
@@ -104,14 +108,16 @@ const StyledTableRow = styled(TableRow)(({ theme }) => ({
   },
 }));
 
-const SectionHeader = styled(Box)(() => ({
+const SectionHeader = styled(Box)(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   gap: '12px',
   padding: '20px 0 16px 0',
   marginBottom: '20px',
-  borderBottom: '2px solid #e2e8f0',
-  background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+  borderBottom: `2px solid ${theme.palette.divider}`,
+  background: theme.palette.mode === 'dark' 
+    ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)'
+    : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
   borderRadius: '8px 8px 0 0',
   marginLeft: '-16px',
   marginRight: '-16px',
@@ -123,12 +129,12 @@ const SectionHeader = styled(Box)(() => ({
   },
 }));
 
-const AccountSection = styled(Box)(() => ({
+const AccountSection = styled(Box)(({ theme }) => ({
   marginBottom: '40px',
   padding: '16px',
   borderRadius: '12px',
-  border: '1px solid #e2e8f0',
-  backgroundColor: '#fafbfc',
+  border: `1px solid ${theme.palette.divider}`,
+  backgroundColor: theme.palette.background.default,
   '&:last-child': {
     marginBottom: 0,
   },
@@ -144,6 +150,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [currentAccountType, setCurrentAccountType] = useState<'banking' | 'investment'>('banking');
+  const [expandedForm, setExpandedForm] = useState<'creditCard' | 'bank' | null>('creditCard');
   const { showNotification } = useNotification();
   const { formatCurrency } = useFinancePrivacy();
   const [newAccount, setNewAccount] = useState<Account>({
@@ -858,15 +865,15 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
 
     return (
-      <Table sx={{ backgroundColor: 'white', borderRadius: '8px', overflow: 'hidden' }}>
+      <Table sx={{ bgcolor: 'background.paper', borderRadius: '8px', overflow: 'hidden' }}>
         <TableHead>
-          <TableRow sx={{ backgroundColor: '#f8fafc' }}>
-            <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Account Name</TableCell>
-            <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Type</TableCell>
-            <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Institution</TableCell>
-            <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Current Value</TableCell>
-            <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Last Update</TableCell>
-            <TableCell align="right" sx={{ fontWeight: 600, color: '#374151' }}>Actions</TableCell>
+          <TableRow sx={{ bgcolor: 'action.hover' }}>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Account Name</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Type</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Institution</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Current Value</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Last Update</TableCell>
+            <TableCell align="right" sx={{ fontWeight: 600, color: 'text.primary' }}>Actions</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -886,10 +893,9 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     label={accountType?.label || account.account_type}
                     size="small"
                     variant="outlined"
+                    color="success"
                     sx={{
                       textTransform: 'capitalize',
-                      borderColor: '#388e3c',
-                      color: '#388e3c',
                     }}
                   />
                 </TableCell>
@@ -921,12 +927,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                         setValueUpdate({ ...valueUpdate, accountId: account.id?.toString() || '' });
                         setShowValueUpdateModal(true);
                       }}
-                      sx={{
-                        color: '#388e3c',
-                        '&:hover': {
-                          backgroundColor: 'rgba(56, 142, 60, 0.1)',
-                        },
-                      }}
+                      color="success"
                     >
                       <TrendingUpIcon />
                     </IconButton>
@@ -938,12 +939,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           fetchAssets(); // Load current assets
                           setShowAssetModal(true);
                         }}
-                        sx={{
-                          color: '#2196f3',
-                          '&:hover': {
-                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
-                          },
-                        }}
+                        color="info"
                       >
                         <EditIcon />
                       </IconButton>
@@ -952,12 +948,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   <Tooltip title="Delete Account">
                     <IconButton
                       onClick={() => confirmDelete(account, 'investment')}
-                      sx={{
-                        color: '#ef4444',
-                        '&:hover': {
-                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        },
-                      }}
+                      color="error"
                     >
                       <DeleteIcon />
                     </IconButton>
@@ -987,24 +978,24 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
 
     return (
-      <Table sx={{ backgroundColor: 'white', borderRadius: '8px', overflow: 'hidden' }}>
+      <Table sx={{ bgcolor: 'background.paper', borderRadius: '8px', overflow: 'hidden' }}>
         <TableHead>
-          <TableRow sx={{ backgroundColor: '#f8fafc' }}>
-            <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Nickname</TableCell>
-            <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Vendor</TableCell>
-            <TableCell sx={{ fontWeight: 600, color: '#374151' }}>
+          <TableRow sx={{ bgcolor: 'action.hover' }}>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Nickname</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Vendor</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>
               {type === 'bank' ? 'Username' : 'ID Number'}
             </TableCell>
             {type === 'bank' ? (
-              <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Account Number</TableCell>
+              <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Account Number</TableCell>
             ) : (
-              <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Card Last Digits</TableCell>
+              <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Card Last Digits</TableCell>
             )}
             {type === 'bank' && (
-              <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Balance</TableCell>
+              <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Balance</TableCell>
             )}
-            <TableCell sx={{ fontWeight: 600, color: '#374151' }}>Last Update</TableCell>
-            <TableCell align="right" sx={{ fontWeight: 600, color: '#374151' }}>Actions</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Last Update</TableCell>
+            <TableCell align="right" sx={{ fontWeight: 600, color: 'text.primary' }}>Actions</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -1030,10 +1021,9 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     label={account.vendor}
                     size="small"
                     variant="outlined"
+                    color={type === 'bank' ? 'primary' : 'secondary'}
                     sx={{
                       textTransform: 'capitalize',
-                      borderColor: type === 'bank' ? '#3b82f6' : '#8b5cf6',
-                      color: type === 'bank' ? '#3b82f6' : '#8b5cf6',
                     }}
                   />
                 </TableCell>
@@ -1079,12 +1069,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   <Tooltip title="Refresh Account Data">
                     <IconButton
                       onClick={() => handleScrape(account)}
-                      sx={{
-                        color: '#3b82f6',
-                        '&:hover': {
-                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        },
-                      }}
+                      color="primary"
                     >
                       <SyncIcon />
                     </IconButton>
@@ -1092,12 +1077,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   <Tooltip title="Delete Account">
                     <IconButton
                       onClick={() => confirmDelete(account, 'banking')}
-                      sx={{
-                        color: '#ef4444',
-                        '&:hover': {
-                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        },
-                      }}
+                      color="error"
                     >
                       <DeleteIcon />
                     </IconButton>
@@ -1137,16 +1117,11 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           actions={
             <Button
               variant="contained"
+              color="primary"
               startIcon={<AddIcon />}
               onClick={() => {
                 setCurrentAccountType(activeTab === 0 ? 'banking' : 'investment');
                 setIsAdding(true);
-              }}
-              sx={{
-                backgroundColor: '#3b82f6',
-                '&:hover': {
-                  backgroundColor: '#2563eb',
-                },
               }}
             >
               Add Account
@@ -1185,13 +1160,21 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
               {isAdding && currentAccountType === 'banking' ? (
                 <Box>
                   {/* Credit Card Account Form */}
-                  <Card sx={{ mb: 3 }}>
-                    <CardHeader
-                      title="Add Credit Card Account"
-                      avatar={<CreditCardIcon sx={{ color: '#7b1fa2' }} />}
-                      sx={{ bgcolor: 'rgba(123, 31, 162, 0.05)' }}
-                    />
-                    <CardContent>
+                  <Accordion 
+                    expanded={expandedForm === 'creditCard'} 
+                    onChange={() => setExpandedForm(expandedForm === 'creditCard' ? null : 'creditCard')}
+                    sx={{ mb: 2 }}
+                  >
+                    <AccordionSummary
+                      expandIcon={<ExpandMoreIcon />}
+                      sx={{ bgcolor: 'action.hover' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <CreditCardIcon color="secondary" />
+                        <Typography variant="h6">Add Credit Card Account</Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
                       <Grid container spacing={2}>
                         <Grid item xs={12}>
                           <TextField
@@ -1278,7 +1261,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             <Grid item xs={12}>
                               <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                                 <Button onClick={() => setIsAdding(false)}>Cancel</Button>
-                                <Button variant="contained" onClick={handleAdd} sx={{ bgcolor: '#7b1fa2' }}>
+                                <Button variant="contained" color="secondary" onClick={handleAdd}>
                                   Add Credit Card
                                 </Button>
                               </Box>
@@ -1286,17 +1269,25 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           </>
                         )}
                       </Grid>
-                    </CardContent>
-                  </Card>
+                    </AccordionDetails>
+                  </Accordion>
 
                   {/* Bank Account Form */}
-                  <Card sx={{ mb: 3 }}>
-                    <CardHeader
-                      title="Add Bank Account"
-                      avatar={<AccountBalanceIcon sx={{ color: 'primary.main' }} />}
-                      sx={{ bgcolor: 'rgba(200, 250, 207, 0.1)' }}
-                    />
-                    <CardContent>
+                  <Accordion 
+                    expanded={expandedForm === 'bank'} 
+                    onChange={() => setExpandedForm(expandedForm === 'bank' ? null : 'bank')}
+                    sx={{ mb: 2 }}
+                  >
+                    <AccordionSummary
+                      expandIcon={<ExpandMoreIcon />}
+                      sx={{ bgcolor: 'action.hover' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <AccountBalanceIcon color="primary" />
+                        <Typography variant="h6">Add Bank Account</Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
                       <Grid container spacing={2}>
                         <Grid item xs={12}>
                           <TextField
@@ -1410,15 +1401,15 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           </>
                         )}
                       </Grid>
-                    </CardContent>
-                  </Card>
+                    </AccordionDetails>
+                  </Accordion>
                 </Box>
               ) : (
                 <>
                   {/* Bank Accounts Section */}
                   <AccountSection>
                     <SectionHeader>
-                      <AccountBalanceIcon sx={{ color: '#3b82f6', fontSize: '24px' }} />
+                      <AccountBalanceIcon color="primary" sx={{ fontSize: '24px' }} />
                       <Typography variant="h6" color="primary">
                         Bank Accounts ({bankAccounts.length})
                       </Typography>
@@ -1429,8 +1420,8 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   {/* Credit Card Accounts Section */}
                   <AccountSection>
                     <SectionHeader>
-                      <CreditCardIcon sx={{ color: '#8b5cf6', fontSize: '24px' }} />
-                      <Typography variant="h6" sx={{ color: '#8b5cf6' }}>
+                      <CreditCardIcon color="secondary" sx={{ fontSize: '24px' }} />
+                      <Typography variant="h6" color="secondary">
                         Credit Card Accounts ({creditAccounts.length})
                       </Typography>
                     </SectionHeader>
@@ -1479,7 +1470,8 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                                     <Chip
                                       label={investmentMatch.category || 'Investment'}
                                       size="small"
-                                      sx={{ bgcolor: '#4caf50', color: 'white', height: '20px', fontSize: '0.65rem' }}
+                                      color="success"
+                                      sx={{ height: '20px', fontSize: '0.65rem' }}
                                     />
                                     {investmentMatch.count && (
                                       <Typography variant="caption" color="text.secondary">
@@ -1695,7 +1687,8 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           onClick={() => setValueUpdate({ ...valueUpdate, costBasis: suggestion.amount.toString() })}
                           clickable
                           size="small"
-                          sx={{ bgcolor: '#e3f2fd', '&:hover': { bgcolor: '#bbdefb' } }}
+                          color="info"
+                          variant="outlined"
                         />
                       ))}
                     </Box>
@@ -1760,7 +1753,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                 </Box>
 
                 {isAddingAsset && (
-                  <Card sx={{ mb: 3, bgcolor: '#f8f9fa' }}>
+                  <Card sx={{ mb: 3, bgcolor: 'action.hover' }}>
                     <CardContent>
                       <Grid container spacing={2}>
                         <Grid item xs={12} sm={6}>
@@ -1968,8 +1961,9 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
               Are you sure you want to delete this account?
             </Typography>
             <Box sx={{
-              bgcolor: '#fff3cd',
-              border: '1px solid #ffeaa7',
+              bgcolor: 'warning.light',
+              border: 1,
+              borderColor: 'warning.main',
               borderRadius: 1,
               p: 2,
               mt: 2

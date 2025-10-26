@@ -15,6 +15,7 @@ import {
   Button,
   Tooltip,
   Badge,
+  CircularProgress,
 } from '@mui/material';
 import {
   Home as HomeIcon,
@@ -38,6 +39,8 @@ import AccountsModal from './AccountsModal';
 import ScrapeModal from './ScrapeModal';
 import CategoryHierarchyModal from './CategoryHierarchyModal';
 import DuplicateManagementModal from './DuplicateManagementModal';
+import { useNotification } from './NotificationContext';
+import { STALE_SYNC_THRESHOLD_MS } from '../utils/constants';
 
 const DRAWER_WIDTH = 260;
 const DRAWER_WIDTH_COLLAPSED = 65;
@@ -66,6 +69,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     noPension: false
   });
   const [uncategorizedCount, setUncategorizedCount] = useState<number>(0);
+  const [isBulkSyncing, setIsBulkSyncing] = useState(false);
+  const { showNotification } = useNotification();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -213,6 +218,53 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     fetchStats();
     if (onDataRefresh) {
       onDataRefresh();
+    }
+  };
+
+  const handleBulkRefresh = async () => {
+    setIsBulkSyncing(true);
+    try {
+      const response = await fetch('/api/scrape/bulk', { method: 'POST' });
+      const result = await response.json();
+      
+      if (result.success) {
+        const message = result.totalProcessed === 0 
+          ? 'All accounts are up to date'
+          : `Synced ${result.successCount}/${result.totalProcessed} accounts (${result.totalTransactions || 0} transactions)`;
+        
+        showNotification(
+          message,
+          result.successCount === result.totalProcessed ? 'success' : 'warning'
+        );
+        
+        fetchStats(); // Refresh stats
+        fetchAccountStatus(); // Refresh account status
+        fetchUncategorizedCount(); // Refresh uncategorized count
+        window.dispatchEvent(new CustomEvent('dataRefresh'));
+        
+        if (onDataRefresh) {
+          onDataRefresh();
+        }
+      } else {
+        showNotification(result.message || 'Bulk sync failed', 'error');
+      }
+    } catch (error) {
+      console.error('Bulk sync error:', error);
+      showNotification('Bulk sync failed', 'error');
+    } finally {
+      setIsBulkSyncing(false);
+    }
+  };
+
+  const handleSyncIconClick = () => {
+    const isSyncStale = stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS;
+    
+    if (isSyncStale && !isBulkSyncing) {
+      // If sync is stale, trigger bulk refresh
+      handleBulkRefresh();
+    } else {
+      // Otherwise, open accounts modal
+      setAccountsModalOpen(true);
     }
   };
 
@@ -373,27 +425,55 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     {stats.totalAccounts} Accounts
                   </Typography>
                 </Box>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    cursor: 'pointer',
-                    '&:hover': {
-                      backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                      borderRadius: 1,
-                    },
-                    padding: '4px',
-                    borderRadius: 1,
-                    transition: 'background-color 0.2s',
-                  }}
-                  onClick={() => setAccountsModalOpen(true)}
+                <Tooltip 
+                  title={
+                    isBulkSyncing 
+                      ? 'Syncing accounts...' 
+                      : (stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS)
+                        ? 'Click to sync all stale accounts'
+                        : 'Manage accounts'
+                  }
                 >
-                  <SyncIcon fontSize="small" color="action" />
-                  <Typography variant="caption" color="text.secondary">
-                    {formatLastSync()}
-                  </Typography>
-                </Box>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      cursor: isBulkSyncing ? 'wait' : 'pointer',
+                      '&:hover': {
+                        backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                        borderRadius: 1,
+                      },
+                      padding: '4px',
+                      borderRadius: 1,
+                      transition: 'background-color 0.2s',
+                    }}
+                    onClick={handleSyncIconClick}
+                  >
+                    {isBulkSyncing ? (
+                      <CircularProgress size={16} />
+                    ) : (
+                      <SyncIcon 
+                        fontSize="small" 
+                        color={
+                          stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS
+                            ? 'warning'
+                            : 'action'
+                        } 
+                      />
+                    )}
+                    <Typography 
+                      variant="caption" 
+                      color={
+                        stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS
+                          ? 'warning.main'
+                          : 'text.secondary'
+                      }
+                    >
+                      {formatLastSync()}
+                    </Typography>
+                  </Box>
+                </Tooltip>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   {stats.dbStatus === 'connected' ? (
                     <>

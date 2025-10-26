@@ -444,22 +444,24 @@ const AnalysisPage: React.FC = () => {
       {/* Enhanced Critical Actions */}
       {recommendations.length > 0 && (
         <Card
-          sx={{
+          sx={(theme) => ({
             mb: 3,
-            background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)',
-            border: '2px solid #ff9800',
+            background: theme.palette.mode === 'dark'
+              ? 'linear-gradient(135deg, rgba(255, 152, 0, 0.15) 0%, rgba(255, 152, 0, 0.05) 100%)'
+              : 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)',
+            border: `2px solid ${theme.palette.warning.main}`,
             borderRadius: 2,
             position: 'relative',
             overflow: 'visible'
-          }}
+          })}
         >
           <Box
             sx={{
               position: 'absolute',
               top: -8,
               left: 20,
-              bgcolor: '#ff9800',
-              color: 'white',
+              bgcolor: 'warning.main',
+              color: 'warning.contrastText',
               px: 2,
               py: 0.5,
               borderRadius: 1,
@@ -519,12 +521,12 @@ const AnalysisPage: React.FC = () => {
       )}
 
       {/* Enhanced Action Sections with Multi-Expand */}
-      <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
+      <Paper sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <DashboardIcon color="primary" sx={{ fontSize: 28 }} />
             <Box>
-              <Typography variant="h5" fontWeight="bold" color="primary.dark">
+              <Typography variant="h5" fontWeight="bold" color="primary.main">
                 Financial Analysis Dashboard
               </Typography>
               <Typography variant="body2" color="text.secondary">
@@ -727,7 +729,7 @@ const AnalysisPage: React.FC = () => {
                         }]}
                         series={[{
                           data: temporal.hourlyHeatmap,
-                          color: '#c8facf',
+                          color: 'success.light',
                         }]}
                         tooltip={{ trigger: 'item' }}
                         slotProps={{
