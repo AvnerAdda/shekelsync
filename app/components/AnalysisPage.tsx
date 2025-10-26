@@ -705,14 +705,21 @@ const AnalysisPage: React.FC = () => {
                   
                   {/* Hourly Spending Heatmap */}
                   {temporal.hourlyHeatmap && temporal.hourlyHeatmap.length > 0 && (
-                    <Box sx={{ mb: 2, height: 80 }}>
-                      <Typography variant="caption" color="text.secondary" gutterBottom>
-                        Spending by Hour of Day
-                      </Typography>
+                    <Box sx={{ mb: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Spending by Hour of Day
+                        </Typography>
+                        {temporal.preciseTimePercentage !== undefined && temporal.preciseTimePercentage < 50 && (
+                          <Typography variant="caption" color="warning.main" sx={{ fontSize: '0.7rem' }}>
+                            ⚠ Only {temporal.preciseTimePercentage}% of transactions have precise times
+                          </Typography>
+                        )}
+                      </Box>
                       <BarChart
                         height={60}
                         margin={{ top: 5, bottom: 5, left: 0, right: 0 }}
-                        xAxis={[{ 
+                        xAxis={[{
                           data: Array.from({ length: 24 }, (_, i) => i),
                           scaleType: 'band',
                           tickMinStep: 6,
@@ -720,7 +727,7 @@ const AnalysisPage: React.FC = () => {
                         }]}
                         series={[{
                           data: temporal.hourlyHeatmap,
-                          color: '#1976d2',
+                          color: '#c8facf',
                         }]}
                         tooltip={{ trigger: 'item' }}
                         slotProps={{

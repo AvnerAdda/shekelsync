@@ -11,6 +11,7 @@ export const SPECIAL_BANK_VENDORS = ['discount', 'mercantile'];
 export const ALL_VENDORS = [...CREDIT_CARD_VENDORS, ...BANK_VENDORS, ...SPECIAL_BANK_VENDORS];
 
 // Unified Account Type Taxonomy for enhanced AccountsModal
+// Updated with website color palette (primary green and secondary peach)
 export const ACCOUNT_CATEGORIES = {
   BANKING: {
     id: 'banking',
@@ -18,14 +19,14 @@ export const ACCOUNT_CATEGORIES = {
     label_he: 'בנקאות ועסקאות',
     description: 'Accounts with automatic transaction scraping',
     icon: 'AccountBalance',
-    color: '#1976d2',
+    color: '#c8facf',
     subcategories: {
       BANK: {
         id: 'bank',
         label: 'Bank Accounts',
         label_he: 'חשבונות בנק',
         icon: 'AccountBalance',
-        color: '#1976d2',
+        color: '#c8facf',
         vendors: BANK_VENDORS.concat(SPECIAL_BANK_VENDORS)
       },
       CREDIT: {
@@ -33,7 +34,7 @@ export const ACCOUNT_CATEGORIES = {
         label: 'Credit Cards',
         label_he: 'כרטיסי אשראי',
         icon: 'CreditCard',
-        color: '#7b1fa2',
+        color: '#9cf5aa',
         vendors: CREDIT_CARD_VENDORS
       }
     }
@@ -44,14 +45,14 @@ export const ACCOUNT_CATEGORIES = {
     label_he: 'השקעות וחסכונות',
     description: 'Manually tracked investment and savings accounts',
     icon: 'TrendingUp',
-    color: '#388e3c',
+    color: '#78e88b',
     subcategories: {
       LIQUID: {
         id: 'liquid',
         label: 'Liquid Investments',
         label_he: 'השקעות נזילות',
         icon: 'TrendingUp',
-        color: '#00796b',
+        color: '#b5f8bf',
         types: ['brokerage', 'crypto', 'mutual_fund', 'savings']
       },
       RESTRICTED: {
@@ -59,7 +60,7 @@ export const ACCOUNT_CATEGORIES = {
         label: 'Long-term Savings',
         label_he: 'חסכונות לטווח ארוך',
         icon: 'Lock',
-        color: '#5d4037',
+        color: '#54d96c',
         types: ['pension', 'provident', 'study_fund']
       },
       ALTERNATIVE: {
@@ -67,7 +68,7 @@ export const ACCOUNT_CATEGORIES = {
         label: 'Alternative Assets',
         label_he: 'נכסים אלטרנטיביים',
         icon: 'Business',
-        color: '#ff5722',
+        color: '#facfc8',
         types: ['bonds', 'real_estate', 'other']
       }
     }
@@ -78,14 +79,14 @@ export const ACCOUNT_CATEGORIES = {
     label_he: 'מזומן ואחר',
     description: 'Cash, foreign accounts, and other assets',
     icon: 'AttachMoney',
-    color: '#616161',
+    color: '#d3d3d3',
     subcategories: {
       CASH: {
         id: 'cash',
         label: 'Cash & Foreign',
         label_he: 'מזומן וחוץ לארץ',
         icon: 'AttachMoney',
-        color: '#616161',
+        color: '#d3d3d3',
         types: ['cash', 'foreign_bank', 'foreign_investment']
       }
     }

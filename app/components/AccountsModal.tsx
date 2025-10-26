@@ -1293,8 +1293,8 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   <Card sx={{ mb: 3 }}>
                     <CardHeader
                       title="Add Bank Account"
-                      avatar={<AccountBalanceIcon sx={{ color: '#1976d2' }} />}
-                      sx={{ bgcolor: 'rgba(25, 118, 210, 0.05)' }}
+                      avatar={<AccountBalanceIcon sx={{ color: 'primary.main' }} />}
+                      sx={{ bgcolor: 'rgba(200, 250, 207, 0.1)' }}
                     />
                     <CardContent>
                       <Grid container spacing={2}>
@@ -1402,7 +1402,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             <Grid item xs={12}>
                               <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                                 <Button onClick={() => setIsAdding(false)}>Cancel</Button>
-                                <Button variant="contained" onClick={handleAdd} sx={{ bgcolor: '#1976d2' }}>
+                                <Button variant="contained" color="primary" onClick={handleAdd}>
                                   Add Bank Account
                                 </Button>
                               </Box>

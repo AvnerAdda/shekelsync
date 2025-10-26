@@ -147,8 +147,8 @@ const FinancialChatbot: React.FC = () => {
         <Box
           sx={{
             p: 2,
-            background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-            color: 'white',
+            background: 'linear-gradient(135deg, #c8facf 0%, #78e88b 100%)',
+            color: '#000000',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',

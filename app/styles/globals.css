@@ -1,0 +1,188 @@
+/* Global CSS Variables - Matching Website Design */
+
+:root {
+  /* Primary Colors - Green (switched from peach) */
+  --primary: #c8facf;
+  --primary-50: #f8fef9;
+  --primary-100: #f1fef3;
+  --primary-200: #e3fde7;
+  --primary-300: #d5fddb;
+  --primary-400: #c8facf;
+  --primary-500: #b5f8bf;
+  --primary-600: #9cf5aa;
+  --primary-700: #78e88b;
+  --primary-800: #54d96c;
+  --primary-900: #3ea54d;
+  --primary-950: #286b33;
+
+  /* Secondary Colors - Peach */
+  --secondary: #facfc8;
+  --secondary-50: #fef9f8;
+  --secondary-100: #fef3f1;
+  --secondary-200: #fde7e3;
+  --secondary-300: #fddbd5;
+  --secondary-400: #facfc8;
+  --secondary-500: #f8bfb5;
+  --secondary-600: #f5aa9c;
+  --secondary-700: #e88b78;
+  --secondary-800: #d96c54;
+  --secondary-900: #a54d3e;
+  --secondary-950: #6b3328;
+
+  /* Background & Text */
+  --background: #ffffff;
+  --foreground: #000000;
+  --muted: #d3d3d3;
+  --muted-foreground: #666666;
+  --border: #d3d3d3;
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #c8facf 0%, #b8f5c2 50%, #a8f0b5 100%);
+  --gradient-secondary: linear-gradient(135deg, #facfc8 0%, #f5c2b8 50%, #f0b5a8 100%);
+  --gradient-mixed: linear-gradient(135deg, #c8facf 0%, #e0e2c8 25%, #facfc8 50%, #e0e2c8 75%, #c8facf 100%);
+  --gradient-primary-to-secondary: linear-gradient(135deg, #c8facf 0%, #facfc8 100%);
+
+  /* Shadows - Clean & Minimal */
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.12);
+
+  /* Border Radius */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --muted: #262626;
+    --muted-foreground: #a3a3a3;
+    --border: #404040;
+  }
+}
+
+/* Global Resets and Base Styles */
+* {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Roboto', 'Segoe UI', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Utility Classes */
+
+/* Shadow Utilities */
+.shadow-soft {
+  box-shadow: var(--shadow-sm);
+}
+
+.shadow-elevated {
+  box-shadow: var(--shadow-md);
+}
+
+.shadow-floating {
+  box-shadow: var(--shadow-lg);
+}
+
+.shadow-dramatic {
+  box-shadow: var(--shadow-xl);
+}
+
+/* Button Transitions */
+.btn-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-transition:hover {
+  transform: translateY(-2px);
+}
+
+.btn-transition:active {
+  transform: translateY(0px);
+}
+
+/* Card Hover Effect */
+.card-lift {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Gradient Backgrounds */
+.bg-gradient-primary {
+  background: var(--gradient-primary);
+}
+
+.bg-gradient-secondary {
+  background: var(--gradient-secondary);
+}
+
+.bg-gradient-mixed {
+  background: var(--gradient-mixed);
+}
+
+.bg-gradient-primary-to-secondary {
+  background: var(--gradient-primary-to-secondary);
+}
+
+/* Gradient Text */
+.text-gradient-primary {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-secondary {
+  background: var(--gradient-secondary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-mixed {
+  background: var(--gradient-primary-to-secondary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Focus States */
+*:focus-visible {
+  outline: 2px solid #c8facf;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Custom Scrollbar (Optional) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9cf5aa;
+}

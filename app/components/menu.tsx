@@ -6,13 +6,14 @@ import Typography from "@mui/material/Typography";
 import Menu from "@mui/material/Menu";
 import Container from "@mui/material/Container";
 import Button from "@mui/material/Button";
+import Badge from "@mui/material/Badge";
 import { styled } from "@mui/material/styles";
 import Image from 'next/image';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import PersonIcon from '@mui/icons-material/Person';
 import SettingsIcon from '@mui/icons-material/Settings';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ScrapeModal from './ScrapeModal';
 import ManualModal from './ManualModal';
 import DatabaseIndicator from './DatabaseIndicator';
@@ -93,7 +94,7 @@ const SignOutButton = styled(Button)({
 });
 
 const redirectTo = (page: string) => {
-  return () => (window.location.href = page);
+  return () => (globalThis.location.href = page);
 };
 
 function ResponsiveAppBar() {
@@ -103,7 +104,106 @@ function ResponsiveAppBar() {
   const [isAccountsModalOpen, setIsAccountsModalOpen] = React.useState(false);
   const [isCategoryManagementOpen, setIsCategoryManagementOpen] = React.useState(false);
   const [isAuditOpen, setIsAuditOpen] = React.useState(false);
-  const { showNotification } = useNotification();
+  const [accountAlerts, setAccountAlerts] = React.useState({
+    noBank: false,
+    noCredit: false,
+    noPension: false
+  });
+  const [uncategorizedCount, setUncategorizedCount] = React.useState<number>(0);
+  const [duplicatesCount, setDuplicatesCount] = React.useState<number>(0);
+  const { showNotification} = useNotification();
+
+  React.useEffect(() => {
+    fetchAccountStatus();
+    fetchUncategorizedCount();
+    fetchDuplicatesCount();
+
+    // Listen for data refresh events to update badges
+    const handleDataRefresh = () => {
+      fetchAccountStatus();
+      fetchUncategorizedCount();
+      fetchDuplicatesCount();
+    };
+    globalThis.addEventListener('dataRefresh', handleDataRefresh);
+    
+    return () => {
+      globalThis.removeEventListener('dataRefresh', handleDataRefresh);
+    };
+  }, []);
+
+  const fetchAccountStatus = async () => {
+    try {
+      // Fetch vendor credentials
+      const credsResponse = await fetch('/api/credentials');
+      const credentials = credsResponse.ok ? await credsResponse.json() : [];
+
+      // Import vendor constants
+      const BANK_VENDORS = new Set(['hapoalim', 'leumi', 'mizrahi', 'otsarHahayal', 'beinleumi', 'massad', 'yahav', 'union', 'discount', 'mercantile']);
+      const CREDIT_CARD_VENDORS = new Set(['visaCal', 'max', 'isracard', 'amex']);
+
+      const hasBank = credentials.some((cred: any) => BANK_VENDORS.has(cred.vendor));
+      const hasCredit = credentials.some((cred: any) => CREDIT_CARD_VENDORS.has(cred.vendor));
+
+      // Fetch investment accounts for pension check
+      const investResponse = await fetch('/api/investments/accounts');
+      const investAccounts = investResponse.ok ? await investResponse.json() : [];
+
+      const PENSION_TYPES = new Set(['pension', 'provident', 'study_fund']);
+      const hasPension = investAccounts.some((acc: any) => PENSION_TYPES.has(acc.account_type));
+
+      setAccountAlerts({
+        noBank: !hasBank,
+        noCredit: !hasCredit,
+        noPension: !hasPension
+      });
+
+      console.log('[Menu] Account alerts:', { noBank: !hasBank, noCredit: !hasCredit, noPension: !hasPension });
+
+      // Also update duplicates count when account status changes
+      // (only relevant if both bank and credit exist)
+      if (hasBank && hasCredit) {
+        fetchDuplicatesCount();
+      } else {
+        setDuplicatesCount(0);
+      }
+    } catch (error) {
+      console.error('Error fetching account status:', error);
+    }
+  };
+
+  const fetchUncategorizedCount = async () => {
+    try {
+      const response = await fetch('/api/analytics/unified-category?groupBy=category');
+      if (response.ok) {
+        const data = await response.json();
+        // Count transactions where category_definition_id is null or N/A
+        const uncategorized = data.filter((item: any) =>
+          !item.category_definition_id || item.category === 'N/A'
+        );
+        const totalUncategorized = uncategorized.reduce((sum: number, item: any) =>
+          sum + (item.transaction_count || 0), 0
+        );
+        setUncategorizedCount(totalUncategorized);
+        console.log('[Menu] Uncategorized count:', totalUncategorized);
+      }
+    } catch (error) {
+      console.error('Error fetching uncategorized count:', error);
+    }
+  };
+
+  const fetchDuplicatesCount = async () => {
+    try {
+      const response = await fetch('/api/analytics/detect-duplicates?includeConfirmed=false');
+      if (response.ok) {
+        const data = await response.json();
+        // Count potential duplicates that haven't been confirmed/excluded
+        setDuplicatesCount(Array.isArray(data) ? data.length : 0);
+        console.log('[Menu] Duplicates count:', Array.isArray(data) ? data.length : 0);
+      }
+    } catch (error) {
+      console.error('Error fetching duplicates count:', error);
+    }
+  };
 
   const handleCloseUserMenu = () => {
     setAnchorElUser(null);
@@ -115,6 +215,7 @@ function ResponsiveAppBar() {
     date: Date;
     type: 'income' | 'expense';
     category?: string;
+    categoryDefinitionId?: number;
   }) => {
     try {
       const formattedDate = transactionData.date.toISOString().split('T')[0];
@@ -136,7 +237,9 @@ function ResponsiveAppBar() {
       if (response.ok) {
         setIsManualModalOpen(false);
         // Dispatch a custom event to trigger data refresh
-        window.dispatchEvent(new CustomEvent('dataRefresh'));
+        globalThis.dispatchEvent(new CustomEvent('dataRefresh'));
+        // Refresh uncategorized count (manual transactions might need categorization)
+        fetchUncategorizedCount();
       } else {
         console.error("Failed to add manual transaction");
       }
@@ -148,7 +251,11 @@ function ResponsiveAppBar() {
   const handleScrapeSuccess = () => {
     showNotification('Scraping process completed successfully!', 'success');
     // Dispatch a custom event to trigger data refresh
-    window.dispatchEvent(new CustomEvent('dataRefresh'));
+    globalThis.dispatchEvent(new CustomEvent('dataRefresh'));
+    // Refresh all badge indicators
+    fetchAccountStatus();
+    fetchUncategorizedCount();
+    fetchDuplicatesCount();
   };
 
   return (
@@ -191,30 +298,60 @@ function ResponsiveAppBar() {
               ))}
             </Box>
             <Box sx={{ flexGrow: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <NavButton
-                onClick={() => setIsAuditOpen(true)}
-                startIcon={<HistoryIcon />}
+              <Badge
+                badgeContent={duplicatesCount > 0 ? <WarningAmberIcon sx={{ fontSize: 14 }} /> : null}
+                color="warning"
+                overlap="circular"
+                anchorOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
               >
-                Audit
-              </NavButton>
+                <NavButton
+                  onClick={() => setIsAuditOpen(true)}
+                  startIcon={<HistoryIcon />}
+                >
+                  Audit
+                </NavButton>
+              </Badge>
               <NavButton
                 onClick={() => setIsManualModalOpen(true)}
                 startIcon={<EditIcon />}
               >
                 Manual
               </NavButton>
-              <NavButton
-                onClick={() => setIsCategoryManagementOpen(true)}
-                startIcon={<SettingsIcon />}
+              <Badge
+                badgeContent={uncategorizedCount > 0 ? <WarningAmberIcon sx={{ fontSize: 14 }} /> : null}
+                color="warning"
+                overlap="circular"
+                anchorOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
               >
-                Categories
-              </NavButton>
-              <NavButton
-                onClick={() => setIsAccountsModalOpen(true)}
-                startIcon={<PersonIcon />}
+                <NavButton
+                  onClick={() => setIsCategoryManagementOpen(true)}
+                  startIcon={<SettingsIcon />}
+                >
+                  Categories
+                </NavButton>
+              </Badge>
+              <Badge
+                badgeContent={(accountAlerts.noBank || accountAlerts.noCredit || accountAlerts.noPension) ? <WarningAmberIcon sx={{ fontSize: 14 }} /> : null}
+                color="warning"
+                overlap="circular"
+                anchorOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
               >
-                Accounts
-              </NavButton>
+                <NavButton
+                  onClick={() => setIsAccountsModalOpen(true)}
+                  startIcon={<PersonIcon />}
+                >
+                  Accounts
+                </NavButton>
+              </Badge>
               <Menu
                 sx={{ mt: "45px" }}
                 id="menu-appbar"
@@ -248,17 +385,30 @@ function ResponsiveAppBar() {
       />
       <AccountsModal
         isOpen={isAccountsModalOpen}
-        onClose={() => setIsAccountsModalOpen(false)}
+        onClose={() => {
+          setIsAccountsModalOpen(false);
+          fetchAccountStatus();
+        }}
       />
       <CategoryManagementModal
         open={isCategoryManagementOpen}
-        onClose={() => setIsCategoryManagementOpen(false)}
+        onClose={() => {
+          setIsCategoryManagementOpen(false);
+          fetchUncategorizedCount();
+        }}
         onCategoriesUpdated={() => {
           // Dispatch a custom event to trigger data refresh
-          window.dispatchEvent(new CustomEvent('dataRefresh'));
+          globalThis.dispatchEvent(new CustomEvent('dataRefresh'));
+          fetchUncategorizedCount();
         }}
       />
-      <ScrapeAuditModal open={isAuditOpen} onClose={() => setIsAuditOpen(false)} />
+      <ScrapeAuditModal
+        open={isAuditOpen}
+        onClose={() => {
+          setIsAuditOpen(false);
+          fetchDuplicatesCount();
+        }}
+      />
     </>
   );
 }

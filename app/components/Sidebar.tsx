@@ -13,7 +13,6 @@ import {
   Typography,
   Divider,
   Button,
-  Chip,
   Tooltip,
   Badge,
 } from '@mui/material';
@@ -33,6 +32,7 @@ import {
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
   ContentCopy as DuplicateIcon,
+  WarningAmber as WarningAmberIcon,
 } from '@mui/icons-material';
 import AccountsModal from './AccountsModal';
 import ScrapeModal from './ScrapeModal';
@@ -60,6 +60,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     dbStatus: 'checking' as 'connected' | 'disconnected' | 'checking',
     pendingDuplicates: 0,
   });
+  const [accountAlerts, setAccountAlerts] = useState({
+    noBank: false,
+    noCredit: false,
+    noPension: false
+  });
+  const [uncategorizedCount, setUncategorizedCount] = useState<number>(0);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -74,6 +80,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   useEffect(() => {
     fetchStats();
     checkDBStatus();
+    fetchAccountStatus();
+    fetchUncategorizedCount();
     const interval = setInterval(checkDBStatus, 30000); // Check DB every 30s
 
     // Listen for onboarding custom events
@@ -90,15 +98,24 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       setScrapeModalOpen(true);
     };
 
-    window.addEventListener('openProfileSetup', handleOpenProfile);
-    window.addEventListener('openAccountsModal', handleOpenAccounts);
-    window.addEventListener('openScrapeModal', handleOpenScrape);
+    // Listen for data refresh events to update badges
+    const handleDataRefresh = () => {
+      fetchStats();
+      fetchAccountStatus();
+      fetchUncategorizedCount();
+    };
+
+    globalThis.addEventListener('openProfileSetup', handleOpenProfile);
+    globalThis.addEventListener('openAccountsModal', handleOpenAccounts);
+    globalThis.addEventListener('openScrapeModal', handleOpenScrape);
+    globalThis.addEventListener('dataRefresh', handleDataRefresh);
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('openProfileSetup', handleOpenProfile);
-      window.removeEventListener('openAccountsModal', handleOpenAccounts);
-      window.removeEventListener('openScrapeModal', handleOpenScrape);
+      globalThis.removeEventListener('openProfileSetup', handleOpenProfile);
+      globalThis.removeEventListener('openAccountsModal', handleOpenAccounts);
+      globalThis.removeEventListener('openScrapeModal', handleOpenScrape);
+      globalThis.removeEventListener('dataRefresh', handleDataRefresh);
     };
   }, [onPageChange]);
 
@@ -142,6 +159,53 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       }));
     } catch (error) {
       setStats(prev => ({ ...prev, dbStatus: 'disconnected' }));
+    }
+  };
+
+  const fetchAccountStatus = async () => {
+    try {
+      // Fetch vendor credentials
+      const credsResponse = await fetch('/api/credentials');
+      const credentials = credsResponse.ok ? await credsResponse.json() : [];
+
+      // Import vendor constants
+      const BANK_VENDORS = new Set(['hapoalim', 'leumi', 'mizrahi', 'otsarHahayal', 'beinleumi', 'massad', 'yahav', 'union', 'discount', 'mercantile']);
+      const CREDIT_CARD_VENDORS = new Set(['visaCal', 'max', 'isracard', 'amex']);
+
+      const hasBank = credentials.some((cred: any) => BANK_VENDORS.has(cred.vendor));
+      const hasCredit = credentials.some((cred: any) => CREDIT_CARD_VENDORS.has(cred.vendor));
+
+      // Fetch investment accounts for pension check
+      const investResponse = await fetch('/api/investments/accounts');
+      const investData = investResponse.ok ? await investResponse.json() : { accounts: [] };
+      const investAccounts = investData.accounts || [];
+
+      const PENSION_TYPES = new Set(['pension', 'provident', 'study_fund']);
+      const hasPension = investAccounts.some((acc: any) => PENSION_TYPES.has(acc.account_type));
+
+      setAccountAlerts({
+        noBank: !hasBank,
+        noCredit: !hasCredit,
+        noPension: !hasPension
+      });
+
+      console.log('[Sidebar] Account alerts:', { noBank: !hasBank, noCredit: !hasCredit, noPension: !hasPension });
+    } catch (error) {
+      console.error('Error fetching account status:', error);
+    }
+  };
+
+  const fetchUncategorizedCount = async () => {
+    try {
+      const response = await fetch('/api/categories/hierarchy');
+      if (response.ok) {
+        const data = await response.json();
+        const totalUncategorized = data.uncategorized?.totalCount || 0;
+        setUncategorizedCount(totalUncategorized);
+        console.log('[Sidebar] Uncategorized count:', totalUncategorized);
+      }
+    } catch (error) {
+      console.error('Error fetching uncategorized count:', error);
     }
   };
 
@@ -249,24 +313,44 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             <Box sx={{ p: 2 }}>
               {/* Action Buttons */}
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<AddIcon />}
-                  onClick={() => setAccountsModalOpen(true)}
-                  fullWidth
+                <Badge
+                  badgeContent={(accountAlerts.noBank || accountAlerts.noCredit || accountAlerts.noPension) ? <WarningAmberIcon sx={{ fontSize: 14 }} /> : null}
+                  color="warning"
+                  overlap="circular"
+                  anchorOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                  }}
                 >
-                  Add Account
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<CategoryIcon />}
-                  onClick={() => setCategoryModalOpen(true)}
-                  fullWidth
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<AddIcon />}
+                    onClick={() => setAccountsModalOpen(true)}
+                    fullWidth
+                  >
+                    Add Account
+                  </Button>
+                </Badge>
+                <Badge
+                  badgeContent={uncategorizedCount > 0 ? <WarningAmberIcon sx={{ fontSize: 14 }} /> : null}
+                  color="warning"
+                  overlap="circular"
+                  anchorOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                  }}
                 >
-                  Categories
-                </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<CategoryIcon />}
+                    onClick={() => setCategoryModalOpen(true)}
+                    fullWidth
+                  >
+                    Categories
+                  </Button>
+                </Badge>
                 <Badge badgeContent={stats.pendingDuplicates} color="warning">
                   <Button
                     variant="outlined"
@@ -345,15 +429,25 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             <Divider sx={{ width: '100%', mb: 1 }} />
             <Tooltip title="Add Account" placement="right">
               <IconButton size="small" onClick={() => setAccountsModalOpen(true)}>
-                <AddIcon />
+                <Badge
+                  badgeContent={(accountAlerts.noBank || accountAlerts.noCredit || accountAlerts.noPension) ? <WarningAmberIcon sx={{ fontSize: 10 }} /> : null}
+                  color="warning"
+                >
+                  <AddIcon />
+                </Badge>
               </IconButton>
             </Tooltip>
             <Tooltip title="Categories" placement="right">
               <IconButton size="small" onClick={() => setCategoryModalOpen(true)}>
-                <CategoryIcon />
+                <Badge
+                  badgeContent={uncategorizedCount > 0 ? <WarningAmberIcon sx={{ fontSize: 10 }} /> : null}
+                  color="warning"
+                >
+                  <CategoryIcon />
+                </Badge>
               </IconButton>
             </Tooltip>
-            <Tooltip title={`Duplicates${stats.pendingDuplicates > 0 ? ` (${stats.pendingDuplicates})` : ''}`} placement="right">
+            <Tooltip title={`Duplicates (${stats.pendingDuplicates})`} placement="right">
               <IconButton size="small" onClick={() => setDuplicateModalOpen(true)}>
                 <Badge badgeContent={stats.pendingDuplicates} color="warning">
                   <DuplicateIcon />
@@ -389,6 +483,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         onClose={() => {
           setAccountsModalOpen(false);
           fetchStats();
+          fetchAccountStatus();
         }}
       />
 
@@ -400,7 +495,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
 
       <CategoryHierarchyModal
         open={categoryModalOpen}
-        onClose={() => setCategoryModalOpen(false)}
+        onClose={() => {
+          setCategoryModalOpen(false);
+          fetchUncategorizedCount();
+        }}
         onCategoriesUpdated={handleScrapeComplete}
       />
 

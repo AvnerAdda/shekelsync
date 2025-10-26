@@ -43,13 +43,13 @@ export async function getCategoryInfo(categoryId, client = null) {
 }
 
 /**
- * Resolve a category by matching the Hebrew term stored in category_mapping.
- * Returns the mapped category definition (if any).
- * @param {string} term
+ * Resolve a category by matching the old category name stored in category_mapping.
+ * This maps legacy transaction.category values to new category_definitions.
+ * @param {string} oldCategoryName - The old Hebrew category name from transaction.category
  * @param {import('pg').PoolClient} client
  */
-export async function resolveCategoryFromMapping(term, client) {
-  if (!term) return null;
+export async function resolveCategoryFromMapping(oldCategoryName, client) {
+  if (!oldCategoryName) return null;
   const mapping = await client.query(
     `SELECT
         cm.category_definition_id,
@@ -59,8 +59,8 @@ export async function resolveCategoryFromMapping(term, client) {
      FROM category_mapping cm
      JOIN category_definitions cd ON cd.id = cm.category_definition_id
      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-     WHERE cm.hebrew_category = $1`,
-    [term]
+     WHERE cm.old_category_name = $1`,
+    [oldCategoryName]
   );
 
   if (mapping.rows.length === 0) return null;

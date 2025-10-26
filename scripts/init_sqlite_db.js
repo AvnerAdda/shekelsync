@@ -80,9 +80,9 @@ const TABLE_DEFINITIONS = [
       FOREIGN KEY (parent_id) REFERENCES category_definitions(id) ON DELETE SET NULL
     );`,
   `CREATE TABLE IF NOT EXISTS category_mapping (
-      hebrew_category TEXT PRIMARY KEY,
+      old_category_name TEXT PRIMARY KEY,
       category_definition_id INTEGER NOT NULL,
-      description TEXT,
+      notes TEXT,
       FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE CASCADE
     );`,
   `CREATE TABLE IF NOT EXISTS merchant_catalog (
@@ -626,39 +626,30 @@ const CATEGORY_TREE = [
   { key: 'investment_real_estate', type: 'investment', parent: 'investment_root', name: 'נדל"ן', nameEn: 'Real Estate', displayOrder: 204 }
 ];
 
+// Legacy category mappings: old transaction.category → new category_definitions
+// Only confident mappings - user will handle uncertain ones via categorization rules
 const CATEGORY_MAPPINGS = [
-  { term: 'שופרסל', categoryKey: 'exp_food_grocery', description: 'רשת סופרמרקטים' },
-  { term: 'AM:PM', categoryKey: 'exp_food_grocery', description: 'מכולות וקמעונות מזון' },
-  { term: 'סופר-פארם', categoryKey: 'exp_health_pharmacy', description: 'רשת פארם' },
-  { term: 'מקדונלדס', categoryKey: 'exp_food_restaurants', description: 'מסעדות מזון מהיר' },
-  { term: 'בורגראנץ', categoryKey: 'exp_food_restaurants', description: 'מזון מהיר' },
-  { term: 'קופיקס', categoryKey: 'exp_food_coffee', description: 'בתי קפה' },
-  { term: 'תן ביס', categoryKey: 'exp_food_delivery', description: 'משלוחי אוכל' },
-
-  { term: 'גט', categoryKey: 'exp_transport_taxi', description: 'נסיעות במוניות Gett' },
-  { term: 'GETT', categoryKey: 'exp_transport_taxi', description: 'חברת מוניות' },
-  { term: 'uber', categoryKey: 'exp_transport_rideshare', description: 'נסיעות שיתופיות' },
-  { term: 'פז', categoryKey: 'exp_transport_fuel', description: 'תחנות דלק' },
-
-  { term: 'בזק', categoryKey: 'exp_bills_internet', description: 'שירותי אינטרנט/טלוויזיה' },
-  { term: 'HOT', categoryKey: 'exp_bills_internet', description: 'טלוויזיה ואינטרנט' },
-  { term: 'Cellcom', categoryKey: 'exp_bills_communication', description: 'תקשורת סלולרית' },
-  { term: 'IEC', categoryKey: 'exp_bills_electricity', description: 'חברת חשמל' },
-  { term: 'חשמל', categoryKey: 'exp_bills_electricity', description: 'חיוב חשמל' },
-  { term: 'מים', categoryKey: 'exp_bills_water', description: 'חיוב מים' },
-  { term: 'MAX IT PAY', categoryKey: 'exp_bills_bank', description: 'הורדת חיובי אשראי' },
-
-  { term: 'איקאה', categoryKey: 'exp_shopping_furniture', description: 'ריהוט לבית' },
-  { term: 'ACE', categoryKey: 'exp_shopping_housewares', description: 'ציוד לבית ולגן' },
-  { term: 'ZARA', categoryKey: 'exp_shopping_clothing', description: 'אופנה' },
-  { term: 'Castro', categoryKey: 'exp_shopping_clothing', description: 'אופנה ישראלית' },
-  { term: 'Nike', categoryKey: 'exp_shopping_shoes', description: 'נעליים וביגוד ספורט' },
-
-  { term: 'נטפליקס', categoryKey: 'exp_leisure_streaming', description: 'שירותי סטרימינג' },
-  { term: 'Yes Planet', categoryKey: 'exp_leisure_cinema', description: 'בתי קולנוע' },
-  { term: 'YES PLANET', categoryKey: 'exp_leisure_cinema', description: 'בתי קולנוע' },
-  { term: 'Coursera', categoryKey: 'exp_education_online', description: 'קורסים מקוונים' },
-  { term: 'Udemy', categoryKey: 'exp_education_online', description: 'קורסים מקוונים' }
+  { oldCategory: 'מזון וצריכה', newCategory: 'סופרמרקט', notes: 'Maps to: Groceries' },
+  { oldCategory: 'מזון ומשקאות', newCategory: 'סופרמרקט', notes: 'Maps to: Groceries' },
+  { oldCategory: 'מסעדות, קפה וברים', newCategory: 'מסעדות', notes: 'Maps to: Restaurants' },
+  { oldCategory: 'תחבורה ורכבים', newCategory: 'תחבורה', notes: 'Maps to: Transportation (parent)' },
+  { oldCategory: 'שירותי תקשורת', newCategory: 'תקשורת', notes: 'Maps to: Mobile & Communications' },
+  { oldCategory: 'דלק, חשמל וגז', newCategory: 'חשמל', notes: 'Maps to: Electricity' },
+  { oldCategory: 'חשמל ומחשבים', newCategory: 'אלקטרוניקה', notes: 'Maps to: Electronics' },
+  { oldCategory: 'רפואה ובתי מרקחת', newCategory: 'בית מרקחת', notes: 'Maps to: Pharmacy' },
+  { oldCategory: 'אופנה', newCategory: 'ביגוד', notes: 'Maps to: Clothing' },
+  { oldCategory: 'עיצוב הבית', newCategory: 'רהיטים', notes: 'Maps to: Furniture' },
+  { oldCategory: 'פנאי, בידור וספורט', newCategory: 'פנאי', notes: 'Maps to: Leisure (parent)' },
+  { oldCategory: 'טיסות ותיירות', newCategory: 'חופשות', notes: 'Maps to: Travel & Holidays' },
+  { oldCategory: 'העברת כספים', newCategory: 'תשלומי בנק', notes: 'Maps to: Bank Settlements' },
+  { oldCategory: 'שונות', newCategory: 'שונות', notes: 'Maps to: Miscellaneous' }
+  // Note: The following are not mapped - user should handle via categorization rules:
+  // - 'קוסמטיקה וטיפוח' (Beauty - could be Health or Shopping)
+  // - 'ספרים ודפוס' (Books - could be Education or Shopping)
+  // - 'עירייה וממשלה' (Government - could be Bills or Bank)
+  // - 'ביטוח' (Insurance - no category exists)
+  // - 'חיות מחמד' (Pets - no category exists)
+  // - 'ציוד ומשרד' (Office - no category exists)
 ];
 
 function seedCategories(db) {
@@ -731,20 +722,21 @@ function seedCategoryActionability(db, helpers) {
 function seedCategoryMapping(db, helpers) {
   const { categoriesByKey } = helpers;
   const insert = db.prepare(`
-    INSERT OR IGNORE INTO category_mapping (hebrew_category, category_definition_id, description)
-    VALUES (@term, @categoryId, @description)
+    INSERT OR IGNORE INTO category_mapping (old_category_name, category_definition_id, notes)
+    VALUES (@oldCategory, @categoryId, @notes)
   `);
 
   db.transaction(() => {
     for (const mapping of CATEGORY_MAPPINGS) {
       const category = categoriesByKey.get(mapping.categoryKey);
       if (!category) {
+        console.warn(`Warning: Category key '${mapping.categoryKey}' not found for '${mapping.oldCategory}'`);
         continue;
       }
       insert.run({
-        term: mapping.term,
+        oldCategory: mapping.oldCategory,
         categoryId: category.id,
-        description: mapping.description || null
+        notes: mapping.notes || null
       });
     }
   })();

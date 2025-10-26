@@ -28,8 +28,8 @@ export default async function handler(req, res) {
         break;
       case 'daily':
       default:
-        dateGroupBy = 't.date';
-        dateSelect = 't.date as date';
+        dateGroupBy = dialect.dateTrunc('day', 't.date');
+        dateSelect = `${dialect.dateTrunc('day', 't.date')} as date`;
     }
 
     // Build duplicate exclusion clause
@@ -41,16 +41,19 @@ export default async function handler(req, res) {
     const duplicateClause = duplicateFilter ? duplicateFilter.replace(/transactions\./g, 't.') : '';
 
     // Get transaction history with aggregation - separated by category type
+    // Fallback to price sign if category_definition_id is NULL
     const historyResult = await client.query(
       `SELECT
         ${dateSelect},
-        SUM(CASE 
-          WHEN cd.category_type = 'income' AND t.price > 0 THEN t.price 
-          ELSE 0 
+        SUM(CASE
+          WHEN (cd.category_type = 'income' OR (cd.category_type IS NULL AND t.price > 0))
+            AND t.price > 0 THEN t.price
+          ELSE 0
         END) as income,
-        SUM(CASE 
-          WHEN cd.category_type = 'expense' AND t.price < 0 THEN ABS(t.price) 
-          ELSE 0 
+        SUM(CASE
+          WHEN (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0))
+            AND t.price < 0 THEN ABS(t.price)
+          ELSE 0
         END) as expenses
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
@@ -102,17 +105,20 @@ export default async function handler(req, res) {
     );
 
     // Get breakdown by month - separated by category type
+    // Fallback to price sign if category_definition_id is NULL
     const monthExpr = dialect.toChar('t.date', 'YYYY-MM');
     const monthResult = await client.query(
       `SELECT
         ${monthExpr} as month,
-        SUM(CASE 
-          WHEN cd.category_type = 'income' AND t.price > 0 THEN t.price 
-          ELSE 0 
+        SUM(CASE
+          WHEN (cd.category_type = 'income' OR (cd.category_type IS NULL AND t.price > 0))
+            AND t.price > 0 THEN t.price
+          ELSE 0
         END) as income,
-        SUM(CASE 
-          WHEN cd.category_type = 'expense' AND t.price < 0 THEN ABS(t.price) 
-          ELSE 0 
+        SUM(CASE
+          WHEN (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0))
+            AND t.price < 0 THEN ABS(t.price)
+          ELSE 0
         END) as expenses
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
@@ -124,23 +130,26 @@ export default async function handler(req, res) {
     );
 
     // Get summary stats - properly separated by category type
+    // Fallback to price sign if category_definition_id is NULL
     const summaryResult = await client.query(
       `SELECT
-        SUM(CASE 
-          WHEN cd.category_type = 'income' AND t.price > 0 THEN t.price 
-          ELSE 0 
+        SUM(CASE
+          WHEN (cd.category_type = 'income' OR (cd.category_type IS NULL AND t.price > 0))
+            AND t.price > 0 THEN t.price
+          ELSE 0
         END) as total_income,
-        SUM(CASE 
-          WHEN cd.category_type = 'expense' AND t.price < 0 THEN ABS(t.price) 
-          ELSE 0 
+        SUM(CASE
+          WHEN (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0))
+            AND t.price < 0 THEN ABS(t.price)
+          ELSE 0
         END) as total_expenses,
-        SUM(CASE 
-          WHEN cd.category_type = 'investment' AND t.price < 0 THEN ABS(t.price) 
-          ELSE 0 
+        SUM(CASE
+          WHEN cd.category_type = 'investment' AND t.price < 0 THEN ABS(t.price)
+          ELSE 0
         END) as investment_outflow,
-        SUM(CASE 
-          WHEN cd.category_type = 'investment' AND t.price > 0 THEN t.price 
-          ELSE 0 
+        SUM(CASE
+          WHEN cd.category_type = 'investment' AND t.price > 0 THEN t.price
+          ELSE 0
         END) as investment_inflow,
         COUNT(DISTINCT t.vendor) as total_accounts
       FROM transactions t

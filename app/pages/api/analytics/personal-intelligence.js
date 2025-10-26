@@ -44,7 +44,7 @@ export default async function handler(req, res) {
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
-        AND cd.category_type = 'expense'
+        AND (cd.category_type = 'expense' OR cd.category_type IS NULL)
         AND COALESCE(cd.name, '') != $3
         AND COALESCE(parent.name, '') != $3
       ORDER BY t.date ASC
@@ -54,12 +54,18 @@ export default async function handler(req, res) {
 
     const transactions = transactionsResult.rows.map(row => {
       const dateObj = new Date(row.date);
+      const hour = dateObj.getHours();
+      const minutes = dateObj.getMinutes();
+      const seconds = dateObj.getSeconds();
+      // Check if this is a precise timestamp (not default 00:00:00 local time from 21:00 UTC)
+      const hasPreciseTime = !(hour === 0 && minutes === 0 && seconds === 0);
       return {
         ...row,
         price: parseFloat(row.price),
         date: dateObj,
-        hour: dateObj.getHours(),
+        hour: hour,
         day_of_week: dateObj.getDay(),
+        hasPreciseTime,
       };
     });
     const totalExpenses = transactions.reduce((sum, t) => sum + Math.abs(t.price), 0);
@@ -67,10 +73,10 @@ export default async function handler(req, res) {
     // Get period income and all-time balance (income - expenses, excluding investments and bank payments)
     const balanceResult = await client.query(`
       SELECT
-        SUM(CASE WHEN cd.category_type = 'income' AND t.price > 0 AND t.date >= $1 AND t.date <= $2 THEN t.price ELSE 0 END) as period_income,
-        SUM(CASE WHEN cd.category_type = 'expense' AND t.price < 0 AND t.date >= $1 AND t.date <= $2 AND COALESCE(cd.name, '') != $3 AND COALESCE(parent.name, '') != $3 THEN ABS(t.price) ELSE 0 END) as period_expenses,
-        SUM(CASE WHEN cd.category_type = 'income' AND t.price > 0 THEN t.price ELSE 0 END) as total_income,
-        SUM(CASE WHEN cd.category_type = 'expense' AND t.price < 0 AND COALESCE(cd.name, '') != $3 AND COALESCE(parent.name, '') != $3 THEN ABS(t.price) ELSE 0 END) as total_expenses
+        SUM(CASE WHEN (cd.category_type = 'income' OR (cd.category_type IS NULL AND t.price > 0)) AND t.price > 0 AND t.date >= $1 AND t.date <= $2 THEN t.price ELSE 0 END) as period_income,
+        SUM(CASE WHEN (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0)) AND t.price < 0 AND t.date >= $1 AND t.date <= $2 AND COALESCE(cd.name, '') != $3 AND COALESCE(parent.name, '') != $3 THEN ABS(t.price) ELSE 0 END) as period_expenses,
+        SUM(CASE WHEN (cd.category_type = 'income' OR (cd.category_type IS NULL AND t.price > 0)) AND t.price > 0 THEN t.price ELSE 0 END) as total_income,
+        SUM(CASE WHEN (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0)) AND t.price < 0 AND COALESCE(cd.name, '') != $3 AND COALESCE(parent.name, '') != $3 THEN ABS(t.price) ELSE 0 END) as total_expenses
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
@@ -83,13 +89,17 @@ export default async function handler(req, res) {
     const dailyBurnRate = parseFloat(period_expenses || 0) / dayCount;
     const financialRunwayDays = Math.floor(currentBalance / dailyBurnRate);
 
-    // Peak spending hours (heatmap data)
+    // Peak spending hours (heatmap data) - only use transactions with precise timestamps
+    const preciseTransactions = transactions.filter(t => t.hasPreciseTime);
     const hourlySpending = Array(24).fill(0);
-    transactions.forEach(t => {
+    preciseTransactions.forEach(t => {
       const hour = Number.isFinite(t.hour) ? t.hour : 12;
       hourlySpending[hour] += Math.abs(t.price);
     });
     const peakHour = hourlySpending.indexOf(Math.max(...hourlySpending));
+    const preciseTimePercentage = transactions.length > 0
+      ? Math.round((preciseTransactions.length / transactions.length) * 100)
+      : 0;
 
     // Payday effect (spending in first 7 days vs last 7 days of month)
     const earlyMonthSpend = transactions
@@ -112,6 +122,9 @@ export default async function handler(req, res) {
     currentBalance: Math.round(currentBalance),
     peakSpendingHour: peakHour,
     hourlyHeatmap: hourlySpending.map(v => Math.round(v)),
+    preciseTimePercentage,
+    transactionsWithPreciseTime: preciseTransactions.length,
+    totalTransactions: transactions.length,
     paydayEffect: Math.round(paydayEffect),
     earlyMonthSpend: Math.round(earlyMonthSpend),
     lateMonthSpend: Math.round(lateMonthSpend),
@@ -133,8 +146,9 @@ export default async function handler(req, res) {
     const impulseScore = Math.min(100, (smallTransactions.length / transactions.length) * 150);
 
     // Decision fatigue index (are evening transactions larger/smaller than morning?)
-    const morningTxns = transactions.filter(t => t.hour >= 6 && t.hour <= 12);
-    const eveningTxns = transactions.filter(t => t.hour >= 18 && t.hour <= 23);
+    // Only use transactions with precise timestamps
+    const morningTxns = preciseTransactions.filter(t => t.hour >= 6 && t.hour <= 12);
+    const eveningTxns = preciseTransactions.filter(t => t.hour >= 18 && t.hour <= 23);
     const morningAvg = morningTxns.reduce((sum, t) => sum + Math.abs(t.price), 0) / (morningTxns.length || 1);
     const eveningAvg = eveningTxns.reduce((sum, t) => sum + Math.abs(t.price), 0) / (eveningTxns.length || 1);
     const decisionFatigueIndex = eveningAvg > morningAvg ? ((eveningAvg / morningAvg - 1) * 100) : 0;

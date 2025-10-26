@@ -20,7 +20,7 @@ export default function ModalHeader({ title, onClose, actions }: ModalHeaderProp
       alignItems: 'center',
       padding: '24px'
     }}>
-      <Typography variant="h6" style={{ fontWeight: 600 }}>
+      <Typography variant="h6" component="span" style={{ fontWeight: 600 }}>
         {title}
       </Typography>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
