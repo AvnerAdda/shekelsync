@@ -10,6 +10,9 @@ export const SPECIAL_BANK_VENDORS = ['discount', 'mercantile'];
 // All vendors
 export const ALL_VENDORS = [...CREDIT_CARD_VENDORS, ...BANK_VENDORS, ...SPECIAL_BANK_VENDORS];
 
+// Sync threshold - accounts not synced in this time are considered stale
+export const STALE_SYNC_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48 hours
+
 // Unified Account Type Taxonomy for enhanced AccountsModal
 // Updated with website color palette (primary green and secondary peach)
 export const ACCOUNT_CATEGORIES = {

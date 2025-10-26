@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material';
 import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { useNotification } from './NotificationContext';
 
 interface Notification {
   id: string;
@@ -64,7 +65,9 @@ const SmartNotifications: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
+  const [isBulkSyncing, setIsBulkSyncing] = useState(false);
   const { formatCurrency } = useFinancePrivacy();
+  const { showNotification } = useNotification();
 
   const open = Boolean(anchorEl);
 
@@ -152,9 +155,41 @@ const SmartNotifications: React.FC = () => {
     }
   };
 
-  const handleNotificationAction = (action: string, params?: any) => {
+  const handleNotificationAction = async (action: string, params?: any) => {
     // Handle different notification actions
     switch (action) {
+      case 'bulk_refresh':
+        // Trigger bulk account refresh
+        setIsBulkSyncing(true);
+        try {
+          const response = await fetch('/api/scrape/bulk', { method: 'POST' });
+          const result = await response.json();
+          
+          if (result.success) {
+            const message = result.totalProcessed === 0 
+              ? 'All accounts are up to date'
+              : `Synced ${result.successCount}/${result.totalProcessed} accounts (${result.totalTransactions || 0} transactions)`;
+            
+            showNotification(
+              message,
+              result.successCount === result.totalProcessed ? 'success' : 'warning'
+            );
+            
+            // Refresh notifications to clear the stale sync alert
+            await fetchNotifications();
+            
+            // Trigger global data refresh
+            window.dispatchEvent(new CustomEvent('dataRefresh'));
+          } else {
+            showNotification(result.message || 'Bulk sync failed', 'error');
+          }
+        } catch (error) {
+          console.error('Bulk sync error:', error);
+          showNotification('Bulk sync failed', 'error');
+        } finally {
+          setIsBulkSyncing(false);
+        }
+        break;
       case 'view_category':
         // Navigate to category view
         console.log('Navigate to category:', params?.category_definition_id || params?.category);
@@ -323,6 +358,8 @@ const SmartNotifications: React.FC = () => {
                             size="small"
                             variant="outlined"
                             onClick={() => handleNotificationAction(action.action, action.params)}
+                            disabled={isBulkSyncing && action.action === 'bulk_refresh'}
+                            startIcon={isBulkSyncing && action.action === 'bulk_refresh' ? <CircularProgress size={12} /> : null}
                             sx={{ fontSize: '0.75rem' }}
                           >
                             {action.label}

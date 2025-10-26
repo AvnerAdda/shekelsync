@@ -1486,8 +1486,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       maxWidth="lg"
       fullWidth
       PaperProps={{
-        style: {
-          backgroundColor: '#ffffff',
+        sx: {
           borderRadius: '24px',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
         },
