@@ -96,7 +96,7 @@ export default async function handler(req, res) {
            category = COALESCE($4, category),
            merchant_name = $5,
            auto_categorized = true,
-           confidence_score = GREATEST(confidence_score, $6)
+           confidence_score = MAX(confidence_score, $6)
          WHERE identifier = $7 AND vendor = $8
          RETURNING *`,
         [
@@ -221,7 +221,7 @@ export async function bulkCategorizeTransactions(client) {
            category = COALESCE($5, category),
            merchant_name = name,
            auto_categorized = true,
-           confidence_score = GREATEST(confidence_score, $6)
+           confidence_score = MAX(confidence_score, $6)
          WHERE
            LOWER(name) LIKE '%' || LOWER($1) || '%'
            AND category_definition_id NOT IN (
