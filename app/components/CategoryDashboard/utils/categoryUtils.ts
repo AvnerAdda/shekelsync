@@ -50,19 +50,20 @@ const defaultIconMap: { [key: string]: SvgIconComponent } = {
   'העברות': TransferWithinAStation,
 };
 
+// Updated color palette based on website design (mint green primary, peach secondary)
 const defaultColorMap: { [key: string]: string } = {
-  'כושר': '#FF6B6B',
-  'אוכל': '#4ECDC4',
-  'ביגוד': '#45B7D1',
-  'פנאי': '#96CEB4',
-  'תחבורה': '#FFEEAD',
-  'בריאות': '#FF9999',
-  'פנסיה': '#88D8B0',
-  'מסעדות': '#FFB6B6',
-  'קניות': '#A6D1E6',
-  'דירה': '#FFDAB9',
-  'תקשורת': '#B5EAD7',
-  'העברות': '#C7CEEA'
+  'כושר': '#9cf5aa',      // green-600
+  'אוכל': '#78e88b',      // green-700
+  'ביגוד': '#c8facf',     // green-400
+  'פנאי': '#b5f8bf',      // green-500
+  'תחבורה': '#d5fddb',    // green-300
+  'בריאות': '#54d96c',    // green-800
+  'פנסיה': '#3ea54d',     // green-900
+  'מסעדות': '#facfc8',    // peach-400
+  'קניות': '#f8bfb5',     // peach-500
+  'דירה': '#e3fde7',      // green-200
+  'תקשורת': '#f1fef3',    // green-100
+  'העברות': '#f5aa9c'     // peach-600
 };
 
 // Extended icon mapping with semantic categories for better matching
@@ -282,20 +283,26 @@ export const useCategoryIcons = (): { [key: string]: SvgIconComponent } => {
 };
 
 // Function to generate a color based on a string (category name)
+// Updated to use colors from website palette (green primary, peach secondary)
 export const generateColorFromString = (str: string): string => {
+  // Define color palette based on website design - prioritize green
+  const colorPalette = [
+    '#c8facf', '#b5f8bf', '#9cf5aa', '#78e88b', // green shades (primary)
+    '#f8fef9', '#f1fef3', '#e3fde7', '#d5fddb', // green light shades
+    '#54d96c', '#3ea54d', '#286b33',            // green darker shades
+    '#facfc8', '#f8bfb5', '#f5aa9c', '#e88b78', // peach shades (secondary)
+    '#fef9f8', '#fef3f1', '#fde7e3', '#fddbd5', // peach light shades
+  ];
+
   // Generate a hash from the string
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
-  
-  // Convert the hash to a color with good saturation and lightness
-  // Using HSL to ensure vibrant but not too bright/dark colors
-  const h = Math.abs(hash) % 360;  // Hue: 0-359 degrees on the color wheel
-  const s = 65 + (hash % 20);      // Saturation: 65-85%
-  const l = 55 + (hash % 10);      // Lightness: 55-65%
-  
-  return `hsl(${h}, ${s}%, ${l}%)`;
+
+  // Use the hash to select a color from the palette
+  const index = Math.abs(hash) % colorPalette.length;
+  return colorPalette[index];
 };
 
 // Hook to get category colors

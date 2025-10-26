@@ -155,7 +155,7 @@ export default async function handler(req, res) {
         break;
 
       case 'month':
-        const monthExpr = dialect.toChar('t.date', 'YYYY-MM');
+        const monthExpr = "TO_CHAR(t.date, 'YYYY-MM')";
         breakdownSelect = `
           ${monthExpr} as month,
           ${monthExpr} as month_name
@@ -184,7 +184,7 @@ export default async function handler(req, res) {
       AND t.date <= $${paramOffset + 2}
       ${priceFilter ? `AND ${priceFilter}` : ''}
       ${categoryFilter ? `AND ${categoryFilter}` : ''}
-      ${specificCategoryFilter ? specificCategoryFilter + (paramOffset + 3) : ''}
+      ${categoryFilterClause ? `AND ${categoryFilterClause}` : ''}
       ${duplicateFilter}
       ${additionalWhereClause}
     `;
@@ -192,8 +192,7 @@ export default async function handler(req, res) {
     const baseParams = [
       ...categoryParams,
       start,
-      end,
-      ...(specificCategoryFilter ? [] : [])
+      end
     ];
 
     // Get summary statistics

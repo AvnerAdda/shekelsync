@@ -385,6 +385,8 @@ const CategoryOpportunitiesPanel: React.FC = () => {
                         {opportunity.outliers.map((outlier, idx) => (
                           <ListItem key={idx}>
                             <ListItemText
+                              primaryTypographyProps={{ component: 'div' }}
+                              secondaryTypographyProps={{ component: 'div' }}
                               primary={
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                   <Typography variant="body2">

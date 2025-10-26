@@ -11,11 +11,14 @@ import {
   Tabs,
   Tab,
   Grid,
+  Alert,
+  AlertTitle,
 } from '@mui/material';
 import {
   AccountBalance as AccountBalanceIcon,
   DateRange as DateRangeIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  InfoOutlined as InfoOutlinedIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -63,6 +66,8 @@ interface Transaction {
   category: string;
   parentCategory: string;
   categoryType: string;
+  parent_name?: string;
+  category_name?: string;
 }
 
 interface PortfolioBreakdownItem {
@@ -105,6 +110,31 @@ interface WaterfallFlowData {
 const CHART_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF6B9D'];
 
 const HomePage: React.FC = () => {
+  // Helper function to parse date strings from SQLite without timezone conversion
+  const parseLocalDate = (dateStr: string): Date => {
+    if (!dateStr || typeof dateStr !== 'string') {
+      return new Date();
+    }
+
+    // Check if already a full ISO string (with time)
+    if (dateStr.includes('T')) {
+      return new Date(dateStr);
+    }
+
+    // Parse YYYY-MM-DD format as local date
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) {
+      return new Date(dateStr);
+    }
+
+    const [year, month, day] = parts.map(Number);
+    if (isNaN(year) || isNaN(month) || isNaN(day)) {
+      return new Date(dateStr);
+    }
+
+    return new Date(year, month - 1, day);
+  };
+
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData | null>(null);
   const [portfolioValue, setPortfolioValue] = useState<number | null>(null);
@@ -123,6 +153,7 @@ const HomePage: React.FC = () => {
     income: false,
     investment: false,
   });
+  const [hasBankAccounts, setHasBankAccounts] = useState<boolean | null>(null);
   // Default to last full month
   const lastMonthStart = startOfMonth(subMonths(new Date(), 1));
   const lastMonthEnd = endOfMonth(subMonths(new Date(), 1));
@@ -147,6 +178,26 @@ const HomePage: React.FC = () => {
     fetchBreakdownData('expense');
     fetchBreakdownData('income');
     fetchBudgetUsage();
+    fetchBankAccountsStatus();
+
+    // Listen for data refresh events (from scraping, manual transactions, etc.)
+    const handleDataRefresh = () => {
+      fetchDashboardData();
+      fetchPortfolioValue();
+      fetchWaterfallData();
+      fetchBreakdownData('expense');
+      fetchBreakdownData('income');
+      if (selectedBreakdownType === 'investment') {
+        fetchBreakdownData('investment');
+      }
+      fetchBudgetUsage();
+      fetchBankAccountsStatus();
+    };
+    globalThis.addEventListener('dataRefresh', handleDataRefresh);
+
+    return () => {
+      globalThis.removeEventListener('dataRefresh', handleDataRefresh);
+    };
   }, [startDate, endDate, aggregationPeriod, selectedBreakdownType]);
 
   useEffect(() => {
@@ -229,12 +280,41 @@ const HomePage: React.FC = () => {
         `/api/analytics/dashboard?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&aggregation=${aggregationPeriod}`
       );
       const result = await response.json();
+
+      // Fill in missing days/weeks/months with zero values for better visualization
+      if (result.history && aggregationPeriod === 'daily') {
+        result.history = fillMissingDates(result.history, startDate, endDate);
+      }
+
       setData(result);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function to fill missing dates in the history array
+  const fillMissingDates = (history: any[], start: Date, end: Date) => {
+    if (!history || history.length === 0) {
+      return history;
+    }
+
+    const dateMap = new Map(history.map(h => [h.date, h]));
+    const filled = [];
+    const current = new Date(start.getTime()); // Clone to avoid mutation
+
+    while (current <= end) {
+      const dateStr = format(current, 'yyyy-MM-dd');
+      if (dateMap.has(dateStr)) {
+        filled.push(dateMap.get(dateStr));
+      } else {
+        filled.push({ date: dateStr, income: 0, expenses: 0 });
+      }
+      current.setDate(current.getDate() + 1);
+    }
+
+    return filled;
   };
 
   const fetchPortfolioValue = async () => {
@@ -340,6 +420,19 @@ const HomePage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching budget usage:', error);
+    }
+  };
+
+  const fetchBankAccountsStatus = async () => {
+    try {
+      const response = await fetch('/api/credentials');
+      if (response.ok) {
+        const credentials = await response.json();
+        setHasBankAccounts(Array.isArray(credentials) && credentials.length > 0);
+      }
+    } catch (error) {
+      console.error('Error fetching bank accounts status:', error);
+      setHasBankAccounts(null);
     }
   };
 
@@ -462,12 +555,14 @@ const HomePage: React.FC = () => {
     formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
 
   const formatXAxis = (value: string) => {
+    const localDate = parseLocalDate(value);
+
     if (aggregationPeriod === 'monthly') {
-      return format(new Date(value), 'MMM');
+      return format(localDate, 'MMM');
     } else if (aggregationPeriod === 'weekly') {
-      return format(new Date(value), 'MM/dd');
+      return format(localDate, 'MM/dd');
     }
-    return format(new Date(value), 'dd');
+    return format(localDate, 'dd/MM');
   };
 
   // Custom tooltip for transaction history chart
@@ -476,11 +571,12 @@ const HomePage: React.FC = () => {
       const dateStr = payload[0].payload.date;
       const income = payload.find((p: any) => p.dataKey === 'income')?.value || 0;
       const expenses = payload.find((p: any) => p.dataKey === 'expenses')?.value || 0;
+      const localDate = parseLocalDate(dateStr);
 
       return (
         <Paper sx={{ p: 2, border: `1px solid ${theme.palette.divider}` }}>
           <Typography variant="body2" fontWeight="bold">
-            {format(new Date(dateStr), 'MMM dd, yyyy')}
+            {format(localDate, 'MMM dd, yyyy')}
           </Typography>
           <Typography variant="body2" color="success.main">
             Income: {formatCurrencyValue(income)}
@@ -510,6 +606,29 @@ const HomePage: React.FC = () => {
           budgetUsage={budgetUsage}
         />
       </Box>
+
+      {/* Zero Income Alert */}
+      {data.summary.totalIncome === 0 && hasBankAccounts !== null && (
+        <Alert
+          severity="info"
+          icon={<InfoOutlinedIcon />}
+          sx={{ mb: 3 }}
+        >
+          <AlertTitle>No Income Detected</AlertTitle>
+          {hasBankAccounts === false ? (
+            <Typography variant="body2">
+              To track your income automatically, please add your bank account credentials.
+              This will enable automatic income tracking and provide a complete financial overview.
+            </Typography>
+          ) : (
+            <Typography variant="body2">
+              We haven't detected any income transactions in the selected period.
+              If you're expecting income data, please verify that your most recent bank scrape was successful
+              or consider running a new scrape to update your transactions.
+            </Typography>
+          )}
+        </Alert>
+      )}
 
       {/* Date Range Picker */}
       <Paper sx={{ p: 2, mb: 3 }}>
@@ -600,7 +719,7 @@ const HomePage: React.FC = () => {
           <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="subtitle2">
-                Transactions on {format(new Date(hoveredDate), 'MMM dd, yyyy')} ({dateTransactions.length} transactions):
+                Transactions on {format(parseLocalDate(hoveredDate), 'MMM dd, yyyy')} ({dateTransactions.length} transactions):
               </Typography>
               <Button
                 size="small"
@@ -824,6 +943,28 @@ const HomePage: React.FC = () => {
             {/* Existing breakdown panels */}
             {(['expense', 'income', 'investment'] as const).map((type) => (
               <Box key={type} sx={{ display: selectedBreakdownType === type ? 'block' : 'none' }}>
+                {/* Zero Income Alert for Income Tab */}
+                {type === 'income' && data && data.summary.totalIncome === 0 && hasBankAccounts !== null && (
+                  <Alert
+                    severity="info"
+                    icon={<InfoOutlinedIcon />}
+                    sx={{ mb: 2 }}
+                  >
+                    <AlertTitle>No Income Data</AlertTitle>
+                    {hasBankAccounts === false ? (
+                      <Typography variant="body2">
+                        Add your bank account credentials to automatically track income transactions
+                        and get a complete view of your financial flows.
+                      </Typography>
+                    ) : (
+                      <Typography variant="body2">
+                        No income transactions found for the selected period.
+                        Verify your last bank scrape was successful or run a new scrape to update your data.
+                      </Typography>
+                    )}
+                  </Alert>
+                )}
+
                 {breakdownLoading[type] ? (
                   <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
                     <CircularProgress size={32} />

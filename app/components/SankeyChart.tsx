@@ -58,8 +58,9 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
     });
 
     // Column 3: Expense/Investment/Remaining totals
-    const expensesTotalNodeIndex = nodeIndex++;
+    let expensesTotalNodeIndex = -1;
     if (totalExpenses > 0) {
+      expensesTotalNodeIndex = nodeIndex++;
       nodes.push({
         name: 'Expenses',
         color: '#ef4444',
@@ -67,8 +68,9 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
       });
     }
 
-    const investmentsTotalNodeIndex = nodeIndex++;
+    let investmentsTotalNodeIndex = -1;
     if (totalInvestments > 0) {
+      investmentsTotalNodeIndex = nodeIndex++;
       nodes.push({
         name: 'Investments',
         color: '#3b82f6',

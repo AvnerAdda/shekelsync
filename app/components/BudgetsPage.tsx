@@ -72,6 +72,16 @@ const BudgetsPage: React.FC = () => {
   useEffect(() => {
     fetchBudgets();
     fetchCategories();
+
+    // Listen for data refresh events (from scraping, manual transactions, etc.)
+    const handleDataRefresh = () => {
+      fetchBudgets();
+    };
+    globalThis.addEventListener('dataRefresh', handleDataRefresh);
+
+    return () => {
+      globalThis.removeEventListener('dataRefresh', handleDataRefresh);
+    };
   }, []);
 
   const fetchBudgets = async () => {
@@ -113,7 +123,7 @@ const BudgetsPage: React.FC = () => {
               label,
             };
           })
-          .sort((a, b) => a.label.localeCompare(b.label));
+          .sort((a: any, b: any) => a.label.localeCompare(b.label));
 
         setCategories(options);
       }

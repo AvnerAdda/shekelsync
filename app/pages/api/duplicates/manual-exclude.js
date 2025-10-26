@@ -20,6 +20,25 @@ export default async function handler(req, res) {
       notes = null
     } = req.body;
 
+    // Validate override category if provided
+    let overrideCategory = null;
+    let overrideCategoryId = null;
+    if (overrideCategoryDefinitionId !== null) {
+      const categoryResult = await client.query(
+        `SELECT id, name
+         FROM category_definitions
+         WHERE id = $1`,
+        [overrideCategoryDefinitionId]
+      );
+
+      if (categoryResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Override category not found' });
+      }
+
+      overrideCategoryId = overrideCategoryDefinitionId;
+      overrideCategory = categoryResult.rows[0].name;
+    }
+
     if (!transactionIdentifier || !transactionVendor) {
       return res.status(400).json({
         error: 'Missing required fields: transactionIdentifier, transactionVendor'
@@ -146,20 +165,3 @@ export default async function handler(req, res) {
     client.release();
   }
 }
-    let overrideCategory = null;
-    let overrideCategoryId = null;
-    if (overrideCategoryDefinitionId !== null) {
-      const categoryResult = await client.query(
-        `SELECT id, name
-         FROM category_definitions
-         WHERE id = $1`,
-        [overrideCategoryDefinitionId]
-      );
-
-      if (categoryResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Override category not found' });
-      }
-
-      overrideCategoryId = overrideCategoryDefinitionId;
-      overrideCategory = categoryResult.rows[0].name;
-    }
