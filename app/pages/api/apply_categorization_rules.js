@@ -94,12 +94,15 @@ const handler = createApiHandler({
             subcategory = $5,
             category_type = $6,
             auto_categorized = true,
-            confidence_score = GREATEST(confidence_score, $7)
+            confidence_score = MAX(confidence_score, $7)
           WHERE LOWER(name) LIKE LOWER($1)
             ${priceCondition}
-            AND category_definition_id NOT IN (
-              SELECT id FROM category_definitions
-              WHERE name = $8 OR category_type = 'income'
+            AND (
+              category_definition_id IS NULL
+              OR category_definition_id NOT IN (
+                SELECT id FROM category_definitions
+                WHERE name = $8 OR category_type = 'income'
+              )
             )
         `, [
           pattern,

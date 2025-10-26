@@ -572,6 +572,8 @@ const CATEGORY_TREE = [
   { key: 'exp_food_restaurants', type: 'expense', parent: 'exp_food', name: 'מסעדות', nameEn: 'Restaurants', displayOrder: 22 },
   { key: 'exp_food_coffee', type: 'expense', parent: 'exp_food', name: 'קפה ומאפה', nameEn: 'Coffee & Pastries', displayOrder: 23 },
   { key: 'exp_food_delivery', type: 'expense', parent: 'exp_food', name: 'משלוחים', nameEn: 'Delivery', displayOrder: 24 },
+  { key: 'exp_food_alcohol', type: 'expense', parent: 'exp_food', name: 'אלכוהול ומשקאות', nameEn: 'Alcohol & Beverages', displayOrder: 25 },
+  { key: 'exp_food_bakery', type: 'expense', parent: 'exp_food', name: 'מאפייה וקינוחים', nameEn: 'Bakery & Desserts', displayOrder: 26 },
 
   { key: 'exp_transport', type: 'expense', parent: 'expense_root', name: 'תחבורה', nameEn: 'Transportation', displayOrder: 30 },
   { key: 'exp_transport_fuel', type: 'expense', parent: 'exp_transport', name: 'דלק', nameEn: 'Fuel', displayOrder: 31 },
@@ -579,6 +581,9 @@ const CATEGORY_TREE = [
   { key: 'exp_transport_parking', type: 'expense', parent: 'exp_transport', name: 'חניה', nameEn: 'Parking', displayOrder: 33 },
   { key: 'exp_transport_taxi', type: 'expense', parent: 'exp_transport', name: 'מוניות', nameEn: 'Taxis', displayOrder: 34 },
   { key: 'exp_transport_rideshare', type: 'expense', parent: 'exp_transport', name: 'שיתוף רכב', nameEn: 'Ride Sharing', displayOrder: 35 },
+  { key: 'exp_transport_maintenance', type: 'expense', parent: 'exp_transport', name: 'תחזוקת רכב', nameEn: 'Vehicle Maintenance', displayOrder: 36 },
+  { key: 'exp_transport_insurance', type: 'expense', parent: 'exp_transport', name: 'ביטוח רכב', nameEn: 'Vehicle Insurance', displayOrder: 37 },
+  { key: 'exp_transport_tolls', type: 'expense', parent: 'exp_transport', name: 'כבישי אגרה', nameEn: 'Toll Roads', displayOrder: 38 },
 
   { key: 'exp_bills', type: 'expense', parent: 'expense_root', name: 'חשבונות', nameEn: 'Bills & Utilities', displayOrder: 40 },
   { key: 'exp_bills_rent', type: 'expense', parent: 'exp_bills', name: 'שכירות ומשכנתא', nameEn: 'Rent & Mortgage', displayOrder: 41 },
@@ -587,16 +592,26 @@ const CATEGORY_TREE = [
   { key: 'exp_bills_electricity', type: 'expense', parent: 'exp_bills', name: 'חשמל', nameEn: 'Electricity', displayOrder: 44 },
   { key: 'exp_bills_water', type: 'expense', parent: 'exp_bills', name: 'מים', nameEn: 'Water', displayOrder: 45 },
   { key: 'exp_bills_bank', type: 'expense', parent: 'exp_bills', name: 'תשלומי בנק', nameEn: 'Bank Settlements', displayOrder: 46 },
+  { key: 'exp_bills_insurance', type: 'expense', parent: 'exp_bills', name: 'ביטוח', nameEn: 'Insurance', displayOrder: 47 },
+  { key: 'exp_bills_municipal', type: 'expense', parent: 'exp_bills', name: 'מיסים עירוניים', nameEn: 'Municipal Taxes', displayOrder: 48 },
+  { key: 'exp_bills_gas', type: 'expense', parent: 'exp_bills', name: 'גז', nameEn: 'Gas', displayOrder: 49 },
+  { key: 'exp_bills_security', type: 'expense', parent: 'exp_bills', name: 'אבטחה', nameEn: 'Security Services', displayOrder: 50 },
 
   { key: 'exp_health', type: 'expense', parent: 'expense_root', name: 'בריאות', nameEn: 'Health & Wellness', displayOrder: 50 },
   { key: 'exp_health_medical', type: 'expense', parent: 'exp_health', name: 'בריאות כללית', nameEn: 'Medical Services', displayOrder: 51 },
   { key: 'exp_health_pharmacy', type: 'expense', parent: 'exp_health', name: 'בית מרקחת', nameEn: 'Pharmacy', displayOrder: 52 },
+  { key: 'exp_health_dental', type: 'expense', parent: 'exp_health', name: 'שיניים', nameEn: 'Dental Care', displayOrder: 53 },
+  { key: 'exp_health_vision', type: 'expense', parent: 'exp_health', name: 'עיניים ואופטיקה', nameEn: 'Vision & Optometry', displayOrder: 54 },
+  { key: 'exp_health_fitness', type: 'expense', parent: 'exp_health', name: 'כושר וספורט', nameEn: 'Gym & Fitness', displayOrder: 55 },
 
   { key: 'exp_leisure', type: 'expense', parent: 'expense_root', name: 'פנאי', nameEn: 'Leisure & Entertainment', displayOrder: 60 },
   { key: 'exp_leisure_entertainment', type: 'expense', parent: 'exp_leisure', name: 'בילויים', nameEn: 'Outings', displayOrder: 61 },
   { key: 'exp_leisure_streaming', type: 'expense', parent: 'exp_leisure', name: 'סטרימינג', nameEn: 'Streaming Services', displayOrder: 62 },
   { key: 'exp_leisure_cinema', type: 'expense', parent: 'exp_leisure', name: 'קולנוע', nameEn: 'Cinema', displayOrder: 63 },
   { key: 'exp_leisure_travel', type: 'expense', parent: 'exp_leisure', name: 'חופשות', nameEn: 'Travel & Holidays', displayOrder: 64 },
+  { key: 'exp_leisure_sports', type: 'expense', parent: 'exp_leisure', name: 'ספורט ותחביבים', nameEn: 'Sports & Hobbies', displayOrder: 65 },
+  { key: 'exp_leisure_music', type: 'expense', parent: 'exp_leisure', name: 'מוזיקה וקונצרטים', nameEn: 'Music & Concerts', displayOrder: 66 },
+  { key: 'exp_leisure_gaming', type: 'expense', parent: 'exp_leisure', name: 'משחקים', nameEn: 'Gaming', displayOrder: 67 },
 
   { key: 'exp_shopping', type: 'expense', parent: 'expense_root', name: 'קניות', nameEn: 'Shopping', displayOrder: 70 },
   { key: 'exp_shopping_clothing', type: 'expense', parent: 'exp_shopping', name: 'ביגוד', nameEn: 'Clothing', displayOrder: 71 },
@@ -605,10 +620,20 @@ const CATEGORY_TREE = [
   { key: 'exp_shopping_furniture', type: 'expense', parent: 'exp_shopping', name: 'רהיטים', nameEn: 'Furniture', displayOrder: 74 },
   { key: 'exp_shopping_electronics', type: 'expense', parent: 'exp_shopping', name: 'אלקטרוניקה', nameEn: 'Electronics', displayOrder: 75 },
   { key: 'exp_shopping_gifts', type: 'expense', parent: 'exp_shopping', name: 'מתנות', nameEn: 'Gifts', displayOrder: 76 },
+  { key: 'exp_shopping_cosmetics', type: 'expense', parent: 'exp_shopping', name: 'קוסמטיקה וטיפוח', nameEn: 'Cosmetics & Personal Care', displayOrder: 77 },
+  { key: 'exp_shopping_books', type: 'expense', parent: 'exp_shopping', name: 'ספרים וכתיבה', nameEn: 'Books & Stationery', displayOrder: 78 },
+  { key: 'exp_shopping_pets', type: 'expense', parent: 'exp_shopping', name: 'חיות מחמד', nameEn: 'Pet Supplies', displayOrder: 79 },
+  { key: 'exp_shopping_office', type: 'expense', parent: 'exp_shopping', name: 'ציוד משרדי', nameEn: 'Office Supplies', displayOrder: 80 },
+  { key: 'exp_shopping_jewelry', type: 'expense', parent: 'exp_shopping', name: 'תכשיטים ואקססוריז', nameEn: 'Jewelry & Accessories', displayOrder: 81 },
+  { key: 'exp_shopping_sports_equipment', type: 'expense', parent: 'exp_shopping', name: 'ציוד ספורט', nameEn: 'Sports Equipment', displayOrder: 82 },
+  { key: 'exp_shopping_religious', type: 'expense', parent: 'exp_shopping', name: 'תשמישי קדושה', nameEn: 'Religious Items & Judaica', displayOrder: 83 },
 
   { key: 'exp_education', type: 'expense', parent: 'expense_root', name: 'חינוך', nameEn: 'Education', displayOrder: 80 },
   { key: 'exp_education_higher', type: 'expense', parent: 'exp_education', name: 'לימודים גבוהים', nameEn: 'Higher Education', displayOrder: 81 },
   { key: 'exp_education_online', type: 'expense', parent: 'exp_education', name: 'קורסים מקוונים', nameEn: 'Online Courses', displayOrder: 82 },
+  { key: 'exp_education_schools', type: 'expense', parent: 'exp_education', name: 'גני ילדים ובתי ספר', nameEn: 'Kindergarten & Schools', displayOrder: 83 },
+  { key: 'exp_education_tutoring', type: 'expense', parent: 'exp_education', name: 'חוגים ושיעורים פרטיים', nameEn: 'Classes & Tutoring', displayOrder: 84 },
+  { key: 'exp_education_books', type: 'expense', parent: 'exp_education', name: 'ספרי לימוד', nameEn: 'Educational Books', displayOrder: 85 },
 
   { key: 'exp_misc', type: 'expense', parent: 'expense_root', name: 'שונות', nameEn: 'Miscellaneous', displayOrder: 90 },
   { key: 'exp_misc_other', type: 'expense', parent: 'exp_misc', name: 'הוצאות אחרות', nameEn: 'Other Expenses', displayOrder: 91 },
@@ -639,17 +664,17 @@ const CATEGORY_MAPPINGS = [
   { oldCategory: 'רפואה ובתי מרקחת', newCategory: 'בית מרקחת', notes: 'Maps to: Pharmacy' },
   { oldCategory: 'אופנה', newCategory: 'ביגוד', notes: 'Maps to: Clothing' },
   { oldCategory: 'עיצוב הבית', newCategory: 'רהיטים', notes: 'Maps to: Furniture' },
-  { oldCategory: 'פנאי, בידור וספורט', newCategory: 'פנאי', notes: 'Maps to: Leisure (parent)' },
+  { oldCategory: 'פנאי, בידור וספורט', newCategory: 'ספורט ותחביבים', notes: 'Maps to: Sports & Hobbies' },
   { oldCategory: 'טיסות ותיירות', newCategory: 'חופשות', notes: 'Maps to: Travel & Holidays' },
   { oldCategory: 'העברת כספים', newCategory: 'תשלומי בנק', notes: 'Maps to: Bank Settlements' },
-  { oldCategory: 'שונות', newCategory: 'שונות', notes: 'Maps to: Miscellaneous' }
-  // Note: The following are not mapped - user should handle via categorization rules:
-  // - 'קוסמטיקה וטיפוח' (Beauty - could be Health or Shopping)
-  // - 'ספרים ודפוס' (Books - could be Education or Shopping)
-  // - 'עירייה וממשלה' (Government - could be Bills or Bank)
-  // - 'ביטוח' (Insurance - no category exists)
-  // - 'חיות מחמד' (Pets - no category exists)
-  // - 'ציוד ומשרד' (Office - no category exists)
+  { oldCategory: 'שונות', newCategory: 'שונות', notes: 'Maps to: Miscellaneous' },
+  // NEW: Specific subcategory mappings (October 2025 expansion)
+  { oldCategory: 'ביטוח', newCategory: 'ביטוח', notes: 'Maps to: Insurance subcategory' },
+  { oldCategory: 'עירייה וממשלה', newCategory: 'מיסים עירוניים', notes: 'Maps to: Municipal Taxes subcategory' },
+  { oldCategory: 'חיות מחמד', newCategory: 'חיות מחמד', notes: 'Maps to: Pet Supplies subcategory' },
+  { oldCategory: 'ספרים ודפוס', newCategory: 'ספרים וכתיבה', notes: 'Maps to: Books & Stationery subcategory' },
+  { oldCategory: 'ציוד ומשרד', newCategory: 'ציוד משרדי', notes: 'Maps to: Office Supplies subcategory' },
+  { oldCategory: 'קוסמטיקה וטיפוח', newCategory: 'קוסמטיקה וטיפוח', notes: 'Maps to: Cosmetics & Personal Care subcategory' }
 ];
 
 function seedCategories(db) {
@@ -728,14 +753,22 @@ function seedCategoryMapping(db, helpers) {
 
   db.transaction(() => {
     for (const mapping of CATEGORY_MAPPINGS) {
-      const category = categoriesByKey.get(mapping.categoryKey);
-      if (!category) {
-        console.warn(`Warning: Category key '${mapping.categoryKey}' not found for '${mapping.oldCategory}'`);
+      // Find category by name instead of key
+      let foundCategory = null;
+      for (const [key, info] of categoriesByKey.entries()) {
+        if (info.name === mapping.newCategory) {
+          foundCategory = info;
+          break;
+        }
+      }
+      
+      if (!foundCategory) {
+        console.warn(`Warning: Category '${mapping.newCategory}' not found for '${mapping.oldCategory}'`);
         continue;
       }
       insert.run({
         oldCategory: mapping.oldCategory,
-        categoryId: category.id,
+        categoryId: foundCategory.id,
         notes: mapping.notes || null
       });
     }

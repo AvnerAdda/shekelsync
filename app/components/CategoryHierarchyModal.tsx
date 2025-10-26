@@ -48,6 +48,7 @@ import {
   ToggleOn as ToggleOnIcon,
   ToggleOff as ToggleOffIcon,
   Visibility as VisibilityIcon,
+  AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material';
 import ModalHeader from './ModalHeader';
 
@@ -103,6 +104,8 @@ interface UncategorizedTransaction {
   name: string;
   price: number;
   accountNumber?: string;
+  parent_category?: string;
+  category?: string;
 }
 
 interface UncategorizedSummary {
@@ -167,6 +170,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, TransactionAssignment>>({});
   const [savingAssignments, setSavingAssignments] = useState<Record<string, boolean>>({});
+  const [creatingRules, setCreatingRules] = useState<Record<string, boolean>>({});
 
   const formatCurrency = (value: number) => {
     const amount = Number.isFinite(value) ? Math.abs(value) : 0;
@@ -271,9 +275,33 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
           next[key] = prev[key];
         } else {
           const defaultType: CategoryType = txn.price >= 0 ? 'income' : 'expense';
+          
+          // Try to find the parent category ID if parent_category is set
+          let preselectedParentId: number | null = null;
+          if (txn.parent_category) {
+            // Search for the category with matching name in the categories tree
+            const findCategoryByName = (cats: CategoryDefinition[]): CategoryDefinition | null => {
+              for (const cat of cats) {
+                if (cat.name === txn.parent_category) {
+                  return cat;
+                }
+                if (cat.children && cat.children.length > 0) {
+                  const found = findCategoryByName(cat.children);
+                  if (found) return found;
+                }
+              }
+              return null;
+            };
+            
+            const foundCategory = findCategoryByName(categories);
+            if (foundCategory) {
+              preselectedParentId = foundCategory.id;
+            }
+          }
+          
           next[key] = {
             type: defaultType,
-            parentId: null,
+            parentId: preselectedParentId,
             categoryId: null,
           };
         }
@@ -281,7 +309,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       return next;
     });
-  }, [uncategorized]);
+  }, [uncategorized, categories]);
 
   const updateAssignmentDraft = (key: string, updates: Partial<TransactionAssignment>) => {
     setAssignmentDrafts((prev: Record<string, TransactionAssignment>) => ({
@@ -338,7 +366,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
           subcategory: categoryDefinition && categoryDefinition.id !== parentDefinition.id ? categoryDefinition.name : null,
           category: categoryDefinition ? categoryDefinition.name : parentDefinition.name,
           auto_categorized: false,
-          confidence_score: null,
+          confidence_score: 1.0,
         }),
       });
 
@@ -357,6 +385,63 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setError(assignmentError instanceof Error ? assignmentError.message : 'Failed to categorize transaction');
     } finally {
       setSavingAssignments((prev: Record<string, boolean>) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
+  const handleAutoAssignSimilar = async (txn: UncategorizedTransaction) => {
+    const key = getTransactionKey(txn);
+    const draft = assignmentDrafts[key];
+
+    if (!draft || !draft.parentId) {
+      setError('Please select at least a parent category first.');
+      return;
+    }
+
+    const selectedCategoryId = draft.categoryId ?? draft.parentId;
+
+    setCreatingRules((prev: Record<string, boolean>) => ({ ...prev, [key]: true }));
+    setError(null);
+
+    try {
+      const response = await fetch('/api/categorization_rules/auto-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionName: txn.name,
+          categoryDefinitionId: selectedCategoryId,
+          categoryType: draft.type,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          setError('A rule for this transaction name already exists.');
+        } else {
+          throw new Error(result.error || 'Failed to create auto-assignment rule');
+        }
+        return;
+      }
+
+      setSuccess(`Rule created! All transactions named "${txn.name}" will now be auto-categorized.`);
+      setTimeout(() => setSuccess(null), 5000);
+
+      // Apply the newly created rule to existing transactions
+      await handleApplyRules();
+      
+      await fetchCategories();
+      await fetchRules();
+      onCategoriesUpdated();
+    } catch (ruleError) {
+      console.error('Error creating auto-assignment rule:', ruleError);
+      setError(ruleError instanceof Error ? ruleError.message : 'Failed to create rule');
+    } finally {
+      setCreatingRules((prev: Record<string, boolean>) => {
         const next = { ...prev };
         delete next[key];
         return next;
@@ -970,6 +1055,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                                   </MenuItem>
                                 ))}
                               </Select>
+                              {txn.parent_category && draft?.parentId && (
+                                <Typography variant="caption" color="primary" sx={{ mt: 0.5 }}>
+                                  Suggested from mapping
+                                </Typography>
+                              )}
                             </FormControl>
                           </Grid>
                           <Grid item xs={12} md={3}>
@@ -994,16 +1084,32 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                             </FormControl>
                           </Grid>
                           <Grid item xs={12} md={2}>
-                            <Button
-                              fullWidth
-                              variant="contained"
-                              size="small"
-                              onClick={() => handleSaveAssignment(txn)}
-                              disabled={!draft?.parentId || isSaving}
-                              startIcon={isSaving ? <CircularProgress color="inherit" size={16} /> : undefined}
-                            >
-                              {isSaving ? 'Saving' : 'Assign'}
-                            </Button>
+                            <Box display="flex" flexDirection="column" gap={0.5}>
+                              <Button
+                                fullWidth
+                                variant="contained"
+                                size="small"
+                                onClick={() => handleSaveAssignment(txn)}
+                                disabled={!draft?.parentId || isSaving}
+                                startIcon={isSaving ? <CircularProgress color="inherit" size={16} /> : undefined}
+                              >
+                                {isSaving ? 'Saving' : 'Assign'}
+                              </Button>
+                              <Tooltip title="Create a rule to automatically categorize all transactions with this exact name">
+                                <span>
+                                  <Button
+                                    fullWidth
+                                    variant="outlined"
+                                    size="small"
+                                    onClick={() => handleAutoAssignSimilar(txn)}
+                                    disabled={!draft?.parentId || creatingRules[key]}
+                                    startIcon={creatingRules[key] ? <CircularProgress color="inherit" size={16} /> : <AutoAwesomeIcon fontSize="small" />}
+                                  >
+                                    {creatingRules[key] ? 'Creating' : 'Auto-Assign Similar'}
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                            </Box>
                           </Grid>
                         </Grid>
                       </ListItem>
