@@ -16,7 +16,8 @@
     "dist": "BUILD_MODE=electron npm run build && electron-builder --publish=never",
     "pack": "BUILD_MODE=electron npm run build && electron-builder --dir",
     "release": "BUILD_MODE=electron npm run build && electron-builder --publish=always",
-    "clean": "rm -rf out build dist"
+    "clean": "rm -rf out build dist",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@emotion/react": "^11.13.3",
@@ -58,6 +59,7 @@
     "electron-builder": "^26.0.12",
     "eslint": "^8.0.0",
     "eslint-config-next": "14.2.15",
+    "patch-package": "^8.0.1",
     "postcss": "^8.4.47",
     "prettier": "^3.5.1",
     "tailwindcss": "^3.4.14",

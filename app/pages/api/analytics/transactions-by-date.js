@@ -55,6 +55,9 @@ export default async function handler(req, res) {
       category: row.category,
       parentCategory: row.parent_category,
       categoryType: row.category_type,
+      // Add snake_case versions for compatibility with frontend
+      category_name: row.category,
+      parent_name: row.parent_category,
     }));
 
     res.status(200).json({ transactions });

@@ -7,8 +7,11 @@ export const BANK_VENDORS = ['hapoalim', 'leumi', 'mizrahi', 'otsarHahayal', 'be
 // Special bank vendors that use id + num + password (like credit cards but with num)
 export const SPECIAL_BANK_VENDORS = ['discount', 'mercantile'];
 
+// Other bank vendors with unique authentication
+export const OTHER_BANK_VENDORS = ['beyahadBishvilha', 'behatsdaa', 'pagi', 'oneZero'];
+
 // All vendors
-export const ALL_VENDORS = [...CREDIT_CARD_VENDORS, ...BANK_VENDORS, ...SPECIAL_BANK_VENDORS];
+export const ALL_VENDORS = [...CREDIT_CARD_VENDORS, ...BANK_VENDORS, ...SPECIAL_BANK_VENDORS, ...OTHER_BANK_VENDORS];
 
 // Sync threshold - accounts not synced in this time are considered stale
 export const STALE_SYNC_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48 hours

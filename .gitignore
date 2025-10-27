@@ -70,3 +70,5 @@ coverage/
 
 website/
 .venv/
+
+*.md

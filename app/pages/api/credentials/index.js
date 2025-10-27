@@ -36,16 +36,25 @@ const handler = createApiHandler({
         };
       }
       if (req.method === 'POST') {
-        const { vendor, username, password, id_number, card6_digits, nickname, bank_account_number, identification_code } = req.body;
+        const { 
+          vendor, username, userCode, email, password, id_number, card6_digits, 
+          nickname, bank_account_number, identification_code, num, nationalID 
+        } = req.body;
+
+        // Map fields to database columns
+        // username column can store: username, userCode, or email
+        const usernameValue = userCode || email || username;
+        // identification_code column can store: identification_code, num, or nationalID
+        const identificationValue = num || nationalID || identification_code;
 
         // Encrypt sensitive data
         const encryptedData = {
           vendor,
-          username: username ? encrypt(username) : null,
+          username: usernameValue ? encrypt(usernameValue) : null,
           password: password ? encrypt(password) : null,
           id_number: id_number ? encrypt(id_number) : null,
           card6_digits: card6_digits ? encrypt(card6_digits) : null,
-          identification_code: identification_code ? encrypt(identification_code) : null,
+          identification_code: identificationValue ? encrypt(identificationValue) : null,
           nickname,
           bank_account_number
         };

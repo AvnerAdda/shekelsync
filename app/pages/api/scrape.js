@@ -1,7 +1,7 @@
 import { CompanyTypes, createScraper } from 'israeli-bank-scrapers';
 import crypto from 'crypto';
 import { getDB } from './db';
-import { BANK_VENDORS, SPECIAL_BANK_VENDORS } from '../../utils/constants';
+import { BANK_VENDORS, SPECIAL_BANK_VENDORS, OTHER_BANK_VENDORS } from '../../utils/constants';
 import {
   resolveCategory,
   matchCategorizationRule,
@@ -343,7 +343,9 @@ export default async function handler(req, res) {
     }
 
     let isBank = false;
-    if (BANK_VENDORS.includes(options.companyId) || SPECIAL_BANK_VENDORS.includes(options.companyId)){
+    if (BANK_VENDORS.includes(options.companyId) || 
+        SPECIAL_BANK_VENDORS.includes(options.companyId) || 
+        OTHER_BANK_VENDORS.includes(options.companyId)){
       isBank = true;
     }
 
@@ -366,7 +368,7 @@ export default async function handler(req, res) {
     } else if (options.companyId === 'hapoalim') {
       // Hapoalim uses userCode instead of username
       scraperCredentials = {
-        userCode: credentials.username,
+        userCode: credentials.userCode || credentials.username,
         password: credentials.password
       };
     } else if (options.companyId === 'yahav') {
@@ -376,6 +378,20 @@ export default async function handler(req, res) {
         password: credentials.password,
         nationalID: credentials.nationalID || credentials.id
       };
+    } else if (options.companyId === 'beyahadBishvilha' || options.companyId === 'behatsdaa') {
+      // BeyahadBishvilha and Behatsdaa use id + password
+      scraperCredentials = {
+        id: credentials.id,
+        password: credentials.password
+      };
+    } else if (options.companyId === 'oneZero') {
+      // OneZero uses email-based authentication with OTP
+      scraperCredentials = {
+        email: credentials.email,
+        password: credentials.password,
+        otpCodeRetriever: credentials.otpCode ? () => Promise.resolve(credentials.otpCode) : undefined,
+        otpLongTermToken: credentials.otpToken || null
+      };
     } else if (BANK_VENDORS.includes(options.companyId)) {
       // Other banks use username + password
       scraperCredentials = {
@@ -384,7 +400,7 @@ export default async function handler(req, res) {
         bankAccountNumber: credentials.bankAccountNumber || undefined
       };
     } else if (options.companyId === 'amex') {
-      // Amex uses username (ID number), card6Digits, and password
+      // Amex uses id (as username), card6Digits, and password
       scraperCredentials = {
         username: credentials.id,
         card6Digits: credentials.card6Digits,
