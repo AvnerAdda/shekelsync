@@ -1,5 +1,5 @@
 import { getDB } from '../db.js';
-import { buildDuplicateFilter } from '../analytics/utils.js';
+// Duplicate filter removed from '../analytics/utils.js';
 import { startOfWeek, startOfMonth, startOfYear, endOfWeek, endOfMonth, endOfYear } from 'date-fns';
 
 function isMissingCategoryIdColumnError(error) {
@@ -31,7 +31,7 @@ function getPeriodRange(periodType) {
   }
 }
 
-async function computeSpent(client, { categoryDefinitionId, categoryName }, start, end, duplicateClause) {
+async function computeSpent(client, { categoryDefinitionId, categoryName }, start, end) {
   if (categoryDefinitionId) {
     const spendingResult = await client.query(
       `WITH RECURSIVE category_tree(id) AS (
@@ -47,7 +47,7 @@ async function computeSpent(client, { categoryDefinitionId, categoryName }, star
          AND t.price < 0
          AND t.date >= $2
          AND t.date <= $3
-         ${duplicateClause}`,
+         `,
       [categoryDefinitionId, start, end]
     );
 
@@ -74,7 +74,7 @@ async function computeSpent(client, { categoryDefinitionId, categoryName }, star
        AND t.price < 0
        AND t.date >= $2
        AND t.date <= $3
-       ${duplicateClause}`,
+       `,
     [categoryName, start, end]
   );
 
@@ -142,8 +142,6 @@ export default async function handler(req, res) {
 
     const budgets = budgetsResult.rows;
     const usageData = [];
-    const duplicateFilter = await buildDuplicateFilter(client, 't');
-    const duplicateClause = duplicateFilter || '';
 
     for (const budget of budgets) {
       const { start, end } = getPeriodRange(budget.period_type);
@@ -173,8 +171,7 @@ export default async function handler(req, res) {
         client,
         { categoryDefinitionId, categoryName },
         start,
-        end,
-        duplicateClause
+        end
       );
 
       const percentage = (spent / limit) * 100;

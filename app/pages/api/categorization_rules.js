@@ -36,17 +36,17 @@ const handler = createApiHandler({
             cr.name_pattern,
             cr.category_definition_id,
             cr.category_type,
+            cr.category_path,
             cr.is_active,
             cr.priority,
             cr.created_at,
             cr.updated_at,
             cd.name as category_name,
             cd.name_en as category_name_en,
-            parent_cd.name as parent_category_name,
-            parent_cd.name_en as parent_category_name_en
+            cd.hierarchy_path,
+            cd.depth_level
           FROM categorization_rules cr
           LEFT JOIN category_definitions cd ON cr.category_definition_id = cd.id
-          LEFT JOIN category_definitions parent_cd ON cd.parent_id = parent_cd.id
           ORDER BY cr.priority DESC, cr.created_at DESC
         `,
         params: []
@@ -54,9 +54,9 @@ const handler = createApiHandler({
     }
 
     if (req.method === 'POST') {
-      const { name_pattern, target_category, parent_category, subcategory, category_definition_id, category_type, priority } = req.body;
+      const { name_pattern, target_category, category_definition_id, category_type, priority } = req.body;
 
-      // If category_definition_id is provided, we need to fetch the category name
+      // If category_definition_id is provided, we need to fetch the category path
       // This is handled in the transform function
       return {
         sql: `SELECT 1`, // Dummy query, actual INSERT happens in transform
@@ -65,7 +65,7 @@ const handler = createApiHandler({
     }
 
     if (req.method === 'PUT') {
-      const { id, name_pattern, target_category, parent_category, subcategory, category_definition_id, category_type, is_active, priority } = req.body;
+      const { id, name_pattern, target_category, category_definition_id, category_type, category_path, is_active, priority } = req.body;
 
       // Build dynamic update based on provided fields
       const updates = [];
@@ -84,18 +84,6 @@ const handler = createApiHandler({
         paramIndex++;
       }
 
-      if (parent_category !== undefined) {
-        updates.push(`parent_category = $${paramIndex}`);
-        params.push(parent_category);
-        paramIndex++;
-      }
-
-      if (subcategory !== undefined) {
-        updates.push(`subcategory = $${paramIndex}`);
-        params.push(subcategory);
-        paramIndex++;
-      }
-
       if (category_definition_id !== undefined) {
         updates.push(`category_definition_id = $${paramIndex}`);
         params.push(category_definition_id);
@@ -105,6 +93,12 @@ const handler = createApiHandler({
       if (category_type !== undefined) {
         updates.push(`category_type = $${paramIndex}`);
         params.push(category_type);
+        paramIndex++;
+      }
+
+      if (category_path !== undefined) {
+        updates.push(`category_path = $${paramIndex}`);
+        params.push(category_path);
         paramIndex++;
       }
 
@@ -127,7 +121,7 @@ const handler = createApiHandler({
           UPDATE categorization_rules
           SET ${updates.join(', ')}
           WHERE id = $1
-          RETURNING id, name_pattern, target_category, parent_category, subcategory, category_definition_id, category_type, is_active, priority, created_at, updated_at
+          RETURNING id, name_pattern, target_category, category_definition_id, category_type, category_path, is_active, priority, created_at, updated_at
         `,
         params: params
       };
@@ -150,22 +144,43 @@ const handler = createApiHandler({
     }
 
     if (req.method === 'POST') {
-      const { name_pattern, target_category, parent_category, subcategory, category_definition_id, category_type, priority } = req.body;
+      const { name_pattern, target_category, category_definition_id, category_type, priority } = req.body;
       const { getDB } = await import('./db.js');
       const client = await getDB();
 
       try {
         let finalTargetCategory = target_category;
-        let finalParentCategory = parent_category;
         let finalCategoryType = category_type;
+        let categoryPath = null;
 
-        // If category_definition_id is provided, fetch the category name
+        // If category_definition_id is provided, fetch the category details and build path
         if (category_definition_id) {
           const categoryResult = await client.query(
-            `SELECT cd.name, cd.category_type, parent_cd.name as parent_name
-             FROM category_definitions cd
-             LEFT JOIN category_definitions parent_cd ON cd.parent_id = parent_cd.id
-             WHERE cd.id = $1`,
+            `WITH RECURSIVE category_tree AS (
+              SELECT
+                cd.id,
+                cd.parent_id,
+                cd.name,
+                cd.category_type,
+                cd.name as path
+              FROM category_definitions cd
+              WHERE cd.id = $1
+
+              UNION ALL
+
+              SELECT
+                parent.id,
+                parent.parent_id,
+                parent.name,
+                parent.category_type,
+                parent.name || ' > ' || ct.path as path
+              FROM category_definitions parent
+              JOIN category_tree ct ON parent.id = ct.parent_id
+            )
+            SELECT path, category_type, name
+            FROM category_tree
+            WHERE parent_id IS NULL
+            LIMIT 1`,
             [category_definition_id]
           );
 
@@ -173,34 +188,30 @@ const handler = createApiHandler({
             const cat = categoryResult.rows[0];
             finalTargetCategory = cat.name;
             finalCategoryType = cat.category_type;
-            if (cat.parent_name) {
-              finalParentCategory = cat.parent_name;
-            }
+            categoryPath = cat.path;
           }
         }
 
         // Insert the rule with duplicate handling
         const insertResult = await client.query(
           `INSERT INTO categorization_rules
-            (name_pattern, target_category, parent_category, subcategory, category_definition_id, category_type, priority)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (name_pattern, target_category, category_definition_id, category_type, category_path, priority)
+          VALUES ($1, $2, $3, $4, $5, $6)
           ON CONFLICT (name_pattern, target_category)
           DO UPDATE SET
-            parent_category = EXCLUDED.parent_category,
-            subcategory = EXCLUDED.subcategory,
             category_definition_id = EXCLUDED.category_definition_id,
             category_type = EXCLUDED.category_type,
+            category_path = EXCLUDED.category_path,
             priority = EXCLUDED.priority,
             is_active = true,
             updated_at = CURRENT_TIMESTAMP
-          RETURNING id, name_pattern, target_category, parent_category, subcategory, category_definition_id, category_type, is_active, priority, created_at, updated_at`,
+          RETURNING id, name_pattern, target_category, category_definition_id, category_type, category_path, is_active, priority, created_at, updated_at`,
           [
             name_pattern,
             finalTargetCategory,
-            finalParentCategory || null,
-            subcategory || null,
             category_definition_id || null,
             finalCategoryType || null,
+            categoryPath,
             priority || 0
           ]
         );

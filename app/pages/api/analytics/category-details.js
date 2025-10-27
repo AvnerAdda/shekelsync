@@ -1,5 +1,5 @@
 import { getDB } from '../db.js';
-import { buildDuplicateFilter } from './utils.js';
+// Duplicate filter removed from './utils.js';
 import { dialect } from '../../../lib/sql-dialect.js';
 
 export default async function handler(req, res) {
@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   const client = await getDB();
 
   try {
-    const { category, parentId, subcategoryId, startDate, endDate, type = 'expense', excludeDuplicates = 'true' } = req.query;
+    const { category, parentId, subcategoryId, startDate, endDate, type = 'expense' } = req.query;
 
     if (!category && !parentId && !subcategoryId) {
       return res.status(400).json({ error: 'Category identifier is required' });
@@ -18,10 +18,6 @@ export default async function handler(req, res) {
 
     const start = startDate ? new Date(startDate) : new Date(0);
     const end = endDate ? new Date(endDate) : new Date();
-
-    const duplicateFilter = excludeDuplicates === 'true'
-      ? await buildDuplicateFilter(client, 't')
-      : '';
 
     // Determine price filter based on type
     let priceFilter;
@@ -83,7 +79,7 @@ export default async function handler(req, res) {
       ${priceFilterClause}
       AND t.date >= $${categoryParams.length + 1}
       AND t.date <= $${categoryParams.length + 2}
-      ${duplicateFilter}`,
+      `,
       [...categoryParams, start, end]
     );
 
@@ -98,7 +94,7 @@ export default async function handler(req, res) {
       ${priceFilterClause}
       AND t.date >= $${categoryParams.length + 1}
       AND t.date <= $${categoryParams.length + 2}
-      ${duplicateFilter}
+      
       GROUP BY t.vendor
       ORDER BY total DESC`,
       [...categoryParams, start, end]
@@ -117,7 +113,7 @@ export default async function handler(req, res) {
       AND t.date >= $${categoryParams.length + 1}
       AND t.date <= $${categoryParams.length + 2}
       AND t.account_number IS NOT NULL
-      ${duplicateFilter}
+      
       GROUP BY t.account_number, t.vendor
       ORDER BY total DESC`,
       [...categoryParams, start, end]
@@ -138,7 +134,7 @@ export default async function handler(req, res) {
         ${priceFilterClause}
         AND t.date >= $2
         AND t.date <= $3
-        ${duplicateFilter}
+        
         GROUP BY cd.id, cd.name
         ORDER BY total DESC`,
         [parentId, start, end]
@@ -164,7 +160,7 @@ export default async function handler(req, res) {
       ${priceFilterClause}
       AND t.date >= $${categoryParams.length + 1}
       AND t.date <= $${categoryParams.length + 2}
-      ${duplicateFilter}
+      
       ORDER BY t.date DESC
       LIMIT 20`,
       [...categoryParams, start, end]
@@ -182,7 +178,7 @@ export default async function handler(req, res) {
       ${priceFilterClause}
       AND t.date >= $${categoryParams.length + 1}
       AND t.date <= $${categoryParams.length + 2}
-      ${duplicateFilter}
+      
       GROUP BY ${monthExpr}
       ORDER BY month ASC`,
       [...categoryParams, start, end]

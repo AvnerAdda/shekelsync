@@ -31,6 +31,15 @@ const handler = createApiHandler({
       const rules = rulesResult.rows;
       let totalUpdated = 0;
 
+      // Look up the bank category ID once so rules can override those assignments
+      const bankCategoryResult = await client.query(
+        `SELECT id FROM category_definitions
+         WHERE name = $1
+         LIMIT 1`,
+        [BANK_CATEGORY_NAME]
+      );
+      const bankCategoryId = bankCategoryResult.rows[0]?.id ?? null;
+
       // Apply each rule
       for (const rule of rules) {
         const pattern = `%${rule.name_pattern}%`;
@@ -80,9 +89,8 @@ const handler = createApiHandler({
             ? 'AND price < 0'
             : '';
 
-        const parentName = categoryRecord.parent_name || null;
-        const subcategory = categoryRecord.parent_id ? categoryRecord.name : null;
-        const categoryLabel = subcategory || categoryRecord.name;
+        // For legacy category field, use the leaf category name
+        const categoryLabel = categoryRecord.name;
         const confidence = categoryRecord.category_type === 'income' ? 0.7 : 0.8;
 
         const updateResult = await client.query(`
@@ -90,29 +98,23 @@ const handler = createApiHandler({
           SET
             category_definition_id = $2,
             category = $3,
-            parent_category = $4,
-            subcategory = $5,
-            category_type = $6,
+            category_type = $4,
             auto_categorized = true,
-            confidence_score = MAX(confidence_score, $7)
+            confidence_score = MAX(confidence_score, $5)
           WHERE LOWER(name) LIKE LOWER($1)
             ${priceCondition}
             AND (
               category_definition_id IS NULL
-              OR category_definition_id NOT IN (
-                SELECT id FROM category_definitions
-                WHERE name = $8 OR category_type = 'income'
-              )
+              OR ($6 IS NOT NULL AND category_definition_id = $6)
+              OR auto_categorized = true
             )
         `, [
           pattern,
           categoryId,
           categoryLabel,
-          parentName,
-          subcategory,
           categoryRecord.category_type,
           confidence,
-          BANK_CATEGORY_NAME
+          bankCategoryId
         ]);
 
         totalUpdated += updateResult.rowCount;

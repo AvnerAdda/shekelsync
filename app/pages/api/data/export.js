@@ -1,5 +1,5 @@
 import { getDB } from '../db.js';
-import { buildDuplicateFilter, resolveDateRange, standardizeResponse, standardizeError } from '../utils/queryUtils.js';
+import { resolveDateRange, standardizeResponse, standardizeError } from '../utils/queryUtils.js';
 
 /**
  * Data Export API
@@ -107,7 +107,6 @@ export default async function handler(req, res) {
       months = 12,
       categories,
       vendors,
-      excludeDuplicates = 'true',
       includeIncome = 'true',
       includeExpenses = 'true',
       includeInvestments = 'true'
@@ -127,7 +126,6 @@ export default async function handler(req, res) {
     }
 
     const { start, end } = resolveDateRange({ startDate, endDate, months });
-    const duplicateFilter = excludeDuplicates === 'true' ? await buildDuplicateFilter(client, 't') : '';
 
     const categoryValues = categories
       ? (Array.isArray(categories) ? categories : categories.split(','))
@@ -280,7 +278,7 @@ export default async function handler(req, res) {
           ${typeFilterClause}
           ${categoryFilterClause}
           ${vendorFilterClause}
-          ${duplicateFilter}
+          
           ORDER BY t.date DESC, t.vendor, t.name
         `,
         queryParams
@@ -310,7 +308,7 @@ export default async function handler(req, res) {
           ${typeFilterClause}
           ${categoryFilterClause}
           ${vendorFilterClause}
-          ${duplicateFilter}
+          
           GROUP BY
             COALESCE(parent.id, cd.id),
             COALESCE(parent.name, cd.name, t.parent_category, t.category, 'Uncategorized'),
@@ -343,7 +341,7 @@ export default async function handler(req, res) {
           ${typeFilterClause}
           ${categoryFilterClause}
           ${vendorFilterClause}
-          ${duplicateFilter}
+          
           GROUP BY t.vendor
           ORDER BY total_amount DESC
         `,

@@ -1,5 +1,5 @@
 import { getDB } from '../db.js';
-import { buildDuplicateFilter } from './utils.js';
+// Duplicate filter removed from './utils.js';
 
 /**
  * GET /api/analytics/transactions-by-date?date=2025-01-15&excludeDuplicates=true
@@ -13,17 +13,13 @@ export default async function handler(req, res) {
   const client = await getDB();
 
   try {
-    const { date, excludeDuplicates = 'true' } = req.query;
+    const { date } = req.query;
 
     if (!date) {
       return res.status(400).json({ error: 'Date parameter is required' });
     }
 
     console.log('Fetching transactions for date:', date);
-
-    const duplicateFilter = excludeDuplicates === 'true'
-      ? await buildDuplicateFilter(client, 't')
-      : '';
 
     const result = await client.query(
       `SELECT
@@ -39,7 +35,7 @@ export default async function handler(req, res) {
       LEFT JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
       LEFT JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
       WHERE DATE(t.date) = DATE($1)
-      ${duplicateFilter}
+      
       ORDER BY t.price DESC`,
       [date]
     );

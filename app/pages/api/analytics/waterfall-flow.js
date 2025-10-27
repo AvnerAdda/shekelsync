@@ -1,5 +1,5 @@
 import { getDB } from '../db.js';
-import { buildDuplicateFilter, resolveDateRange } from './utils.js';
+import { resolveDateRange } from './utils.js';
 
 /**
  * Waterfall Flow API
@@ -13,15 +13,9 @@ export default async function handler(req, res) {
   const client = await getDB();
 
   try {
-    const { startDate, endDate, months = 3, excludeDuplicates = 'true' } = req.query;
+    const { startDate, endDate, months = 3 } = req.query;
 
     const { start, end } = resolveDateRange({ startDate, endDate, months });
-
-    // Build duplicate exclusion clause
-    const shouldExcludeDuplicates = excludeDuplicates === 'true';
-    const duplicateFilter = shouldExcludeDuplicates
-      ? await buildDuplicateFilter(client, 'transactions')
-      : '';
 
     // Get income sources by vendor/category
     const incomeResult = await client.query(
@@ -36,7 +30,6 @@ export default async function handler(req, res) {
       WHERE t.date >= $1 AND t.date <= $2
       AND cd.category_type = 'income'
       AND t.price > 0
-      ${duplicateFilter.replace(/transactions\./g, 't.')}
       GROUP BY cd.name, cd.name_en, t.vendor
       ORDER BY total DESC`,
       [start, end]
@@ -55,7 +48,6 @@ export default async function handler(req, res) {
       WHERE t.date >= $1 AND t.date <= $2
       AND t.price < 0
       AND cd_parent.category_type = 'expense'
-      ${duplicateFilter.replace(/transactions\./g, 't.')}
       GROUP BY cd_parent.name, cd_parent.name_en
       ORDER BY total DESC`,
       [start, end]
@@ -73,7 +65,6 @@ export default async function handler(req, res) {
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE t.date >= $1 AND t.date <= $2
       AND cd.category_type = 'investment'
-      ${duplicateFilter.replace(/transactions\./g, 't.')}
       GROUP BY cd.name, cd.name_en
       ORDER BY outflow DESC`,
       [start, end]

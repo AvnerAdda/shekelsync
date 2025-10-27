@@ -74,6 +74,8 @@ const TABLE_DEFINITIONS = [
       color TEXT,
       description TEXT,
       is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+      hierarchy_path TEXT,
+      depth_level INTEGER DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(name, parent_id, category_type),
@@ -187,8 +189,6 @@ const TABLE_DEFINITIONS = [
       charged_currency TEXT,
       memo TEXT,
       status TEXT NOT NULL DEFAULT 'completed',
-      parent_category TEXT,
-      subcategory TEXT,
       merchant_name TEXT,
       auto_categorized INTEGER NOT NULL DEFAULT 0 CHECK (auto_categorized IN (0,1)),
       confidence_score REAL NOT NULL DEFAULT 0.0,
@@ -204,12 +204,11 @@ const TABLE_DEFINITIONS = [
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name_pattern TEXT NOT NULL,
       target_category TEXT NOT NULL,
-      parent_category TEXT,
-      subcategory TEXT,
       priority INTEGER NOT NULL DEFAULT 0,
       is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
       category_definition_id INTEGER,
       category_type TEXT,
+      category_path TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(name_pattern, target_category),
@@ -225,65 +224,6 @@ const TABLE_DEFINITIONS = [
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(category_definition_id, period_type),
       FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE CASCADE
-    );`,
-  `CREATE TABLE IF NOT EXISTS duplicate_patterns (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      pattern_name TEXT NOT NULL,
-      pattern_regex TEXT NOT NULL,
-      description TEXT,
-      match_type TEXT NOT NULL,
-      override_category TEXT,
-      override_category_definition_id INTEGER,
-      is_user_defined INTEGER NOT NULL DEFAULT 0 CHECK (is_user_defined IN (0,1)),
-      is_auto_learned INTEGER NOT NULL DEFAULT 0 CHECK (is_auto_learned IN (0,1)),
-      is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
-      confidence REAL NOT NULL DEFAULT 1.0,
-      match_count INTEGER NOT NULL DEFAULT 0,
-      last_matched_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      created_by TEXT,
-      notes TEXT
-    ,
-      FOREIGN KEY (override_category_definition_id) REFERENCES category_definitions(id) ON DELETE SET NULL
-    );`,
-  `CREATE TABLE IF NOT EXISTS manual_exclusions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      transaction_identifier TEXT NOT NULL,
-      transaction_vendor TEXT NOT NULL,
-      exclusion_reason TEXT NOT NULL,
-      override_category TEXT,
-      override_category_definition_id INTEGER,
-      notes TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(transaction_identifier, transaction_vendor),
-      FOREIGN KEY (transaction_identifier, transaction_vendor)
-        REFERENCES transactions(identifier, vendor)
-        ON DELETE CASCADE,
-      FOREIGN KEY (override_category_definition_id) REFERENCES category_definitions(id) ON DELETE SET NULL
-    );`,
-  `CREATE TABLE IF NOT EXISTS transaction_duplicates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      transaction1_identifier TEXT NOT NULL,
-      transaction1_vendor TEXT NOT NULL,
-      transaction2_identifier TEXT NOT NULL,
-      transaction2_vendor TEXT NOT NULL,
-      match_type TEXT NOT NULL,
-      confidence REAL NOT NULL DEFAULT 0,
-      is_confirmed INTEGER NOT NULL DEFAULT 0 CHECK (is_confirmed IN (0,1)),
-      exclude_from_totals INTEGER NOT NULL DEFAULT 1 CHECK (exclude_from_totals IN (0,1)),
-      notes TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      confirmed_at TEXT,
-      confirmed_by TEXT,
-      override_category TEXT,
-      UNIQUE(transaction1_identifier, transaction1_vendor, transaction2_identifier, transaction2_vendor),
-      FOREIGN KEY (transaction1_identifier, transaction1_vendor)
-        REFERENCES transactions(identifier, vendor)
-        ON DELETE CASCADE,
-      FOREIGN KEY (transaction2_identifier, transaction2_vendor)
-        REFERENCES transactions(identifier, vendor)
-        ON DELETE CASCADE
     );`,
   `CREATE TABLE IF NOT EXISTS user_action_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -506,19 +446,14 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_category_definitions_active ON category_definitions (is_active);',
   'CREATE INDEX IF NOT EXISTS idx_category_definitions_parent ON category_definitions (parent_id);',
   'CREATE INDEX IF NOT EXISTS idx_category_definitions_type ON category_definitions (category_type);',
+  'CREATE INDEX IF NOT EXISTS idx_category_hierarchy_path ON category_definitions (hierarchy_path);',
+  'CREATE INDEX IF NOT EXISTS idx_category_depth_level ON category_definitions (depth_level);',
   'CREATE INDEX IF NOT EXISTS idx_category_mapping_category ON category_mapping (category_definition_id);',
   'CREATE INDEX IF NOT EXISTS idx_merchant_catalog_pattern ON merchant_catalog (merchant_pattern);',
   'CREATE INDEX IF NOT EXISTS idx_merchant_catalog_active ON merchant_catalog (is_active);',
   'CREATE INDEX IF NOT EXISTS idx_children_birth_date ON children_profile (birth_date);',
   'CREATE INDEX IF NOT EXISTS idx_children_education_stage ON children_profile (education_stage);',
   'CREATE INDEX IF NOT EXISTS idx_children_profile_user_id ON children_profile (user_profile_id);',
-  'CREATE INDEX IF NOT EXISTS idx_duplicate_patterns_active ON duplicate_patterns (is_active, match_type);',
-  'CREATE INDEX IF NOT EXISTS idx_duplicate_patterns_regex ON duplicate_patterns (pattern_regex);',
-  'CREATE INDEX IF NOT EXISTS idx_duplicate_patterns_override_cat_id ON duplicate_patterns (override_category_definition_id);',
-  'CREATE INDEX IF NOT EXISTS idx_duplicates_confirmed ON transaction_duplicates (is_confirmed, exclude_from_totals);',
-  'CREATE INDEX IF NOT EXISTS idx_duplicates_match_type ON transaction_duplicates (match_type);',
-  'CREATE INDEX IF NOT EXISTS idx_duplicates_transaction1 ON transaction_duplicates (transaction1_identifier, transaction1_vendor);',
-  'CREATE INDEX IF NOT EXISTS idx_duplicates_transaction2 ON transaction_duplicates (transaction2_identifier, transaction2_vendor);',
   'CREATE INDEX IF NOT EXISTS idx_holdings_history_account ON investment_holdings_history (account_id);',
   'CREATE INDEX IF NOT EXISTS idx_holdings_history_date ON investment_holdings_history (snapshot_date DESC);',
   'CREATE INDEX IF NOT EXISTS idx_investment_accounts_active ON investment_accounts (is_active);',
@@ -530,10 +465,6 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_investment_assets_symbol ON investment_assets (asset_symbol);',
   'CREATE INDEX IF NOT EXISTS idx_investment_holdings_account ON investment_holdings (account_id);',
   'CREATE INDEX IF NOT EXISTS idx_investment_holdings_date ON investment_holdings (as_of_date DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_manual_exclusions_category ON manual_exclusions (override_category);',
-  'CREATE INDEX IF NOT EXISTS idx_manual_exclusions_category_id ON manual_exclusions (override_category_definition_id);',
-  'CREATE INDEX IF NOT EXISTS idx_manual_exclusions_reason ON manual_exclusions (exclusion_reason);',
-  'CREATE INDEX IF NOT EXISTS idx_manual_exclusions_transaction ON manual_exclusions (transaction_identifier, transaction_vendor);',
   'CREATE INDEX IF NOT EXISTS idx_patterns_account ON account_transaction_patterns (account_id);',
   'CREATE INDEX IF NOT EXISTS idx_pending_created ON pending_transaction_suggestions (created_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_transaction_suggestions (status);',
@@ -554,7 +485,6 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_transactions_date_desc ON transactions (date DESC);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_date_vendor ON transactions (date, vendor);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_datetime ON transactions (transaction_datetime);',
-  'CREATE INDEX IF NOT EXISTS idx_transactions_parent_category ON transactions (parent_category);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_price ON transactions (price);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor ON transactions (vendor);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_datetime ON transactions (vendor, transaction_datetime DESC);',
@@ -592,6 +522,12 @@ const CATEGORY_TREE = [
   { key: 'exp_bills_electricity', type: 'expense', parent: 'exp_bills', name: 'חשמל', nameEn: 'Electricity', displayOrder: 44 },
   { key: 'exp_bills_water', type: 'expense', parent: 'exp_bills', name: 'מים', nameEn: 'Water', displayOrder: 45 },
   { key: 'exp_bills_bank', type: 'expense', parent: 'exp_bills', name: 'תשלומי בנק', nameEn: 'Bank Settlements', displayOrder: 46 },
+  { key: 'exp_bills_bank_cc_payment', type: 'expense', parent: 'exp_bills_bank', name: 'פרעון כרטיס אשראי', nameEn: 'Credit Card Repayment', displayOrder: 461 },
+  { key: 'exp_bills_bank_digital', type: 'expense', parent: 'exp_bills_bank', name: 'העברות דיגיטליות', nameEn: 'Digital Wallet Transfers (BIT/PayBox)', displayOrder: 462 },
+  { key: 'exp_bills_bank_fees', type: 'expense', parent: 'exp_bills_bank', name: 'עמלות בנק וכרטיס', nameEn: 'Bank & Card Fees', displayOrder: 463 },
+  { key: 'exp_bills_bank_to_investments', type: 'expense', parent: 'exp_bills_bank', name: 'העברות להשקעות', nameEn: 'Transfers to Investments', displayOrder: 464 },
+  { key: 'exp_bills_bank_cash', type: 'expense', parent: 'exp_bills_bank', name: 'משיכת מזומן', nameEn: 'Cash Withdrawal', displayOrder: 465 },
+  { key: 'exp_bills_bank_inv_tax', type: 'expense', parent: 'exp_bills_bank', name: 'מס על השקעות', nameEn: 'Investment Tax Withholding', displayOrder: 466 },
   { key: 'exp_bills_insurance', type: 'expense', parent: 'exp_bills', name: 'ביטוח', nameEn: 'Insurance', displayOrder: 47 },
   { key: 'exp_bills_municipal', type: 'expense', parent: 'exp_bills', name: 'מיסים עירוניים', nameEn: 'Municipal Taxes', displayOrder: 48 },
   { key: 'exp_bills_gas', type: 'expense', parent: 'exp_bills', name: 'גז', nameEn: 'Gas', displayOrder: 49 },
@@ -637,18 +573,22 @@ const CATEGORY_TREE = [
 
   { key: 'exp_misc', type: 'expense', parent: 'expense_root', name: 'שונות', nameEn: 'Miscellaneous', displayOrder: 90 },
   { key: 'exp_misc_other', type: 'expense', parent: 'exp_misc', name: 'הוצאות אחרות', nameEn: 'Other Expenses', displayOrder: 91 },
+  { key: 'exp_misc_donations', type: 'expense', parent: 'exp_misc', name: 'תרומות', nameEn: 'Charitable Donations', displayOrder: 92 },
 
   { key: 'income_root', type: 'income', name: 'הכנסות', nameEn: 'Income', displayOrder: 100 },
   { key: 'income_salary', type: 'income', parent: 'income_root', name: 'משכורת', nameEn: 'Salary', displayOrder: 101 },
   { key: 'income_freelance', type: 'income', parent: 'income_root', name: 'פרילנס', nameEn: 'Freelance & Side Hustle', displayOrder: 102 },
   { key: 'income_refunds', type: 'income', parent: 'income_root', name: 'החזרים וזיכויים', nameEn: 'Refunds & Credits', displayOrder: 103 },
   { key: 'income_gifts', type: 'income', parent: 'income_root', name: 'מתנות', nameEn: 'Gifts & Windfalls', displayOrder: 104 },
+  { key: 'income_gov_benefits', type: 'income', parent: 'income_root', name: 'קצבאות ממשלתיות', nameEn: 'Government Benefits', displayOrder: 105 },
 
   { key: 'investment_root', type: 'investment', name: 'השקעות', nameEn: 'Investments', displayOrder: 200 },
   { key: 'investment_stocks', type: 'investment', parent: 'investment_root', name: 'מניות', nameEn: 'Stocks & ETFs', displayOrder: 201 },
   { key: 'investment_crypto', type: 'investment', parent: 'investment_root', name: 'קריפטו', nameEn: 'Crypto Assets', displayOrder: 202 },
   { key: 'investment_retirement', type: 'investment', parent: 'investment_root', name: 'פנסיה וחיסכון', nameEn: 'Retirement & Savings', displayOrder: 203 },
-  { key: 'investment_real_estate', type: 'investment', parent: 'investment_root', name: 'נדל"ן', nameEn: 'Real Estate', displayOrder: 204 }
+  { key: 'investment_study_fund', type: 'investment', parent: 'investment_root', name: 'קופות גמל', nameEn: 'Study & Provident Funds', displayOrder: 204 },
+  { key: 'investment_real_estate', type: 'investment', parent: 'investment_root', name: 'נדל"ן', nameEn: 'Real Estate', displayOrder: 205 },
+  { key: 'investment_deposits', type: 'investment', parent: 'investment_root', name: 'פיקדונות', nameEn: 'Bank Deposits', displayOrder: 206 }
 ];
 
 // Legacy category mappings: old transaction.category → new category_definitions
@@ -668,6 +608,7 @@ const CATEGORY_MAPPINGS = [
   { oldCategory: 'טיסות ותיירות', newCategory: 'חופשות', notes: 'Maps to: Travel & Holidays' },
   { oldCategory: 'העברת כספים', newCategory: 'תשלומי בנק', notes: 'Maps to: Bank Settlements' },
   { oldCategory: 'שונות', newCategory: 'שונות', notes: 'Maps to: Miscellaneous' },
+  { oldCategory: 'קופת גמל', newCategory: 'קופות גמל', notes: 'Maps to: Study & Provident Funds' },
   // NEW: Specific subcategory mappings (October 2025 expansion)
   { oldCategory: 'ביטוח', newCategory: 'ביטוח', notes: 'Maps to: Insurance subcategory' },
   { oldCategory: 'עירייה וממשלה', newCategory: 'מיסים עירוניים', notes: 'Maps to: Municipal Taxes subcategory' },
@@ -716,6 +657,43 @@ function seedCategories(db) {
         leafTracker.set(category.parent, false);
       }
     }
+
+    // After all categories are inserted, calculate hierarchy_path and depth_level
+    db.exec(`
+      WITH RECURSIVE CategoryTree AS (
+        SELECT
+          id,
+          parent_id,
+          name,
+          CAST(id AS TEXT) as hierarchy_path,
+          0 as depth_level
+        FROM category_definitions
+        WHERE parent_id IS NULL
+
+        UNION ALL
+
+        SELECT
+          c.id,
+          c.parent_id,
+          c.name,
+          ct.hierarchy_path || '/' || CAST(c.id AS TEXT) as hierarchy_path,
+          ct.depth_level + 1 as depth_level
+        FROM category_definitions c
+        JOIN CategoryTree ct ON c.parent_id = ct.id
+      )
+      UPDATE category_definitions
+      SET
+        hierarchy_path = (
+          SELECT hierarchy_path
+          FROM CategoryTree
+          WHERE CategoryTree.id = category_definitions.id
+        ),
+        depth_level = (
+          SELECT depth_level
+          FROM CategoryTree
+          WHERE CategoryTree.id = category_definitions.id
+        );
+    `);
   })();
 
   return { categoriesByKey, leafTracker };

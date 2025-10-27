@@ -1,5 +1,5 @@
 import pool from '../db.js';
-import { buildDuplicateFilter } from '../analytics/utils.js';
+import { BANK_CATEGORY_NAME } from '../../../lib/category-constants.js';
 
 /**
  * API endpoint for managing hierarchical categories
@@ -51,6 +51,8 @@ async function handleGet(req, res) {
         cd.color,
         cd.description,
         cd.is_active,
+        cd.hierarchy_path,
+        cd.depth_level,
         cd.created_at,
         cd.updated_at,
         COUNT(DISTINCT t.identifier || '-' || t.vendor) as transaction_count,
@@ -77,31 +79,52 @@ async function handleGet(req, res) {
 
     query += `
       GROUP BY cd.id, cd.name, cd.name_en, cd.parent_id, cd.category_type, cd.display_order,
-               cd.icon, cd.color, cd.description, cd.is_active, cd.created_at, cd.updated_at
+               cd.icon, cd.color, cd.description, cd.is_active, cd.hierarchy_path, cd.depth_level,
+               cd.created_at, cd.updated_at
       ORDER BY cd.category_type, cd.display_order, cd.name
     `;
 
-    const duplicateFilter = await buildDuplicateFilter(pool, 't');
 
-    const [categoryResult, uncategorizedSummary, uncategorizedRecent] = await Promise.all([
+    const [categoryResult, uncategorizedSummary, uncategorizedRecent, bankTransactionsSummary, bankTransactionsRecent] = await Promise.all([
       pool.query(query, params),
       pool.query(
         `SELECT COUNT(*) AS total_transactions, COALESCE(SUM(ABS(price)), 0) AS total_amount
          FROM transactions t
          WHERE t.category_definition_id IS NULL
-         ${duplicateFilter}`
+         `
       ),
       pool.query(
         `SELECT identifier, vendor, name, date, price, account_number
          FROM transactions t
          WHERE t.category_definition_id IS NULL
-         ${duplicateFilter}
+         
          ORDER BY date DESC
          LIMIT 50`
+      ),
+      pool.query(
+        `SELECT COUNT(*) AS total_transactions, COALESCE(SUM(ABS(price)), 0) AS total_amount
+         FROM transactions t
+         WHERE t.category_definition_id IN (
+           SELECT id FROM category_definitions WHERE name = $1
+         )
+         `,
+        [BANK_CATEGORY_NAME]
+      ),
+      pool.query(
+        `SELECT identifier, vendor, name, date, price, account_number
+         FROM transactions t
+         WHERE t.category_definition_id IN (
+           SELECT id FROM category_definitions WHERE name = $1
+         )
+         
+         ORDER BY date DESC
+         LIMIT 50`,
+        [BANK_CATEGORY_NAME]
       ),
     ]);
 
     const summaryRow = uncategorizedSummary.rows[0] || { total_transactions: 0, total_amount: 0 };
+    const bankSummaryRow = bankTransactionsSummary.rows[0] || { total_transactions: 0, total_amount: 0 };
 
     return res.status(200).json({
       categories: categoryResult.rows,
@@ -109,6 +132,18 @@ async function handleGet(req, res) {
         totalCount: parseInt(summaryRow.total_transactions, 10) || 0,
         totalAmount: parseFloat(summaryRow.total_amount) || 0,
         recentTransactions: uncategorizedRecent.rows.map(row => ({
+          identifier: row.identifier,
+          vendor: row.vendor,
+          name: row.name,
+          date: row.date,
+          price: parseFloat(row.price),
+          accountNumber: row.account_number,
+        })),
+      },
+      bankTransactions: {
+        totalCount: parseInt(bankSummaryRow.total_transactions, 10) || 0,
+        totalAmount: parseFloat(bankSummaryRow.total_amount) || 0,
+        recentTransactions: bankTransactionsRecent.rows.map(row => ({
           identifier: row.identifier,
           vendor: row.vendor,
           name: row.name,
@@ -150,10 +185,13 @@ async function handlePost(req, res) {
       return res.status(400).json({ error: 'Category with this name already exists at this level' });
     }
 
-    // If parent_id is provided, verify it exists and has same category_type
+    // If parent_id is provided, verify it exists, has same category_type, and calculate hierarchy
+    let hierarchyPath = null;
+    let depthLevel = 0;
+
     if (parent_id) {
       const parentCheck = await pool.query(
-        'SELECT category_type FROM category_definitions WHERE id = $1',
+        'SELECT category_type, hierarchy_path, depth_level FROM category_definitions WHERE id = $1',
         [parent_id]
       );
 
@@ -164,6 +202,11 @@ async function handlePost(req, res) {
       if (parentCheck.rows[0].category_type !== category_type) {
         return res.status(400).json({ error: 'Parent category must be of the same type' });
       }
+
+      // Build hierarchy path and depth for the new category
+      const parentPath = parentCheck.rows[0].hierarchy_path;
+      depthLevel = (parentCheck.rows[0].depth_level || 0) + 1;
+      // Note: We'll set the actual hierarchy_path after insert since we need the new ID
     }
 
     // Determine display_order if not provided
@@ -178,11 +221,11 @@ async function handlePost(req, res) {
       finalDisplayOrder = orderResult.rows[0].next_order;
     }
 
-    // Insert new category
+    // Insert new category with depth_level
     const insertQuery = `
       INSERT INTO category_definitions
-        (name, parent_id, category_type, icon, color, description, display_order, is_active)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+        (name, parent_id, category_type, icon, color, description, display_order, depth_level, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
       RETURNING *
     `;
 
@@ -194,9 +237,26 @@ async function handlePost(req, res) {
       color || null,
       description || null,
       finalDisplayOrder,
+      depthLevel,
     ]);
 
-    return res.status(201).json(result.rows[0]);
+    const newCategory = result.rows[0];
+
+    // Update hierarchy_path now that we have the ID
+    const newId = newCategory.id;
+    const newPath = parent_id
+      ? await pool.query('SELECT hierarchy_path FROM category_definitions WHERE id = $1', [parent_id])
+          .then(r => r.rows[0].hierarchy_path + '/' + newId)
+      : String(newId);
+
+    await pool.query(
+      'UPDATE category_definitions SET hierarchy_path = $1 WHERE id = $2',
+      [newPath, newId]
+    );
+
+    newCategory.hierarchy_path = newPath;
+
+    return res.status(201).json(newCategory);
   } catch (error) {
     console.error('Error creating category:', error);
     throw error;

@@ -32,13 +32,11 @@ import {
   Storage as StorageIcon,
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
-  ContentCopy as DuplicateIcon,
   WarningAmber as WarningAmberIcon,
 } from '@mui/icons-material';
 import AccountsModal from './AccountsModal';
 import ScrapeModal from './ScrapeModal';
 import CategoryHierarchyModal from './CategoryHierarchyModal';
-import DuplicateManagementModal from './DuplicateManagementModal';
 import { useNotification } from './NotificationContext';
 import { STALE_SYNC_THRESHOLD_MS } from '../utils/constants';
 
@@ -56,12 +54,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const [accountsModalOpen, setAccountsModalOpen] = useState(false);
   const [scrapeModalOpen, setScrapeModalOpen] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
-  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [stats, setStats] = useState({
     totalAccounts: 0,
     lastSync: null as Date | null,
     dbStatus: 'checking' as 'connected' | 'disconnected' | 'checking',
-    pendingDuplicates: 0,
   });
   const [accountAlerts, setAccountAlerts] = useState({
     noBank: false,
@@ -134,21 +130,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       const scrapeRes = await fetch('/api/scrape_events?limit=1');
       const scrapeEvents = await scrapeRes.json();
 
-      // Fetch pending duplicates count
-      let pendingDuplicates = 0;
-      try {
-        const duplicatesRes = await fetch('/api/analytics/detect-duplicates?minConfidence=0.7');
-        const duplicatesData = await duplicatesRes.json();
-        pendingDuplicates = duplicatesData.totalDetected || 0;
-      } catch (err) {
-        console.log('Duplicate detection not yet available');
-      }
-
       setStats(prev => ({
         ...prev,
         totalAccounts: accounts.length || 0,
         lastSync: scrapeEvents[0]?.created_at ? new Date(scrapeEvents[0].created_at) : null,
-        pendingDuplicates,
       }));
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -403,18 +388,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     Categories
                   </Button>
                 </Badge>
-                <Badge badgeContent={stats.pendingDuplicates} color="warning">
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<DuplicateIcon />}
-                    onClick={() => setDuplicateModalOpen(true)}
-                    fullWidth
-                    sx={{ width: '100%' }}
-                  >
-                    Duplicates
-                  </Button>
-                </Badge>
               </Box>
 
               {/* Stats */}
@@ -527,13 +500,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                 </Badge>
               </IconButton>
             </Tooltip>
-            <Tooltip title={`Duplicates (${stats.pendingDuplicates})`} placement="right">
-              <IconButton size="small" onClick={() => setDuplicateModalOpen(true)}>
-                <Badge badgeContent={stats.pendingDuplicates} color="warning">
-                  <DuplicateIcon />
-                </Badge>
-              </IconButton>
-            </Tooltip>
             <Box sx={{ width: 8, height: 8, borderRadius: '50%',
                       backgroundColor: stats.dbStatus === 'connected' ? 'success.main' : 'error.main',
                       mt: 1
@@ -580,18 +546,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
           fetchUncategorizedCount();
         }}
         onCategoriesUpdated={handleScrapeComplete}
-      />
-
-      <DuplicateManagementModal
-        open={duplicateModalOpen}
-        onClose={() => {
-          setDuplicateModalOpen(false);
-          fetchStats();
-        }}
-        onDuplicatesChanged={() => {
-          handleScrapeComplete();
-          fetchStats();
-        }}
       />
     </>
   );
