@@ -1,0 +1,13 @@
+diff --git a/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js b/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js
+index ba4e880..2df42b0 100644
+--- a/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js
++++ b/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js
+@@ -80,7 +80,7 @@ async function navigateOrErrorLabel(page) {
+ }
+ function getPossibleLoginResults() {
+   const urls = {};
+-  urls[_baseScraperWithBrowser.LoginResults.Success] = [`${BASE_URL}/apollo/retail/#/MY_ACCOUNT_HOMEPAGE`];
++  urls[_baseScraperWithBrowser.LoginResults.Success] = [`${BASE_URL}/apollo/retail/#/MY_ACCOUNT_HOMEPAGE`, `${BASE_URL}/apollo/retail2/#/MY_ACCOUNT_HOMEPAGE`];
+   urls[_baseScraperWithBrowser.LoginResults.InvalidPassword] = [`${BASE_URL}/apollo/core/templates/lobby/masterPage.html#/LOGIN_PAGE`];
+   urls[_baseScraperWithBrowser.LoginResults.ChangePassword] = [`${BASE_URL}/apollo/core/templates/lobby/masterPage.html#/PWD_RENEW`];
+   return urls;

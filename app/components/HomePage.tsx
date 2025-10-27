@@ -744,21 +744,48 @@ const HomePage: React.FC = () => {
                       py: 1.5,
                       px: 1,
                       borderBottom: idx < dateTransactions.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
+                      '&:hover': {
+                        bgcolor: 'action.hover',
+                        borderRadius: 1,
+                      }
                     }}
                   >
                     <Box sx={{ flex: 1 }}>
                       <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
                         {txn.description || txn.vendor}
                       </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                         <Typography variant="caption" color="text.secondary">
                           {format(new Date(txn.date), 'HH:mm')}
                         </Typography>
-                        {(txn.parent_name || txn.category_name) && (
+                        {(txn.parent_name || txn.category_name || txn.category) && (
                           <>
                             <Typography variant="caption" color="text.secondary">•</Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {txn.category_name || txn.parent_name}
+                            <Typography 
+                              variant="caption" 
+                              sx={{ 
+                                color: 'primary.main',
+                                fontWeight: 500,
+                              }}
+                            >
+                              {txn.parent_name && txn.category_name 
+                                ? `${txn.parent_name} > ${txn.category_name}`
+                                : txn.category_name || txn.parent_name || txn.category}
+                            </Typography>
+                          </>
+                        )}
+                        {txn.vendor && (
+                          <>
+                            <Typography variant="caption" color="text.secondary">•</Typography>
+                            <Typography 
+                              variant="caption" 
+                              sx={{ 
+                                color: 'text.secondary',
+                                textTransform: 'capitalize',
+                                fontSize: '0.7rem',
+                              }}
+                            >
+                              {txn.vendor}
                             </Typography>
                           </>
                         )}

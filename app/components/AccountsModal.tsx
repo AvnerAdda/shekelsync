@@ -54,6 +54,7 @@ import {
   CREDIT_CARD_VENDORS,
   BANK_VENDORS,
   SPECIAL_BANK_VENDORS,
+  OTHER_BANK_VENDORS,
   ACCOUNT_CATEGORIES,
   INVESTMENT_ACCOUNT_TYPES
 } from '../utils/constants';
@@ -67,10 +68,14 @@ interface Account {
   id: number;
   vendor: string;
   username?: string;
+  userCode?: string;
   id_number?: string;
   card6_digits?: string;
   bank_account_number?: string;
   identification_code?: string;
+  num?: string;
+  nationalID?: string;
+  email?: string;
   nickname?: string;
   password?: string;
   created_at: string;
@@ -156,10 +161,14 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const [newAccount, setNewAccount] = useState<Account>({
     vendor: 'isracard',
     username: '',
+    userCode: '',
     id_number: '',
     card6_digits: '',
     bank_account_number: '',
     identification_code: '',
+    num: '',
+    nationalID: '',
+    email: '',
     password: '',
     nickname: '',
     id: 0,
@@ -333,13 +342,37 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         return;
       }
     } else if (SPECIAL_BANK_VENDORS.includes(newAccount.vendor)) {
-      // Discount and Mercantile require: id, password, num (identification_code)
+      // Discount and Mercantile require: id, password, num
       if (!newAccount.id_number) {
         setError('ID number is required for Discount and Mercantile');
         return;
       }
-      if (!newAccount.identification_code) {
+      if (!newAccount.num && !newAccount.identification_code) {
         setError('Identification code (num) is required for Discount and Mercantile');
+        return;
+      }
+    } else if (newAccount.vendor === 'hapoalim') {
+      if (!newAccount.userCode) {
+        setError('User Code is required for Bank Hapoalim');
+        return;
+      }
+    } else if (newAccount.vendor === 'yahav') {
+      if (!newAccount.username) {
+        setError('Username is required for Bank Yahav');
+        return;
+      }
+      if (!newAccount.nationalID) {
+        setError('National ID is required for Bank Yahav');
+        return;
+      }
+    } else if (newAccount.vendor === 'beyahadBishvilha' || newAccount.vendor === 'behatsdaa') {
+      if (!newAccount.id_number) {
+        setError('ID number is required for ' + newAccount.vendor);
+        return;
+      }
+    } else if (newAccount.vendor === 'oneZero') {
+      if (!newAccount.email) {
+        setError('Email is required for One Zero');
         return;
       }
     } else if (newAccount.vendor === 'isracard' || newAccount.vendor === 'amex') {
@@ -347,13 +380,9 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         setError('ID number is required for Isracard and American Express');
         return;
       }
-    } else if (BANK_VENDORS.includes(newAccount.vendor)) {
+    } else if (BANK_VENDORS.includes(newAccount.vendor) || newAccount.vendor === 'pagi') {
       if (!newAccount.username) {
         setError('Username is required for bank accounts');
-        return;
-      }
-      if (!newAccount.bank_account_number) {
-        setError('Bank account number is required for bank accounts');
         return;
       }
     }
@@ -381,16 +410,21 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         setNewAccount({
           vendor: 'isracard',
           username: '',
+          userCode: '',
           id_number: '',
           card6_digits: '',
           bank_account_number: '',
           identification_code: '',
+          num: '',
+          nationalID: '',
+          email: '',
           password: '',
           nickname: '',
           id: 0,
           created_at: new Date().toISOString(),
         });
         setIsAdding(false);
+        showNotification('Bank account added successfully!', 'success');
       } else {
         throw new Error('Failed to add account');
       }
@@ -1304,87 +1338,186 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             fullWidth
                             select
                             label="Bank"
-                            value={[...BANK_VENDORS, ...SPECIAL_BANK_VENDORS].includes(newAccount.vendor) ? newAccount.vendor : ''}
+                            value={[...BANK_VENDORS, ...SPECIAL_BANK_VENDORS, ...OTHER_BANK_VENDORS].includes(newAccount.vendor) ? newAccount.vendor : ''}
                             onChange={(e) => {
                               const vendor = e.target.value;
                               setNewAccount({
                                 ...newAccount,
                                 vendor,
-                                username: BANK_VENDORS.includes(vendor) ? newAccount.username : '',
-                                id_number: SPECIAL_BANK_VENDORS.includes(vendor) ? newAccount.id_number : '',
-                                identification_code: SPECIAL_BANK_VENDORS.includes(vendor) ? newAccount.identification_code : '',
-                                bank_account_number: [...BANK_VENDORS, ...SPECIAL_BANK_VENDORS].includes(vendor) ? newAccount.bank_account_number : '',
+                                username: '',
+                                userCode: '',
+                                id_number: '',
+                                num: '',
+                                nationalID: '',
+                                email: '',
+                                identification_code: '',
+                                bank_account_number: '',
                                 card6_digits: '',
                               });
                             }}
                           >
                             <MenuItem value="hapoalim">Bank Hapoalim</MenuItem>
                             <MenuItem value="leumi">Bank Leumi</MenuItem>
-                            <MenuItem value="mizrahi">Mizrahi Tefahot</MenuItem>
                             <MenuItem value="discount">Discount Bank</MenuItem>
-                            <MenuItem value="mercantile">Mercantile Bank</MenuItem>
-                            <MenuItem value="otsarHahayal">Otsar Hahayal</MenuItem>
+                            <MenuItem value="mizrahi">Mizrahi Tefahot</MenuItem>
                             <MenuItem value="beinleumi">Beinleumi</MenuItem>
-                            <MenuItem value="massad">Massad</MenuItem>
-                            <MenuItem value="yahav">Yahav</MenuItem>
                             <MenuItem value="union">Union Bank</MenuItem>
+                            <MenuItem value="yahav">Bank Yahav</MenuItem>
+                            <MenuItem value="otsarHahayal">Otsar Hahayal</MenuItem>
+                            <MenuItem value="mercantile">Mercantile Bank</MenuItem>
+                            <MenuItem value="massad">Massad</MenuItem>
+                            <MenuItem value="beyahadBishvilha">Beyahad Bishvilha</MenuItem>
+                            <MenuItem value="behatsdaa">Behatsdaa</MenuItem>
+                            <MenuItem value="pagi">Pagi</MenuItem>
+                            <MenuItem value="oneZero">One Zero</MenuItem>
                           </TextField>
                         </Grid>
 
-                        {[...BANK_VENDORS, ...SPECIAL_BANK_VENDORS].includes(newAccount.vendor) && (
+                        {[...BANK_VENDORS, ...SPECIAL_BANK_VENDORS, ...OTHER_BANK_VENDORS].includes(newAccount.vendor) && (
                           <>
-                            {BANK_VENDORS.includes(newAccount.vendor) ? (
+                            {/* Hapoalim - userCode */}
+                            {newAccount.vendor === 'hapoalim' && (
                               <Grid item xs={12}>
                                 <TextField
                                   fullWidth
-                                  label="Username"
-                                  value={newAccount.username}
-                                  onChange={(e) => setNewAccount({ ...newAccount, username: e.target.value })}
+                                  label="User Code"
+                                  value={newAccount.userCode || ''}
+                                  onChange={(e) => setNewAccount({ ...newAccount, userCode: e.target.value })}
                                   required
                                 />
                               </Grid>
-                            ) : (
+                            )}
+
+                            {/* Discount/Mercantile - id + num */}
+                            {SPECIAL_BANK_VENDORS.includes(newAccount.vendor) && (
+                              <>
+                                <Grid item xs={12}>
+                                  <TextField
+                                    fullWidth
+                                    label="ID Number"
+                                    value={newAccount.id_number || ''}
+                                    onChange={(e) => setNewAccount({ ...newAccount, id_number: e.target.value })}
+                                    required
+                                  />
+                                </Grid>
+                                <Grid item xs={12}>
+                                  <TextField
+                                    fullWidth
+                                    label="Identification Code (num)"
+                                    value={newAccount.num || newAccount.identification_code || ''}
+                                    onChange={(e) => setNewAccount({ ...newAccount, num: e.target.value, identification_code: e.target.value })}
+                                    required
+                                    helperText="User identification code provided by the bank"
+                                  />
+                                </Grid>
+                              </>
+                            )}
+
+                            {/* Yahav - username + nationalID */}
+                            {newAccount.vendor === 'yahav' && (
+                              <>
+                                <Grid item xs={12}>
+                                  <TextField
+                                    fullWidth
+                                    label="Username"
+                                    value={newAccount.username || ''}
+                                    onChange={(e) => setNewAccount({ ...newAccount, username: e.target.value })}
+                                    required
+                                  />
+                                </Grid>
+                                <Grid item xs={12}>
+                                  <TextField
+                                    fullWidth
+                                    label="National ID"
+                                    value={newAccount.nationalID || ''}
+                                    onChange={(e) => setNewAccount({ ...newAccount, nationalID: e.target.value })}
+                                    required
+                                  />
+                                </Grid>
+                              </>
+                            )}
+
+                            {/* BeyahadBishvilha/Behatsdaa - id only */}
+                            {(newAccount.vendor === 'beyahadBishvilha' || newAccount.vendor === 'behatsdaa') && (
                               <Grid item xs={12}>
                                 <TextField
                                   fullWidth
                                   label="ID Number"
-                                  value={newAccount.id_number}
+                                  value={newAccount.id_number || ''}
                                   onChange={(e) => setNewAccount({ ...newAccount, id_number: e.target.value })}
                                   required
                                 />
                               </Grid>
                             )}
 
-                            {SPECIAL_BANK_VENDORS.includes(newAccount.vendor) && (
+                            {/* OneZero - email */}
+                            {newAccount.vendor === 'oneZero' && (
                               <Grid item xs={12}>
                                 <TextField
                                   fullWidth
-                                  label="Identification Code (num)"
-                                  value={newAccount.identification_code}
-                                  onChange={(e) => setNewAccount({ ...newAccount, identification_code: e.target.value })}
+                                  type="email"
+                                  label="Email"
+                                  value={newAccount.email || ''}
+                                  onChange={(e) => setNewAccount({ ...newAccount, email: e.target.value })}
                                   required
-                                  helperText="User identification code - required by Discount/Mercantile"
                                 />
                               </Grid>
                             )}
 
-                            <Grid item xs={12}>
-                              <TextField
-                                fullWidth
-                                label="Bank Account Number"
-                                value={newAccount.bank_account_number}
-                                onChange={(e) => setNewAccount({ ...newAccount, bank_account_number: e.target.value })}
-                                required
-                                placeholder="Full account number"
-                              />
-                            </Grid>
+                            {/* Standard banks - username only */}
+                            {BANK_VENDORS.includes(newAccount.vendor) && 
+                             newAccount.vendor !== 'hapoalim' && 
+                             newAccount.vendor !== 'yahav' && (
+                              <Grid item xs={12}>
+                                <TextField
+                                  fullWidth
+                                  label="Username"
+                                  value={newAccount.username || ''}
+                                  onChange={(e) => setNewAccount({ ...newAccount, username: e.target.value })}
+                                  required
+                                />
+                              </Grid>
+                            )}
 
+                            {/* Pagi - username */}
+                            {newAccount.vendor === 'pagi' && (
+                              <Grid item xs={12}>
+                                <TextField
+                                  fullWidth
+                                  label="Username"
+                                  value={newAccount.username || ''}
+                                  onChange={(e) => setNewAccount({ ...newAccount, username: e.target.value })}
+                                  required
+                                />
+                              </Grid>
+                            )}
+
+                            {/* Bank Account Number - Optional for standard banks only */}
+                            {/* Don't show for Discount/Mercantile (use id+num), credit cards, or special auth banks */}
+                            {!SPECIAL_BANK_VENDORS.includes(newAccount.vendor) && 
+                             !CREDIT_CARD_VENDORS.includes(newAccount.vendor) &&
+                             newAccount.vendor !== 'beyahadBishvilha' &&
+                             newAccount.vendor !== 'behatsdaa' &&
+                             newAccount.vendor !== 'oneZero' && (
+                              <Grid item xs={12}>
+                                <TextField
+                                  fullWidth
+                                  label="Bank Account Number (Optional)"
+                                  value={newAccount.bank_account_number || ''}
+                                  onChange={(e) => setNewAccount({ ...newAccount, bank_account_number: e.target.value })}
+                                  placeholder="Optional - for tracking purposes"
+                                  helperText="Not required for scraping, useful for reference"
+                                />
+                              </Grid>
+                            )}
+
+                            {/* Password - Required for all */}
                             <Grid item xs={12}>
                               <TextField
                                 fullWidth
                                 label="Password"
                                 type="password"
-                                value={newAccount.password}
+                                value={newAccount.password || ''}
                                 onChange={(e) => setNewAccount({ ...newAccount, password: e.target.value })}
                                 required
                               />
