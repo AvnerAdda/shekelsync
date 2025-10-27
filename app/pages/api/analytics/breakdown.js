@@ -1,5 +1,5 @@
 import { getDB } from '../db.js';
-import { buildDuplicateFilter, resolveDateRange } from './utils.js';
+import { resolveDateRange } from './utils.js';
 
 const VALID_TYPES = new Set(['expense', 'income', 'investment']);
 
@@ -37,7 +37,6 @@ export default async function handler(req, res) {
       startDate,
       endDate,
       months = 3,
-      excludeDuplicates = 'true',
     } = req.query;
 
     if (!VALID_TYPES.has(type)) {
@@ -48,11 +47,6 @@ export default async function handler(req, res) {
     const { start, end } = resolveDateRange({ startDate, endDate, months });
     const startStr = start.toISOString().split('T')[0];
     const endStr = end.toISOString().split('T')[0];
-
-    const duplicateFilter = excludeDuplicates === 'true'
-      ? await buildDuplicateFilter(client, 't')
-      : '';
-    const duplicateClause = duplicateFilter ? duplicateFilter.replace(/transactions\./g, 't.') : '';
 
     const priceFilterClause = config.priceFilter ? `AND ${config.priceFilter}` : '';
     const transactionsResult = await client.query(
@@ -71,7 +65,7 @@ export default async function handler(req, res) {
       WHERE t.date >= $1 AND t.date <= $2
         AND cd_parent.category_type = $3
         ${priceFilterClause}
-        ${duplicateClause}
+        
       ORDER BY t.date ASC`,
       [startStr, endStr, config.categoryType]
     );

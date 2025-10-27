@@ -212,8 +212,7 @@ const HomePage: React.FC = () => {
     try {
       const formattedDate = format(new Date(date), 'yyyy-MM-dd');
       console.log('Formatted date for API:', formattedDate);
-      // Don't exclude duplicates when viewing detailed transactions for a specific date
-      const response = await fetch(`/api/analytics/transactions-by-date?date=${formattedDate}&excludeDuplicates=false`);
+      const response = await fetch(`/api/analytics/transactions-by-date?date=${formattedDate}`);
       if (response.ok) {
         const result = await response.json();
         console.log('API response:', result);

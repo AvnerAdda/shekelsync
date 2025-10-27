@@ -110,22 +110,19 @@ function ResponsiveAppBar() {
     noPension: false
   });
   const [uncategorizedCount, setUncategorizedCount] = React.useState<number>(0);
-  const [duplicatesCount, setDuplicatesCount] = React.useState<number>(0);
   const { showNotification} = useNotification();
 
   React.useEffect(() => {
     fetchAccountStatus();
     fetchUncategorizedCount();
-    fetchDuplicatesCount();
 
     // Listen for data refresh events to update badges
     const handleDataRefresh = () => {
       fetchAccountStatus();
       fetchUncategorizedCount();
-      fetchDuplicatesCount();
     };
     globalThis.addEventListener('dataRefresh', handleDataRefresh);
-    
+
     return () => {
       globalThis.removeEventListener('dataRefresh', handleDataRefresh);
     };
@@ -158,14 +155,6 @@ function ResponsiveAppBar() {
       });
 
       console.log('[Menu] Account alerts:', { noBank: !hasBank, noCredit: !hasCredit, noPension: !hasPension });
-
-      // Also update duplicates count when account status changes
-      // (only relevant if both bank and credit exist)
-      if (hasBank && hasCredit) {
-        fetchDuplicatesCount();
-      } else {
-        setDuplicatesCount(0);
-      }
     } catch (error) {
       console.error('Error fetching account status:', error);
     }
@@ -188,20 +177,6 @@ function ResponsiveAppBar() {
       }
     } catch (error) {
       console.error('Error fetching uncategorized count:', error);
-    }
-  };
-
-  const fetchDuplicatesCount = async () => {
-    try {
-      const response = await fetch('/api/analytics/detect-duplicates?includeConfirmed=false');
-      if (response.ok) {
-        const data = await response.json();
-        // Count potential duplicates that haven't been confirmed/excluded
-        setDuplicatesCount(Array.isArray(data) ? data.length : 0);
-        console.log('[Menu] Duplicates count:', Array.isArray(data) ? data.length : 0);
-      }
-    } catch (error) {
-      console.error('Error fetching duplicates count:', error);
     }
   };
 
@@ -255,7 +230,6 @@ function ResponsiveAppBar() {
     // Refresh all badge indicators
     fetchAccountStatus();
     fetchUncategorizedCount();
-    fetchDuplicatesCount();
   };
 
   return (
@@ -298,22 +272,12 @@ function ResponsiveAppBar() {
               ))}
             </Box>
             <Box sx={{ flexGrow: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Badge
-                badgeContent={duplicatesCount > 0 ? <WarningAmberIcon sx={{ fontSize: 14 }} /> : null}
-                color="warning"
-                overlap="circular"
-                anchorOrigin={{
-                  vertical: 'top',
-                  horizontal: 'right',
-                }}
+              <NavButton
+                onClick={() => setIsAuditOpen(true)}
+                startIcon={<HistoryIcon />}
               >
-                <NavButton
-                  onClick={() => setIsAuditOpen(true)}
-                  startIcon={<HistoryIcon />}
-                >
-                  Audit
-                </NavButton>
-              </Badge>
+                Audit
+              </NavButton>
               <NavButton
                 onClick={() => setIsManualModalOpen(true)}
                 startIcon={<EditIcon />}
@@ -404,10 +368,7 @@ function ResponsiveAppBar() {
       />
       <ScrapeAuditModal
         open={isAuditOpen}
-        onClose={() => {
-          setIsAuditOpen(false);
-          fetchDuplicatesCount();
-        }}
+        onClose={() => setIsAuditOpen(false)}
       />
     </>
   );

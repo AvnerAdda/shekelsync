@@ -1,6 +1,6 @@
 import { getDB } from '../db.js';
 import { startOfWeek, startOfMonth, format } from 'date-fns';
-import { buildDuplicateFilter, resolveDateRange } from './utils.js';
+import { resolveDateRange } from './utils.js';
 import { BANK_CATEGORY_NAME } from '../../../lib/category-constants.js';
 import { dialect } from '../../../lib/sql-dialect.js';
 
@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   const client = await getDB();
 
   try {
-    const { startDate, endDate, months = 3, aggregation = 'daily', excludeDuplicates = 'true' } = req.query;
+    const { startDate, endDate, months = 3, aggregation = 'daily' } = req.query;
 
     const { start, end } = resolveDateRange({ startDate, endDate, months });
 
@@ -32,14 +32,6 @@ export default async function handler(req, res) {
         dateGroupBy = dialect.dateTrunc('day', 't.date');
         dateSelect = `${dialect.dateTrunc('day', 't.date')} as date`;
     }
-
-    // Build duplicate exclusion clause
-    // Check both transaction_duplicates and manual_exclusions tables
-    const shouldExcludeDuplicates = excludeDuplicates === 'true';
-    const duplicateFilter = shouldExcludeDuplicates
-      ? await buildDuplicateFilter(client, 'transactions')
-      : '';
-    const duplicateClause = duplicateFilter ? duplicateFilter.replace(/transactions\./g, 't.') : '';
 
     // Get transaction history with aggregation - separated by category type
     // Fallback to price sign if category_definition_id is NULL
@@ -62,7 +54,6 @@ export default async function handler(req, res) {
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE t.date >= $1 AND t.date <= $2
-      ${duplicateClause}
       GROUP BY ${dateGroupBy}
       ORDER BY date ASC`,
       [start, end, BANK_CATEGORY_NAME]
@@ -70,9 +61,6 @@ export default async function handler(req, res) {
 
     // Get breakdown by category (EXPENSES ONLY - negative prices)
     // Return hierarchical structure: parent categories with their subcategories
-    // Build the duplicate filter with 't' alias
-    const categoryDuplicateFilter = duplicateClause;
-
     const categoryDataResult = await client.query(
       `SELECT
         cd_parent.id as parent_id,
@@ -87,7 +75,6 @@ export default async function handler(req, res) {
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND cd_parent.category_type = 'expense'
-        ${categoryDuplicateFilter}
       GROUP BY cd_parent.id, cd_parent.name, cd_child.id, cd_child.name
       ORDER BY cd_parent.name, total DESC`,
       [start, end]
@@ -102,7 +89,6 @@ export default async function handler(req, res) {
       FROM transactions t
       WHERE t.date >= $1 AND t.date <= $2
       AND t.price < 0
-      ${duplicateClause}
       GROUP BY t.vendor
       ORDER BY total DESC`,
       [start, end]
@@ -130,7 +116,6 @@ export default async function handler(req, res) {
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE t.date >= $1 AND t.date <= $2
-      ${duplicateClause}
       GROUP BY ${monthExpr}
       ORDER BY month ASC`,
       [start, end, BANK_CATEGORY_NAME]
@@ -164,8 +149,7 @@ export default async function handler(req, res) {
         COUNT(DISTINCT t.vendor) as total_accounts
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      WHERE t.date >= $1 AND t.date <= $2
-      ${duplicateClause}`,
+      WHERE t.date >= $1 AND t.date <= $2`,
       [start, end, BANK_CATEGORY_NAME]
     );
 

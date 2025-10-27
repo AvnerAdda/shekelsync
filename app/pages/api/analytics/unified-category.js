@@ -1,5 +1,5 @@
 import { getDB } from '../db.js';
-import { buildDuplicateFilter, resolveDateRange, buildTypeFilters, standardizeResponse, standardizeError } from '../utils/queryUtils.js';
+import { resolveDateRange, buildTypeFilters, standardizeResponse, standardizeError } from '../utils/queryUtils.js';
 
 /**
  * Unified Category Analytics API
@@ -29,7 +29,6 @@ export default async function handler(req, res) {
       category,
       parentId,
       subcategoryId,
-      excludeDuplicates = 'true',
       groupBy = 'category',
       includeTransactions = 'false',
       limit = 100
@@ -51,7 +50,6 @@ export default async function handler(req, res) {
     // Build query components
     const { start, end } = resolveDateRange({ startDate, endDate, months });
     const { priceFilter, amountExpression, categoryFilter } = buildTypeFilters(type);
-    const duplicateFilter = excludeDuplicates === 'true' ? await buildDuplicateFilter(client, 't') : '';
 
     const parsedSubcategoryId =
       subcategoryId !== undefined && subcategoryId !== null
@@ -185,7 +183,7 @@ export default async function handler(req, res) {
       ${priceFilter ? `AND ${priceFilter}` : ''}
       ${categoryFilter ? `AND ${categoryFilter}` : ''}
       ${categoryFilterClause ? `AND ${categoryFilterClause}` : ''}
-      ${duplicateFilter}
+      
       ${additionalWhereClause}
     `;
 

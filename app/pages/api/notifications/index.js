@@ -1,5 +1,5 @@
 import { getDB } from '../db.js';
-import { buildDuplicateFilter, standardizeResponse, standardizeError } from '../utils/queryUtils.js';
+import { standardizeResponse, standardizeError } from '../utils/queryUtils.js';
 import { subDays, startOfMonth, endOfMonth, format } from 'date-fns';
 
 /**
@@ -45,7 +45,7 @@ async function calculateSpentForCategory(client, { categoryDefinitionId, categor
          AND t.price < 0
          AND t.date >= $2
          AND t.date <= $3
-         ${duplicateClause}`,
+         `,
       [categoryDefinitionId, startDate, endDate]
     );
 
@@ -72,7 +72,7 @@ async function calculateSpentForCategory(client, { categoryDefinitionId, categor
        AND t.price < 0
        AND t.date >= $2
        AND t.date <= $3
-       ${duplicateClause}`,
+       `,
     [categoryName, startDate, endDate]
   );
 
@@ -106,8 +106,6 @@ export default async function handler(req, res) {
     const currentMonthEndStr = currentMonth.end.toISOString().split('T')[0];
 
     // Get duplicate filter for accurate calculations
-    const duplicateFilter = await buildDuplicateFilter(client, 't');
-    const duplicateClause = duplicateFilter || '';
 
     // 1. Budget Warnings & Exceeded Alerts
     if (type === 'all' || type === NOTIFICATION_TYPES.BUDGET_WARNING || type === NOTIFICATION_TYPES.BUDGET_EXCEEDED) {
@@ -232,7 +230,7 @@ export default async function handler(req, res) {
         LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
         WHERE t.date >= $1
           AND t.price < 0
-          ${duplicateClause}
+          
         ORDER BY t.date DESC
         LIMIT 1000`,
         [ninetyDaysStr]
@@ -319,7 +317,7 @@ export default async function handler(req, res) {
         LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
         WHERE t.date >= $1
           AND t.price < 0
-          ${duplicateClause}
+          
         ORDER BY t.date DESC
         LIMIT 1000`,
         [thirtyDaysStr]
@@ -388,7 +386,7 @@ export default async function handler(req, res) {
           SUM(ABS(t.price)) as total_amount
         FROM transactions t
         WHERE t.price < 0
-          ${duplicateClause}
+          
         GROUP BY t.vendor
         HAVING MIN(t.date) >= $1 AND COUNT(*) >= 2
         ORDER BY first_transaction DESC
@@ -432,7 +430,7 @@ export default async function handler(req, res) {
           FROM transactions t
           WHERE t.date >= $1
           AND t.date <= $2
-          ${duplicateClause}
+          
         ),
         recent_daily_spending AS (
           SELECT AVG(daily_spending) as avg_daily_spending
@@ -443,7 +441,7 @@ export default async function handler(req, res) {
             FROM transactions t
             WHERE t.date >= $3
             AND t.price < 0
-            ${duplicateClause}
+            
             GROUP BY DATE(date)
           ) daily_totals
         )

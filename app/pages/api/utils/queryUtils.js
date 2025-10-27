@@ -4,9 +4,8 @@
 
 import { BANK_CATEGORY_NAME } from '../../../lib/category-constants.js';
 
-// Import existing duplicate filter from analytics utils
-export { buildDuplicateFilter, resolveDateRange } from '../analytics/utils.js';
-
+// Import date range resolver from analytics utils
+export { resolveDateRange } from '../analytics/utils.js';
 
 /**
  * Builds price filter and amount expression based on transaction type

@@ -31,6 +31,9 @@ import {
   FormControlLabel,
   Tooltip,
   Paper,
+  ButtonGroup,
+  Menu,
+  ListItemIcon,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -49,6 +52,7 @@ import {
   ToggleOff as ToggleOffIcon,
   Visibility as VisibilityIcon,
   AutoAwesome as AutoAwesomeIcon,
+  ArrowDropDown as ArrowDropDownIcon,
 } from '@mui/icons-material';
 import ModalHeader from './ModalHeader';
 
@@ -118,8 +122,7 @@ type CategoryType = 'expense' | 'investment' | 'income';
 
 interface TransactionAssignment {
   type: CategoryType;
-  parentId: number | null;
-  categoryId: number | null;
+  categoryPath: number[]; // Array of category IDs from root to leaf (e.g., [1, 5, 12])
 }
 
 interface CategoryHierarchyModalProps {
@@ -141,6 +144,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   // Category Hierarchy State
   const [categories, setCategories] = useState<CategoryDefinition[]>([]);
   const [uncategorized, setUncategorized] = useState<UncategorizedSummary | null>(null);
+  const [bankTransactions, setBankTransactions] = useState<UncategorizedSummary | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [editingCategory, setEditingCategory] = useState<CategoryDefinition | null>(null);
   const [newCategory, setNewCategory] = useState<Partial<CategoryDefinition>>({
@@ -171,6 +175,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, TransactionAssignment>>({});
   const [savingAssignments, setSavingAssignments] = useState<Record<string, boolean>>({});
   const [creatingRules, setCreatingRules] = useState<Record<string, boolean>>({});
+  const [assignMenuAnchors, setAssignMenuAnchors] = useState<Record<string, HTMLElement | null>>({});
 
   const formatCurrency = (value: number) => {
     const amount = Number.isFinite(value) ? Math.abs(value) : 0;
@@ -251,6 +256,16 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       } else {
         setUncategorized(null);
       }
+
+      if (!Array.isArray(payload) && payload?.bankTransactions) {
+        setBankTransactions({
+          totalCount: payload.bankTransactions.totalCount ?? 0,
+          totalAmount: payload.bankTransactions.totalAmount ?? 0,
+          recentTransactions: payload.bankTransactions.recentTransactions ?? [],
+        });
+      } else {
+        setBankTransactions(null);
+      }
     } catch (error) {
       console.error('Error fetching categories:', error);
       setError('Failed to load categories');
@@ -260,7 +275,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   };
 
   useEffect(() => {
-    if (!uncategorized?.recentTransactions || uncategorized.recentTransactions.length === 0) {
+    const hasUncategorized = uncategorized?.recentTransactions && uncategorized.recentTransactions.length > 0;
+    const hasBankTransactions = bankTransactions?.recentTransactions && bankTransactions.recentTransactions.length > 0;
+
+    if (!hasUncategorized && !hasBankTransactions) {
       setAssignmentDrafts({});
       setSavingAssignments({});
       return;
@@ -269,88 +287,128 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     setAssignmentDrafts((prev: Record<string, TransactionAssignment>) => {
       const next: Record<string, TransactionAssignment> = {};
 
-      uncategorized.recentTransactions.forEach((txn: UncategorizedTransaction) => {
-        const key = getTransactionKey(txn);
-        if (prev[key]) {
-          next[key] = prev[key];
-        } else {
-          const defaultType: CategoryType = txn.price >= 0 ? 'income' : 'expense';
-          
-          // Try to find the parent category ID if parent_category is set
-          let preselectedParentId: number | null = null;
-          if (txn.parent_category) {
-            // Search for the category with matching name in the categories tree
-            const findCategoryByName = (cats: CategoryDefinition[]): CategoryDefinition | null => {
-              for (const cat of cats) {
-                if (cat.name === txn.parent_category) {
-                  return cat;
-                }
-                if (cat.children && cat.children.length > 0) {
-                  const found = findCategoryByName(cat.children);
-                  if (found) return found;
-                }
-              }
-              return null;
-            };
-            
-            const foundCategory = findCategoryByName(categories);
-            if (foundCategory) {
-              preselectedParentId = foundCategory.id;
-            }
+      // Helper function to find category by name
+      const findCategoryByName = (cats: CategoryDefinition[], name: string): CategoryDefinition | null => {
+        for (const cat of cats) {
+          if (cat.name === name) {
+            return cat;
           }
-          
-          next[key] = {
-            type: defaultType,
-            parentId: preselectedParentId,
-            categoryId: null,
-          };
+          if (cat.children && cat.children.length > 0) {
+            const found = findCategoryByName(cat.children, name);
+            if (found) return found;
+          }
         }
-      });
+        return null;
+      };
+
+      // Process uncategorized transactions
+      if (hasUncategorized) {
+        uncategorized!.recentTransactions.forEach((txn: UncategorizedTransaction) => {
+          const key = getTransactionKey(txn);
+          if (prev[key]) {
+            next[key] = prev[key];
+          } else {
+            const defaultType: CategoryType = txn.price >= 0 ? 'income' : 'expense';
+            
+            let preselectedPath: number[] = [];
+            if (txn.parent_category) {
+              const foundCategory = findCategoryByName(categories, txn.parent_category);
+              if (foundCategory) {
+                // Build the path from root to this category
+                const path: number[] = [];
+                let current: CategoryDefinition | undefined = foundCategory;
+                while (current) {
+                  path.unshift(current.id);
+                  current = current.parent_id ? categoryLookup.get(current.parent_id) : undefined;
+                }
+                preselectedPath = path;
+              }
+            }
+
+            next[key] = {
+              type: defaultType,
+              categoryPath: preselectedPath,
+            };
+          }
+        });
+      }
+
+      // Process bank transactions
+      if (hasBankTransactions) {
+        bankTransactions!.recentTransactions.forEach((txn: UncategorizedTransaction) => {
+          const key = getTransactionKey(txn);
+          if (prev[key]) {
+            next[key] = prev[key];
+          } else {
+            // Bank transactions are typically expenses or could be transfers
+            const defaultType: CategoryType = txn.price >= 0 ? 'income' : 'expense';
+            
+            next[key] = {
+              type: defaultType,
+              categoryPath: [],
+            };
+          }
+        });
+      }
 
       return next;
     });
-  }, [uncategorized, categories]);
+  }, [uncategorized, bankTransactions, categories]);
 
   const updateAssignmentDraft = (key: string, updates: Partial<TransactionAssignment>) => {
     setAssignmentDrafts((prev: Record<string, TransactionAssignment>) => ({
       ...prev,
       [key]: {
         type: updates.type ?? prev[key]?.type ?? 'expense',
-        parentId: updates.parentId ?? prev[key]?.parentId ?? null,
-        categoryId: updates.categoryId ?? prev[key]?.categoryId ?? null,
+        categoryPath: updates.categoryPath ?? prev[key]?.categoryPath ?? [],
       },
     }));
   };
 
   const handleAssignmentTypeChange = (key: string, type: CategoryType) => {
-    updateAssignmentDraft(key, { type, parentId: null, categoryId: null });
+    updateAssignmentDraft(key, { type, categoryPath: [] });
   };
 
-  const handleAssignmentParentChange = (key: string, parentId: number | null) => {
-    updateAssignmentDraft(key, { parentId, categoryId: null });
-  };
+  const handleCategoryPathChange = (key: string, depth: number, categoryId: number | null) => {
+    setAssignmentDrafts((prev: Record<string, TransactionAssignment>) => {
+      const draft = prev[key] || { type: 'expense', categoryPath: [] };
+      const newPath = [...draft.categoryPath];
 
-  const handleAssignmentSubcategoryChange = (key: string, categoryId: number | null) => {
-    updateAssignmentDraft(key, { categoryId });
+      if (categoryId === null) {
+        // Clear from this depth onwards
+        newPath.splice(depth);
+      } else {
+        // Set this level and clear all deeper levels
+        newPath.splice(depth, newPath.length - depth, categoryId);
+      }
+
+      return {
+        ...prev,
+        [key]: {
+          ...draft,
+          categoryPath: newPath,
+        },
+      };
+    });
   };
 
   const handleSaveAssignment = async (txn: UncategorizedTransaction) => {
     const key = getTransactionKey(txn);
     const draft = assignmentDrafts[key];
 
-    if (!draft || !draft.parentId) {
-      setError('Please select at least a parent category.');
+    if (!draft || draft.categoryPath.length === 0) {
+      setError('Please select at least one category.');
       return;
     }
 
-    const parentDefinition = categoryLookup.get(draft.parentId);
-    if (!parentDefinition) {
+    // Get the final (leaf) category from the path
+    const selectedCategoryId = draft.categoryPath[draft.categoryPath.length - 1];
+    const categoryDefinition = categoryLookup.get(selectedCategoryId);
+
+    if (!categoryDefinition) {
       setError('Selected category is no longer available.');
       return;
     }
-
-    const selectedCategoryId = draft.categoryId ?? draft.parentId;
-    const categoryDefinition = categoryLookup.get(selectedCategoryId);
 
   setSavingAssignments((prev: Record<string, boolean>) => ({ ...prev, [key]: true }));
     setError(null);
@@ -362,9 +420,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         body: JSON.stringify({
           category_definition_id: selectedCategoryId,
           category_type: draft.type,
-          parent_category: parentDefinition.name,
-          subcategory: categoryDefinition && categoryDefinition.id !== parentDefinition.id ? categoryDefinition.name : null,
-          category: categoryDefinition ? categoryDefinition.name : parentDefinition.name,
+          category: categoryDefinition.name,
           auto_categorized: false,
           confidence_score: 1.0,
         }),
@@ -383,7 +439,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     } catch (assignmentError) {
       console.error('Error categorizing transaction:', assignmentError);
       setError(assignmentError instanceof Error ? assignmentError.message : 'Failed to categorize transaction');
-    } finally {
+    } finally{
       setSavingAssignments((prev: Record<string, boolean>) => {
         const next = { ...prev };
         delete next[key];
@@ -392,16 +448,17 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     }
   };
 
+
   const handleAutoAssignSimilar = async (txn: UncategorizedTransaction) => {
     const key = getTransactionKey(txn);
     const draft = assignmentDrafts[key];
 
-    if (!draft || !draft.parentId) {
-      setError('Please select at least a parent category first.');
+    if (!draft || draft.categoryPath.length === 0) {
+      setError('Please select at least one category first.');
       return;
     }
 
-    const selectedCategoryId = draft.categoryId ?? draft.parentId;
+    const selectedCategoryId = draft.categoryPath[draft.categoryPath.length - 1];
 
     setCreatingRules((prev: Record<string, boolean>) => ({ ...prev, [key]: true }));
     setError(null);
@@ -421,11 +478,19 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         if (response.status === 409) {
-          setError('A rule for this transaction name already exists.');
+          // Rule already exists - just apply the existing rules
+          setSuccess(`A rule for "${txn.name}" already exists. Applying all rules now...`);
+          setTimeout(() => setSuccess(null), 5000);
+          
+          // Apply existing rules
+          await handleApplyRules();
+          await fetchCategories();
+          await fetchRules();
+          onCategoriesUpdated();
+          return;
         } else {
           throw new Error(result.error || 'Failed to create auto-assignment rule');
         }
-        return;
       }
 
       setSuccess(`Rule created! All transactions named "${txn.name}" will now be auto-categorized.`);
@@ -484,6 +549,71 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     sortByOrder(rootCategories);
 
     return rootCategories;
+  };
+
+  // Helper function to render cascading category selectors
+  const renderCategorySelectors = (
+    transactionKey: string,
+    draft: TransactionAssignment | undefined,
+    rootCategories: CategoryDefinition[]
+  ) => {
+    const path = draft?.categoryPath || [];
+    const selectors: JSX.Element[] = [];
+
+    // Determine maximum depth to render (current path length + 1 for next level)
+    const maxDepth = path.length + 1;
+
+    for (let depth = 0; depth < Math.max(maxDepth, 1); depth++) {
+      // Get options for this depth level
+      let options: CategoryDefinition[] = [];
+
+      if (depth === 0) {
+        // Root level - show root categories
+        options = rootCategories;
+      } else {
+        // Child level - get children of parent at depth-1
+        const parentId = path[depth - 1];
+        if (parentId) {
+          const parent = categoryLookup.get(parentId);
+          options = parent?.children || [];
+        }
+      }
+
+      // Only render if there are options OR if this is a level in the current path
+      if (options.length === 0 && depth >= path.length) {
+        break;
+      }
+
+      const currentValue = path[depth] ?? '';
+      const isLastInPath = depth === path.length - 1;
+      const currentCategory = currentValue ? categoryLookup.get(currentValue) : undefined;
+      const hasChildren = currentCategory?.children && currentCategory.children.length > 0;
+
+      selectors.push(
+        <Grid key={`cat-${depth}`} item xs={12} md={depth === 0 ? 3 : 2}>
+          <FormControl fullWidth size="small">
+            <InputLabel>{depth === 0 ? 'Category' : `Level ${depth + 1}`}</InputLabel>
+            <Select
+              value={currentValue}
+              label={depth === 0 ? 'Category' : `Level ${depth + 1}`}
+              onChange={(event: any) => {
+                const value = event.target.value;
+                handleCategoryPathChange(transactionKey, depth, value === '' ? null : Number(value));
+              }}
+            >
+              <MenuItem value="">Select...</MenuItem>
+              {options.map((cat: CategoryDefinition) => (
+                <MenuItem key={cat.id} value={cat.id}>
+                  {cat.name} {cat.name_en ? `(${cat.name_en})` : ''}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+      );
+    }
+
+    return selectors;
   };
 
   const fetchRules = async () => {
@@ -980,10 +1110,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   {uncategorizedPreview.map((txn: UncategorizedTransaction) => {
                     const key = getTransactionKey(txn);
                     const draft = assignmentDrafts[key];
-                    const parentOptions = categoryRootsByType[draft?.type ?? 'expense'];
-                    const parentDefinition = draft?.parentId ? categoryLookup.get(draft.parentId) : undefined;
-                    const childOptions = parentDefinition?.children ?? [];
-                    const subcategoryValue = draft?.categoryId ?? '';
+                    const rootOptions = categoryRootsByType[draft?.type ?? 'expense'];
                     const isSaving = Boolean(savingAssignments[key]);
 
                     return (
@@ -1037,79 +1164,42 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                               </Select>
                             </FormControl>
                           </Grid>
+                          {renderCategorySelectors(key, draft, rootOptions)}
                           <Grid item xs={12} md={4}>
-                            <FormControl fullWidth size="small">
-                              <InputLabel>Category</InputLabel>
-                              <Select
-                                value={draft?.parentId ?? ''}
-                                label="Category"
-                                onChange={(event: any) => {
-                                  const value = event.target.value;
-                                  handleAssignmentParentChange(key, value === '' ? null : Number(value));
-                                }}
-                              >
-                                <MenuItem value="">Select category</MenuItem>
-                                {parentOptions.map((parent: CategoryDefinition) => (
-                                  <MenuItem key={parent.id} value={parent.id}>
-                                    {parent.name} {parent.name_en ? `(${parent.name_en})` : ''}
-                                  </MenuItem>
-                                ))}
-                              </Select>
-                              {txn.parent_category && draft?.parentId && (
-                                <Typography variant="caption" color="primary" sx={{ mt: 0.5 }}>
-                                  Suggested from mapping
-                                </Typography>
-                              )}
-                            </FormControl>
-                          </Grid>
-                          <Grid item xs={12} md={3}>
-                            <FormControl fullWidth size="small" disabled={!draft?.parentId || childOptions.length === 0}>
-                              <InputLabel>Subcategory (Optional)</InputLabel>
-                              <Select
-                                value={subcategoryValue}
-                                label="Subcategory (Optional)"
-                                onChange={(event: any) => {
-                                  const value = event.target.value;
-                                  handleAssignmentSubcategoryChange(key, value === '' ? null : Number(value));
-                                }}
-                                displayEmpty
-                              >
-                                <MenuItem value="">None</MenuItem>
-                                {childOptions.map((child: CategoryDefinition) => (
-                                  <MenuItem key={child.id} value={child.id}>
-                                    {child.name} {child.name_en ? `(${child.name_en})` : ''}
-                                  </MenuItem>
-                                ))}
-                              </Select>
-                            </FormControl>
-                          </Grid>
-                          <Grid item xs={12} md={2}>
-                            <Box display="flex" flexDirection="column" gap={0.5}>
+                            <ButtonGroup fullWidth variant="contained" size="small">
                               <Button
-                                fullWidth
-                                variant="contained"
-                                size="small"
                                 onClick={() => handleSaveAssignment(txn)}
-                                disabled={!draft?.parentId || isSaving}
+                                disabled={!draft?.categoryPath?.length || isSaving}
                                 startIcon={isSaving ? <CircularProgress color="inherit" size={16} /> : undefined}
                               >
                                 {isSaving ? 'Saving' : 'Assign'}
                               </Button>
-                              <Tooltip title="Create a rule to automatically categorize all transactions with this exact name">
-                                <span>
-                                  <Button
-                                    fullWidth
-                                    variant="outlined"
-                                    size="small"
-                                    onClick={() => handleAutoAssignSimilar(txn)}
-                                    disabled={!draft?.parentId || creatingRules[key]}
-                                    startIcon={creatingRules[key] ? <CircularProgress color="inherit" size={16} /> : <AutoAwesomeIcon fontSize="small" />}
-                                  >
-                                    {creatingRules[key] ? 'Creating' : 'Auto-Assign Similar'}
-                                  </Button>
-                                </span>
-                              </Tooltip>
-                            </Box>
+                              <Button
+                                size="small"
+                                onClick={(e) => setAssignMenuAnchors({ ...assignMenuAnchors, [key]: e.currentTarget })}
+                                disabled={!draft?.categoryPath?.length || isSaving}
+                              >
+                                <ArrowDropDownIcon />
+                              </Button>
+                            </ButtonGroup>
+                            <Menu
+                              anchorEl={assignMenuAnchors[key]}
+                              open={Boolean(assignMenuAnchors[key])}
+                              onClose={() => setAssignMenuAnchors({ ...assignMenuAnchors, [key]: null })}
+                            >
+                              <MenuItem
+                                onClick={() => {
+                                  setAssignMenuAnchors({ ...assignMenuAnchors, [key]: null });
+                                  handleAutoAssignSimilar(txn);
+                                }}
+                                disabled={!draft?.categoryPath?.length || creatingRules[key]}
+                              >
+                                <ListItemIcon>
+                                  {creatingRules[key] ? <CircularProgress size={20} /> : <AutoAwesomeIcon fontSize="small" />}
+                                </ListItemIcon>
+                                <ListItemText primary={creatingRules[key] ? 'Creating...' : 'Auto-Assign Similar'} />
+                              </MenuItem>
+                            </Menu>
                           </Grid>
                         </Grid>
                       </ListItem>
@@ -1119,6 +1209,134 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 {uncategorized.totalCount > uncategorizedPreview.length && (
                   <Typography variant="caption" color="text.secondary">
                     {`Showing the latest ${uncategorizedPreview.length} of ${uncategorized.totalCount.toLocaleString()} transactions.`}
+                  </Typography>
+                )}
+              </>
+            )}
+          </Paper>
+        )}
+
+        {/* Bank Transactions to Categorize */}
+        {bankTransactions && (
+          <Paper sx={{ p: 2, mb: 3 }}>
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              Bank Transactions to Categorize
+            </Typography>
+            {bankTransactions.totalCount === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                All bank transactions have been categorized.
+              </Typography>
+            ) : (
+              <>
+                <Typography variant="body2" color="text.secondary">
+                  {`You have ${bankTransactions.totalCount.toLocaleString()} bank transaction${bankTransactions.totalCount !== 1 ? 's' : ''} to categorize.`}
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5, mb: 1 }}>
+                  {`Total amount: ${formatCurrency(bankTransactions.totalAmount)}`}
+                </Typography>
+                <List dense sx={{ pt: 0 }}>
+                  {bankTransactions.recentTransactions.slice(0, 10).map((txn: UncategorizedTransaction) => {
+                    const key = getTransactionKey(txn);
+                    const draft = assignmentDrafts[key];
+                    const rootOptions = categoryRootsByType[draft?.type ?? 'expense'];
+                    const isSaving = Boolean(savingAssignments[key]);
+
+                    return (
+                      <ListItem
+                        key={`${txn.identifier}-${txn.vendor}-${txn.date}`}
+                        alignItems="flex-start"
+                        sx={{
+                          flexDirection: 'column',
+                          alignItems: 'stretch',
+                          gap: 1,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          borderRadius: 2,
+                          mb: 1,
+                          py: 1.5,
+                          px: 2,
+                        }}
+                      >
+                        <Box display="flex" justifyContent="space-between" width="100%">
+                          <Box>
+                            <Typography variant="subtitle2" fontWeight="600">
+                              {txn.name || 'Unknown transaction'}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {(txn.vendor || 'Unknown vendor')}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {formatDate(txn.date)}
+                              {txn.accountNumber ? ` • ****${txn.accountNumber}` : ''}
+                            </Typography>
+                          </Box>
+                          <Typography variant="subtitle2" fontWeight="bold">
+                            {formatCurrency(txn.price)}
+                          </Typography>
+                        </Box>
+
+                        <Grid container spacing={1} alignItems="center">
+                          <Grid item xs={12} md={3}>
+                            <FormControl fullWidth size="small">
+                              <InputLabel>Type</InputLabel>
+                              <Select
+                                value={draft?.type ?? 'expense'}
+                                label="Type"
+                                onChange={(event: any) =>
+                                  handleAssignmentTypeChange(key, event.target.value as CategoryType)
+                                }
+                              >
+                                <MenuItem value="expense">Expense</MenuItem>
+                                <MenuItem value="investment">Investment</MenuItem>
+                                <MenuItem value="income">Income</MenuItem>
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          {renderCategorySelectors(key, draft, rootOptions)}
+                          <Grid item xs={12} md={4}>
+                            <ButtonGroup fullWidth variant="contained" size="small">
+                              <Button
+                                onClick={() => handleSaveAssignment(txn)}
+                                disabled={!draft?.categoryPath?.length || isSaving}
+                                startIcon={isSaving ? <CircularProgress color="inherit" size={16} /> : undefined}
+                              >
+                                {isSaving ? 'Saving' : 'Assign'}
+                              </Button>
+                              <Button
+                                size="small"
+                                onClick={(e) => setAssignMenuAnchors({ ...assignMenuAnchors, [key]: e.currentTarget })}
+                                disabled={!draft?.categoryPath?.length || isSaving}
+                              >
+                                <ArrowDropDownIcon />
+                              </Button>
+                            </ButtonGroup>
+                            <Menu
+                              anchorEl={assignMenuAnchors[key]}
+                              open={Boolean(assignMenuAnchors[key])}
+                              onClose={() => setAssignMenuAnchors({ ...assignMenuAnchors, [key]: null })}
+                            >
+                              <MenuItem
+                                onClick={() => {
+                                  setAssignMenuAnchors({ ...assignMenuAnchors, [key]: null });
+                                  handleAutoAssignSimilar(txn);
+                                }}
+                                disabled={!draft?.categoryPath?.length || creatingRules[key]}
+                              >
+                                <ListItemIcon>
+                                  {creatingRules[key] ? <CircularProgress size={20} /> : <AutoAwesomeIcon fontSize="small" />}
+                                </ListItemIcon>
+                                <ListItemText primary={creatingRules[key] ? 'Creating...' : 'Auto-Assign Similar'} />
+                              </MenuItem>
+                            </Menu>
+                          </Grid>
+                        </Grid>
+                      </ListItem>
+                    );
+                  })}
+                </List>
+                {bankTransactions.totalCount > 10 && (
+                  <Typography variant="caption" color="text.secondary">
+                    {`Showing the latest 10 of ${bankTransactions.totalCount.toLocaleString()} transactions.`}
                   </Typography>
                 )}
               </>
