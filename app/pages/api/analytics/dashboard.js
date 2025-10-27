@@ -1,6 +1,7 @@
 import { getDB } from '../db.js';
 import { startOfWeek, startOfMonth, format } from 'date-fns';
 import { buildDuplicateFilter, resolveDateRange } from './utils.js';
+import { BANK_CATEGORY_NAME } from '../../../lib/category-constants.js';
 import { dialect } from '../../../lib/sql-dialect.js';
 
 export default async function handler(req, res) {
@@ -46,8 +47,11 @@ export default async function handler(req, res) {
       `SELECT
         ${dateSelect},
         SUM(CASE
-          WHEN (cd.category_type = 'income' OR (cd.category_type IS NULL AND t.price > 0))
-            AND t.price > 0 THEN t.price
+          WHEN (
+            (cd.category_type = 'income' AND t.price > 0)
+            OR (cd.category_type IS NULL AND t.price > 0)
+            OR (COALESCE(cd.name, '') = $3 AND t.price > 0)
+          ) THEN t.price
           ELSE 0
         END) as income,
         SUM(CASE
@@ -61,7 +65,7 @@ export default async function handler(req, res) {
       ${duplicateClause}
       GROUP BY ${dateGroupBy}
       ORDER BY date ASC`,
-      [start, end]
+      [start, end, BANK_CATEGORY_NAME]
     );
 
     // Get breakdown by category (EXPENSES ONLY - negative prices)
@@ -111,8 +115,11 @@ export default async function handler(req, res) {
       `SELECT
         ${monthExpr} as month,
         SUM(CASE
-          WHEN (cd.category_type = 'income' OR (cd.category_type IS NULL AND t.price > 0))
-            AND t.price > 0 THEN t.price
+          WHEN (
+            (cd.category_type = 'income' AND t.price > 0)
+            OR (cd.category_type IS NULL AND t.price > 0)
+            OR (COALESCE(cd.name, '') = $3 AND t.price > 0)
+          ) THEN t.price
           ELSE 0
         END) as income,
         SUM(CASE
@@ -126,7 +133,7 @@ export default async function handler(req, res) {
       ${duplicateClause}
       GROUP BY ${monthExpr}
       ORDER BY month ASC`,
-      [start, end]
+      [start, end, BANK_CATEGORY_NAME]
     );
 
     // Get summary stats - properly separated by category type
@@ -134,8 +141,11 @@ export default async function handler(req, res) {
     const summaryResult = await client.query(
       `SELECT
         SUM(CASE
-          WHEN (cd.category_type = 'income' OR (cd.category_type IS NULL AND t.price > 0))
-            AND t.price > 0 THEN t.price
+          WHEN (
+            (cd.category_type = 'income' AND t.price > 0)
+            OR (cd.category_type IS NULL AND t.price > 0)
+            OR (COALESCE(cd.name, '') = $3 AND t.price > 0)
+          ) THEN t.price
           ELSE 0
         END) as total_income,
         SUM(CASE
@@ -156,7 +166,7 @@ export default async function handler(req, res) {
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE t.date >= $1 AND t.date <= $2
       ${duplicateClause}`,
-      [start, end]
+      [start, end, BANK_CATEGORY_NAME]
     );
 
     const summary = summaryResult.rows[0];
