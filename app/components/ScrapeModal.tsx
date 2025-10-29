@@ -50,14 +50,16 @@ interface ScraperConfig {
   };
 }
 
-interface ScrapeModalProps {
+interface SyncModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  onStart?: () => void;
+  onComplete?: () => void;
   initialConfig?: ScraperConfig;
 }
 
-export default function ScrapeModal({ isOpen, onClose, onSuccess, initialConfig }: ScrapeModalProps) {
+export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onComplete, initialConfig }: SyncModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { showNotification } = useNotification();
@@ -122,9 +124,10 @@ export default function ScrapeModal({ isOpen, onClose, onSuccess, initialConfig 
     }
   };
 
-  const handleScrape = async () => {
+  const handleSync = async () => {
     setIsLoading(true);
     setError(null);
+    onStart?.();
 
     try {
       const response = await fetch('/api/scrape', {
@@ -139,13 +142,14 @@ export default function ScrapeModal({ isOpen, onClose, onSuccess, initialConfig 
         throw new Error('Failed to start scraping');
       }
 
-      showNotification('Scraping process started successfully!', 'success');
+      showNotification('Sync started successfully!', 'success');
       onClose();
       onSuccess?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
+      onComplete?.();
     }
   };
 
@@ -303,21 +307,6 @@ export default function ScrapeModal({ isOpen, onClose, onSuccess, initialConfig 
       </FormControl>
 
       {renderCredentialFields()}
-
-      <TextField
-        label="Start Date"
-        type="date"
-        value={config.options.startDate.toISOString().split('T')[0]}
-        onChange={(e) => {
-          const v = clampDateString(e.target.value);
-          handleConfigChange('options.startDate', new Date(v));
-        }}
-        InputLabelProps={{
-          shrink: true,
-        }}
-        inputProps={{ max: todayStr }}
-        helperText="Transactions will be fetched from this date"
-      />
     </>
   );
 
@@ -406,21 +395,6 @@ export default function ScrapeModal({ isOpen, onClose, onSuccess, initialConfig 
             fullWidth
           />
         )}
-
-        <TextField
-          label="Start Date"
-          type="date"
-          value={config.options.startDate.toISOString().split('T')[0]}
-          onChange={(e) => {
-            const v = clampDateString(e.target.value);
-            handleConfigChange('options.startDate', new Date(v));
-          }}
-          InputLabelProps={{
-            shrink: true,
-          }}
-          inputProps={{ max: todayStr }}
-          helperText="Transactions will be fetched from this date"
-        />
       </>
     );
   };
@@ -441,7 +415,7 @@ export default function ScrapeModal({ isOpen, onClose, onSuccess, initialConfig 
         }
       }}
     >
-      <ModalHeader title="Scrape" onClose={onClose} />
+      <ModalHeader title="Sync Transactions" onClose={onClose} />
       <DialogContent style={{ padding: '0 24px 24px' }}>
         {error && (
           <Alert severity="error" sx={{ mb: 2, mt: 2 }}>
@@ -461,7 +435,7 @@ export default function ScrapeModal({ isOpen, onClose, onSuccess, initialConfig 
           Cancel
         </Button>
         <Button
-          onClick={handleScrape}
+          onClick={handleSync}
           variant="contained"
           disabled={isLoading}
           sx={{
@@ -476,7 +450,7 @@ export default function ScrapeModal({ isOpen, onClose, onSuccess, initialConfig 
             }
           }}
         >
-          {isLoading ? 'SCRAPING...' : 'SCRAPE'}
+          {isLoading ? 'SYNCING...' : 'SYNC'}
         </Button>
       </DialogActions>
     </Dialog>

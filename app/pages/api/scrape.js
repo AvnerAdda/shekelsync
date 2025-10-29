@@ -66,6 +66,15 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
       parentCategory = resolved.parentCategory;
       subcategory = resolved.subcategory;
       category = subcategory || parentCategory || category;
+    } else if (amount < 0) {
+      // Default credit card expenses to root Expenses category (id=1) when no rule matches
+      categoryDefinitionId = 1;
+      const expenseCategory = await getCategoryInfo(1, client);
+      if (expenseCategory) {
+        category = expenseCategory.name;
+        parentCategory = expenseCategory.name;
+        subcategory = null;
+      }
     }
   } else {
     // Smart categorization for bank transactions based on name and price
@@ -162,6 +171,104 @@ async function autoCategorizeTransaction(transactionName, client) {
   } catch (error) {
     console.error('Error in auto-categorization:', error);
     return { success: false };
+  }
+}
+
+async function applyAccountPairings(client) {
+  try {
+    // Get all active account pairings
+    const pairingsResult = await client.query(`
+      SELECT
+        id,
+        credit_card_vendor,
+        credit_card_account_number,
+        bank_vendor,
+        bank_account_number,
+        match_patterns
+      FROM account_pairings
+      WHERE is_active = 1
+    `);
+
+    const pairings = pairingsResult.rows;
+    if (pairings.length === 0) {
+      console.log('No active account pairings found');
+      return { pairingsApplied: 0, transactionsUpdated: 0 };
+    }
+
+    let totalUpdated = 0;
+
+    // Credit card related keywords in Hebrew and English
+    const keywords = [
+      'ויזה', 'visa',
+      'כ.א.ל', 'cal',
+      'מקס', 'max',
+      'ישראכרט', 'isracard',
+      'אמקס', 'אמריקן אקספרס', 'amex', 'american express',
+      'לאומי כרט', 'leumi card',
+      'דיינרס', 'diners',
+      'hapoalim', 'leumi', 'mizrahi', 'discount',
+      'otsarHahayal', 'beinleumi', 'massad', 'yahav', 'union'
+    ];
+
+    for (const pairing of pairings) {
+      const creditCardAccountNumber = pairing.credit_card_account_number;
+      const bankVendor = pairing.bank_vendor;
+      const bankAccountNumber = pairing.bank_account_number;
+
+      // Build keyword conditions
+      const keywordConditions = keywords.map(() => `LOWER(name) LIKE '%' || LOWER(?) || '%'`).join(' OR ');
+
+      // Build the query to find matching transactions
+      let query = `
+        UPDATE transactions
+        SET category_definition_id = CASE
+          WHEN price < 0 THEN 25
+          WHEN price > 0 THEN 75
+          ELSE category_definition_id
+        END
+        WHERE vendor = ?
+          AND (
+            LOWER(name) LIKE '%' || LOWER(?) || '%'
+            OR category_definition_id IN (25, 75)
+            OR ${keywordConditions}
+          )
+      `;
+
+      const params = [bankVendor, creditCardAccountNumber, ...keywords];
+
+      // Add optional bank account number filter
+      if (bankAccountNumber) {
+        query += ' AND account_number = ?';
+        params.push(bankAccountNumber);
+      }
+
+      // Add custom match patterns if any
+      const matchPatterns = pairing.match_patterns ? JSON.parse(pairing.match_patterns) : [];
+      if (matchPatterns.length > 0) {
+        const patternConditions = matchPatterns.map(() => `LOWER(name) LIKE '%' || LOWER(?) || '%'`).join(' OR ');
+        query = query.replace('WHERE vendor = ?', `WHERE vendor = ? AND (${patternConditions} OR`);
+        query = query.replace(')', '))');
+        params.splice(2, 0, ...matchPatterns);
+      }
+
+      const updateResult = await client.query(query, params);
+      totalUpdated += updateResult.rowCount;
+
+      // Log the application
+      if (updateResult.rowCount > 0) {
+        await client.query(
+          `INSERT INTO account_pairing_log (pairing_id, action, transaction_count)
+           VALUES (?, 'applied', ?)`,
+          [pairing.id, updateResult.rowCount]
+        );
+      }
+    }
+
+    console.log(`Applied ${pairings.length} pairings to ${totalUpdated} transactions`);
+    return { pairingsApplied: pairings.length, transactionsUpdated: totalUpdated };
+  } catch (error) {
+    console.error('Error applying account pairings:', error);
+    throw error;
   }
 }
 
@@ -431,7 +538,14 @@ export default async function handler(req, res) {
     }
     
     let bankTransactions = 0;
+    const discoveredAccountNumbers = new Set();
+
     for (const account of result.accounts) {
+      // Collect account numbers for later storage
+      if (account.accountNumber) {
+        discoveredAccountNumbers.add(account.accountNumber);
+      }
+
       // Store account balance if available (primarily for bank accounts)
       if (account.balance !== undefined && account.balance !== null) {
         try {
@@ -461,6 +575,25 @@ export default async function handler(req, res) {
       }
     }
 
+    // Store discovered account numbers in vendor_credentials
+    if (discoveredAccountNumbers.size > 0) {
+      const accountNumbersStr = Array.from(discoveredAccountNumbers).join(';');
+      const fieldName = isBank ? 'bank_account_number' : 'card6_digits';
+
+      try {
+        await client.query(`
+          UPDATE vendor_credentials
+          SET ${fieldName} = $1,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE vendor = $2`,
+          [accountNumbersStr, options.companyId]
+        );
+        console.log(`Updated ${fieldName} for ${options.companyId}: ${accountNumbersStr}`);
+      } catch (updateError) {
+        console.error(`Failed to update account numbers for ${options.companyId}:`, updateError);
+      }
+    }
+
     // Update last scrape attempt for this vendor (regardless of balance availability)
     try {
       await client.query(`
@@ -476,6 +609,9 @@ export default async function handler(req, res) {
     }
 
     await applyCategorizationRules(client);
+
+    // Apply account pairings to automatically categorize credit card settlements
+    await applyAccountPairings(client);
 
     console.log(`Scraped ${bankTransactions} bank transactions`);
 
