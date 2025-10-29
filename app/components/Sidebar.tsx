@@ -33,11 +33,13 @@ import {
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
   WarningAmber as WarningAmberIcon,
+  Lock as LockIcon,
 } from '@mui/icons-material';
 import AccountsModal from './AccountsModal';
 import ScrapeModal from './ScrapeModal';
 import CategoryHierarchyModal from './CategoryHierarchyModal';
 import { useNotification } from './NotificationContext';
+import { useOnboarding } from '../contexts/OnboardingContext';
 import { STALE_SYNC_THRESHOLD_MS } from '../utils/constants';
 
 const DRAWER_WIDTH = 260;
@@ -67,6 +69,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const [uncategorizedCount, setUncategorizedCount] = useState<number>(0);
   const [isBulkSyncing, setIsBulkSyncing] = useState(false);
   const { showNotification } = useNotification();
+  const { getPageAccessStatus } = useOnboarding();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -317,30 +320,57 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
 
         {/* Menu Items */}
         <List sx={{ flexGrow: 1 }}>
-          {menuItems.map((item) => (
-            <ListItem key={item.id} disablePadding>
-              <ListItemButton
-                selected={currentPage === item.id}
-                onClick={() => onPageChange(item.id)}
-                sx={{
-                  minHeight: 48,
-                  justifyContent: open ? 'initial' : 'center',
-                  px: 2.5,
-                }}
-              >
-                <ListItemIcon
-                  sx={{
-                    minWidth: 0,
-                    mr: open ? 3 : 'auto',
-                    justifyContent: 'center',
-                  }}
+          {menuItems.map((item) => {
+            const accessStatus = getPageAccessStatus(item.id);
+            const isLocked = accessStatus.isLocked;
+
+            return (
+              <ListItem key={item.id} disablePadding>
+                <Tooltip
+                  title={isLocked ? accessStatus.reason : ''}
+                  placement="right"
+                  arrow
                 >
-                  {item.icon}
-                </ListItemIcon>
-                {open && <ListItemText primary={item.label} />}
-              </ListItemButton>
-            </ListItem>
-          ))}
+                  <ListItemButton
+                    selected={currentPage === item.id}
+                    onClick={() => onPageChange(item.id)}
+                    sx={{
+                      minHeight: 48,
+                      justifyContent: open ? 'initial' : 'center',
+                      px: 2.5,
+                      opacity: isLocked ? 0.5 : 1,
+                      '&:hover': {
+                        opacity: isLocked ? 0.6 : 1,
+                      },
+                    }}
+                  >
+                    <ListItemIcon
+                      sx={{
+                        minWidth: 0,
+                        mr: open ? 3 : 'auto',
+                        justifyContent: 'center',
+                        position: 'relative',
+                      }}
+                    >
+                      {item.icon}
+                      {isLocked && (
+                        <LockIcon
+                          sx={{
+                            position: 'absolute',
+                            bottom: -4,
+                            right: -4,
+                            fontSize: 12,
+                            color: 'text.secondary',
+                          }}
+                        />
+                      )}
+                    </ListItemIcon>
+                    {open && <ListItemText primary={item.label} />}
+                  </ListItemButton>
+                </Tooltip>
+              </ListItem>
+            );
+          })}
         </List>
 
         {/* Bottom Section */}

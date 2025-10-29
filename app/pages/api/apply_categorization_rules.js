@@ -97,21 +97,19 @@ const handler = createApiHandler({
           UPDATE transactions
           SET
             category_definition_id = $2,
-            category = $3,
-            category_type = $4,
+            category_type = $3,
             auto_categorized = true,
-            confidence_score = MAX(confidence_score, $5)
+            confidence_score = MAX(confidence_score, $4)
           WHERE LOWER(name) LIKE LOWER($1)
             ${priceCondition}
             AND (
               category_definition_id IS NULL
-              OR ($6 IS NOT NULL AND category_definition_id = $6)
+              OR ($5 IS NOT NULL AND category_definition_id = $5)
               OR auto_categorized = true
             )
         `, [
           pattern,
           categoryId,
-          categoryLabel,
           categoryRecord.category_type,
           confidence,
           bankCategoryId

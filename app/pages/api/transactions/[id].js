@@ -49,24 +49,6 @@ const handler = createApiHandler({
       paramIndex++;
     }
 
-    if (req.body.category !== undefined) {
-      updates.push(`category = $${paramIndex}`);
-      params.push(req.body.category);
-      paramIndex++;
-    }
-
-    if (req.body.parent_category !== undefined) {
-      updates.push(`parent_category = $${paramIndex}`);
-      params.push(req.body.parent_category);
-      paramIndex++;
-    }
-
-    if (req.body.subcategory !== undefined) {
-      updates.push(`subcategory = $${paramIndex}`);
-      params.push(req.body.subcategory);
-      paramIndex++;
-    }
-
     if (req.body.category_definition_id !== undefined) {
       updates.push(`category_definition_id = $${paramIndex}`);
       params.push(req.body.category_definition_id);

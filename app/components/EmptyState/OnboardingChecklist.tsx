@@ -16,6 +16,7 @@ import {
   Lock as LockIcon,
   Person as PersonIcon,
   AccountBalance as AccountBalanceIcon,
+  CreditCard as CreditCardIcon,
   CloudDownload as CloudDownloadIcon,
   Explore as ExploreIcon
 } from '@mui/icons-material';
@@ -23,16 +24,16 @@ import { useOnboarding } from '../../contexts/OnboardingContext';
 
 interface OnboardingChecklistProps {
   onProfileClick?: () => void;
-  onAccountsClick?: () => void;
-  onScrapeClick?: () => void;
+  onBankAccountClick?: () => void;
+  onCreditCardClick?: () => void;
   onDismiss?: () => void;
   compact?: boolean;
 }
 
 const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   onProfileClick,
-  onAccountsClick,
-  onScrapeClick,
+  onBankAccountClick,
+  onCreditCardClick,
   onDismiss,
   compact = false
 }) => {
@@ -40,7 +41,7 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
 
   if (!status) return null;
 
-  const { completedSteps, suggestedAction } = status;
+  const { completedSteps, suggestedAction, stats } = status;
 
   const steps = [
     {
@@ -53,22 +54,31 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
       locked: false
     },
     {
-      id: 'accounts',
-      title: 'Add bank/credit accounts',
-      description: 'Connect your Israeli bank accounts and credit cards',
+      id: 'bankAccount',
+      title: 'Add bank account',
+      description: `Connect your Israeli bank account${stats?.bankAccountCount ? ` (${stats.bankAccountCount} added)` : ''}`,
       icon: AccountBalanceIcon,
-      completed: completedSteps.accounts,
-      onClick: onAccountsClick,
+      completed: completedSteps.bankAccount,
+      onClick: onBankAccountClick,
       locked: !completedSteps.profile
     },
     {
+      id: 'creditCard',
+      title: 'Add credit card',
+      description: `Add your credit card account${stats?.creditCardCount ? ` (${stats.creditCardCount} added)` : ''}`,
+      icon: CreditCardIcon,
+      completed: completedSteps.creditCard,
+      onClick: onCreditCardClick,
+      locked: !completedSteps.bankAccount
+    },
+    {
       id: 'firstScrape',
-      title: 'Scrape your first transactions',
-      description: 'Fetch your transaction history automatically',
+      title: 'Auto-sync transactions',
+      description: 'Automatic sync when accounts are added',
       icon: CloudDownloadIcon,
       completed: completedSteps.firstScrape,
-      onClick: onScrapeClick,
-      locked: !completedSteps.accounts
+      onClick: null,
+      locked: !completedSteps.bankAccount || !completedSteps.creditCard
     },
     {
       id: 'explored',
@@ -82,7 +92,7 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   ];
 
   const completedCount = Object.values(completedSteps).filter(Boolean).length;
-  const totalSteps = 4;
+  const totalSteps = 5;
 
   const handleDismiss = async () => {
     try {

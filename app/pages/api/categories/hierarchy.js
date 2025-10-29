@@ -104,22 +104,17 @@ async function handleGet(req, res) {
       pool.query(
         `SELECT COUNT(*) AS total_transactions, COALESCE(SUM(ABS(price)), 0) AS total_amount
          FROM transactions t
-         WHERE t.category_definition_id IN (
-           SELECT id FROM category_definitions WHERE name = $1
-         )
-         `,
-        [BANK_CATEGORY_NAME]
+         JOIN category_definitions cd ON t.category_definition_id = cd.id
+         WHERE cd.depth_level = 0
+         `
       ),
       pool.query(
-        `SELECT identifier, vendor, name, date, price, account_number
+        `SELECT t.identifier, t.vendor, t.name, t.date, t.price, t.account_number
          FROM transactions t
-         WHERE t.category_definition_id IN (
-           SELECT id FROM category_definitions WHERE name = $1
-         )
-         
-         ORDER BY date DESC
-         LIMIT 50`,
-        [BANK_CATEGORY_NAME]
+         JOIN category_definitions cd ON t.category_definition_id = cd.id
+         WHERE cd.depth_level = 0
+         ORDER BY t.date DESC
+         LIMIT 50`
       ),
     ]);
 

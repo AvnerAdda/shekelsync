@@ -5,9 +5,11 @@ import { BANK_VENDORS, SPECIAL_BANK_VENDORS, OTHER_BANK_VENDORS } from '../../ut
 import {
   resolveCategory,
   matchCategorizationRule,
-  findCategoryByName
+  findCategoryByName,
+  getCategoryInfo
 } from '../../lib/category-helpers.js';
 import { BANK_CATEGORY_NAME } from '../../lib/category-constants.js';
+import { autoCategorizeBankTransaction } from '../../lib/auto-categorize-bank.js';
 
 let cachedBankCategory = null;
 
@@ -66,15 +68,28 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
       category = subcategory || parentCategory || category;
     }
   } else {
-    const bankCategory = await getBankCategoryDefinition(client);
-    categoryDefinitionId = bankCategory.id;
-    category = bankCategory.name;
-    parentCategory = bankCategory.parent_name || bankCategory.name;
-    subcategory = bankCategory.parent_id ? bankCategory.name : null;
+    // Smart categorization for bank transactions based on name and price
+    const autoCat = await autoCategorizeBankTransaction(txn.description, amount, client);
+    categoryDefinitionId = autoCat.categoryDefinitionId;
+
+    // Get full category info for labels
+    const categoryInfo = await getCategoryInfo(categoryDefinitionId, client);
+    if (categoryInfo) {
+      category = categoryInfo.name;
+      parentCategory = categoryInfo.parent_id ? categoryInfo.parent_name : categoryInfo.name;
+      subcategory = categoryInfo.parent_id ? categoryInfo.name : null;
+    }
   }
 
   // Determine category_type based on transaction characteristics
-  const categoryType = isBank ? 'bank' : (category === 'Income' ? 'income' : 'expense');
+  let categoryType = 'expense'; // default
+  if (isBank && categoryDefinitionId) {
+    // For bank transactions, get the actual category_type from the assigned category
+    const categoryInfo = await getCategoryInfo(categoryDefinitionId, client);
+    categoryType = categoryInfo?.category_type || 'expense';
+  } else if (!isBank) {
+    categoryType = category === 'Income' ? 'income' : 'expense';
+  }
 
   try {
     await client.query(
@@ -84,9 +99,6 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
         date,
         name,
         price,
-        category,
-        parent_category,
-        subcategory,
         category_definition_id,
         merchant_name,
         auto_categorized,
@@ -102,7 +114,7 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
         category_type,
         transaction_datetime,
         processed_datetime
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       ON CONFLICT (identifier, vendor) DO NOTHING`,
       [
         txn.identifier,
@@ -110,13 +122,10 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
         new Date(txn.date),
         txn.description,
         amount,
-        category || 'N/A',
-        parentCategory,
-        subcategory,
         categoryDefinitionId,
         txn.description,
         categoryDefinitionId ? true : false,
-        categoryDefinitionId ? 0.8 : parentCategory ? 0.5 : 0.0,
+        categoryDefinitionId ? 0.8 : 0.0,
         txn.type,
         txn.processedDate,
         txn.originalAmount,
@@ -164,8 +173,6 @@ async function applyCategorizationRules(client) {
         cr.id,
         cr.name_pattern,
         cr.target_category,
-        cr.parent_category,
-        cr.subcategory,
         cr.category_definition_id,
         cd.name AS resolved_subcategory,
         parent.name AS resolved_parent_category,
@@ -184,10 +191,9 @@ async function applyCategorizationRules(client) {
     for (const rule of rules) {
       const pattern = `%${rule.name_pattern}%`;
       let categoryId = rule.category_definition_id;
-      let resolvedSub = rule.resolved_subcategory || rule.subcategory || null;
+      let resolvedSub = rule.resolved_subcategory || null;
       let resolvedParent =
         rule.resolved_parent_category ||
-        rule.parent_category ||
         (resolvedSub ? null : rule.target_category) ||
         null;
 
@@ -212,20 +218,17 @@ async function applyCategorizationRules(client) {
         UPDATE transactions
         SET
           category_definition_id = COALESCE($2, category_definition_id),
-          category = COALESCE($3, category),
-          parent_category = COALESCE($4, parent_category),
-          subcategory = COALESCE($5, subcategory),
           auto_categorized = true,
-          confidence_score = MAX(confidence_score, $6)
+          confidence_score = MAX(confidence_score, $3)
         WHERE LOWER(name) LIKE LOWER($1)
           AND (
             category_definition_id IS NULL
             OR category_definition_id NOT IN (
               SELECT id FROM category_definitions
-              WHERE name = $7 OR category_type = 'income'
+              WHERE name = $4 OR category_type = 'income'
             )
           )
-      `, [pattern, categoryId, categoryName, resolvedParent, resolvedSub, confidence, BANK_CATEGORY_NAME]);
+      `, [pattern, categoryId, confidence, BANK_CATEGORY_NAME]);
 
       totalUpdated += updateResult.rowCount;
     }
@@ -238,85 +241,9 @@ async function applyCategorizationRules(client) {
   }
 }
 
-async function autoMarkCreditCardPaymentDuplicates(client) {
-  try {
-    // Auto-mark credit card payment transactions as duplicates
-    const duplicateResult = await client.query(`
-      INSERT INTO transaction_duplicates (
-        transaction1_identifier,
-        transaction1_vendor,
-        transaction2_identifier,
-        transaction2_vendor,
-        match_type,
-        confidence,
-        exclude_from_totals,
-        is_confirmed,
-        created_at,
-        notes
-      )
-      SELECT
-        t.identifier,
-        t.vendor,
-        t.identifier,
-        t.vendor,
-        'credit_card_payment',
-        1.0,
-        true,
-        true,
-        CURRENT_TIMESTAMP,
-        'Auto-detected credit card payment transaction - exclude from totals to avoid double counting'
-      FROM transactions t
-      WHERE (t.name LIKE '%חיוב לכרטיס ויזה%' OR t.name LIKE '%חיוב לכרטיס ממקס%')
-        AND t.category_definition_id IN (
-          SELECT id FROM category_definitions WHERE name = $1
-        )
-        AND t.price < 0
-        AND NOT EXISTS (
-          SELECT 1 FROM transaction_duplicates td
-          WHERE td.transaction1_identifier = t.identifier
-          AND td.transaction1_vendor = t.vendor
-        )
-      ON CONFLICT DO NOTHING
-    `, [BANK_CATEGORY_NAME]);
-
-    const markedCount = duplicateResult.rowCount;
-    if (markedCount > 0) {
-      console.log(`Auto-marked ${markedCount} credit card payment transactions as duplicates`);
-    }
-
-    return { duplicatesMarked: markedCount };
-  } catch (error) {
-    console.error('Error auto-marking credit card payment duplicates:', error);
-    // Don't throw - this is a non-critical operation
-    return { duplicatesMarked: 0, error: error.message };
-  }
-}
-
-async function linkTransactionsToCategoryDefinitions(client) {
-  try {
-    // Link transactions to category_definitions by matching category names
-    const linkResult = await client.query(`
-      UPDATE transactions
-      SET category_definition_id = cd.id
-      FROM category_definitions cd
-      WHERE transactions.category_definition_id IS NULL
-        AND transactions.category = cd.name
-        AND cd.is_active = true
-        AND cd.name != $1
-    `, [BANK_CATEGORY_NAME]);
-
-    const linkedCount = linkResult.rowCount;
-    if (linkedCount > 0) {
-      console.log(`Linked ${linkedCount} transactions to category definitions`);
-    }
-
-    return { transactionsLinked: linkedCount };
-  } catch (error) {
-    console.error('Error linking transactions to category definitions:', error);
-    // Don't throw - this is a non-critical operation
-    return { transactionsLinked: 0, error: error.message };
-  }
-}
+// NOTE: Duplicate detection is now handled via category_definition_id pointing to
+// "Bank Settlements" category. Credit card payments are categorized during insertion.
+// The old transaction_duplicates table has been removed in favor of this approach.
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -549,14 +476,6 @@ export default async function handler(req, res) {
     }
 
     await applyCategorizationRules(client);
-
-    // Auto-detect and mark credit card payment duplicates
-    if (isBank) {
-      await autoMarkCreditCardPaymentDuplicates(client);
-    }
-
-    // Link transactions to category_definitions
-    await linkTransactionsToCategoryDefinitions(client);
 
     console.log(`Scraped ${bankTransactions} bank transactions`);
 

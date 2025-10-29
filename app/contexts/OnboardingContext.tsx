@@ -4,17 +4,26 @@ interface OnboardingStatus {
   isComplete: boolean;
   completedSteps: {
     profile: boolean;
-    accounts: boolean;
+    bankAccount: boolean;
+    creditCard: boolean;
     firstScrape: boolean;
     explored: boolean;
   };
   stats: {
     accountCount: number;
+    bankAccountCount: number;
+    creditCardCount: number;
     transactionCount: number;
     lastScrapeDate: string | null;
     hasProfile: boolean;
   };
-  suggestedAction: 'profile' | 'accounts' | 'scrape' | 'explore' | null;
+  suggestedAction: 'profile' | 'bankAccount' | 'creditCard' | 'scrape' | 'explore' | null;
+}
+
+interface PageAccessStatus {
+  isLocked: boolean;
+  requiredStep: string;
+  reason: string;
 }
 
 interface OnboardingContextType {
@@ -24,6 +33,7 @@ interface OnboardingContextType {
   refetch: () => Promise<void>;
   dismissOnboarding: () => Promise<void>;
   markStepComplete: (step: keyof OnboardingStatus['completedSteps']) => void;
+  getPageAccessStatus: (page: string) => PageAccessStatus;
 }
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
@@ -86,8 +96,10 @@ export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       let suggestedAction: OnboardingStatus['suggestedAction'] = null;
       if (!updatedSteps.profile) {
         suggestedAction = 'profile';
-      } else if (!updatedSteps.accounts) {
-        suggestedAction = 'accounts';
+      } else if (!updatedSteps.bankAccount) {
+        suggestedAction = 'bankAccount';
+      } else if (!updatedSteps.creditCard) {
+        suggestedAction = 'creditCard';
       } else if (!updatedSteps.firstScrape) {
         suggestedAction = 'scrape';
       } else if (!updatedSteps.explored) {
@@ -111,13 +123,61 @@ export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     fetchStatus();
   }, [fetchStatus]);
 
+  const getPageAccessStatus = useCallback((page: string): PageAccessStatus => {
+    // Settings is always accessible
+    if (page === 'settings') {
+      return {
+        isLocked: false,
+        requiredStep: '',
+        reason: ''
+      };
+    }
+
+    // Home is always accessible
+    if (page === 'home') {
+      return {
+        isLocked: false,
+        requiredStep: '',
+        reason: ''
+      };
+    }
+
+    // If no status yet, lock everything except settings/home
+    if (!status) {
+      return {
+        isLocked: true,
+        requiredStep: 'firstScrape',
+        reason: 'Complete your first transaction scrape to unlock this page'
+      };
+    }
+
+    // Analysis, Investments, and Budgets require first scrape
+    if (['analysis', 'investments', 'budgets'].includes(page)) {
+      if (!status.completedSteps.firstScrape) {
+        return {
+          isLocked: true,
+          requiredStep: 'firstScrape',
+          reason: 'Complete your first transaction scrape to unlock this page'
+        };
+      }
+    }
+
+    // Page is unlocked
+    return {
+      isLocked: false,
+      requiredStep: '',
+      reason: ''
+    };
+  }, [status]);
+
   const value: OnboardingContextType = {
     status,
     loading,
     error,
     refetch: fetchStatus,
     dismissOnboarding,
-    markStepComplete
+    markStepComplete,
+    getPageAccessStatus
   };
 
   return (
@@ -135,4 +195,5 @@ export const useOnboarding = (): OnboardingContextType => {
   return context;
 };
 
+export type { PageAccessStatus };
 export default OnboardingContext;

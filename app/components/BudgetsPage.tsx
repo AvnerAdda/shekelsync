@@ -29,6 +29,8 @@ import {
   CheckCircle as CheckIcon,
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { useOnboarding } from '../contexts/OnboardingContext';
+import LockedPagePlaceholder from './EmptyState/LockedPagePlaceholder';
 
 interface BudgetBase {
   id: number;
@@ -57,6 +59,22 @@ interface CategoryOption {
 }
 
 const BudgetsPage: React.FC = () => {
+  const theme = useTheme();
+  const { formatCurrency } = useFinancePrivacy();
+  const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
+
+  // Check if page is locked
+  const accessStatus = getPageAccessStatus('budgets');
+  if (accessStatus.isLocked) {
+    return (
+      <LockedPagePlaceholder
+        page="budgets"
+        accessStatus={accessStatus}
+        onboardingStatus={onboardingStatus}
+      />
+    );
+  }
+
   const [budgets, setBudgets] = useState<BudgetUsage[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -66,8 +84,6 @@ const BudgetsPage: React.FC = () => {
     period_type: 'monthly' as 'weekly' | 'monthly' | 'yearly',
     budget_limit: '',
   });
-  const theme = useTheme();
-  const { formatCurrency } = useFinancePrivacy();
 
   useEffect(() => {
     fetchBudgets();

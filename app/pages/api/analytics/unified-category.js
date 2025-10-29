@@ -31,6 +31,7 @@ export default async function handler(req, res) {
       subcategoryId,
       groupBy = 'category',
       includeTransactions = 'false',
+      excludeDuplicates = 'false',
       limit = 100
     } = req.query;
 

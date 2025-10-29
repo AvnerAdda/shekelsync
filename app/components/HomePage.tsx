@@ -477,11 +477,11 @@ const HomePage: React.FC = () => {
             // Profile modal will be handled by parent (MainLayout)
             window.dispatchEvent(new CustomEvent('openProfileSetup'));
           }}
-          onAccountsClick={() => {
+          onBankAccountClick={() => {
             window.dispatchEvent(new CustomEvent('openAccountsModal'));
           }}
-          onScrapeClick={() => {
-            window.dispatchEvent(new CustomEvent('openScrapeModal'));
+          onCreditCardClick={() => {
+            window.dispatchEvent(new CustomEvent('openAccountsModal'));
           }}
         />
       </EmptyState>

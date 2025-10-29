@@ -1,27 +1,34 @@
 import { getDB } from '../db.js';
+import { BANK_VENDORS, CREDIT_CARD_VENDORS, SPECIAL_BANK_VENDORS } from '../../../utils/constants.js';
+
+// Combined list of all bank vendors
+const ALL_BANK_VENDORS = [...BANK_VENDORS, ...SPECIAL_BANK_VENDORS];
 
 /**
  * GET /api/onboarding/status
  *
  * Returns onboarding completion status for new users.
- * Checks: profile, accounts, transactions, and dismissed flag
+ * Checks: profile, bank account, credit card, transactions, and dismissed flag
  *
  * Response:
  * {
  *   isComplete: boolean,
  *   completedSteps: {
  *     profile: boolean,
- *     accounts: boolean,
+ *     bankAccount: boolean,
+ *     creditCard: boolean,
  *     firstScrape: boolean,
  *     explored: boolean
  *   },
  *   stats: {
  *     accountCount: number,
+ *     bankAccountCount: number,
+ *     creditCardCount: number,
  *     transactionCount: number,
  *     lastScrapeDate: string | null,
  *     hasProfile: boolean
  *   },
- *   suggestedAction: 'profile' | 'accounts' | 'scrape' | 'explore' | null
+ *   suggestedAction: 'profile' | 'bankAccount' | 'creditCard' | 'scrape' | 'explore' | null
  * }
  */
 export default async function handler(req, res) {
@@ -47,12 +54,30 @@ export default async function handler(req, res) {
     const hasProfile = profileResult.rows.length > 0;
     const profile = profileResult.rows[0] || null;
 
-    // Count vendor credentials (accounts)
+    // Count all vendor credentials (accounts)
     const accountsResult = await client.query(`
       SELECT COUNT(*) as count
       FROM vendor_credentials
     `);
     const accountCount = parseInt(accountsResult.rows[0].count);
+
+    // Count bank accounts specifically
+    const bankPlaceholders = ALL_BANK_VENDORS.map(() => '?').join(',');
+    const bankAccountsResult = await client.query(`
+      SELECT COUNT(*) as count
+      FROM vendor_credentials
+      WHERE vendor IN (${bankPlaceholders})
+    `, ALL_BANK_VENDORS);
+    const bankAccountCount = parseInt(bankAccountsResult.rows[0].count);
+
+    // Count credit card accounts specifically
+    const creditPlaceholders = CREDIT_CARD_VENDORS.map(() => '?').join(',');
+    const creditCardResult = await client.query(`
+      SELECT COUNT(*) as count
+      FROM vendor_credentials
+      WHERE vendor IN (${creditPlaceholders})
+    `, CREDIT_CARD_VENDORS);
+    const creditCardCount = parseInt(creditCardResult.rows[0].count);
 
     // Count transactions
     const transactionsResult = await client.query(`
@@ -69,10 +94,11 @@ export default async function handler(req, res) {
     `);
     const lastScrapeDate = lastScrapeResult.rows[0]?.last_scrape || null;
 
-    // Determine completion status for each step
+    // Determine completion status for each step (4 steps now)
     const completedSteps = {
       profile: hasProfile && profile.username !== null,
-      accounts: accountCount > 0,
+      bankAccount: bankAccountCount > 0,
+      creditCard: creditCardCount > 0,
       firstScrape: transactionCount > 0,
       explored: profile?.onboarding_dismissed === 1 || transactionCount > 50 // Auto-complete if 50+ transactions
     };
@@ -80,12 +106,14 @@ export default async function handler(req, res) {
     // Calculate overall completion
     const isComplete = Object.values(completedSteps).every(step => step === true);
 
-    // Suggest next action based on completion
+    // Suggest next action based on completion (profile → bankAccount → creditCard → scrape → explore)
     let suggestedAction = null;
     if (!completedSteps.profile) {
       suggestedAction = 'profile';
-    } else if (!completedSteps.accounts) {
-      suggestedAction = 'accounts';
+    } else if (!completedSteps.bankAccount) {
+      suggestedAction = 'bankAccount';
+    } else if (!completedSteps.creditCard) {
+      suggestedAction = 'creditCard';
     } else if (!completedSteps.firstScrape) {
       suggestedAction = 'scrape';
     } else if (!completedSteps.explored) {
@@ -98,6 +126,8 @@ export default async function handler(req, res) {
       completedSteps,
       stats: {
         accountCount,
+        bankAccountCount,
+        creditCardCount,
         transactionCount,
         lastScrapeDate,
         hasProfile

@@ -91,19 +91,13 @@ export default async function handler(req, res) {
         `UPDATE transactions
          SET
            category_definition_id = COALESCE($1, category_definition_id),
-           parent_category = COALESCE($2, parent_category),
-           subcategory = COALESCE($3, subcategory),
-           category = COALESCE($4, category),
-           merchant_name = $5,
+           merchant_name = $2,
            auto_categorized = true,
-           confidence_score = MAX(confidence_score, $6)
-         WHERE identifier = $7 AND vendor = $8
+           confidence_score = MAX(confidence_score, $3)
+         WHERE identifier = $4 AND vendor = $5
          RETURNING *`,
         [
           categoryDefinitionId,
-          parentCategory,
-          subcategory,
-          categoryLabel,
           transaction_name,
           finalConfidence,
           transaction_id,
@@ -216,29 +210,23 @@ export async function bulkCategorizeTransactions(client) {
         `UPDATE transactions
          SET
            category_definition_id = COALESCE($2, category_definition_id),
-           parent_category = COALESCE($3, parent_category),
-           subcategory = COALESCE($4, subcategory),
-           category = COALESCE($5, category),
            merchant_name = name,
            auto_categorized = true,
-           confidence_score = MAX(confidence_score, $6)
+           confidence_score = MAX(confidence_score, $3)
          WHERE
            LOWER(name) LIKE '%' || LOWER($1) || '%'
            AND category_definition_id NOT IN (
              SELECT id FROM category_definitions
-             WHERE name = $7 OR category_type = 'income'
+             WHERE name = $4 OR category_type = 'income'
            )
            AND (
              category_definition_id IS NULL
              OR auto_categorized = false
-             OR confidence_score < $6
+             OR confidence_score < $3
            )`,
         [
           pattern.name_pattern,
           categoryId,
-          parentCategory,
-          subcategory,
-          categoryLabel,
           confidence,
           BANK_CATEGORY_NAME
         ]

@@ -44,21 +44,23 @@ export default async function handler(req, res) {
     }
 
     const category = categoryResult.rows[0];
-    const targetCategory = category.parent_id ? category.name : category.name;
-    const parentCategory = category.parent_name || null;
-    const subcategory = category.parent_id ? category.name : null;
+    const targetCategory = category.name;
+
+    // Build category path (e.g., "Food > Groceries" or just "Income")
+    const categoryPath = category.parent_name
+      ? `${category.parent_name} > ${category.name}`
+      : category.name;
 
     // Create the rule
     const insertResult = await client.query(
-      `INSERT INTO categorization_rules 
-       (name_pattern, target_category, parent_category, subcategory, category_definition_id, category_type, is_active, priority)
-       VALUES ($1, $2, $3, $4, $5, $6, true, 50)
-       RETURNING id, name_pattern, target_category, parent_category, subcategory, category_definition_id, category_type, is_active, priority`,
+      `INSERT INTO categorization_rules
+       (name_pattern, target_category, category_path, category_definition_id, category_type, is_active, priority)
+       VALUES ($1, $2, $3, $4, $5, true, 50)
+       RETURNING id, name_pattern, target_category, category_path, category_definition_id, category_type, is_active, priority`,
       [
         transactionName,
         targetCategory,
-        parentCategory,
-        subcategory,
+        categoryPath,
         categoryDefinitionId,
         categoryType || category.category_type
       ]

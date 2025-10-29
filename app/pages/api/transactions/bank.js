@@ -69,12 +69,6 @@ export default async function handler(req, res) {
         me.transaction_identifier = t.identifier
         AND me.transaction_vendor = t.vendor
       )
-      LEFT JOIN transaction_duplicates td ON (
-        td.exclude_from_totals = true AND (
-          (td.transaction1_identifier = t.identifier AND td.transaction1_vendor = t.vendor) OR
-          (td.transaction2_identifier = t.identifier AND td.transaction2_vendor = t.vendor)
-        )
-      )
       ` : ''}
       WHERE t.category_definition_id IN (
         SELECT id FROM category_definitions WHERE name = '${BANK_CATEGORY_NAME}'
@@ -90,7 +84,7 @@ export default async function handler(req, res) {
     // Filter out excluded if requested
     if (includeExcluded === 'false') {
       if (hasManualExclusions) {
-        query += ` AND me.id IS NULL AND td.id IS NULL`;
+        query += ` AND me.id IS NULL`;
       }
     }
 
@@ -110,12 +104,6 @@ export default async function handler(req, res) {
         me.transaction_identifier = t.identifier
         AND me.transaction_vendor = t.vendor
       )
-      LEFT JOIN transaction_duplicates td ON (
-        td.exclude_from_totals = true AND (
-          (td.transaction1_identifier = t.identifier AND td.transaction1_vendor = t.vendor) OR
-          (td.transaction2_identifier = t.identifier AND td.transaction2_vendor = t.vendor)
-        )
-      )
       ` : ''}
       WHERE t.category_definition_id IN (
         SELECT id FROM category_definitions WHERE name = '${BANK_CATEGORY_NAME}'
@@ -127,7 +115,7 @@ export default async function handler(req, res) {
     `;
 
     if (includeExcluded === 'false' && hasManualExclusions) {
-      countQuery += ` AND me.id IS NULL AND td.id IS NULL`;
+      countQuery += ` AND me.id IS NULL`;
     }
 
     const countResult = await client.query(countQuery, [start, end, searchPattern]);

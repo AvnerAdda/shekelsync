@@ -44,11 +44,7 @@ const handler = createApiHandler({
             cd.category_type,
             parent.id AS parent_category_definition_id,
             parent.name AS parent_category_name,
-            parent.name_en AS parent_category_name_en,
-            COALESCE(cd.name, t.category) AS resolved_category_name,
-            COALESCE(parent.name, t.parent_category) AS resolved_parent_category_name,
-            t.category AS legacy_category,
-            t.parent_category AS legacy_parent_category
+            parent.name_en AS parent_category_name_en
           FROM transactions t
           LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
           LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
@@ -91,11 +87,7 @@ const handler = createApiHandler({
             cd.category_type,
             parent.id AS parent_category_definition_id,
             parent.name AS parent_category_name,
-            parent.name_en AS parent_category_name_en,
-            COALESCE(cd.name, t.category) AS resolved_category_name,
-            COALESCE(parent.name, t.parent_category) AS resolved_parent_category_name,
-            t.category AS legacy_category,
-            t.parent_category AS legacy_parent_category
+            parent.name_en AS parent_category_name_en
           FROM transactions t
           LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
           LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
@@ -107,48 +99,8 @@ const handler = createApiHandler({
       };
     }
 
-    // Legacy fallback: filter by stored category text (used by older UIs)
-    const params = [];
-    const whereClauses = [];
-
-    if (month && month !== "all") {
-      params.push(month);
-      whereClauses.push(`${monthExpr} = $${params.length}`);
-    }
-
-    params.push(category);
-    whereClauses.push(`t.category = $${params.length}`);
-
-    const whereSql = `WHERE ${whereClauses.join(" AND ")}`;
-
-    return {
-      sql: `
-        SELECT
-          t.name,
-          t.price,
-          t.date,
-          t.identifier,
-          t.vendor,
-          t.account_number,
-          t.category_definition_id,
-          cd.name AS category_name,
-          cd.name_en AS category_name_en,
-          cd.category_type,
-          parent.id AS parent_category_definition_id,
-          parent.name AS parent_category_name,
-          parent.name_en AS parent_category_name_en,
-          COALESCE(cd.name, t.category) AS resolved_category_name,
-          COALESCE(parent.name, t.parent_category) AS resolved_parent_category_name,
-          t.category AS legacy_category,
-          t.parent_category AS legacy_parent_category
-        FROM transactions t
-        LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
-        LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-        ${whereSql}
-        ORDER BY t.date DESC
-      `,
-      params
-    };
+    // No fallback needed - after migration, all transactions have category_definition_id
+    throw new Error('Category filtering requires categoryId parameter');
   }
 });
 
