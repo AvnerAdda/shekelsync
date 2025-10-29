@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useOnboarding } from '../contexts/OnboardingContext';
+import LockedPagePlaceholder from './EmptyState/LockedPagePlaceholder';
 import {
   Box,
   Typography,
@@ -149,6 +151,21 @@ interface PortfolioSummary {
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 
 const InvestmentsPage: React.FC = () => {
+  const { formatCurrency, maskAmounts } = useFinancePrivacy();
+  const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
+
+  // Check if page is locked
+  const accessStatus = getPageAccessStatus('investments');
+  if (accessStatus.isLocked) {
+    return (
+      <LockedPagePlaceholder
+        page="investments"
+        accessStatus={accessStatus}
+        onboardingStatus={onboardingStatus}
+      />
+    );
+  }
+
   const [data, setData] = useState<InvestmentData | null>(null);
   const [portfolioData, setPortfolioData] = useState<PortfolioSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -157,7 +174,6 @@ const InvestmentsPage: React.FC = () => {
   const [portfolioModalOpen, setPortfolioModalOpen] = useState(false);
   const [portfolioModalTab, setPortfolioModalTab] = useState(0);
   const [activeTab, setActiveTab] = useState(0);
-  const { formatCurrency, maskAmounts } = useFinancePrivacy();
   
   // Time series states
   const [historyTimeRange, setHistoryTimeRange] = useState<'1m' | '3m' | '6m' | '1y' | 'all'>('3m');

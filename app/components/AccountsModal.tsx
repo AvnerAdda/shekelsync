@@ -62,6 +62,7 @@ import { dateUtils } from './CategoryDashboard/utils/dateUtils';
 import { useNotification } from './NotificationContext';
 import ModalHeader from './ModalHeader';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { useOnboarding } from '../contexts/OnboardingContext';
 import { matchAccount, calculateSimilarity } from '../utils/account-matcher';
 
 interface Account {
@@ -158,6 +159,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const [expandedForm, setExpandedForm] = useState<'creditCard' | 'bank' | null>('creditCard');
   const { showNotification } = useNotification();
   const { formatCurrency } = useFinancePrivacy();
+  const { status: onboardingStatus, refetch: refetchOnboardingStatus } = useOnboarding();
   const [newAccount, setNewAccount] = useState<Account>({
     vendor: 'isracard',
     username: '',
@@ -406,7 +408,42 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       });
 
       if (response.ok) {
+        const addedAccountData = await response.json();
         await fetchAccounts();
+
+        // Check if we should trigger auto-scrape
+        await refetchOnboardingStatus();
+
+        // Trigger auto-scrape if both bank and credit card are now added
+        const statusAfterAdd = await fetch('/api/onboarding/status').then(r => r.json());
+        if (statusAfterAdd.completedSteps.bankAccount &&
+            statusAfterAdd.completedSteps.creditCard &&
+            !statusAfterAdd.completedSteps.firstScrape) {
+          showNotification('Account added! Starting automatic sync...', 'info');
+
+          // Trigger auto-scrape for the newly added account
+          setTimeout(async () => {
+            try {
+              // Use bulk scrape to scrape all accounts
+              const scrapeResponse = await fetch('/api/scrape/bulk', { method: 'POST' });
+              const scrapeResult = await scrapeResponse.json();
+
+              if (scrapeResult.success) {
+                showNotification(
+                  `Auto-sync complete! ${scrapeResult.totalTransactions || 0} transactions imported.`,
+                  'success'
+                );
+                // Trigger data refresh event
+                window.dispatchEvent(new CustomEvent('dataRefresh'));
+                await refetchOnboardingStatus();
+              }
+            } catch (scrapeErr) {
+              console.error('Auto-scrape error:', scrapeErr);
+              showNotification('Auto-sync started in background', 'info');
+            }
+          }, 1000);
+        }
+
         setNewAccount({
           vendor: 'isracard',
           username: '',
@@ -424,7 +461,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           created_at: new Date().toISOString(),
         });
         setIsAdding(false);
-        showNotification('Bank account added successfully!', 'success');
+        showNotification('Account added successfully!', 'success');
       } else {
         throw new Error('Failed to add account');
       }

@@ -48,6 +48,8 @@ import { BarChart } from '@mui/x-charts/BarChart';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { SparkLineChart } from '@mui/x-charts/SparkLineChart';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { useOnboarding } from '../contexts/OnboardingContext';
+import LockedPagePlaceholder from './EmptyState/LockedPagePlaceholder';
 import ActionabilitySetupModal from './AnalysisPage/ActionabilitySetupModal';
 import RecurringTransactionManager from './AnalysisPage/RecurringTransactionManager';
 import CategoryOpportunitiesPanel from './AnalysisPage/CategoryOpportunitiesPanel';
@@ -81,6 +83,19 @@ const AnalysisPage: React.FC = () => {
     insights: false
   });
   const { formatCurrency } = useFinancePrivacy();
+  const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
+
+  // Check if page is locked
+  const accessStatus = getPageAccessStatus('analysis');
+  if (accessStatus.isLocked) {
+    return (
+      <LockedPagePlaceholder
+        page="analysis"
+        accessStatus={accessStatus}
+        onboardingStatus={onboardingStatus}
+      />
+    );
+  }
 
   const fetchIntelligence = async () => {
     setLoading(true);

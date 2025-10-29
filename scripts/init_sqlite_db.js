@@ -127,7 +127,10 @@ const TABLE_DEFINITIONS = [
       household_size INTEGER NOT NULL DEFAULT 1,
       home_ownership TEXT,
       education_level TEXT,
-      employment_status TEXT
+      employment_status TEXT,
+      onboarding_dismissed INTEGER NOT NULL DEFAULT 0 CHECK (onboarding_dismissed IN (0,1)),
+      onboarding_dismissed_at TEXT,
+      last_active_at TEXT
     );`,
   `CREATE TABLE IF NOT EXISTS spouse_profile (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -181,7 +184,6 @@ const TABLE_DEFINITIONS = [
       date TEXT NOT NULL,
       name TEXT NOT NULL,
       price REAL NOT NULL,
-      category TEXT,
       type TEXT NOT NULL,
       processed_date TEXT,
       original_amount REAL,
@@ -478,10 +480,8 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_spending_patterns_category ON spending_patterns (category, subcategory);',
   'CREATE INDEX IF NOT EXISTS idx_spouse_profile_user_id ON spouse_profile (user_profile_id);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_account_number ON transactions (account_number);',
-  'CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions (category);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_category_def ON transactions (category_definition_id);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_category_type ON transactions (category_type);',
-  'CREATE INDEX IF NOT EXISTS idx_transactions_date_category ON transactions (date, category);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_date_desc ON transactions (date DESC);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_date_vendor ON transactions (date, vendor);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_datetime ON transactions (transaction_datetime);',
@@ -739,7 +739,7 @@ function seedCategoryMapping(db, helpers) {
           break;
         }
       }
-      
+
       if (!foundCategory) {
         console.warn(`Warning: Category '${mapping.newCategory}' not found for '${mapping.oldCategory}'`);
         continue;
@@ -748,6 +748,53 @@ function seedCategoryMapping(db, helpers) {
         oldCategory: mapping.oldCategory,
         categoryId: foundCategory.id,
         notes: mapping.notes || null
+      });
+    }
+  })();
+}
+
+function seedCategorizationRules(db, helpers) {
+  const { categoriesByKey } = helpers;
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO categorization_rules
+      (name_pattern, target_category, category_definition_id, category_type, priority, is_active)
+    VALUES (@namePattern, @targetCategory, @categoryId, @categoryType, @priority, 1)
+  `);
+
+  // Default income categorization rules
+  const incomeRules = [
+    { pattern: 'משכורת', target: 'Salary', categoryName: 'משכורת', priority: 100 },
+    { pattern: 'ביטוח לאומי', target: 'Government Benefits', categoryName: 'קצבאות ממשלתיות', priority: 90 },
+    { pattern: 'זיכוי', target: 'Refunds & Credits', categoryName: 'החזרים וזיכויים', priority: 80 },
+    { pattern: 'קבלת תשלום', target: 'Refunds & Credits', categoryName: 'החזרים וזיכויים', priority: 80 },
+    { pattern: 'פיקדון', target: 'Income', categoryName: 'הכנסות', priority: 70 },
+    { pattern: 'רווח', target: 'Income', categoryName: 'הכנסות', priority: 70 },
+    { pattern: 'דיבידנד', target: 'Income', categoryName: 'הכנסות', priority: 70 },
+    { pattern: 'ריבית', target: 'Income', categoryName: 'הכנסות', priority: 70 }
+  ];
+
+  db.transaction(() => {
+    for (const rule of incomeRules) {
+      // Find category by name
+      let foundCategory = null;
+      for (const [key, info] of categoriesByKey.entries()) {
+        if (info.name === rule.categoryName) {
+          foundCategory = info;
+          break;
+        }
+      }
+
+      if (!foundCategory) {
+        console.warn(`Warning: Category '${rule.categoryName}' not found for rule '${rule.pattern}'`);
+        continue;
+      }
+
+      insert.run({
+        namePattern: rule.pattern,
+        targetCategory: rule.target,
+        categoryId: foundCategory.id,
+        categoryType: 'income',
+        priority: rule.priority
       });
     }
   })();
@@ -770,12 +817,15 @@ function main() {
 
   console.log(`\n📦 Initialising SQLite database at ${output}\n`);
   const db = new Database(output);
+  let transactionStarted = false;
 
   try {
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
 
     db.exec('BEGIN');
+    transactionStarted = true;
+    
     for (const statement of TABLE_DEFINITIONS) {
       db.exec(statement);
     }
@@ -786,23 +836,31 @@ function main() {
     const helpers = seedCategories(db);
     seedCategoryActionability(db, helpers);
     seedCategoryMapping(db, helpers);
+    seedCategorizationRules(db, helpers);
 
     db.exec('COMMIT');
+    transactionStarted = false;
 
     const expenseLeafCount = Array.from(helpers.categoriesByKey.entries())
       .filter(([key]) => helpers.leafTracker.get(key) && helpers.categoriesByKey.get(key).type === 'expense')
       .length;
 
+    // Count income rules
+    const incomeRulesCount = db.prepare('SELECT COUNT(*) as count FROM categorization_rules WHERE category_type = ?').get('income').count;
+
     console.log('✅ Schema created with foreign keys and indexes');
     console.log(`✅ Seeded ${helpers.categoriesByKey.size} category definitions`);
     console.log(`✅ Seeded ${expenseLeafCount} default actionability entries`);
     console.log(`✅ Seeded ${CATEGORY_MAPPINGS.length} category mappings`);
+    console.log(`✅ Seeded ${incomeRulesCount} income categorization rules`);
     console.log('\nDone. You can now run `npm run dev` to start the app against the new database.\n');
   } catch (error) {
-    try {
-      db.exec('ROLLBACK');
-    } catch (rollbackError) {
-      console.error('Failed to rollback transaction:', rollbackError);
+    if (transactionStarted && db.inTransaction) {
+      try {
+        db.exec('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('Failed to rollback transaction:', rollbackError);
+      }
     }
     throw error;
   } finally {

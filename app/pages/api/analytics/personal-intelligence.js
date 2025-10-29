@@ -38,7 +38,8 @@ export default async function handler(req, res) {
         t.price,
         t.name,
         cd.name as category_name,
-        parent.name as parent_category
+        parent.name as parent_category,
+        CASE WHEN cd.parent_id IS NOT NULL THEN cd.name ELSE NULL END as subcategory
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
@@ -157,7 +158,7 @@ export default async function handler(req, res) {
     const weekendEntertainment = transactions
       .filter(t =>
         [0, 6].includes(t.day_of_week) &&
-        (t.parent_category === 'בילויים' || t.parent_category === 'אוכל')
+        (t.parent_category === 'אוכל' || t.parent_category === 'פנאי' || t.subcategory === 'בילויים')
       )
       .reduce((sum, t) => sum + Math.abs(t.price), 0);
     const fomoScore = totalExpenses > 0
@@ -344,8 +345,8 @@ export default async function handler(req, res) {
           equivalentTo: 'טיסה לאירופה'
         },
         {
-          category: 'בילויים',
-          monthlySpend: Math.round(transactions.filter(t => t.parent_category === 'בילויים').reduce((s, t) => s + Math.abs(t.price), 0)),
+          category: 'פנאי',
+          monthlySpend: Math.round(transactions.filter(t => t.parent_category === 'פנאי').reduce((s, t) => s + Math.abs(t.price), 0)),
           equivalentTo: '2 חודשי Netflix + Spotify'
         }
       ]

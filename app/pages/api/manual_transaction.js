@@ -83,9 +83,6 @@ const handler = createApiHandler({
           date,
           name,
           price,
-          category,
-          parent_category,
-          subcategory,
           category_definition_id,
           category_type,
           type,
@@ -96,8 +93,7 @@ const handler = createApiHandler({
           transaction_datetime,
           processed_datetime
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8,
-          $9, $10, $11, 'completed', false, 1.0, $12, $13, $14
+          $1, $2, $3, $4, $5, $6, $7, $8, 'completed', false, 1.0, $9, $10, $11
         )`,
         [
           identifier,
@@ -105,9 +101,6 @@ const handler = createApiHandler({
           effectiveDate,
           name,
           price,
-          categoryLabel,
-          parentName,
-          subcategory,
           resolvedCategoryId,
           categoryRecord.category_type,
           type,

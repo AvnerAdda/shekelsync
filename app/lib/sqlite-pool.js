@@ -26,6 +26,18 @@ function createSqlitePool(options = {}) {
     process.env.SQLCIPHER_DB_PATH ||
     path.join(process.cwd(), 'dist', 'clarify.sqlite');
 
+  // Check if database exists before attempting to open
+  const fs = require('fs');
+  if (!fs.existsSync(dbPath)) {
+    const resolvedPath = path.resolve(dbPath);
+    throw new Error(
+      `SQLite database not found at: ${resolvedPath}\n\n` +
+      `To initialize the database, run:\n` +
+      `  node scripts/init_sqlite_db.js\n\n` +
+      `Or if you have a backup, copy it to: ${resolvedPath}`
+    );
+  }
+
   const db = new Database(dbPath, { fileMustExist: true });
   db.pragma('foreign_keys = ON');
   db.pragma('journal_mode = WAL');

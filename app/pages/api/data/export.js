@@ -203,41 +203,7 @@ export default async function handler(req, res) {
       if (selectedCategoryIds.length > 0) {
         queryParams.push(selectedCategoryIds);
         const idsParamIndex = queryParams.length;
-
-        const categoryNames = Array.from(categoryNameSet).filter(Boolean);
-        let fallbackClause = '';
-
-        if (categoryNames.length > 0) {
-          queryParams.push(categoryNames);
-          const namesParamIndex = queryParams.length;
-          fallbackClause = `
-            OR (
-              t.category_definition_id IS NULL
-              AND (
-                t.category = ANY($${namesParamIndex}::text[])
-                OR t.parent_category = ANY($${namesParamIndex}::text[])
-              )
-            )
-          `;
-        }
-
-        categoryFilterClause = fallbackClause
-          ? `
-            AND (
-              t.category_definition_id = ANY($${idsParamIndex}::int[])
-              ${fallbackClause}
-            )
-          `
-          : `AND t.category_definition_id = ANY($${idsParamIndex}::int[])`;
-      } else {
-        queryParams.push(categoryValues);
-        const legacyParamIndex = queryParams.length;
-        categoryFilterClause = `
-          AND (
-            t.category = ANY($${legacyParamIndex}::text[])
-            OR t.parent_category = ANY($${legacyParamIndex}::text[])
-          )
-        `;
+        categoryFilterClause = `AND t.category_definition_id = ANY($${idsParamIndex}::int[])`;
       }
     }
 
@@ -256,8 +222,8 @@ export default async function handler(req, res) {
             t.vendor,
             t.name,
             t.price,
-            COALESCE(cd.name, t.category) AS category,
-            COALESCE(parent.name, cd.name, t.parent_category) AS parent_category,
+            CASE WHEN cd.parent_id IS NOT NULL THEN cd.name ELSE parent.name END AS category,
+            COALESCE(parent.name, cd.name) AS parent_category,
             t.type,
             t.status,
             t.account_number,
@@ -267,9 +233,7 @@ export default async function handler(req, res) {
             cd.name_en AS category_name_en,
             parent.name AS parent_category_name,
             parent.name_en AS parent_category_name_en,
-            cd.category_type,
-            t.category AS legacy_category,
-            t.parent_category AS legacy_parent_category
+            cd.category_type
           FROM transactions t
           LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
           LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
