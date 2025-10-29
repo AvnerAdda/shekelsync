@@ -1,4 +1,5 @@
 import { getDB } from '../db.js';
+import { startOfMonth, subMonths } from 'date-fns';
 
 /**
  * Get the last transaction date for a specific vendor
@@ -29,14 +30,13 @@ export default async function handler(req, res) {
     const lastTransactionDate = result.rows[0]?.last_transaction_date;
 
     if (!lastTransactionDate) {
-      // If no transactions found, default to 30 days ago
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // If no transactions found, default to start of month 3 months ago
+      const threeMonthsAgo = startOfMonth(subMonths(new Date(), 3));
 
       return res.status(200).json({
-        lastTransactionDate: thirtyDaysAgo.toISOString(),
+        lastTransactionDate: threeMonthsAgo.toISOString(),
         hasTransactions: false,
-        message: 'No previous transactions found, using 30 days ago as default'
+        message: 'No previous transactions found, starting from 3 months ago'
       });
     }
 

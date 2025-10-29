@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { startOfMonth, subMonths } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,7 @@ import {
   AccordionSummary,
   AccordionDetails,
 } from '@mui/material';
+import LinkIcon from '@mui/icons-material/Link';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import SyncIcon from '@mui/icons-material/Sync';
@@ -49,7 +51,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CircularProgress from '@mui/material/CircularProgress';
-import ScrapeModal from './ScrapeModal';
+import SyncModal from './ScrapeModal';
+import AccountPairingModal from './AccountPairingModal';
 import {
   CREDIT_CARD_VENDORS,
   BANK_VENDORS,
@@ -152,11 +155,13 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const [, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const [isScrapeModalOpen, setIsScrapeModalOpen] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [activeTab, setActiveTab] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [currentAccountType, setCurrentAccountType] = useState<'banking' | 'investment'>('banking');
   const [expandedForm, setExpandedForm] = useState<'creditCard' | 'bank' | null>('creditCard');
+  const [isPairingModalOpen, setIsPairingModalOpen] = useState(false);
   const { showNotification } = useNotification();
   const { formatCurrency } = useFinancePrivacy();
   const { status: onboardingStatus, refetch: refetchOnboardingStatus } = useOnboarding();
@@ -414,35 +419,84 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         // Check if we should trigger auto-scrape
         await refetchOnboardingStatus();
 
-        // Trigger auto-scrape if both bank and credit card are now added
-        const statusAfterAdd = await fetch('/api/onboarding/status').then(r => r.json());
-        if (statusAfterAdd.completedSteps.bankAccount &&
-            statusAfterAdd.completedSteps.creditCard &&
-            !statusAfterAdd.completedSteps.firstScrape) {
-          showNotification('Account added! Starting automatic sync...', 'info');
+        // Trigger automatic 3-month sync for the newly added account
+        showNotification('Account added! Starting initial sync for last 3 months...', 'info');
+        setIsSyncing(true);
 
-          // Trigger auto-scrape for the newly added account
-          setTimeout(async () => {
-            try {
-              // Use bulk scrape to scrape all accounts
-              const scrapeResponse = await fetch('/api/scrape/bulk', { method: 'POST' });
-              const scrapeResult = await scrapeResponse.json();
+        setTimeout(async () => {
+          try {
+            // Calculate start date: beginning of month 3 months ago
+            const startDate = startOfMonth(subMonths(new Date(), 3));
 
-              if (scrapeResult.success) {
-                showNotification(
-                  `Auto-sync complete! ${scrapeResult.totalTransactions || 0} transactions imported.`,
-                  'success'
-                );
-                // Trigger data refresh event
-                window.dispatchEvent(new CustomEvent('dataRefresh'));
-                await refetchOnboardingStatus();
+            // Prepare credentials for scraping
+            const scrapeCredentials: any = {};
+
+            // Map account fields to scraper credential fields
+            if (newAccount.id_number) scrapeCredentials.id = newAccount.id_number;
+            if (newAccount.password) scrapeCredentials.password = newAccount.password;
+            if (newAccount.username) scrapeCredentials.username = newAccount.username;
+            if (newAccount.userCode) scrapeCredentials.userCode = newAccount.userCode;
+            if (newAccount.email) scrapeCredentials.email = newAccount.email;
+            if (newAccount.card6_digits) scrapeCredentials.card6Digits = newAccount.card6_digits;
+            if (newAccount.num) scrapeCredentials.num = newAccount.num;
+            if (newAccount.nationalID) scrapeCredentials.nationalID = newAccount.nationalID;
+            if (newAccount.identification_code) scrapeCredentials.identification_code = newAccount.identification_code;
+            scrapeCredentials.nickname = newAccount.nickname;
+
+            const scrapeConfig = {
+              options: {
+                companyId: newAccount.vendor,
+                startDate: startDate.toISOString(),
+                combineInstallments: false,
+                showBrowser: true,
+                additionalTransactionInformation: true
+              },
+              credentials: scrapeCredentials
+            };
+
+            console.log('[Auto-sync] Starting 3-month sync for:', newAccount.vendor, 'from:', startDate.toISOString());
+
+            // Show ongoing notification
+            showNotification('Syncing transactions... This may take a few minutes.', 'info');
+
+            const scrapeResponse = await fetch('/api/scrape', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(scrapeConfig)
+            });
+
+            const scrapeResult = await scrapeResponse.json();
+
+            if (scrapeResponse.ok && !scrapeResult.error) {
+              // Calculate transaction count
+              let transactionCount = 0;
+              if (scrapeResult.accounts) {
+                transactionCount = scrapeResult.accounts.reduce((sum: number, acc: any) => {
+                  return sum + (acc.txns ? acc.txns.length : 0);
+                }, 0);
               }
-            } catch (scrapeErr) {
-              console.error('Auto-scrape error:', scrapeErr);
-              showNotification('Auto-sync started in background', 'info');
+
+              showNotification(
+                `Initial sync complete! ${transactionCount} transactions imported from last 3 months.`,
+                'success'
+              );
+
+              // Trigger data refresh event
+              window.dispatchEvent(new CustomEvent('dataRefresh'));
+              await refetchOnboardingStatus();
+            } else {
+              showNotification(
+                `Sync started in background. Check notifications for updates.`,
+                'info'
+              );
             }
-          }, 1000);
-        }
+          } catch (syncErr) {
+            console.error('[Auto-sync] Error:', syncErr);
+            showNotification('Initial sync started in background', 'info');
+          } finally {
+            setIsSyncing(false);
+          }
+        }, 1000);
 
         setNewAccount({
           vendor: 'isracard',
@@ -737,8 +791,8 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
   };
 
-  const handleScrape = async (account: Account) => {
-    console.log('Selected account for scraping:', account);
+  const handleSync = async (account: Account) => {
+    console.log('Selected account for syncing:', account);
     setSelectedAccount(account);
 
     // Fetch the last transaction date for this vendor to set as default start date
@@ -760,11 +814,11 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       // Continue with default behavior if API fails
     }
 
-    setIsScrapeModalOpen(true);
+    setIsSyncModalOpen(true);
   };
 
-  const handleScrapeSuccess = () => {
-    showNotification('Scraping process completed successfully!', 'success');
+  const handleSyncSuccess = () => {
+    showNotification('Sync completed successfully!', 'success');
     window.dispatchEvent(new CustomEvent('dataRefresh'));
     fetchAccounts(); // Refresh accounts to update last sync dates
   };
@@ -917,8 +971,11 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   }, [selectedAccount]);
 
   // Separate accounts by type
-  const bankAccounts = accounts.filter(account => BANK_VENDORS.includes(account.vendor) || SPECIAL_BANK_VENDORS.includes(account.vendor));
+  const bankAccounts = accounts.filter(account => BANK_VENDORS.includes(account.vendor) || SPECIAL_BANK_VENDORS.includes(account.vendor) || OTHER_BANK_VENDORS.includes(account.vendor));
   const creditAccounts = accounts.filter(account => CREDIT_CARD_VENDORS.includes(account.vendor));
+
+  // Show Pair button only if both bank and credit card accounts exist
+  const canPairAccounts = bankAccounts.length > 0 && creditAccounts.length > 0;
 
   const renderInvestmentAccountTable = (accounts: InvestmentAccount[]) => {
     if (accounts.length === 0) {
@@ -1137,13 +1194,16 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   />
                 </TableCell>
                 <TableCell align="right">
-                  <Tooltip title="Refresh Account Data">
-                    <IconButton
-                      onClick={() => handleScrape(account)}
-                      color="primary"
-                    >
-                      <SyncIcon />
-                    </IconButton>
+                  <Tooltip title={isSyncing ? "Sync in progress..." : "Sync Account Data"}>
+                    <span>
+                      <IconButton
+                        onClick={() => handleSync(account)}
+                        color="primary"
+                        disabled={isSyncing}
+                      >
+                        {isSyncing ? <CircularProgress size={20} /> : <SyncIcon />}
+                      </IconButton>
+                    </span>
                   </Tooltip>
                   <Tooltip title="Delete Account">
                     <IconButton
@@ -1186,17 +1246,29 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
             }
           }}
           actions={
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={() => {
-                setCurrentAccountType(activeTab === 0 ? 'banking' : 'investment');
-                setIsAdding(true);
-              }}
-            >
-              Add Account
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              {activeTab === 0 && canPairAccounts && (
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<LinkIcon />}
+                  onClick={() => setIsPairingModalOpen(true)}
+                >
+                  Pair Accounts
+                </Button>
+              )}
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setCurrentAccountType(activeTab === 0 ? 'banking' : 'investment');
+                  setIsAdding(true);
+                }}
+              >
+                Add Account
+              </Button>
+            </Box>
           }
         />
 
@@ -2087,13 +2159,15 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         </DialogActions>
       </Dialog>
 
-      <ScrapeModal
-        isOpen={isScrapeModalOpen}
+      <SyncModal
+        isOpen={isSyncModalOpen}
         onClose={() => {
-          setIsScrapeModalOpen(false);
+          setIsSyncModalOpen(false);
           setSelectedAccount(null);
         }}
-        onSuccess={handleScrapeSuccess}
+        onSuccess={handleSyncSuccess}
+        onStart={() => setIsSyncing(true)}
+        onComplete={() => setIsSyncing(false)}
         initialConfig={selectedAccount ? {
           options: {
             companyId: selectedAccount.vendor,
@@ -2112,6 +2186,14 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
             nickname: selectedAccount.nickname
           }
         } : undefined}
+      />
+
+      {/* Account Pairing Modal */}
+      <AccountPairingModal
+        isOpen={isPairingModalOpen}
+        onClose={() => setIsPairingModalOpen(false)}
+        creditCardAccounts={creditAccounts}
+        bankAccounts={bankAccounts}
       />
 
       {/* Confirmation Dialog for Delete Operations */}

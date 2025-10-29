@@ -89,10 +89,10 @@ const handler = createApiHandler({
         username: row.username ? decrypt(row.username) : null,
         password: row.password ? decrypt(row.password) : null,
         id_number: row.id_number ? decrypt(row.id_number) : null,
-        card6_digits: row.card6_digits ? decrypt(row.card6_digits) : null,
+        card6_digits: row.card6_digits, // Plain text account numbers (semicolon-separated)
         identification_code: row.identification_code ? decrypt(row.identification_code) : null,
         nickname: row.nickname,
-        bank_account_number: row.bank_account_number,
+        bank_account_number: row.bank_account_number, // Plain text account numbers (semicolon-separated)
         created_at: row.created_at,
         current_balance: row.current_balance,
         balance_updated_at: row.balance_updated_at,

@@ -14,7 +14,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import ScrapeModal from './ScrapeModal';
+import SyncModal from './ScrapeModal';
 import ManualModal from './ManualModal';
 import DatabaseIndicator from './DatabaseIndicator';
 import AccountsModal from './AccountsModal';
@@ -223,8 +223,8 @@ function ResponsiveAppBar() {
     }
   };
 
-  const handleScrapeSuccess = () => {
-    showNotification('Scraping process completed successfully!', 'success');
+  const handleSyncSuccess = () => {
+    showNotification('Sync completed successfully!', 'success');
     // Dispatch a custom event to trigger data refresh
     globalThis.dispatchEvent(new CustomEvent('dataRefresh'));
     // Refresh all badge indicators
@@ -337,10 +337,10 @@ function ResponsiveAppBar() {
           </Toolbar>
         </Container>
       </StyledAppBar>
-      <ScrapeModal
+      <SyncModal
         isOpen={isScrapeModalOpen}
         onClose={() => setIsScrapeModalOpen(false)}
-        onSuccess={handleScrapeSuccess}
+        onSuccess={handleSyncSuccess}
       />
       <ManualModal
         open={isManualModalOpen}
