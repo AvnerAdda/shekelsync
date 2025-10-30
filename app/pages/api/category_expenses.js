@@ -48,7 +48,18 @@ const handler = createApiHandler({
           FROM transactions t
           LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
           LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-          ${whereSql}
+          LEFT JOIN account_pairings ap ON (
+            t.vendor = ap.bank_vendor
+            AND ap.is_active = 1
+            AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+            AND ap.match_patterns IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+              FROM json_each(ap.match_patterns)
+              WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+            )
+          )
+          ${whereSql ? whereSql + ' AND ap.id IS NULL' : 'WHERE ap.id IS NULL'}
           ORDER BY t.date DESC
         `,
         params
@@ -91,7 +102,19 @@ const handler = createApiHandler({
           FROM transactions t
           LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
           LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+          LEFT JOIN account_pairings ap ON (
+            t.vendor = ap.bank_vendor
+            AND ap.is_active = 1
+            AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+            AND ap.match_patterns IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+              FROM json_each(ap.match_patterns)
+              WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+            )
+          )
           WHERE t.category_definition_id IN (SELECT id FROM category_tree)
+            AND ap.id IS NULL
           ${monthClause}
           ORDER BY t.date DESC
         `,

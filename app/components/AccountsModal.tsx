@@ -61,7 +61,7 @@ import {
   ACCOUNT_CATEGORIES,
   INVESTMENT_ACCOUNT_TYPES
 } from '../utils/constants';
-import { dateUtils } from './CategoryDashboard/utils/dateUtils';
+import { formatDate } from '../utils/date';
 import { useNotification } from './NotificationContext';
 import ModalHeader from './ModalHeader';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
@@ -950,7 +950,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       text = `${diffDays} days ago`;
       color = 'warning';
     } else {
-      text = dateUtils.formatDate(lastUpdate);
+      text = formatDate(lastUpdate);
       color = 'error';
     }
 

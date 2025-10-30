@@ -197,28 +197,21 @@ async function applyAccountPairings(client) {
 
     let totalUpdated = 0;
 
-    // Credit card related keywords in Hebrew and English
-    const keywords = [
-      'ויזה', 'visa',
-      'כ.א.ל', 'cal',
-      'מקס', 'max',
-      'ישראכרט', 'isracard',
-      'אמקס', 'אמריקן אקספרס', 'amex', 'american express',
-      'לאומי כרט', 'leumi card',
-      'דיינרס', 'diners',
-      'hapoalim', 'leumi', 'mizrahi', 'discount',
-      'otsarHahayal', 'beinleumi', 'massad', 'yahav', 'union'
-    ];
-
     for (const pairing of pairings) {
-      const creditCardAccountNumber = pairing.credit_card_account_number;
       const bankVendor = pairing.bank_vendor;
       const bankAccountNumber = pairing.bank_account_number;
+      const matchPatterns = pairing.match_patterns ? JSON.parse(pairing.match_patterns) : [];
 
-      // Build keyword conditions
-      const keywordConditions = keywords.map(() => `LOWER(name) LIKE '%' || LOWER(?) || '%'`).join(' OR ');
+      // Skip if no match patterns defined
+      if (matchPatterns.length === 0) {
+        console.log(`Pairing ${pairing.id} has no match patterns, skipping`);
+        continue;
+      }
 
-      // Build the query to find matching transactions
+      // Build pattern matching conditions
+      const patternConditions = matchPatterns.map(() => `LOWER(name) LIKE '%' || LOWER(?) || '%'`).join(' OR ');
+
+      // Build the query to find matching transactions based ONLY on match_patterns
       let query = `
         UPDATE transactions
         SET category_definition_id = CASE
@@ -227,28 +220,15 @@ async function applyAccountPairings(client) {
           ELSE category_definition_id
         END
         WHERE vendor = ?
-          AND (
-            LOWER(name) LIKE '%' || LOWER(?) || '%'
-            OR category_definition_id IN (25, 75)
-            OR ${keywordConditions}
-          )
+          AND (${patternConditions})
       `;
 
-      const params = [bankVendor, creditCardAccountNumber, ...keywords];
+      const params = [bankVendor, ...matchPatterns];
 
       // Add optional bank account number filter
       if (bankAccountNumber) {
         query += ' AND account_number = ?';
         params.push(bankAccountNumber);
-      }
-
-      // Add custom match patterns if any
-      const matchPatterns = pairing.match_patterns ? JSON.parse(pairing.match_patterns) : [];
-      if (matchPatterns.length > 0) {
-        const patternConditions = matchPatterns.map(() => `LOWER(name) LIKE '%' || LOWER(?) || '%'`).join(' OR ');
-        query = query.replace('WHERE vendor = ?', `WHERE vendor = ? AND (${patternConditions} OR`);
-        query = query.replace(')', '))');
-        params.splice(2, 0, ...matchPatterns);
       }
 
       const updateResult = await client.query(query, params);
@@ -581,14 +561,27 @@ export default async function handler(req, res) {
       const fieldName = isBank ? 'bank_account_number' : 'card6_digits';
 
       try {
+        // Match the specific credential by vendor AND username/id_number
+        // to avoid updating all credentials with the same vendor
+        let whereClause = 'WHERE vendor = $2';
+        const params = [accountNumbersStr, options.companyId];
+
+        if (credentials.username) {
+          whereClause += ' AND username = $3';
+          params.push(credentials.username);
+        } else if (credentials.id) {
+          whereClause += ' AND id_number = $3';
+          params.push(credentials.id);
+        }
+
         await client.query(`
           UPDATE vendor_credentials
           SET ${fieldName} = $1,
               updated_at = CURRENT_TIMESTAMP
-          WHERE vendor = $2`,
-          [accountNumbersStr, options.companyId]
+          ${whereClause}`,
+          params
         );
-        console.log(`Updated ${fieldName} for ${options.companyId}: ${accountNumbersStr}`);
+        console.log(`Updated ${fieldName} for ${options.companyId} (${credentials.username || credentials.id || 'unknown'}): ${accountNumbersStr}`);
       } catch (updateError) {
         console.error(`Failed to update account numbers for ${options.companyId}:`, updateError);
       }

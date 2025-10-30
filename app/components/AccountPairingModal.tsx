@@ -35,8 +35,10 @@ import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LinkIcon from '@mui/icons-material/Link';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import EditIcon from '@mui/icons-material/Edit';
 import { useNotification } from './NotificationContext';
 import ModalHeader from './ModalHeader';
+import UnpairedTransactionsDialog from './UnpairedTransactionsDialog';
 
 interface Account {
   id: number;
@@ -95,14 +97,58 @@ export default function AccountPairingModal({
   const [existingPairings, setExistingPairings] = useState<Pairing[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [expandedAccounts, setExpandedAccounts] = useState<Account[]>([]);
+  const [unpairableTransactionsCount, setUnpairableTransactionsCount] = useState<number>(0);
+  const [editingPairing, setEditingPairing] = useState<Pairing | null>(null);
+  const [editCreditCard, setEditCreditCard] = useState<Account | null>(null);
+  const [editBank, setEditBank] = useState<Account | null>(null);
+  const [editCandidates, setEditCandidates] = useState<CandidateTransaction[]>([]);
+  const [editSelectedTransactions, setEditSelectedTransactions] = useState<Set<string>>(new Set());
+  const [showEditReview, setShowEditReview] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [showUnpairedDialog, setShowUnpairedDialog] = useState(false);
+  const [matchPatterns, setMatchPatterns] = useState<string[]>([]);
+  const [editMatchPatterns, setEditMatchPatterns] = useState<string[]>([]);
+  const [newPatternInput, setNewPatternInput] = useState('');
+  const [editNewPatternInput, setEditNewPatternInput] = useState('');
   const { showNotification } = useNotification();
 
   useEffect(() => {
     if (isOpen) {
       fetchExistingPairings();
       expandAccountsByNumbers();
+      fetchUnpairableTransactionsCount();
     }
   }, [isOpen, creditCardAccounts, bankAccounts]);
+
+  // Auto-extract unique transaction names from selected transactions
+  useEffect(() => {
+    if (selectedTransactions.size > 0) {
+      const uniqueNames = new Set<string>();
+      candidates.forEach(txn => {
+        if (selectedTransactions.has(txn.identifier)) {
+          uniqueNames.add(txn.name);
+        }
+      });
+      setMatchPatterns(Array.from(uniqueNames));
+    } else {
+      setMatchPatterns([]);
+    }
+  }, [selectedTransactions, candidates]);
+
+  // Auto-extract unique transaction names from edit selected transactions
+  useEffect(() => {
+    if (editSelectedTransactions.size > 0) {
+      const uniqueNames = new Set<string>();
+      editCandidates.forEach(txn => {
+        if (editSelectedTransactions.has(txn.identifier)) {
+          uniqueNames.add(txn.name);
+        }
+      });
+      setEditMatchPatterns(Array.from(uniqueNames));
+    } else {
+      setEditMatchPatterns([]);
+    }
+  }, [editSelectedTransactions, editCandidates]);
 
   const expandAccountsByNumbers = () => {
     // Expand accounts based on unique vendor+account_number combinations
@@ -155,6 +201,19 @@ export default function AccountPairingModal({
       }
     } catch (error) {
       console.error('Error fetching pairings:', error);
+    }
+  };
+
+  const fetchUnpairableTransactionsCount = async () => {
+    try {
+      // Get count of bank transactions that might need pairing (categories 25/75)
+      const response = await fetch('/api/accounts/unpaired-transactions-count');
+      if (response.ok) {
+        const data = await response.json();
+        setUnpairableTransactionsCount(data.count);
+      }
+    } catch (error) {
+      console.error('Error fetching unpaired count:', error);
     }
   };
 
@@ -213,17 +272,12 @@ export default function AccountPairingModal({
           creditCardAccountNumber: selectedCreditCard!.account_number || selectedCreditCard!.card6_digits || null,
           bankVendor: selectedBank!.vendor,
           bankAccountNumber: selectedBank!.account_number || selectedBank!.bank_account_number || null,
-          matchPatterns: [],
-          selectedTransactionIds: Array.from(selectedTransactions)
+          matchPatterns: matchPatterns
         })
       });
 
       if (response.ok) {
-        const data = await response.json();
-        showNotification(
-          `Pairing created! ${data.categorizedCount} transactions categorized.`,
-          'success'
-        );
+        showNotification('Pairing created successfully!', 'success');
         handleClose();
         // Trigger data refresh
         window.dispatchEvent(new CustomEvent('dataRefresh'));
@@ -248,12 +302,165 @@ export default function AccountPairingModal({
       if (response.ok) {
         showNotification('Pairing deleted successfully', 'success');
         fetchExistingPairings();
+        fetchUnpairableTransactionsCount();
+        expandAccountsByNumbers(); // Refresh to show newly unpaired accounts
       } else {
         showNotification('Failed to delete pairing', 'error');
       }
     } catch (error) {
       console.error('Error deleting pairing:', error);
       showNotification('Error deleting pairing', 'error');
+    }
+  };
+
+  const handleUpdatePairing = async (pairingId: number, isActive: boolean) => {
+    try {
+      const response = await fetch('/api/accounts/pairing', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: pairingId,
+          isActive
+        })
+      });
+
+      if (response.ok) {
+        showNotification(
+          isActive ? 'Pairing activated' : 'Pairing deactivated',
+          'success'
+        );
+        fetchExistingPairings();
+        setEditingPairing(null);
+      } else {
+        showNotification('Failed to update pairing', 'error');
+      }
+    } catch (error) {
+      console.error('Error updating pairing:', error);
+      showNotification('Error updating pairing', 'error');
+    }
+  };
+
+  const handleStartEdit = (pairing: Pairing) => {
+    setEditingPairing(pairing);
+    setShowEditReview(false);
+
+    // Find the corresponding accounts
+    const creditCard = expandedAccounts.find(
+      acc => acc.vendor === pairing.creditCardVendor &&
+             acc.account_number === pairing.creditCardAccountNumber
+    );
+    const bank = expandedAccounts.find(
+      acc => acc.vendor === pairing.bankVendor &&
+             acc.account_number === pairing.bankAccountNumber
+    );
+
+    setEditCreditCard(creditCard || null);
+    setEditBank(bank || null);
+    setEditCandidates([]);
+    setEditSelectedTransactions(new Set());
+    setEditMatchPatterns(pairing.matchPatterns || []);
+  };
+
+  const handleEditReviewTransactions = async () => {
+    if (!editCreditCard || !editBank) {
+      showNotification('Please select both accounts', 'error');
+      return;
+    }
+
+    setEditLoading(true);
+    try {
+      const creditCardNumber = editCreditCard.account_number || editCreditCard.card6_digits || '0000';
+      const bankAccountNumber = editBank.account_number || editBank.bank_account_number || '';
+      const response = await fetch(
+        `/api/accounts/find-settlement-candidates?credit_card_account_number=${creditCardNumber}&bank_vendor=${editBank.vendor}&bank_account_number=${bankAccountNumber}`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setEditCandidates(data.candidates);
+        setEditSelectedTransactions(new Set());
+        setShowEditReview(true);
+      } else {
+        showNotification('Failed to find candidate transactions', 'error');
+      }
+    } catch (error) {
+      console.error('Error fetching candidates:', error);
+      showNotification('Error finding candidates', 'error');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingPairing) return;
+
+    setEditLoading(true);
+    try {
+      // Delete old pairing
+      await fetch(`/api/accounts/pairing?id=${editingPairing.id}`, {
+        method: 'DELETE'
+      });
+
+      // Create new pairing with updated values
+      const response = await fetch('/api/accounts/pairing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          creditCardVendor: editCreditCard!.vendor,
+          creditCardAccountNumber: editCreditCard!.account_number || editCreditCard!.card6_digits || null,
+          bankVendor: editBank!.vendor,
+          bankAccountNumber: editBank!.account_number || editBank!.bank_account_number || null,
+          matchPatterns: editMatchPatterns
+        })
+      });
+
+      if (response.ok) {
+        showNotification('Pairing updated successfully!', 'success');
+        setEditingPairing(null);
+        setShowEditReview(false);
+        fetchExistingPairings();
+        fetchUnpairableTransactionsCount();
+        expandAccountsByNumbers();
+        window.dispatchEvent(new CustomEvent('dataRefresh'));
+      } else {
+        const error = await response.json();
+        showNotification(error.error || 'Failed to update pairing', 'error');
+      }
+    } catch (error) {
+      console.error('Error updating pairing:', error);
+      showNotification('Error updating pairing', 'error');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const toggleEditTransaction = (identifier: string) => {
+    const transaction = editCandidates.find(c => c.identifier === identifier);
+    if (!transaction) return;
+
+    setEditSelectedTransactions(prev => {
+      const next = new Set(prev);
+      const isCurrentlySelected = next.has(identifier);
+
+      if (isCurrentlySelected) {
+        next.delete(identifier);
+      } else {
+        editCandidates.forEach(c => {
+          if (c.name === transaction.name) {
+            next.add(c.identifier);
+          }
+        });
+      }
+
+      return next;
+    });
+  };
+
+  const toggleAllEditTransactions = () => {
+    if (editSelectedTransactions.size === editCandidates.length) {
+      setEditSelectedTransactions(new Set());
+    } else {
+      setEditSelectedTransactions(new Set(editCandidates.map(c => c.identifier)));
     }
   };
 
@@ -264,7 +471,31 @@ export default function AccountPairingModal({
     setCandidates([]);
     setSelectedTransactions(new Set());
     setStats(null);
+    setMatchPatterns([]);
+    setNewPatternInput('');
     onClose();
+  };
+
+  const handleAddPattern = () => {
+    if (newPatternInput.trim() && !matchPatterns.includes(newPatternInput.trim())) {
+      setMatchPatterns([...matchPatterns, newPatternInput.trim()]);
+      setNewPatternInput('');
+    }
+  };
+
+  const handleRemovePattern = (pattern: string) => {
+    setMatchPatterns(matchPatterns.filter(p => p !== pattern));
+  };
+
+  const handleAddEditPattern = () => {
+    if (editNewPatternInput.trim() && !editMatchPatterns.includes(editNewPatternInput.trim())) {
+      setEditMatchPatterns([...editMatchPatterns, editNewPatternInput.trim()]);
+      setEditNewPatternInput('');
+    }
+  };
+
+  const handleRemoveEditPattern = (pattern: string) => {
+    setEditMatchPatterns(editMatchPatterns.filter(p => p !== pattern));
   };
 
   const toggleTransaction = (identifier: string) => {
@@ -327,6 +558,7 @@ export default function AccountPairingModal({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onClose={handleClose} maxWidth="lg" fullWidth>
       <ModalHeader
         title="Account Pairing"
@@ -347,9 +579,20 @@ export default function AccountPairingModal({
         {/* Existing Pairings Section */}
         {activeStep === 0 && existingPairings.length > 0 && (
           <Box sx={{ mb: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Existing Pairings
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">
+                Existing Pairings ({existingPairings.length})
+              </Typography>
+              {unpairableTransactionsCount > 0 && (
+                <Chip
+                  label={`${unpairableTransactionsCount} transactions may need pairing`}
+                  color="warning"
+                  size="small"
+                  onClick={() => setShowUnpairedDialog(true)}
+                  sx={{ cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
+                />
+              )}
+            </Box>
             <List>
               {existingPairings.map((pairing) => (
                 <ListItem
@@ -364,10 +607,10 @@ export default function AccountPairingModal({
                 >
                   <ListItemText
                     primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                         <LinkIcon fontSize="small" />
                         <Typography variant="body1">
-                          {pairing.creditCardVendor} → {pairing.bankVendor}
+                          {pairing.creditCardVendor} ({pairing.creditCardAccountNumber || 'N/A'}) → {pairing.bankVendor} ({pairing.bankAccountNumber || 'N/A'})
                         </Typography>
                         {pairing.isActive && (
                           <Chip label="Active" size="small" color="success" />
@@ -375,22 +618,39 @@ export default function AccountPairingModal({
                       </Box>
                     }
                     secondary={
-                      <Typography variant="body2" color="text.secondary">
-                        Credit Card: {pairing.creditCardAccountNumber || 'Any'} |
-                        Bank: {pairing.bankAccountNumber || 'Any'} |
-                        Created: {new Date(pairing.createdAt).toLocaleDateString()}
-                      </Typography>
+                      <Box>
+                        <Typography variant="body2" color="text.secondary">
+                          Created: {new Date(pairing.createdAt).toLocaleDateString()}
+                        </Typography>
+                        {pairing.matchPatterns && pairing.matchPatterns.length > 0 && (
+                          <Box sx={{ display: 'flex', gap: 0.5, mt: 1, flexWrap: 'wrap' }}>
+                            <Typography variant="caption" color="text.secondary">
+                              Patterns:
+                            </Typography>
+                            {pairing.matchPatterns.map((pattern) => (
+                              <Chip key={pattern} label={pattern} size="small" variant="outlined" />
+                            ))}
+                          </Box>
+                        )}
+                      </Box>
                     }
                   />
-                  <ListItemSecondaryAction>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
                     <IconButton
-                      edge="end"
+                      onClick={() => handleStartEdit(pairing)}
+                      color="primary"
+                      title="Edit pairing"
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton
                       onClick={() => handleDeletePairing(pairing.id)}
                       color="error"
+                      title="Delete pairing"
                     >
                       <DeleteIcon />
                     </IconButton>
-                  </ListItemSecondaryAction>
+                  </Box>
                 </ListItem>
               ))}
             </List>
@@ -423,9 +683,20 @@ export default function AccountPairingModal({
                 }
               }}
               sx={{ mb: 2 }}
+              helperText="Only showing credit cards that haven't been paired yet"
             >
               {expandedAccounts
-                .filter(acc => creditCardAccounts.some(c => c.id === acc.id))
+                .filter(acc => {
+                  // Only show credit cards
+                  if (!creditCardAccounts.some(c => c.id === acc.id)) return false;
+
+                  // Filter out already paired credit card accounts
+                  const isPaired = existingPairings.some(p =>
+                    p.creditCardVendor === acc.vendor &&
+                    p.creditCardAccountNumber === acc.account_number
+                  );
+                  return !isPaired;
+                })
                 .map((account, idx) => {
                   const accountNumberDisplay = account.account_number || 'No transactions yet';
                   const key = `${account.id}-${account.account_number || idx}`;
@@ -575,6 +846,52 @@ export default function AccountPairingModal({
                     </TableBody>
                   </Table>
                 </TableContainer>
+
+                {/* Match Patterns Section */}
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="h6" sx={{ mb: 2 }}>
+                    Match Patterns
+                  </Typography>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    These transaction names will be used to identify future settlement transactions.
+                    Patterns are automatically extracted from selected transactions, but you can add or remove them manually.
+                  </Alert>
+
+                  <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                    {matchPatterns.map((pattern) => (
+                      <Chip
+                        key={pattern}
+                        label={pattern}
+                        onDelete={() => handleRemovePattern(pattern)}
+                        color="primary"
+                        variant="outlined"
+                      />
+                    ))}
+                    {matchPatterns.length === 0 && (
+                      <Typography variant="body2" color="text.secondary">
+                        No patterns yet. Select transactions to auto-extract patterns.
+                      </Typography>
+                    )}
+                  </Box>
+
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <TextField
+                      size="small"
+                      label="Add custom pattern"
+                      value={newPatternInput}
+                      onChange={(e) => setNewPatternInput(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          handleAddPattern();
+                        }
+                      }}
+                      sx={{ flex: 1 }}
+                    />
+                    <Button onClick={handleAddPattern} variant="outlined">
+                      Add
+                    </Button>
+                  </Box>
+                </Box>
               </>
             )}
           </Box>
@@ -594,10 +911,15 @@ export default function AccountPairingModal({
                 {selectedBank?.nickname && ` - ${selectedBank.nickname}`}
               </Typography>
               <Typography variant="body2" sx={{ mt: 1 }}>
-                {selectedTransactions.size} transactions will be categorized immediately.
+                <strong>Match Patterns ({matchPatterns.length}):</strong>
               </Typography>
-              <Typography variant="body2">
-                Future bank transactions matching these patterns will be automatically categorized.
+              <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                {matchPatterns.map((pattern) => (
+                  <Chip key={pattern} label={pattern} size="small" color="primary" />
+                ))}
+              </Box>
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Future bank transactions matching these patterns will be automatically excluded from analytics.
               </Typography>
             </Alert>
 
@@ -633,7 +955,7 @@ export default function AccountPairingModal({
             onClick={handleConfirm}
             variant="contained"
             color="primary"
-            disabled={loading || selectedTransactions.size === 0}
+            disabled={loading || matchPatterns.length === 0}
             startIcon={loading ? <CircularProgress size={20} /> : <LinkIcon />}
           >
             Create Pairing
@@ -641,5 +963,325 @@ export default function AccountPairingModal({
         )}
       </DialogActions>
     </Dialog>
+
+    {/* Edit Pairing Dialog */}
+    <Dialog open={!!editingPairing} onClose={() => setEditingPairing(null)} maxWidth="lg" fullWidth>
+      <ModalHeader
+        title="Edit Pairing"
+        onClose={() => {
+          setEditingPairing(null);
+          setShowEditReview(false);
+        }}
+      />
+      <DialogContent>
+        {editingPairing && (
+          <Box>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              <AlertTitle>Current Pairing</AlertTitle>
+              <Typography variant="body2">
+                <strong>Credit Card:</strong> {editingPairing.creditCardVendor} ({editingPairing.creditCardAccountNumber || 'N/A'})
+              </Typography>
+              <Typography variant="body2">
+                <strong>Bank Account:</strong> {editingPairing.bankVendor} ({editingPairing.bankAccountNumber || 'N/A'})
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                <strong>Status:</strong> {editingPairing.isActive ? (
+                  <Chip label="Active" size="small" color="success" sx={{ ml: 1 }} />
+                ) : (
+                  <Chip label="Inactive" size="small" color="default" sx={{ ml: 1 }} />
+                )}
+              </Typography>
+            </Alert>
+
+            {!showEditReview ? (
+              <>
+                <Typography variant="h6" sx={{ mb: 2 }}>Update Pairing Accounts</Typography>
+
+                <TextField
+                  fullWidth
+                  select
+                  label="Credit Card Account"
+                  value={editCreditCard ? `${editCreditCard.id}-${editCreditCard.account_number}` : ''}
+                  onChange={(e) => {
+                    const [idStr, accNum] = e.target.value.split('-');
+                    const id = Number(idStr);
+                    const account = expandedAccounts.find(
+                      a => a.id === id && a.account_number === (accNum === 'undefined' ? undefined : accNum)
+                    );
+                    if (account) setEditCreditCard(account);
+                  }}
+                  sx={{ mb: 2 }}
+                >
+                  {expandedAccounts
+                    .filter(acc => creditCardAccounts.some(c => c.id === acc.id))
+                    .map((account, idx) => {
+                      const accountNumberDisplay = account.account_number || 'No transactions yet';
+                      const key = `${account.id}-${account.account_number || idx}`;
+                      return (
+                        <MenuItem key={key} value={`${account.id}-${account.account_number || 'undefined'}`}>
+                          {account.vendor} ({accountNumberDisplay})
+                          {account.nickname && ` - ${account.nickname}`}
+                        </MenuItem>
+                      );
+                    })}
+                </TextField>
+
+                <TextField
+                  fullWidth
+                  select
+                  label="Bank Account"
+                  value={editBank ? `${editBank.id}-${editBank.account_number}` : ''}
+                  onChange={(e) => {
+                    const [idStr, accNum] = e.target.value.split('-');
+                    const id = Number(idStr);
+                    const account = expandedAccounts.find(
+                      a => a.id === id && a.account_number === (accNum === 'undefined' ? undefined : accNum)
+                    );
+                    if (account) setEditBank(account);
+                  }}
+                  sx={{ mb: 3 }}
+                >
+                  {expandedAccounts
+                    .filter(acc => bankAccounts.some(b => b.id === acc.id))
+                    .map((account, idx) => {
+                      const accountNumberDisplay = account.account_number || 'No transactions yet';
+                      const key = `${account.id}-${account.account_number || idx}`;
+                      return (
+                        <MenuItem key={key} value={`${account.id}-${account.account_number || 'undefined'}`}>
+                          {account.vendor} ({accountNumberDisplay})
+                          {account.nickname && ` - ${account.nickname}`}
+                        </MenuItem>
+                      );
+                    })}
+                </TextField>
+
+                <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+                  <Button
+                    variant="contained"
+                    onClick={handleEditReviewTransactions}
+                    disabled={!editCreditCard || !editBank || editLoading}
+                    fullWidth
+                  >
+                    Review Transactions
+                  </Button>
+                </Box>
+
+                <Divider sx={{ my: 2 }} />
+
+                <Typography variant="h6" sx={{ mb: 2 }}>Quick Actions</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {editingPairing.isActive ? (
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      onClick={() => handleUpdatePairing(editingPairing.id, false)}
+                    >
+                      Deactivate Pairing
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outlined"
+                      color="success"
+                      onClick={() => handleUpdatePairing(editingPairing.id, true)}
+                    >
+                      Activate Pairing
+                    </Button>
+                  )}
+
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    onClick={() => {
+                      handleDeletePairing(editingPairing.id);
+                      setEditingPairing(null);
+                    }}
+                  >
+                    Delete Pairing
+                  </Button>
+                </Box>
+              </>
+            ) : (
+              <>
+                <Typography variant="h6" sx={{ mb: 2 }}>Review Transactions for Updated Pairing</Typography>
+
+                {editLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress />
+                  </Box>
+                ) : (
+                  <>
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      <Typography variant="body2">
+                        <strong>Credit Card:</strong> {editCreditCard?.vendor} ({editCreditCard?.account_number || 'N/A'})
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>Bank Account:</strong> {editBank?.vendor} ({editBank?.account_number || 'N/A'})
+                      </Typography>
+                    </Alert>
+
+                    <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="body2">
+                        {editSelectedTransactions.size} of {editCandidates.length} selected
+                      </Typography>
+                      <Button onClick={toggleAllEditTransactions} size="small">
+                        {editSelectedTransactions.size === editCandidates.length ? 'Deselect All' : 'Select All'}
+                      </Button>
+                    </Box>
+
+                    <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
+                      <Table stickyHeader size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                checked={editSelectedTransactions.size === editCandidates.length && editCandidates.length > 0}
+                                indeterminate={editSelectedTransactions.size > 0 && editSelectedTransactions.size < editCandidates.length}
+                                onChange={toggleAllEditTransactions}
+                              />
+                            </TableCell>
+                            <TableCell>Date</TableCell>
+                            <TableCell>Transaction Name</TableCell>
+                            <TableCell align="right">Amount</TableCell>
+                            <TableCell>Match Reason</TableCell>
+                            <TableCell>Action</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {editCandidates.map((txn) => {
+                            const isSelected = editSelectedTransactions.has(txn.identifier);
+                            return (
+                              <TableRow
+                                key={txn.identifier}
+                                hover
+                                sx={{
+                                  bgcolor: isSelected ? 'action.selected' : 'inherit',
+                                  '&:hover': {
+                                    bgcolor: isSelected ? 'action.selected' : 'action.hover',
+                                  }
+                                }}
+                              >
+                                <TableCell padding="checkbox">
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onChange={() => toggleEditTransaction(txn.identifier)}
+                                  />
+                                </TableCell>
+                                <TableCell>{new Date(txn.date).toLocaleDateString()}</TableCell>
+                                <TableCell sx={{ fontWeight: isSelected ? 600 : 400 }}>
+                                  {txn.name}
+                                </TableCell>
+                                <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
+                                  ₪{Math.abs(txn.price).toLocaleString()}
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={getMatchReasonLabel(txn.matchReason)}
+                                    size="small"
+                                    color={getMatchReasonColor(txn.matchReason)}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={txn.price < 0 ? '→ Credit Card Repayment' : '→ Refund'}
+                                    size="small"
+                                    variant="outlined"
+                                    color={txn.price < 0 ? 'primary' : 'success'}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+
+                    {/* Edit Match Patterns Section */}
+                    <Box sx={{ mt: 3 }}>
+                      <Typography variant="h6" sx={{ mb: 2 }}>
+                        Match Patterns
+                      </Typography>
+                      <Alert severity="info" sx={{ mb: 2 }}>
+                        These transaction names will be used to identify future settlement transactions.
+                        Patterns are automatically extracted from selected transactions, but you can add or remove them manually.
+                      </Alert>
+
+                      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                        {editMatchPatterns.map((pattern) => (
+                          <Chip
+                            key={pattern}
+                            label={pattern}
+                            onDelete={() => handleRemoveEditPattern(pattern)}
+                            color="primary"
+                            variant="outlined"
+                          />
+                        ))}
+                        {editMatchPatterns.length === 0 && (
+                          <Typography variant="body2" color="text.secondary">
+                            No patterns yet. Select transactions to auto-extract patterns.
+                          </Typography>
+                        )}
+                      </Box>
+
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <TextField
+                          size="small"
+                          label="Add custom pattern"
+                          value={editNewPatternInput}
+                          onChange={(e) => setEditNewPatternInput(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              handleAddEditPattern();
+                            }
+                          }}
+                          sx={{ flex: 1 }}
+                        />
+                        <Button onClick={handleAddEditPattern} variant="outlined">
+                          Add
+                        </Button>
+                      </Box>
+                    </Box>
+                  </>
+                )}
+              </>
+            )}
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => {
+          setEditingPairing(null);
+          setShowEditReview(false);
+        }} disabled={editLoading}>
+          Cancel
+        </Button>
+        {showEditReview && (
+          <>
+            <Button onClick={() => setShowEditReview(false)} disabled={editLoading}>
+              Back
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              variant="contained"
+              color="primary"
+              disabled={editLoading || editMatchPatterns.length === 0}
+              startIcon={editLoading ? <CircularProgress size={20} /> : <LinkIcon />}
+            >
+              Save Changes
+            </Button>
+          </>
+        )}
+      </DialogActions>
+    </Dialog>
+
+    {/* Unpaired Transactions Dialog */}
+    <UnpairedTransactionsDialog
+      isOpen={showUnpairedDialog}
+      onClose={() => {
+        setShowUnpairedDialog(false);
+        fetchUnpairableTransactionsCount(); // Refresh count when dialog closes
+      }}
+    />
+    </>
   );
 }

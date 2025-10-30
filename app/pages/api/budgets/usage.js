@@ -43,10 +43,22 @@ async function computeSpent(client, { categoryDefinitionId, categoryName }, star
         )
        SELECT COALESCE(SUM(ABS(price)), 0) as spent
        FROM transactions t
+       LEFT JOIN account_pairings ap ON (
+         t.vendor = ap.bank_vendor
+         AND ap.is_active = 1
+         AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+         AND ap.match_patterns IS NOT NULL
+         AND EXISTS (
+           SELECT 1
+           FROM json_each(ap.match_patterns)
+           WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+         )
+       )
        WHERE t.category_definition_id IN (SELECT id FROM category_tree)
          AND t.price < 0
          AND t.date >= $2
          AND t.date <= $3
+         AND ap.id IS NULL
          `,
       [categoryDefinitionId, start, end]
     );
@@ -70,10 +82,22 @@ async function computeSpent(client, { categoryDefinitionId, categoryName }, star
       )
      SELECT COALESCE(SUM(ABS(price)), 0) AS spent
      FROM transactions t
+     LEFT JOIN account_pairings ap ON (
+       t.vendor = ap.bank_vendor
+       AND ap.is_active = 1
+       AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+       AND ap.match_patterns IS NOT NULL
+       AND EXISTS (
+         SELECT 1
+         FROM json_each(ap.match_patterns)
+         WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+       )
+     )
      WHERE t.category_definition_id IN (SELECT id FROM category_tree)
        AND t.price < 0
        AND t.date >= $2
        AND t.date <= $3
+       AND ap.id IS NULL
        `,
     [categoryName, start, end]
   );

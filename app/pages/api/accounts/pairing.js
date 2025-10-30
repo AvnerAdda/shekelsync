@@ -82,8 +82,7 @@ async function handleGet(client, req, res) {
  * Body: {
  *   creditCardVendor, creditCardAccountNumber,
  *   bankVendor, bankAccountNumber,
- *   matchPatterns (optional array of custom patterns),
- *   selectedTransactionIds (optional array of transaction IDs to immediately categorize)
+ *   matchPatterns (required array of transaction name patterns)
  * }
  */
 async function handlePost(client, req, res) {
@@ -92,13 +91,18 @@ async function handlePost(client, req, res) {
     creditCardAccountNumber,
     bankVendor,
     bankAccountNumber,
-    matchPatterns = [],
-    selectedTransactionIds = []
+    matchPatterns = []
   } = req.body;
 
   if (!creditCardVendor || !bankVendor) {
     return res.status(400).json({
       error: 'creditCardVendor and bankVendor are required'
+    });
+  }
+
+  if (!matchPatterns || matchPatterns.length === 0) {
+    return res.status(400).json({
+      error: 'At least one match pattern is required'
     });
   }
 
@@ -141,35 +145,16 @@ async function handlePost(client, req, res) {
 
   const pairingId = insertResult.rows[0].id;
 
-  // If specific transaction IDs were selected, categorize them immediately
-  let categorizedCount = 0;
-  if (selectedTransactionIds && selectedTransactionIds.length > 0) {
-    const placeholders = selectedTransactionIds.map((_, i) => `$${i + 1}`).join(',');
-    const updateResult = await client.query(
-      `UPDATE transactions
-       SET category_definition_id = CASE
-         WHEN price < 0 THEN 25
-         WHEN price > 0 THEN 75
-         ELSE category_definition_id
-       END
-       WHERE identifier IN (${placeholders})
-         AND vendor = $${selectedTransactionIds.length + 1}`,
-      [...selectedTransactionIds, bankVendor]
-    );
-    categorizedCount = updateResult.rowCount;
-  }
-
   // Log the action
   await client.query(
-    `INSERT INTO account_pairing_log (pairing_id, action, transaction_count, details)
-     VALUES ($1, 'created', $2, $3)`,
-    [pairingId, categorizedCount, JSON.stringify({ selectedTransactionIds })]
+    `INSERT INTO account_pairing_log (pairing_id, action, details)
+     VALUES ($1, 'created', $2)`,
+    [pairingId, JSON.stringify({ matchPatterns, patternCount: matchPatterns.length })]
   );
 
   res.status(201).json({
     message: 'Pairing created successfully',
-    pairingId,
-    categorizedCount
+    pairingId
   });
 }
 

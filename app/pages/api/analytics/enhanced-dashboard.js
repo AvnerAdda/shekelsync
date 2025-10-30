@@ -42,10 +42,22 @@ export default async function handler(req, res) {
       FROM transactions t
       JOIN category_definitions cd ON cd.id = t.category_definition_id
       LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND cd.category_type = 'expense'
         AND cd.name != $3
+        AND ap.id IS NULL
       GROUP BY parent.id, parent.name, cd.id, cd.name
       ORDER BY total_amount DESC`,
       [startStr, endStr, BANK_CATEGORY_NAME]
@@ -60,10 +72,22 @@ export default async function handler(req, res) {
         COUNT(*) AS total_transactions
       FROM transactions t
       JOIN category_definitions cd ON cd.id = t.category_definition_id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND cd.category_type = 'expense'
-        AND cd.name != $3`,
+        AND cd.name != $3
+        AND ap.id IS NULL`,
       [startStr, endStr, BANK_CATEGORY_NAME]
     );
 
@@ -78,11 +102,23 @@ export default async function handler(req, res) {
       FROM transactions t
       JOIN category_definitions cd ON cd.id = t.category_definition_id
       LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND t.merchant_name IS NOT NULL
         AND cd.category_type = 'expense'
         AND cd.name != $3
+        AND ap.id IS NULL
       GROUP BY t.merchant_name, parent.id, parent.name, cd.id, cd.name
       ORDER BY total_spent DESC
       LIMIT 20`,
@@ -99,10 +135,22 @@ export default async function handler(req, res) {
       FROM transactions t
       JOIN category_definitions cd ON cd.id = t.category_definition_id
       LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND cd.category_type = 'expense'
         AND cd.name != $3
+        AND ap.id IS NULL
       GROUP BY ${monthExpr}, parent.id, parent.name, cd.id, cd.name
       ORDER BY month ASC, amount DESC`,
       [startStr, endStr, BANK_CATEGORY_NAME]
@@ -133,10 +181,22 @@ export default async function handler(req, res) {
       FROM transactions t
       JOIN category_definitions cd ON cd.id = t.category_definition_id
       LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND cd.category_type = 'expense'
         AND cd.name != $3
+        AND ap.id IS NULL
       GROUP BY parent.id, parent.name, cd.id, cd.name
       ORDER BY total_amount DESC`,
       [startStr, endStr, BANK_CATEGORY_NAME]
@@ -150,8 +210,20 @@ export default async function handler(req, res) {
         SUM(CASE WHEN price < 0 THEN ABS(price) ELSE 0 END) as total_expenses,
         COUNT(DISTINCT vendor) as total_accounts,
         ${activeDaysExpr} as active_days
-      FROM transactions
-      WHERE date >= $1 AND date <= $2`,
+      FROM transactions t
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
+      WHERE date >= $1 AND date <= $2
+        AND ap.id IS NULL`,
       [startStr, endStr]
     );
 
