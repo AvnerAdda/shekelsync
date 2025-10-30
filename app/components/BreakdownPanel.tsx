@@ -47,30 +47,33 @@ import {
   ZoomIn as ZoomInIcon,
   MonetizationOn as IncomeIcon,
   TrendingUp as InvestmentIcon,
+  InfoOutlined as InfoOutlinedIcon,
+  Category as CategoryOutlined,
 } from '@mui/icons-material';
+import * as MuiIcons from '@mui/icons-material';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 
-const EXPENSE_COLORS = [
-  '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8',
-  '#82CA9D', '#FFC658', '#FF6B9D', '#C084FC', '#34D399',
-  '#F87171', '#60A5FA', '#A78BFA', '#FB923C', '#2DD4BF'
-];
+// Helper component to render Material-UI icon dynamically from icon name string
+const CategoryIcon: React.FC<{ iconName?: string | null; color?: string | null; size?: number }> = ({
+  iconName,
+  color,
+  size = 20
+}) => {
+  if (!iconName) {
+    return <CategoryOutlined sx={{ color: color || 'inherit', fontSize: size }} />;
+  }
 
-const INCOME_COLORS = [
-  '#4caf50', '#66bb6a', '#81c784', '#a5d6a7', '#c8e6c9',
-  '#00acc1', '#26c6da', '#4dd0e1', '#80deea', '#b2ebf2',
-  '#ffa726', '#ffb74d', '#ffcc80', '#ffe0b2', '#fff3e0'
-];
-
-const INVESTMENT_COLORS = [
-  '#9c27b0', '#ab47bc', '#ba68c8', '#ce93d8', '#e1bee7',
-  '#673ab7', '#7e57c2', '#9575cd', '#b39ddb', '#d1c4e9',
-  '#3f51b5', '#5c6bc0', '#7986cb', '#9fa8da', '#c5cae9'
-];
+  // Dynamically access the icon from MuiIcons
+  const IconComponent = (MuiIcons as any)[iconName] || CategoryOutlined;
+  return <IconComponent sx={{ color: color || 'inherit', fontSize: size }} />;
+};
 
 interface Subcategory {
   id: number;
   name: string;
+  color?: string | null;
+  icon?: string | null;
+  description?: string | null;
   count: number;
   total: number;
 }
@@ -79,6 +82,9 @@ interface BreakdownData {
   byCategory: Array<{
     parentId: number;
     category: string;
+    color?: string | null;
+    icon?: string | null;
+    description?: string | null;
     total: number;
     count: number;
     subcategories: Subcategory[];
@@ -138,9 +144,6 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
   const categoryBreakdown = breakdowns?.byCategory ?? [];
   const vendorBreakdown = breakdowns?.byVendor ?? [];
   const monthlyBreakdown = breakdowns?.byMonth ?? [];
-
-  // Get colors based on category type
-  const COLORS = categoryType === 'expense' ? EXPENSE_COLORS : categoryType === 'income' ? INCOME_COLORS : INVESTMENT_COLORS;
 
   // Get configuration based on category type
   const config = {
@@ -211,7 +214,6 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
   const handleDrillDown = (parentId: number, parentName: string) => {
     setIsZooming(true);
     setDrillStack([...drillStack, { type: 'parent', parentId, parentName }]);
-    fetchCategoryDetails(parentId, undefined, parentName);
     setTimeout(() => setIsZooming(false), 300);
   };
 
@@ -228,7 +230,6 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
         subcategoryName,
       },
     ]);
-    fetchCategoryDetails(undefined, subcategoryId, subcategoryName);
     setTimeout(() => setIsZooming(false), 300);
   };
 
@@ -239,13 +240,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
       setDetailsModalOpen(false);
     } else if (index < drillStack.length - 1) {
       // Navigate to specific level
-      const targetLevel = drillStack[index];
       setDrillStack(drillStack.slice(0, index + 1));
-      if (targetLevel.type === 'parent') {
-        fetchCategoryDetails(targetLevel.parentId, undefined, targetLevel.parentName);
-      } else {
-        fetchCategoryDetails(undefined, targetLevel.subcategoryId, targetLevel.subcategoryName);
-      }
     }
   };
 
@@ -253,17 +248,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
     if (drillStack.length > 0) {
       const newStack = drillStack.slice(0, -1);
       setDrillStack(newStack);
-
-      if (newStack.length === 0) {
-        setDetailsModalOpen(false);
-      } else {
-        const prevLevel = newStack[newStack.length - 1];
-        if (prevLevel.type === 'parent') {
-          fetchCategoryDetails(prevLevel.parentId, undefined, prevLevel.parentName);
-        } else {
-          fetchCategoryDetails(undefined, prevLevel.subcategoryId, prevLevel.subcategoryName);
-        }
-      }
+      setDetailsModalOpen(false);
     }
   };
 
@@ -275,18 +260,28 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
       return categoryBreakdown.map(item => ({
         id: item.parentId,
         name: item.category,
+        color: item.color,
+        icon: item.icon,
+        description: item.description,
         value: Math.abs(item.total),
         count: item.count,
         subcategories: item.subcategories,
       }));
-    } else if (currentLevel.type === 'parent' && categoryDetails?.subcategories) {
-      // Drill level 1: show subcategories
-      return categoryDetails.subcategories.map((sub: any) => ({
-        id: sub.id,
-        name: sub.name,
-        value: Math.abs(sub.total),
-        count: sub.count,
-      }));
+    } else if (currentLevel.type === 'parent') {
+      // Drill level 1: show subcategories from breakdown data
+      const parentCategory = categoryBreakdown.find(cat => cat.parentId === currentLevel.parentId);
+      if (parentCategory && parentCategory.subcategories) {
+        return parentCategory.subcategories.map((sub: any) => ({
+          id: sub.id,
+          name: sub.name,
+          color: sub.color,
+          icon: sub.icon,
+          description: sub.description,
+          value: Math.abs(sub.total),
+          count: sub.count,
+        }));
+      }
+      return [];
     } else {
       // Subcategory level: no further drill down
       return [];
@@ -373,13 +368,26 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
                     {data.map((entry: any, index: number) => (
                       <Cell
                         key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
+                        fill={entry.color || theme.palette.grey[400]}
                         onClick={() => {
                           if (!isSubcategoryLevel) {
-                            if (!currentLevel) {
-                              handleDrillDown(entry.id, entry.name);
-                            } else if (currentLevel.type === 'parent') {
-                              handleSubcategoryClick(entry.id, entry.name);
+                            // Check if this category has subcategories
+                            const hasSubcategories = entry.subcategories && entry.subcategories.length > 0;
+
+                            if (hasSubcategories) {
+                              // Has subcategories - drill down
+                              if (!currentLevel) {
+                                handleDrillDown(entry.id, entry.name);
+                              } else if (currentLevel.type === 'parent') {
+                                handleSubcategoryClick(entry.id, entry.name);
+                              }
+                            } else {
+                              // Leaf node - open details modal
+                              if (!currentLevel) {
+                                fetchCategoryDetails(entry.id, undefined, entry.name);
+                              } else if (currentLevel.type === 'parent') {
+                                fetchCategoryDetails(undefined, entry.id, entry.name);
+                              }
                             }
                           }
                         }}
@@ -399,7 +407,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
               {!isSubcategoryLevel && (
                 <Typography variant="caption" display="block" align="center" color="text.secondary">
                   <ZoomInIcon sx={{ fontSize: 14, verticalAlign: 'middle', mr: 0.5 }} />
-                  Click on a slice to drill down
+                  Click to drill down or view details
                 </Typography>
               )}
             </Box>
@@ -428,25 +436,30 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
                       }}
                       onClick={() => {
                         if (!isSubcategoryLevel) {
-                          if (!currentLevel) {
-                            handleDrillDown(item.id, item.name);
-                          } else if (currentLevel.type === 'parent') {
-                            handleSubcategoryClick(item.id, item.name);
+                          // Check if this category has subcategories
+                          const hasSubcategories = item.subcategories && item.subcategories.length > 0;
+
+                          if (hasSubcategories) {
+                            // Has subcategories - drill down
+                            if (!currentLevel) {
+                              handleDrillDown(item.id, item.name);
+                            } else if (currentLevel.type === 'parent') {
+                              handleSubcategoryClick(item.id, item.name);
+                            }
+                          } else {
+                            // Leaf node - open details modal
+                            if (!currentLevel) {
+                              fetchCategoryDetails(item.id, undefined, item.name);
+                            } else if (currentLevel.type === 'parent') {
+                              fetchCategoryDetails(undefined, item.id, item.name);
+                            }
                           }
                         }
                       }}
                     >
                       <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                          <Box
-                            sx={{
-                              width: 12,
-                              height: 12,
-                              borderRadius: '50%',
-                              backgroundColor: COLORS[index % COLORS.length],
-                              flexShrink: 0,
-                            }}
-                          />
+                          <CategoryIcon iconName={item.icon} color={item.color} size={24} />
                           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                               <Typography variant="body2" fontWeight="medium" noWrap>
@@ -470,7 +483,23 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
                             </Box>
                           </Box>
                           {!isSubcategoryLevel && (
-                            <ChevronRightIcon color="action" />
+                            <>
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!currentLevel) {
+                                    fetchCategoryDetails(item.id, undefined, item.name);
+                                  } else if (currentLevel.type === 'parent') {
+                                    fetchCategoryDetails(undefined, item.id, item.name);
+                                  }
+                                }}
+                                sx={{ color: 'action.active' }}
+                              >
+                                <InfoOutlinedIcon fontSize="small" />
+                              </IconButton>
+                              <ChevronRightIcon color="action" />
+                            </>
                           )}
                         </Box>
                       </CardContent>
@@ -504,7 +533,10 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
             />
             <Bar dataKey="value" fill={theme.palette.primary.main}>
               {data.map((entry: any, index: number) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                <Cell
+                  key={`cell-${index}`}
+                  fill={entry.color || theme.palette.primary.main}
+                />
               ))}
             </Bar>
           </BarChart>

@@ -53,6 +53,40 @@ import {
   Visibility as VisibilityIcon,
   AutoAwesome as AutoAwesomeIcon,
   ArrowDropDown as ArrowDropDownIcon,
+  Restaurant as RestaurantIcon,
+  DirectionsCar as DirectionsCarIcon,
+  LocalGroceryStore as LocalGroceryStoreIcon,
+  Home as HomeIcon,
+  Flight as FlightIcon,
+  LocalHospital as LocalHospitalIcon,
+  School as SchoolIcon,
+  FitnessCenter as FitnessCenterIcon,
+  Smartphone as SmartphoneIcon,
+  Checkroom as CheckroomIcon,
+  Pets as PetsIcon,
+  SportsEsports as SportsEsportsIcon,
+  Theaters as TheatersIcon,
+  LocalBar as LocalBarIcon,
+  LocalCafe as LocalCafeIcon,
+  AccountBalance as AccountBalanceIcon,
+  CreditCard as CreditCardIcon,
+  Savings as SavingsIcon,
+  Work as WorkIcon,
+  AttachMoney as AttachMoneyIcon,
+  TrendingDown as TrendingDownIcon,
+  LocalTaxi as LocalTaxiIcon,
+  Train as TrainIcon,
+  LocalGasStation as LocalGasStationIcon,
+  ElectricBolt as ElectricBoltIcon,
+  Water as WaterIcon,
+  Wifi as WifiIcon,
+  Phone as PhoneIcon,
+  LiveTv as LiveTvIcon,
+  MedicalServices as MedicalServicesIcon,
+  Cake as CakeIcon,
+  CardGiftcard as CardGiftcardIcon,
+  ChildCare as ChildCareIcon,
+  MenuBook as MenuBookIcon,
 } from '@mui/icons-material';
 import ModalHeader from './ModalHeader';
 
@@ -90,8 +124,6 @@ interface TransactionMatch {
   date: string;
   name: string;
   price: number;
-  category: string;
-  parentCategory: string;
   accountNumber?: string;
 }
 
@@ -108,8 +140,6 @@ interface UncategorizedTransaction {
   name: string;
   price: number;
   accountNumber?: string;
-  parent_category?: string;
-  category?: string;
 }
 
 interface UncategorizedSummary {
@@ -130,6 +160,48 @@ interface CategoryHierarchyModalProps {
   onClose: () => void;
   onCategoriesUpdated: () => void;
 }
+
+// Icon mapping for dynamic icon rendering
+const ICON_MAP: Record<string, React.ComponentType<any>> = {
+  Restaurant: RestaurantIcon,
+  DirectionsCar: DirectionsCarIcon,
+  LocalGroceryStore: LocalGroceryStoreIcon,
+  ShoppingCart: ExpenseIcon,
+  Home: HomeIcon,
+  Flight: FlightIcon,
+  LocalHospital: LocalHospitalIcon,
+  School: SchoolIcon,
+  FitnessCenter: FitnessCenterIcon,
+  Smartphone: SmartphoneIcon,
+  Checkroom: CheckroomIcon,
+  Pets: PetsIcon,
+  SportsEsports: SportsEsportsIcon,
+  Theaters: TheatersIcon,
+  LocalBar: LocalBarIcon,
+  LocalCafe: LocalCafeIcon,
+  AccountBalance: AccountBalanceIcon,
+  CreditCard: CreditCardIcon,
+  Savings: SavingsIcon,
+  Work: WorkIcon,
+  AttachMoney: AttachMoneyIcon,
+  TrendingUp: InvestmentIcon,
+  TrendingDown: TrendingDownIcon,
+  MonetizationOn: IncomeIcon,
+  LocalTaxi: LocalTaxiIcon,
+  Train: TrainIcon,
+  LocalGasStation: LocalGasStationIcon,
+  ElectricBolt: ElectricBoltIcon,
+  Water: WaterIcon,
+  Wifi: WifiIcon,
+  Phone: PhoneIcon,
+  LiveTv: LiveTvIcon,
+  MedicalServices: MedicalServicesIcon,
+  Cake: CakeIcon,
+  CardGiftcard: CardGiftcardIcon,
+  ChildCare: ChildCareIcon,
+  MenuBook: MenuBookIcon,
+  Category: CategoryIcon,
+};
 
 const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   open,
@@ -177,6 +249,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [creatingRules, setCreatingRules] = useState<Record<string, boolean>>({});
   const [assignMenuAnchors, setAssignMenuAnchors] = useState<Record<string, HTMLElement | null>>({});
 
+  // Transaction Viewer State
+  const [selectedCategoryForTransactions, setSelectedCategoryForTransactions] = useState<CategoryDefinition | null>(null);
+  const [categoryTransactions, setCategoryTransactions] = useState<TransactionMatch[]>([]);
+  const [loadingCategoryTransactions, setLoadingCategoryTransactions] = useState(false);
+  const [transactionToMove, setTransactionToMove] = useState<TransactionMatch | null>(null);
+  const [transactionMoveMenuAnchor, setTransactionMoveMenuAnchor] = useState<HTMLElement | null>(null);
+
   const formatCurrency = (value: number) => {
     const amount = Number.isFinite(value) ? Math.abs(value) : 0;
     const formatted = amount.toLocaleString('en-US', {
@@ -192,6 +271,15 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     }
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? 'Unknown date' : parsed.toLocaleDateString('en-IL');
+  };
+
+  const getCategoryIcon = (category: CategoryDefinition) => {
+    if (category.icon && ICON_MAP[category.icon]) {
+      const IconComponent = ICON_MAP[category.icon];
+      return <IconComponent sx={{ mr: 1, color: category.color || 'text.secondary' }} />;
+    }
+    // Fallback to generic category icon
+    return <CategoryIcon sx={{ mr: 1, color: category.color || 'text.secondary' }} />;
   };
 
   const categoryLookup = useMemo(() => {
@@ -287,20 +375,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     setAssignmentDrafts((prev: Record<string, TransactionAssignment>) => {
       const next: Record<string, TransactionAssignment> = {};
 
-      // Helper function to find category by name
-      const findCategoryByName = (cats: CategoryDefinition[], name: string): CategoryDefinition | null => {
-        for (const cat of cats) {
-          if (cat.name === name) {
-            return cat;
-          }
-          if (cat.children && cat.children.length > 0) {
-            const found = findCategoryByName(cat.children, name);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-
       // Process uncategorized transactions
       if (hasUncategorized) {
         uncategorized!.recentTransactions.forEach((txn: UncategorizedTransaction) => {
@@ -309,25 +383,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             next[key] = prev[key];
           } else {
             const defaultType: CategoryType = txn.price >= 0 ? 'income' : 'expense';
-            
-            let preselectedPath: number[] = [];
-            if (txn.parent_category) {
-              const foundCategory = findCategoryByName(categories, txn.parent_category);
-              if (foundCategory) {
-                // Build the path from root to this category
-                const path: number[] = [];
-                let current: CategoryDefinition | undefined = foundCategory;
-                while (current) {
-                  path.unshift(current.id);
-                  current = current.parent_id ? categoryLookup.get(current.parent_id) : undefined;
-                }
-                preselectedPath = path;
-              }
-            }
 
             next[key] = {
               type: defaultType,
-              categoryPath: preselectedPath,
+              categoryPath: [],
             };
           }
         });
@@ -968,6 +1027,154 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     }
   };
 
+  const fetchCategoryTransactions = async (category: CategoryDefinition) => {
+    try {
+      setLoadingCategoryTransactions(true);
+      setSelectedCategoryForTransactions(category);
+
+      const response = await fetch(`/api/categories/transactions?categoryId=${category.id}&limit=200`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch category transactions');
+      }
+
+      const data = await response.json();
+      setCategoryTransactions(data.transactions.map((txn: any) => ({
+        identifier: txn.identifier,
+        vendor: txn.vendor,
+        date: txn.date,
+        name: txn.name,
+        price: txn.price,
+        accountNumber: txn.accountNumber,
+      })));
+    } catch (error) {
+      console.error('Error fetching category transactions:', error);
+      setError('Failed to load transactions for this category');
+    } finally {
+      setLoadingCategoryTransactions(false);
+    }
+  };
+
+  const handleRemoveTransactionFromCategory = async (txn: TransactionMatch) => {
+    try {
+      setError(null);
+
+      const response = await fetch(`/api/transactions/${encodeURIComponent(`${txn.identifier}|${txn.vendor}`)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category_definition_id: null,
+          auto_categorized: false,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        throw new Error(errorPayload?.error || 'Failed to remove transaction from category');
+      }
+
+      setSuccess('Transaction removed from category');
+      setTimeout(() => setSuccess(null), 3000);
+
+      // Refresh the transaction list
+      if (selectedCategoryForTransactions) {
+        await fetchCategoryTransactions(selectedCategoryForTransactions);
+      }
+      await fetchCategories();
+      onCategoriesUpdated();
+    } catch (error) {
+      console.error('Error removing transaction:', error);
+      setError(error instanceof Error ? error.message : 'Failed to remove transaction');
+    }
+  };
+
+  const handleCreateRuleFromTransaction = async (txn: TransactionMatch) => {
+    try {
+      setError(null);
+
+      if (!selectedCategoryForTransactions) {
+        setError('No category selected');
+        return;
+      }
+
+      const response = await fetch('/api/categorization_rules/auto-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionName: txn.name,
+          categoryDefinitionId: selectedCategoryForTransactions.id,
+          categoryType: selectedCategoryForTransactions.category_type,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          setSuccess(`A rule for "${txn.name}" already exists.`);
+          setTimeout(() => setSuccess(null), 3000);
+          return;
+        } else {
+          throw new Error(result.error || 'Failed to create rule');
+        }
+      }
+
+      setSuccess(`Rule created! All transactions named "${txn.name}" will now be auto-categorized.`);
+      setTimeout(() => setSuccess(null), 5000);
+
+      await fetchRules();
+    } catch (error) {
+      console.error('Error creating rule:', error);
+      setError(error instanceof Error ? error.message : 'Failed to create rule');
+    }
+  };
+
+  const handleMoveTransactionToCategory = async (txn: TransactionMatch, targetCategoryId: number) => {
+    try {
+      setError(null);
+
+      const targetCategory = categoryLookup.get(targetCategoryId);
+      if (!targetCategory) {
+        setError('Target category not found');
+        return;
+      }
+
+      const response = await fetch(`/api/transactions/${encodeURIComponent(`${txn.identifier}|${txn.vendor}`)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category_definition_id: targetCategoryId,
+          category_type: targetCategory.category_type,
+          category: targetCategory.name,
+          auto_categorized: false,
+          confidence_score: 1.0,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        throw new Error(errorPayload?.error || 'Failed to move transaction');
+      }
+
+      setSuccess(`Transaction moved to ${targetCategory.name}`);
+      setTimeout(() => setSuccess(null), 3000);
+
+      // Close the move menu
+      setTransactionMoveMenuAnchor(null);
+      setTransactionToMove(null);
+
+      // Refresh the transaction list
+      if (selectedCategoryForTransactions) {
+        await fetchCategoryTransactions(selectedCategoryForTransactions);
+      }
+      await fetchCategories();
+      onCategoriesUpdated();
+    } catch (error) {
+      console.error('Error moving transaction:', error);
+      setError(error instanceof Error ? error.message : 'Failed to move transaction');
+    }
+  };
+
   const toggleCategory = (categoryId: number) => {
     setExpandedCategories(prev => {
       const next = new Set(prev);
@@ -999,6 +1206,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const renderCategoryTree = (category: CategoryDefinition, level: number = 0) => {
     const hasChildren = category.children && category.children.length > 0;
     const isExpanded = expandedCategories.has(category.id);
+    const isLeafCategory = !hasChildren && level > 0; // Leaf categories are those without children and not at root level
 
     return (
       <React.Fragment key={category.id}>
@@ -1007,13 +1215,22 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             pl: level * 4 + 2,
             borderLeft: level > 0 ? '2px solid #e0e0e0' : 'none',
             '&:hover': { bgcolor: 'action.hover' },
+            cursor: isLeafCategory ? 'pointer' : 'default',
+          }}
+          onClick={() => {
+            if (isLeafCategory && category.transaction_count && category.transaction_count > 0) {
+              fetchCategoryTransactions(category);
+            }
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
             {hasChildren && (
               <IconButton
                 size="small"
-                onClick={() => toggleCategory(category.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleCategory(category.id);
+                }}
                 sx={{ mr: 1 }}
               >
                 {isExpanded ? <ExpandMoreIcon /> : <ChevronRightIcon />}
@@ -1021,7 +1238,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             )}
             {!hasChildren && <Box sx={{ width: 40 }} />}
 
-            <CategoryIcon sx={{ mr: 1, color: category.color || 'text.secondary' }} />
+            {getCategoryIcon(category)}
 
             <ListItemText
               primary={
@@ -1499,6 +1716,179 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               </Button>
             </DialogActions>
           </Dialog>
+        )}
+
+        {/* Transaction Viewer Dialog */}
+        {selectedCategoryForTransactions && (
+          <Dialog
+            open={true}
+            onClose={() => {
+              setSelectedCategoryForTransactions(null);
+              setCategoryTransactions([]);
+            }}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle>
+              <Box display="flex" alignItems="center" gap={1}>
+                {getCategoryIcon(selectedCategoryForTransactions)}
+                <Typography variant="h6">
+                  {selectedCategoryForTransactions.name} Transactions
+                </Typography>
+                <Chip
+                  label={`${categoryTransactions.length} transaction${categoryTransactions.length !== 1 ? 's' : ''}`}
+                  size="small"
+                  color="primary"
+                />
+              </Box>
+            </DialogTitle>
+            <DialogContent>
+              {loadingCategoryTransactions ? (
+                <Box display="flex" justifyContent="center" py={4}>
+                  <CircularProgress />
+                </Box>
+              ) : categoryTransactions.length === 0 ? (
+                <Alert severity="info">No transactions found for this category.</Alert>
+              ) : (
+                <List dense>
+                  {categoryTransactions.map((txn, idx) => (
+                    <ListItem
+                      key={`${txn.identifier}-${txn.vendor}-${idx}`}
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 2,
+                        mb: 1,
+                        flexDirection: 'column',
+                        alignItems: 'stretch',
+                      }}
+                    >
+                      <Box display="flex" justifyContent="space-between" width="100%" mb={1}>
+                        <Box>
+                          <Typography variant="subtitle2" fontWeight="600">
+                            {txn.name || 'Unknown transaction'}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {txn.vendor || 'Unknown vendor'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {formatDate(txn.date)}
+                            {txn.accountNumber ? ` • ****${txn.accountNumber}` : ''}
+                          </Typography>
+                        </Box>
+                        <Typography variant="subtitle2" fontWeight="bold">
+                          {formatCurrency(txn.price)}
+                        </Typography>
+                      </Box>
+                      <Box display="flex" gap={1}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          startIcon={<DeleteIcon />}
+                          onClick={() => handleRemoveTransactionFromCategory(txn)}
+                        >
+                          Remove from Category
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="primary"
+                          startIcon={<EditIcon />}
+                          onClick={(e) => {
+                            setTransactionToMove(txn);
+                            setTransactionMoveMenuAnchor(e.currentTarget);
+                          }}
+                        >
+                          Move to Category
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<AutoAwesomeIcon />}
+                          onClick={() => handleCreateRuleFromTransaction(txn)}
+                        >
+                          Create Rule
+                        </Button>
+                      </Box>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button
+                onClick={() => {
+                  setSelectedCategoryForTransactions(null);
+                  setCategoryTransactions([]);
+                }}
+              >
+                Close
+              </Button>
+            </DialogActions>
+          </Dialog>
+        )}
+
+        {/* Move to Category Menu */}
+        {transactionToMove && (
+          <Menu
+            anchorEl={transactionMoveMenuAnchor}
+            open={Boolean(transactionMoveMenuAnchor)}
+            onClose={() => {
+              setTransactionMoveMenuAnchor(null);
+              setTransactionToMove(null);
+            }}
+            PaperProps={{
+              style: {
+                maxHeight: 400,
+                width: '300px',
+              },
+            }}
+          >
+            <MenuItem disabled>
+              <Typography variant="caption" fontWeight="bold">
+                Select Target Category
+              </Typography>
+            </MenuItem>
+            <Divider />
+            {categories.map((rootCategory) => {
+              const renderCategoryMenuItem = (cat: CategoryDefinition, depth: number = 0): JSX.Element[] => {
+                const items: JSX.Element[] = [];
+
+                // Only show leaf categories (those without children) as options
+                if (!cat.children || cat.children.length === 0) {
+                  if (depth > 0) { // Don't show root categories as targets
+                    items.push(
+                      <MenuItem
+                        key={cat.id}
+                        onClick={() => handleMoveTransactionToCategory(transactionToMove, cat.id)}
+                        sx={{ pl: depth * 2 + 2 }}
+                      >
+                        <ListItemIcon>
+                          {getCategoryIcon(cat)}
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={cat.name}
+                          secondary={cat.name_en}
+                        />
+                      </MenuItem>
+                    );
+                  }
+                }
+
+                // Recursively render children
+                if (cat.children && cat.children.length > 0) {
+                  cat.children.forEach(child => {
+                    items.push(...renderCategoryMenuItem(child, depth + 1));
+                  });
+                }
+
+                return items;
+              };
+
+              return renderCategoryMenuItem(rootCategory);
+            })}
+          </Menu>
         )}
       </Box>
     );

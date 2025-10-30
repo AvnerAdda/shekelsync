@@ -85,36 +85,61 @@ async function handleGet(req, res) {
     `;
 
 
+    // Credit card vendors (unassigned transactions)
+    const creditCardVendors = ['visaCal', 'max', 'isracard', 'amex'];
+
+    // Bank vendors (bank transactions to categorize)
+    const bankVendors = [
+      'hapoalim', 'leumi', 'mizrahi', 'otsarHahayal', 'beinleumi',
+      'massad', 'yahav', 'union', 'discount', 'mercantile',
+      'beyahadBishvilha', 'behatsdaa', 'pagi', 'oneZero'
+    ];
+
+    // Create placeholders for SQLite IN clause
+    const creditCardPlaceholders = creditCardVendors.map(() => '?').join(', ');
+    const bankPlaceholders = bankVendors.map(() => '?').join(', ');
+
     const [categoryResult, uncategorizedSummary, uncategorizedRecent, bankTransactionsSummary, bankTransactionsRecent] = await Promise.all([
       pool.query(query, params),
+      // Credit card transactions that need categorization (either NULL or assigned to root categories)
       pool.query(
         `SELECT COUNT(*) AS total_transactions, COALESCE(SUM(ABS(price)), 0) AS total_amount
          FROM transactions t
-         WHERE t.category_definition_id IS NULL
-         `
-      ),
-      pool.query(
-        `SELECT identifier, vendor, name, date, price, account_number
-         FROM transactions t
-         WHERE t.category_definition_id IS NULL
-         
-         ORDER BY date DESC
-         LIMIT 50`
-      ),
-      pool.query(
-        `SELECT COUNT(*) AS total_transactions, COALESCE(SUM(ABS(price)), 0) AS total_amount
-         FROM transactions t
-         JOIN category_definitions cd ON t.category_definition_id = cd.id
-         WHERE cd.depth_level = 0
-         `
+         LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+         WHERE (t.category_definition_id IS NULL OR cd.depth_level = 0)
+         AND t.vendor IN (${creditCardPlaceholders})
+         `,
+        creditCardVendors
       ),
       pool.query(
         `SELECT t.identifier, t.vendor, t.name, t.date, t.price, t.account_number
          FROM transactions t
-         JOIN category_definitions cd ON t.category_definition_id = cd.id
-         WHERE cd.depth_level = 0
+         LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+         WHERE (t.category_definition_id IS NULL OR cd.depth_level = 0)
+         AND t.vendor IN (${creditCardPlaceholders})
          ORDER BY t.date DESC
-         LIMIT 50`
+         LIMIT 50`,
+        creditCardVendors
+      ),
+      // Bank transactions that need categorization (either NULL or assigned to root categories)
+      pool.query(
+        `SELECT COUNT(*) AS total_transactions, COALESCE(SUM(ABS(price)), 0) AS total_amount
+         FROM transactions t
+         LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+         WHERE (t.category_definition_id IS NULL OR cd.depth_level = 0)
+         AND t.vendor IN (${bankPlaceholders})
+         `,
+        bankVendors
+      ),
+      pool.query(
+        `SELECT t.identifier, t.vendor, t.name, t.date, t.price, t.account_number
+         FROM transactions t
+         LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+         WHERE (t.category_definition_id IS NULL OR cd.depth_level = 0)
+         AND t.vendor IN (${bankPlaceholders})
+         ORDER BY t.date DESC
+         LIMIT 50`,
+        bankVendors
       ),
     ]);
 

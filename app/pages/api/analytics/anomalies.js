@@ -98,10 +98,22 @@ async function detectAnomalies(client) {
       FROM transactions t
       JOIN category_definitions cd ON cd.id = t.category_definition_id
       LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE t.date >= $1
         AND t.price < 0
         AND cd.category_type = 'expense'
-        AND cd.name != $2`,
+        AND cd.name != $2
+        AND ap.id IS NULL`,
       [sixMonthsAgoStr, BANK_CATEGORY_NAME]
     );
 

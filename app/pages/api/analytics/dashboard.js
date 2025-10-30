@@ -53,7 +53,19 @@ export default async function handler(req, res) {
         END) as expenses
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE t.date >= $1 AND t.date <= $2
+        AND ap.id IS NULL
       GROUP BY ${dateGroupBy}
       ORDER BY date ASC`,
       [start, end, BANK_CATEGORY_NAME]
@@ -72,9 +84,21 @@ export default async function handler(req, res) {
       FROM transactions t
       JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
       JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND cd_parent.category_type = 'expense'
+        AND ap.id IS NULL
       GROUP BY cd_parent.id, cd_parent.name, cd_child.id, cd_child.name
       ORDER BY cd_parent.name, total DESC`,
       [start, end]
@@ -87,8 +111,20 @@ export default async function handler(req, res) {
         COUNT(*) as count,
         SUM(ABS(price)) as total
       FROM transactions t
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE t.date >= $1 AND t.date <= $2
-      AND t.price < 0
+        AND t.price < 0
+        AND ap.id IS NULL
       GROUP BY t.vendor
       ORDER BY total DESC`,
       [start, end]
@@ -115,7 +151,19 @@ export default async function handler(req, res) {
         END) as expenses
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE t.date >= $1 AND t.date <= $2
+        AND ap.id IS NULL
       GROUP BY ${monthExpr}
       ORDER BY month ASC`,
       [start, end, BANK_CATEGORY_NAME]
@@ -149,7 +197,19 @@ export default async function handler(req, res) {
         COUNT(DISTINCT t.vendor) as total_accounts
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      WHERE t.date >= $1 AND t.date <= $2`,
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
+      WHERE t.date >= $1 AND t.date <= $2
+        AND ap.id IS NULL`,
       [start, end, BANK_CATEGORY_NAME]
     );
 

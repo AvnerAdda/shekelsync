@@ -24,6 +24,19 @@ export default async function handler(req, res) {
   const client = await getDB();
 
   try {
+    // First, fetch all active pairings to exclude already-paired transactions
+    const pairingsResult = await client.query(`
+      SELECT
+        id,
+        bank_vendor,
+        bank_account_number,
+        match_patterns
+      FROM account_pairings
+      WHERE is_active = 1
+    `);
+
+    const activePairings = pairingsResult.rows;
+
     // Credit card related keywords in Hebrew and English
     const keywords = [
       'ויזה', 'visa',
@@ -80,8 +93,8 @@ export default async function handler(req, res) {
 
     const result = await client.query(query, params);
 
-    // Group results by match reason for better UX
-    const candidates = result.rows.map(row => ({
+    // Filter out transactions that are already matched by active pairings
+    const allCandidates = result.rows.map(row => ({
       identifier: row.identifier,
       vendor: row.vendor,
       date: row.date,
@@ -92,6 +105,41 @@ export default async function handler(req, res) {
       accountNumber: row.account_number,
       matchReason: row.match_reason
     }));
+
+    // Exclude transactions already matched by other active pairings
+    const candidates = allCandidates.filter(txn => {
+      // Check if this transaction matches ANY active pairing
+      const matchesPairing = activePairings.some(pairing => {
+        // Must match bank vendor
+        if (txn.vendor !== pairing.bank_vendor) {
+          return false;
+        }
+
+        // If pairing has specific bank account number, it must match
+        if (pairing.bank_account_number &&
+            txn.accountNumber !== pairing.bank_account_number) {
+          return false;
+        }
+
+        // Check custom match patterns (ONLY match_patterns)
+        const matchPatterns = pairing.match_patterns ?
+          JSON.parse(pairing.match_patterns) : [];
+
+        if (matchPatterns.length === 0) {
+          return false;
+        }
+
+        const txnNameLower = (txn.name || '').toLowerCase();
+        const hasPatternMatch = matchPatterns.some(pattern =>
+          txnNameLower.includes(pattern.toLowerCase())
+        );
+
+        return hasPatternMatch;
+      });
+
+      // Keep transactions that DON'T match any existing pairing
+      return !matchesPairing;
+    });
 
     // Statistics
     const stats = {

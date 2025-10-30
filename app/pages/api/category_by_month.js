@@ -50,7 +50,19 @@ const handler = createApiHandler({
                 ${yearExpr} AS year,
                 ${yearTrunc} AS year_sort
               FROM transactions t
+              LEFT JOIN account_pairings ap ON (
+                t.vendor = ap.bank_vendor
+                AND ap.is_active = 1
+                AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+                AND ap.match_patterns IS NOT NULL
+                AND EXISTS (
+                  SELECT 1
+                  FROM json_each(ap.match_patterns)
+                  WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+                )
+              )
               WHERE t.category_definition_id IN (SELECT id FROM category_tree)
+                AND ap.id IS NULL
               GROUP BY ${yearExpr}, ${yearTrunc}
               ORDER BY year_sort DESC
               LIMIT $2
@@ -80,7 +92,19 @@ const handler = createApiHandler({
               ${yearMonthExpr} AS year_month,
               ${monthTrunc} AS month_sort
             FROM transactions t
+            LEFT JOIN account_pairings ap ON (
+              t.vendor = ap.bank_vendor
+              AND ap.is_active = 1
+              AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+              AND ap.match_patterns IS NOT NULL
+              AND EXISTS (
+                SELECT 1
+                FROM json_each(ap.match_patterns)
+                WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+              )
+            )
             WHERE t.category_definition_id IN (SELECT id FROM category_tree)
+              AND ap.id IS NULL
             GROUP BY ${yearExpr}, ${monthExpr}, ${yearMonthExpr}, ${monthTrunc}
             ORDER BY month_sort DESC
             LIMIT $2

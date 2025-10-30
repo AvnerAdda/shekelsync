@@ -75,10 +75,22 @@ export default async function handler(req, res) {
   MIN(${amountExpression}) as min_amount,
   MAX(${amountExpression}) as max_amount
       FROM transactions t
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE ${categoryFilter}
       ${priceFilterClause}
       AND t.date >= $${categoryParams.length + 1}
       AND t.date <= $${categoryParams.length + 2}
+      AND ap.id IS NULL
       `,
       [...categoryParams, start, end]
     );
@@ -90,11 +102,22 @@ export default async function handler(req, res) {
         COUNT(*) as count,
   SUM(${amountExpression}) as total
       FROM transactions t
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE ${categoryFilter}
       ${priceFilterClause}
       AND t.date >= $${categoryParams.length + 1}
       AND t.date <= $${categoryParams.length + 2}
-      
+      AND ap.id IS NULL
       GROUP BY t.vendor
       ORDER BY total DESC`,
       [...categoryParams, start, end]
@@ -108,12 +131,23 @@ export default async function handler(req, res) {
         COUNT(*) as count,
   SUM(${amountExpression}) as total
       FROM transactions t
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE ${categoryFilter}
       ${priceFilterClause}
       AND t.date >= $${categoryParams.length + 1}
       AND t.date <= $${categoryParams.length + 2}
       AND t.account_number IS NOT NULL
-      
+      AND ap.id IS NULL
       GROUP BY t.account_number, t.vendor
       ORDER BY total DESC`,
       [...categoryParams, start, end]
@@ -126,16 +160,30 @@ export default async function handler(req, res) {
         `SELECT
           cd.id,
           cd.name,
+          cd.color,
+          cd.icon,
+          cd.description,
           COUNT(t.identifier) as count,
           SUM(${amountExpression}) as total
         FROM transactions t
         JOIN category_definitions cd ON t.category_definition_id = cd.id
+        LEFT JOIN account_pairings ap ON (
+          t.vendor = ap.bank_vendor
+          AND ap.is_active = 1
+          AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+          AND ap.match_patterns IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM json_each(ap.match_patterns)
+            WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+          )
+        )
         WHERE cd.parent_id = $1
         ${priceFilterClause}
         AND t.date >= $2
         AND t.date <= $3
-        
-        GROUP BY cd.id, cd.name
+        AND ap.id IS NULL
+        GROUP BY cd.id, cd.name, cd.color, cd.icon, cd.description
         ORDER BY total DESC`,
         [parentId, start, end]
       );
@@ -156,11 +204,22 @@ export default async function handler(req, res) {
       FROM transactions t
       JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE ${categoryFilter}
       ${priceFilterClause}
       AND t.date >= $${categoryParams.length + 1}
       AND t.date <= $${categoryParams.length + 2}
-      
+      AND ap.id IS NULL
       ORDER BY t.date DESC
       LIMIT 20`,
       [...categoryParams, start, end]
@@ -174,11 +233,22 @@ export default async function handler(req, res) {
         SUM(${amountExpression}) as total,
         COUNT(*) as count
       FROM transactions t
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE ${categoryFilter}
       ${priceFilterClause}
       AND t.date >= $${categoryParams.length + 1}
       AND t.date <= $${categoryParams.length + 2}
-      
+      AND ap.id IS NULL
       GROUP BY ${monthExpr}
       ORDER BY month ASC`,
       [...categoryParams, start, end]

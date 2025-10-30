@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 
     // Get transaction details for outlier detection
     const transactionsQuery = `
-      SELECT 
+      SELECT
         cd.id as category_definition_id,
         COALESCE(cd.name, cd.name_en, 'Unknown') as category_name,
         COALESCE(parent.id, cd.id) as parent_id,
@@ -33,10 +33,22 @@ export default async function handler(req, res) {
       FROM transactions t
       INNER JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
       WHERE t.date >= $1
         AND t.price < 0
         AND cd.category_type = 'expense'
         AND cd.is_active = true
+        AND ap.id IS NULL
       ORDER BY t.date DESC;
     `;
 
