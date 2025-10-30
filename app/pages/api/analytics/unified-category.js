@@ -1,5 +1,5 @@
 import { getDB } from '../db.js';
-import { resolveDateRange, buildTypeFilters, standardizeResponse, standardizeError } from '../utils/queryUtils.js';
+import { resolveDateRange, buildTypeFilters, standardizeResponse, standardizeError } from '@/lib/server/query-utils.js';
 
 /**
  * Unified Category Analytics API

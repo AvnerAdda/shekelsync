@@ -1,4 +1,4 @@
-import { createApiHandler } from "../utils/apiHandler";
+import { createApiHandler } from "@/lib/server/api-handler.js";
 
 const handler = createApiHandler({
   validate: (req) => {

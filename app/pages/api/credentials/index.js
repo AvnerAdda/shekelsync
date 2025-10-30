@@ -1,5 +1,5 @@
-import { createApiHandler } from "../utils/apiHandler";
-import { encrypt, decrypt } from "../utils/encryption";
+import { createApiHandler } from "@/lib/server/api-handler.js";
+import { encrypt, decrypt } from "@/lib/server/encryption.js";
 
 const handler = createApiHandler({
   validate: (req) => {

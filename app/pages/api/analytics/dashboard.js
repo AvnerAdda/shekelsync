@@ -1,6 +1,6 @@
 import { getDB } from '../db.js';
 import { startOfWeek, startOfMonth, format } from 'date-fns';
-import { resolveDateRange } from './utils.js';
+import { resolveDateRange } from '@/lib/server/query-utils.js';
 import { BANK_CATEGORY_NAME } from '../../../lib/category-constants.js';
 import { dialect } from '../../../lib/sql-dialect.js';
 
