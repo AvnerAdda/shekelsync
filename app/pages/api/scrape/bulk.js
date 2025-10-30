@@ -1,5 +1,5 @@
 import { getDB } from '../db.js';
-import { decrypt } from '../utils/encryption.js';
+import { decrypt } from '@/lib/server/encryption.js';
 import { STALE_SYNC_THRESHOLD_MS } from '../../../utils/constants.js';
 
 /**

@@ -1,5 +1,5 @@
 import { getDB } from '../db.js';
-import { resolveDateRange } from './utils.js';
+import { resolveDateRange } from '@/lib/server/query-utils.js';
 
 const VALID_TYPES = new Set(['expense', 'income', 'investment']);
 

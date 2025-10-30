@@ -1,12 +1,8 @@
-import { getDB } from "../db";
+import { getDB } from '@/pages/api/db.js';
 
 /**
- * Generic API handler utility for database operations
- * @param {Object} options - Handler configuration
- * @param {Function} options.query - Function that returns the SQL query and parameters
- * @param {Function} [options.validate] - Optional validation function
- * @param {Function} [options.transform] - Optional transformation function for results
- * @returns {Function} - API handler function
+ * Generic API handler utility for database operations.
+ * Centralised here to keep Next.js from exposing it as a route.
  */
 export function createApiHandler({ query, validate, transform }) {
   return async function handler(req, res) {
@@ -26,13 +22,13 @@ export function createApiHandler({ query, validate, transform }) {
 
       res.status(200).json(data);
     } catch (error) {
-      console.error("Error executing query:", error);
-      res.status(500).json({ 
-        error: "Internal Server Error", 
-        details: error.message 
+      console.error('Error executing query:', error);
+      res.status(500).json({
+        error: 'Internal Server Error',
+        details: error.message,
       });
     } finally {
       client.release();
     }
   };
-} 
+}

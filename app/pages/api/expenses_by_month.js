@@ -1,4 +1,4 @@
-import { createApiHandler } from "./utils/apiHandler";
+import { createApiHandler } from "@/lib/server/api-handler.js";
 import { dialect } from "../../lib/sql-dialect.js";
 import { BANK_CATEGORY_NAME } from "../../lib/category-constants.js";
 
