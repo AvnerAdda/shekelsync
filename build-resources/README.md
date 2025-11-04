@@ -2,36 +2,53 @@
 
 This directory contains assets needed for building the Electron application.
 
-## Required Icon Files
+## Application Icons
 
-Please add the following icon files to this directory:
+### Available Files
+- ✅ `icon.svg` - Source SVG logo (shekel symbol with green branding)
+- ✅ `logo.png` - High-resolution PNG (used for Linux/fallback)
+- ✅ `logo.ico` - Multi-size Windows icon (16x16 to 256x256)
+- ⚠️ `logo.icns` - macOS icon bundle (generate on macOS with `npm run icons:icns`)
 
-### Windows
-- `icon.ico` - Windows icon file (256x256 px recommended)
+### Platform Usage
+- **Windows**: Uses `logo.ico`
+- **macOS**: Uses `logo.icns` (falls back to `logo.png` if not available)
+- **Linux**: Uses `logo.png`
 
-### macOS
-- `icon.icns` - macOS icon file (1024x1024 px recommended)
+## Generating macOS Icons
 
-### Linux
-- `icon.png` - Linux icon file (512x512 px recommended)
+The `.icns` file must be generated on macOS:
 
-## Icon Requirements
+```bash
+npm run icons:icns
+```
 
-- **Format**: High-quality PNG source (1024x1024 px minimum)
-- **Design**: Should represent ShekelSync finance application
-- **Colors**: Consistent with app branding
-- **Background**: Transparent preferred
+This script:
+1. Creates an iconset with all required sizes (16x16 to 1024x1024)
+2. Converts the iconset to `.icns` format using macOS `iconutil`
+3. Places the result in this directory
 
-## Creating Icons
+**Note**: On non-macOS systems, the app will automatically use `logo.png` as a fallback.
 
-You can use tools like:
-- [electron-icon-maker](https://www.npmjs.com/package/electron-icon-maker)
-- [Figma](https://figma.com) for design
-- [GIMP](https://gimp.org) for editing
-- Online converters for format conversion
+## Icon Design
 
-## Current Status
+The current icon features:
+- Shekel symbol (₪) in white
+- Green circular background (#2E7D32)
+- "ShekelSync" text
+- Sync arrows motif
+- Professional, recognizable at all sizes
 
-🚨 **PLACEHOLDER FILES**: Replace these with actual icons before building for distribution
+## Updating Icons
 
-The current build configuration references these icon files, but they need to be created and added to this directory.
+To update the application icon:
+1. Edit `icon.svg` with your preferred SVG editor
+2. Generate PNG: `inkscape icon.svg --export-filename=logo.png --export-width=1024`
+3. Generate ICO: Use online converter or ImageMagick
+4. Generate ICNS on macOS: `npm run icons:icns`
+
+## Build Configuration
+
+Icons are referenced in:
+- `electron/main.js` - Runtime window icon
+- `app/package.json` - electron-builder configuration

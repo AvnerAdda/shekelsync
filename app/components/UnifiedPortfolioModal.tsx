@@ -44,6 +44,8 @@ import {
   Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useNotification } from './NotificationContext';
+import { apiClient } from '@/lib/api-client';
+import PortfolioSetupModal from './PortfolioSetupModal';
 
 interface UnifiedPortfolioModalProps {
   open: boolean;
@@ -161,7 +163,7 @@ const UnifiedPortfolioModal: React.FC<UnifiedPortfolioModalProps> = ({
 
       {/* Keep the full Portfolio Setup modal separate - it's complex */}
       {setupModalOpen && (
-        <PortfolioSetupModalWrapper
+        <PortfolioSetupModal
           open={setupModalOpen}
           onClose={() => setSetupModalOpen(false)}
           onComplete={handleRefresh}
@@ -169,12 +171,6 @@ const UnifiedPortfolioModal: React.FC<UnifiedPortfolioModalProps> = ({
       )}
     </>
   );
-};
-
-// Lazy load the complex setup modal
-const PortfolioSetupModalWrapper = (props: any) => {
-  const PortfolioSetupModal = require('./PortfolioSetupModal').default;
-  return <PortfolioSetupModal {...props} />;
 };
 
 // Tab 1: Accounts Overview
@@ -191,9 +187,9 @@ const AccountsTabContent: React.FC<{ onOpenSetup: () => void; onRefresh: () => v
 
   const loadAccounts = async () => {
     try {
-      const res = await fetch('/api/investments/summary');
-      const data = await res.json();
-      setAccounts(data.accounts || []);
+      const res = await apiClient.get('/api/investments/summary');
+      const data = res.ok ? (res.data as any) : {};
+      setAccounts(Array.isArray(data?.accounts) ? data.accounts : []);
     } catch (error) {
       console.error('Error loading accounts:', error);
     } finally {
@@ -220,7 +216,7 @@ const AccountsTabContent: React.FC<{ onOpenSetup: () => void; onRefresh: () => v
 
       {accounts.length === 0 ? (
         <Alert severity="info">
-          No accounts set up yet. Click "Full Setup Wizard" to add your first investment account.
+          No accounts set up yet. Click &ldquo;Full Setup Wizard&rdquo; to add your first investment account.
         </Alert>
       ) : (
         <TableContainer component={Paper} variant="outlined">
@@ -272,9 +268,9 @@ const TransactionLinksTabContent: React.FC<{ onRefresh: () => void }> = ({ onRef
   const loadSuggestions = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/investments/pending-suggestions?status=pending');
-      const data = await res.json();
-      setSuggestions(data.pending_suggestions || []);
+      const res = await apiClient.get('/api/investments/pending-suggestions?status=pending');
+      const data = res.ok ? (res.data as any) : {};
+      setSuggestions(Array.isArray(data?.pending_suggestions) ? data.pending_suggestions : []);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -285,13 +281,9 @@ const TransactionLinksTabContent: React.FC<{ onRefresh: () => void }> = ({ onRef
   const handleAction = async (id: number, action: string) => {
     setProcessing(id);
     try {
-      const res = await fetch('/api/investments/pending-suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, action })
-      });
-      const data = await res.json();
-      if (data.success) {
+      const res = await apiClient.post('/api/investments/pending-suggestions', { id, action });
+      const data = res.data as any;
+      if (res.ok && data?.success) {
         showNotification(`Suggestion ${action}d`, 'success');
         setSuggestions(prev => prev.filter(s => s.id !== id));
         onRefresh();
@@ -388,15 +380,18 @@ const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) 
     setLoading(true);
     try {
       const [accountsRes, patternsRes] = await Promise.all([
-        fetch('/api/investments/summary'),
-        fetch('/api/investments/patterns')
+        apiClient.get('/api/investments/summary'),
+        apiClient.get('/api/investments/patterns'),
       ]);
-      const accountsData = await accountsRes.json();
-      const patternsData = await patternsRes.json();
+      const accountsData = accountsRes.ok ? (accountsRes.data as any) : {};
+      const patternsData = patternsRes.ok ? (patternsRes.data as any) : {};
 
-      const accountsWithPatterns = accountsData.accounts.map((acc: any) => ({
+      const accountsList = Array.isArray(accountsData?.accounts) ? accountsData.accounts : [];
+      const patternsList = Array.isArray(patternsData?.patterns) ? patternsData.patterns : [];
+
+      const accountsWithPatterns = accountsList.map((acc: any) => ({
         ...acc,
-        patterns: patternsData.patterns.filter((p: any) => p.account_id === acc.id)
+        patterns: patternsList.filter((p: any) => p.account_id === acc.id),
       }));
 
       setAccounts(accountsWithPatterns);
@@ -415,17 +410,13 @@ const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) 
     }
 
     try {
-      const res = await fetch('/api/investments/patterns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          account_id: accountId,
-          pattern: pattern.trim(),
-          pattern_type: 'substring'
-        })
+      const res = await apiClient.post('/api/investments/patterns', {
+        account_id: accountId,
+        pattern: pattern.trim(),
+        pattern_type: 'substring',
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = res.data as any;
+      if (res.ok && data?.success) {
         showNotification('Pattern added', 'success');
         setNewPattern({ ...newPattern, [accountId]: '' });
         loadPatterns();
@@ -440,11 +431,9 @@ const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) 
     if (!confirm('Delete this pattern?')) return;
 
     try {
-      const res = await fetch(`/api/investments/patterns?id=${patternId}`, {
-        method: 'DELETE'
-      });
-      const data = await res.json();
-      if (data.success) {
+      const res = await apiClient.delete(`/api/investments/patterns?id=${patternId}`);
+      const data = res.data as any;
+      if (res.ok && data?.success) {
         showNotification('Pattern deleted', 'success');
         loadPatterns();
         onRefresh();

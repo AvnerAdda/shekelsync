@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -31,6 +31,7 @@ import BreakdownPanel from '../components/BreakdownPanel';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import { useOnboarding } from '../contexts/OnboardingContext';
 import { EmptyState, OnboardingChecklist } from './EmptyState';
+import { apiClient } from '@/lib/api-client';
 
 interface DashboardData {
   dateRange: { start: Date; end: Date };
@@ -169,52 +170,15 @@ const HomePage: React.FC = () => {
   const { formatCurrency } = useFinancePrivacy();
   const { status: onboardingStatus } = useOnboarding();
 
-  useEffect(() => {
-    setBreakdownData(prev => ({ ...prev, investment: null }));
-    setBreakdownLoading(prev => ({ ...prev, investment: false }));
-    fetchDashboardData();
-    fetchPortfolioValue();
-    fetchWaterfallData();
-    fetchBreakdownData('expense');
-    fetchBreakdownData('income');
-    fetchBudgetUsage();
-    fetchBankAccountsStatus();
-
-    // Listen for data refresh events (from scraping, manual transactions, etc.)
-    const handleDataRefresh = () => {
-      fetchDashboardData();
-      fetchPortfolioValue();
-      fetchWaterfallData();
-      fetchBreakdownData('expense');
-      fetchBreakdownData('income');
-      if (selectedBreakdownType === 'investment') {
-        fetchBreakdownData('investment');
-      }
-      fetchBudgetUsage();
-      fetchBankAccountsStatus();
-    };
-    globalThis.addEventListener('dataRefresh', handleDataRefresh);
-
-    return () => {
-      globalThis.removeEventListener('dataRefresh', handleDataRefresh);
-    };
-  }, [startDate, endDate, aggregationPeriod, selectedBreakdownType]);
-
-  useEffect(() => {
-    if (selectedBreakdownType === 'investment' && !breakdownData.investment && !breakdownLoading.investment) {
-      fetchBreakdownData('investment');
-    }
-  }, [selectedBreakdownType, breakdownData.investment, breakdownLoading.investment]);
-
   const fetchTransactionsByDate = async (date: string) => {
     setLoadingTransactions(true);
     console.log('fetchTransactionsByDate called with:', date);
     try {
       const formattedDate = format(new Date(date), 'yyyy-MM-dd');
       console.log('Formatted date for API:', formattedDate);
-      const response = await fetch(`/api/analytics/transactions-by-date?date=${formattedDate}`);
+      const response = await apiClient.get(`/api/analytics/transactions-by-date?date=${formattedDate}`);
       if (response.ok) {
-        const result = await response.json();
+        const result = response.data as any;
         console.log('API response:', result);
         setDateTransactions(result.transactions || []);
       } else {
@@ -272,13 +236,16 @@ const HomePage: React.FC = () => {
     );
   };
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(
+      const response = await apiClient.get(
         `/api/analytics/dashboard?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&aggregation=${aggregationPeriod}`
       );
-      const result = await response.json();
+      if (!response.ok) {
+        throw new Error('Failed to fetch dashboard data');
+      }
+      const result = response.data as any;
 
       // Fill in missing days/weeks/months with zero values for better visualization
       if (result.history && aggregationPeriod === 'daily') {
@@ -288,10 +255,11 @@ const HomePage: React.FC = () => {
       setData(result);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      setData(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [aggregationPeriod, endDate, startDate]);
 
   // Helper function to fill missing dates in the history array
   const fillMissingDates = (history: any[], start: Date, end: Date) => {
@@ -316,30 +284,34 @@ const HomePage: React.FC = () => {
     return filled;
   };
 
-  const fetchPortfolioValue = async () => {
+  const fetchPortfolioValue = useCallback(async () => {
     try {
-      const response = await fetch('/api/investments/summary');
+      const response = await apiClient.get('/api/investments/summary');
       if (response.ok) {
-        const result = await response.json();
-        setPortfolioValue(result.summary.totalPortfolioValue);
+        const result = response.data as any;
+        const summary = result?.summary ?? {};
+        setPortfolioValue(Number(summary.totalPortfolioValue ?? 0));
 
         // Set overall portfolio breakdown
-        if (result.breakdown && result.breakdown.length > 0) {
+        if (Array.isArray(result?.breakdown) && result.breakdown.length > 0) {
           setPortfolioBreakdown(result.breakdown.map((item: any) => ({
             name: item.name || item.type,
             value: item.totalValue,
             percentage: item.percentage,
             category: item.category
-          })));
+          }))); 
 
           // Separate liquid and restricted portfolios
+          const liquidSummary = summary.liquid ?? { totalValue: 0 };
+          const restrictedSummary = summary.restricted ?? { totalValue: 0 };
+
           const liquidItems = result.breakdown
             .filter((item: any) => item.category === 'liquid')
             .map((item: any) => ({
               name: item.name || item.type,
               value: item.totalValue,
-              percentage: result.summary.liquid.totalValue > 0
-                ? (item.totalValue / result.summary.liquid.totalValue) * 100
+              percentage: liquidSummary.totalValue > 0
+                ? (item.totalValue / liquidSummary.totalValue) * 100
                 : 0,
               category: item.category
             }));
@@ -349,8 +321,8 @@ const HomePage: React.FC = () => {
             .map((item: any) => ({
               name: item.name || item.type,
               value: item.totalValue,
-              percentage: result.summary.restricted.totalValue > 0
-                ? (item.totalValue / result.summary.restricted.totalValue) * 100
+              percentage: restrictedSummary.totalValue > 0
+                ? (item.totalValue / restrictedSummary.totalValue) * 100
                 : 0,
               category: item.category
             }));
@@ -361,57 +333,66 @@ const HomePage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching portfolio value:', error);
+      setPortfolioValue(0);
+      setPortfolioBreakdown([]);
+      setLiquidPortfolio([]);
+      setRestrictedPortfolio([]);
     }
-  };
+  }, []);
 
-  const fetchWaterfallData = async () => {
+  const fetchWaterfallData = useCallback(async () => {
     setWaterfallLoading(true);
     try {
-      const response = await fetch(
+      const response = await apiClient.get(
         `/api/analytics/waterfall-flow?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`
       );
-      if (response.ok) {
-        const result = await response.json();
-        setWaterfallData(result);
+      if (!response.ok) {
+        throw new Error('Failed to fetch waterfall data');
       }
+      const result = response.data as any;
+      setWaterfallData(result);
     } catch (error) {
       console.error('Error fetching waterfall data:', error);
+      setWaterfallData(null);
     } finally {
       setWaterfallLoading(false);
     }
-  };
+  }, [endDate, startDate]);
 
-  const fetchBreakdownData = async (type: 'expense' | 'income' | 'investment') => {
-    setBreakdownLoading(prev => ({ ...prev, [type]: true }));
+  const fetchBreakdownData = useCallback(
+    async (type: 'expense' | 'income' | 'investment') => {
+      setBreakdownLoading(prev => ({ ...prev, [type]: true }));
 
-    try {
-      const params = new URLSearchParams({
-        type,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-      });
-      const response = await fetch(`/api/analytics/breakdown?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch ${type} breakdown`);
+      try {
+        const params = new URLSearchParams({
+          type,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+        });
+        const response = await apiClient.get(`/api/analytics/breakdown?${params.toString()}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ${type} breakdown`);
+        }
+        const result = response.data as any;
+        setBreakdownData(prev => ({ ...prev, [type]: result }));
+      } catch (error) {
+        console.error(`Error fetching ${type} breakdown:`, error);
+        setBreakdownData(prev => ({ ...prev, [type]: null }));
+      } finally {
+        setBreakdownLoading(prev => ({ ...prev, [type]: false }));
       }
-      const result = await response.json();
-      setBreakdownData(prev => ({ ...prev, [type]: result }));
-    } catch (error) {
-      console.error(`Error fetching ${type} breakdown:`, error);
-      setBreakdownData(prev => ({ ...prev, [type]: null }));
-    } finally {
-      setBreakdownLoading(prev => ({ ...prev, [type]: false }));
-    }
-  };
+    },
+    [endDate, startDate],
+  );
 
-  const fetchBudgetUsage = async () => {
+  const fetchBudgetUsage = useCallback(async () => {
     try {
-      const response = await fetch('/api/budgets/usage');
+      const response = await apiClient.get('/api/budgets/usage');
       if (!response.ok) {
         console.warn('Budget usage API not available yet');
         return;
       }
-      const budgets = await response.json();
+      const budgets = response.data as any;
 
       if (Array.isArray(budgets) && budgets.length > 0) {
         const avgUsage = budgets.reduce((sum: number, b: any) => sum + b.percentage, 0) / budgets.length;
@@ -420,20 +401,67 @@ const HomePage: React.FC = () => {
     } catch (error) {
       console.error('Error fetching budget usage:', error);
     }
-  };
+  }, []);
 
-  const fetchBankAccountsStatus = async () => {
+  const fetchBankAccountsStatus = useCallback(async () => {
     try {
-      const response = await fetch('/api/credentials');
+      const response = await apiClient.get('/api/credentials');
       if (response.ok) {
-        const credentials = await response.json();
+        const credentials = response.data as any;
         setHasBankAccounts(Array.isArray(credentials) && credentials.length > 0);
+      } else {
+        setHasBankAccounts(null);
       }
     } catch (error) {
       console.error('Error fetching bank accounts status:', error);
       setHasBankAccounts(null);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    setBreakdownData(prev => ({ ...prev, investment: null }));
+    setBreakdownLoading(prev => ({ ...prev, investment: false }));
+    fetchDashboardData();
+    fetchPortfolioValue();
+    fetchWaterfallData();
+    fetchBreakdownData('expense');
+    fetchBreakdownData('income');
+    fetchBudgetUsage();
+    fetchBankAccountsStatus();
+
+    // Listen for data refresh events (from scraping, manual transactions, etc.)
+    const handleDataRefresh = () => {
+      fetchDashboardData();
+      fetchPortfolioValue();
+      fetchWaterfallData();
+      fetchBreakdownData('expense');
+      fetchBreakdownData('income');
+      if (selectedBreakdownType === 'investment') {
+        fetchBreakdownData('investment');
+      }
+      fetchBudgetUsage();
+      fetchBankAccountsStatus();
+    };
+    globalThis.addEventListener('dataRefresh', handleDataRefresh);
+
+    return () => {
+      globalThis.removeEventListener('dataRefresh', handleDataRefresh);
+    };
+  }, [
+    fetchBankAccountsStatus,
+    fetchBreakdownData,
+    fetchBudgetUsage,
+    fetchDashboardData,
+    fetchPortfolioValue,
+    fetchWaterfallData,
+    selectedBreakdownType,
+  ]);
+
+  useEffect(() => {
+    if (selectedBreakdownType === 'investment' && !breakdownData.investment && !breakdownLoading.investment) {
+      fetchBreakdownData('investment');
+    }
+  }, [selectedBreakdownType, breakdownData.investment, breakdownLoading.investment, fetchBreakdownData]);
 
   const setQuickRange = (range: 'lastMonth' | 'thisMonth' | 'last3Months') => {
     const now = new Date();
@@ -474,7 +502,7 @@ const HomePage: React.FC = () => {
       >
         <OnboardingChecklist
           onProfileClick={() => {
-            // Profile modal will be handled by parent (MainLayout)
+            // Profile modal handled by AppLayout container in renderer
             window.dispatchEvent(new CustomEvent('openProfileSetup'));
           }}
           onBankAccountClick={() => {
@@ -505,13 +533,21 @@ const HomePage: React.FC = () => {
               <DatePicker
                 label="Start Date"
                 value={startDate}
-                onChange={(newValue) => newValue && setStartDate(newValue)}
+                onChange={(newValue: Date | null) => {
+                  if (newValue) {
+                    setStartDate(newValue);
+                  }
+                }}
                 slotProps={{ textField: { size: 'small' } }}
               />
               <DatePicker
                 label="End Date"
                 value={endDate}
-                onChange={(newValue) => newValue && setEndDate(newValue)}
+                onChange={(newValue: Date | null) => {
+                  if (newValue) {
+                    setEndDate(newValue);
+                  }
+                }}
                 slotProps={{ textField: { size: 'small' } }}
               />
             </Box>
@@ -621,8 +657,8 @@ const HomePage: React.FC = () => {
             </Typography>
           ) : (
             <Typography variant="body2">
-              We haven't detected any income transactions in the selected period.
-              If you're expecting income data, please verify that your most recent bank scrape was successful
+              We haven&apos;t detected any income transactions in the selected period.
+              If you&apos;re expecting income data, please verify that your most recent bank scrape was successful
               or consider running a new scrape to update your transactions.
             </Typography>
           )}
@@ -637,13 +673,21 @@ const HomePage: React.FC = () => {
             <DatePicker
               label="Start Date"
               value={startDate}
-              onChange={(newValue) => newValue && setStartDate(newValue)}
+              onChange={(newValue: Date | null) => {
+                if (newValue) {
+                  setStartDate(newValue);
+                }
+              }}
               slotProps={{ textField: { size: 'small' } }}
             />
             <DatePicker
               label="End Date"
               value={endDate}
-              onChange={(newValue) => newValue && setEndDate(newValue)}
+              onChange={(newValue: Date | null) => {
+                if (newValue) {
+                  setEndDate(newValue);
+                }
+              }}
               slotProps={{ textField: { size: 'small' } }}
             />
           </Box>

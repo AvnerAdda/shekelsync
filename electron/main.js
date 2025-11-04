@@ -1,6 +1,28 @@
+require('./setup-module-alias');
+
 const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
+// Load environment variables from the Next.js app if present (e.g., USE_SQLITE)
+try {
+  const dotenv = require(path.join(__dirname, '..', 'app', 'node_modules', 'dotenv'));
+  const envFile = path.join(__dirname, '..', 'app', '.env.local');
+  if (fs.existsSync(envFile)) {
+    dotenv.config({ path: envFile });
+  }
+} catch (error) {
+  console.warn('Unable to load dotenv configuration:', error.message);
+}
+
+// Reduce GPU-related crashes in certain Linux setups
+try {
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch('disable-gpu');
+} catch (error) {
+  console.warn('Failed to disable hardware acceleration:', error.message);
+}
 
 // Handle module resolution for development vs production
 let autoUpdater;
@@ -15,18 +37,45 @@ try {
   autoUpdater = null;
 }
 
+const MIGRATION_ENV_FLAG = 'ALLOW_DB_MIGRATE';
+if (typeof process.env[MIGRATION_ENV_FLAG] === 'undefined') {
+  process.env[MIGRATION_ENV_FLAG] = 'false';
+}
+if (process.env[MIGRATION_ENV_FLAG] === 'true') {
+  console.warn(`${MIGRATION_ENV_FLAG} flag is enabled. Proceed only if this build is intended for database maintenance.`);
+}
+
 // Import configuration and database managers
 const { configManager } = require('./config');
 const { dbManager } = require('./database');
+const sessionStore = require('./session-store');
 
-// Import API server setup
-let setupAPIServer;
-try {
-  const serverModule = require('./server');
-  setupAPIServer = serverModule.setupAPIServer;
-} catch (error) {
-  console.log('API server module not available, running in basic mode:', error.message);
-  setupAPIServer = null;
+// Lazy-loaded services (to avoid loading better-sqlite3 in dev mode)
+let healthService = null;
+let scrapingService = null;
+let setupAPIServer = null;
+
+// Helper to lazy-load services only when needed (and not in SQLite dev mode)
+function getHealthService() {
+  if (!healthService) {
+    healthService = require(path.join(__dirname, '..', 'app', 'server', 'services', 'health.js'));
+  }
+  return healthService;
+}
+
+function getScrapingService() {
+  if (!scrapingService) {
+    scrapingService = require(path.join(
+      __dirname,
+      '..',
+      'app',
+      'server',
+      'services',
+      'scraping',
+      'run.js',
+    ));
+  }
+  return scrapingService;
 }
 
 // Keep a global reference of the window object
@@ -39,22 +88,119 @@ if (isDev) {
   console.log('Running in development mode');
 }
 
+function sanitizeSession(session) {
+  if (!session) {
+    return null;
+  }
+
+  const { refreshToken, ...rest } = session;
+  return {
+    ...rest,
+  };
+}
+
+function sendScrapeProgress(payload) {
+  if (mainWindow?.webContents) {
+    mainWindow.webContents.send('scrape:progress', payload);
+  }
+}
+
+function emitSessionChanged(session) {
+  if (mainWindow?.webContents) {
+    mainWindow.webContents.send('auth:session-changed', sanitizeSession(session));
+  }
+}
+
+function createScrapeLogger(vendor) {
+  const prefix = vendor ? `[Scrape:${vendor}]` : '[Scrape]';
+  return {
+    log: (...args) => console.log(prefix, ...args),
+    info: (...args) => console.info(prefix, ...args),
+    warn: (...args) => console.warn(prefix, ...args),
+    error: (...args) => console.error(prefix, ...args),
+  };
+}
+
 async function createWindow() {
+  const skipEmbeddedApi = process.env.SKIP_EMBEDDED_API === 'true';
+  const useViteRenderer = (() => {
+    if (typeof process.env.USE_VITE_RENDERER !== 'undefined') {
+      return process.env.USE_VITE_RENDERER === 'true';
+    }
+    if (isDev) {
+      return true;
+    }
+    const viteDistPath = path.join(__dirname, '..', 'renderer', 'dist', 'index.html');
+    return fs.existsSync(viteDistPath);
+  })();
+  const devRendererUrl =
+    process.env.RENDERER_DEV_URL ||
+    (useViteRenderer ? 'http://localhost:5173' : 'http://localhost:3000');
+
   // Initialize configuration and database
   try {
     console.log('Initializing application configuration...');
     const config = await configManager.initializeConfig();
 
-    console.log('Initializing database connection...');
-    const dbResult = await dbManager.initialize(config.database);
+    const usingSqliteEnv =
+      process.env.USE_SQLITE === 'true' ||
+      Boolean(process.env.SQLITE_DB_PATH) ||
+      config.database.mode === 'sqlite';
+    if (!config.database) {
+      config.database = {};
+    }
+    if (!config.database.mode) {
+      config.database.mode = usingSqliteEnv ? 'sqlite' : 'postgres';
+    }
 
-    if (!dbResult.success) {
-      console.error('Database initialization failed:', dbResult.message);
-      // Show error dialog but continue with app (may work in proxy mode)
-      dialog.showErrorBox(
-        'Database Connection Error',
-        `Failed to connect to database: ${dbResult.message}\n\nThe app will run in limited mode.`
-      );
+    if (config.database.mode === 'postgres') {
+      process.env.USE_SQLITE = 'false';
+      delete process.env.SQLITE_DB_PATH;
+      delete process.env.USE_SQLCIPHER;
+      delete process.env.SQLCIPHER_DB_PATH;
+
+      process.env.CLARIFY_DB_USER = config.database.user;
+      process.env.CLARIFY_DB_HOST = config.database.host;
+      process.env.CLARIFY_DB_NAME = config.database.database;
+      process.env.CLARIFY_DB_PASSWORD = config.database.password;
+      process.env.CLARIFY_DB_PORT = String(config.database.port ?? 5432);
+    } else {
+      process.env.USE_SQLITE = 'true';
+      const sqlitePath =
+        config.database.path ||
+        process.env.SQLITE_DB_PATH ||
+        path.join(app.getPath('userData'), 'clarify.sqlite');
+      process.env.SQLITE_DB_PATH = sqlitePath;
+      config.database.path = sqlitePath;
+    }
+
+    if (skipEmbeddedApi) {
+      console.log('SKIP_EMBEDDED_API=true, embedded API server startup disabled.');
+    }
+
+    if (!skipEmbeddedApi && !setupAPIServer) {
+      try {
+        setupAPIServer = require('./server').setupAPIServer;
+      } catch (error) {
+        console.log('API server module not available, running in basic mode:', error.message);
+        setupAPIServer = null;
+      }
+    }
+
+    let dbResult = { success: false };
+    if (skipEmbeddedApi) {
+      console.log('Skipping main-process database initialization (SKIP_EMBEDDED_API=true).');
+    } else {
+      console.log('Initializing database connection...');
+      dbResult = await dbManager.initialize(config.database);
+
+      if (!dbResult.success) {
+        console.error('Database initialization failed:', dbResult.message);
+        dialog.showErrorBox(
+          'Database Connection Error',
+          `Failed to connect to database: ${dbResult.message}\n\nThe app will run in limited mode.`
+        );
+      }
     }
   } catch (error) {
     console.error('Initialization error:', error);
@@ -64,8 +210,52 @@ async function createWindow() {
     );
   }
 
-  // Set up Content Security Policy
-  session.defaultSession.webSecurity = !isDev; // Disable in dev for hot reload
+  if (isDev) {
+    process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
+  }
+
+  // Apply a conservative Content Security Policy in production.
+  if (!isDev) {
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      const csp = [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data:",
+        "font-src 'self' data:",
+        "connect-src 'self'",
+        "frame-src 'none'",
+        "object-src 'none'",
+        "base-uri 'self'",
+      ].join('; ');
+
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [csp],
+        },
+      });
+    });
+  }
+
+  // Determine icon path based on platform and environment
+  const getIconPath = () => {
+    const iconDir = path.join(__dirname, '..', 'build-resources');
+
+    if (process.platform === 'win32') {
+      return path.join(iconDir, 'logo.ico');
+    } else if (process.platform === 'darwin') {
+      // For macOS, use .icns if available, fallback to .png
+      const icnsPath = path.join(iconDir, 'logo.icns');
+      return fs.existsSync(icnsPath) ? icnsPath : path.join(iconDir, 'logo.png');
+    } else {
+      // Linux and others use PNG
+      return path.join(iconDir, 'logo.png');
+    }
+  };
+
+  // Detect system theme preference
+  const isDarkMode = require('electron').nativeTheme.shouldUseDarkColors;
 
   // Create the browser window
   mainWindow = new BrowserWindow({
@@ -73,27 +263,59 @@ async function createWindow() {
     height: 900,
     minWidth: 1200,
     minHeight: 700,
+    title: 'ShekelSync - Personal Finance Tracker',
+    backgroundColor: isDarkMode ? '#0a0a0a' : '#f8fef9', // Adapts to system theme
     webPreferences: {
       nodeIntegration: false, // Security: disable node integration
       contextIsolation: true, // Security: enable context isolation
       enableRemoteModule: false, // Security: disable remote module
       preload: path.join(__dirname, 'preload.js'), // Load preload script
-      webSecurity: !isDev, // Disable web security in development
+      webSecurity: true,
       // Performance optimizations
       experimentalFeatures: false,
       spellcheck: false,
       backgroundThrottling: false,
       allowRunningInsecureContent: false
     },
-    icon: isDev
-      ? path.join(__dirname, '..', 'app', 'public', 'favicon.ico')
-      : path.join(process.resourcesPath, 'app', 'public', 'favicon.ico'),
+    icon: getIconPath(),
     show: false, // Don't show until ready
-    titleBarStyle: 'default'
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    ...(process.platform === 'darwin' && { trafficLightPosition: { x: 10, y: 10 } })
   });
 
+  let windowShown = false;
+  const ensureWindowVisible = () => {
+    if (!mainWindow || windowShown || mainWindow.isDestroyed()) {
+      return;
+    }
+    windowShown = true;
+    console.log('Electron main window ready, displaying now...');
+    if (!mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+    if (!mainWindow.isFocused()) {
+      mainWindow.focus();
+    }
+    if (isDev && !mainWindow.webContents.isDevToolsOpened()) {
+      mainWindow.webContents.openDevTools();
+    }
+  };
+
+  mainWindow.once('ready-to-show', () => {
+    console.log('BrowserWindow emitted ready-to-show');
+    ensureWindowVisible();
+  });
+  mainWindow.webContents.once('did-finish-load', () => {
+    console.log('WebContents finished load');
+    ensureWindowVisible();
+  });
+  setTimeout(() => {
+    console.log('Fallback timer triggering ensureWindowVisible');
+    ensureWindowVisible();
+  }, 1500);
+
   // Set up API server (optional)
-  if (setupAPIServer) {
+  if (!skipEmbeddedApi && setupAPIServer) {
     try {
       const serverResult = await setupAPIServer(mainWindow);
       apiServer = serverResult.server;
@@ -103,40 +325,49 @@ async function createWindow() {
       console.error('Failed to start API server:', error);
       console.log('Running without internal API server - using external Next.js dev server');
     }
+  } else if (skipEmbeddedApi) {
+    console.log('Embedded API server disabled via SKIP_EMBEDDED_API flag.');
   } else {
-    console.log('Running without internal API server - using external Next.js dev server');
+    console.log('Running without internal API server - relying on external dev renderer');
   }
 
+  // Start renderer server in development
   // Load the app
   if (isDev) {
-    await mainWindow.loadURL('http://localhost:3000');
+    console.log(`Loading renderer from ${devRendererUrl}`);
+    await mainWindow.loadURL(devRendererUrl);
   } else {
     // In production, check for static export vs server build
-    const outPath = path.join(__dirname, '..', 'app', 'out', 'index.html');
-    const buildPath = path.join(__dirname, '..', 'app', 'build', 'index.html');
-
-    if (require('fs').existsSync(outPath)) {
-      console.log('Loading from Next.js static export');
-      await mainWindow.loadFile(outPath);
-    } else if (require('fs').existsSync(buildPath)) {
-      console.log('Loading from Next.js build directory');
-      await mainWindow.loadFile(buildPath);
+    const fs = require('fs');
+    if (useViteRenderer) {
+      const viteDist = path.join(__dirname, '..', 'renderer', 'dist', 'index.html');
+      if (fs.existsSync(viteDist)) {
+        console.log('Loading Vite renderer bundle');
+        await mainWindow.loadFile(viteDist);
+      } else {
+        console.error('Vite renderer build not found. Expected at', viteDist);
+        app.quit();
+        return;
+      }
     } else {
-      console.error('No built app found! Please run npm run build first.');
-      app.quit();
-      return;
+      const outPath = path.join(__dirname, '..', 'app', 'out', 'index.html');
+      const buildPath = path.join(__dirname, '..', 'app', 'build', 'index.html');
+
+      if (fs.existsSync(outPath)) {
+        console.log('Loading from Next.js static export');
+        await mainWindow.loadFile(outPath);
+      } else if (fs.existsSync(buildPath)) {
+        console.log('Loading from Next.js build directory');
+        await mainWindow.loadFile(buildPath);
+      } else {
+        console.error('No built app found! Please run npm run build first.');
+        app.quit();
+        return;
+      }
     }
   }
 
-  // Show window when ready
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-
-    // Focus on window
-    if (isDev) {
-      mainWindow.webContents.openDevTools();
-    }
-  });
+  ensureWindowVisible();
 
   // Handle window closed
   mainWindow.on('closed', () => {
@@ -153,7 +384,12 @@ async function createWindow() {
   mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
     const parsedUrl = new URL(navigationUrl);
 
-    if (parsedUrl.origin !== 'http://localhost:3000' && parsedUrl.origin !== 'file://') {
+    const allowedOrigins = new Set([
+      'file://',
+      'http://localhost:3000',
+      'http://localhost:5173',
+    ]);
+    if (!allowedOrigins.has(parsedUrl.origin)) {
       event.preventDefault();
     }
   });
@@ -227,6 +463,7 @@ app.on('web-contents-created', (event, contents) => {
   });
 });
 
+
 // IPC Handlers
 
 // Database operations
@@ -262,8 +499,22 @@ ipcMain.handle('db:stats', async () => {
 ipcMain.handle('api:ping', async () => {
   try {
     const startTime = Date.now();
+    const health = await getHealthService().ping();
     const dbTest = await dbManager.testConnection();
     const responseTime = Date.now() - startTime;
+
+    if (!health.ok) {
+      return {
+        success: false,
+        error: health.error,
+        data: {
+          status: health.status,
+          database: 'disconnected',
+          environment: process.env.NODE_ENV || 'development',
+          version: '0.1.0'
+        }
+      };
+    }
 
     return {
       success: true,
@@ -346,20 +597,58 @@ ipcMain.handle('api:categories', async () => {
 });
 
 // Scraping handlers
-let electronScraper = null;
-
 ipcMain.handle('scrape:start', async (event, options, credentials) => {
+  const vendor = options?.companyId;
+
   try {
-    if (!electronScraper) {
-      const { ElectronScraper } = require('./scraper');
-      electronScraper = new ElectronScraper(mainWindow);
+    if (!vendor || !options?.startDate || !credentials) {
+      throw new Error('Missing required fields: companyId, startDate, or credentials');
     }
 
-    const result = await electronScraper.scrape(options, credentials);
-    return { success: true, data: result };
+    sendScrapeProgress({
+      vendor,
+      status: 'starting',
+      progress: 5,
+      message: 'Preparing scraper...',
+    });
+
+    const logger = createScrapeLogger(vendor);
+    const result = await getScrapingService().runScrape({
+      options,
+      credentials,
+      logger,
+    });
+
+    const transactionCount = Array.isArray(result.accounts)
+      ? result.accounts.reduce(
+          (sum, account) => sum + (Array.isArray(account.txns) ? account.txns.length : 0),
+          0,
+        )
+      : 0;
+
+    sendScrapeProgress({
+      vendor,
+      status: 'completed',
+      progress: 100,
+      message: `Scraping completed (${transactionCount} transactions)`,
+      transactions: transactionCount,
+    });
+
+    return { success: true, data: { ...result, transactionCount } };
   } catch (error) {
     console.error('Scrape operation failed:', error);
-    return { success: false, error: error.message };
+
+    if (vendor) {
+      sendScrapeProgress({
+        vendor,
+        status: 'failed',
+        progress: 100,
+        message: error?.message || 'Scraping failed',
+        error: error?.message,
+      });
+    }
+
+    return { success: false, error: error?.message || 'Scraping failed' };
   }
 });
 
@@ -436,7 +725,7 @@ ipcMain.handle('window:close', () => {
 // API proxy handler
 ipcMain.handle('api:request', async (event, { method, endpoint, data, headers = {} }) => {
   try {
-    // Use internal API server if available, otherwise proxy to Next.js dev server
+    // Use internal API server if available, otherwise hit the embedded Next renderer (dev only)
     const baseUrl = apiPort ? `http://localhost:${apiPort}` : 'http://localhost:3000';
     const url = `${baseUrl}${endpoint}`;
 
@@ -479,6 +768,41 @@ ipcMain.handle('api:request', async (event, { method, endpoint, data, headers = 
   }
 });
 
+ipcMain.handle('auth:getSession', async () => {
+  try {
+    const session = await sessionStore.load();
+    return { success: true, session: sanitizeSession(session) };
+  } catch (error) {
+    console.error('Failed to load auth session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('auth:setSession', async (event, session) => {
+  try {
+    if (session && typeof session !== 'object') {
+      throw new Error('Session payload must be an object or null');
+    }
+    const saved = await sessionStore.save(session || null);
+    emitSessionChanged(saved);
+    return { success: true, session: sanitizeSession(saved) };
+  } catch (error) {
+    console.error('Failed to persist auth session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('auth:clearSession', async () => {
+  try {
+    await sessionStore.clear();
+    emitSessionChanged(null);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to clear auth session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // File system operations
 ipcMain.handle('file:showSaveDialog', async (event, options) => {
   try {
@@ -497,6 +821,20 @@ ipcMain.handle('file:showOpenDialog', async (event, options) => {
   } catch (error) {
     console.error('Open dialog error:', error);
     return { canceled: true };
+  }
+});
+
+ipcMain.handle('file:write', async (event, filePath, data, options = {}) => {
+  try {
+    if (!filePath) {
+      throw new Error('No file path provided');
+    }
+    const encoding = options.encoding ?? 'utf8';
+    await fs.promises.writeFile(filePath, data, encoding);
+    return { success: true };
+  } catch (error) {
+    console.error('File write error:', error);
+    return { success: false, error: error.message };
   }
 });
 

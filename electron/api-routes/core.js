@@ -1,5 +1,16 @@
 const path = require('path');
 const { dbManager } = require('../database');
+const healthService = require(path.join(__dirname, '..', '..', 'app', 'server', 'services', 'health.js'));
+const transactionsMetrics = require(path.join(
+  __dirname,
+  '..',
+  '..',
+  'app',
+  'server',
+  'services',
+  'transactions',
+  'metrics.js',
+));
 
 // Import original Next.js API handlers for reference
 const apiPath = path.join(__dirname, '..', '..', 'app', 'pages', 'api');
@@ -11,9 +22,18 @@ class CoreAPIRoutes {
     try {
       const startTime = Date.now();
 
-      // Test database connection
-      const dbTest = await dbManager.testConnection();
+      const health = await healthService.ping();
       const responseTime = Date.now() - startTime;
+
+      if (!health.ok) {
+        return res.status(500).json({
+          status: health.status,
+          message: 'Database connectivity check failed',
+          error: health.error,
+        });
+      }
+
+      const dbTest = await dbManager.testConnection();
 
       res.json({
         status: 'ok',
@@ -140,39 +160,12 @@ class CoreAPIRoutes {
   // Get all categories
   async getCategories(req, res) {
     try {
-      const query = `
-        SELECT DISTINCT
-          category,
-          parent_category,
-          COUNT(*) as transaction_count,
-          SUM(CASE WHEN price < 0 THEN ABS(price) ELSE 0 END) as total_spent
-        FROM transactions
-        WHERE category IS NOT NULL
-          AND category != ''
-        GROUP BY category, parent_category
-        ORDER BY total_spent DESC
-      `;
-
-      const result = await dbManager.query(query);
-
-      // Process categories into hierarchical structure
-      const categories = result.rows.map(row => ({
-        ...row,
-        total_spent: parseFloat(row.total_spent) || 0,
-        transaction_count: parseInt(row.transaction_count) || 0
-      }));
-
-      res.json({
-        success: true,
-        categories: categories,
-        count: categories.length
-      });
+      const categories = await transactionsMetrics.listCategories();
+      res.json(categories);
     } catch (error) {
       console.error('Get categories error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to fetch categories',
-        message: error.message
+      res.status(error.status || 500).json({
+        error: error.message || 'Failed to fetch categories',
       });
     }
   }

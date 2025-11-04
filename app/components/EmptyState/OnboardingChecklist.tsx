@@ -286,7 +286,7 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
           onClick={handleDismiss}
           sx={{ color: 'text.secondary' }}
         >
-          I'll do this later
+          I&apos;ll do this later
         </Button>
       </Box>
     </Paper>

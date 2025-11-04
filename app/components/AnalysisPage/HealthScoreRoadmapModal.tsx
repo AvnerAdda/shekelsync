@@ -37,6 +37,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   PlayArrow as PlayIcon
 } from '@mui/icons-material';
+import { apiClient } from '@/lib/api-client';
 
 interface HealthScoreRoadmapModalProps {
   open: boolean;
@@ -111,16 +112,16 @@ const HealthScoreRoadmapModal: React.FC<HealthScoreRoadmapModalProps> = ({
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(
+      const response = await apiClient.get(
         `/api/analytics/health-score-roadmap?targetScore=${target}&months=6`
       );
 
       if (!response.ok) {
-        throw new Error('Failed to fetch roadmap');
+        throw new Error(response.statusText || 'Failed to fetch roadmap');
       }
 
-      const data = await response.json();
-      setRoadmapData(data);
+      const data = response.data as any;
+      setRoadmapData(data ?? null);
     } catch (err) {
       console.error('Error fetching roadmap:', err);
       setError(err instanceof Error ? err.message : 'Failed to load roadmap');

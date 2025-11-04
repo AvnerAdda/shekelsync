@@ -52,6 +52,7 @@ import {
 } from '@mui/icons-material';
 import * as MuiIcons from '@mui/icons-material';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { apiClient } from '@/lib/api-client';
 
 // Helper component to render Material-UI icon dynamically from icon name string
 const CategoryIcon: React.FC<{ iconName?: string | null; color?: string | null; size?: number }> = ({
@@ -195,11 +196,11 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
         params.append('category', categoryName);
       }
 
-      const response = await fetch(`/api/analytics/category-details?${params.toString()}`);
+      const response = await apiClient.get(`/api/analytics/category-details?${params.toString()}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      const data = await response.json();
+      const data = response.data as any;
       console.log('Category details:', data);
       setCategoryDetails(data);
       setDetailsModalOpen(true);

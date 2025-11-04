@@ -1,0 +1,145 @@
+name: Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  preflight:
+    name: Verify signing secrets
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - name: Check required repository secrets
+        shell: bash
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+          LINUX_GPG_KEY: ${{ secrets.LINUX_GPG_KEY }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+
+          required=(WINDOWS_CERT_PFX WINDOWS_CERT_PASSWORD)
+          optional=(LINUX_GPG_KEY LINUX_GPG_PASSPHRASE)
+
+          missing=()
+          for name in "${required[@]}"; do
+            value=$(eval "printf '%s' \"\${$name-}\"")
+            if [ -z "$value" ]; then
+              missing+=("$name")
+            fi
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            echo "Populate these secrets via the secrets vault sync (see docs/secrets-vault.md) before tagging a release."
+            exit 1
+          fi
+
+          missing_optional=()
+          for name in "${optional[@]}"; do
+            value=$(eval "printf '%s' \"\${$name-}\"")
+            if [ -z "$value" ]; then
+              missing_optional+=("$name")
+            fi
+          done
+
+          if [ "${#missing_optional[@]}" -gt 0 ]; then
+            echo "::warning::Optional secrets not configured: ${missing_optional[*]}"
+          fi
+
+  build:
+    name: Build Electron (${{ matrix.os }})
+    needs: [preflight]
+    if: needs.preflight.result == 'success' || needs.preflight.result == 'skipped'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    env:
+      ALLOW_DEV_NO_ENCRYPTION: 'true'
+      SKIP_EMBEDDED_API: 'true'
+      USE_VITE_RENDERER: 'true'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install app dependencies
+        run: npm --prefix app install
+
+      - name: Install renderer dependencies
+        run: npm --prefix renderer install
+
+      - name: Prepare Windows signing
+        if: matrix.os == 'windows-latest' && secrets.WINDOWS_CERT_PFX
+        shell: bash
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          echo "$WINDOWS_CERT_PFX" | base64 --decode > windows-cert.pfx
+          echo "WIN_CSC_LINK=$(pwd)/windows-cert.pfx" >> $GITHUB_ENV
+          echo "WIN_CSC_KEY_PASSWORD=$WINDOWS_CERT_PASSWORD" >> $GITHUB_ENV
+
+      - name: Prepare Linux signing
+        if: matrix.os == 'ubuntu-latest' && secrets.LINUX_GPG_KEY
+        shell: bash
+        env:
+          LINUX_GPG_KEY: ${{ secrets.LINUX_GPG_KEY }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+        run: |
+          echo "$LINUX_GPG_KEY" | base64 --decode > linux-gpg.key
+          echo "CSC_IDENTITY_AUTO_DISCOVERY=true" >> $GITHUB_ENV
+          echo "CSC_KEY_PASSWORD=$LINUX_GPG_PASSPHRASE" >> $GITHUB_ENV
+          echo "CSC_LINK=$(pwd)/linux-gpg.key" >> $GITHUB_ENV
+
+      - name: Show signing configuration summary
+        run: |
+          echo "Signing enabled?" \
+          && if [ -n "$CSC_LINK" ]; then echo "  using $CSC_LINK"; else echo "  no signing secrets detected"; fi
+
+      - name: Build Electron distributable
+        shell: bash
+        env:
+          CUSTOM_GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
+          DEFAULT_GH_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ -n "$CUSTOM_GH_TOKEN" ]; then
+            export GH_TOKEN="$CUSTOM_GH_TOKEN"
+            echo "Using GH_RELEASE_TOKEN secret for release publishing."
+          else
+            export GH_TOKEN="$DEFAULT_GH_TOKEN"
+            echo "Using default GITHUB_TOKEN for release publishing."
+          fi
+
+          if [ -n "$GH_TOKEN" ] && [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            echo "Detected tag push with publishing credentials; running release build."
+            npm --prefix app run release
+          else
+            echo "Publishing disabled (missing GH_TOKEN or manual workflow); generating unsigned artifacts only."
+            npm --prefix app run dist
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-dist-${{ matrix.os }}
+          path: dist/**

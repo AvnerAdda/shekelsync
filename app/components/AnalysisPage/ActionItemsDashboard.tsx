@@ -43,6 +43,7 @@ import {
   Edit as EditIcon,
   Savings as SavingsIcon
 } from '@mui/icons-material';
+import { apiClient } from '@/lib/api-client';
 
 interface ActionItem {
   id: number;
@@ -95,15 +96,14 @@ const ActionItemsDashboard: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('/api/analytics/action-items');
-      
+      const response = await apiClient.get('/api/analytics/action-items');
       if (!response.ok) {
-        throw new Error('Failed to fetch action items');
+        throw new Error(response.statusText || 'Failed to fetch action items');
       }
 
-      const data = await response.json();
-      setItems(data.items || []);
-      setSummary(data.summary || null);
+      const data = response.data as any;
+      setItems(Array.isArray(data?.items) ? data.items : []);
+      setSummary(data?.summary || null);
     } catch (err) {
       console.error('Error fetching action items:', err);
       setError(err instanceof Error ? err.message : 'Failed to load action items');
@@ -117,17 +117,13 @@ const ActionItemsDashboard: React.FC = () => {
     const newProgress = newStatus === 'completed' ? 100 : item.current_progress;
 
     try {
-      const response = await fetch(`/api/analytics/action-items?id=${item.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: newStatus,
-          current_progress: newProgress
-        })
+      const response = await apiClient.put(`/api/analytics/action-items?id=${item.id}`, {
+        status: newStatus,
+        current_progress: newProgress,
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update action item');
+        throw new Error(response.statusText || 'Failed to update action item');
       }
 
       await fetchActionItems();
@@ -139,17 +135,13 @@ const ActionItemsDashboard: React.FC = () => {
 
   const handleUpdateProgress = async (item: ActionItem, progress: number) => {
     try {
-      const response = await fetch(`/api/analytics/action-items?id=${item.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          current_progress: progress,
-          status: progress >= 100 ? 'completed' : progress > 0 ? 'in_progress' : 'pending'
-        })
+      const response = await apiClient.put(`/api/analytics/action-items?id=${item.id}`, {
+        current_progress: progress,
+        status: progress >= 100 ? 'completed' : progress > 0 ? 'in_progress' : 'pending',
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update progress');
+        throw new Error(response.statusText || 'Failed to update progress');
       }
 
       await fetchActionItems();
@@ -165,12 +157,10 @@ const ActionItemsDashboard: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/analytics/action-items?id=${id}`, {
-        method: 'DELETE'
-      });
+      const response = await apiClient.delete(`/api/analytics/action-items?id=${id}`);
 
       if (!response.ok) {
-        throw new Error('Failed to delete action item');
+        throw new Error(response.statusText || 'Failed to delete action item');
       }
 
       await fetchActionItems();
@@ -187,14 +177,10 @@ const ActionItemsDashboard: React.FC = () => {
     }
 
     try {
-      const response = await fetch('/api/analytics/action-items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newItem)
-      });
+      const response = await apiClient.post('/api/analytics/action-items', newItem);
 
       if (!response.ok) {
-        throw new Error('Failed to create action item');
+        throw new Error(response.statusText || 'Failed to create action item');
       }
 
       setAddDialogOpen(false);

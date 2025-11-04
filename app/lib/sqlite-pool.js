@@ -1,5 +1,5 @@
-import path from 'path';
-import Database from 'better-sqlite3';
+const path = require('path');
+const resolveBetterSqlite = require('./better-sqlite3-wrapper.js');
 
 const PLACEHOLDER_REGEX = /\$(\d+)/g;
 const SELECT_LIKE_REGEX = /^\s*(WITH|SELECT|PRAGMA)/i;
@@ -19,6 +19,21 @@ function normalizeParams(params) {
   return params.map(normalizeValue);
 }
 
+let cachedDatabaseCtor;
+
+function resolveDatabaseCtor(override) {
+  if (override) {
+    return override;
+  }
+
+  if (!cachedDatabaseCtor) {
+    const resolved = resolveBetterSqlite();
+    cachedDatabaseCtor = resolved.default ?? resolved;
+  }
+
+  return cachedDatabaseCtor;
+}
+
 function createSqlitePool(options = {}) {
   const dbPath =
     options.databasePath ||
@@ -26,7 +41,6 @@ function createSqlitePool(options = {}) {
     process.env.SQLCIPHER_DB_PATH ||
     path.join(process.cwd(), 'dist', 'clarify.sqlite');
 
-  // Check if database exists before attempting to open
   const fs = require('fs');
   if (!fs.existsSync(dbPath)) {
     const resolvedPath = path.resolve(dbPath);
@@ -38,6 +52,7 @@ function createSqlitePool(options = {}) {
     );
   }
 
+  const Database = resolveDatabaseCtor(options.databaseCtor);
   const db = new Database(dbPath, { fileMustExist: true });
   db.pragma('foreign_keys = ON');
   db.pragma('journal_mode = WAL');
@@ -100,4 +115,5 @@ function createSqlitePool(options = {}) {
   };
 }
 
-export default createSqlitePool;
+module.exports = createSqlitePool;
+module.exports.default = createSqlitePool;

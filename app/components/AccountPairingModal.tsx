@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -39,6 +39,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import { useNotification } from './NotificationContext';
 import ModalHeader from './ModalHeader';
 import UnpairedTransactionsDialog from './UnpairedTransactionsDialog';
+import { apiClient } from '@/lib/api-client';
 
 interface Account {
   id: number;
@@ -112,45 +113,7 @@ export default function AccountPairingModal({
   const [editNewPatternInput, setEditNewPatternInput] = useState('');
   const { showNotification } = useNotification();
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchExistingPairings();
-      expandAccountsByNumbers();
-      fetchUnpairableTransactionsCount();
-    }
-  }, [isOpen, creditCardAccounts, bankAccounts]);
-
-  // Auto-extract unique transaction names from selected transactions
-  useEffect(() => {
-    if (selectedTransactions.size > 0) {
-      const uniqueNames = new Set<string>();
-      candidates.forEach(txn => {
-        if (selectedTransactions.has(txn.identifier)) {
-          uniqueNames.add(txn.name);
-        }
-      });
-      setMatchPatterns(Array.from(uniqueNames));
-    } else {
-      setMatchPatterns([]);
-    }
-  }, [selectedTransactions, candidates]);
-
-  // Auto-extract unique transaction names from edit selected transactions
-  useEffect(() => {
-    if (editSelectedTransactions.size > 0) {
-      const uniqueNames = new Set<string>();
-      editCandidates.forEach(txn => {
-        if (editSelectedTransactions.has(txn.identifier)) {
-          uniqueNames.add(txn.name);
-        }
-      });
-      setEditMatchPatterns(Array.from(uniqueNames));
-    } else {
-      setEditMatchPatterns([]);
-    }
-  }, [editSelectedTransactions, editCandidates]);
-
-  const expandAccountsByNumbers = () => {
+  const expandAccountsByNumbers = useCallback(() => {
     // Expand accounts based on unique vendor+account_number combinations
     const expanded: Account[] = [];
     const seenCombinations = new Set<string>();
@@ -190,32 +153,70 @@ export default function AccountPairingModal({
     });
 
     setExpandedAccounts(expanded);
-  };
+  }, [bankAccounts, creditCardAccounts]);
 
-  const fetchExistingPairings = async () => {
+  const fetchExistingPairings = useCallback(async () => {
     try {
-      const response = await fetch('/api/accounts/pairing');
+      const response = await apiClient.get('/api/accounts/pairing');
       if (response.ok) {
-        const data = await response.json();
-        setExistingPairings(data.pairings);
+        const data = response.data as any;
+        setExistingPairings(data?.pairings || []);
       }
     } catch (error) {
       console.error('Error fetching pairings:', error);
     }
-  };
+  }, []);
 
-  const fetchUnpairableTransactionsCount = async () => {
+  const fetchUnpairableTransactionsCount = useCallback(async () => {
     try {
       // Get count of bank transactions that might need pairing (categories 25/75)
-      const response = await fetch('/api/accounts/unpaired-transactions-count');
+      const response = await apiClient.get('/api/accounts/unpaired-transactions-count');
       if (response.ok) {
-        const data = await response.json();
-        setUnpairableTransactionsCount(data.count);
+        const data = response.data as any;
+        setUnpairableTransactionsCount(data?.count || 0);
       }
     } catch (error) {
       console.error('Error fetching unpaired count:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchExistingPairings();
+      expandAccountsByNumbers();
+      fetchUnpairableTransactionsCount();
+    }
+  }, [isOpen, creditCardAccounts, bankAccounts, expandAccountsByNumbers, fetchExistingPairings, fetchUnpairableTransactionsCount]);
+
+  // Auto-extract unique transaction names from selected transactions
+  useEffect(() => {
+    if (selectedTransactions.size > 0) {
+      const uniqueNames = new Set<string>();
+      candidates.forEach(txn => {
+        if (selectedTransactions.has(txn.identifier)) {
+          uniqueNames.add(txn.name);
+        }
+      });
+      setMatchPatterns(Array.from(uniqueNames));
+    } else {
+      setMatchPatterns([]);
+    }
+  }, [selectedTransactions, candidates]);
+
+  // Auto-extract unique transaction names from edit selected transactions
+  useEffect(() => {
+    if (editSelectedTransactions.size > 0) {
+      const uniqueNames = new Set<string>();
+      editCandidates.forEach(txn => {
+        if (editSelectedTransactions.has(txn.identifier)) {
+          uniqueNames.add(txn.name);
+        }
+      });
+      setEditMatchPatterns(Array.from(uniqueNames));
+    } else {
+      setEditMatchPatterns([]);
+    }
+  }, [editSelectedTransactions, editCandidates]);
 
   const handleNext = async () => {
     if (activeStep === 0) {
@@ -231,12 +232,12 @@ export default function AccountPairingModal({
         // Use the selected account number
         const creditCardNumber = selectedCreditCard.account_number || selectedCreditCard.card6_digits || '0000';
         const bankAccountNumber = selectedBank.account_number || selectedBank.bank_account_number || '';
-        const response = await fetch(
+        const response = await apiClient.get(
           `/api/accounts/find-settlement-candidates?credit_card_account_number=${creditCardNumber}&bank_vendor=${selectedBank.vendor}&bank_account_number=${bankAccountNumber}`
         );
 
         if (response.ok) {
-          const data = await response.json();
+          const data = response.data as any;
           setCandidates(data.candidates);
           setStats(data.stats);
           // Start with no transactions selected
@@ -264,16 +265,12 @@ export default function AccountPairingModal({
   const handleConfirm = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/accounts/pairing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          creditCardVendor: selectedCreditCard!.vendor,
-          creditCardAccountNumber: selectedCreditCard!.account_number || selectedCreditCard!.card6_digits || null,
-          bankVendor: selectedBank!.vendor,
-          bankAccountNumber: selectedBank!.account_number || selectedBank!.bank_account_number || null,
-          matchPatterns: matchPatterns
-        })
+      const response = await apiClient.post('/api/accounts/pairing', {
+        creditCardVendor: selectedCreditCard!.vendor,
+        creditCardAccountNumber: selectedCreditCard!.account_number || selectedCreditCard!.card6_digits || null,
+        bankVendor: selectedBank!.vendor,
+        bankAccountNumber: selectedBank!.account_number || selectedBank!.bank_account_number || null,
+        matchPatterns: matchPatterns
       });
 
       if (response.ok) {
@@ -282,7 +279,7 @@ export default function AccountPairingModal({
         // Trigger data refresh
         window.dispatchEvent(new CustomEvent('dataRefresh'));
       } else {
-        const error = await response.json();
+        const error = (response.data as any) || {};
         showNotification(error.error || 'Failed to create pairing', 'error');
       }
     } catch (error) {
@@ -295,9 +292,7 @@ export default function AccountPairingModal({
 
   const handleDeletePairing = async (pairingId: number) => {
     try {
-      const response = await fetch(`/api/accounts/pairing?id=${pairingId}`, {
-        method: 'DELETE'
-      });
+      const response = await apiClient.delete(`/api/accounts/pairing?id=${pairingId}`);
 
       if (response.ok) {
         showNotification('Pairing deleted successfully', 'success');
@@ -315,13 +310,9 @@ export default function AccountPairingModal({
 
   const handleUpdatePairing = async (pairingId: number, isActive: boolean) => {
     try {
-      const response = await fetch('/api/accounts/pairing', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: pairingId,
-          isActive
-        })
+      const response = await apiClient.put('/api/accounts/pairing', {
+        id: pairingId,
+        isActive
       });
 
       if (response.ok) {
@@ -371,12 +362,12 @@ export default function AccountPairingModal({
     try {
       const creditCardNumber = editCreditCard.account_number || editCreditCard.card6_digits || '0000';
       const bankAccountNumber = editBank.account_number || editBank.bank_account_number || '';
-      const response = await fetch(
+      const response = await apiClient.get(
         `/api/accounts/find-settlement-candidates?credit_card_account_number=${creditCardNumber}&bank_vendor=${editBank.vendor}&bank_account_number=${bankAccountNumber}`
       );
 
       if (response.ok) {
-        const data = await response.json();
+        const data = response.data as any;
         setEditCandidates(data.candidates);
         setEditSelectedTransactions(new Set());
         setShowEditReview(true);
@@ -397,21 +388,15 @@ export default function AccountPairingModal({
     setEditLoading(true);
     try {
       // Delete old pairing
-      await fetch(`/api/accounts/pairing?id=${editingPairing.id}`, {
-        method: 'DELETE'
-      });
+      await apiClient.delete(`/api/accounts/pairing?id=${editingPairing.id}`);
 
       // Create new pairing with updated values
-      const response = await fetch('/api/accounts/pairing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          creditCardVendor: editCreditCard!.vendor,
-          creditCardAccountNumber: editCreditCard!.account_number || editCreditCard!.card6_digits || null,
-          bankVendor: editBank!.vendor,
-          bankAccountNumber: editBank!.account_number || editBank!.bank_account_number || null,
-          matchPatterns: editMatchPatterns
-        })
+      const response = await apiClient.post('/api/accounts/pairing', {
+        creditCardVendor: editCreditCard!.vendor,
+        creditCardAccountNumber: editCreditCard!.account_number || editCreditCard!.card6_digits || null,
+        bankVendor: editBank!.vendor,
+        bankAccountNumber: editBank!.account_number || editBank!.bank_account_number || null,
+        matchPatterns: editMatchPatterns
       });
 
       if (response.ok) {
@@ -423,7 +408,7 @@ export default function AccountPairingModal({
         expandAccountsByNumbers();
         window.dispatchEvent(new CustomEvent('dataRefresh'));
       } else {
-        const error = await response.json();
+        const error = (response.data as any) || {};
         showNotification(error.error || 'Failed to update pairing', 'error');
       }
     } catch (error) {

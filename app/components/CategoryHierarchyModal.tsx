@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -89,6 +89,7 @@ import {
   MenuBook as MenuBookIcon,
 } from '@mui/icons-material';
 import ModalHeader from './ModalHeader';
+import { apiClient } from '@/lib/api-client';
 
 interface CategoryDefinition {
   id: number;
@@ -140,6 +141,11 @@ interface UncategorizedTransaction {
   name: string;
   price: number;
   accountNumber?: string;
+  categoryDefinitionId?: number | null;
+  categoryType?: 'expense' | 'investment' | 'income' | null;
+  categoryName?: string | null;
+  categoryColor?: string | null;
+  categoryIcon?: string | null;
 }
 
 interface UncategorizedSummary {
@@ -216,7 +222,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   // Category Hierarchy State
   const [categories, setCategories] = useState<CategoryDefinition[]>([]);
   const [uncategorized, setUncategorized] = useState<UncategorizedSummary | null>(null);
-  const [bankTransactions, setBankTransactions] = useState<UncategorizedSummary | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [editingCategory, setEditingCategory] = useState<CategoryDefinition | null>(null);
   const [newCategory, setNewCategory] = useState<Partial<CategoryDefinition>>({
@@ -304,13 +309,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       income: [],
     };
 
-    // Get actual parent categories (level 2) - children of root categories
-    // Root categories (level 1) are: הוצאות, השקעות, הכנסות
+    // Add the root categories themselves (הוצאות, השקעות, הכנסות)
+    // These will be shown in the first dropdown
     categories.forEach((root: CategoryDefinition) => {
-      if (root.children && root.children.length > 0) {
-        // Add the children (level 2 - actual parent categories) to the list
-        result[root.category_type as CategoryType].push(...root.children);
-      }
+      result[root.category_type as CategoryType].push(root);
     });
 
     return result;
@@ -318,20 +320,104 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
   const getTransactionKey = (txn: UncategorizedTransaction) => `${txn.identifier}|${txn.vendor}`;
 
-  useEffect(() => {
-    if (open) {
-      fetchCategories();
-      fetchRules();
-    }
-  }, [open]);
+  // Helper function to auto-detect type from category path
+  const getTypeFromCategoryPath = useCallback((path: number[]): CategoryType => {
+    if (path.length === 0) return 'expense'; // default
+    const rootCategoryId = path[0];
+    const rootCategory = categoryLookup.get(rootCategoryId);
+    return (rootCategory?.category_type as CategoryType) || 'expense';
+  }, [categoryLookup]);
 
-  const fetchCategories = async () => {
+  const buildCategoryTree = useCallback((flatCategories: CategoryDefinition[] = []): CategoryDefinition[] => {
+    const categoryMap = new Map<number, CategoryDefinition>();
+    const rootCategories: CategoryDefinition[] = [];
+
+    // First pass: create map of all categories
+    flatCategories.forEach(cat => {
+      categoryMap.set(cat.id, { ...cat, children: [] });
+    });
+
+    // Second pass: build tree structure
+    flatCategories.forEach(cat => {
+      const categoryNode = categoryMap.get(cat.id)!;
+      if (cat.parent_id === null) {
+        rootCategories.push(categoryNode);
+      } else {
+        const parent = categoryMap.get(cat.parent_id);
+        if (parent) {
+          parent.children = parent.children || [];
+          parent.children.push(categoryNode);
+        }
+      }
+    });
+
+    // Sort by display_order
+    const sortByOrder = (cats: CategoryDefinition[]) => {
+      cats.sort((a, b) => a.display_order - b.display_order);
+      cats.forEach(cat => {
+        if (cat.children && cat.children.length > 0) {
+          sortByOrder(cat.children);
+        }
+      });
+    };
+    sortByOrder(rootCategories);
+
+    return rootCategories;
+  }, []);
+
+  const fetchAllTransactionCounts = useCallback(async (rulesToFetch: PatternRule[] | any) => {
+    if (!Array.isArray(rulesToFetch) || rulesToFetch.length === 0) {
+      setRuleTransactionCounts(new Map());
+      return;
+    }
+    try {
+      const counts = new Map<number, number>();
+
+      await Promise.all(
+        rulesToFetch.map(async (rule) => {
+          try {
+            const response = await apiClient.get(
+              `/api/categorization_rules/preview?ruleId=${rule.id}&limit=0`
+            );
+            if (response.ok) {
+              const data = response.data as any;
+              counts.set(rule.id, data.totalCount);
+            }
+          } catch (err) {
+            console.error(`Error fetching count for rule ${rule.id}:`, err);
+          }
+        })
+      );
+
+      setRuleTransactionCounts(counts);
+    } catch (error) {
+      console.error('Error fetching transaction counts:', error);
+    }
+  }, []);
+
+  const fetchRules = useCallback(async () => {
+    try {
+      const response = await apiClient.get('/api/categorization_rules');
+      if (!response.ok) throw new Error('Failed to fetch rules');
+
+      const rulesData = response.data as any;
+      setRules(rulesData);
+
+      // Fetch transaction counts for all rules
+      await fetchAllTransactionCounts(rulesData);
+    } catch (error) {
+      console.error('Error fetching rules:', error);
+      setError('Failed to load rules');
+    }
+  }, [fetchAllTransactionCounts]);
+
+  const fetchCategories = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/categories/hierarchy');
+      const response = await apiClient.get('/api/categories/hierarchy');
       if (!response.ok) throw new Error('Failed to fetch categories');
 
-      const payload = await response.json();
+      const payload = response.data as any;
       const categoryList = Array.isArray(payload) ? payload : payload?.categories;
       setCategories(buildCategoryTree(categoryList || []));
 
@@ -344,29 +430,44 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       } else {
         setUncategorized(null);
       }
-
-      if (!Array.isArray(payload) && payload?.bankTransactions) {
-        setBankTransactions({
-          totalCount: payload.bankTransactions.totalCount ?? 0,
-          totalAmount: payload.bankTransactions.totalAmount ?? 0,
-          recentTransactions: payload.bankTransactions.recentTransactions ?? [],
-        });
-      } else {
-        setBankTransactions(null);
-      }
     } catch (error) {
       console.error('Error fetching categories:', error);
       setError('Failed to load categories');
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildCategoryTree]);
+
+  // Helper function to build category path from a category ID
+  const buildCategoryPath = useCallback((categoryId: number | null | undefined): number[] => {
+    if (!categoryId) return [];
+
+    const path: number[] = [];
+    let currentId: number | null = categoryId;
+
+    // Traverse up the hierarchy to build the full path
+    while (currentId !== null) {
+      const category = categoryLookup.get(currentId);
+      if (!category) break;
+
+      path.unshift(currentId); // Add to beginning of array
+      currentId = category.parent_id;
+    }
+
+    return path;
+  }, [categoryLookup]);
+
+  useEffect(() => {
+    if (open) {
+      fetchCategories();
+      fetchRules();
+    }
+  }, [fetchCategories, fetchRules, open]);
 
   useEffect(() => {
     const hasUncategorized = uncategorized?.recentTransactions && uncategorized.recentTransactions.length > 0;
-    const hasBankTransactions = bankTransactions?.recentTransactions && bankTransactions.recentTransactions.length > 0;
 
-    if (!hasUncategorized && !hasBankTransactions) {
+    if (!hasUncategorized) {
       setAssignmentDrafts({});
       setSavingAssignments({});
       return;
@@ -376,43 +477,39 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       const next: Record<string, TransactionAssignment> = {};
 
       // Process uncategorized transactions
-      if (hasUncategorized) {
-        uncategorized!.recentTransactions.forEach((txn: UncategorizedTransaction) => {
-          const key = getTransactionKey(txn);
-          if (prev[key]) {
-            next[key] = prev[key];
-          } else {
-            const defaultType: CategoryType = txn.price >= 0 ? 'income' : 'expense';
+      uncategorized!.recentTransactions.forEach((txn: UncategorizedTransaction) => {
+        const key = getTransactionKey(txn);
+        if (prev[key]) {
+          // Keep existing user selections
+          next[key] = prev[key];
+        } else {
+          // Auto-populate from existing transaction data
+          let type: CategoryType;
+          let categoryPath: number[] = [];
 
-            next[key] = {
-              type: defaultType,
-              categoryPath: [],
-            };
-          }
-        });
-      }
-
-      // Process bank transactions
-      if (hasBankTransactions) {
-        bankTransactions!.recentTransactions.forEach((txn: UncategorizedTransaction) => {
-          const key = getTransactionKey(txn);
-          if (prev[key]) {
-            next[key] = prev[key];
+          // 1. Try to use existing category_type from transaction
+          if (txn.categoryType && ['expense', 'investment', 'income'].includes(txn.categoryType)) {
+            type = txn.categoryType as CategoryType;
           } else {
-            // Bank transactions are typically expenses or could be transfers
-            const defaultType: CategoryType = txn.price >= 0 ? 'income' : 'expense';
-            
-            next[key] = {
-              type: defaultType,
-              categoryPath: [],
-            };
+            // 2. Fallback: Infer from price
+            type = txn.price >= 0 ? 'income' : 'expense';
           }
-        });
-      }
+
+          // 3. Build category path if transaction has a category assigned
+          if (txn.categoryDefinitionId) {
+            categoryPath = buildCategoryPath(txn.categoryDefinitionId);
+          }
+
+          next[key] = {
+            type,
+            categoryPath,
+          };
+        }
+      });
 
       return next;
     });
-  }, [uncategorized, bankTransactions, categories]);
+  }, [uncategorized, categories, buildCategoryPath]);
 
   const updateAssignmentDraft = (key: string, updates: Partial<TransactionAssignment>) => {
     setAssignmentDrafts((prev: Record<string, TransactionAssignment>) => ({
@@ -441,10 +538,14 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         newPath.splice(depth, newPath.length - depth, categoryId);
       }
 
+      // Auto-detect type from the category path
+      const newType = getTypeFromCategoryPath(newPath);
+
       return {
         ...prev,
         [key]: {
           ...draft,
+          type: newType,
           categoryPath: newPath,
         },
       };
@@ -473,20 +574,16 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     setError(null);
 
     try {
-      const response = await fetch(`/api/transactions/${encodeURIComponent(`${txn.identifier}|${txn.vendor}`)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category_definition_id: selectedCategoryId,
-          category_type: draft.type,
-          category: categoryDefinition.name,
-          auto_categorized: false,
-          confidence_score: 1.0,
-        }),
+      const response = await apiClient.put(`/api/transactions/${encodeURIComponent(`${txn.identifier}|${txn.vendor}`)}`, {
+        category_definition_id: selectedCategoryId,
+        category_type: draft.type,
+        category: categoryDefinition.name,
+        auto_categorized: false,
+        confidence_score: 1.0,
       });
 
       if (!response.ok) {
-        const errorPayload = await response.json().catch(() => null);
+        const errorPayload = (response.data as any) || {};
         throw new Error(errorPayload?.error || 'Failed to categorize transaction');
       }
 
@@ -523,41 +620,39 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     setError(null);
 
     try {
-      const response = await fetch('/api/categorization_rules/auto-create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transactionName: txn.name,
-          categoryDefinitionId: selectedCategoryId,
-          categoryType: draft.type,
-        }),
+      const response = await apiClient.post('/api/categorization_rules/auto-create', {
+        transactionName: txn.name,
+        categoryDefinitionId: selectedCategoryId,
+        categoryType: draft.type,
       });
 
-      const result = await response.json();
-
       if (!response.ok) {
-        if (response.status === 409) {
-          // Rule already exists - just apply the existing rules
-          setSuccess(`A rule for "${txn.name}" already exists. Applying all rules now...`);
-          setTimeout(() => setSuccess(null), 5000);
-          
-          // Apply existing rules
-          await handleApplyRules();
-          await fetchCategories();
-          await fetchRules();
-          onCategoriesUpdated();
-          return;
-        } else {
-          throw new Error(result.error || 'Failed to create auto-assignment rule');
-        }
+        const result = response.data as any;
+        throw new Error(result.error || 'Failed to create auto-assignment rule');
       }
 
-      setSuccess(`Rule created! All transactions named "${txn.name}" will now be auto-categorized.`);
+      const result = response.data as any;
+
+      // Check if rule already existed (success response with alreadyExists flag)
+      if (result.alreadyExists) {
+        setSuccess(`✓ ${result.message} Applying to all matching transactions...`);
+        setTimeout(() => setSuccess(null), 5000);
+
+        // Apply existing rule to transactions
+        await handleApplyRules();
+        await fetchCategories();
+        await fetchRules();
+        onCategoriesUpdated();
+        return;
+      }
+
+      // New rule was created
+      setSuccess(`✓ Rule created! All transactions named "${txn.name}" will now be auto-categorized.`);
       setTimeout(() => setSuccess(null), 5000);
 
       // Apply the newly created rule to existing transactions
       await handleApplyRules();
-      
+
       await fetchCategories();
       await fetchRules();
       onCategoriesUpdated();
@@ -571,43 +666,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         return next;
       });
     }
-  };
-
-  const buildCategoryTree = (flatCategories: CategoryDefinition[] = []): CategoryDefinition[] => {
-    const categoryMap = new Map<number, CategoryDefinition>();
-    const rootCategories: CategoryDefinition[] = [];
-
-    // First pass: create map of all categories
-    flatCategories.forEach(cat => {
-      categoryMap.set(cat.id, { ...cat, children: [] });
-    });
-
-    // Second pass: build tree structure
-    flatCategories.forEach(cat => {
-      const categoryNode = categoryMap.get(cat.id)!;
-      if (cat.parent_id === null) {
-        rootCategories.push(categoryNode);
-      } else {
-        const parent = categoryMap.get(cat.parent_id);
-        if (parent) {
-          parent.children = parent.children || [];
-          parent.children.push(categoryNode);
-        }
-      }
-    });
-
-    // Sort by display_order
-    const sortByOrder = (cats: CategoryDefinition[]) => {
-      cats.sort((a, b) => a.display_order - b.display_order);
-      cats.forEach(cat => {
-        if (cat.children && cat.children.length > 0) {
-          sortByOrder(cat.children);
-        }
-      });
-    };
-    sortByOrder(rootCategories);
-
-    return rootCategories;
   };
 
   // Helper function to render cascading category selectors
@@ -648,22 +706,58 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       const currentCategory = currentValue ? categoryLookup.get(currentValue) : undefined;
       const hasChildren = currentCategory?.children && currentCategory.children.length > 0;
 
+      // Determine label based on depth
+      const getLabel = (d: number) => {
+        if (d === 0) return 'Category Type';
+        if (d === 1) return 'Category';
+        if (d === 2) return 'Subcategory';
+        return `Subcategory ${d}`;
+      };
+
+      const label = getLabel(depth);
+
       selectors.push(
-        <Grid key={`cat-${depth}`} item xs={12} md={depth === 0 ? 3 : 2}>
-          <FormControl fullWidth size="small">
-            <InputLabel>{depth === 0 ? 'Category' : `Level ${depth + 1}`}</InputLabel>
+        <Grid key={`cat-${depth}`} item xs={12} md={3}>
+          <FormControl
+            fullWidth
+            size="small"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: currentCategory?.color || 'primary.main',
+                  borderWidth: 2,
+                },
+              },
+            }}
+          >
+            <InputLabel>{label}</InputLabel>
             <Select
               value={currentValue}
-              label={depth === 0 ? 'Category' : `Level ${depth + 1}`}
+              label={label}
               onChange={(event: any) => {
                 const value = event.target.value;
                 handleCategoryPathChange(transactionKey, depth, value === '' ? null : Number(value));
               }}
+              renderValue={(selected) => {
+                const cat = categoryLookup.get(selected as number);
+                if (!cat) return 'Select...';
+                return (
+                  <Box display="flex" alignItems="center" gap={1}>
+                    {getCategoryIcon(cat)}
+                    <span>{cat.name}</span>
+                  </Box>
+                );
+              }}
             >
-              <MenuItem value="">Select...</MenuItem>
+              <MenuItem value="">
+                <em>Select...</em>
+              </MenuItem>
               {options.map((cat: CategoryDefinition) => (
                 <MenuItem key={cat.id} value={cat.id}>
-                  {cat.name} {cat.name_en ? `(${cat.name_en})` : ''}
+                  <Box display="flex" alignItems="center" gap={1}>
+                    {getCategoryIcon(cat)}
+                    <span>{cat.name} {cat.name_en ? `(${cat.name_en})` : ''}</span>
+                  </Box>
                 </MenuItem>
               ))}
             </Select>
@@ -675,58 +769,16 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     return selectors;
   };
 
-  const fetchRules = async () => {
-    try {
-      const response = await fetch('/api/categorization_rules');
-      if (!response.ok) throw new Error('Failed to fetch rules');
-
-      const rulesData = await response.json();
-      setRules(rulesData);
-
-      // Fetch transaction counts for all rules
-      await fetchAllTransactionCounts(rulesData);
-    } catch (error) {
-      console.error('Error fetching rules:', error);
-      setError('Failed to load rules');
-    }
-  };
-
-  const fetchAllTransactionCounts = async (rulesToFetch: PatternRule[]) => {
-    try {
-      const counts = new Map<number, number>();
-
-      await Promise.all(
-        rulesToFetch.map(async (rule) => {
-          try {
-            const response = await fetch(
-              `/api/categorization_rules/preview?ruleId=${rule.id}&limit=0`
-            );
-            if (response.ok) {
-              const data = await response.json();
-              counts.set(rule.id, data.totalCount);
-            }
-          } catch (err) {
-            console.error(`Error fetching count for rule ${rule.id}:`, err);
-          }
-        })
-      );
-
-      setRuleTransactionCounts(counts);
-    } catch (error) {
-      console.error('Error fetching transaction counts:', error);
-    }
-  };
-
   const fetchRulePreview = async (ruleId: number) => {
     try {
       setLoadingPreview(true);
-      const response = await fetch(
+      const response = await apiClient.get(
         `/api/categorization_rules/preview?ruleId=${ruleId}&limit=20`
       );
 
       if (!response.ok) throw new Error('Failed to fetch preview');
 
-      const data: PatternPreview = await response.json();
+      const data: PatternPreview = response.data as any;
       setRulePreviewData(new Map(rulePreviewData.set(ruleId, data)));
     } catch (error) {
       console.error('Error fetching rule preview:', error);
@@ -743,13 +795,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
     try {
       setLoadingPreview(true);
-      const response = await fetch(
+      const response = await apiClient.get(
         `/api/categorization_rules/preview?pattern=${encodeURIComponent(pattern)}&limit=10`
       );
 
       if (!response.ok) throw new Error('Failed to fetch preview');
 
-      const data: PatternPreview = await response.json();
+      const data: PatternPreview = response.data as any;
       setNewRulePreview(data);
     } catch (error) {
       console.error('Error fetching new rule preview:', error);
@@ -782,14 +834,12 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/categories/hierarchy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newCategory),
+      const response = await apiClient.post('/api/categories/hierarchy', {
+        payload: newCategory,
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = (response.data as any) || {};
         throw new Error(errorData.error || 'Failed to create category');
       }
 
@@ -817,14 +867,12 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/categories/hierarchy', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(category),
+      const response = await apiClient.put('/api/categories/hierarchy', {
+        payload: category,
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = (response.data as any) || {};
         throw new Error(errorData.error || 'Failed to update category');
       }
 
@@ -851,12 +899,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/categories/hierarchy?id=${categoryId}`, {
-        method: 'DELETE',
+      const response = await apiClient.delete(`/api/categories/hierarchy?id=${categoryId}`, {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = (response.data as any) || {};
         throw new Error(errorData.error || 'Failed to delete category');
       }
 
@@ -892,19 +939,17 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/categorization_rules', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const response = await apiClient.post('/api/categorization_rules', {
+        payload: {
           name_pattern: newRule.name_pattern,
           category_definition_id: selectedCategoryId,
           category_type: newRuleType,
           is_active: true,
-        }),
+        },
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = (response.data as any) || {};
         throw new Error(errorData.error || 'Failed to create rule');
       }
 
@@ -929,17 +974,15 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/categorization_rules', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: ruleId,
+      const response = await apiClient.put('/api/categorization_rules', {
+        id: ruleId,
+        payload: {
           is_active: !currentStatus,
-        }),
+        },
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = (response.data as any) || {};
         throw new Error(errorData.error || 'Failed to toggle rule');
       }
 
@@ -964,12 +1007,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/categorization_rules?id=${ruleId}`, {
-        method: 'DELETE',
+      const response = await apiClient.delete(`/api/categorization_rules?id=${ruleId}`, {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = (response.data as any) || {};
         throw new Error(errorData.error || 'Failed to delete rule');
       }
 
@@ -1002,17 +1044,16 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setIsApplyingRules(true);
       setError(null);
 
-      const response = await fetch('/api/apply_categorization_rules', {
+      const response = await apiClient.post('/api/apply_categorization_rules', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = (response.data as any) || {};
         throw new Error(errorData.error || 'Failed to apply rules');
       }
 
-      const result = await response.json();
+      const result = response.data as any;
       setSuccess(`Successfully applied ${result.rulesApplied} rules to ${result.transactionsUpdated} transactions`);
 
       await fetchCategories();
@@ -1032,14 +1073,14 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setLoadingCategoryTransactions(true);
       setSelectedCategoryForTransactions(category);
 
-      const response = await fetch(`/api/categories/transactions?categoryId=${category.id}&limit=200`);
+      const response = await apiClient.get(`/api/categories/transactions?categoryId=${category.id}&limit=200`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch category transactions');
       }
 
-      const data = await response.json();
-      setCategoryTransactions(data.transactions.map((txn: any) => ({
+      const data = response.data as any;
+      setCategoryTransactions(data?.transactions?.map((txn: any) => ({
         identifier: txn.identifier,
         vendor: txn.vendor,
         date: txn.date,
@@ -1059,17 +1100,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     try {
       setError(null);
 
-      const response = await fetch(`/api/transactions/${encodeURIComponent(`${txn.identifier}|${txn.vendor}`)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category_definition_id: null,
-          auto_categorized: false,
-        }),
+      const response = await apiClient.put(`/api/transactions/${encodeURIComponent(`${txn.identifier}|${txn.vendor}`)}`, {
+        category_definition_id: null,
+        auto_categorized: false,
       });
 
       if (!response.ok) {
-        const errorPayload = await response.json().catch(() => null);
+        const errorPayload = (response.data as any) || {};
         throw new Error(errorPayload?.error || 'Failed to remove transaction from category');
       }
 
@@ -1097,20 +1134,16 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         return;
       }
 
-      const response = await fetch('/api/categorization_rules/auto-create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transactionName: txn.name,
-          categoryDefinitionId: selectedCategoryForTransactions.id,
-          categoryType: selectedCategoryForTransactions.category_type,
-        }),
+      const response = await apiClient.post('/api/categorization_rules/auto-create', {
+        transactionName: txn.name,
+        categoryDefinitionId: selectedCategoryForTransactions.id,
+        categoryType: selectedCategoryForTransactions.category_type,
       });
 
-      const result = await response.json();
+      const result = response.data as any;
 
       if (!response.ok) {
-        if (response.status === 409) {
+        if ((response.data as any).status === 409) {
           setSuccess(`A rule for "${txn.name}" already exists.`);
           setTimeout(() => setSuccess(null), 3000);
           return;
@@ -1139,20 +1172,16 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         return;
       }
 
-      const response = await fetch(`/api/transactions/${encodeURIComponent(`${txn.identifier}|${txn.vendor}`)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category_definition_id: targetCategoryId,
-          category_type: targetCategory.category_type,
-          category: targetCategory.name,
-          auto_categorized: false,
-          confidence_score: 1.0,
-        }),
+      const response = await apiClient.put(`/api/transactions/${encodeURIComponent(`${txn.identifier}|${txn.vendor}`)}`, {
+        category_definition_id: targetCategoryId,
+        category_type: targetCategory.category_type,
+        category: targetCategory.name,
+        auto_categorized: false,
+        confidence_score: 1.0,
       });
 
       if (!response.ok) {
-        const errorPayload = await response.json().catch(() => null);
+        const errorPayload = (response.data as any) || {};
         throw new Error(errorPayload?.error || 'Failed to move transaction');
       }
 
@@ -1307,89 +1336,235 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     return (
       <Box>
         {uncategorized && (
-          <Paper sx={{ p: 2, mb: 3 }}>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-              Unassigned Transactions
-            </Typography>
-            {uncategorized.totalCount === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                All transactions are currently assigned to categories.
-              </Typography>
-            ) : (
+          <Paper
+            sx={(theme) => ({
+              p: 3,
+              mb: 3,
+              background: theme.palette.mode === 'dark'
+                ? 'linear-gradient(135deg, rgba(30, 30, 30, 0.95) 0%, rgba(30, 30, 30, 0.85) 100%)'
+                : 'linear-gradient(135deg, rgba(200, 250, 207, 0.08) 0%, rgba(250, 207, 200, 0.08) 100%)',
+              backdropFilter: 'blur(12px)',
+              border: `1px solid ${theme.palette.divider}`,
+              borderRadius: 3,
+              boxShadow: theme.palette.mode === 'dark'
+                ? '0 4px 20px rgba(0, 0, 0, 0.4)'
+                : '0 4px 20px rgba(0, 0, 0, 0.08)',
+            })}
+          >
+            <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+              <Box display="flex" alignItems="center" gap={2}>
+                <CategoryIcon sx={{ fontSize: 40, color: '#c8facf' }} />
+                <Box>
+                  <Typography variant="h5" fontWeight="bold" gutterBottom sx={{ mb: 0 }}>
+                    Transactions to Categorize
+                  </Typography>
+                  {uncategorized.totalCount === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      🎉 All transactions are properly categorized to leaf categories!
+                    </Typography>
+                  ) : (
+                    <Box>
+                      <Typography variant="body1" color="text.primary">
+                        {`${uncategorized.totalCount.toLocaleString()} transaction${uncategorized.totalCount !== 1 ? 's' : ''} awaiting categorization`}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {`Total pending: ${formatCurrency(uncategorized.totalAmount)}`}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+              {uncategorized.totalCount > 0 && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleApplyRules}
+                  disabled={isApplyingRules}
+                  startIcon={isApplyingRules ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+                  sx={(theme) => ({
+                    borderColor: theme.palette.primary.main,
+                    color: theme.palette.primary.main,
+                    fontWeight: 600,
+                    '&:hover': {
+                      borderColor: theme.palette.primary.dark,
+                      backgroundColor: `${theme.palette.primary.main}20`,
+                    },
+                  })}
+                >
+                  {isApplyingRules ? 'Applying Rules...' : 'Apply Rules Now'}
+                </Button>
+              )}
+            </Box>
+            {uncategorized.totalCount > 0 && (
               <>
-                <Typography variant="body2" color="text.secondary">
-                  {`You have ${uncategorized.totalCount.toLocaleString()} transaction${uncategorized.totalCount !== 1 ? 's' : ''} waiting for categorization.`}
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 0.5, mb: 1 }}>
-                  {`Total pending amount: ${formatCurrency(uncategorized.totalAmount)}`}
-                </Typography>
-                <List dense sx={{ pt: 0 }}>
+                <List dense sx={{ pt: 1, mt: 2 }}>
                   {uncategorizedPreview.map((txn: UncategorizedTransaction) => {
                     const key = getTransactionKey(txn);
                     const draft = assignmentDrafts[key];
-                    const rootOptions = categoryRootsByType[draft?.type ?? 'expense'];
+                    // Show ALL category types in the first dropdown
+                    const rootOptions = [
+                      ...categoryRootsByType.expense,
+                      ...categoryRootsByType.investment,
+                      ...categoryRootsByType.income,
+                    ];
                     const isSaving = Boolean(savingAssignments[key]);
+
+                    // Determine card styling based on category type and status
+                    const hasExistingCategory = Boolean(txn.categoryDefinitionId);
+
+                    // Get the selected category's color (use the deepest selected category)
+                    const selectedCategoryId = draft?.categoryPath?.[draft.categoryPath.length - 1];
+                    const selectedCategory = selectedCategoryId ? categoryLookup.get(selectedCategoryId) : null;
+
+                    // Fallback colors based on type
+                    const categoryTypeColor = draft?.type === 'expense'
+                      ? '#ef5350'
+                      : draft?.type === 'investment'
+                      ? '#66bb6a'
+                      : '#42a5f5';
+
+                    // Priority: selected category color > existing transaction color > type color
+                    const borderColor = selectedCategory?.color || txn.categoryColor || categoryTypeColor;
 
                     return (
                       <ListItem
                         key={`${txn.identifier}-${txn.vendor}-${txn.date}`}
                         alignItems="flex-start"
-                        sx={{
+                        sx={(theme) => ({
                           flexDirection: 'column',
                           alignItems: 'stretch',
-                          gap: 1,
+                          gap: 1.5,
+                          borderLeft: (hasExistingCategory || draft?.categoryPath?.length > 0)
+                            ? `3px solid ${borderColor}`
+                            : `2px dashed ${theme.palette.divider}`,
                           border: '1px solid',
                           borderColor: 'divider',
                           borderRadius: 2,
-                          mb: 1,
-                          py: 1.5,
-                          px: 2,
-                        }}
+                          mb: 2,
+                          py: 2,
+                          px: 2.5,
+                          background: hasExistingCategory
+                            ? (theme.palette.mode === 'dark'
+                              ? 'rgba(30, 30, 30, 0.5)'
+                              : 'rgba(255, 255, 255, 0.98)')
+                            : theme.palette.background.paper,
+                          boxShadow: theme.palette.mode === 'dark'
+                            ? '0 1px 3px rgba(0,0,0,0.2)'
+                            : '0 1px 3px rgba(0,0,0,0.05)',
+                          transition: 'all 0.2s ease-in-out',
+                          '&:hover': {
+                            boxShadow: theme.palette.mode === 'dark'
+                              ? '0 4px 12px rgba(0,0,0,0.4)'
+                              : '0 4px 12px rgba(0,0,0,0.1)',
+                            transform: 'translateY(-2px)',
+                          },
+                        })}
                       >
-                        <Box display="flex" justifyContent="space-between" width="100%">
-                          <Box>
-                            <Typography variant="subtitle2" fontWeight="600">
-                              {txn.name || 'Unknown transaction'}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {(txn.vendor || 'Unknown vendor')}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {formatDate(txn.date)}
-                              {txn.accountNumber ? ` • ****${txn.accountNumber}` : ''}
+                        <Box display="flex" justifyContent="space-between" width="100%" alignItems="flex-start">
+                          <Box flex={1}>
+                            <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                              <Typography variant="h6" fontWeight="600" sx={{ fontSize: '1.1rem' }}>
+                                {txn.name || 'Unknown transaction'}
+                              </Typography>
+                              {hasExistingCategory && txn.categoryName && (
+                                <Chip
+                                  icon={getCategoryIcon({ icon: txn.categoryIcon, color: txn.categoryColor } as any)}
+                                  label={txn.categoryName}
+                                  size="small"
+                                  sx={{
+                                    backgroundColor: txn.categoryColor ? `${txn.categoryColor}20` : 'rgba(0,0,0,0.08)',
+                                    color: txn.categoryColor || 'text.primary',
+                                    fontWeight: 500,
+                                    borderLeft: `3px solid ${txn.categoryColor || '#999'}`,
+                                  }}
+                                />
+                              )}
+                              {hasExistingCategory && (
+                                <Chip
+                                  label="Needs Refinement"
+                                  size="small"
+                                  color="warning"
+                                  variant="outlined"
+                                  sx={{ fontWeight: 500 }}
+                                />
+                              )}
+                            </Box>
+                            <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                              <Chip
+                                label={txn.vendor || 'Unknown vendor'}
+                                size="small"
+                                variant="outlined"
+                                sx={{ fontWeight: 500 }}
+                              />
+                              <Typography variant="caption" color="text.secondary">
+                                {formatDate(txn.date)}
+                              </Typography>
+                              {txn.accountNumber && (
+                                <Typography variant="caption" color="text.secondary">
+                                  • ****{txn.accountNumber}
+                                </Typography>
+                              )}
+                            </Box>
+                          </Box>
+                          <Box textAlign="right">
+                            <Typography
+                              variant="h6"
+                              fontWeight="bold"
+                              sx={{
+                                fontSize: '1.25rem',
+                                color: txn.price < 0 ? '#ef5350' : '#66bb6a',
+                              }}
+                            >
+                              {formatCurrency(txn.price)}
                             </Typography>
                           </Box>
-                          <Typography variant="subtitle2" fontWeight="bold">
-                            {formatCurrency(txn.price)}
-                          </Typography>
                         </Box>
 
-                        <Grid container spacing={1} alignItems="center">
-                          <Grid item xs={12} md={3}>
-                            <FormControl fullWidth size="small">
-                              <InputLabel>Type</InputLabel>
-                              <Select
-                                value={draft?.type ?? 'expense'}
-                                label="Type"
-                                onChange={(event: any) =>
-                                  handleAssignmentTypeChange(key, event.target.value as CategoryType)
-                                }
-                              >
-                                <MenuItem value="expense">Expense</MenuItem>
-                                <MenuItem value="investment">Investment</MenuItem>
-                                <MenuItem value="income">Income</MenuItem>
-                              </Select>
-                            </FormControl>
-                          </Grid>
+                        {/* Status helper text */}
+                        {hasExistingCategory && (
+                          <Alert severity="info" sx={{ mb: 1, py: 0.5 }}>
+                            <Typography variant="caption">
+                              This transaction is assigned to a parent category. Please refine the categorization by selecting a more specific subcategory.
+                            </Typography>
+                          </Alert>
+                        )}
+
+                        <Grid container spacing={1.5} alignItems="center">
                           {renderCategorySelectors(key, draft, rootOptions)}
-                          <Grid item xs={12} md={4}>
-                            <ButtonGroup fullWidth variant="contained" size="small">
+                          <Grid item xs={12} md={3}>
+                            <ButtonGroup
+                              fullWidth
+                              variant="contained"
+                              size="small"
+                              sx={(theme) => ({
+                                '& .MuiButton-root': {
+                                  backgroundColor: draft?.categoryPath?.length
+                                    ? theme.palette.primary.main
+                                    : undefined,
+                                  color: draft?.categoryPath?.length
+                                    ? theme.palette.primary.contrastText
+                                    : undefined,
+                                  transition: 'all 0.3s ease',
+                                  fontWeight: 600,
+                                  '&:hover': {
+                                    backgroundColor: draft?.categoryPath?.length
+                                      ? theme.palette.primary.dark
+                                      : undefined,
+                                    transform: 'translateY(-2px)',
+                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                                  },
+                                  '&:disabled': {
+                                    opacity: 0.5,
+                                  },
+                                },
+                              })}
+                            >
                               <Button
                                 onClick={() => handleSaveAssignment(txn)}
                                 disabled={!draft?.categoryPath?.length || isSaving}
                                 startIcon={isSaving ? <CircularProgress color="inherit" size={16} /> : undefined}
                               >
-                                {isSaving ? 'Saving' : 'Assign'}
+                                {isSaving ? 'Saving...' : 'Assign'}
                               </Button>
                               <Button
                                 size="small"
@@ -1414,7 +1589,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                                 <ListItemIcon>
                                   {creatingRules[key] ? <CircularProgress size={20} /> : <AutoAwesomeIcon fontSize="small" />}
                                 </ListItemIcon>
-                                <ListItemText primary={creatingRules[key] ? 'Creating...' : 'Auto-Assign Similar'} />
+                                <ListItemText primary={creatingRules[key] ? 'Creating Rule...' : 'Create Rule for Similar'} />
                               </MenuItem>
                             </Menu>
                           </Grid>
@@ -1424,136 +1599,8 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   })}
                 </List>
                 {uncategorized.totalCount > uncategorizedPreview.length && (
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
                     {`Showing the latest ${uncategorizedPreview.length} of ${uncategorized.totalCount.toLocaleString()} transactions.`}
-                  </Typography>
-                )}
-              </>
-            )}
-          </Paper>
-        )}
-
-        {/* Bank Transactions to Categorize */}
-        {bankTransactions && (
-          <Paper sx={{ p: 2, mb: 3 }}>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-              Bank Transactions to Categorize
-            </Typography>
-            {bankTransactions.totalCount === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                All bank transactions have been categorized.
-              </Typography>
-            ) : (
-              <>
-                <Typography variant="body2" color="text.secondary">
-                  {`You have ${bankTransactions.totalCount.toLocaleString()} bank transaction${bankTransactions.totalCount !== 1 ? 's' : ''} to categorize.`}
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 0.5, mb: 1 }}>
-                  {`Total amount: ${formatCurrency(bankTransactions.totalAmount)}`}
-                </Typography>
-                <List dense sx={{ pt: 0 }}>
-                  {bankTransactions.recentTransactions.slice(0, 10).map((txn: UncategorizedTransaction) => {
-                    const key = getTransactionKey(txn);
-                    const draft = assignmentDrafts[key];
-                    const rootOptions = categoryRootsByType[draft?.type ?? 'expense'];
-                    const isSaving = Boolean(savingAssignments[key]);
-
-                    return (
-                      <ListItem
-                        key={`${txn.identifier}-${txn.vendor}-${txn.date}`}
-                        alignItems="flex-start"
-                        sx={{
-                          flexDirection: 'column',
-                          alignItems: 'stretch',
-                          gap: 1,
-                          border: '1px solid',
-                          borderColor: 'divider',
-                          borderRadius: 2,
-                          mb: 1,
-                          py: 1.5,
-                          px: 2,
-                        }}
-                      >
-                        <Box display="flex" justifyContent="space-between" width="100%">
-                          <Box>
-                            <Typography variant="subtitle2" fontWeight="600">
-                              {txn.name || 'Unknown transaction'}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {(txn.vendor || 'Unknown vendor')}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {formatDate(txn.date)}
-                              {txn.accountNumber ? ` • ****${txn.accountNumber}` : ''}
-                            </Typography>
-                          </Box>
-                          <Typography variant="subtitle2" fontWeight="bold">
-                            {formatCurrency(txn.price)}
-                          </Typography>
-                        </Box>
-
-                        <Grid container spacing={1} alignItems="center">
-                          <Grid item xs={12} md={3}>
-                            <FormControl fullWidth size="small">
-                              <InputLabel>Type</InputLabel>
-                              <Select
-                                value={draft?.type ?? 'expense'}
-                                label="Type"
-                                onChange={(event: any) =>
-                                  handleAssignmentTypeChange(key, event.target.value as CategoryType)
-                                }
-                              >
-                                <MenuItem value="expense">Expense</MenuItem>
-                                <MenuItem value="investment">Investment</MenuItem>
-                                <MenuItem value="income">Income</MenuItem>
-                              </Select>
-                            </FormControl>
-                          </Grid>
-                          {renderCategorySelectors(key, draft, rootOptions)}
-                          <Grid item xs={12} md={4}>
-                            <ButtonGroup fullWidth variant="contained" size="small">
-                              <Button
-                                onClick={() => handleSaveAssignment(txn)}
-                                disabled={!draft?.categoryPath?.length || isSaving}
-                                startIcon={isSaving ? <CircularProgress color="inherit" size={16} /> : undefined}
-                              >
-                                {isSaving ? 'Saving' : 'Assign'}
-                              </Button>
-                              <Button
-                                size="small"
-                                onClick={(e) => setAssignMenuAnchors({ ...assignMenuAnchors, [key]: e.currentTarget })}
-                                disabled={!draft?.categoryPath?.length || isSaving}
-                              >
-                                <ArrowDropDownIcon />
-                              </Button>
-                            </ButtonGroup>
-                            <Menu
-                              anchorEl={assignMenuAnchors[key]}
-                              open={Boolean(assignMenuAnchors[key])}
-                              onClose={() => setAssignMenuAnchors({ ...assignMenuAnchors, [key]: null })}
-                            >
-                              <MenuItem
-                                onClick={() => {
-                                  setAssignMenuAnchors({ ...assignMenuAnchors, [key]: null });
-                                  handleAutoAssignSimilar(txn);
-                                }}
-                                disabled={!draft?.categoryPath?.length || creatingRules[key]}
-                              >
-                                <ListItemIcon>
-                                  {creatingRules[key] ? <CircularProgress size={20} /> : <AutoAwesomeIcon fontSize="small" />}
-                                </ListItemIcon>
-                                <ListItemText primary={creatingRules[key] ? 'Creating...' : 'Auto-Assign Similar'} />
-                              </MenuItem>
-                            </Menu>
-                          </Grid>
-                        </Grid>
-                      </ListItem>
-                    );
-                  })}
-                </List>
-                {bankTransactions.totalCount > 10 && (
-                  <Typography variant="caption" color="text.secondary">
-                    {`Showing the latest 10 of ${bankTransactions.totalCount.toLocaleString()} transactions.`}
                   </Typography>
                 )}
               </>
@@ -2070,7 +2117,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                         <Box flex={1}>
                           <Box display="flex" alignItems="center" gap={1} mb={0.5}>
                             <Typography variant="body2" fontWeight="medium">
-                              IF transaction contains "<strong>{rule.name_pattern}</strong>"
+                              IF transaction contains &ldquo;<strong>{rule.name_pattern}</strong>&rdquo;
                             </Typography>
                             <Chip
                               label={`${transactionCount} txn${transactionCount !== 1 ? 's' : ''}`}

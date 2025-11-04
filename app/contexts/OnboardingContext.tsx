@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { apiClient } from '@/lib/api-client';
 
 interface OnboardingStatus {
   isComplete: boolean;
@@ -38,6 +39,56 @@ interface OnboardingContextType {
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
 
+const createDefaultStatus = (): OnboardingStatus => ({
+  isComplete: false,
+  completedSteps: {
+    profile: false,
+    bankAccount: false,
+    creditCard: false,
+    firstScrape: false,
+    explored: false,
+  },
+  stats: {
+    accountCount: 0,
+    bankAccountCount: 0,
+    creditCardCount: 0,
+    transactionCount: 0,
+    lastScrapeDate: null,
+    hasProfile: false,
+  },
+  suggestedAction: 'profile',
+});
+
+const normalizeStatus = (raw: any): OnboardingStatus => {
+  if (raw && typeof raw === 'object' && raw.completedSteps) {
+    return {
+      isComplete: Boolean(raw.isComplete),
+      completedSteps: {
+        profile: Boolean(raw.completedSteps.profile),
+        bankAccount: Boolean(raw.completedSteps.bankAccount),
+        creditCard: Boolean(raw.completedSteps.creditCard),
+        firstScrape: Boolean(raw.completedSteps.firstScrape),
+        explored: Boolean(raw.completedSteps.explored),
+      },
+      stats: {
+        accountCount: Number(raw.stats?.accountCount ?? 0),
+        bankAccountCount: Number(raw.stats?.bankAccountCount ?? 0),
+        creditCardCount: Number(raw.stats?.creditCardCount ?? 0),
+        transactionCount: Number(raw.stats?.transactionCount ?? 0),
+        lastScrapeDate: raw.stats?.lastScrapeDate ?? null,
+        hasProfile: Boolean(raw.stats?.hasProfile),
+      },
+      suggestedAction: raw.suggestedAction ?? 'profile',
+    };
+  }
+
+  if (raw && typeof raw === 'object' && raw.data) {
+    return normalizeStatus(raw.data);
+  }
+
+  return createDefaultStatus();
+};
+
 export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,13 +99,13 @@ export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/onboarding/status');
+      const response = await apiClient.get('/api/onboarding/status');
       if (!response.ok) {
         throw new Error('Failed to fetch onboarding status');
       }
 
-      const data = await response.json();
-      setStatus(data);
+      const data = response.data as any;
+      setStatus(normalizeStatus(data));
     } catch (err) {
       console.error('Error fetching onboarding status:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -65,11 +116,8 @@ export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const dismissOnboarding = useCallback(async () => {
     try {
-      const response = await fetch('/api/onboarding/dismiss', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      const response = await apiClient.post('/api/onboarding/dismiss', {
+        payload: {},
       });
 
       if (!response.ok) {

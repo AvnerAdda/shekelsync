@@ -1,11 +1,27 @@
-import { subMonths } from 'date-fns';
-import { BANK_CATEGORY_NAME } from '@/lib/category-constants.js';
+const { BANK_CATEGORY_NAME } = require('../category-constants.js');
+
+function daysInMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function subtractMonths(date, amount) {
+  const original = new Date(date.getTime());
+  const result = new Date(date.getTime());
+
+  const targetMonth = result.getMonth() - amount;
+  result.setDate(1);
+  result.setMonth(targetMonth);
+
+  const day = Math.min(original.getDate(), daysInMonth(result.getFullYear(), result.getMonth()));
+  result.setDate(day);
+  return result;
+}
 
 /**
  * Normalises start/end date range based on query params.
  * Falls back to last `months` months when explicit dates are not provided.
  */
-export function resolveDateRange({ startDate, endDate, months = 3 }) {
+function resolveDateRange({ startDate, endDate, months = 3 }) {
   let start;
   let end;
 
@@ -14,7 +30,7 @@ export function resolveDateRange({ startDate, endDate, months = 3 }) {
     end = new Date(endDate);
   } else {
     end = new Date();
-    start = subMonths(end, parseInt(months, 10));
+    start = subtractMonths(end, parseInt(months, 10));
   }
 
   return { start, end };
@@ -23,7 +39,7 @@ export function resolveDateRange({ startDate, endDate, months = 3 }) {
 /**
  * Builds price filter and amount expression based on transaction type.
  */
-export function buildTypeFilters(type = 'expense') {
+function buildTypeFilters(type = 'expense') {
   const bankExclusion = `
     category_definition_id NOT IN (
       SELECT id FROM category_definitions WHERE name = '${BANK_CATEGORY_NAME}'
@@ -54,7 +70,7 @@ export function buildTypeFilters(type = 'expense') {
 /**
  * Standardizes API response format.
  */
-export function standardizeResponse(data, metadata = {}) {
+function standardizeResponse(data, metadata = {}) {
   return {
     success: true,
     data,
@@ -68,7 +84,7 @@ export function standardizeResponse(data, metadata = {}) {
 /**
  * Standardizes error response format.
  */
-export function standardizeError(message, code = 'INTERNAL_ERROR', details = {}) {
+function standardizeError(message, code = 'INTERNAL_ERROR', details = {}) {
   return {
     success: false,
     error: {
@@ -79,3 +95,11 @@ export function standardizeError(message, code = 'INTERNAL_ERROR', details = {})
     },
   };
 }
+
+module.exports = {
+  resolveDateRange,
+  buildTypeFilters,
+  standardizeResponse,
+  standardizeError,
+};
+module.exports.default = module.exports;

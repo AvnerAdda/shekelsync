@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Drawer,
   List,
@@ -41,6 +41,8 @@ import CategoryHierarchyModal from './CategoryHierarchyModal';
 import { useNotification } from './NotificationContext';
 import { useOnboarding } from '../contexts/OnboardingContext';
 import { STALE_SYNC_THRESHOLD_MS } from '../utils/constants';
+import { apiClient } from '@/lib/api-client';
+import { useScrapeProgress } from '@/hooks/useScrapeProgress';
 
 const DRAWER_WIDTH = 260;
 const DRAWER_WIDTH_COLLAPSED = 65;
@@ -72,6 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const { getPageAccessStatus } = useOnboarding();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { latestEvent: scrapeEvent } = useScrapeProgress();
 
   const menuItems = [
     { id: 'home', label: 'Home', icon: <HomeIcon /> },
@@ -80,6 +83,155 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     { id: 'budgets', label: 'Budgets', icon: <BudgetIcon /> },
     { id: 'settings', label: 'Settings', icon: <SettingsIcon /> },
   ];
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const accountsRes = await apiClient.get('/api/credentials');
+      const accountsData = accountsRes.ok ? (accountsRes.data as any) : [];
+      const accounts = Array.isArray(accountsData) ? accountsData : accountsData?.items ?? [];
+
+      const scrapeRes = await apiClient.get('/api/scrape_events?limit=1');
+      const scrapeData = scrapeRes.ok ? (scrapeRes.data as any) : [];
+      const scrapeEvents = Array.isArray(scrapeData) ? scrapeData : [];
+
+      setStats(prev => ({
+        ...prev,
+        totalAccounts: accounts.length || 0,
+        lastSync: scrapeEvents[0]?.created_at ? new Date(scrapeEvents[0].created_at) : null,
+      }));
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    }
+  }, []);
+
+  const checkDBStatus = useCallback(async () => {
+    try {
+      const response = await apiClient.get('/api/ping');
+      setStats(prev => ({
+        ...prev,
+        dbStatus: response.ok ? 'connected' : 'disconnected',
+      }));
+    } catch (error) {
+      setStats(prev => ({ ...prev, dbStatus: 'disconnected' }));
+    }
+  }, []);
+
+  const fetchAccountStatus = useCallback(async () => {
+    try {
+      const credsResponse = await apiClient.get('/api/credentials');
+      const credentialsData = credsResponse.ok ? (credsResponse.data as any) : [];
+      const credentials = Array.isArray(credentialsData) ? credentialsData : credentialsData?.items ?? [];
+
+      // Import vendor constants
+      const BANK_VENDORS = new Set(['hapoalim', 'leumi', 'mizrahi', 'otsarHahayal', 'beinleumi', 'massad', 'yahav', 'union', 'discount', 'mercantile']);
+      const CREDIT_CARD_VENDORS = new Set(['visaCal', 'max', 'isracard', 'amex']);
+
+      const hasBank = credentials.some((cred: any) => BANK_VENDORS.has(cred.vendor));
+      const hasCredit = credentials.some((cred: any) => CREDIT_CARD_VENDORS.has(cred.vendor));
+
+      // Fetch investment accounts for pension check
+      const investResponse = await apiClient.get('/api/investments/accounts');
+      const investData = investResponse.ok ? (investResponse.data as any) : { accounts: [] };
+      const investAccounts = Array.isArray(investData?.accounts) ? investData.accounts : [];
+
+      const PENSION_TYPES = new Set(['pension', 'provident', 'study_fund']);
+      const hasPension = investAccounts.some((acc: any) => PENSION_TYPES.has(acc.account_type));
+
+      setAccountAlerts({
+        noBank: !hasBank,
+        noCredit: !hasCredit,
+        noPension: !hasPension
+      });
+
+      console.log('[Sidebar] Account alerts:', { noBank: !hasBank, noCredit: !hasCredit, noPension: !hasPension });
+    } catch (error) {
+      console.error('Error fetching account status:', error);
+    }
+  }, []);
+
+  const fetchUncategorizedCount = useCallback(async () => {
+    try {
+      const response = await apiClient.get('/api/categories/hierarchy');
+      if (response.ok) {
+        const data = response.data as any;
+        const totalUncategorized = data.uncategorized?.totalCount || 0;
+        setUncategorizedCount(totalUncategorized);
+        console.log('[Sidebar] Uncategorized count:', totalUncategorized);
+      }
+    } catch (error) {
+      console.error('Error fetching uncategorized count:', error);
+    }
+  }, []);
+
+  const handleScrapeComplete = useCallback(() => {
+    fetchStats();
+    fetchAccountStatus();
+    fetchUncategorizedCount();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('dataRefresh'));
+    }
+    onDataRefresh?.();
+  }, [fetchStats, fetchAccountStatus, fetchUncategorizedCount, onDataRefresh]);
+
+  useEffect(() => {
+    if (!scrapeEvent || !scrapeEvent.status) {
+      return;
+    }
+
+    if (scrapeEvent.status === 'starting' || scrapeEvent.status === 'in_progress') {
+      setIsBulkSyncing(true);
+      return;
+    }
+
+    if (scrapeEvent.status === 'completed') {
+      setIsBulkSyncing(false);
+      handleScrapeComplete();
+      return;
+    }
+
+    if (scrapeEvent.status === 'failed') {
+      setIsBulkSyncing(false);
+    }
+  }, [scrapeEvent, handleScrapeComplete]);
+
+  const handleBulkRefresh = async () => {
+    setIsBulkSyncing(true);
+    const hasScrapeBridge =
+      typeof window !== 'undefined' &&
+      Boolean(window.electronAPI?.events?.onScrapeProgress);
+    try {
+      const response = await apiClient.post('/api/scrape/bulk', {});
+      if (!response.ok) {
+        throw new Error(response.statusText || 'Bulk sync failed');
+      }
+      const result = (response.data as any) ?? {};
+      
+      if (result.success) {
+        const message = result.totalProcessed === 0 
+          ? 'All accounts are up to date'
+          : `Synced ${result.successCount}/${result.totalProcessed} accounts (${result.totalTransactions || 0} transactions)`;
+        
+        showNotification(
+          message,
+          result.successCount === result.totalProcessed ? 'success' : 'warning'
+        );
+
+        if (!hasScrapeBridge) {
+          handleScrapeComplete();
+        }
+      } else {
+        showNotification(result.message || 'Bulk sync failed', 'error');
+      }
+    } catch (error) {
+      console.error('Bulk sync error:', error);
+      showNotification('Bulk sync failed', 'error');
+      setIsBulkSyncing(false);
+    } finally {
+      if (!hasScrapeBridge) {
+        setIsBulkSyncing(false);
+      }
+    }
+  };
 
   useEffect(() => {
     fetchStats();
@@ -121,128 +273,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       globalThis.removeEventListener('openScrapeModal', handleOpenScrape);
       globalThis.removeEventListener('dataRefresh', handleDataRefresh);
     };
-  }, [onPageChange]);
-
-  const fetchStats = async () => {
-    try {
-      // Fetch total accounts
-      const accountsRes = await fetch('/api/credentials');
-      const accounts = await accountsRes.json();
-
-      // Fetch last scrape event
-      const scrapeRes = await fetch('/api/scrape_events?limit=1');
-      const scrapeEvents = await scrapeRes.json();
-
-      setStats(prev => ({
-        ...prev,
-        totalAccounts: accounts.length || 0,
-        lastSync: scrapeEvents[0]?.created_at ? new Date(scrapeEvents[0].created_at) : null,
-      }));
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
-  };
-
-  const checkDBStatus = async () => {
-    try {
-      const response = await fetch('/api/ping');
-      setStats(prev => ({
-        ...prev,
-        dbStatus: response.ok ? 'connected' : 'disconnected',
-      }));
-    } catch (error) {
-      setStats(prev => ({ ...prev, dbStatus: 'disconnected' }));
-    }
-  };
-
-  const fetchAccountStatus = async () => {
-    try {
-      // Fetch vendor credentials
-      const credsResponse = await fetch('/api/credentials');
-      const credentials = credsResponse.ok ? await credsResponse.json() : [];
-
-      // Import vendor constants
-      const BANK_VENDORS = new Set(['hapoalim', 'leumi', 'mizrahi', 'otsarHahayal', 'beinleumi', 'massad', 'yahav', 'union', 'discount', 'mercantile']);
-      const CREDIT_CARD_VENDORS = new Set(['visaCal', 'max', 'isracard', 'amex']);
-
-      const hasBank = credentials.some((cred: any) => BANK_VENDORS.has(cred.vendor));
-      const hasCredit = credentials.some((cred: any) => CREDIT_CARD_VENDORS.has(cred.vendor));
-
-      // Fetch investment accounts for pension check
-      const investResponse = await fetch('/api/investments/accounts');
-      const investData = investResponse.ok ? await investResponse.json() : { accounts: [] };
-      const investAccounts = investData.accounts || [];
-
-      const PENSION_TYPES = new Set(['pension', 'provident', 'study_fund']);
-      const hasPension = investAccounts.some((acc: any) => PENSION_TYPES.has(acc.account_type));
-
-      setAccountAlerts({
-        noBank: !hasBank,
-        noCredit: !hasCredit,
-        noPension: !hasPension
-      });
-
-      console.log('[Sidebar] Account alerts:', { noBank: !hasBank, noCredit: !hasCredit, noPension: !hasPension });
-    } catch (error) {
-      console.error('Error fetching account status:', error);
-    }
-  };
-
-  const fetchUncategorizedCount = async () => {
-    try {
-      const response = await fetch('/api/categories/hierarchy');
-      if (response.ok) {
-        const data = await response.json();
-        const totalUncategorized = data.uncategorized?.totalCount || 0;
-        setUncategorizedCount(totalUncategorized);
-        console.log('[Sidebar] Uncategorized count:', totalUncategorized);
-      }
-    } catch (error) {
-      console.error('Error fetching uncategorized count:', error);
-    }
-  };
-
-  const handleScrapeComplete = () => {
-    fetchStats();
-    if (onDataRefresh) {
-      onDataRefresh();
-    }
-  };
-
-  const handleBulkRefresh = async () => {
-    setIsBulkSyncing(true);
-    try {
-      const response = await fetch('/api/scrape/bulk', { method: 'POST' });
-      const result = await response.json();
-      
-      if (result.success) {
-        const message = result.totalProcessed === 0 
-          ? 'All accounts are up to date'
-          : `Synced ${result.successCount}/${result.totalProcessed} accounts (${result.totalTransactions || 0} transactions)`;
-        
-        showNotification(
-          message,
-          result.successCount === result.totalProcessed ? 'success' : 'warning'
-        );
-        
-        fetchStats(); // Refresh stats
-        fetchAccountStatus(); // Refresh account status
-        fetchUncategorizedCount(); // Refresh uncategorized count
-        window.dispatchEvent(new CustomEvent('dataRefresh'));
-        
-        if (onDataRefresh) {
-          onDataRefresh();
-        }
-      } else {
-        showNotification(result.message || 'Bulk sync failed', 'error');
-      }
-    } catch (error) {
-      console.error('Bulk sync error:', error);
-      showNotification('Bulk sync failed', 'error');
-    } finally {
-      setIsBulkSyncing(false);
-    }
-  };
+  }, [fetchStats, checkDBStatus, fetchAccountStatus, fetchUncategorizedCount, onPageChange]);
 
   const handleSyncIconClick = () => {
     const isSyncStale = stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS;
@@ -308,11 +339,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             minHeight: 64,
           }}
         >
-          {open && (
-            <Box sx={{ fontWeight: 'bold', fontSize: '1.25rem' }}>
-              ShekelSync
-            </Box>
-          )}
           <IconButton onClick={handleDrawerToggle}>
             {open ? <ChevronLeftIcon /> : <MenuIcon />}
           </IconButton>

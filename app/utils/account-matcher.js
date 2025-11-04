@@ -3,7 +3,7 @@
  * Handles Hebrew, English, transliterations, and fuzzy matching
  */
 
-import { getPatternsForType, getKeywordsForType, getAllPatterns } from '../config/investment-patterns';
+import { getPatternsForType, getKeywordsForType, getAllPatterns } from '../config/investment-patterns.js';
 
 /**
  * Normalize text for comparison
