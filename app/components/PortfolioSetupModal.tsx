@@ -37,6 +37,7 @@ import {
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import { matchAccount, calculateSimilarity } from '../utils/account-matcher';
+import { apiClient } from '@/lib/api-client';
 
 interface PortfolioSetupModalProps {
   open: boolean;
@@ -140,10 +141,9 @@ const PortfolioSetupModal: React.FC<PortfolioSetupModalProps> = ({ open, onClose
 
   const loadExistingInvestments = async () => {
     try {
-      const response = await fetch('/api/investments/check-existing');
+      const response = await apiClient.get('/api/investments/check-existing');
       if (response.ok) {
-        const data = await response.json();
-        setExistingInvestments(data);
+        setExistingInvestments(response.data);
       }
     } catch (err) {
       console.error('Error loading existing investments:', err);
@@ -222,10 +222,10 @@ const PortfolioSetupModal: React.FC<PortfolioSetupModalProps> = ({ open, onClose
 
   const loadExistingAccounts = async () => {
     try {
-      const response = await fetch('/api/investments/accounts');
+      const response = await apiClient.get('/api/investments/accounts');
       if (response.ok) {
-        const data = await response.json();
-        if (data.accounts && data.accounts.length > 0) {
+        const data = response.data as any;
+        if (Array.isArray(data?.accounts) && data.accounts.length > 0) {
           setAccounts(data.accounts);
         }
       }
@@ -239,10 +239,10 @@ const PortfolioSetupModal: React.FC<PortfolioSetupModalProps> = ({ open, onClose
     setCostBasisSuggestion(null);
     
     try {
-      const response = await fetch(`/api/investments/suggest-cost-basis?account_id=${accountId}`);
+      const response = await apiClient.get(`/api/investments/suggest-cost-basis?account_id=${accountId}`);
       if (response.ok) {
-        const data = await response.json();
-        if (data.suggestion.has_new_transactions) {
+        const data = response.data as any;
+        if (data?.suggestion?.has_new_transactions) {
           setCostBasisSuggestion(data);
         }
       }
@@ -359,48 +359,32 @@ const PortfolioSetupModal: React.FC<PortfolioSetupModalProps> = ({ open, onClose
       for (const account of accounts) {
         if (account.id) {
           // Update existing account
-          const response = await fetch('/api/investments/accounts', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(account),
-          });
-          if (!response.ok) throw new Error('Failed to update account');
-          const data = await response.json();
-          savedAccounts.push(data.account);
+          const response = await apiClient.put('/api/investments/accounts', account);
+          if (!response.ok) throw new Error(response.statusText || 'Failed to update account');
+          const data = response.data as any;
+          savedAccounts.push(data?.account ?? data);
         } else {
           // Create new account
-          const response = await fetch('/api/investments/accounts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(account),
-          });
-          if (!response.ok) throw new Error('Failed to create account');
-          const data = await response.json();
-          savedAccounts.push(data.account);
+          const response = await apiClient.post('/api/investments/accounts', account);
+          if (!response.ok) throw new Error(response.statusText || 'Failed to create account');
+          const data = response.data as any;
+          savedAccounts.push(data?.account ?? data);
         }
       }
 
       // Save holdings (all entries from the list)
       for (const holding of holdings) {
-        const response = await fetch('/api/investments/holdings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...holding,
-            save_history: true,
-          }),
+        const response = await apiClient.post('/api/investments/holdings', {
+          ...holding,
+          save_history: true,
         });
-        if (!response.ok) throw new Error('Failed to save holding');
+        if (!response.ok) throw new Error(response.statusText || 'Failed to save holding');
       }
 
       // Save individual assets
       for (const asset of assets) {
-        const response = await fetch('/api/investments/assets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(asset),
-        });
-        if (!response.ok) throw new Error('Failed to save asset');
+        const response = await apiClient.post('/api/investments/assets', asset);
+        if (!response.ok) throw new Error(response.statusText || 'Failed to save asset');
       }
 
       onComplete();
@@ -1070,7 +1054,7 @@ const PortfolioSetupModal: React.FC<PortfolioSetupModalProps> = ({ open, onClose
             )}
 
             <Alert severity="info" sx={{ mt: 2 }}>
-              Click "Save & Complete" to save your portfolio setup.
+              Click &ldquo;Save &amp; Complete&rdquo; to save your portfolio setup.
               You can update values anytime from the Investments page.
             </Alert>
           </Box>

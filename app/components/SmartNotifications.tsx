@@ -36,6 +36,7 @@ import {
 import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import { useNotification } from './NotificationContext';
+import { apiClient } from '@/lib/api-client';
 
 interface Notification {
   id: string;
@@ -82,12 +83,12 @@ const SmartNotifications: React.FC = () => {
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/notifications?limit=20');
-      const data = await response.json();
+      const response = await apiClient.get('/api/notifications?limit=20');
+      const data = response.data as any;
 
-      if (data.success) {
-        setNotifications(data.data.notifications);
-        setSummary(data.data.summary);
+      if (response.ok && data?.success) {
+        setNotifications(Array.isArray(data.data?.notifications) ? data.data.notifications : []);
+        setSummary(data.data?.summary ?? null);
         setLastFetch(new Date());
       }
     } catch (error) {
@@ -162,10 +163,10 @@ const SmartNotifications: React.FC = () => {
         // Trigger bulk account refresh
         setIsBulkSyncing(true);
         try {
-          const response = await fetch('/api/scrape/bulk', { method: 'POST' });
-          const result = await response.json();
+          const response = await apiClient.post('/api/scrape/bulk', { payload: {} });
+          const result = response.data as any;
           
-          if (result.success) {
+          if (response.ok && result.success) {
             const message = result.totalProcessed === 0 
               ? 'All accounts are up to date'
               : `Synced ${result.successCount}/${result.totalProcessed} accounts (${result.totalTransactions || 0} transactions)`;

@@ -1,11 +1,17 @@
 {
   "scripts": {
     "init:sqlite": "node scripts/init_sqlite_db.js",
-    "migrate:schema-v2": "node scripts/migrate_schema_v2.js"
+    "migrate:schema-v2": "node scripts/migrate_schema_v2.js",
+    "dev:electron": "npm --prefix app run electron-dev",
+    "test": "ALLOW_DEV_NO_ENCRYPTION=true npm --prefix app run test:coverage && npm --prefix renderer run test:e2e",
+    "icons:icns": "node scripts/generate-icns.js"
   },
   "dependencies": {
     "electron-is-dev": "^3.0.1",
     "electron-reload": "^2.0.0-alpha.1",
     "http-proxy-middleware": "^3.0.5"
+  },
+  "devDependencies": {
+    "electron-icon-builder": "^2.0.1"
   }
 }

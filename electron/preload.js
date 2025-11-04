@@ -1,5 +1,55 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+const authBridge = Object.freeze({
+  getSession: () => ipcRenderer.invoke('auth:getSession'),
+  setSession: (session) => {
+    if (session && typeof session !== 'object') {
+      throw new Error('Session payload must be an object or null');
+    }
+    return ipcRenderer.invoke('auth:setSession', session);
+  },
+  clearSession: () => ipcRenderer.invoke('auth:clearSession')
+});
+
+const eventsBridge = Object.freeze({
+  onScrapeProgress: (callback) => {
+    const wrappedCallback = (event, ...args) => callback(...args);
+    ipcRenderer.on('scrape:progress', wrappedCallback);
+
+    return () => ipcRenderer.removeListener('scrape:progress', wrappedCallback);
+  },
+  onScrapeComplete: (callback) => {
+    const wrappedCallback = (event, ...args) => callback(...args);
+    ipcRenderer.on('scrape:complete', wrappedCallback);
+
+    return () => ipcRenderer.removeListener('scrape:complete', wrappedCallback);
+  },
+  onScrapeError: (callback) => {
+    const wrappedCallback = (event, ...args) => callback(...args);
+    ipcRenderer.on('scrape:error', wrappedCallback);
+
+    return () => ipcRenderer.removeListener('scrape:error', wrappedCallback);
+  },
+  onDataRefresh: (callback) => {
+    const wrappedCallback = (event, ...args) => callback(...args);
+    ipcRenderer.on('data:refresh', wrappedCallback);
+
+    return () => ipcRenderer.removeListener('data:refresh', wrappedCallback);
+  },
+  onNotification: (callback) => {
+    const wrappedCallback = (event, ...args) => callback(...args);
+    ipcRenderer.on('notification:show', wrappedCallback);
+
+    return () => ipcRenderer.removeListener('notification:show', wrappedCallback);
+  },
+  onAuthSessionChanged: (callback) => {
+    const wrappedCallback = (event, ...args) => callback(...args);
+    ipcRenderer.on('auth:session-changed', wrappedCallback);
+
+    return () => ipcRenderer.removeListener('auth:session-changed', wrappedCallback);
+  }
+});
+
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -64,8 +114,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // File system operations
   file: {
     showSaveDialog: (options) => ipcRenderer.invoke('file:showSaveDialog', options),
-    showOpenDialog: (options) => ipcRenderer.invoke('file:showOpenDialog', options)
+    showOpenDialog: (options) => ipcRenderer.invoke('file:showOpenDialog', options),
+    writeFile: (filePath, data, options) => ipcRenderer.invoke('file:write', filePath, data, options)
   },
+
+  // Auth/session persistence
+  auth: authBridge,
 
   // App information
   app: {
@@ -75,46 +129,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // Event listeners for real-time updates
-  events: {
-    // Bank scraping progress
-    onScrapeProgress: (callback) => {
-      const wrappedCallback = (event, ...args) => callback(...args);
-      ipcRenderer.on('scrape:progress', wrappedCallback);
-
-      // Return cleanup function
-      return () => ipcRenderer.removeListener('scrape:progress', wrappedCallback);
-    },
-
-    onScrapeComplete: (callback) => {
-      const wrappedCallback = (event, ...args) => callback(...args);
-      ipcRenderer.on('scrape:complete', wrappedCallback);
-
-      return () => ipcRenderer.removeListener('scrape:complete', wrappedCallback);
-    },
-
-    onScrapeError: (callback) => {
-      const wrappedCallback = (event, ...args) => callback(...args);
-      ipcRenderer.on('scrape:error', wrappedCallback);
-
-      return () => ipcRenderer.removeListener('scrape:error', wrappedCallback);
-    },
-
-    // General app events
-    onDataRefresh: (callback) => {
-      const wrappedCallback = (event, ...args) => callback(...args);
-      ipcRenderer.on('data:refresh', wrappedCallback);
-
-      return () => ipcRenderer.removeListener('data:refresh', wrappedCallback);
-    },
-
-    // Notification system
-    onNotification: (callback) => {
-      const wrappedCallback = (event, ...args) => callback(...args);
-      ipcRenderer.on('notification:show', wrappedCallback);
-
-      return () => ipcRenderer.removeListener('notification:show', wrappedCallback);
-    }
-  },
+  events: eventsBridge,
 
   // Platform detection
   platform: {

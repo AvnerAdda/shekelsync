@@ -19,6 +19,7 @@ import {
   SmartToy as BotIcon,
   Person as PersonIcon,
 } from '@mui/icons-material';
+import { apiClient } from '@/lib/api-client';
 
 interface Message {
   id: string;
@@ -64,17 +65,16 @@ const FinancialChatbot: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: inputValue, conversationHistory: messages }),
+      const response = await apiClient.post('/api/chat', {
+        message: inputValue,
+        conversationHistory: messages,
       });
 
       if (!response.ok) {
         throw new Error('Failed to get response');
       }
 
-      const data = await response.json();
+      const data = response.data as any;
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),

@@ -37,6 +37,7 @@ import {
   Star as StarIcon,
   AttachMoney as MoneyIcon
 } from '@mui/icons-material';
+import { apiClient } from '@/lib/api-client';
 
 interface Outlier {
   date: string;
@@ -109,15 +110,14 @@ const CategoryOpportunitiesPanel: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('/api/analytics/category-opportunities?months=6&minTransactions=3');
-      
+      const response = await apiClient.get('/api/analytics/category-opportunities?months=6&minTransactions=3');
       if (!response.ok) {
-        throw new Error('Failed to fetch opportunities');
+        throw new Error(response.statusText || 'Failed to fetch opportunities');
       }
 
-      const data = await response.json();
-      setOpportunities(data.opportunities || []);
-      setSummary(data.summary || null);
+      const data = response.data as any;
+      setOpportunities(Array.isArray(data?.opportunities) ? data.opportunities : []);
+      setSummary(data?.summary || null);
     } catch (err) {
       console.error('Error fetching opportunities:', err);
       setError(err instanceof Error ? err.message : 'Failed to load opportunities');

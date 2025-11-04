@@ -7,8 +7,10 @@ export const CATEGORY_TYPES = {
   INVESTMENT: 'investment',
 };
 
-export default {
+export const CATEGORY_CONSTANTS = {
   BANK_CATEGORY_NAME,
   INCOME_ROOT_NAME,
   CATEGORY_TYPES,
 };
+
+export default CATEGORY_CONSTANTS;

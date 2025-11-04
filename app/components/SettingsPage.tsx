@@ -31,6 +31,7 @@ import {
   Cake as AgeIcon,
   AttachMoney as MoneyIcon,
   VisibilityOff as MaskIcon,
+  FormatSize as TextSizeIcon,
 } from '@mui/icons-material';
 import { useThemeMode } from '../contexts/ThemeContext';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
@@ -38,7 +39,7 @@ import DataExportPanel from './DataExportPanel';
 import EnhancedProfileSection from './EnhancedProfileSection';
 
 const SettingsPage: React.FC = () => {
-  const { mode, setMode } = useThemeMode();
+  const { mode, setMode, fontSize, setFontSize } = useThemeMode();
   const theme = useTheme();
   const { maskAmounts, setMaskAmounts } = useFinancePrivacy();
 
@@ -59,7 +60,7 @@ const SettingsPage: React.FC = () => {
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Choose your preferred theme. System will automatically match your device's theme.
+          Choose your preferred theme. System will automatically match your device&apos;s theme.
         </Typography>
 
         <ToggleButtonGroup
@@ -90,6 +91,46 @@ const SettingsPage: React.FC = () => {
         <Alert severity="info">
           Current theme: <strong>{theme.palette.mode}</strong>
           {mode === 'system' && ' (following system preference)'}
+        </Alert>
+
+        <Divider sx={{ my: 3 }} />
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <TextSizeIcon color="primary" />
+          <Typography variant="h6">Text Size</Typography>
+        </Box>
+
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Adjust the text size throughout the application for better readability.
+        </Typography>
+
+        <ToggleButtonGroup
+          value={fontSize}
+          exclusive
+          onChange={(e, newSize) => {
+            if (newSize !== null) {
+              setFontSize(newSize);
+            }
+          }}
+          fullWidth
+          sx={{ mb: 2 }}
+        >
+          <ToggleButton value="small">
+            Small
+          </ToggleButton>
+          <ToggleButton value="medium">
+            Medium
+          </ToggleButton>
+          <ToggleButton value="large">
+            Large
+          </ToggleButton>
+        </ToggleButtonGroup>
+
+        <Alert severity="info">
+          Current text size: <strong>{fontSize.charAt(0).toUpperCase() + fontSize.slice(1)}</strong>
+          {fontSize === 'small' && ' (90% of default)'}
+          {fontSize === 'medium' && ' (100% - default)'}
+          {fontSize === 'large' && ' (110% of default)'}
         </Alert>
       </Paper>
 

@@ -97,8 +97,15 @@ class ConfigManager {
 
   async loadConfig() {
     try {
+      console.log('Loading config from:', this.configPath);
       if (!fs.existsSync(this.configPath)) {
         console.log('No config file found, using environment variables');
+        return this.getDefaultConfig();
+      }
+
+      const stat = fs.statSync(this.configPath);
+      if (stat.isDirectory()) {
+        console.warn(`Config path ${this.configPath} is a directory. Ignoring and using defaults.`);
         return this.getDefaultConfig();
       }
 
@@ -116,13 +123,14 @@ class ConfigManager {
   }
 
   getDefaultConfig() {
+    // SQLite-only configuration for Electron desktop app
+    const defaultSqlitePath =
+      process.env.SQLITE_DB_PATH || path.join(app.getPath('userData'), 'clarify.sqlite');
+
     return {
       database: {
-        user: process.env.CLARIFY_DB_USER || 'clarify',
-        host: process.env.CLARIFY_DB_HOST || 'localhost',
-        database: process.env.CLARIFY_DB_NAME || 'my_clarify',
-        password: process.env.CLARIFY_DB_PASSWORD || 'clarify_pass',
-        port: parseInt(process.env.CLARIFY_DB_PORT) || 5432
+        mode: 'sqlite',
+        path: defaultSqlitePath
       },
       app: {
         name: 'ShekelSync',

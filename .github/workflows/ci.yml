@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install app dependencies
+        run: npm --prefix app install
+
+      - name: Install renderer dependencies
+        run: npm --prefix renderer install
+
+      - name: Install Playwright browsers
+        run: npx --yes playwright install --with-deps
+
+      - name: Run test suite
+        run: npm run test
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: app/coverage
+          if-no-files-found: ignore

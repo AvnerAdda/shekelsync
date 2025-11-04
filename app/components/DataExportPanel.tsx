@@ -36,6 +36,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format as formatDate, subMonths, startOfYear, startOfMonth, endOfMonth } from 'date-fns';
+import { apiClient } from '@/lib/api-client';
 
 interface ExportStatus {
   loading: boolean;
@@ -109,8 +110,8 @@ const DataExportPanel: React.FC = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/get_all_categories');
-      const data = await response.json();
+      const response = await apiClient.get('/api/get_all_categories');
+      const data = response.data as any;
       setCategories(data.map((cat: any) => ({ name: cat.category, count: cat.count })));
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -119,8 +120,8 @@ const DataExportPanel: React.FC = () => {
 
   const fetchVendors = async () => {
     try {
-      const response = await fetch('/api/analytics/unified-category?groupBy=vendor&months=12');
-      const data = await response.json();
+      const response = await apiClient.get('/api/analytics/unified-category?groupBy=vendor&months=12');
+      const data = response.data as any;
       if (data.success && data.data.breakdown) {
         setVendors(data.data.breakdown.map((vendor: any) => ({ name: vendor.vendor, count: vendor.count })));
       }
@@ -152,36 +153,55 @@ const DataExportPanel: React.FC = () => {
         params.append('vendors', selectedVendors.join(','));
       }
 
-      const response = await fetch(`/api/data/export?${params.toString()}`);
+      const response = await apiClient.get(`/api/data/export?${params.toString()}`);
 
       if (!response.ok) {
         throw new Error('Export failed');
       }
 
-      if (format === 'csv') {
-        // Handle file download for CSV
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const contentDisposition = response.headers.get('content-disposition');
-        const filename = contentDisposition?.match(/filename="(.+)"/)?.[1] || `clarify-export-${Date.now()}.csv`;
+      const now = new Date();
+      const defaultFilename =
+        format === 'csv'
+          ? `clarify-export-${Date.now()}.csv`
+          : `clarify-export-${dataType}-${formatDate(now, 'yyyy-MM-dd')}.json`;
+      const payload =
+        format === 'csv'
+          ? String(response.data ?? '')
+          : JSON.stringify(response.data, null, 2);
+      const electronFileApi =
+        typeof window !== 'undefined' ? window.electronAPI?.file : undefined;
 
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+      if (electronFileApi?.showSaveDialog && electronFileApi?.writeFile) {
+        const filters =
+          format === 'csv'
+            ? [{ name: 'CSV Files', extensions: ['csv'] }]
+            : [{ name: 'JSON Files', extensions: ['json'] }];
+
+        const saveResult = await electronFileApi.showSaveDialog({
+          defaultPath: defaultFilename,
+          filters,
+        });
+
+        if (saveResult.canceled || !saveResult.filePath) {
+          setExportStatus({ loading: false, success: false, error: null, downloadUrl: null });
+          return;
+        }
+
+        const writeResult = await electronFileApi.writeFile(saveResult.filePath, payload, {
+          encoding: 'utf8',
+        });
+
+        if (!writeResult.success) {
+          throw new Error(writeResult.error || 'Failed to save exported file');
+        }
       } else {
-        // Handle JSON download
-        const data = await response.json();
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
+        const blob = new Blob([payload], { type: mimeType });
         const url = window.URL.createObjectURL(blob);
-        const filename = `clarify-export-${dataType}-${formatDate(new Date(), 'yyyy-MM-dd')}.json`;
 
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.download = defaultFilename;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -287,13 +307,21 @@ const DataExportPanel: React.FC = () => {
                     <DatePicker
                       label="Start Date"
                       value={startDate}
-                      onChange={(newValue) => newValue && setStartDate(newValue)}
+                      onChange={(newValue: Date | null) => {
+                        if (newValue) {
+                          setStartDate(newValue);
+                        }
+                      }}
                       slotProps={{ textField: { size: 'small', fullWidth: true } }}
                     />
                     <DatePicker
                       label="End Date"
                       value={endDate}
-                      onChange={(newValue) => newValue && setEndDate(newValue)}
+                      onChange={(newValue: Date | null) => {
+                        if (newValue) {
+                          setEndDate(newValue);
+                        }
+                      }}
                       slotProps={{ textField: { size: 'small', fullWidth: true } }}
                     />
                   </Box>

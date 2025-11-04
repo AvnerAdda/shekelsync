@@ -39,50 +39,16 @@ import {
   ChildCare as ChildIcon,
   Favorite as SpouseIcon,
 } from '@mui/icons-material';
-
-interface EnhancedUserProfile {
-  id?: number;
-  username: string;
-  marital_status: string;
-  age: number | null;
-  birth_date: string | null;
-  occupation: string;
-  monthly_income: number | null;
-  family_status: string;
-  location: string;
-  industry: string;
-  children_count: number;
-  household_size: number;
-  home_ownership: string;
-  education_level: string;
-  employment_status: string;
-}
-
-interface SpouseProfile {
-  id?: number;
-  name: string;
-  birth_date: string;
-  occupation: string;
-  industry: string;
-  monthly_income: number | null;
-  employment_status: string;
-  education_level: string;
-}
-
-interface ChildProfile {
-  id?: number;
-  name: string;
-  birth_date: string;
-  gender: string;
-  education_stage: string;
-  special_needs: boolean;
-}
-
-interface ProfileData {
-  profile: EnhancedUserProfile;
-  spouse: SpouseProfile | null;
-  children: ChildProfile[];
-}
+import {
+  ChildProfile,
+  EnhancedUserProfile,
+  ProfileData,
+  SpouseProfile,
+  normalizeChildren,
+  normalizeProfile,
+  normalizeSpouse,
+} from '@/lib/profile-normalization';
+import { apiClient } from '@/lib/api-client';
 
 const EnhancedProfileSection: React.FC = () => {
   const [profileData, setProfileData] = useState<ProfileData>({
@@ -108,6 +74,8 @@ const EnhancedProfileSection: React.FC = () => {
 
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   const [childDialogOpen, setChildDialogOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<ChildProfile | null>(null);
   const [tempChild, setTempChild] = useState<ChildProfile>({
@@ -123,23 +91,37 @@ const EnhancedProfileSection: React.FC = () => {
   }, []);
 
   const fetchProfileData = async () => {
+    setIsLoading(true);
+    setLoadError('');
     try {
-      const response = await fetch('/api/profile');
-      const data = await response.json();
-
-      // Handle both old format (just profile) and new format (profile + spouse + children)
-      if (data.profile) {
-        setProfileData(data);
-      } else {
-        // Old format - convert to new format
-        setProfileData({
-          profile: data,
-          spouse: null,
-          children: []
-        });
+      const response = await apiClient.get('/api/profile');
+      if (!response.ok) {
+        if (response.status === 401) {
+          setLoadError('Session expired. Please sign in again.');
+        } else {
+          setLoadError('Failed to load profile. Please try again.');
+        }
+        return;
       }
+      const data = response.data as any;
+
+      const normalized = data.profile
+        ? {
+            profile: normalizeProfile(data.profile),
+            spouse: normalizeSpouse(data.spouse),
+            children: normalizeChildren(data.children),
+          }
+        : {
+          profile: normalizeProfile(data),
+          spouse: null,
+          children: [],
+        };
+      setProfileData(normalized);
     } catch (error) {
       console.error('Error fetching profile:', error);
+      setLoadError('Failed to load profile. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -148,18 +130,17 @@ const EnhancedProfileSection: React.FC = () => {
     setSaveSuccess(false);
 
     try {
-      const response = await fetch('/api/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profileData),
-      });
-
+      const response = await apiClient.put('/api/profile', profileData);
       if (!response.ok) {
-        throw new Error('Failed to save profile');
+        throw new Error(response.statusText || 'Failed to save profile');
       }
 
-      const updatedData = await response.json();
-      setProfileData(updatedData);
+      const updatedData = response.data as any;
+      setProfileData({
+        profile: normalizeProfile(updatedData.profile),
+        spouse: normalizeSpouse(updatedData.spouse),
+        children: normalizeChildren(updatedData.children),
+      });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
@@ -284,6 +265,14 @@ const EnhancedProfileSection: React.FC = () => {
     setProfileData(updatedData);
   };
 
+  if (isLoading && !loadError) {
+    return (
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="body1">Loading profile...</Typography>
+      </Paper>
+    );
+  }
+
   return (
     <Paper sx={{ p: 3, mb: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
@@ -300,6 +289,12 @@ const EnhancedProfileSection: React.FC = () => {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         Complete your enhanced profile for personalized insights and family financial analytics.
       </Typography>
+
+      {loadError && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {loadError}
+        </Alert>
+      )}
 
       {/* Basic Information - Always Visible */}
       <Accordion defaultExpanded>
@@ -334,8 +329,20 @@ const EnhancedProfileSection: React.FC = () => {
                 fullWidth
                 value={profileData.profile.birth_date || ''}
                 onChange={(e) => {
-                  handleProfileChange('birth_date', e.target.value);
-                  handleProfileChange('age', calculateAge(e.target.value));
+                  const newValue = e.target.value;
+                  // Use the input's native validity check instead of Date.parse
+                  // This properly handles partial input during typing
+                  if (newValue === '' || e.target.validity.valid) {
+                    // Update both birth_date and age in a SINGLE state update to prevent double renders
+                    setProfileData({
+                      ...profileData,
+                      profile: {
+                        ...profileData.profile,
+                        birth_date: newValue,
+                        age: newValue ? calculateAge(newValue) : null,
+                      }
+                    });
+                  }
                 }}
                 InputLabelProps={{ shrink: true }}
                 InputProps={{
@@ -470,8 +477,8 @@ const EnhancedProfileSection: React.FC = () => {
                   <MenuItem value="">Not specified</MenuItem>
                   <MenuItem value="high_school">High School</MenuItem>
                   <MenuItem value="vocational">Vocational Training</MenuItem>
-                  <MenuItem value="bachelor">Bachelor's Degree</MenuItem>
-                  <MenuItem value="master">Master's Degree</MenuItem>
+                  <MenuItem value="bachelor">Bachelor&apos;s Degree</MenuItem>
+                  <MenuItem value="master">Master&apos;s Degree</MenuItem>
                   <MenuItem value="phd">PhD</MenuItem>
                   <MenuItem value="other">Other</MenuItem>
                 </Select>
@@ -553,7 +560,13 @@ const EnhancedProfileSection: React.FC = () => {
                   type="date"
                   fullWidth
                   value={profileData.spouse?.birth_date || ''}
-                  onChange={(e) => handleSpouseChange('birth_date', e.target.value)}
+                  onChange={(e) => {
+                    const newValue = e.target.value;
+                    // Use native validity check for proper validation during typing
+                    if (newValue === '' || e.target.validity.valid) {
+                      handleSpouseChange('birth_date', newValue);
+                    }
+                  }}
                   InputLabelProps={{ shrink: true }}
                   helperText={profileData.spouse?.birth_date ? `Age: ${calculateAge(profileData.spouse.birth_date)}` : ''}
                 />
@@ -659,10 +672,19 @@ const EnhancedProfileSection: React.FC = () => {
                             {child.name || `Child ${index + 1}`}
                           </Typography>
                           <Box>
-                            <IconButton size="small" onClick={() => handleEditChild(child)}>
+                            <IconButton
+                              size="small"
+                              aria-label="Edit child"
+                              onClick={() => handleEditChild(child)}
+                            >
                               <EditIcon fontSize="small" />
                             </IconButton>
-                            <IconButton size="small" onClick={() => handleDeleteChild(child.id)} color="error">
+                            <IconButton
+                              size="small"
+                              aria-label="Delete child"
+                              onClick={() => handleDeleteChild(child.id)}
+                              color="error"
+                            >
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Box>
@@ -687,6 +709,7 @@ const EnhancedProfileSection: React.FC = () => {
               size="small"
               color="primary"
               onClick={handleAddChild}
+              aria-label="Add child"
               sx={{ mt: 2 }}
             >
               <AddIcon />
@@ -767,7 +790,13 @@ const EnhancedProfileSection: React.FC = () => {
                 fullWidth
                 required
                 value={tempChild.birth_date}
-                onChange={(e) => setTempChild({ ...tempChild, birth_date: e.target.value })}
+                onChange={(e) => {
+                  const newValue = e.target.value;
+                  // Use native validity check for proper validation during typing
+                  if (newValue === '' || e.target.validity.valid) {
+                    setTempChild({ ...tempChild, birth_date: newValue });
+                  }
+                }}
                 InputLabelProps={{ shrink: true }}
                 helperText={tempChild.birth_date ? `Age: ${calculateAge(tempChild.birth_date)}` : 'Required'}
               />

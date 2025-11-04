@@ -3,11 +3,14 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 
 type ThemeMode = 'light' | 'dark' | 'system';
+type FontSize = 'small' | 'medium' | 'large';
 
 interface ThemeContextType {
   mode: ThemeMode;
   setMode: (mode: ThemeMode) => void;
   actualTheme: 'light' | 'dark';
+  fontSize: FontSize;
+  setFontSize: (size: FontSize) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -25,12 +28,18 @@ export const ThemeContextProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [mode, setMode] = useState<ThemeMode>('system');
   const [actualTheme, setActualTheme] = useState<'light' | 'dark'>('light');
+  const [fontSize, setFontSizeState] = useState<FontSize>('medium');
 
   useEffect(() => {
-    // Load saved preference
-    const saved = localStorage.getItem('theme-mode') as ThemeMode;
-    if (saved) {
-      setMode(saved);
+    // Load saved preferences
+    const savedMode = localStorage.getItem('theme-mode') as ThemeMode;
+    if (savedMode) {
+      setMode(savedMode);
+    }
+
+    const savedFontSize = localStorage.getItem('font-size') as FontSize;
+    if (savedFontSize) {
+      setFontSizeState(savedFontSize);
     }
   }, []);
 
@@ -56,6 +65,14 @@ export const ThemeContextProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.setItem('theme-mode', newMode);
   };
 
+  const handleSetFontSize = (newSize: FontSize) => {
+    setFontSizeState(newSize);
+    localStorage.setItem('font-size', newSize);
+  };
+
+  // Calculate font size multiplier
+  const fontSizeMultiplier = fontSize === 'small' ? 0.9 : fontSize === 'large' ? 1.1 : 1;
+
   const theme = createTheme({
     palette: {
       mode: actualTheme,
@@ -80,6 +97,56 @@ export const ThemeContextProvider: React.FC<{ children: React.ReactNode }> = ({
         secondary: actualTheme === 'dark' ? '#a3a3a3' : '#666666',
       },
     },
+    typography: {
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+      h1: {
+        fontWeight: 800,
+        fontSize: `${3.5 * fontSizeMultiplier}rem`,
+        letterSpacing: '-0.04em',
+        lineHeight: 1.2,
+      },
+      h2: {
+        fontWeight: 700,
+        fontSize: `${2.5 * fontSizeMultiplier}rem`,
+        letterSpacing: '-0.03em',
+        lineHeight: 1.3,
+      },
+      h3: {
+        fontWeight: 700,
+        fontSize: `${2 * fontSizeMultiplier}rem`,
+        letterSpacing: '-0.02em',
+        lineHeight: 1.4,
+      },
+      h4: {
+        fontWeight: 600,
+        fontSize: `${1.5 * fontSizeMultiplier}rem`,
+        letterSpacing: '-0.01em',
+        lineHeight: 1.5,
+      },
+      h5: {
+        fontWeight: 600,
+        fontSize: `${1.25 * fontSizeMultiplier}rem`,
+        letterSpacing: '-0.01em',
+        lineHeight: 1.6,
+      },
+      h6: {
+        fontWeight: 600,
+        fontSize: `${1.125 * fontSizeMultiplier}rem`,
+        letterSpacing: '-0.005em',
+        lineHeight: 1.6,
+      },
+      body1: {
+        fontSize: `${1 * fontSizeMultiplier}rem`,
+        lineHeight: 1.7,
+        letterSpacing: '0.00938em',
+      },
+      body2: {
+        fontSize: `${0.875 * fontSizeMultiplier}rem`,
+        lineHeight: 1.6,
+        letterSpacing: '0.01071em',
+      },
+    },
+    spacing: 8,
     components: {
       MuiDrawer: {
         styleOverrides: {
@@ -93,14 +160,15 @@ export const ThemeContextProvider: React.FC<{ children: React.ReactNode }> = ({
         styleOverrides: {
           root: {
             textTransform: 'none',
-            borderRadius: '0.75rem',
+            borderRadius: '14px',
             fontWeight: 600,
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            padding: '10px 24px',
+            transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
           },
           contained: {
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.08)',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
             '&:hover': {
-              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
               transform: 'translateY(-2px)',
             },
           },
@@ -109,19 +177,39 @@ export const ThemeContextProvider: React.FC<{ children: React.ReactNode }> = ({
       MuiCard: {
         styleOverrides: {
           root: {
-            borderRadius: '1rem',
-            boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06)',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            '&:hover': {
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.08)',
-            },
+            borderRadius: '20px',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.06)',
+            transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            backdropFilter: 'blur(12px)',
+            background: actualTheme === 'dark'
+              ? 'rgba(30, 30, 30, 0.7)'
+              : 'rgba(255, 255, 255, 0.7)',
           },
         },
       },
       MuiChip: {
         styleOverrides: {
           root: {
-            borderRadius: '0.5rem',
+            borderRadius: '12px',
+            fontWeight: 500,
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          },
+        },
+      },
+      MuiPaper: {
+        styleOverrides: {
+          root: {
+            borderRadius: '20px',
+            backgroundImage: 'none',
+          },
+          elevation1: {
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
+          },
+          elevation2: {
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
+          },
+          elevation3: {
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
           },
         },
       },
@@ -129,7 +217,7 @@ export const ThemeContextProvider: React.FC<{ children: React.ReactNode }> = ({
   });
 
   return (
-    <ThemeContext.Provider value={{ mode, setMode: handleSetMode, actualTheme }}>
+    <ThemeContext.Provider value={{ mode, setMode: handleSetMode, actualTheme, fontSize, setFontSize: handleSetFontSize }}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
         {children}

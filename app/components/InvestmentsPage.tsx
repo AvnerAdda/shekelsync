@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useOnboarding } from '../contexts/OnboardingContext';
 import LockedPagePlaceholder from './EmptyState/LockedPagePlaceholder';
 import {
@@ -65,6 +65,7 @@ import {
 import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import UnifiedPortfolioModal from './UnifiedPortfolioModal';
+import { apiClient } from '@/lib/api-client';
 
 interface InvestmentData {
   summary: {
@@ -153,18 +154,8 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 const InvestmentsPage: React.FC = () => {
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
   const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
-
-  // Check if page is locked
   const accessStatus = getPageAccessStatus('investments');
-  if (accessStatus.isLocked) {
-    return (
-      <LockedPagePlaceholder
-        page="investments"
-        accessStatus={accessStatus}
-        onboardingStatus={onboardingStatus}
-      />
-    );
-  }
+  const isLocked = accessStatus.isLocked;
 
   const [data, setData] = useState<InvestmentData | null>(null);
   const [portfolioData, setPortfolioData] = useState<PortfolioSummary | null>(null);
@@ -191,43 +182,41 @@ const InvestmentsPage: React.FC = () => {
     transactions: false
   });
 
-  useEffect(() => {
-    fetchData();
-    fetchPortfolioData();
-  }, [dateRange]);
-
-  useEffect(() => {
-    if (portfolioData && portfolioData.summary.totalAccounts > 0) {
-      fetchHistoryData();
+  const fetchHistoryData = useCallback(async () => {
+    if (isLocked) {
+      return;
     }
-  }, [historyTimeRange, portfolioData]);
-
-  const fetchHistoryData = async () => {
     setHistoryLoading(true);
     try {
-      // Fetch overall aggregated history
-      const overallResponse = await fetch(`/api/investments/history?timeRange=${historyTimeRange}`);
+      const overallResponse = await apiClient.get(`/api/investments/history?timeRange=${historyTimeRange}`);
       if (overallResponse.ok) {
-        const overallResult = await overallResponse.json();
+        const overallResult = (overallResponse.data as any) || {};
         setOverallHistory(overallResult.history || []);
+      } else {
+        setOverallHistory([]);
       }
 
-      // Fetch individual account histories
       if (portfolioData?.breakdown) {
         const histories: Record<number, any[]> = {};
-        
+
         for (const group of portfolioData.breakdown) {
           for (const account of group.accounts) {
             if (account.id) {
-              const accountResponse = await fetch(`/api/investments/history?accountId=${account.id}&timeRange=${historyTimeRange}`);
-              if (accountResponse.ok) {
-                const accountResult = await accountResponse.json();
-                histories[account.id] = accountResult.history || [];
+              try {
+                const accountResponse = await apiClient.get(`/api/investments/history?accountId=${account.id}&timeRange=${historyTimeRange}`);
+                if (accountResponse.ok) {
+                  const accountResult = (accountResponse.data as any) || {};
+                  histories[account.id] = accountResult.history || [];
+                } else {
+                  histories[account.id] = [];
+                }
+              } catch (innerError) {
+                console.error(`Error fetching history for account ${account.id}:`, innerError);
               }
             }
           }
         }
-        
+
         setAccountHistories(histories);
       }
     } catch (error) {
@@ -235,7 +224,16 @@ const InvestmentsPage: React.FC = () => {
     } finally {
       setHistoryLoading(false);
     }
-  };
+  }, [historyTimeRange, isLocked, portfolioData]);
+
+  useEffect(() => {
+    if (isLocked) {
+      return;
+    }
+    if (portfolioData && portfolioData.summary.totalAccounts > 0) {
+      fetchHistoryData();
+    }
+  }, [fetchHistoryData, historyTimeRange, isLocked, portfolioData]);
 
   const toggleAccountChart = (accountId: number) => {
     setExpandedAccounts(prev => ({
@@ -244,22 +242,30 @@ const InvestmentsPage: React.FC = () => {
     }));
   };
 
-  const fetchPortfolioData = async () => {
+  const fetchPortfolioData = useCallback(async () => {
+    if (isLocked) {
+      return;
+    }
     setPortfolioLoading(true);
     try {
-      const response = await fetch('/api/investments/summary');
+      const response = await apiClient.get('/api/investments/summary');
       if (response.ok) {
-        const result = await response.json();
-        setPortfolioData(result);
+        setPortfolioData(response.data as PortfolioSummary);
+      } else {
+        throw new Error('Failed to fetch portfolio data');
       }
     } catch (error) {
       console.error('Error fetching portfolio data:', error);
+      setPortfolioData(null);
     } finally {
       setPortfolioLoading(false);
     }
-  };
+  }, [isLocked]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (isLocked) {
+      return;
+    }
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -284,15 +290,26 @@ const InvestmentsPage: React.FC = () => {
         params.append('endDate', endDate.toISOString().split('T')[0]);
       }
 
-      const response = await fetch(`/api/analytics/investments?${params}`);
-      const result = await response.json();
-      setData(result);
+      const response = await apiClient.get(`/api/analytics/investments?${params}`);
+      if (!response.ok) {
+        throw new Error(response.statusText || 'Failed to fetch investments analytics');
+      }
+      setData(response.data as InvestmentData);
     } catch (error) {
       console.error('Error fetching investment data:', error);
+      setData(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateRange, isLocked]);
+
+  useEffect(() => {
+    if (isLocked) {
+      return;
+    }
+    fetchData();
+    fetchPortfolioData();
+  }, [fetchData, fetchPortfolioData, isLocked]);
 
   const formatCurrencyValue = (value: number) =>
     formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
@@ -376,6 +393,16 @@ const InvestmentsPage: React.FC = () => {
       setRefreshing(false);
     }
   };
+
+  if (isLocked) {
+    return (
+      <LockedPagePlaceholder
+        page="investments"
+        accessStatus={accessStatus}
+        onboardingStatus={onboardingStatus}
+      />
+    );
+  }
 
   // Enhanced Skeleton Loading Component
   const InvestmentsSkeleton = () => (
@@ -563,19 +590,19 @@ const InvestmentsPage: React.FC = () => {
     return <InvestmentsSkeleton />;
   }
 
-  const pieData = data?.byCategory.map(item => ({
+  const pieData = (data?.byCategory ?? []).map(item => ({
     name: item.name_en || item.name,
     value: item.total,
   })) || [];
 
-  const barData = data?.byCategory.map(item => ({
+  const barData = (data?.byCategory ?? []).map(item => ({
     name: item.name_en || item.name,
     amount: item.total,
     count: item.count,
   })) || [];
 
   // Timeline data - already aggregated by month
-  const lineData = data?.timeline.map(item => ({
+  const lineData = (data?.timeline ?? []).map(item => ({
     month: formatMonth(item.month),
     Outflow: item.outflow,
     Inflow: item.inflow,
@@ -881,7 +908,7 @@ const InvestmentsPage: React.FC = () => {
                 )}
               </AccordionDetails>
             </Accordion>
-            {portfolioData.breakdown.map((group, index) => (
+            {(portfolioData?.breakdown ?? []).map((group, index) => (
               <Accordion key={index} sx={{ '&:before': { display: 'none' } }}>
                 <AccordionSummary 
                   expandIcon={<ExpandMoreIcon />}
@@ -932,7 +959,7 @@ const InvestmentsPage: React.FC = () => {
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 0 }}>
                   <List disablePadding>
-                    {group.accounts.map((account: any, accIndex: number) => {
+                    {(group.accounts ?? []).map((account: any, accIndex: number) => {
                       const accountHistory = accountHistories[account.id] || [];
                       const hasHistory = accountHistory.length > 0;
                       const isExpanded = expandedAccounts[account.id] || false;

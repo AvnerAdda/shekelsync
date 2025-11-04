@@ -61,12 +61,14 @@ import {
   ACCOUNT_CATEGORIES,
   INVESTMENT_ACCOUNT_TYPES
 } from '../utils/constants';
+import type { AccountCategory } from '../utils/constants';
 import { formatDate } from '../utils/date';
 import { useNotification } from './NotificationContext';
 import ModalHeader from './ModalHeader';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import { useOnboarding } from '../contexts/OnboardingContext';
 import { matchAccount, calculateSimilarity } from '../utils/account-matcher';
+import { apiClient } from '@/lib/api-client';
 
 interface Account {
   id: number;
@@ -160,7 +162,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const [activeTab, setActiveTab] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [currentAccountType, setCurrentAccountType] = useState<'banking' | 'investment'>('banking');
-  const [expandedForm, setExpandedForm] = useState<'creditCard' | 'bank' | null>('creditCard');
+  const [expandedForm, setExpandedForm] = useState<'creditCard' | 'bank' | null>(null);
   const [isPairingModalOpen, setIsPairingModalOpen] = useState(false);
   const { showNotification } = useNotification();
   const { formatCurrency } = useFinancePrivacy();
@@ -282,21 +284,21 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const fetchAccounts = async () => {
     try {
       setIsLoading(true);
-      // Fetch accounts with last update information
-      const response = await fetch('/api/accounts/last-update');
-      if (!response.ok) {
-        throw new Error('Failed to fetch accounts');
+      const accountsResponse = await apiClient.get('/api/accounts/last-update');
+      if (!accountsResponse.ok) {
+        throw new Error(accountsResponse.statusText || 'Failed to fetch accounts');
       }
-      const accountsWithUpdates = await response.json();
+      const accountsWithUpdates = Array.isArray(accountsResponse.data)
+        ? accountsResponse.data
+        : [];
 
-      // Also fetch complete account info for password and other fields
-      const credentialsResponse = await fetch('/api/credentials');
+      const credentialsResponse = await apiClient.get('/api/credentials');
       if (!credentialsResponse.ok) {
-        throw new Error('Failed to fetch credentials');
+        throw new Error(credentialsResponse.statusText || 'Failed to fetch credentials');
       }
-      const credentials = await credentialsResponse.json();
+      const credentialsData = credentialsResponse.data as any;
+      const credentials = Array.isArray(credentialsData) ? credentialsData : credentialsData?.items ?? [];
 
-      // Merge the data
       const mergedAccounts = accountsWithUpdates.map((account: any) => {
         const credential = credentials.find((c: any) => c.id === account.id);
         return {
@@ -317,10 +319,10 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
   const fetchInvestmentAccounts = async () => {
     try {
-      const response = await fetch('/api/investments/accounts');
+      const response = await apiClient.get('/api/investments/accounts');
       if (response.ok) {
-        const data = await response.json();
-        setInvestmentAccounts(data.accounts || []);
+        const data = response.data as any;
+        setInvestmentAccounts(Array.isArray(data?.accounts) ? data.accounts : []);
       }
     } catch (err) {
       console.error('Error loading investment accounts:', err);
@@ -404,16 +406,9 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
 
     try {
-      const response = await fetch('/api/credentials', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newAccount),
-      });
+      const response = await apiClient.post('/api/credentials', newAccount);
 
       if (response.ok) {
-        const addedAccountData = await response.json();
         await fetchAccounts();
 
         // Check if we should trigger auto-scrape
@@ -459,15 +454,10 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
             // Show ongoing notification
             showNotification('Syncing transactions... This may take a few minutes.', 'info');
 
-            const scrapeResponse = await fetch('/api/scrape', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(scrapeConfig)
-            });
+            const scrapeResponse = await apiClient.post('/api/scrape', scrapeConfig);
+            const scrapeResult = scrapeResponse.data as any;
 
-            const scrapeResult = await scrapeResponse.json();
-
-            if (scrapeResponse.ok && !scrapeResult.error) {
+            if (scrapeResponse.ok && !(scrapeResult && scrapeResult.error)) {
               // Calculate transaction count
               let transactionCount = 0;
               if (scrapeResult.accounts) {
@@ -531,11 +521,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
 
     try {
-      const response = await fetch('/api/investments/accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newInvestmentAccount),
-      });
+      const response = await apiClient.post('/api/investments/accounts', newInvestmentAccount);
 
       if (response.ok) {
         await fetchInvestmentAccounts();
@@ -573,9 +559,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   // Actual delete functions
   const handleDelete = async (accountID: number) => {
     try {
-      const response = await fetch(`/api/credentials/${accountID}`, {
-        method: 'DELETE',
-      });
+      const response = await apiClient.delete(`/api/credentials/${accountID}`);
       if (response.ok) {
         setAccounts(accounts.filter((account) => account.id !== accountID));
         showNotification('Banking account deleted successfully', 'success');
@@ -589,9 +573,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
   const handleDeleteInvestmentAccount = async (accountID: number) => {
     try {
-      const response = await fetch(`/api/investments/accounts?id=${accountID}`, {
-        method: 'DELETE',
-      });
+      const response = await apiClient.delete(`/api/investments/accounts?id=${accountID}`);
       if (response.ok) {
         setInvestmentAccounts(investmentAccounts.filter((account) => account.id !== accountID));
         showNotification('Investment account deleted successfully', 'success');
@@ -636,17 +618,13 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
 
     try {
-      const response = await fetch('/api/investments/holdings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          account_id: selectedInvestmentAccount.id,
-          current_value: Number(currentHolding.current_value),
-          cost_basis: currentHolding.cost_basis ? Number(currentHolding.cost_basis) : null,
-          as_of_date: currentHolding.as_of_date,
-          notes: currentHolding.notes,
-          save_history: true,
-        }),
+      const response = await apiClient.post('/api/investments/holdings', {
+        account_id: selectedInvestmentAccount.id,
+        current_value: Number(currentHolding.current_value),
+        cost_basis: currentHolding.cost_basis ? Number(currentHolding.cost_basis) : null,
+        as_of_date: currentHolding.as_of_date,
+        notes: currentHolding.notes,
+        save_history: true,
       });
 
       if (response.ok) {
@@ -668,10 +646,10 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     setCostBasisSuggestion(null);
 
     try {
-      const response = await fetch(`/api/investments/suggest-cost-basis?account_id=${accountId}`);
+      const response = await apiClient.get(`/api/investments/suggest-cost-basis?account_id=${accountId}`);
       if (response.ok) {
-        const data = await response.json();
-        if (data.suggestion.has_new_transactions) {
+        const data = response.data as any;
+        if (data?.suggestion?.has_new_transactions) {
           setCostBasisSuggestion(data);
         }
       }
@@ -694,10 +672,9 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   // Existing investments matching functionality
   const loadExistingInvestments = async () => {
     try {
-      const response = await fetch('/api/investments/check-existing');
+      const response = await apiClient.get('/api/investments/check-existing');
       if (response.ok) {
-        const data = await response.json();
-        setExistingInvestments(data);
+        setExistingInvestments(response.data as any);
       }
     } catch (err) {
       console.error('Error loading existing investments:', err);
@@ -766,17 +743,13 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
 
     try {
-      const response = await fetch('/api/investments/assets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          account_id: selectedInvestmentAccount.id,
-          asset_symbol: currentAsset.asset_symbol,
-          asset_name: currentAsset.asset_name,
-          asset_type: currentAsset.asset_type,
-          units: Number(currentAsset.units),
-          currency: currentAsset.currency,
-        }),
+      const response = await apiClient.post('/api/investments/assets', {
+        account_id: selectedInvestmentAccount.id,
+        asset_symbol: currentAsset.asset_symbol,
+        asset_name: currentAsset.asset_name,
+        asset_type: currentAsset.asset_type,
+        units: Number(currentAsset.units),
+        currency: currentAsset.currency,
       });
 
       if (response.ok) {
@@ -797,9 +770,9 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
     // Fetch the last transaction date for this vendor to set as default start date
     try {
-      const response = await fetch(`/api/accounts/last-transaction-date?vendor=${account.vendor}`);
+      const response = await apiClient.get(`/api/accounts/last-transaction-date?vendor=${account.vendor}`);
       if (response.ok) {
-        const data = await response.json();
+        const data = response.data as any;
         console.log(`Auto-setting start date for ${account.vendor}:`, data.message);
 
         // Update the account with the suggested start date
@@ -831,17 +804,13 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
 
     try {
-      const response = await fetch('/api/investments/holdings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          account_id: valueUpdate.accountId,
-          current_value: parseFloat(valueUpdate.currentValue),
-          cost_basis: valueUpdate.costBasis ? parseFloat(valueUpdate.costBasis) : null,
-          as_of_date: valueUpdate.asOfDate,
-          currency: valueUpdate.currency,
-          notes: valueUpdate.notes,
-        }),
+      const response = await apiClient.post('/api/investments/holdings', {
+        account_id: valueUpdate.accountId,
+        current_value: parseFloat(valueUpdate.currentValue),
+        cost_basis: valueUpdate.costBasis ? parseFloat(valueUpdate.costBasis) : null,
+        as_of_date: valueUpdate.asOfDate,
+        currency: valueUpdate.currency,
+        notes: valueUpdate.notes,
       });
 
       if (response.ok) {
@@ -858,7 +827,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         // Refresh investment accounts to show updated values
         fetchInvestmentAccounts();
       } else {
-        const errorData = await response.json();
+        const errorData = (response.data as any) || {};
         setError(errorData.error || 'Failed to add value update');
       }
     } catch (error) {
@@ -875,16 +844,12 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
 
     try {
-      const response = await fetch('/api/investments/assets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          account_id: newAsset.accountId,
-          symbol: newAsset.symbol,
-          quantity: parseFloat(newAsset.quantity),
-          avg_price: newAsset.avgPrice ? parseFloat(newAsset.avgPrice) : null,
-          as_of_date: newAsset.asOfDate,
-        }),
+      const response = await apiClient.post('/api/investments/assets', {
+        account_id: newAsset.accountId,
+        symbol: newAsset.symbol,
+        quantity: parseFloat(newAsset.quantity),
+        avg_price: newAsset.avgPrice ? parseFloat(newAsset.avgPrice) : null,
+        as_of_date: newAsset.asOfDate,
       });
 
       if (response.ok) {
@@ -900,7 +865,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         // Refresh assets list
         fetchAssets();
       } else {
-        const errorData = await response.json();
+        const errorData = (response.data as any) || {};
         setError(errorData.error || 'Failed to add asset');
       }
     } catch (error) {
@@ -912,11 +877,11 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   // Function to load assets and asset history
   const fetchAssets = async () => {
     try {
-      const response = await fetch('/api/investments/assets');
+      const response = await apiClient.get('/api/investments/assets');
       if (response.ok) {
-        const data = await response.json();
-        setAssets(data.assets || []);
-        setAssetHistory(data.history || []);
+        const data = response.data as any;
+        setAssets(Array.isArray(data?.assets) ? data.assets : []);
+        setAssetHistory(Array.isArray(data?.history) ? data.history : []);
       }
     } catch (error) {
       console.error('Error fetching assets:', error);
@@ -1797,9 +1762,13 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
               ) : (
                 <>
                   {/* Investment Accounts organized by category */}
-                  {Object.entries(ACCOUNT_CATEGORIES.INVESTMENTS.subcategories).map(([key, subcategory]) => {
-                    const categoryAccounts = investmentAccounts.filter(acc =>
-                      subcategory.types.includes(acc.account_type)
+                  {Object.entries(
+                    (ACCOUNT_CATEGORIES.INVESTMENTS.subcategories ??
+                      {}) as Record<string, AccountCategory>,
+                  ).map(([key, subcategory]) => {
+                    const allowedTypes = subcategory.types ?? [];
+                    const categoryAccounts = investmentAccounts.filter((acc) =>
+                      allowedTypes.includes(acc.account_type),
                     );
 
                     if (categoryAccounts.length === 0) return null;

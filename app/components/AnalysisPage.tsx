@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -55,6 +55,26 @@ import RecurringTransactionManager from './AnalysisPage/RecurringTransactionMana
 import CategoryOpportunitiesPanel from './AnalysisPage/CategoryOpportunitiesPanel';
 import HealthScoreRoadmapModal from './AnalysisPage/HealthScoreRoadmapModal';
 import ActionItemsDashboard from './AnalysisPage/ActionItemsDashboard';
+import AccountsModal from './AccountsModal';
+import AccountPairingModal from './AccountPairingModal';
+import CategoryHierarchyModal from './CategoryHierarchyModal';
+import { apiClient } from '@/lib/api-client';
+
+interface DataQualityWarning {
+  type: string;
+  severity: 'critical' | 'high' | 'medium';
+  title: string;
+  message: string;
+  count?: number;
+  percentage?: number;
+  actionLabel: string;
+  actionTarget: string;
+}
+
+interface DataQuality {
+  hasIssues: boolean;
+  warnings: DataQualityWarning[];
+}
 
 interface PersonalIntelligence {
   temporalIntelligence: any;
@@ -68,6 +88,7 @@ interface PersonalIntelligence {
   overallHealthScore: number;
   healthBreakdown: any;
   userProfile: any;
+  dataQuality?: DataQuality;
 }
 
 const AnalysisPage: React.FC = () => {
@@ -76,6 +97,10 @@ const AnalysisPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [roadmapModalOpen, setRoadmapModalOpen] = useState(false);
+  const [accountsModalOpen, setAccountsModalOpen] = useState(false);
+  const [pairingModalOpen, setPairingModalOpen] = useState(false);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [dismissedWarnings, setDismissedWarnings] = useState<Set<string>>(new Set());
   const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({
     actions: true,
     recurring: false,
@@ -84,10 +109,41 @@ const AnalysisPage: React.FC = () => {
   });
   const { formatCurrency } = useFinancePrivacy();
   const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
-
-  // Check if page is locked
   const accessStatus = getPageAccessStatus('analysis');
-  if (accessStatus.isLocked) {
+  const isLocked = accessStatus.isLocked;
+
+  const fetchIntelligence = useCallback(async () => {
+    if (isLocked) {
+      return;
+    }
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiClient.get('/api/analytics/personal-intelligence?months=3');
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch intelligence data');
+      }
+
+      const data = response.data as any;
+      setIntelligence(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      console.error('Error fetching personal intelligence:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [isLocked]);
+
+  useEffect(() => {
+    if (isLocked) {
+      return;
+    }
+    fetchIntelligence();
+  }, [fetchIntelligence, isLocked]);
+
+  if (isLocked) {
     return (
       <LockedPagePlaceholder
         page="analysis"
@@ -96,31 +152,6 @@ const AnalysisPage: React.FC = () => {
       />
     );
   }
-
-  const fetchIntelligence = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/analytics/personal-intelligence?months=3');
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch intelligence data');
-      }
-
-      const data = await response.json();
-      setIntelligence(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error occurred');
-      console.error('Error fetching personal intelligence:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchIntelligence();
-  }, []);
 
   const getHealthScoreColor = (score: number) => {
     if (score >= 80) return '#4caf50';
@@ -168,6 +199,39 @@ const AnalysisPage: React.FC = () => {
       ...(options?.absolute !== undefined ? { absolute: options.absolute } : {}),
       ...(options?.showSign ? { showSign: true } : {}),
     });
+
+  const handleWarningAction = (actionTarget: string) => {
+    switch (actionTarget) {
+      case 'accounts_modal':
+        setAccountsModalOpen(true);
+        break;
+      case 'pairing_modal':
+        setPairingModalOpen(true);
+        break;
+      case 'category_modal':
+        setCategoryModalOpen(true);
+        break;
+      default:
+        console.warn('Unknown action target:', actionTarget);
+    }
+  };
+
+  const dismissWarning = (warningType: string) => {
+    setDismissedWarnings(prev => new Set(prev).add(warningType));
+  };
+
+  const getSeverityColor = (severity: 'critical' | 'high' | 'medium') => {
+    switch (severity) {
+      case 'critical':
+        return 'error';
+      case 'high':
+        return 'warning';
+      case 'medium':
+        return 'info';
+      default:
+        return 'info';
+    }
+  };
 
   // Skeleton Loading Component
   const SkeletonLoader = () => (
@@ -254,8 +318,12 @@ const AnalysisPage: React.FC = () => {
     psychologicalInsights: psychological,
     recommendations,
     overallHealthScore,
-    healthBreakdown
+    healthBreakdown,
+    dataQuality
   } = intelligence;
+
+  // Filter out dismissed warnings
+  const activeWarnings = dataQuality?.warnings.filter(w => !dismissedWarnings.has(w.type)) || [];
 
   return (
     <Box sx={{ width: '100%', p: 3 }}>
@@ -295,12 +363,90 @@ const AnalysisPage: React.FC = () => {
         onClose={() => setSetupModalOpen(false)}
         onSave={() => fetchIntelligence()}
       />
-      
+
       <HealthScoreRoadmapModal
         open={roadmapModalOpen}
         onClose={() => setRoadmapModalOpen(false)}
         currentScore={overallHealthScore}
       />
+
+      <AccountsModal
+        isOpen={accountsModalOpen}
+        onClose={() => {
+          setAccountsModalOpen(false);
+          fetchIntelligence();
+        }}
+      />
+
+      <AccountPairingModal
+        isOpen={pairingModalOpen}
+        onClose={() => {
+          setPairingModalOpen(false);
+          fetchIntelligence();
+        }}
+      />
+
+      <CategoryHierarchyModal
+        open={categoryModalOpen}
+        onClose={() => {
+          setCategoryModalOpen(false);
+          fetchIntelligence();
+        }}
+      />
+
+      {/* Data Quality Warnings */}
+      {activeWarnings.length > 0 && (
+        <Box sx={{ mb: 2 }}>
+          {activeWarnings.map((warning) => (
+            <Collapse in={!dismissedWarnings.has(warning.type)} key={warning.type}>
+              <Alert
+                severity={getSeverityColor(warning.severity) as any}
+                onClose={() => dismissWarning(warning.type)}
+                sx={{
+                  mb: 1.5,
+                  borderRadius: 2,
+                  '& .MuiAlert-message': {
+                    width: '100%'
+                  }
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                      {warning.title}
+                    </Typography>
+                    <Typography variant="body2">
+                      {warning.message}
+                    </Typography>
+                    {warning.count !== undefined && (
+                      <Chip
+                        label={`${warning.count} item${warning.count > 1 ? 's' : ''}`}
+                        size="small"
+                        sx={{ mt: 1 }}
+                        color={getSeverityColor(warning.severity) as any}
+                      />
+                    )}
+                  </Box>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={() => handleWarningAction(warning.actionTarget)}
+                    sx={{
+                      ml: 3,
+                      minWidth: 140,
+                      fontWeight: 600,
+                      textTransform: 'none',
+                      flexShrink: 0
+                    }}
+                  >
+                    {warning.actionLabel}
+                  </Button>
+                </Box>
+              </Alert>
+            </Collapse>
+          ))}
+        </Box>
+      )}
 
       {/* Enhanced Health Score Overview */}
       <Paper sx={{

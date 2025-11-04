@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -31,6 +31,7 @@ import {
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import { useOnboarding } from '../contexts/OnboardingContext';
 import LockedPagePlaceholder from './EmptyState/LockedPagePlaceholder';
+import { apiClient } from '@/lib/api-client';
 
 interface BudgetBase {
   id: number;
@@ -62,18 +63,8 @@ const BudgetsPage: React.FC = () => {
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
   const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
-
-  // Check if page is locked
   const accessStatus = getPageAccessStatus('budgets');
-  if (accessStatus.isLocked) {
-    return (
-      <LockedPagePlaceholder
-        page="budgets"
-        accessStatus={accessStatus}
-        onboardingStatus={onboardingStatus}
-      />
-    );
-  }
+  const isLocked = accessStatus.isLocked;
 
   const [budgets, setBudgets] = useState<BudgetUsage[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -85,42 +76,33 @@ const BudgetsPage: React.FC = () => {
     budget_limit: '',
   });
 
-  useEffect(() => {
-    fetchBudgets();
-    fetchCategories();
-
-    // Listen for data refresh events (from scraping, manual transactions, etc.)
-    const handleDataRefresh = () => {
-      fetchBudgets();
-    };
-    globalThis.addEventListener('dataRefresh', handleDataRefresh);
-
-    return () => {
-      globalThis.removeEventListener('dataRefresh', handleDataRefresh);
-    };
-  }, []);
-
-  const fetchBudgets = async () => {
+  const fetchBudgets = useCallback(async () => {
+    if (isLocked) {
+      return;
+    }
     try {
-      const response = await fetch('/api/budgets/usage');
+      const response = await apiClient.get('/api/budgets/usage');
       if (!response.ok) {
         throw new Error('Failed to fetch budgets');
       }
-      const data = await response.json();
+      const data = response.data as any;
       setBudgets(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching budgets:', error);
       setBudgets([]);
     }
-  };
+  }, [isLocked]);
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
+    if (isLocked) {
+      return;
+    }
     try {
-      const response = await fetch('/api/categories/hierarchy?type=expense');
+      const response = await apiClient.get('/api/categories/hierarchy?type=expense');
       if (!response.ok) {
         throw new Error('Failed to fetch categories');
       }
-      const data = await response.json();
+      const data = response.data as any;
 
       if (data.categories && Array.isArray(data.categories)) {
         const map = new Map<number, any>();
@@ -147,7 +129,25 @@ const BudgetsPage: React.FC = () => {
       console.error('Error fetching categories:', error);
       setCategories([]);
     }
-  };
+  }, [isLocked]);
+
+  useEffect(() => {
+    if (isLocked) {
+      return;
+    }
+    fetchBudgets();
+    fetchCategories();
+
+    // Listen for data refresh events (from scraping, manual transactions, etc.)
+    const handleDataRefresh = () => {
+      fetchBudgets();
+    };
+    globalThis.addEventListener('dataRefresh', handleDataRefresh);
+
+    return () => {
+      globalThis.removeEventListener('dataRefresh', handleDataRefresh);
+    };
+  }, [fetchBudgets, fetchCategories, isLocked]);
 
   const handleOpenDialog = (budget?: BudgetBase) => {
     if (budget) {
@@ -167,6 +167,16 @@ const BudgetsPage: React.FC = () => {
     }
     setDialogOpen(true);
   };
+
+  if (isLocked) {
+    return (
+      <LockedPagePlaceholder
+        page="budgets"
+        accessStatus={accessStatus}
+        onboardingStatus={onboardingStatus}
+      />
+    );
+  }
 
   const handleCloseDialog = () => {
     setDialogOpen(false);
@@ -190,19 +200,15 @@ const BudgetsPage: React.FC = () => {
       }
 
       if (editingBudget) {
-        await fetch('/api/budgets', {
+        await apiClient.put('/api/budgets', {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: editingBudget.id,
-            budget_limit: payload.budget_limit,
-          }),
+          id: editingBudget.id,
+          budget_limit: payload.budget_limit,
         });
       } else {
-        await fetch('/api/budgets', {
+        await apiClient.post('/api/budgets', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          payload,
         });
       }
 
@@ -217,7 +223,7 @@ const BudgetsPage: React.FC = () => {
     if (!confirm('Are you sure you want to delete this budget?')) return;
 
     try {
-      await fetch(`/api/budgets?id=${id}`, {
+      await apiClient.delete(`/api/budgets?id=${id}`, {
         method: 'DELETE',
       });
       fetchBudgets();

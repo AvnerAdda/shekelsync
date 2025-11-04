@@ -13,6 +13,7 @@ import Alert from '@mui/material/Alert';
 import { useTheme } from '@mui/material/styles';
 import { useNotification } from './NotificationContext';
 import ModalHeader from './ModalHeader';
+import { apiClient } from '@/lib/api-client';
 
 interface ScraperConfig {
   options: {
@@ -59,38 +60,37 @@ interface SyncModalProps {
   initialConfig?: ScraperConfig;
 }
 
+const createDefaultConfig = (): ScraperConfig => ({
+  options: {
+    companyId: 'isracard',
+    startDate: new Date(),
+    combineInstallments: false,
+    showBrowser: true,
+    additionalTransactionInformation: true
+  },
+  credentials: {
+    password: '',
+    nickname: '',
+    id: '',
+    username: '',
+    userCode: '',
+    card6Digits: '',
+    nationalID: '',
+    num: '',
+    identification_code: '',
+    bankAccountNumber: '',
+    email: '',
+    otpCode: '',
+    otpToken: ''
+  }
+});
+
 export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onComplete, initialConfig }: SyncModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { showNotification } = useNotification();
   const theme = useTheme();
-  const todayStr = new Date().toISOString().split('T')[0];
-  const clampDateString = (value: string) => (value > todayStr ? todayStr : value);
-  const defaultConfig: ScraperConfig = {
-    options: {
-      companyId: 'isracard',
-      startDate: new Date(),
-      combineInstallments: false,
-      showBrowser: true,
-      additionalTransactionInformation: true
-    },
-    credentials: {
-      password: '',
-      nickname: '',
-      id: '',
-      username: '',
-      userCode: '',
-      card6Digits: '',
-      nationalID: '',
-      num: '',
-      identification_code: '',
-      bankAccountNumber: '',
-      email: '',
-      otpCode: '',
-      otpToken: ''
-    }
-  };
-  const [config, setConfig] = useState<ScraperConfig>(initialConfig || defaultConfig);
+  const [config, setConfig] = useState<ScraperConfig>(initialConfig || createDefaultConfig());
 
   useEffect(() => {
     if (initialConfig) {
@@ -100,7 +100,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
 
   useEffect(() => {
     if (!isOpen) {
-      setConfig(initialConfig || defaultConfig);
+      setConfig(initialConfig || createDefaultConfig());
       setError(null);
       setIsLoading(false);
     }
@@ -130,16 +130,9 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
     onStart?.();
 
     try {
-      const response = await fetch('/api/scrape', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(config)
-      });
-
+      const response = await apiClient.post('/api/scrape', config);
       if (!response.ok) {
-        throw new Error('Failed to start scraping');
+        throw new Error(response.statusText || 'Failed to start scraping');
       }
 
       showNotification('Sync started successfully!', 'success');

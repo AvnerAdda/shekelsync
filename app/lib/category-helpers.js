@@ -1,22 +1,65 @@
-import pool from '../pages/api/db.js';
+const database = require('../server/services/database.js');
+const { BANK_CATEGORY_NAME } = require('./category-constants.js');
 
-/**
- * Fetch a category definition with its parent information.
- * @param {import('pg').PoolClient | null} client
- * @param {number} categoryId
- * @returns {Promise<{
- *  id: number;
- *  name: string;
- *  name_en: string | null;
- *  category_type: string;
- *  parent_id: number | null;
- *  parent_name: string | null;
- *  parent_name_en: string | null;
- * } | null>}
- */
-export async function getCategoryInfo(categoryId, client = null) {
+function normalizeCategoryPath(path) {
+  if (!path) {
+    return path;
+  }
+  return path.split('>').map((segment) => segment.trim()).join(' > ');
+}
+
+async function findCategoryByName(name, parentId = null, client) {
+  const normalizedName = name.trim().toLowerCase();
+  const params = [normalizedName];
+  let parentClause = '';
+  if (parentId !== null && parentId !== undefined) {
+    parentClause = 'AND parent_id = $2';
+    params.push(parentId);
+  }
+
+  const result = await client.query(
+    `
+      SELECT id, name, category_type, parent_id
+      FROM category_definitions
+      WHERE LOWER(name) = $1 ${parentClause}
+      LIMIT 1
+    `,
+    params,
+  );
+
+  return result.rows[0] || null;
+}
+
+async function matchCategorizationRule(transactionName, client) {
+  const result = await client.query(
+    `
+      SELECT
+        cr.id,
+        cr.name_pattern,
+        cr.target_category,
+        cr.category_definition_id,
+        cd.name AS subcategory,
+        parent.name AS parent_category
+      FROM categorization_rules cr
+      LEFT JOIN category_definitions cd ON cd.id = cr.category_definition_id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      WHERE cr.is_active = true
+      ORDER BY cr.priority DESC, cr.id
+    `,
+  );
+
+  const normalizedName = (transactionName || '').toLowerCase();
+  return result.rows.find((rule) => {
+    const pattern = (rule.name_pattern || '').toLowerCase();
+    return pattern && normalizedName.includes(pattern);
+  }) || null;
+}
+
+async function getCategoryInfo(categoryId, client = null) {
   if (!categoryId) return null;
-  const executor = client || (await pool.connect());
+
+  const executor = client || await database.getClient();
+  const shouldRelease = !client;
 
   try {
     const result = await executor.query(
@@ -36,72 +79,13 @@ export async function getCategoryInfo(categoryId, client = null) {
 
     return result.rows[0] || null;
   } finally {
-    if (!client) {
+    if (shouldRelease && executor.release) {
       executor.release();
     }
   }
 }
 
-/**
- * Resolve a category by matching the old category name stored in category_mapping.
- * This maps legacy transaction.category values to new category_definitions.
- * @param {string} oldCategoryName - The old Hebrew category name from transaction.category
- * @param {import('pg').PoolClient} client
- */
-export async function resolveCategoryFromMapping(oldCategoryName, client) {
-  if (!oldCategoryName) return null;
-  const mapping = await client.query(
-    `SELECT
-        cm.category_definition_id,
-        cd.name AS subcategory,
-        cd.parent_id,
-        parent.name AS parent_category
-     FROM category_mapping cm
-     JOIN category_definitions cd ON cd.id = cm.category_definition_id
-     LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-     WHERE cm.old_category_name = $1`,
-    [oldCategoryName]
-  );
-
-  if (mapping.rows.length === 0) return null;
-  return mapping.rows[0];
-}
-
-/**
- * Find a category definition by its name (case-insensitive).
- * Optionally filter by parent category name.
- * @param {string} name
- * @param {string | null} parentName
- * @param {import('pg').PoolClient} client
- */
-export async function findCategoryByName(name, parentName, client) {
-  if (!name) return null;
-  const params = [name];
-  let query = `
-    SELECT
-      cd.id,
-      cd.name,
-      cd.name_en,
-      cd.category_type,
-      cd.parent_id,
-      parent.name AS parent_name,
-      parent.name_en AS parent_name_en
-    FROM category_definitions cd
-    LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-    WHERE LOWER(cd.name) = LOWER($1)
-  `;
-
-  if (parentName) {
-    params.push(parentName);
-    query += ' AND LOWER(parent.name) = LOWER($2)';
-  }
-
-  const result = await client.query(query, params);
-  if (result.rows.length === 0) return null;
-  return result.rows[0];
-}
-
-export function normaliseCategoryRecord(record) {
+function normaliseCategoryRecord(record) {
   if (!record) return null;
 
   if ('id' in record) {
@@ -124,40 +108,26 @@ export function normaliseCategoryRecord(record) {
   };
 }
 
-export async function matchCategorizationRule(transactionName, client) {
-  if (!transactionName) return null;
-
-  const cleanName = transactionName.toLowerCase().trim();
-  const result = await client.query(
+async function resolveCategoryFromMapping(term, client) {
+  if (!term) return null;
+  const mapping = await client.query(
     `SELECT
-        cr.id,
-        cr.name_pattern,
-        cr.category_definition_id,
+        cm.category_definition_id,
         cd.name AS subcategory,
         cd.parent_id,
-        parent.name AS parent_category,
-        cr.priority
-     FROM categorization_rules cr
-     LEFT JOIN category_definitions cd ON cd.id = cr.category_definition_id
+        parent.name AS parent_category
+     FROM category_mapping cm
+     JOIN category_definitions cd ON cd.id = cm.category_definition_id
      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-     WHERE cr.is_active = true
-       AND LOWER($1) LIKE '%' || LOWER(cr.name_pattern) || '%'
-     ORDER BY
-       cr.priority DESC,
-       LENGTH(cr.name_pattern) DESC
-     LIMIT 1`,
-    [cleanName]
+     WHERE cm.old_category_name = $1`,
+    [term]
   );
 
-  return result.rows[0] || null;
+  if (mapping.rows.length === 0) return null;
+  return mapping.rows[0];
 }
 
-/**
- * Resolve the best category information for a transaction.
- * Returns an object containing the categoryDefinitionId (if found),
- * along with the human-friendly parent/subcategory labels.
- */
-export async function resolveCategory({
+async function resolveCategory({
   client,
   rawCategory,
   transactionName,
@@ -202,3 +172,12 @@ export async function resolveCategory({
     subcategory,
   };
 }
+
+module.exports = {
+  normalizeCategoryPath,
+  resolveCategory,
+  findCategoryByName,
+  matchCategorizationRule,
+  getCategoryInfo,
+  BANK_CATEGORY_NAME,
+};

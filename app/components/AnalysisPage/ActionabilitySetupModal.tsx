@@ -37,6 +37,7 @@ import {
   TrendingUp as HighIcon,
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '../../contexts/FinancePrivacyContext';
+import { apiClient } from '@/lib/api-client';
 
 interface Category {
   category_definition_id: number;
@@ -83,11 +84,11 @@ const ActionabilitySetupModal: React.FC<ActionabilitySetupModalProps> = ({ open,
     setError(null);
 
     try {
-      const response = await fetch('/api/analytics/category-spending-summary?months=3');
-      if (!response.ok) throw new Error('Failed to fetch categories');
+      const response = await apiClient.get('/api/analytics/category-spending-summary?months=3');
+      if (!response.ok) throw new Error(response.statusText || 'Failed to fetch categories');
 
-      const data = await response.json();
-      setCategories(data.categories || []);
+      const data = response.data as any;
+      setCategories(Array.isArray(data?.categories) ? data.categories : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       console.error('Error fetching categories:', err);
@@ -122,13 +123,9 @@ const ActionabilitySetupModal: React.FC<ActionabilitySetupModalProps> = ({ open,
         user_notes: cat.user_notes
       }));
 
-      const response = await fetch('/api/analytics/actionability-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings })
-      });
+      const response = await apiClient.post('/api/analytics/actionability-settings', { settings });
 
-      if (!response.ok) throw new Error('Failed to save settings');
+      if (!response.ok) throw new Error(response.statusText || 'Failed to save settings');
 
       setHasChanges(false);
       if (onSave) onSave();
@@ -145,11 +142,9 @@ const ActionabilitySetupModal: React.FC<ActionabilitySetupModalProps> = ({ open,
     if (!confirm('Reset all categories to default actionability levels?')) return;
 
     try {
-      const response = await fetch('/api/analytics/actionability-settings', {
-        method: 'DELETE'
-      });
+      const response = await apiClient.delete('/api/analytics/actionability-settings');
 
-      if (!response.ok) throw new Error('Failed to reset');
+      if (!response.ok) throw new Error(response.statusText || 'Failed to reset');
 
       await fetchCategories();
       setHasChanges(false);

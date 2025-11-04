@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -39,6 +39,7 @@ import {
   Info as InfoIcon,
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '../../contexts/FinancePrivacyContext';
+import { apiClient } from '@/lib/api-client';
 
 interface RecurringPattern {
   merchant_pattern: string;
@@ -83,19 +84,15 @@ const RecurringTransactionManager: React.FC<RecurringTransactionManagerProps> = 
   const [suggestionsDialogOpen, setSuggestionsDialogOpen] = useState(false);
   const { formatCurrency } = useFinancePrivacy();
 
-  useEffect(() => {
-    fetchRecurringPatterns();
-  }, [months]);
-
-  const fetchRecurringPatterns = async () => {
+  const fetchRecurringPatterns = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(`/api/analytics/recurring-analysis?months=${months}&minOccurrences=3&minConfidence=0.5`);
+      const response = await apiClient.get(`/api/analytics/recurring-analysis?months=${months}&minOccurrences=3&minConfidence=0.5`);
       if (!response.ok) throw new Error('Failed to fetch recurring patterns');
 
-      const data = await response.json();
+      const data = response.data as any;
       setPatterns(data.recurring_patterns || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -103,21 +100,21 @@ const RecurringTransactionManager: React.FC<RecurringTransactionManagerProps> = 
     } finally {
       setLoading(false);
     }
-  };
+  }, [months]);
+
+  useEffect(() => {
+    fetchRecurringPatterns();
+  }, [fetchRecurringPatterns]);
 
   const handleStatusChange = async (pattern: RecurringPattern, newStatus: string) => {
     try {
-      const response = await fetch('/api/analytics/recurring-management', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          merchant_pattern: pattern.merchant_pattern,
-          frequency: pattern.frequency,
-          user_status: newStatus
-        })
+      const response = await apiClient.post('/api/analytics/recurring-management', {
+        merchant_pattern: pattern.merchant_pattern,
+        frequency: pattern.frequency,
+        user_status: newStatus,
       });
 
-      if (!response.ok) throw new Error('Failed to update status');
+      if (!response.ok) throw new Error(response.statusText || 'Failed to update status');
 
       // Update local state
       setPatterns(prev =>

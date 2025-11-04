@@ -4,8 +4,8 @@ const { app } = require('electron');
 // Add app directory to module search paths
 require('module').globalPaths.push(path.join(__dirname, '..', 'app', 'node_modules'));
 
-const { Pool } = require(path.join(__dirname, '..', 'app', 'node_modules', 'pg'));
-const SqliteDatabase = require(path.join(__dirname, '..', 'app', 'node_modules', 'better-sqlite3'));
+let Pool = null;
+let SqliteDatabase = null;
 
 const PLACEHOLDER_REGEX = /\$(\d+)/g;
 const SELECT_LIKE_REGEX = /^\s*(WITH|SELECT|PRAGMA)/i;
@@ -48,8 +48,13 @@ class DatabaseManager {
       if (this.mode === 'sqlite') {
         const dbPath =
           process.env.SQLITE_DB_PATH ||
-          process.env.SQLCIPHER_DB_PATH ||
-          path.join(app.getPath('userData'), 'clarify.sqlite');
+      process.env.SQLCIPHER_DB_PATH ||
+      path.join(app.getPath('userData'), 'clarify.sqlite');
+
+        if (!SqliteDatabase) {
+          const betterSqlite = require(path.join(__dirname, '..', 'app', 'node_modules', 'better-sqlite3'));
+          SqliteDatabase = typeof betterSqlite.default === 'function' ? betterSqlite.default : betterSqlite;
+        }
 
         this.sqliteDb = new SqliteDatabase(dbPath, { fileMustExist: true });
         if (process.env.SQLCIPHER_KEY) {
@@ -63,6 +68,10 @@ class DatabaseManager {
         // Simple sanity check
         this.sqliteDb.prepare('SELECT 1').get();
       } else {
+        if (!Pool) {
+          Pool = require(path.join(__dirname, '..', 'app', 'node_modules', 'pg')).Pool;
+        }
+
         this.pool = new Pool({
           user: dbConfig.user,
           host: dbConfig.host,
@@ -85,6 +94,12 @@ class DatabaseManager {
 
       return { success: true, message: 'Database connected successfully' };
     } catch (error) {
+      if (this.mode === 'postgres' && error.code === 'MODULE_NOT_FOUND') {
+        console.warn('Postgres module not available, falling back to SQLite. Set USE_SQLITE=true to silence this.');
+        this.mode = 'sqlite';
+        return this.initialize(config);
+      }
+
       console.error('Database connection failed:', error);
       this.isConnected = false;
       return {
@@ -112,6 +127,9 @@ class DatabaseManager {
     }
 
     if (this.mode === 'sqlite') {
+      if (!SqliteDatabase) {
+        SqliteDatabase = require(path.join(__dirname, '..', 'app', 'node_modules', 'better-sqlite3'));
+      }
       return {
         query: (text, params = []) => this.query(text, params),
         release: () => {},

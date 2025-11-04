@@ -1,3 +1,5 @@
+# Docker Compose configuration for ShekelSync
+# This app uses SQLite exclusively for data storage
 services:
   clarify-app:
     build:

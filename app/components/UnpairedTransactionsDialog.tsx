@@ -19,6 +19,7 @@ import {
   Chip
 } from '@mui/material';
 import ModalHeader from './ModalHeader';
+import { apiClient } from '@/lib/api-client';
 
 interface UnpairedTransaction {
   identifier: string;
@@ -54,13 +55,13 @@ export default function UnpairedTransactionsDialog({
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/accounts/truly-unpaired-transactions?include_details=true');
-      if (response.ok) {
-        const data = await response.json();
-        setTransactions(data.transactions || []);
-      } else {
-        setError('Failed to load unpaired transactions');
+      const response = await apiClient.get('/api/accounts/truly-unpaired-transactions?include_details=true');
+      if (!response.ok) {
+        setError(response.statusText || 'Failed to load unpaired transactions');
+        return;
       }
+      const data = response.data as any;
+      setTransactions(Array.isArray(data?.transactions) ? data.transactions : []);
     } catch (err) {
       console.error('Error fetching unpaired transactions:', err);
       setError('Error loading transactions');
@@ -116,8 +117,8 @@ export default function UnpairedTransactionsDialog({
           <>
             <Alert severity="info" sx={{ mb: 3 }}>
               <Typography variant="body2">
-                These {transactions.length} bank transactions have category "Credit Card Repayment" (25)
-                or "Refunds" (75) but don't match any active account pairing.
+                These {transactions.length} bank transactions have category &ldquo;Credit Card Repayment&rdquo; (25)
+                or &ldquo;Refunds&rdquo; (75) but don&apos;t match any active account pairing.
                 Consider creating pairings for them to avoid double-counting expenses.
               </Typography>
             </Alert>

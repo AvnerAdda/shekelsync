@@ -142,21 +142,50 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             <Card
               sx={{
                 height: '100%',
-                backgroundColor: card.bgColor,
-                border: `2px solid ${card.color}${isNetBalance ? '30' : '15'}`,
-                boxShadow: isNetBalance
-                  ? '0 4px 12px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08)'
-                  : '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                transform: isNetBalance ? 'scale(1.02)' : 'scale(1)',
+                background: theme.palette.mode === 'dark'
+                  ? 'rgba(30, 30, 30, 0.6)'
+                  : 'rgba(255, 255, 255, 0.6)',
+                backdropFilter: 'blur(16px) saturate(120%)',
+                WebkitBackdropFilter: 'blur(16px) saturate(120%)',
+                border: `1px solid ${
+                  theme.palette.mode === 'dark'
+                    ? 'rgba(200, 250, 207, 0.15)'
+                    : 'rgba(200, 250, 207, 0.3)'
+                }`,
+                borderRadius: '20px',
+                boxShadow: `
+                  0 8px 32px rgba(0, 0, 0, 0.06),
+                  inset 0 1px 1px rgba(255, 255, 255, ${theme.palette.mode === 'dark' ? '0.1' : '0.6'})
+                `,
+                transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                transform: isNetBalance ? 'scale(1.03)' : 'scale(1)',
                 position: 'relative',
                 overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: '-100%',
+                  width: '50%',
+                  height: '100%',
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
+                  transition: 'left 0.6s',
+                },
                 '&:hover': {
-                  transform: isNetBalance ? 'scale(1.04) translateY(-4px)' : 'translateY(-2px)',
-                  boxShadow: isNetBalance
-                    ? '0 12px 24px rgba(0, 0, 0, 0.18), 0 6px 8px rgba(0, 0, 0, 0.12)'
-                    : '0 8px 16px rgba(0, 0, 0, 0.12), 0 4px 6px rgba(0, 0, 0, 0.08)',
-                  borderColor: `${card.color}${isNetBalance ? '50' : '30'}`,
+                  transform: isNetBalance ? 'translateY(-12px) scale(1.04)' : 'translateY(-8px) scale(1.02)',
+                  boxShadow: `
+                    0 20px 60px rgba(0, 0, 0, 0.15),
+                    0 0 20px rgba(200, 250, 207, 0.3),
+                    inset 0 1px 1px rgba(255, 255, 255, ${theme.palette.mode === 'dark' ? '0.2' : '0.8'})
+                  `,
+                  border: `1px solid ${
+                    theme.palette.mode === 'dark'
+                      ? 'rgba(200, 250, 207, 0.4)'
+                      : 'rgba(200, 250, 207, 0.6)'
+                  }`,
+                },
+                '&:hover::before': {
+                  left: '100%',
                 }
               }}
             >

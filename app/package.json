@@ -5,19 +5,22 @@
   "main": "electron/main.js",
   "homepage": "./",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "build-electron": "BUILD_MODE=electron next build && electron-builder",
-    "start": "next start",
-    "lint": "next lint",
-    "scrape": "ts-node --esm scrapers/index.ts",
+    "dev": "npm --prefix ../renderer run dev",
+    "build": "npm --prefix ../renderer run build",
+    "build:renderer:electron": "npm --prefix ../renderer run build",
+    "build-electron": "npm run build:renderer:electron && electron-builder",
+    "start": "electron ../electron/main.js",
+    "lint": "npm --prefix ../renderer run lint",
+    "typecheck": "npm --prefix ../renderer run typecheck",
     "electron": "electron ../electron/main.js",
-    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron ../electron/main.js\"",
-    "dist": "BUILD_MODE=electron npm run build && electron-builder --publish=never",
-    "pack": "BUILD_MODE=electron npm run build && electron-builder --dir",
-    "release": "BUILD_MODE=electron npm run build && electron-builder --publish=always",
+    "electron-dev": "USE_VITE_RENDERER=true RENDERER_DEV_URL=http://localhost:5173 concurrently \"npm --prefix ../renderer run dev\" \"wait-on http://localhost:5173 && electron ../electron/main.js\"",
+    "dist": "npm run build:renderer:electron && electron-builder --publish=never",
+    "pack": "npm run build:renderer:electron && electron-builder --dir",
+    "release": "npm run build:renderer:electron && electron-builder --publish=always",
     "clean": "rm -rf out build dist",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@emotion/react": "^11.13.3",
@@ -30,7 +33,7 @@
     "@mui/x-date-pickers": "^8.3.1",
     "@types/d3": "^7.4.3",
     "@types/d3-sankey": "^0.12.4",
-    "better-sqlite3": "^9.6.0",
+    "better-sqlite3": "^12.4.1",
     "cors": "^2.8.5",
     "d3": "^7.9.0",
     "d3-sankey": "^0.12.3",
@@ -39,9 +42,7 @@
     "electron-updater": "^6.6.2",
     "express": "^5.1.0",
     "israeli-bank-scrapers": "^6.2.3",
-    "next": "^14.2.29",
-    "next-auth": "^4.24.11",
-    "pg": "^8.16.0",
+    "keytar": "^7.9.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-icons": "^5.5.0",
@@ -49,22 +50,26 @@
     "styled-components": "^6.1.18"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.0.1",
     "@types/node": "^20.17.49",
-    "@types/pg": "^8.15.2",
     "@types/react": "^18.3.21",
     "@types/react-dom": "^18.3.7",
+    "@vitest/coverage-v8": "^4.0.6",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.2.1",
     "electron": "^38.3.0",
     "electron-builder": "^26.0.12",
     "eslint": "^8.0.0",
-    "eslint-config-next": "14.2.15",
+    "jsdom": "^27.1.0",
     "patch-package": "^8.0.1",
     "postcss": "^8.4.47",
     "prettier": "^3.5.1",
+    "supertest": "^7.1.4",
     "tailwindcss": "^3.4.14",
     "ts-node": "^10.9.2",
     "typescript": "^5.0.0",
+    "vitest": "^4.0.6",
     "wait-on": "^9.0.1"
   },
   "build": {
@@ -76,6 +81,7 @@
     },
     "files": [
       "out/**/*",
+      "server/**/*",
       "electron/**/*",
       "node_modules/**/*",
       "package.json"
@@ -87,6 +93,7 @@
       }
     ],
     "win": {
+      "icon": "../build-resources/logo.ico",
       "target": [
         {
           "target": "nsis",
@@ -107,7 +114,7 @@
     },
     "mac": {
       "category": "public.app-category.finance",
-      "icon": "../build-resources/icon.icns",
+      "icon": "../build-resources/logo.icns",
       "target": [
         {
           "target": "dmg",
@@ -127,7 +134,7 @@
           ]
         }
       ],
-      "icon": "../build-resources/icon.png",
+      "icon": "../build-resources/logo.png",
       "category": "Office"
     },
     "publish": {

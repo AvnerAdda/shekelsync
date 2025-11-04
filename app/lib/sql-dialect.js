@@ -4,7 +4,7 @@ const useSqlite =
   Boolean(process.env.SQLITE_DB_PATH) ||
   Boolean(process.env.SQLCIPHER_DB_PATH);
 
-export const dialect = {
+const dialect = {
   useSqlite,
 
   dateTrunc(unit, column) {
@@ -71,3 +71,6 @@ export const dialect = {
     return `LOWER(${column}) LIKE LOWER(${placeholder})`;
   },
 };
+
+module.exports = { dialect, useSqlite };
+module.exports.default = { dialect, useSqlite };
