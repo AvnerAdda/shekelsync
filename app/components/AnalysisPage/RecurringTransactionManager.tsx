@@ -23,6 +23,7 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
+  useTheme,
 } from '@mui/material';
 import {
   Autorenew as RecurringIcon,
@@ -74,6 +75,7 @@ interface RecurringTransactionManagerProps {
 }
 
 const RecurringTransactionManager: React.FC<RecurringTransactionManagerProps> = ({ months = 6 }) => {
+  const theme = useTheme();
   const [patterns, setPatterns] = useState<RecurringPattern[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -488,7 +490,7 @@ const RecurringTransactionManager: React.FC<RecurringTransactionManagerProps> = 
         </DialogTitle>
         <DialogContent>
           {selectedPattern?.optimization_suggestions.map((suggestion, idx) => (
-            <Box key={idx} sx={{ mb: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Box key={idx} sx={{ mb: 3, p: 2, bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50', borderRadius: 1 }}>
               <Typography variant="subtitle2" gutterBottom>
                 {suggestion.title}
               </Typography>

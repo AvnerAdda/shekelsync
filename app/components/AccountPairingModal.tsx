@@ -45,9 +45,9 @@ interface Account {
   id: number;
   vendor: string;
   nickname?: string;
-  card6_digits?: string;
-  bank_account_number?: string;
-  account_numbers?: string[]; // Actual account numbers from transactions
+  card6_digits?: string; // Deprecated - kept for backward compatibility
+  bank_account_number?: string; // Deprecated - kept for backward compatibility
+  accountNumbers?: string[]; // Actual account numbers from transactions
   account_number?: string; // Single account number when expanded
 }
 
@@ -111,26 +111,52 @@ export default function AccountPairingModal({
   const [editMatchPatterns, setEditMatchPatterns] = useState<string[]>([]);
   const [newPatternInput, setNewPatternInput] = useState('');
   const [editNewPatternInput, setEditNewPatternInput] = useState('');
+  const [smartSelectLoading, setSmartSelectLoading] = useState(false);
   const { showNotification } = useNotification();
 
+  // Helper function to get display name for an account
+  const getAccountDisplayName = useCallback((account: Account, includeVendor: boolean = true): string => {
+    const parts: string[] = [];
+
+    // Part 1: Vendor (if requested)
+    if (includeVendor) {
+      parts.push(account.vendor);
+    }
+
+    // Part 2: Nickname (always show if available)
+    if (account.nickname) {
+      parts.push(account.nickname);
+    }
+
+    // Part 3: Account number with masking, or "Not yet scraped"
+    if (account.account_number) {
+      const masked = account.account_number.length > 4
+        ? `****${account.account_number.slice(-4)}`
+        : account.account_number;
+      parts.push(masked);
+    } else {
+      parts.push('Not yet scraped');
+    }
+
+    return parts.join(' - ');
+  }, []);
+
   const expandAccountsByNumbers = useCallback(() => {
-    // Expand accounts based on unique vendor+account_number combinations
+    // Expand accounts based on unique credential ID + account_number combinations
     const expanded: Account[] = [];
     const seenCombinations = new Set<string>();
 
     [...creditCardAccounts, ...bankAccounts].forEach((account) => {
-      // Get account numbers from appropriate field
-      const accountNumbersStr = account.card6_digits || account.bank_account_number || '';
+      // Get account numbers from the new accountNumbers field (from transactions)
+      const accountNumbersArray = account.accountNumbers || [];
 
-      if (accountNumbersStr) {
-        // Split by semicolon and create separate entry for each unique combination
-        const accountNumbers = accountNumbersStr.split(';').filter(Boolean);
-
-        accountNumbers.forEach((accNum) => {
+      if (accountNumbersArray.length > 0) {
+        // Create separate entry for each unique account number
+        accountNumbersArray.forEach((accNum) => {
           const trimmedAccNum = accNum.trim();
-          const combination = `${account.vendor}-${trimmedAccNum}`;
+          const combination = `${account.id}-${trimmedAccNum}`;
 
-          // Only add if we haven't seen this vendor+account_number combination
+          // Only add if we haven't seen this credential ID + account_number combination
           if (!seenCombinations.has(combination)) {
             seenCombinations.add(combination);
             expanded.push({
@@ -140,8 +166,8 @@ export default function AccountPairingModal({
           }
         });
       } else {
-        // No account numbers yet - still add it
-        const combination = `${account.vendor}-undefined`;
+        // No account numbers yet - add as individual entry using credential ID
+        const combination = `${account.id}-unscraped`;
         if (!seenCombinations.has(combination)) {
           seenCombinations.add(combination);
           expanded.push({
@@ -190,33 +216,91 @@ export default function AccountPairingModal({
 
   // Auto-extract unique transaction names from selected transactions
   useEffect(() => {
+    const patterns = new Set<string>();
+
+    // Add transaction names from selected transactions
     if (selectedTransactions.size > 0) {
-      const uniqueNames = new Set<string>();
       candidates.forEach(txn => {
         if (selectedTransactions.has(txn.identifier)) {
-          uniqueNames.add(txn.name);
+          patterns.add(txn.name);
         }
       });
-      setMatchPatterns(Array.from(uniqueNames));
-    } else {
-      setMatchPatterns([]);
     }
-  }, [selectedTransactions, candidates]);
+
+    // Add credit card nickname if available
+    if (selectedCreditCard?.nickname) {
+      patterns.add(selectedCreditCard.nickname);
+      // Also add individual words from nickname if multi-word
+      const words = selectedCreditCard.nickname.split(/\s+/).filter(w => w.length > 2);
+      words.forEach(word => patterns.add(word));
+    }
+
+    // Add credit card account number if available
+    if (selectedCreditCard?.account_number && selectedCreditCard.account_number !== 'undefined') {
+      patterns.add(selectedCreditCard.account_number);
+      // Add last 4 digits if longer
+      if (selectedCreditCard.account_number.length > 4) {
+        patterns.add(selectedCreditCard.account_number.slice(-4));
+      }
+    }
+
+    // Add card6_digits if available
+    if (selectedCreditCard?.card6_digits) {
+      const digits = selectedCreditCard.card6_digits.split(';').filter(Boolean);
+      digits.forEach(d => {
+        const trimmed = d.trim();
+        patterns.add(trimmed);
+        if (trimmed.length > 4) {
+          patterns.add(trimmed.slice(-4));
+        }
+      });
+    }
+
+    setMatchPatterns(Array.from(patterns).filter(p => p && p.length > 0));
+  }, [selectedTransactions, candidates, selectedCreditCard]);
 
   // Auto-extract unique transaction names from edit selected transactions
   useEffect(() => {
+    const patterns = new Set<string>();
+
+    // Add transaction names from selected transactions
     if (editSelectedTransactions.size > 0) {
-      const uniqueNames = new Set<string>();
       editCandidates.forEach(txn => {
         if (editSelectedTransactions.has(txn.identifier)) {
-          uniqueNames.add(txn.name);
+          patterns.add(txn.name);
         }
       });
-      setEditMatchPatterns(Array.from(uniqueNames));
-    } else {
-      setEditMatchPatterns([]);
     }
-  }, [editSelectedTransactions, editCandidates]);
+
+    // Add credit card nickname if available
+    if (editCreditCard?.nickname) {
+      patterns.add(editCreditCard.nickname);
+      const words = editCreditCard.nickname.split(/\s+/).filter(w => w.length > 2);
+      words.forEach(word => patterns.add(word));
+    }
+
+    // Add credit card account number if available
+    if (editCreditCard?.account_number && editCreditCard.account_number !== 'undefined') {
+      patterns.add(editCreditCard.account_number);
+      if (editCreditCard.account_number.length > 4) {
+        patterns.add(editCreditCard.account_number.slice(-4));
+      }
+    }
+
+    // Add card6_digits if available
+    if (editCreditCard?.card6_digits) {
+      const digits = editCreditCard.card6_digits.split(';').filter(Boolean);
+      digits.forEach(d => {
+        const trimmed = d.trim();
+        patterns.add(trimmed);
+        if (trimmed.length > 4) {
+          patterns.add(trimmed.slice(-4));
+        }
+      });
+    }
+
+    setEditMatchPatterns(Array.from(patterns).filter(p => p && p.length > 0));
+  }, [editSelectedTransactions, editCandidates, editCreditCard]);
 
   const handleNext = async () => {
     if (activeStep === 0) {
@@ -516,6 +600,46 @@ export default function AccountPairingModal({
     }
   };
 
+  const handleSmartSelect = async () => {
+    if (!selectedCreditCard || !selectedBank) {
+      showNotification('Please select accounts first', 'error');
+      return;
+    }
+
+    setSmartSelectLoading(true);
+    try {
+      const response = await apiClient.post('/api/accounts/smart-match', {
+        creditCardVendor: selectedCreditCard.vendor,
+        creditCardAccountNumber: selectedCreditCard.account_number || selectedCreditCard.card6_digits || null,
+        bankVendor: selectedBank.vendor,
+        bankAccountNumber: selectedBank.account_number || selectedBank.bank_account_number || null,
+        nickname: selectedCreditCard.nickname,
+        card6_digits: selectedCreditCard.card6_digits,
+      });
+
+      if (response.ok) {
+        const data = response.data as any;
+        const matchedIds = data.matches.map((m: any) => m.identifier);
+
+        // Select the matched transactions
+        setSelectedTransactions(new Set(matchedIds));
+
+        // Show notification with count
+        showNotification(
+          `Smart Select found ${matchedIds.length} matching transaction${matchedIds.length !== 1 ? 's' : ''}`,
+          'success'
+        );
+      } else {
+        showNotification('Failed to perform smart match', 'error');
+      }
+    } catch (error) {
+      console.error('Smart select error:', error);
+      showNotification('Error during smart selection', 'error');
+    } finally {
+      setSmartSelectLoading(false);
+    }
+  };
+
   const getMatchReasonLabel = (reason: string) => {
     switch (reason) {
       case 'account_number_match':
@@ -595,7 +719,7 @@ export default function AccountPairingModal({
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                         <LinkIcon fontSize="small" />
                         <Typography variant="body1">
-                          {pairing.creditCardVendor} ({pairing.creditCardAccountNumber || 'N/A'}) → {pairing.bankVendor} ({pairing.bankAccountNumber || 'N/A'})
+                          {pairing.creditCardVendor} ({pairing.creditCardAccountNumber || 'Not specified'}) → {pairing.bankVendor} ({pairing.bankAccountNumber || 'All accounts'})
                         </Typography>
                         {pairing.isActive && (
                           <Chip label="Active" size="small" color="success" />
@@ -683,13 +807,11 @@ export default function AccountPairingModal({
                   return !isPaired;
                 })
                 .map((account, idx) => {
-                  const accountNumberDisplay = account.account_number || 'No transactions yet';
                   const key = `${account.id}-${account.account_number || idx}`;
 
                   return (
                     <MenuItem key={key} value={`${account.id}-${account.account_number || 'undefined'}`}>
-                      {account.vendor} ({accountNumberDisplay})
-                      {account.nickname && ` - ${account.nickname}`}
+                      {getAccountDisplayName(account)}
                     </MenuItem>
                   );
                 })}
@@ -714,13 +836,11 @@ export default function AccountPairingModal({
               {expandedAccounts
                 .filter(acc => bankAccounts.some(b => b.id === acc.id))
                 .map((account, idx) => {
-                  const accountNumberDisplay = account.account_number || 'No transactions yet';
                   const key = `${account.id}-${account.account_number || idx}`;
 
                   return (
                     <MenuItem key={key} value={`${account.id}-${account.account_number || 'undefined'}`}>
-                      {account.vendor} ({accountNumberDisplay})
-                      {account.nickname && ` - ${account.nickname}`}
+                      {getAccountDisplayName(account)}
                     </MenuItem>
                   );
                 })}
@@ -740,12 +860,10 @@ export default function AccountPairingModal({
                 <Alert severity="info" sx={{ mb: 2 }}>
                   <AlertTitle>Selected Accounts</AlertTitle>
                   <Typography variant="body2">
-                    <strong>Credit Card:</strong> {selectedCreditCard?.vendor} ({selectedCreditCard?.account_number || 'N/A'})
-                    {selectedCreditCard?.nickname && ` - ${selectedCreditCard.nickname}`}
+                    <strong>Credit Card:</strong> {selectedCreditCard && getAccountDisplayName(selectedCreditCard)}
                   </Typography>
                   <Typography variant="body2">
-                    <strong>Bank Account:</strong> {selectedBank?.vendor} ({selectedBank?.account_number || 'N/A'})
-                    {selectedBank?.nickname && ` - ${selectedBank.nickname}`}
+                    <strong>Bank Account:</strong> {selectedBank && getAccountDisplayName(selectedBank)}
                   </Typography>
                 </Alert>
 
@@ -760,9 +878,19 @@ export default function AccountPairingModal({
                   <Typography variant="body2">
                     {selectedTransactions.size} of {candidates.length} selected
                   </Typography>
-                  <Button onClick={toggleAll} size="small">
-                    {selectedTransactions.size === candidates.length ? 'Deselect All' : 'Select All'}
-                  </Button>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                      onClick={handleSmartSelect}
+                      size="small"
+                      variant="outlined"
+                      disabled={smartSelectLoading}
+                    >
+                      {smartSelectLoading ? 'Searching...' : 'Smart Select'}
+                    </Button>
+                    <Button onClick={toggleAll} size="small">
+                      {selectedTransactions.size === candidates.length ? 'Deselect All' : 'Select All'}
+                    </Button>
+                  </Box>
                 </Box>
 
                 <TableContainer component={Paper} sx={{ maxHeight: 400 }}>

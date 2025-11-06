@@ -40,6 +40,7 @@ import {
   Fab,
   Badge,
   Tooltip,
+  useTheme,
 } from '@mui/material';
 import {
   AccountBalance as AccountIcon,
@@ -64,7 +65,7 @@ import {
 } from '@mui/icons-material';
 import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
-import UnifiedPortfolioModal from './UnifiedPortfolioModal';
+import InvestmentAccountsModal from './InvestmentAccountsModal';
 import { apiClient } from '@/lib/api-client';
 
 interface InvestmentData {
@@ -149,13 +150,23 @@ interface PortfolioSummary {
   restrictedAccounts: any[];
 }
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
-
 const InvestmentsPage: React.FC = () => {
+  const theme = useTheme();
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
   const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
   const accessStatus = getPageAccessStatus('investments');
   const isLocked = accessStatus.isLocked;
+
+  // Theme-aware color palette
+  const COLORS = [
+    theme.palette.primary.main,
+    theme.palette.success.main,
+    theme.palette.warning.main,
+    theme.palette.error.main,
+    theme.palette.secondary.main,
+    theme.palette.info.main,
+    '#14b8a6', // teal as fallback
+  ];
 
   const [data, setData] = useState<InvestmentData | null>(null);
   const [portfolioData, setPortfolioData] = useState<PortfolioSummary | null>(null);
@@ -508,11 +519,11 @@ const InvestmentsPage: React.FC = () => {
     return (
       <ResponsiveContainer width="100%" height={40}>
         <LineChart data={data}>
-          <Line 
-            type="monotone" 
-            dataKey="value" 
-            stroke="#3b82f6" 
-            strokeWidth={2} 
+          <Line
+            type="monotone"
+            dataKey="value"
+            stroke={theme.palette.primary.main}
+            strokeWidth={2}
             dot={false}
           />
         </LineChart>
@@ -547,35 +558,45 @@ const InvestmentsPage: React.FC = () => {
       <Box sx={{ p: 2, height: 300 }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis 
-              dataKey="date" 
-              tick={{ fontSize: 12 }}
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke={theme.palette.mode === 'dark' ? theme.palette.grey[700] : theme.palette.grey[300]}
+            />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
               angle={history.length > 30 ? -45 : 0}
               textAnchor={history.length > 30 ? "end" : "middle"}
               height={history.length > 30 ? 60 : 30}
+              stroke={theme.palette.text.disabled}
             />
-            <YAxis 
-              tick={{ fontSize: 12 }}
+            <YAxis
+              tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
               tickFormatter={(value) => maskAmounts ? '***' : `₪${(value / 1000).toFixed(0)}k`}
+              stroke={theme.palette.text.disabled}
             />
             <RechartsTooltip
               formatter={(value: any) => formatCurrencyValue(value)}
-              labelStyle={{ color: '#000' }}
+              labelStyle={{ color: theme.palette.text.primary }}
+              contentStyle={{
+                backgroundColor: theme.palette.background.paper,
+                border: `1px solid ${theme.palette.divider}`,
+                borderRadius: theme.shape.borderRadius,
+              }}
             />
             <Legend />
-            <Line 
-              type="monotone" 
-              dataKey="Current Value" 
-              stroke="#3b82f6" 
+            <Line
+              type="monotone"
+              dataKey="Current Value"
+              stroke={theme.palette.primary.main}
               strokeWidth={2}
               dot={{ r: 3 }}
               activeDot={{ r: 5 }}
             />
-            <Line 
-              type="monotone" 
-              dataKey="Cost Basis" 
-              stroke="#10b981" 
+            <Line
+              type="monotone"
+              dataKey="Cost Basis"
+              stroke={theme.palette.success.main}
               strokeWidth={2}
               dot={{ r: 3 }}
               activeDot={{ r: 5 }}
@@ -611,7 +632,7 @@ const InvestmentsPage: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <UnifiedPortfolioModal
+      <InvestmentAccountsModal
         open={portfolioModalOpen}
         onClose={() => setPortfolioModalOpen(false)}
         onComplete={handleSetupComplete}
@@ -658,7 +679,7 @@ const InvestmentsPage: React.FC = () => {
         </Box>
 
         {/* Enhanced Control Bar */}
-        <Paper sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, bgcolor: 'grey.50' }}>
+        <Paper sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50' }}>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             <Tooltip title="Filter investment data by time period">
               <FormControl size="small" sx={{ minWidth: 140 }}>
@@ -701,7 +722,7 @@ const InvestmentsPage: React.FC = () => {
       {portfolioData && portfolioData.summary.totalAccounts > 0 && (
         <Box sx={{ mb: 3 }}>
           {/* Overall Portfolio Summary */}
-          <Card sx={{ p: 3, mb: 3, bgcolor: 'grey.50' }}>
+          <Card sx={{ p: 3, mb: 3, bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
               <AccountIcon sx={{ mr: 2, fontSize: 28, color: 'primary.main' }} />
               <Box>
@@ -873,12 +894,15 @@ const InvestmentsPage: React.FC = () => {
               onChange={() => setShowOverallChart(!showOverallChart)}
               sx={{ mb: 2, '&:before': { display: 'none' } }}
             >
-              <AccordionSummary 
+              <AccordionSummary
                 expandIcon={<ExpandMoreIcon />}
-                sx={{ 
-                  bgcolor: 'primary.light',
-                  color: 'primary.dark',
-                  '&:hover': { bgcolor: 'primary.main', color: 'white' },
+                sx={{
+                  bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'primary.light',
+                  color: theme.palette.mode === 'dark' ? 'primary.light' : 'primary.dark',
+                  '&:hover': {
+                    bgcolor: 'primary.main',
+                    color: 'primary.contrastText'
+                  },
                   borderRadius: 1,
                   minHeight: 56
                 }}
@@ -919,11 +943,11 @@ const InvestmentsPage: React.FC = () => {
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, justifyContent: 'space-between', pr: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Box sx={{ 
-                        width: 40, 
-                        height: 40, 
-                        borderRadius: '50%', 
-                        bgcolor: 'primary.light',
+                      <Box sx={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: '50%',
+                        bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'primary.light',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -943,10 +967,12 @@ const InvestmentsPage: React.FC = () => {
                         {formatCurrencyValue(group.totalValue)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {group.percentage.toFixed(1)}% • 
+                        {group.percentage.toFixed(1)}% •
                         {group.totalCost > 0 && (
-                          <span style={{ 
-                            color: (group.totalValue - group.totalCost) >= 0 ? '#10b981' : '#ef4444',
+                          <span style={{
+                            color: (group.totalValue - group.totalCost) >= 0
+                              ? theme.palette.success.main
+                              : theme.palette.error.main,
                             fontWeight: 500,
                             marginLeft: 4
                           }}>

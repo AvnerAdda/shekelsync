@@ -53,6 +53,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CircularProgress from '@mui/material/CircularProgress';
 import SyncModal from './ScrapeModal';
 import AccountPairingModal from './AccountPairingModal';
+import InvestmentAccountSuggestionsCard from './InvestmentAccountSuggestionsCard';
 import {
   CREDIT_CARD_VENDORS,
   BANK_VENDORS,
@@ -78,6 +79,7 @@ interface Account {
   id_number?: string;
   card6_digits?: string;
   bank_account_number?: string;
+  accountNumbers?: string[]; // Account numbers from transactions
   identification_code?: string;
   num?: string;
   nationalID?: string;
@@ -305,6 +307,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           ...credential,
           lastUpdate: account.lastUpdate,
           lastScrapeStatus: account.lastScrapeStatus,
+          accountNumbers: account.accountNumbers || [], // Include account numbers from transactions
         };
       });
 
@@ -1642,6 +1645,17 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           {activeTab === 1 && (
             <Box>
               {/* Investments & Savings Tab */}
+
+              {/* Smart Investment Account Suggestions - Show at top */}
+              {!isAdding && (
+                <InvestmentAccountSuggestionsCard
+                  onSuggestionCreated={() => {
+                    loadInvestmentAccounts();
+                    handleRefreshData();
+                  }}
+                />
+              )}
+
               {isAdding && currentAccountType === 'investment' ? (
                 <Card sx={{ mb: 3 }}>
                   <CardHeader title="Add Investment Account" />

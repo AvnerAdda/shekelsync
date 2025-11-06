@@ -5,6 +5,7 @@ const lastUpdateService = require('../services/accounts/last-update.js');
 const pairingsService = require('../services/accounts/pairings.js');
 const unpairedService = require('../services/accounts/unpaired.js');
 const lastTransactionDateService = require('../services/accounts/last-transaction-date.js');
+const smartMatchService = require('../services/accounts/smart-match.js');
 
 function handleServiceError(res, error, fallbackMessage) {
   const status = error?.status || error?.statusCode || 500;
@@ -109,6 +110,16 @@ function createAccountsRouter() {
     } catch (error) {
       console.error('Last transaction date error:', error);
       handleServiceError(res, error, 'Failed to fetch last transaction date');
+    }
+  });
+
+  router.post('/smart-match', async (req, res) => {
+    try {
+      const result = await smartMatchService.findSmartMatches(req.body || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Smart match error:', error);
+      handleServiceError(res, error, 'Failed to perform smart match');
     }
   });
 

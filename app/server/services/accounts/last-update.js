@@ -8,7 +8,8 @@ async function listAccountLastUpdates() {
         vc.vendor,
         vc.nickname,
         COALESCE(last_scrapes.last_successful_scrape, vc.created_at) AS last_update,
-        last_scrapes.status AS last_scrape_status
+        last_scrapes.status AS last_scrape_status,
+        account_numbers.account_numbers
       FROM vendor_credentials vc
       LEFT JOIN (
         SELECT
@@ -24,6 +25,15 @@ async function listAccountLastUpdates() {
         FROM scrape_events se
         GROUP BY se.vendor
       ) last_scrapes ON vc.vendor = last_scrapes.vendor
+      LEFT JOIN (
+        SELECT
+          t.vendor,
+          t.vendor_nickname,
+          GROUP_CONCAT(DISTINCT t.account_number) AS account_numbers
+        FROM transactions t
+        WHERE t.account_number IS NOT NULL
+        GROUP BY t.vendor, t.vendor_nickname
+      ) account_numbers ON vc.vendor = account_numbers.vendor AND vc.nickname = account_numbers.vendor_nickname
       ORDER BY vc.nickname ASC
     `,
   );
@@ -34,6 +44,7 @@ async function listAccountLastUpdates() {
     nickname: row.nickname,
     lastUpdate: row.last_update,
     lastScrapeStatus: row.last_scrape_status || 'never',
+    accountNumbers: row.account_numbers ? row.account_numbers.split(',') : [],
   }));
 }
 

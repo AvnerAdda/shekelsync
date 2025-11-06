@@ -201,15 +201,11 @@ const BudgetsPage: React.FC = () => {
 
       if (editingBudget) {
         await apiClient.put('/api/budgets', {
-          method: 'PUT',
           id: editingBudget.id,
           budget_limit: payload.budget_limit,
         });
       } else {
-        await apiClient.post('/api/budgets', {
-          method: 'POST',
-          payload,
-        });
+        await apiClient.post('/api/budgets', payload);
       }
 
       fetchBudgets();
@@ -223,9 +219,7 @@ const BudgetsPage: React.FC = () => {
     if (!confirm('Are you sure you want to delete this budget?')) return;
 
     try {
-      await apiClient.delete(`/api/budgets?id=${id}`, {
-        method: 'DELETE',
-      });
+      await apiClient.delete(`/api/budgets?id=${id}`);
       fetchBudgets();
     } catch (error) {
       console.error('Error deleting budget:', error);
