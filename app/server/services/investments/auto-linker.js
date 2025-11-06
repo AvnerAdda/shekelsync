@@ -1,0 +1,310 @@
+/**
+ * Auto-Linker Service
+ * Automatically links transactions to investment accounts when accounts are created from suggestions
+ */
+
+import { getPool } from '../../../utils/db.js';
+
+/**
+ * Link a single transaction to an investment account
+ * @param {object} params
+ * @param {string} params.transactionIdentifier
+ * @param {string} params.transactionVendor
+ * @param {string} params.transactionDate
+ * @param {number} params.accountId
+ * @param {string} params.linkMethod - 'auto', 'manual', or 'pattern'
+ * @param {number} params.confidence - Confidence score (0-1)
+ * @param {string} params.createdBy - 'system' or 'user'
+ * @returns {Promise<object>} Created link
+ */
+async function linkTransactionToAccount(params) {
+  const {
+    transactionIdentifier,
+    transactionVendor,
+    transactionDate,
+    accountId,
+    linkMethod = 'auto',
+    confidence = 1.0,
+    createdBy = 'system'
+  } = params;
+
+  const pool = getPool();
+
+  const query = `
+    INSERT INTO transaction_account_links (
+      transaction_identifier,
+      transaction_vendor,
+      transaction_date,
+      account_id,
+      link_method,
+      confidence,
+      created_by
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(transaction_identifier, transaction_vendor) DO UPDATE SET
+      account_id = excluded.account_id,
+      link_method = excluded.link_method,
+      confidence = excluded.confidence,
+      created_at = datetime('now')
+    RETURNING *
+  `;
+
+  const result = await pool.query(query, [
+    transactionIdentifier,
+    transactionVendor,
+    transactionDate,
+    accountId,
+    linkMethod,
+    confidence,
+    createdBy
+  ]);
+
+  return result.rows[0];
+}
+
+/**
+ * Link multiple transactions to an account in a single operation
+ * @param {number} accountId - Investment account ID
+ * @param {Array<object>} transactions - Array of transaction objects
+ * @param {string} linkMethod - Link method (default 'auto')
+ * @param {number} confidence - Confidence score (default 1.0)
+ * @returns {Promise<object>} Summary of linking operation
+ */
+async function linkMultipleTransactions(accountId, transactions, linkMethod = 'auto', confidence = 1.0) {
+  const pool = getPool();
+
+  const successfulLinks = [];
+  const failedLinks = [];
+
+  for (const transaction of transactions) {
+    try {
+      const link = await linkTransactionToAccount({
+        transactionIdentifier: transaction.transactionIdentifier || transaction.identifier,
+        transactionVendor: transaction.transactionVendor || transaction.vendor,
+        transactionDate: transaction.transactionDate || transaction.date,
+        accountId,
+        linkMethod,
+        confidence: transaction.confidence || confidence,
+        createdBy: 'system'
+      });
+
+      successfulLinks.push(link);
+    } catch (error) {
+      failedLinks.push({
+        transaction,
+        error: error.message
+      });
+    }
+  }
+
+  return {
+    totalAttempted: transactions.length,
+    successCount: successfulLinks.length,
+    failureCount: failedLinks.length,
+    successfulLinks,
+    failedLinks
+  };
+}
+
+/**
+ * Link all transactions from approved suggestions to an account
+ * @param {number} accountId - Investment account ID
+ * @param {Array<string>} suggestionIds - Array of pending_transaction_suggestions IDs
+ * @returns {Promise<object>} Linking result summary
+ */
+async function linkFromSuggestions(accountId, suggestionIds) {
+  const pool = getPool();
+
+  // Get all transactions from the suggestions
+  const placeholders = suggestionIds.map(() => '?').join(',');
+  const query = `
+    SELECT
+      transaction_identifier,
+      transaction_vendor,
+      transaction_date,
+      confidence
+    FROM pending_transaction_suggestions
+    WHERE id IN (${placeholders})
+      AND status = 'pending'
+  `;
+
+  const result = await pool.query(query, suggestionIds);
+  const transactions = result.rows;
+
+  if (transactions.length === 0) {
+    return {
+      totalAttempted: 0,
+      successCount: 0,
+      failureCount: 0,
+      successfulLinks: [],
+      failedLinks: []
+    };
+  }
+
+  // Link all transactions
+  const linkResult = await linkMultipleTransactions(accountId, transactions, 'auto');
+
+  // Update suggestions status to 'approved'
+  if (linkResult.successCount > 0) {
+    const updateQuery = `
+      UPDATE pending_transaction_suggestions
+      SET status = 'approved',
+          suggested_account_id = ?,
+          reviewed_at = datetime('now')
+      WHERE id IN (${placeholders})
+    `;
+
+    await pool.query(updateQuery, [accountId, ...suggestionIds]);
+  }
+
+  return linkResult;
+}
+
+/**
+ * Link transactions from a grouped suggestion (all transactions in the group)
+ * @param {number} accountId - Investment account ID
+ * @param {object} groupedSuggestion - Grouped suggestion object from analyzer
+ * @returns {Promise<object>} Linking result summary
+ */
+async function linkFromGroupedSuggestion(accountId, groupedSuggestion) {
+  const transactions = groupedSuggestion.transactions || [];
+
+  if (transactions.length === 0) {
+    return {
+      totalAttempted: 0,
+      successCount: 0,
+      failureCount: 0,
+      successfulLinks: [],
+      failedLinks: []
+    };
+  }
+
+  // Link all transactions
+  const linkResult = await linkMultipleTransactions(accountId, transactions, 'auto');
+
+  // Mark as processed in pending_transaction_suggestions if they exist
+  const pool = getPool();
+
+  for (const transaction of transactions) {
+    try {
+      const updateQuery = `
+        UPDATE pending_transaction_suggestions
+        SET status = 'approved',
+            suggested_account_id = ?,
+            reviewed_at = datetime('now')
+        WHERE transaction_identifier = ?
+          AND transaction_vendor = ?
+          AND status = 'pending'
+      `;
+
+      await pool.query(updateQuery, [
+        accountId,
+        transaction.transactionIdentifier,
+        transaction.transactionVendor
+      ]);
+    } catch (error) {
+      console.error(`Failed to update suggestion status for transaction ${transaction.transactionIdentifier}:`, error);
+    }
+  }
+
+  return linkResult;
+}
+
+/**
+ * Unlink a transaction from an investment account
+ * @param {string} transactionIdentifier
+ * @param {string} transactionVendor
+ * @returns {Promise<boolean>} Success status
+ */
+async function unlinkTransaction(transactionIdentifier, transactionVendor) {
+  const pool = getPool();
+
+  const query = `
+    DELETE FROM transaction_account_links
+    WHERE transaction_identifier = ?
+      AND transaction_vendor = ?
+  `;
+
+  const result = await pool.query(query, [transactionIdentifier, transactionVendor]);
+
+  return result.rowsAffected > 0;
+}
+
+/**
+ * Get all linked transactions for an account
+ * @param {number} accountId - Investment account ID
+ * @returns {Promise<Array>} Array of linked transactions
+ */
+async function getLinkedTransactions(accountId) {
+  const pool = getPool();
+
+  const query = `
+    SELECT
+      tal.*,
+      t.description,
+      t.date,
+      t.price,
+      t.vendor as transaction_vendor_name
+    FROM transaction_account_links tal
+    JOIN transactions t ON tal.transaction_identifier = t.identifier
+      AND tal.transaction_vendor = t.vendor
+    WHERE tal.account_id = ?
+    ORDER BY t.date DESC
+  `;
+
+  const result = await pool.query(query, [accountId]);
+
+  return result.rows;
+}
+
+/**
+ * Calculate cost basis from linked transactions
+ * @param {number} accountId - Investment account ID
+ * @returns {Promise<number>} Total cost basis
+ */
+async function calculateCostBasis(accountId) {
+  const pool = getPool();
+
+  const query = `
+    SELECT SUM(ABS(t.price)) as total_cost
+    FROM transaction_account_links tal
+    JOIN transactions t ON tal.transaction_identifier = t.identifier
+      AND tal.transaction_vendor = t.vendor
+    WHERE tal.account_id = ?
+      AND t.price < 0
+  `;
+
+  const result = await pool.query(query, [accountId]);
+
+  return result.rows[0]?.total_cost || 0;
+}
+
+/**
+ * Get transaction count for an account
+ * @param {number} accountId - Investment account ID
+ * @returns {Promise<number>} Transaction count
+ */
+async function getTransactionCount(accountId) {
+  const pool = getPool();
+
+  const query = `
+    SELECT COUNT(*) as count
+    FROM transaction_account_links
+    WHERE account_id = ?
+  `;
+
+  const result = await pool.query(query, [accountId]);
+
+  return result.rows[0]?.count || 0;
+}
+
+export {
+  linkTransactionToAccount,
+  linkMultipleTransactions,
+  linkFromSuggestions,
+  linkFromGroupedSuggestion,
+  unlinkTransaction,
+  getLinkedTransactions,
+  calculateCostBasis,
+  getTransactionCount
+};

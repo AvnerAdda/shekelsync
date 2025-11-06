@@ -169,6 +169,7 @@ const TABLE_DEFINITIONS = [
   `CREATE TABLE IF NOT EXISTS transactions (
       identifier TEXT NOT NULL,
       vendor TEXT NOT NULL,
+      vendor_nickname TEXT,
       date TEXT NOT NULL,
       name TEXT NOT NULL,
       price REAL NOT NULL,
@@ -283,6 +284,7 @@ const TABLE_DEFINITIONS = [
       notes TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(account_id, as_of_date),
       FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE
     );`,
   `CREATE TABLE IF NOT EXISTS investment_holdings_history (
@@ -293,6 +295,7 @@ const TABLE_DEFINITIONS = [
       snapshot_date TEXT NOT NULL,
       notes TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(account_id, snapshot_date),
       FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE
     );`,
   `CREATE TABLE IF NOT EXISTS account_transaction_patterns (
@@ -315,9 +318,14 @@ const TABLE_DEFINITIONS = [
       transaction_date TEXT,
       transaction_amount REAL,
       suggested_account_id INTEGER,
+      suggested_account_type TEXT,
+      suggested_institution TEXT,
+      suggested_account_name TEXT,
       confidence REAL,
       match_reason TEXT,
       status TEXT NOT NULL DEFAULT 'pending',
+      dismiss_count INTEGER DEFAULT 0,
+      last_dismissed_at TEXT,
       reviewed_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (transaction_identifier, transaction_vendor)
@@ -477,6 +485,8 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_patterns_account ON account_transaction_patterns (account_id);',
   'CREATE INDEX IF NOT EXISTS idx_pending_created ON pending_transaction_suggestions (created_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_transaction_suggestions (status);',
+  'CREATE INDEX IF NOT EXISTS idx_pending_account_type ON pending_transaction_suggestions (suggested_account_type);',
+  'CREATE INDEX IF NOT EXISTS idx_pending_dismissed ON pending_transaction_suggestions (dismiss_count, last_dismissed_at);',
   'CREATE INDEX IF NOT EXISTS idx_recurring_confidence ON recurring_transaction_analysis (confidence_score DESC);',
   'CREATE INDEX IF NOT EXISTS idx_recurring_merchant ON recurring_transactions (merchant_name, is_active);',
   'CREATE INDEX IF NOT EXISTS idx_recurring_next_date ON recurring_transactions (next_expected_date, is_active);',
@@ -495,6 +505,7 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_transactions_price ON transactions (price);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor ON transactions (vendor);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_datetime ON transactions (vendor, transaction_datetime DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_nickname ON transactions (vendor, vendor_nickname);',
   'CREATE INDEX IF NOT EXISTS idx_txn_links_account ON transaction_account_links (account_id);',
   'CREATE INDEX IF NOT EXISTS idx_txn_links_identifier ON transaction_account_links (transaction_identifier);',
   'CREATE INDEX IF NOT EXISTS idx_vendor_credentials_last_scrape ON vendor_credentials (vendor, last_scrape_success DESC);',

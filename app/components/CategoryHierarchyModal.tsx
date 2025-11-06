@@ -87,6 +87,8 @@ import {
   CardGiftcard as CardGiftcardIcon,
   ChildCare as ChildCareIcon,
   MenuBook as MenuBookIcon,
+  Search as SearchIcon,
+  Clear as ClearIcon,
 } from '@mui/icons-material';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
@@ -115,6 +117,8 @@ interface PatternRule {
   subcategory?: string;
   category_definition_id?: number;
   category_type?: 'expense' | 'investment' | 'income';
+  category_name?: string;
+  category_name_en?: string;
   is_active: boolean;
   priority: number;
 }
@@ -242,6 +246,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [newRuleParentId, setNewRuleParentId] = useState<number | null>(null);
   const [newRuleCategoryId, setNewRuleCategoryId] = useState<number | null>(null);
   const [isApplyingRules, setIsApplyingRules] = useState(false);
+  const [ruleSearchQuery, setRuleSearchQuery] = useState<string>('');
 
   // Transaction Preview State
   const [ruleTransactionCounts, setRuleTransactionCounts] = useState<Map<number, number>>(new Map());
@@ -589,6 +594,20 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       setSuccess('Transaction categorized successfully');
       setTimeout(() => setSuccess(null), 3000);
+
+      // Dispatch category assignment event for investment notification service
+      if (draft.type === 'investment') {
+        const categoryAssignedEvent = new CustomEvent('categoryAssigned', {
+          detail: {
+            transactionId: txn.identifier,
+            transactionVendor: txn.vendor,
+            transactionDescription: txn.name,
+            categoryName: categoryDefinition.name,
+            categoryType: draft.type
+          }
+        });
+        window.dispatchEvent(categoryAssignedEvent);
+      }
 
       await fetchCategories();
       onCategoriesUpdated();
@@ -2095,19 +2114,61 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         </Paper>
 
         {/* Rules List */}
-        <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-          Active Rules ({rules.length})
-        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+            <Typography variant="subtitle1" fontWeight="bold">
+              Active Rules ({rules.filter(rule => {
+                if (!ruleSearchQuery.trim()) return true;
+                const query = ruleSearchQuery.toLowerCase();
+                const patternMatch = rule.name_pattern?.toLowerCase().includes(query);
+                const categoryMatch = (rule.category_name || rule.target_category || rule.parent_category || rule.subcategory || '')?.toLowerCase().includes(query);
+                return patternMatch || categoryMatch;
+              }).length} {ruleSearchQuery.trim() ? `/ ${rules.length}` : ''})
+            </Typography>
+          </Box>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search rules by pattern or category..."
+            value={ruleSearchQuery}
+            onChange={(e) => setRuleSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+              endAdornment: ruleSearchQuery && (
+                <IconButton
+                  size="small"
+                  onClick={() => setRuleSearchQuery('')}
+                  sx={{ ml: 1 }}
+                >
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              ),
+            }}
+            sx={{ mb: 2 }}
+          />
+        </Box>
         {rules.length === 0 ? (
           <Alert severity="info">
             No rules created yet. Add your first rule above to automatically categorize transactions.
           </Alert>
         ) : (
           <Grid container spacing={2}>
-            {rules.map(rule => {
+            {rules.filter(rule => {
+              if (!ruleSearchQuery.trim()) return true;
+              const query = ruleSearchQuery.toLowerCase();
+              const patternMatch = rule.name_pattern?.toLowerCase().includes(query);
+              const categoryMatch = (rule.category_name || rule.target_category || rule.parent_category || rule.subcategory || '')?.toLowerCase().includes(query);
+              return patternMatch || categoryMatch;
+            }).map(rule => {
               const transactionCount = ruleTransactionCounts.get(rule.id) || 0;
               const isExpanded = expandedRuleId === rule.id;
               const previewData = rulePreviewData.get(rule.id);
+
+              // Get category details for display
+              const ruleCategory = rule.category_definition_id ? categoryLookup.get(rule.category_definition_id) : null;
+              const categoryDisplayName = rule.category_name || rule.target_category || rule.parent_category || 'Unknown';
+              const categoryDisplayIcon = ruleCategory ? getCategoryIcon(ruleCategory) : null;
+              const categoryDisplayColor = ruleCategory?.color;
 
               return (
                 <Grid item xs={12} key={rule.id}>
@@ -2126,10 +2187,31 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                               variant="outlined"
                             />
                           </Box>
-                          <Typography variant="body2" color="text.secondary">
-                            THEN categorize as: {rule.target_category || rule.parent_category}
-                            {rule.subcategory && ` › ${rule.subcategory}`}
-                          </Typography>
+                          <Box display="flex" alignItems="center" gap={0.5}>
+                            <Typography variant="body2" color="text.secondary">
+                              THEN categorize as:
+                            </Typography>
+                            {categoryDisplayIcon && (
+                              <Box display="flex" alignItems="center">
+                                {categoryDisplayIcon}
+                              </Box>
+                            )}
+                            <Typography
+                              variant="body2"
+                              fontWeight="medium"
+                              sx={{
+                                color: categoryDisplayColor || 'text.primary',
+                              }}
+                            >
+                              {categoryDisplayName}
+                              {rule.category_name_en && ` (${rule.category_name_en})`}
+                            </Typography>
+                            {rule.subcategory && (
+                              <Typography variant="body2" color="text.secondary">
+                                › {rule.subcategory}
+                              </Typography>
+                            )}
+                          </Box>
                         </Box>
                         <Box display="flex" alignItems="center" gap={1}>
                           <Chip

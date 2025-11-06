@@ -19,6 +19,7 @@ import {
   Skeleton,
   Fab,
   Collapse,
+  useTheme,
 } from '@mui/material';
 import {
   TrendingUp as TrendIcon,
@@ -92,6 +93,7 @@ interface PersonalIntelligence {
 }
 
 const AnalysisPage: React.FC = () => {
+  const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [intelligence, setIntelligence] = useState<PersonalIntelligence | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -748,8 +750,10 @@ const AnalysisPage: React.FC = () => {
           sx={{
             borderRadius: 2,
             bgcolor: expandedSections.actions ? 'primary.main' : 'background.paper',
-            color: expandedSections.actions ? 'white' : 'text.primary',
-            '&:hover': { bgcolor: expandedSections.actions ? 'primary.dark' : 'grey.50' }
+            color: expandedSections.actions ? 'primary.contrastText' : 'text.primary',
+            '&:hover': {
+              bgcolor: expandedSections.actions ? 'primary.dark' : (theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50')
+            }
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -784,8 +788,10 @@ const AnalysisPage: React.FC = () => {
           sx={{
             borderRadius: 2,
             bgcolor: expandedSections.recurring ? 'info.main' : 'background.paper',
-            color: expandedSections.recurring ? 'white' : 'text.primary',
-            '&:hover': { bgcolor: expandedSections.recurring ? 'info.dark' : 'grey.50' }
+            color: expandedSections.recurring ? 'info.contrastText' : 'text.primary',
+            '&:hover': {
+              bgcolor: expandedSections.recurring ? 'info.dark' : (theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50')
+            }
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -814,8 +820,10 @@ const AnalysisPage: React.FC = () => {
           sx={{
             borderRadius: 2,
             bgcolor: expandedSections.opportunities ? 'success.main' : 'background.paper',
-            color: expandedSections.opportunities ? 'white' : 'text.primary',
-            '&:hover': { bgcolor: expandedSections.opportunities ? 'success.dark' : 'grey.50' }
+            color: expandedSections.opportunities ? 'success.contrastText' : 'text.primary',
+            '&:hover': {
+              bgcolor: expandedSections.opportunities ? 'success.dark' : (theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50')
+            }
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -844,8 +852,10 @@ const AnalysisPage: React.FC = () => {
           sx={{
             borderRadius: 2,
             bgcolor: expandedSections.insights ? 'secondary.main' : 'background.paper',
-            color: expandedSections.insights ? 'white' : 'text.primary',
-            '&:hover': { bgcolor: expandedSections.insights ? 'secondary.dark' : 'grey.50' }
+            color: expandedSections.insights ? 'secondary.contrastText' : 'text.primary',
+            '&:hover': {
+              bgcolor: expandedSections.insights ? 'secondary.dark' : (theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50')
+            }
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

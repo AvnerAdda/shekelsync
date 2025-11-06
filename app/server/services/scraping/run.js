@@ -194,7 +194,7 @@ async function markVendorScrapeStatus(client, vendor, status) {
   await client.query(sql, values);
 }
 
-async function insertTransaction(txn, client, companyId, isBank, accountNumber) {
+async function insertTransaction(txn, client, companyId, isBank, accountNumber, vendorNickname) {
   const uniqueId = `${txn.identifier}-${companyId}-${txn.processedDate}-${txn.description}`;
   const hash = crypto.createHash('sha1');
   hash.update(uniqueId);
@@ -206,6 +206,7 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
       `INSERT INTO transactions (
         identifier,
         vendor,
+        vendor_nickname,
         date,
         name,
         price,
@@ -224,11 +225,12 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
         category_type,
         transaction_datetime,
         processed_datetime
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       ON CONFLICT (identifier, vendor) DO NOTHING`,
       [
         identifier,
         companyId,
+        vendorNickname || null,
         new Date(txn.date),
         txn.description,
         txn.chargedAmount || txn.originalAmount || 0,
@@ -288,6 +290,7 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
     `INSERT INTO transactions (
       identifier,
       vendor,
+      vendor_nickname,
       date,
       name,
       price,
@@ -306,11 +309,12 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber) 
       category_type,
       transaction_datetime,
       processed_datetime
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
     ON CONFLICT (identifier, vendor) DO NOTHING`,
     [
       identifier,
       companyId,
+      vendorNickname || null,
       new Date(txn.date),
       txn.description,
       amount,
@@ -509,23 +513,15 @@ async function updateVendorAccountNumbers(client, options, credentials, discover
   const accountNumbersStr = Array.from(discoveredAccountNumbers).join(';');
   const fieldName = isBank ? 'bank_account_number' : 'card6_digits';
 
-  const params = [accountNumbersStr, options.companyId];
-  let whereClause = 'WHERE vendor = $2';
-
-  if (credentials.username) {
-    params.push(credentials.username);
-    whereClause += ` AND username = $${params.length}`;
-  } else if (credentials.id) {
-    params.push(credentials.id);
-    whereClause += ` AND id_number = $${params.length}`;
-  }
-
+  // Fix: Match by credential ID (primary key) instead of encrypted username/id_number
+  // credentials.id is the database row ID which uniquely identifies the credential
   await client.query(
     `UPDATE vendor_credentials
         SET ${fieldName} = $1,
             updated_at = CURRENT_TIMESTAMP
-      ${whereClause}`,
-    params,
+      WHERE vendor = $2
+        AND id = $3`,
+    [accountNumbersStr, options.companyId, credentials.id],
   );
 }
 
@@ -569,7 +565,7 @@ async function processScrapeResult(client, { options, credentials, result, isBan
       if (isBank) {
         bankTransactions += 1;
       }
-      await insertTransaction(txn, client, options.companyId, isBank, account.accountNumber);
+      await insertTransaction(txn, client, options.companyId, isBank, account.accountNumber, credentials.nickname);
     }
   }
 

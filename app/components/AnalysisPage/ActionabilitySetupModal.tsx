@@ -25,6 +25,7 @@ import {
   Paper,
   TextField,
   InputAdornment,
+  useTheme,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -63,6 +64,7 @@ type SortField = 'amount' | 'category' | 'level';
 type SortDirection = 'asc' | 'desc';
 
 const ActionabilitySetupModal: React.FC<ActionabilitySetupModalProps> = ({ open, onClose, onSave }) => {
+  const theme = useTheme();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -392,19 +394,19 @@ const ActionabilitySetupModal: React.FC<ActionabilitySetupModalProps> = ({ open,
         )}
 
         {/* Legend */}
-        <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+        <Box sx={{ mt: 2, p: 2, bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50', borderRadius: 1 }}>
           <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
             <strong>Actionability Levels:</strong>
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
             <Typography variant="caption" color="text.secondary">
-              <strong style={{ color: '#f44336' }}>🔴 Low:</strong> Fixed costs (Insurance, Rent, Mortgage) - Limited optimization potential
+              <strong style={{ color: theme.palette.error.main }}>🔴 Low:</strong> Fixed costs (Insurance, Rent, Mortgage) - Limited optimization potential
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              <strong style={{ color: '#ff9800' }}>🟡 Medium:</strong> Can optimize (Phone, Internet, Utilities) - Negotiate or reduce
+              <strong style={{ color: theme.palette.warning.main }}>🟡 Medium:</strong> Can optimize (Phone, Internet, Utilities) - Negotiate or reduce
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              <strong style={{ color: '#4caf50' }}>🟢 High:</strong> Flexible spending (Food, Entertainment) - Easiest to reduce
+              <strong style={{ color: theme.palette.success.main }}>🟢 High:</strong> Flexible spending (Food, Entertainment) - Easiest to reduce
             </Typography>
           </Box>
         </Box>
