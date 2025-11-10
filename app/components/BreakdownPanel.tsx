@@ -102,16 +102,6 @@ interface BreakdownSummary {
   max: number;
 }
 
-interface DetailedTransaction {
-  date: string;
-  name: string;
-  price: number;
-  vendor: string;
-  category: string;
-  parentCategory: string;
-  account_number?: string;
-}
-
 interface BreakdownPanelProps {
   breakdowns: BreakdownData;
   startDate: Date;

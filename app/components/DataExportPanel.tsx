@@ -14,7 +14,6 @@ import {
   Grid,
   Alert,
   CircularProgress,
-  Divider,
   Card,
   CardContent,
   LinearProgress,
@@ -26,8 +25,6 @@ import {
   Download as DownloadIcon,
   GetApp as ExportIcon,
   DateRange as DateIcon,
-  Category as CategoryIcon,
-  Store as VendorIcon,
   Description as FileIcon,
   CheckCircle as SuccessIcon,
   Error as ErrorIcon,
@@ -35,7 +32,7 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { format as formatDate, subMonths, startOfYear, startOfMonth, endOfMonth } from 'date-fns';
+import { format as formatDate, subMonths, startOfYear } from 'date-fns';
 import { apiClient } from '@/lib/api-client';
 
 interface ExportStatus {

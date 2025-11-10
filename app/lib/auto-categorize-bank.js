@@ -2,7 +2,6 @@ const { matchCategorizationRule } = require('./category-helpers.js');
 
 async function autoCategorizeBankTransaction({
   transactionName,
-  accountNumber,
   client,
 }) {
   if (!transactionName) {

@@ -483,7 +483,6 @@ async function getNotifications(query = {}) {
 
     // 5. Cash flow alert
     if (type === 'all' || type === NOTIFICATION_TYPES.CASH_FLOW_ALERT) {
-      const thirtyDaysAgoStr = toISODate(subDays(now, 30));
       const fifteenDaysAgoStr = toISODate(subDays(now, 15));
 
       const cashFlowResult = await client.query(

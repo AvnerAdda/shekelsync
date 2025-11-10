@@ -3,7 +3,7 @@
  * Intelligent investment account detection from transaction descriptions
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 // Mock the database module BEFORE importing the analyzer
 vi.mock('../../../../utils/db.js', () => ({

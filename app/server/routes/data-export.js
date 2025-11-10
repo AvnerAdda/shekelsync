@@ -10,7 +10,7 @@ function createDataExportRouter() {
       const result = await dataExportService.exportData(req.query || {});
       res.setHeader('Content-Type', result.contentType);
       if (result.filename) {
-        res.setHeader('Content-Disposition', `attachment; filename=\"${result.filename}\"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
       }
 
       if (result.format === 'json') {

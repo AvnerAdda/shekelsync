@@ -16,8 +16,6 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  IconButton,
-  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -33,9 +31,7 @@ import {
   Lightbulb as LightbulbIcon,
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
-  Info as InfoIcon,
   Star as StarIcon,
-  AttachMoney as MoneyIcon
 } from '@mui/icons-material';
 import { apiClient } from '@/lib/api-client';
 

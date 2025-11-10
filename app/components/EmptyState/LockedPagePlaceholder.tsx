@@ -6,8 +6,6 @@ import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 import SyncIcon from '@mui/icons-material/Sync';
-import type { PageAccessStatus } from '../../contexts/OnboardingContext';
-
 interface OnboardingStatus {
   isComplete: boolean;
   completedSteps: {
@@ -30,7 +28,6 @@ interface OnboardingStatus {
 
 interface LockedPagePlaceholderProps {
   page: 'analysis' | 'investments' | 'budgets';
-  accessStatus: PageAccessStatus;
   onboardingStatus: OnboardingStatus | null;
 }
 
@@ -54,7 +51,6 @@ const pageContent = {
 
 export const LockedPagePlaceholder: React.FC<LockedPagePlaceholderProps> = ({
   page,
-  accessStatus,
   onboardingStatus
 }) => {
   const content = pageContent[page];

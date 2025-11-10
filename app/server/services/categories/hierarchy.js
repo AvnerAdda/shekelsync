@@ -1,23 +1,5 @@
 const database = require('../database.js');
 
-const CREDIT_CARD_VENDORS = ['visaCal', 'max', 'isracard', 'amex'];
-const BANK_VENDORS = [
-  'hapoalim',
-  'leumi',
-  'mizrahi',
-  'otsarHahayal',
-  'beinleumi',
-  'massad',
-  'yahav',
-  'union',
-  'discount',
-  'mercantile',
-  'beyahadBishvilha',
-  'behatsdaa',
-  'pagi',
-  'oneZero',
-];
-
 function serviceError(status, message) {
   const error = new Error(message);
   error.status = status;
@@ -48,10 +30,6 @@ function normalizeNumeric(value, field, { required = false } = {}) {
     throw serviceError(400, `${field} must be a number`);
   }
   return parsed;
-}
-
-function buildPlaceholders(values, startIndex = 1) {
-  return values.map((_, index) => `$${startIndex + index}`).join(', ');
 }
 
 async function listHierarchy(params = {}) {

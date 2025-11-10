@@ -36,7 +36,6 @@ import {
   ListItemIcon,
 } from '@mui/material';
 import {
-  Close as CloseIcon,
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
@@ -47,7 +46,6 @@ import {
   MonetizationOn as IncomeIcon,
   ShoppingCart as ExpenseIcon,
   PlayArrow as PlayArrowIcon,
-  Refresh as RefreshIcon,
   ToggleOn as ToggleOnIcon,
   ToggleOff as ToggleOffIcon,
   Visibility as VisibilityIcon,
@@ -237,7 +235,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
   // Pattern Rules State
   const [rules, setRules] = useState<PatternRule[]>([]);
-  const [editingRule, setEditingRule] = useState<PatternRule | null>(null);
   const [newRule, setNewRule] = useState<Partial<PatternRule>>({
     name_pattern: '',
     category_type: 'expense',
@@ -515,21 +512,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       return next;
     });
   }, [uncategorized, categories, buildCategoryPath]);
-
-  const updateAssignmentDraft = (key: string, updates: Partial<TransactionAssignment>) => {
-    setAssignmentDrafts((prev: Record<string, TransactionAssignment>) => ({
-      ...prev,
-      [key]: {
-        type: updates.type ?? prev[key]?.type ?? 'expense',
-        categoryPath: updates.categoryPath ?? prev[key]?.categoryPath ?? [],
-      },
-    }));
-  };
-
-  const handleAssignmentTypeChange = (key: string, type: CategoryType) => {
-    updateAssignmentDraft(key, { type, categoryPath: [] });
-  };
-
+  
   const handleCategoryPathChange = (key: string, depth: number, categoryId: number | null) => {
     setAssignmentDrafts((prev: Record<string, TransactionAssignment>) => {
       const draft = prev[key] || { type: 'expense', categoryPath: [] };
@@ -721,9 +704,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       }
 
       const currentValue = path[depth] ?? '';
-      const isLastInPath = depth === path.length - 1;
       const currentCategory = currentValue ? categoryLookup.get(currentValue) : undefined;
-      const hasChildren = currentCategory?.children && currentCategory.children.length > 0;
 
       // Determine label based on depth
       const getLabel = (d: number) => {
@@ -952,7 +933,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     }
 
     const selectedCategoryId = newRuleCategoryId ?? newRuleParentId;
-    const categoryDefinition = categoryLookup.get(selectedCategoryId);
 
     try {
       setLoading(true);
@@ -2315,7 +2295,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
   const handleClose = () => {
     setEditingCategory(null);
-    setEditingRule(null);
     setError(null);
     setSuccess(null);
     setActiveTab(0);

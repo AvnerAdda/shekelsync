@@ -16,7 +16,6 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Divider,
   Alert,
   Slider,
   Tab,

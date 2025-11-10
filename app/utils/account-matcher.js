@@ -27,7 +27,7 @@ export function normalizeText(text) {
     .replace(/"/g, '')
     .replace(/'/g, '')
     // Normalize punctuation and spaces
-    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, ' ')
+    .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }

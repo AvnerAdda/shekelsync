@@ -71,8 +71,6 @@ async function linkTransactionToAccount(params) {
  * @returns {Promise<object>} Summary of linking operation
  */
 async function linkMultipleTransactions(accountId, transactions, linkMethod = 'auto', confidence = 1.0) {
-  const pool = getPool();
-
   const successfulLinks = [];
   const failedLinks = [];
 

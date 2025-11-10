@@ -14,7 +14,6 @@ import {
   CircularProgress,
   Alert,
   IconButton,
-  Divider,
   Tooltip,
   Table,
   TableBody,
@@ -70,7 +69,7 @@ const ActionabilitySetupModal: React.FC<ActionabilitySetupModalProps> = ({ open,
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('amount');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const sortDirection: SortDirection = 'desc';
   const [searchQuery, setSearchQuery] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
   const { formatCurrency } = useFinancePrivacy();
@@ -180,10 +179,11 @@ const ActionabilitySetupModal: React.FC<ActionabilitySetupModalProps> = ({ open,
         case 'category':
           comparison = (a.subcategory || '').localeCompare(b.subcategory || '');
           break;
-        case 'level':
-          const levelOrder = { high: 3, medium: 2, low: 1 };
-          comparison = levelOrder[a.actionability_level] - levelOrder[b.actionability_level];
+        case 'level': {
+          const levelOrder: Record<string, number> = { high: 3, medium: 2, low: 1 };
+          comparison = (levelOrder[a.actionability_level] || 0) - (levelOrder[b.actionability_level] || 0);
           break;
+        }
       }
 
       return sortDirection === 'asc' ? comparison : -comparison;
@@ -206,15 +206,6 @@ const ActionabilitySetupModal: React.FC<ActionabilitySetupModalProps> = ({ open,
       case 'medium': return <MediumIcon fontSize="small" />;
       case 'high': return <HighIcon fontSize="small" />;
       default: return null;
-    }
-  };
-
-  const getActionabilityColor = (level: string) => {
-    switch (level) {
-      case 'low': return 'error';
-      case 'medium': return 'warning';
-      case 'high': return 'success';
-      default: return 'default';
     }
   };
 

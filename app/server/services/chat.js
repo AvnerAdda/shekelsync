@@ -100,7 +100,7 @@ async function generatePlaceholderResponse(message, context) {
   const lowerMessage = message.toLowerCase();
 
   const hebrewPatterns = {
-    monthlySpending: /כמה הוצאתי|סה\"כ הוצאות|הוצאות החודש/,
+    monthlySpending: /כמה הוצאתי|סה"כ הוצאות|הוצאות החודש/,
     topCategory: /קטגוריה|הכי הרבה|הוצאה הגדולה/,
     savings: /חיסכון|לחסוך|המלצות/,
     anomalies: /חריגה|חריגות|יוצא דופן/,

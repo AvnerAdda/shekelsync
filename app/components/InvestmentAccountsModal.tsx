@@ -170,7 +170,7 @@ const TransactionLinksTabContent: React.FC<{ onRefresh: () => void }> = ({ onRef
         setSuggestions(prev => prev.filter(s => s.id !== id));
         onRefresh();
       }
-    } catch (error) {
+    } catch {
       showNotification('שגיאה בעיבוד ההצעה', 'error');
     } finally {
       setProcessing(null);
@@ -308,7 +308,7 @@ const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) 
         loadPatterns();
         onRefresh();
       }
-    } catch (error) {
+    } catch {
       showNotification('שגיאה בהוספת תבנית', 'error');
     }
   };
@@ -324,7 +324,7 @@ const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) 
         loadPatterns();
         onRefresh();
       }
-    } catch (error) {
+    } catch {
       showNotification('שגיאה במחיקת תבנית', 'error');
     }
   };
@@ -339,7 +339,7 @@ const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) 
       <Alert severity="info" sx={{ mb: 2 }}>
         תבניות מגדירות אילו עסקאות שייכות לאילו חשבונות. השתמש ב-<code>%</code> כתו כללי.
         <br />
-        דוגמה: <code>%פיקדון%</code> תתאים לכל עסקה המכילה את המילה "פיקדון"
+        דוגמה: <code>%פיקדון%</code> תתאים לכל עסקה המכילה את המילה &quot;פיקדון&quot;
       </Alert>
 
       {accounts.length === 0 ? (

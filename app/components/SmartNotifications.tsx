@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Paper,
   Typography,
   Badge,
   IconButton,
   Popover,
   List,
   ListItem,
-  ListItemText,
-  ListItemIcon,
   Button,
   Chip,
   Divider,
@@ -34,7 +31,6 @@ import {
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
-import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import { useNotification } from './NotificationContext';
 import { apiClient } from '@/lib/api-client';
 
@@ -67,7 +63,6 @@ const SmartNotifications: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
   const [isBulkSyncing, setIsBulkSyncing] = useState(false);
-  const { formatCurrency } = useFinancePrivacy();
   const { showNotification } = useNotification();
 
   const open = Boolean(anchorEl);

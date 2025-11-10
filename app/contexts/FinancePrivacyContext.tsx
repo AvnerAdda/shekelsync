@@ -52,7 +52,7 @@ export const FinancePrivacyProvider: React.FC<FinancePrivacyProviderProps> = ({ 
       if (stored !== null) {
         setMaskAmountsState(stored === 'true');
       }
-    } catch (error) {
+    } catch {
       // Ignore storage read errors to avoid blocking the UI
     }
   }, []);
@@ -63,7 +63,7 @@ export const FinancePrivacyProvider: React.FC<FinancePrivacyProviderProps> = ({ 
     }
     try {
       window.localStorage.setItem(STORAGE_KEY, maskAmounts ? 'true' : 'false');
-    } catch (error) {
+    } catch {
       // Ignore storage write errors
     }
   }, [maskAmounts]);
@@ -123,7 +123,7 @@ export const FinancePrivacyProvider: React.FC<FinancePrivacyProviderProps> = ({ 
       formatterOptions.compactDisplay = 'short';
     }
 
-    let formatted = Math.abs(rawValue).toLocaleString('en-US', formatterOptions);
+    const formatted = Math.abs(rawValue).toLocaleString('en-US', formatterOptions);
 
     let signPrefix = '';
     if (showSign && rawValue !== 0) {
@@ -132,7 +132,7 @@ export const FinancePrivacyProvider: React.FC<FinancePrivacyProviderProps> = ({ 
       signPrefix = '-';
     }
 
-      return `${signPrefix}${currencySymbol}${formatted}`;
+    return `${signPrefix}${currencySymbol}${formatted}`;
     },
     [maskAmounts]
   );

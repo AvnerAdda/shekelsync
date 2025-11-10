@@ -27,7 +27,6 @@ import {
   CardHeader,
   Grid,
   Alert,
-  AlertTitle,
   InputAdornment,
   Paper,
   Accordion,
@@ -66,9 +65,8 @@ import type { AccountCategory } from '../utils/constants';
 import { formatDate } from '../utils/date';
 import { useNotification } from './NotificationContext';
 import ModalHeader from './ModalHeader';
-import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import { useOnboarding } from '../contexts/OnboardingContext';
-import { matchAccount, calculateSimilarity } from '../utils/account-matcher';
+import { calculateSimilarity } from '../utils/account-matcher';
 import { apiClient } from '@/lib/api-client';
 
 export interface Account {
@@ -251,8 +249,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const [isPairingModalOpen, setIsPairingModalOpen] = useState(false);
   const [pendingSuggestionTransactions, setPendingSuggestionTransactions] = useState<any[]>([]);
   const { showNotification} = useNotification();
-  const { formatCurrency } = useFinancePrivacy();
-  const { status: onboardingStatus, refetch: refetchOnboardingStatus } = useOnboarding();
+  const { refetch: refetchOnboardingStatus } = useOnboarding();
   const [newAccount, setNewAccount] = useState<Account>({
     vendor: 'isracard',
     username: '',
@@ -280,21 +277,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   });
 
   // Holdings management state
-  const [isValueModalOpen, setIsValueModalOpen] = useState(false);
-  const [selectedInvestmentAccount, setSelectedInvestmentAccount] = useState<InvestmentAccount | null>(null);
-  const [currentHolding, setCurrentHolding] = useState<{
-    current_value: number | '';
-    cost_basis: number | '';
-    as_of_date: string;
-    notes: string;
-  }>({
-    current_value: '',
-    cost_basis: '',
-    as_of_date: new Date().toISOString().split('T')[0],
-    notes: '',
-  });
-  const [costBasisSuggestion, setCostBasisSuggestion] = useState<any>(null);
-  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
   const [existingInvestments, setExistingInvestments] = useState<any>(null);
 
   // Additional modal states for new features
@@ -312,9 +294,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     currency: 'ILS',
     notes: '',
   });
-
-  // Cost basis suggestions state
-  const [costBasisSuggestions, setCostBasisSuggestions] = useState<any[]>([]);
 
   // Asset tracking state
   const [assets, setAssets] = useState<any[]>([]);
@@ -335,21 +314,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     name: string;
   } | null>(null);
 
-  const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
-  const [currentAsset, setCurrentAsset] = useState<{
-    asset_symbol: string;
-    asset_name: string;
-    asset_type: string;
-    units: number | '';
-    currency: string;
-  }>({
-    asset_symbol: '',
-    asset_name: '',
-    asset_type: 'stock',
-    units: '',
-    currency: 'USD',
-  });
-
   useEffect(() => {
     if (isOpen) {
       fetchAccounts();
@@ -357,15 +321,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       loadExistingInvestments();
     }
   }, [isOpen]);
-
-  // Load cost basis suggestion when account is selected for value update
-  useEffect(() => {
-    if (selectedInvestmentAccount && isValueModalOpen) {
-      loadCostBasisSuggestion(selectedInvestmentAccount.id!);
-    } else {
-      setCostBasisSuggestion(null);
-    }
-  }, [selectedInvestmentAccount, isValueModalOpen]);
 
   const fetchAccounts = async () => {
     try {
@@ -654,76 +609,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     setAccountToDelete(null);
   };
 
-  // Add Value Update functionality
-  const handleAddValueUpdate = (account: InvestmentAccount) => {
-    setSelectedInvestmentAccount(account);
-    setCurrentHolding({
-      current_value: '',
-      cost_basis: '',
-      as_of_date: new Date().toISOString().split('T')[0],
-      notes: '',
-    });
-    setIsValueModalOpen(true);
-  };
-
-  const handleSaveValueUpdate = async () => {
-    if (!selectedInvestmentAccount || !currentHolding.current_value || !currentHolding.as_of_date) {
-      setError('Please enter current value and date');
-      return;
-    }
-
-    try {
-      const response = await apiClient.post('/api/investments/holdings', {
-        account_id: selectedInvestmentAccount.id,
-        current_value: Number(currentHolding.current_value),
-        cost_basis: currentHolding.cost_basis ? Number(currentHolding.cost_basis) : null,
-        as_of_date: currentHolding.as_of_date,
-        notes: currentHolding.notes,
-        save_history: true,
-      });
-
-      if (response.ok) {
-        await fetchInvestmentAccounts(); // Refresh to show updated values
-        setIsValueModalOpen(false);
-        setSelectedInvestmentAccount(null);
-        showNotification('Value update saved successfully!', 'success');
-      } else {
-        throw new Error('Failed to save value update');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    }
-  };
-
-  // Cost basis suggestion functionality
-  const loadCostBasisSuggestion = async (accountId: number) => {
-    setLoadingSuggestion(true);
-    setCostBasisSuggestion(null);
-
-    try {
-      const response = await apiClient.get(`/api/investments/suggest-cost-basis?account_id=${accountId}`);
-      if (response.ok) {
-        const data = response.data as any;
-        if (data?.suggestion?.has_new_transactions) {
-          setCostBasisSuggestion(data);
-        }
-      }
-    } catch (err) {
-      console.error('Error loading cost basis suggestion:', err);
-    } finally {
-      setLoadingSuggestion(false);
-    }
-  };
-
-  const applyCostBasisSuggestion = () => {
-    if (costBasisSuggestion) {
-      setCurrentHolding({
-        ...currentHolding,
-        cost_basis: costBasisSuggestion.suggestion.suggested_cost_basis,
-      });
-    }
-  };
-
   // Existing investments matching functionality
   const loadExistingInvestments = async () => {
     try {
@@ -737,7 +622,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   };
 
   // Check if account name matches existing investment transactions
-  const isExistingInvestment = (accountName: string, accountType?: string): { match: boolean; category?: string; count?: number; confidence?: number } => {
+  const isExistingInvestment = (accountName: string): { match: boolean; category?: string; count?: number; confidence?: number } => {
     if (!existingInvestments || !accountName) return { match: false };
 
     // PRIORITY 1: Check if account has actual linked transactions
@@ -772,51 +657,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
 
     return { match: false };
-  };
-
-  // Asset management functionality
-  const handleAddAssets = (account: InvestmentAccount) => {
-    if (account.account_type !== 'brokerage') {
-      setError('Asset tracking is only available for brokerage accounts');
-      return;
-    }
-    setSelectedInvestmentAccount(account);
-    setCurrentAsset({
-      asset_symbol: '',
-      asset_name: '',
-      asset_type: 'stock',
-      units: '',
-      currency: 'USD',
-    });
-    setIsAssetModalOpen(true);
-  };
-
-  const handleSaveAsset = async () => {
-    if (!selectedInvestmentAccount || !currentAsset.asset_name || !currentAsset.units) {
-      setError('Please enter asset name and units');
-      return;
-    }
-
-    try {
-      const response = await apiClient.post('/api/investments/assets', {
-        account_id: selectedInvestmentAccount.id,
-        asset_symbol: currentAsset.asset_symbol,
-        asset_name: currentAsset.asset_name,
-        asset_type: currentAsset.asset_type,
-        units: Number(currentAsset.units),
-        currency: currentAsset.currency,
-      });
-
-      if (response.ok) {
-        setIsAssetModalOpen(false);
-        setSelectedInvestmentAccount(null);
-        showNotification('Asset added successfully!', 'success');
-      } else {
-        throw new Error('Failed to save asset');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    }
   };
 
   const handleSync = async (account: Account) => {
@@ -1723,7 +1563,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     <Grid container spacing={2}>
                       <Grid item xs={12}>
                         {(() => {
-                          const investmentMatch = newInvestmentAccount.account_name ? isExistingInvestment(newInvestmentAccount.account_name, newInvestmentAccount.account_type) : { match: false };
+                          const investmentMatch = newInvestmentAccount.account_name ? isExistingInvestment(newInvestmentAccount.account_name) : { match: false };
                           return (
                             <Box>
                               <TextField
@@ -1960,26 +1800,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   <MenuItem value="EUR">EUR (€)</MenuItem>
                 </TextField>
               </Grid>
-              {costBasisSuggestions.length > 0 && (
-                <Grid item xs={12}>
-                  <Alert severity="info" sx={{ mt: 1 }}>
-                    <AlertTitle>Cost Basis Suggestions</AlertTitle>
-                    <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                      {costBasisSuggestions.map((suggestion, index) => (
-                        <Chip
-                          key={index}
-                          label={`₪${suggestion.amount.toLocaleString()} (${suggestion.count} transactions)`}
-                          onClick={() => setValueUpdate({ ...valueUpdate, costBasis: suggestion.amount.toString() })}
-                          clickable
-                          size="small"
-                          color="info"
-                          variant="outlined"
-                        />
-                      ))}
-                    </Box>
-                  </Alert>
-                </Grid>
-              )}
               <Grid item xs={12}>
                 <TextField
                   fullWidth

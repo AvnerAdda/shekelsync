@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
-  DialogTitle,
   DialogActions,
   Button,
   TextField,
@@ -27,11 +26,9 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
   CircularProgress,
   Divider
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LinkIcon from '@mui/icons-material/Link';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -81,6 +78,58 @@ interface AccountPairingModalProps {
   bankAccounts: Account[];
 }
 
+interface PairingStats {
+  total: number;
+  totalPositive: number;
+  totalNegative: number;
+  byMatchReason: Record<string, number>;
+}
+
+interface SettlementCandidatesResponse {
+  candidates: CandidateTransaction[];
+  stats: PairingStats;
+}
+
+interface PairingsResponse {
+  pairings: Pairing[];
+}
+
+interface UnpairedTransactionsCountResponse {
+  count: number;
+}
+
+interface SmartMatchResult {
+  identifier: string;
+  vendor: string;
+  vendorNickname: string | null;
+  date: string;
+  name: string;
+  price: number;
+  categoryId: number | null;
+  categoryName: string | null;
+  accountNumber: string | null;
+  confidence: number;
+  matchedPatterns: string[];
+}
+
+interface SmartMatchResponse {
+  matches: SmartMatchResult[];
+}
+
+type ApiErrorPayload = {
+  error?: string;
+} | null | undefined;
+
+function extractApiError(data: unknown, fallback: string): string {
+  if (data && typeof data === 'object' && 'error' in data) {
+    const message = (data as ApiErrorPayload)?.error;
+    if (typeof message === 'string' && message.trim().length > 0) {
+      return message;
+    }
+  }
+  return fallback;
+}
+
 const steps = ['Select Accounts', 'Review Transactions', 'Confirm'];
 
 export default function AccountPairingModal({
@@ -96,7 +145,7 @@ export default function AccountPairingModal({
   const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [existingPairings, setExistingPairings] = useState<Pairing[]>([]);
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<PairingStats | null>(null);
   const [expandedAccounts, setExpandedAccounts] = useState<Account[]>([]);
   const [unpairableTransactionsCount, setUnpairableTransactionsCount] = useState<number>(0);
   const [editingPairing, setEditingPairing] = useState<Pairing | null>(null);
@@ -183,10 +232,9 @@ export default function AccountPairingModal({
 
   const fetchExistingPairings = useCallback(async () => {
     try {
-      const response = await apiClient.get('/api/accounts/pairing');
+      const response = await apiClient.get<PairingsResponse>('/api/accounts/pairing');
       if (response.ok) {
-        const data = response.data as any;
-        setExistingPairings(data?.pairings || []);
+        setExistingPairings(response.data?.pairings ?? []);
       }
     } catch (error) {
       console.error('Error fetching pairings:', error);
@@ -196,10 +244,9 @@ export default function AccountPairingModal({
   const fetchUnpairableTransactionsCount = useCallback(async () => {
     try {
       // Get count of bank transactions that might need pairing (categories 25/75)
-      const response = await apiClient.get('/api/accounts/unpaired-transactions-count');
+      const response = await apiClient.get<UnpairedTransactionsCountResponse>('/api/accounts/unpaired-transactions-count');
       if (response.ok) {
-        const data = response.data as any;
-        setUnpairableTransactionsCount(data?.count || 0);
+        setUnpairableTransactionsCount(response.data?.count ?? 0);
       }
     } catch (error) {
       console.error('Error fetching unpaired count:', error);
@@ -316,14 +363,13 @@ export default function AccountPairingModal({
         // Use the selected account number
         const creditCardNumber = selectedCreditCard.account_number || selectedCreditCard.card6_digits || '0000';
         const bankAccountNumber = selectedBank.account_number || selectedBank.bank_account_number || '';
-        const response = await apiClient.get(
+        const response = await apiClient.get<SettlementCandidatesResponse>(
           `/api/accounts/find-settlement-candidates?credit_card_account_number=${creditCardNumber}&bank_vendor=${selectedBank.vendor}&bank_account_number=${bankAccountNumber}`
         );
 
         if (response.ok) {
-          const data = response.data as any;
-          setCandidates(data.candidates);
-          setStats(data.stats);
+          setCandidates(response.data?.candidates ?? []);
+          setStats(response.data?.stats ?? null);
           // Start with no transactions selected
           setSelectedTransactions(new Set());
         } else {
@@ -363,8 +409,8 @@ export default function AccountPairingModal({
         // Trigger data refresh
         window.dispatchEvent(new CustomEvent('dataRefresh'));
       } else {
-        const error = (response.data as any) || {};
-        showNotification(error.error || 'Failed to create pairing', 'error');
+        const errorMessage = extractApiError(response.data, 'Failed to create pairing');
+        showNotification(errorMessage, 'error');
       }
     } catch (error) {
       console.error('Error creating pairing:', error);
@@ -446,13 +492,12 @@ export default function AccountPairingModal({
     try {
       const creditCardNumber = editCreditCard.account_number || editCreditCard.card6_digits || '0000';
       const bankAccountNumber = editBank.account_number || editBank.bank_account_number || '';
-      const response = await apiClient.get(
+      const response = await apiClient.get<SettlementCandidatesResponse>(
         `/api/accounts/find-settlement-candidates?credit_card_account_number=${creditCardNumber}&bank_vendor=${editBank.vendor}&bank_account_number=${bankAccountNumber}`
       );
 
       if (response.ok) {
-        const data = response.data as any;
-        setEditCandidates(data.candidates);
+        setEditCandidates(response.data?.candidates ?? []);
         setEditSelectedTransactions(new Set());
         setShowEditReview(true);
       } else {
@@ -492,8 +537,8 @@ export default function AccountPairingModal({
         expandAccountsByNumbers();
         window.dispatchEvent(new CustomEvent('dataRefresh'));
       } else {
-        const error = (response.data as any) || {};
-        showNotification(error.error || 'Failed to update pairing', 'error');
+        const errorMessage = extractApiError(response.data, 'Failed to update pairing');
+        showNotification(errorMessage, 'error');
       }
     } catch (error) {
       console.error('Error updating pairing:', error);
@@ -608,7 +653,7 @@ export default function AccountPairingModal({
 
     setSmartSelectLoading(true);
     try {
-      const response = await apiClient.post('/api/accounts/smart-match', {
+      const response = await apiClient.post<SmartMatchResponse>('/api/accounts/smart-match', {
         creditCardVendor: selectedCreditCard.vendor,
         creditCardAccountNumber: selectedCreditCard.account_number || selectedCreditCard.card6_digits || null,
         bankVendor: selectedBank.vendor,
@@ -618,8 +663,8 @@ export default function AccountPairingModal({
       });
 
       if (response.ok) {
-        const data = response.data as any;
-        const matchedIds = data.matches.map((m: any) => m.identifier);
+        const matches = response.data?.matches ?? [];
+        const matchedIds = matches.map((match) => match.identifier);
 
         // Select the matched transactions
         setSelectedTransactions(new Set(matchedIds));

@@ -8,12 +8,10 @@ const {
 } = require('../../../utils/constants.js');
 const {
   resolveCategory,
-  matchCategorizationRule,
   findCategoryByName,
   getCategoryInfo,
 } = require('../../../lib/category-helpers.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
-const { autoCategorizeBankTransaction } = require('../../../lib/auto-categorize-bank.js');
 
 const DEFAULT_TIMEOUT = 120000;
 const DEFAULT_LOOKBACK_MONTHS = 3;
@@ -345,26 +343,6 @@ async function getBankCategoryDefinition(client) {
   }
   cachedBankCategory = bankCategory;
   return bankCategory;
-}
-
-async function autoCategorizeCreditTransaction(client, transactionName) {
-  try {
-    const match = await matchCategorizationRule(transactionName, client);
-    if (!match) {
-      return { success: false };
-    }
-
-    return {
-      success: true,
-      categoryDefinitionId: match.category_definition_id || null,
-      parentCategory: match.parent_category || null,
-      subcategory: match.subcategory || null,
-      confidence: 0.8,
-    };
-  } catch (error) {
-    console.error('Error in auto-categorization:', error);
-    return { success: false };
-  }
 }
 
 async function applyCategorizationRules(client) {

@@ -17,8 +17,6 @@ import {
   Badge,
   CircularProgress,
   Popover,
-  Paper,
-  Chip,
 } from '@mui/material';
 import {
   Home as HomeIcon,
@@ -151,7 +149,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         ...prev,
         dbStatus: response.ok ? 'connected' : 'disconnected',
       }));
-    } catch (error) {
+    } catch {
       setStats(prev => ({ ...prev, dbStatus: 'disconnected' }));
     }
   }, []);

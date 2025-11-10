@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import EnhancedProfileSection from '../EnhancedProfileSection';
 
 const getMock = vi.fn();
@@ -294,7 +294,7 @@ describe('EnhancedProfileSection', () => {
       const childNameInput = await screen.findByLabelText(/child name/i);
       fireEvent.change(childNameInput, { target: { value: 'Noa' } });
 
-      const childDialog = childNameInput.closest('[role=\"dialog\"]') as HTMLElement | null;
+      const childDialog = childNameInput.closest('[role="dialog"]') as HTMLElement | null;
       const dialogScope = childDialog ? within(childDialog) : screen;
 
       fireEvent.change(dialogScope.getByLabelText(/birth date/i), { target: { value: '2018-01-15' } });

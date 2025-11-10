@@ -14,7 +14,6 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Divider,
   Tooltip,
   Skeleton,
   Fab,
@@ -28,7 +27,6 @@ import {
   CalendarToday as CalendarIcon,
   Psychology as PsychologyIcon,
   AttachMoney as MoneyIcon,
-  CompareArrows as CompareIcon,
   Timeline as TimelineIcon,
   Savings as SavingsIcon,
   Diversity3 as DiversityIcon,
@@ -46,7 +44,6 @@ import {
   PriorityHigh as PriorityIcon,
 } from '@mui/icons-material';
 import { BarChart } from '@mui/x-charts/BarChart';
-import { LineChart } from '@mui/x-charts/LineChart';
 import { SparkLineChart } from '@mui/x-charts/SparkLineChart';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import { useOnboarding } from '../contexts/OnboardingContext';
@@ -149,7 +146,6 @@ const AnalysisPage: React.FC = () => {
     return (
       <LockedPagePlaceholder
         page="analysis"
-        accessStatus={accessStatus}
         onboardingStatus={onboardingStatus}
       />
     );
@@ -313,9 +309,6 @@ const AnalysisPage: React.FC = () => {
   const {
     temporalIntelligence: temporal,
     behavioralIntelligence: behavioral,
-    comparativeIntelligence: comparative,
-    microInsights: micro,
-    efficiencyMetrics: efficiency,
     predictiveAnalytics: predictive,
     psychologicalInsights: psychological,
     recommendations,

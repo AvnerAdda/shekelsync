@@ -3,7 +3,7 @@
  * Automatic transaction linking to investment accounts
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock the database pool
 const mockQuery = vi.fn();

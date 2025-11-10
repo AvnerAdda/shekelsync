@@ -129,7 +129,7 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
         </Box>
 
         <List dense>
-          {steps.map((step, index) => (
+          {steps.map((step) => (
             <ListItem
               key={step.id}
               sx={{

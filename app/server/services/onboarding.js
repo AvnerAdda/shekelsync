@@ -4,12 +4,6 @@ const { dialect } = require('../../lib/sql-dialect.js');
 
 const ALL_BANK_VENDORS = [...BANK_VENDORS, ...SPECIAL_BANK_VENDORS];
 
-function serviceError(status, message) {
-  const error = new Error(message);
-  error.status = status;
-  return error;
-}
-
 function buildVendorQueryFragments(vendors) {
   if (dialect.useSqlite) {
     const placeholders = vendors.map(() => '?').join(',');

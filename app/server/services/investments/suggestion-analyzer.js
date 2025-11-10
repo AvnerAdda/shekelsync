@@ -5,7 +5,7 @@
  */
 
 import pool from '../../../utils/db.js';
-import { ACCOUNT_PATTERNS, getAllPatterns } from '../../../config/investment-patterns.js';
+import { ACCOUNT_PATTERNS } from '../../../config/investment-patterns.js';
 
 /**
  * Known Israeli financial institutions for extraction
