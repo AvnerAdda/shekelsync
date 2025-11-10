@@ -16,29 +16,22 @@ import {
   TableHead,
   TableRow,
   Chip,
-  LinearProgress,
-  Alert,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   Button,
-  Tabs,
-  Tab,
   Accordion,
   AccordionSummary,
   AccordionDetails,
   List,
   ListItem,
   ListItemText,
-  Divider,
   IconButton,
   Collapse,
   ToggleButtonGroup,
   ToggleButton,
   Skeleton,
-  Fab,
-  Badge,
   Tooltip,
   useTheme,
 } from '@mui/material';
@@ -52,18 +45,14 @@ import {
   School as SchoolIcon,
   CreditCard as CardIcon,
   CurrencyBitcoin as CryptoIcon,
-  Link as LinkIcon,
-  Pattern as PatternIcon,
   Timeline as TimelineIcon,
   Close as CloseIcon,
   Refresh as RefreshIcon,
   Dashboard as DashboardIcon,
-  Visibility as ViewIcon,
-  VisibilityOff as HideIcon,
   Add as AddIcon,
   Analytics as AnalyticsIcon,
 } from '@mui/icons-material';
-import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import InvestmentAccountsModal from './InvestmentAccountsModal';
 import { apiClient } from '@/lib/api-client';
@@ -105,6 +94,47 @@ interface InvestmentData {
   }>;
 }
 
+interface PortfolioHistoryPoint {
+  date: string;
+  currentValue: number;
+  costBasis: number;
+  gainLoss?: number;
+}
+
+interface InvestmentAccountAsset {
+  asset_name: string;
+  asset_type?: string;
+  units?: number;
+  current_value?: number;
+  cost_basis?: number;
+}
+
+interface InvestmentAccountSummary {
+  id: number;
+  account_name: string;
+  account_type: string;
+  institution?: string | null;
+  investment_category?: string | null;
+  currency: string;
+  current_value: number;
+  cost_basis: number;
+  as_of_date?: string | null;
+  current_value_explicit?: number | null;
+  account_value_history?: PortfolioHistoryPoint[];
+  assets?: InvestmentAccountAsset[];
+}
+
+interface PortfolioBreakdownGroup {
+  type: string;
+  name: string;
+  name_he: string;
+  totalValue: number;
+  totalCost: number;
+  count: number;
+  percentage: number;
+  accounts: InvestmentAccountSummary[];
+}
+
 interface PortfolioSummary {
   summary: {
     totalPortfolioValue: number;
@@ -129,25 +159,15 @@ interface PortfolioSummary {
       accountsCount: number;
     };
   };
-  breakdown: Array<{
-    type: string;
-    name: string;
-    name_he: string;
-    totalValue: number;
-    totalCost: number;
-    count: number;
-    percentage: number;
-    accounts: any[];
-  }>;
-  timeline: Array<{
-    date: string;
-    totalValue: number;
-    totalCost: number;
-    gainLoss: number;
-  }>;
-  accounts: any[];
-  liquidAccounts: any[];
-  restrictedAccounts: any[];
+  breakdown: PortfolioBreakdownGroup[];
+  timeline: PortfolioHistoryPoint[];
+  accounts: InvestmentAccountSummary[];
+  liquidAccounts: InvestmentAccountSummary[];
+  restrictedAccounts: InvestmentAccountSummary[];
+}
+
+interface PortfolioHistoryResponse {
+  history?: PortfolioHistoryPoint[];
 }
 
 const InvestmentsPage: React.FC = () => {
@@ -157,16 +177,6 @@ const InvestmentsPage: React.FC = () => {
   const accessStatus = getPageAccessStatus('investments');
   const isLocked = accessStatus.isLocked;
 
-  // Theme-aware color palette
-  const COLORS = [
-    theme.palette.primary.main,
-    theme.palette.success.main,
-    theme.palette.warning.main,
-    theme.palette.error.main,
-    theme.palette.secondary.main,
-    theme.palette.info.main,
-    '#14b8a6', // teal as fallback
-  ];
 
   const [data, setData] = useState<InvestmentData | null>(null);
   const [portfolioData, setPortfolioData] = useState<PortfolioSummary | null>(null);
@@ -179,19 +189,14 @@ const InvestmentsPage: React.FC = () => {
   
   // Time series states
   const [historyTimeRange, setHistoryTimeRange] = useState<'1m' | '3m' | '6m' | '1y' | 'all'>('3m');
-  const [overallHistory, setOverallHistory] = useState<any[]>([]);
-  const [accountHistories, setAccountHistories] = useState<Record<number, any[]>>({});
+  const [overallHistory, setOverallHistory] = useState<PortfolioHistoryPoint[]>([]);
+  const [accountHistories, setAccountHistories] = useState<Record<number, PortfolioHistoryPoint[]>>({});
   const [expandedAccounts, setExpandedAccounts] = useState<Record<number, boolean>>({});
   const [showOverallChart, setShowOverallChart] = useState(false);
-  const [selectedAccountsFilter, setSelectedAccountsFilter] = useState<number[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'summary' | 'detailed'>('summary');
-  const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({
-    portfolio: true,
-    performance: false,
-    transactions: false
-  });
+
 
   const fetchHistoryData = useCallback(async () => {
     if (isLocked) {
@@ -201,14 +206,14 @@ const InvestmentsPage: React.FC = () => {
     try {
       const overallResponse = await apiClient.get(`/api/investments/history?timeRange=${historyTimeRange}`);
       if (overallResponse.ok) {
-        const overallResult = (overallResponse.data as any) || {};
-        setOverallHistory(overallResult.history || []);
+        const overallResult = (overallResponse.data as PortfolioHistoryResponse) || {};
+        setOverallHistory(Array.isArray(overallResult.history) ? overallResult.history : []);
       } else {
         setOverallHistory([]);
       }
 
       if (portfolioData?.breakdown) {
-        const histories: Record<number, any[]> = {};
+        const histories: Record<number, PortfolioHistoryPoint[]> = {};
 
         for (const group of portfolioData.breakdown) {
           for (const account of group.accounts) {
@@ -216,8 +221,8 @@ const InvestmentsPage: React.FC = () => {
               try {
                 const accountResponse = await apiClient.get(`/api/investments/history?accountId=${account.id}&timeRange=${historyTimeRange}`);
                 if (accountResponse.ok) {
-                  const accountResult = (accountResponse.data as any) || {};
-                  histories[account.id] = accountResult.history || [];
+                  const accountResult = (accountResponse.data as PortfolioHistoryResponse) || {};
+                  histories[account.id] = Array.isArray(accountResult.history) ? accountResult.history : [];
                 } else {
                   histories[account.id] = [];
                 }
@@ -325,24 +330,11 @@ const InvestmentsPage: React.FC = () => {
   const formatCurrencyValue = (value: number) =>
     formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
 
-  const formatCurrencyThousands = (value: number) => {
-    if (maskAmounts) {
-      return formatCurrencyValue(value);
-    }
-    return `₪${(value / 1000).toFixed(0)}k`;
-  };
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
-  const formatMonth = (date: string) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short',
       year: 'numeric',
     });
   };
@@ -409,7 +401,6 @@ const InvestmentsPage: React.FC = () => {
     return (
       <LockedPagePlaceholder
         page="investments"
-        accessStatus={accessStatus}
         onboardingStatus={onboardingStatus}
       />
     );
@@ -506,7 +497,7 @@ const InvestmentsPage: React.FC = () => {
   );
 
   // Render mini sparkline chart
-  const renderSparkline = (history: any[]) => {
+  const renderSparkline = (history: PortfolioHistoryPoint[]) => {
     if (!history || history.length === 0) {
       return null;
     }
@@ -532,7 +523,7 @@ const InvestmentsPage: React.FC = () => {
   };
 
   // Render full time series chart
-  const renderFullChart = (history: any[], accountName?: string) => {
+  const renderFullChart = (history: PortfolioHistoryPoint[]) => {
     if (!history || history.length === 0) {
       return (
         <Box sx={{ p: 3, textAlign: 'center' }}>
@@ -572,11 +563,11 @@ const InvestmentsPage: React.FC = () => {
             />
             <YAxis
               tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
-              tickFormatter={(value) => maskAmounts ? '***' : `₪${(value / 1000).toFixed(0)}k`}
+              tickFormatter={(value: number) => maskAmounts ? '***' : `₪${(value / 1000).toFixed(0)}k`}
               stroke={theme.palette.text.disabled}
             />
             <RechartsTooltip
-              formatter={(value: any) => formatCurrencyValue(value)}
+              formatter={(value: number | string) => (typeof value === 'number' ? formatCurrencyValue(value) : value)}
               labelStyle={{ color: theme.palette.text.primary }}
               contentStyle={{
                 backgroundColor: theme.palette.background.paper,
@@ -611,24 +602,7 @@ const InvestmentsPage: React.FC = () => {
     return <InvestmentsSkeleton />;
   }
 
-  const pieData = (data?.byCategory ?? []).map(item => ({
-    name: item.name_en || item.name,
-    value: item.total,
-  })) || [];
 
-  const barData = (data?.byCategory ?? []).map(item => ({
-    name: item.name_en || item.name,
-    amount: item.total,
-    count: item.count,
-  })) || [];
-
-  // Timeline data - already aggregated by month
-  const lineData = (data?.timeline ?? []).map(item => ({
-    month: formatMonth(item.month),
-    Outflow: item.outflow,
-    Inflow: item.inflow,
-    Net: item.net,
-  })).reverse() || [];
 
   return (
     <Box sx={{ p: 3 }}>
@@ -686,7 +660,7 @@ const InvestmentsPage: React.FC = () => {
                 <InputLabel>Date Range</InputLabel>
                 <Select
                   value={dateRange}
-                  onChange={(e) => setDateRange(e.target.value as any)}
+                  onChange={(e) => setDateRange(e.target.value as 'all' | '3m' | '6m' | '1y')}
                   label="Date Range"
                 >
                   <MenuItem value="all">All Time</MenuItem>
@@ -868,7 +842,7 @@ const InvestmentsPage: React.FC = () => {
                   <InputLabel>Time Range</InputLabel>
                   <Select
                     value={historyTimeRange}
-                    onChange={(e) => setHistoryTimeRange(e.target.value as any)}
+                    onChange={(e) => setHistoryTimeRange(e.target.value as '1m' | '3m' | '6m' | '1y' | 'all')}
                     label="Time Range"
                   >
                     <MenuItem value="1m">Last Month</MenuItem>
@@ -928,7 +902,7 @@ const InvestmentsPage: React.FC = () => {
                     <CircularProgress size={30} />
                   </Box>
                 ) : (
-                  renderFullChart(overallHistory, 'Overall Portfolio')
+                  renderFullChart(overallHistory)
                 )}
               </AccordionDetails>
             </Accordion>
@@ -985,7 +959,7 @@ const InvestmentsPage: React.FC = () => {
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 0 }}>
                   <List disablePadding>
-                    {(group.accounts ?? []).map((account: any, accIndex: number) => {
+                    {(group.accounts ?? []).map((account: InvestmentAccountSummary, accIndex: number) => {
                       const accountHistory = accountHistories[account.id] || [];
                       const hasHistory = accountHistory.length > 0;
                       const isExpanded = expandedAccounts[account.id] || false;
@@ -1083,7 +1057,7 @@ const InvestmentsPage: React.FC = () => {
                                     <CircularProgress size={30} />
                                   </Box>
                                 ) : (
-                                  renderFullChart(accountHistory, account.account_name)
+                                  renderFullChart(accountHistory)
                                 )}
                               </Box>
                             </Collapse>

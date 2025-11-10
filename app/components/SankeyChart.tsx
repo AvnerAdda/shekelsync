@@ -50,7 +50,7 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
       .attr('transform', `translate(${margin.left}, ${margin.top})`);
 
     // Create sankey layout with more columns
-    const sankeyLayout = sankey<{}, {}>()
+    const sankeyLayout = sankey<Record<string, unknown>, Record<string, unknown>>()
       .nodeWidth(60)  // Thinner for minimalist look
       .nodePadding(15) // More spacing
       .extent([[0, 0], [width, chartHeight]]);

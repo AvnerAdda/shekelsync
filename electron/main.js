@@ -876,6 +876,31 @@ ipcMain.handle('window:isMaximized', () => {
   return mainWindow ? mainWindow.isMaximized() : false;
 });
 
+// Zoom controls
+ipcMain.handle('window:zoomIn', () => {
+  if (!mainWindow) return;
+  const currentZoom = mainWindow.webContents.getZoomLevel();
+  mainWindow.webContents.setZoomLevel(currentZoom + 0.5);
+  return mainWindow.webContents.getZoomLevel();
+});
+
+ipcMain.handle('window:zoomOut', () => {
+  if (!mainWindow) return;
+  const currentZoom = mainWindow.webContents.getZoomLevel();
+  mainWindow.webContents.setZoomLevel(currentZoom - 0.5);
+  return mainWindow.webContents.getZoomLevel();
+});
+
+ipcMain.handle('window:zoomReset', () => {
+  if (!mainWindow) return;
+  mainWindow.webContents.setZoomLevel(0);
+  return 0;
+});
+
+ipcMain.handle('window:getZoomLevel', () => {
+  return mainWindow ? mainWindow.webContents.getZoomLevel() : 0;
+});
+
 // API proxy handler
 ipcMain.handle('api:request', async (event, { method, endpoint, data, headers = {} }) => {
   try {

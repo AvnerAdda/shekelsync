@@ -76,7 +76,7 @@ async function getCategoryOpportunities(params = {}) {
   const opportunities = categorySummaries.map((subcategory) => {
     const subTransactions = subcategory.transactions;
     const outliers = detectOutliers(subTransactions, subcategory.avg_transaction_amount);
-    const trend = analyzeSpendingTrend(subTransactions, months);
+    const trend = analyzeSpendingTrend(subTransactions);
     const suggestions = generateReductionSuggestions(
       subcategory,
       outliers,
@@ -229,7 +229,7 @@ function detectOutliers(transactions, avgAmount) {
   return outliers;
 }
 
-function analyzeSpendingTrend(transactions, months) {
+function analyzeSpendingTrend(transactions) {
   const monthlyTotals = new Map();
 
   transactions.forEach((txn) => {

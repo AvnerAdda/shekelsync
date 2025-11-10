@@ -1,3 +1,4 @@
+/* eslint-env browser */
 function isElectronApiAvailable() {
     return typeof window !== 'undefined' && Boolean(window.electronAPI?.api?.request);
 }

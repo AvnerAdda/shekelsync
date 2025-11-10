@@ -59,6 +59,19 @@ interface CategoryOption {
   label: string;
 }
 
+interface CategoryHierarchyNode {
+  id: number;
+  name: string;
+  name_en?: string | null;
+  parent_id?: number | null;
+  is_active: boolean;
+  category_type: string;
+}
+
+interface CategoryHierarchyResponse {
+  categories?: CategoryHierarchyNode[];
+}
+
 const BudgetsPage: React.FC = () => {
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
@@ -85,7 +98,7 @@ const BudgetsPage: React.FC = () => {
       if (!response.ok) {
         throw new Error('Failed to fetch budgets');
       }
-      const data = response.data as any;
+      const data = response.data as BudgetUsage[] | undefined;
       setBudgets(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching budgets:', error);
@@ -102,15 +115,15 @@ const BudgetsPage: React.FC = () => {
       if (!response.ok) {
         throw new Error('Failed to fetch categories');
       }
-      const data = response.data as any;
+      const data = response.data as CategoryHierarchyResponse;
 
-      if (data.categories && Array.isArray(data.categories)) {
-        const map = new Map<number, any>();
-        data.categories.forEach((cat: any) => map.set(cat.id, cat));
+      if (Array.isArray(data.categories)) {
+        const map = new Map<number, CategoryHierarchyNode>();
+        data.categories.forEach((cat) => map.set(cat.id, cat));
 
         const options: CategoryOption[] = data.categories
-          .filter((cat: any) => cat.is_active && cat.category_type === 'expense')
-          .map((cat: any) => {
+          .filter((cat) => cat.is_active && cat.category_type === 'expense')
+          .map((cat) => {
             const parent = cat.parent_id ? map.get(cat.parent_id) : null;
             const displayName = cat.name_en ? `${cat.name} (${cat.name_en})` : cat.name;
             const label = parent ? `${parent.name} › ${displayName}` : displayName;
@@ -121,7 +134,7 @@ const BudgetsPage: React.FC = () => {
               label,
             };
           })
-          .sort((a: any, b: any) => a.label.localeCompare(b.label));
+          .sort((a, b) => a.label.localeCompare(b.label));
 
         setCategories(options);
       }
@@ -172,7 +185,6 @@ const BudgetsPage: React.FC = () => {
     return (
       <LockedPagePlaceholder
         page="budgets"
-        accessStatus={accessStatus}
         onboardingStatus={onboardingStatus}
       />
     );

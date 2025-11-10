@@ -160,6 +160,42 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
       case 'go-settings':
         navigate('/settings');
         break;
+      case 'view-zoom-in':
+        console.log('Zoom in clicked', { hasAPI: !!window.electronAPI?.window?.zoomIn });
+        if (window.electronAPI?.window?.zoomIn) {
+          window.electronAPI.window.zoomIn().then(() => {
+            console.log('Zoom in successful');
+          }).catch((error) => {
+            console.error('Failed to zoom in', error);
+          });
+        } else {
+          console.warn('Zoom API not available - please restart Electron');
+        }
+        break;
+      case 'view-zoom-out':
+        console.log('Zoom out clicked', { hasAPI: !!window.electronAPI?.window?.zoomOut });
+        if (window.electronAPI?.window?.zoomOut) {
+          window.electronAPI.window.zoomOut().then(() => {
+            console.log('Zoom out successful');
+          }).catch((error) => {
+            console.error('Failed to zoom out', error);
+          });
+        } else {
+          console.warn('Zoom API not available - please restart Electron');
+        }
+        break;
+      case 'view-reset':
+        console.log('Reset zoom clicked', { hasAPI: !!window.electronAPI?.window?.zoomReset });
+        if (window.electronAPI?.window?.zoomReset) {
+          window.electronAPI.window.zoomReset().then(() => {
+            console.log('Reset zoom successful');
+          }).catch((error) => {
+            console.error('Failed to reset zoom', error);
+          });
+        } else {
+          console.warn('Zoom API not available - please restart Electron');
+        }
+        break;
       case 'help-open-logs':
         if (diagnosticsBridge?.openLogDirectory) {
           diagnosticsBridge.openLogDirectory().catch((error) => {

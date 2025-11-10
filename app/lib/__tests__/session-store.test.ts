@@ -8,7 +8,6 @@ import {
   getAuthorizationHeader,
 } from '@/lib/session-store';
 
-const originalWindow = { ...window } as typeof window & Record<string, unknown>;
 
 function resetGlobals() {
   vi.restoreAllMocks();

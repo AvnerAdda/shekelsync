@@ -7,10 +7,6 @@ const { createInvestmentsRouter } = require('../../routes/investments.js');
 
 // Services
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const checkExistingService = require('../../services/investments/check-existing.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const historyService = require('../../services/investments/history.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const patternsService = require('../../services/investments/patterns.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pendingSuggestionsService = require('../../services/investments/pending-suggestions.js');
@@ -18,8 +14,6 @@ const pendingSuggestionsService = require('../../services/investments/pending-su
 const costBasisService = require('../../services/investments/suggest-cost-basis.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const accountsService = require('../../services/investments/accounts.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const assetsService = require('../../services/investments/assets.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const holdingsService = require('../../services/investments/holdings.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires

@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
@@ -6,7 +7,6 @@ import {
   Box,
   Button,
   Chip,
-  Alert,
   CircularProgress,
   IconButton,
   Collapse,
@@ -65,19 +65,6 @@ interface GroupedSuggestion {
   matchingAccounts?: InvestmentAccount[];
 }
 
-const ACCOUNT_TYPE_LABELS: Record<string, string> = {
-  pension: 'קרן פנסיה',
-  provident: 'קרן השתלמות',
-  study_fund: 'קופת גמל',
-  brokerage: 'ברוקר',
-  crypto: 'קריפטו',
-  savings: 'פיקדון',
-  mutual_fund: 'קרן נאמנות',
-  bonds: 'אג"ח',
-  real_estate: 'נדל"ן',
-  other: 'אחר'
-};
-
 const ACCOUNT_TYPE_ICONS: Record<string, string> = {
   pension: '💼',
   provident: '🎓',
@@ -94,13 +81,11 @@ const ACCOUNT_TYPE_ICONS: Record<string, string> = {
 interface InvestmentAccountSuggestionsCardProps {
   onSuggestionCreated?: () => void;
   onCreateAccountClick?: (suggestion: GroupedSuggestion) => void;
-  onLinkToAccountClick?: (suggestion: GroupedSuggestion, accountId: number) => void;
 }
 
 export default function InvestmentAccountSuggestionsCard({
   onSuggestionCreated,
   onCreateAccountClick,
-  onLinkToAccountClick
 }: InvestmentAccountSuggestionsCardProps) {
   const { showNotification } = useNotification();
 

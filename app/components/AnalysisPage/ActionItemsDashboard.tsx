@@ -9,9 +9,6 @@ import {
   Chip,
   Grid,
   List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
   IconButton,
   Checkbox,
   Alert,
@@ -27,7 +24,6 @@ import {
   Select,
   MenuItem,
   Stack,
-  Tooltip,
   CircularProgress
 } from '@mui/material';
 import {
@@ -35,12 +31,9 @@ import {
   RadioButtonUnchecked as UncheckedIcon,
   Delete as DeleteIcon,
   Add as AddIcon,
-  TrendingUp as TrendingUpIcon,
   EmojiEvents as TrophyIcon,
   PlayArrow as StartIcon,
   Pause as PauseIcon,
-  Close as CloseIcon,
-  Edit as EditIcon,
   Savings as SavingsIcon
 } from '@mui/icons-material';
 import { apiClient } from '@/lib/api-client';

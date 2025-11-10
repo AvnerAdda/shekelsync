@@ -14,7 +14,6 @@ import {
   Alert,
   AlertTitle,
   Tooltip as MuiTooltip,
-  IconButton,
   Chip,
 } from '@mui/material';
 import {
@@ -24,15 +23,13 @@ import {
   InfoOutlined as InfoOutlinedIcon,
   TrendingUp as TrendingUpIcon,
   ShowChart as ShowChartIcon,
-  CompareArrows as CompareArrowsIcon,
-  ZoomIn as ZoomInIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Brush, ReferenceLine, Area, AreaChart } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine, Area, AreaChart } from 'recharts';
 import SankeyChart from './SankeyChart';
-import { startOfMonth, endOfMonth, subMonths, format, differenceInDays } from 'date-fns';
+import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import SummaryCards from '../components/SummaryCards';
 import BreakdownPanel from '../components/BreakdownPanel';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
@@ -84,12 +81,6 @@ interface PortfolioBreakdownItem {
   name: string;
   value: number;
   percentage: number;
-  [key: string]: any;
-}
-
-interface MonthlyFlowItem {
-  name: string;
-  value: number;
   [key: string]: any;
 }
 
@@ -148,7 +139,6 @@ const HomePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData | null>(null);
   const [portfolioValue, setPortfolioValue] = useState<number | null>(null);
-  const [portfolioBreakdown, setPortfolioBreakdown] = useState<PortfolioBreakdownItem[]>([]);
   const [waterfallData, setWaterfallData] = useState<WaterfallFlowData | null>(null);
   const [waterfallLoading, setWaterfallLoading] = useState(true);
   const [liquidPortfolio, setLiquidPortfolio] = useState<PortfolioBreakdownItem[]>([]);
@@ -177,8 +167,6 @@ const HomePage: React.FC = () => {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [yAxisScale, setYAxisScale] = useState<YAxisScale>('linear');
   const [chartView, setChartView] = useState<ChartView>('transaction');
-  const [showComparison, setShowComparison] = useState(false);
-  const [comparisonData, setComparisonData] = useState<any[]>([]);
   const [cumulativeData, setCumulativeData] = useState<any[]>([]);
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
@@ -203,17 +191,6 @@ const HomePage: React.FC = () => {
       setDateTransactions([]);
     } finally {
       setLoadingTransactions(false);
-    }
-  };
-
-  const handleChartClick = (data: any, index: number) => {
-    console.log('Dot click - data:', data, 'index:', index);
-    // The actual payload is in the index parameter when clicking dots
-    if (index && (index as any).payload && (index as any).payload.date) {
-      const clickedDate = (index as any).payload.date;
-      console.log('Fetching transactions for date:', clickedDate);
-      fetchTransactionsByDate(clickedDate);
-      setHoveredDate(clickedDate);
     }
   };
 
@@ -446,12 +423,6 @@ const HomePage: React.FC = () => {
 
         // Set overall portfolio breakdown
         if (Array.isArray(result?.breakdown) && result.breakdown.length > 0) {
-          setPortfolioBreakdown(result.breakdown.map((item: any) => ({
-            name: item.name || item.type,
-            value: item.totalValue,
-            percentage: item.percentage,
-            category: item.category
-          }))); 
 
           // Separate liquid and restricted portfolios
           const liquidSummary = summary.liquid ?? { totalValue: 0 };
@@ -486,7 +457,6 @@ const HomePage: React.FC = () => {
     } catch (error) {
       console.error('Error fetching portfolio value:', error);
       setPortfolioValue(0);
-      setPortfolioBreakdown([]);
       setLiquidPortfolio([]);
       setRestrictedPortfolio([]);
     }
@@ -1126,13 +1096,6 @@ const HomePage: React.FC = () => {
                   }}
                 />
               ))}
-
-              <Brush
-                dataKey="date"
-                height={30}
-                stroke={theme.palette.primary.main}
-                tickFormatter={formatXAxis}
-              />
             </LineChart>
           ) : (
             <AreaChart data={cumulativeData}>
@@ -1262,12 +1225,6 @@ const HomePage: React.FC = () => {
                   fill: theme.palette.text.secondary,
                   fontSize: 10,
                 }}
-              />
-              <Brush
-                dataKey="date"
-                height={30}
-                stroke={theme.palette.primary.main}
-                tickFormatter={formatXAxis}
               />
             </AreaChart>
           )}

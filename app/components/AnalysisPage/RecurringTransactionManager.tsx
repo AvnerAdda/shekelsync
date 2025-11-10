@@ -34,9 +34,6 @@ import {
   Star as StarIcon,
   MoreVert as MoreIcon,
   Lightbulb as LightbulbIcon,
-  TrendingUp as TrendingUpIcon,
-  Schedule as ScheduleIcon,
-  AttachMoney as MoneyIcon,
   Info as InfoIcon,
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '../../contexts/FinancePrivacyContext';

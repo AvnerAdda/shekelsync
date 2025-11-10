@@ -153,7 +153,7 @@ export function getKeywordsForType(accountType) {
  */
 export function getAllPatterns() {
   const all = [];
-  for (const [type, patterns] of Object.entries(ACCOUNT_PATTERNS)) {
+  for (const [type] of Object.entries(ACCOUNT_PATTERNS)) {
     all.push(...getPatternsForType(type).map(p => ({ pattern: p, type })));
   }
   return all;
