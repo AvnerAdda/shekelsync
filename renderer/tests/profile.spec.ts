@@ -47,13 +47,13 @@ test('profile section loads data and saves changes', async ({ page }) => {
   await goHome(page);
 
   await page.getByRole('button', { name: 'Settings' }).click();
-  await expect(page.getByRole('heading', { name: 'Enhanced Profile Information' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /profile information/i })).toBeVisible();
 
   const nameInput = page.getByLabel('Username');
   await expect(nameInput).toHaveValue('Jane Doe');
 
   await nameInput.fill('Janet Doe');
-  await page.getByRole('button', { name: 'Save Enhanced Profile' }).click();
+  await page.getByRole('button', { name: 'Save Profile' }).click();
 
   await expect(page.getByText(/updated successfully/i)).toBeVisible();
   expect(bodies[0]?.profile?.username).toBe('Janet Doe');
@@ -90,18 +90,18 @@ test('allows adding and editing a child profile', async ({ page }) => {
   await goHome(page);
 
   await page.getByRole('button', { name: 'Settings' }).click();
-  await expect(page.getByRole('heading', { name: 'Enhanced Profile Information' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /profile information/i })).toBeVisible();
 
   await page.getByRole('button', { name: 'Children Information' }).click();
   await page.getByRole('button', { name: 'Add child' }).click();
   const addDialog = page.getByRole('dialog', { name: /Add Child Information/i });
   await addDialog.getByLabel('Child Name').fill('Luna');
-  await addDialog.getByLabel('Birth Date', { exact: true }).fill('2018-04-02');
+  await addDialog.getByLabel(/Birth Date/i).fill('2018-04-02');
   await addDialog.getByRole('button', { name: /^Add Child$/i }).click();
 
   await expect(page.getByText('Luna')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Save Enhanced Profile' }).click();
+  await page.getByRole('button', { name: 'Save Profile' }).click();
   await expect(page.getByText(/updated successfully/i)).toBeVisible();
   expect(savedPayloads.at(-1)?.children?.[0]?.name).toBe('Luna');
 
@@ -112,7 +112,7 @@ test('allows adding and editing a child profile', async ({ page }) => {
   await editDialog.getByRole('button', { name: /^Update Child$/i }).click();
   await expect(page.getByText('Luna Updated')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Save Enhanced Profile' }).click();
+  await page.getByRole('button', { name: 'Save Profile' }).click();
   await expect(page.getByText(/updated successfully/i)).toBeVisible();
   expect(savedPayloads.at(-1)?.children?.[0]?.name).toBe('Luna Updated');
 });

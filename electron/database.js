@@ -1,8 +1,9 @@
 const path = require('path');
 const { app } = require('electron');
+const { resolveAppPath, requireFromApp } = require('./paths');
 
 // Add app directory to module search paths
-require('module').globalPaths.push(path.join(__dirname, '..', 'app', 'node_modules'));
+require('module').globalPaths.push(resolveAppPath('node_modules'));
 
 let Pool = null;
 let SqliteDatabase = null;
@@ -52,7 +53,7 @@ class DatabaseManager {
       path.join(app.getPath('userData'), 'clarify.sqlite');
 
         if (!SqliteDatabase) {
-          const betterSqlite = require(path.join(__dirname, '..', 'app', 'node_modules', 'better-sqlite3'));
+          const betterSqlite = requireFromApp('better-sqlite3');
           SqliteDatabase = typeof betterSqlite.default === 'function' ? betterSqlite.default : betterSqlite;
         }
 
@@ -69,7 +70,7 @@ class DatabaseManager {
         this.sqliteDb.prepare('SELECT 1').get();
       } else {
         if (!Pool) {
-          Pool = require(path.join(__dirname, '..', 'app', 'node_modules', 'pg')).Pool;
+          Pool = requireFromApp('pg').Pool;
         }
 
         this.pool = new Pool({
@@ -128,7 +129,7 @@ class DatabaseManager {
 
     if (this.mode === 'sqlite') {
       if (!SqliteDatabase) {
-        SqliteDatabase = require(path.join(__dirname, '..', 'app', 'node_modules', 'better-sqlite3'));
+        SqliteDatabase = requireFromApp('better-sqlite3');
       }
       return {
         query: (text, params = []) => this.query(text, params),

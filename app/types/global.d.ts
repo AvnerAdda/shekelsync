@@ -39,6 +39,7 @@ declare global {
     minimize?: () => Promise<void>;
     maximize?: () => Promise<void>;
     close?: () => Promise<void>;
+    isMaximized?: () => Promise<boolean>;
   }
 
   interface ElectronDbApi {
@@ -107,6 +108,9 @@ declare global {
     onAuthSessionChanged?: (
       callback: (session: AuthSession | null) => void,
     ) => ElectronEventUnsubscribe | void;
+    onWindowStateChanged?: (
+      callback: (payload: { maximized: boolean }) => void,
+    ) => ElectronEventUnsubscribe | void;
   }
 
   interface ElectronPlatformInfo {
@@ -121,6 +125,31 @@ declare global {
     log?: (...args: unknown[]) => void;
   }
 
+  interface ElectronLogBridge {
+    info?: (message: string, data?: Record<string, unknown>) => void;
+    warn?: (message: string, data?: Record<string, unknown>) => void;
+    error?: (message: string, data?: Record<string, unknown>) => void;
+    debug?: (message: string, data?: Record<string, unknown>) => void;
+  }
+
+  interface ElectronDiagnosticsExportResult {
+    success: boolean;
+    error?: string;
+    path?: string;
+  }
+
+  interface ElectronDiagnosticsApi {
+    getInfo?: () => Promise<{
+      success: boolean;
+      logDirectory?: string;
+      logFile?: string;
+      appVersion?: string;
+      platform?: NodeJS.Platform;
+    }>;
+    openLogDirectory?: () => Promise<{ success: boolean; error?: string }>;
+    exportDiagnostics?: (filePath: string) => Promise<ElectronDiagnosticsExportResult>;
+  }
+
   interface ElectronAPI {
     window?: ElectronWindowControls;
     db?: ElectronDbApi;
@@ -132,6 +161,8 @@ declare global {
     events?: ElectronEventsApi;
     platform?: ElectronPlatformInfo;
     dev?: ElectronDevTools;
+    log?: ElectronLogBridge;
+    diagnostics?: ElectronDiagnosticsApi;
   }
 
   interface Window {

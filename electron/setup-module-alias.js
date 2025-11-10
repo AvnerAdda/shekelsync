@@ -1,8 +1,8 @@
 const path = require('path');
 const Module = require('module');
+const { appRoot } = require('./paths');
 
 if (!global.__electronAliasRegistered) {
-  const appRoot = path.join(__dirname, '..', 'app');
   const originalResolveFilename = Module._resolveFilename;
 
   Module._resolveFilename = function patchedResolve(request, parent, isMain, options) {

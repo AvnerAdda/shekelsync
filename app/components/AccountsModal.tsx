@@ -71,7 +71,7 @@ import { useOnboarding } from '../contexts/OnboardingContext';
 import { matchAccount, calculateSimilarity } from '../utils/account-matcher';
 import { apiClient } from '@/lib/api-client';
 
-interface Account {
+export interface Account {
   id: number;
   vendor: string;
   username?: string;
@@ -106,6 +106,8 @@ interface InvestmentAccount {
   is_liquid?: boolean;
   investment_category?: string;
   current_value?: number;
+  current_value_explicit?: number | null;
+  total_invested?: number | null;
   holdings_count?: number;
   last_update_date?: string;
 }
@@ -115,11 +117,92 @@ interface AccountsModalProps {
   onClose: () => void;
 }
 
+export const getBankingAccountValidationError = (account: Account): string | null => {
+  if ((account.vendor === 'visaCal' || account.vendor === 'max') && !account.username) {
+    return 'Username is required for Visa Cal and Max';
+  }
+
+  if (SPECIAL_BANK_VENDORS.includes(account.vendor)) {
+    if (!account.id_number) {
+      return 'ID number is required for Discount and Mercantile';
+    }
+    if (!account.num && !account.identification_code) {
+      return 'Identification code (num) is required for Discount and Mercantile';
+    }
+  }
+
+  if (account.vendor === 'hapoalim' && !account.userCode) {
+    return 'User Code is required for Bank Hapoalim';
+  }
+
+  if (account.vendor === 'yahav') {
+    if (!account.username) {
+      return 'Username is required for Bank Yahav';
+    }
+    if (!account.nationalID) {
+      return 'National ID is required for Bank Yahav';
+    }
+  }
+
+  if ((account.vendor === 'beyahadBishvilha' || account.vendor === 'behatsdaa') && !account.id_number) {
+    return `ID number is required for ${account.vendor}`;
+  }
+
+  if (account.vendor === 'oneZero' && !account.email) {
+    return 'Email is required for One Zero';
+  }
+
+  if ((account.vendor === 'isracard' || account.vendor === 'amex') && !account.id_number) {
+    return 'ID number is required for Isracard and American Express';
+  }
+
+  if ((BANK_VENDORS.includes(account.vendor) || account.vendor === 'pagi') && !account.username) {
+    return 'Username is required for bank accounts';
+  }
+
+  if (!account.password) {
+    return 'Password is required';
+  }
+
+  if (!account.nickname) {
+    return 'Account nickname is required';
+  }
+
+  return null;
+};
+
 const StyledTableRow = styled(TableRow)(({ theme }) => ({
   '&:nth-of-type(odd)': {
     backgroundColor: theme.palette.action.hover,
   },
 }));
+
+export const buildInitialSyncPayload = (account: Account) => {
+  const startDate = startOfMonth(subMonths(new Date(), 3));
+  const scrapeCredentials: Record<string, string> = {};
+
+  if (account.id_number) scrapeCredentials.id = account.id_number;
+  if (account.password) scrapeCredentials.password = account.password;
+  if (account.username) scrapeCredentials.username = account.username;
+  if (account.userCode) scrapeCredentials.userCode = account.userCode;
+  if (account.email) scrapeCredentials.email = account.email;
+  if (account.card6_digits) scrapeCredentials.card6Digits = account.card6_digits;
+  if (account.num) scrapeCredentials.num = account.num;
+  if (account.nationalID) scrapeCredentials.nationalID = account.nationalID;
+  if (account.identification_code) scrapeCredentials.identification_code = account.identification_code;
+  scrapeCredentials.nickname = account.nickname ?? '';
+
+  return {
+    options: {
+      companyId: account.vendor,
+      startDate: startDate.toISOString(),
+      combineInstallments: false,
+      showBrowser: true,
+      additionalTransactionInformation: true,
+    },
+    credentials: scrapeCredentials,
+  };
+};
 
 const SectionHeader = styled(Box)(({ theme }) => ({
   display: 'flex',
@@ -166,7 +249,8 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const [currentAccountType, setCurrentAccountType] = useState<'banking' | 'investment'>('banking');
   const [expandedForm, setExpandedForm] = useState<'creditCard' | 'bank' | null>(null);
   const [isPairingModalOpen, setIsPairingModalOpen] = useState(false);
-  const { showNotification } = useNotification();
+  const [pendingSuggestionTransactions, setPendingSuggestionTransactions] = useState<any[]>([]);
+  const { showNotification} = useNotification();
   const { formatCurrency } = useFinancePrivacy();
   const { status: onboardingStatus, refetch: refetchOnboardingStatus } = useOnboarding();
   const [newAccount, setNewAccount] = useState<Account>({
@@ -347,64 +431,9 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   };
 
   const handleAddBankingAccount = async () => {
-    // Validate based on vendor type
-    if (newAccount.vendor === 'visaCal' || newAccount.vendor === 'max') {
-      if (!newAccount.username) {
-        setError('Username is required for Visa Cal and Max');
-        return;
-      }
-    } else if (SPECIAL_BANK_VENDORS.includes(newAccount.vendor)) {
-      // Discount and Mercantile require: id, password, num
-      if (!newAccount.id_number) {
-        setError('ID number is required for Discount and Mercantile');
-        return;
-      }
-      if (!newAccount.num && !newAccount.identification_code) {
-        setError('Identification code (num) is required for Discount and Mercantile');
-        return;
-      }
-    } else if (newAccount.vendor === 'hapoalim') {
-      if (!newAccount.userCode) {
-        setError('User Code is required for Bank Hapoalim');
-        return;
-      }
-    } else if (newAccount.vendor === 'yahav') {
-      if (!newAccount.username) {
-        setError('Username is required for Bank Yahav');
-        return;
-      }
-      if (!newAccount.nationalID) {
-        setError('National ID is required for Bank Yahav');
-        return;
-      }
-    } else if (newAccount.vendor === 'beyahadBishvilha' || newAccount.vendor === 'behatsdaa') {
-      if (!newAccount.id_number) {
-        setError('ID number is required for ' + newAccount.vendor);
-        return;
-      }
-    } else if (newAccount.vendor === 'oneZero') {
-      if (!newAccount.email) {
-        setError('Email is required for One Zero');
-        return;
-      }
-    } else if (newAccount.vendor === 'isracard' || newAccount.vendor === 'amex') {
-      if (!newAccount.id_number) {
-        setError('ID number is required for Isracard and American Express');
-        return;
-      }
-    } else if (BANK_VENDORS.includes(newAccount.vendor) || newAccount.vendor === 'pagi') {
-      if (!newAccount.username) {
-        setError('Username is required for bank accounts');
-        return;
-      }
-    }
-
-    if (!newAccount.password) {
-      setError('Password is required');
-      return;
-    }
-    if (!newAccount.nickname) {
-      setError('Account nickname is required');
+    const validationError = getBankingAccountValidationError(newAccount);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -423,36 +452,10 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
         setTimeout(async () => {
           try {
-            // Calculate start date: beginning of month 3 months ago
-            const startDate = startOfMonth(subMonths(new Date(), 3));
+            const scrapeConfig = buildInitialSyncPayload(newAccount);
+            const syncStartDate = new Date(scrapeConfig.options.startDate);
 
-            // Prepare credentials for scraping
-            const scrapeCredentials: any = {};
-
-            // Map account fields to scraper credential fields
-            if (newAccount.id_number) scrapeCredentials.id = newAccount.id_number;
-            if (newAccount.password) scrapeCredentials.password = newAccount.password;
-            if (newAccount.username) scrapeCredentials.username = newAccount.username;
-            if (newAccount.userCode) scrapeCredentials.userCode = newAccount.userCode;
-            if (newAccount.email) scrapeCredentials.email = newAccount.email;
-            if (newAccount.card6_digits) scrapeCredentials.card6Digits = newAccount.card6_digits;
-            if (newAccount.num) scrapeCredentials.num = newAccount.num;
-            if (newAccount.nationalID) scrapeCredentials.nationalID = newAccount.nationalID;
-            if (newAccount.identification_code) scrapeCredentials.identification_code = newAccount.identification_code;
-            scrapeCredentials.nickname = newAccount.nickname;
-
-            const scrapeConfig = {
-              options: {
-                companyId: newAccount.vendor,
-                startDate: startDate.toISOString(),
-                combineInstallments: false,
-                showBrowser: true,
-                additionalTransactionInformation: true
-              },
-              credentials: scrapeCredentials
-            };
-
-            console.log('[Auto-sync] Starting 3-month sync for:', newAccount.vendor, 'from:', startDate.toISOString());
+            console.log('[Auto-sync] Starting 3-month sync for:', newAccount.vendor, 'from:', syncStartDate.toISOString());
 
             // Show ongoing notification
             showNotification('Syncing transactions... This may take a few minutes.', 'info');
@@ -517,6 +520,27 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
   };
 
+  const handleSuggestionClick = (suggestion: any) => {
+    // Switch to investment tab
+    setCurrentAccountType('investment');
+
+    // Set adding mode
+    setIsAdding(true);
+
+    // Pre-populate the form with suggestion data
+    setNewInvestmentAccount({
+      account_name: suggestion.categoryName || suggestion.suggestedAccountName,
+      account_type: suggestion.suggestedAccountType || 'other',
+      currency: 'ILS',
+      institution: suggestion.suggestedInstitution || '',
+      account_number: '',
+      notes: `Created from smart suggestion (${suggestion.transactionCount} transactions)`,
+    });
+
+    // Store transactions for later linking
+    setPendingSuggestionTransactions(suggestion.transactions || []);
+  };
+
   const handleAddInvestmentAccount = async () => {
     if (!newInvestmentAccount.account_name || !newInvestmentAccount.account_type) {
       setError('Please enter account name and type');
@@ -527,6 +551,33 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       const response = await apiClient.post('/api/investments/accounts', newInvestmentAccount);
 
       if (response.ok) {
+        const data = response.data as any;
+        const newAccountId = data.id;
+
+        // Auto-link transactions if this came from a suggestion
+        if (pendingSuggestionTransactions.length > 0 && newAccountId) {
+          try {
+            let successCount = 0;
+            for (const txn of pendingSuggestionTransactions) {
+              const linkResponse = await apiClient.post('/api/investments/transaction-links', {
+                transaction_identifier: txn.transactionIdentifier,
+                transaction_vendor: txn.transactionVendor,
+                account_id: newAccountId,
+                link_method: 'suggestion',
+                confidence: 0.9
+              });
+              if (linkResponse.ok) successCount++;
+            }
+            showNotification(`Account created and ${successCount} transactions linked`, 'success');
+            setPendingSuggestionTransactions([]);
+          } catch (linkError) {
+            console.error('Error linking transactions:', linkError);
+            showNotification('Account created but failed to link some transactions', 'warning');
+          }
+        } else {
+          showNotification('Investment account added successfully', 'success');
+        }
+
         await fetchInvestmentAccounts();
         setNewInvestmentAccount({
           account_name: '',
@@ -537,6 +588,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           notes: '',
         });
         setIsAdding(false);
+        window.dispatchEvent(new CustomEvent('dataRefresh'));
       } else {
         throw new Error('Failed to add investment account');
       }
@@ -1001,12 +1053,19 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   </Typography>
                 </TableCell>
                 <TableCell>
-                  <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
-                    {account.current_value
-                      ? `${account.currency} ${account.current_value.toLocaleString()}`
-                      : 'Not set'
-                    }
-                  </Typography>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                      {account.current_value
+                        ? `${account.currency} ${account.current_value.toLocaleString()}`
+                        : 'Not set'
+                      }
+                    </Typography>
+                    {account.current_value && !(account as any).current_value_explicit && (
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem', fontStyle: 'italic' }}>
+                        (from transactions)
+                      </Typography>
+                    )}
+                  </Box>
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" color="text.secondary">
@@ -1650,9 +1709,10 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
               {!isAdding && (
                 <InvestmentAccountSuggestionsCard
                   onSuggestionCreated={() => {
-                    loadInvestmentAccounts();
-                    handleRefreshData();
+                    fetchInvestmentAccounts();
+                    window.dispatchEvent(new CustomEvent('dataRefresh'));
                   }}
+                  onCreateAccountClick={handleSuggestionClick}
                 />
               )}
 

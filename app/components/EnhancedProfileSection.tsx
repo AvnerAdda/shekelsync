@@ -277,7 +277,7 @@ const EnhancedProfileSection: React.FC = () => {
     <Paper sx={{ p: 3, mb: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         <PersonIcon color="primary" />
-        <Typography variant="h6">Enhanced Profile Information</Typography>
+        <Typography variant="h6">Profile Information</Typography>
         <Chip
           label={`Household of ${profileData.profile.household_size}`}
           color="primary"
@@ -287,7 +287,7 @@ const EnhancedProfileSection: React.FC = () => {
       </Box>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Complete your enhanced profile for personalized insights and family financial analytics.
+        Complete your profile for personalized insights and family financial analytics.
       </Typography>
 
       {loadError && (
@@ -360,6 +360,7 @@ const EnhancedProfileSection: React.FC = () => {
               <FormControl fullWidth>
                 <InputLabel>Marital Status</InputLabel>
                 <Select
+                  data-testid="marital-status-select"
                   value={profileData.profile.marital_status}
                   label="Marital Status"
                   onChange={(e) => handleMaritalStatusChange(e.target.value)}
@@ -749,14 +750,14 @@ const EnhancedProfileSection: React.FC = () => {
           startIcon={<SaveIcon />}
           onClick={handleSaveProfile}
         >
-          Save Enhanced Profile
+          Save Profile
         </Button>
       </Box>
 
       {/* Success/Error Messages */}
       {saveSuccess && (
         <Alert severity="success" sx={{ mt: 2 }}>
-          Enhanced profile updated successfully! Your family insights will now be more comprehensive.
+          Profile updated successfully! Your family insights will now be more comprehensive.
         </Alert>
       )}
 

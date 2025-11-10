@@ -3,3 +3,82 @@
 @import '@fontsource/roboto/500.css';
 @import '@fontsource/roboto/700.css';
 @import '@app/styles/globals.css';
+
+/* Custom window styling for Electron frameless window - updated */
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+  height: 100vh !important;
+  width: 100vw !important;
+  box-sizing: border-box;
+  background: radial-gradient(circle at top, rgba(200, 250, 207, 0.15), rgba(10, 10, 10, 0.85)),
+    linear-gradient(135deg, #0a0a0a, #131a13);
+}
+
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  overflow: auto;
+  border-radius: 0;
+  transition: border-radius 0.2s ease, box-shadow 0.2s ease, width 0.2s ease, height 0.2s ease;
+  background: transparent;
+}
+
+body.window-restored {
+  padding: 12px;
+}
+
+body.window-restored #root {
+  height: calc(100vh - 24px);
+  width: calc(100vw - 24px);
+  box-shadow: 0 12px 45px rgba(0, 0, 0, 0.35), 0 20px 65px rgba(0, 0, 0, 0.45);
+  background-clip: padding-box;
+  border-radius: 16px;
+}
+
+body.window-maximized {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+body.window-maximized #root {
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  height: 100vh !important;
+  width: 100vw !important;
+}
+
+/* Draggable region for window title bar */
+.draggable {
+  -webkit-app-region: drag;
+}
+
+.non-draggable {
+  -webkit-app-region: no-drag;
+}
+
+/* Window border radius (platform-specific) */
+@supports (border-radius: 16px) {
+  body {
+    border-radius: 16px;
+  }
+}
+
+/* Smooth window transitions */
+* {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection in input fields */
+input,
+textarea,
+[contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}

@@ -19,6 +19,27 @@ function normalizeMerchantName(name) {
   return normalized || 'unknown';
 }
 
+function generateDisplayName(transactions) {
+  // Find the most common or representative name from the group
+  const nameFrequency = {};
+  transactions.forEach((txn) => {
+    const cleaned = txn.name.trim();
+    nameFrequency[cleaned] = (nameFrequency[cleaned] || 0) + 1;
+  });
+
+  // Get the most frequent name
+  const mostCommon = Object.entries(nameFrequency)
+    .sort((a, b) => b[1] - a[1])[0]?.[0];
+
+  if (!mostCommon) return 'Unknown Merchant';
+
+  // Capitalize first letter of each word for better display
+  return mostCommon
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function groupByMerchant(transactions) {
   const groups = {};
   transactions.forEach((txn) => {
@@ -76,16 +97,33 @@ function analyzeRecurringPattern(transactions, merchantPattern, dateFns) {
 
   const nextExpectedDate = addDays(new Date(sortedTxns[sortedTxns.length - 1].date), avgInterval);
 
+  // Generate a friendly display name from the transactions
+  const displayName = generateDisplayName(sortedTxns);
+
+  // Determine if this is likely a subscription based on consistency and frequency
+  const isSubscription =
+    (frequency === 'monthly' || frequency === 'yearly') &&
+    amountConsistency > 0.85 &&
+    intervalConsistency > 0.75;
+
   return {
     merchant_pattern: merchantPattern,
+    merchant_display_name: displayName,
     occurrences: sortedTxns.length,
     total_amount: sortedTxns.reduce((sum, txn) => sum + txn.amount, 0),
     avg_amount: avgAmount,
     amount_std_dev: stdDev,
+    amount_variance: variance,
     frequency,
     avg_interval: avgInterval,
     interval_std_dev: intervalStdDev,
     confidence,
+    is_subscription: isSubscription,
+    first_transaction: sortedTxns[0].date,
+    last_transaction: sortedTxns[sortedTxns.length - 1].date,
+    category: sortedTxns[0].category,
+    parent_category: sortedTxns[0].parent_category,
+    average_interval_days: Math.round(avgInterval),
     sample_transactions: sortedTxns.slice(-5).map((txn) => ({
       identifier: txn.identifier,
       date: txn.date,

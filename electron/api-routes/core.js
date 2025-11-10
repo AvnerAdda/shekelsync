@@ -1,19 +1,12 @@
-const path = require('path');
 const { dbManager } = require('../database');
-const healthService = require(path.join(__dirname, '..', '..', 'app', 'server', 'services', 'health.js'));
-const transactionsMetrics = require(path.join(
-  __dirname,
-  '..',
-  '..',
-  'app',
+const { resolveAppPath } = require('../paths');
+const healthService = require(resolveAppPath('server', 'services', 'health.js'));
+const transactionsMetrics = require(resolveAppPath(
   'server',
   'services',
   'transactions',
   'metrics.js',
 ));
-
-// Import original Next.js API handlers for reference
-const apiPath = path.join(__dirname, '..', '..', 'app', 'pages', 'api');
 
 // Core API route handlers
 class CoreAPIRoutes {

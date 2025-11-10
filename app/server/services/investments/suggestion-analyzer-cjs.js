@@ -1,11 +1,10 @@
 /**
- * Investment Account Suggestion Analyzer
+ * Investment Account Suggestion Analyzer (CommonJS version for Electron)
  * Intelligently parses transaction descriptions to suggest investment account creation
- * Uses pattern matching from investment-patterns.js
  */
 
-import pool from '../../../utils/db.js';
-import { ACCOUNT_PATTERNS, getAllPatterns } from '../../../config/investment-patterns.js';
+const database = require('../database.js');
+const { ACCOUNT_PATTERNS } = require('../../../config/investment-patterns-cjs.js');
 
 /**
  * Known Israeli financial institutions for extraction
@@ -26,9 +25,6 @@ const INSTITUTIONS = {
 
 /**
  * Calculate confidence score for account type detection
- * @param {string} description - Transaction description
- * @param {string} accountType - Detected account type
- * @returns {number} Confidence score (0-1)
  */
 function calculateConfidence(description, accountType) {
   const lowerDesc = description.toLowerCase();
@@ -76,9 +72,6 @@ function calculateConfidence(description, accountType) {
 
 /**
  * Extract institution name from transaction description
- * @param {string} description - Transaction description
- * @param {string} accountType - Account type
- * @returns {string|null} Institution name or null
  */
 function extractInstitution(description, accountType) {
   const lowerDesc = description.toLowerCase();
@@ -95,12 +88,27 @@ function extractInstitution(description, accountType) {
 }
 
 /**
+ * Get Hebrew label for account type
+ */
+function getAccountTypeLabel(accountType) {
+  const labels = {
+    pension: 'קרן פנסיה',
+    provident: 'קרן השתלמות',
+    study_fund: 'קופת גמל לחינוך',
+    brokerage: 'חשבון ברוקר',
+    crypto: 'מטבעות דיגיטליים',
+    savings: 'חשבון חיסכון',
+    mutual_fund: 'קרנות נאמנות',
+    bonds: 'אג"ח',
+    real_estate: 'נדל"ן',
+    other: 'השקעות אחרות'
+  };
+
+  return labels[accountType] || accountType;
+}
+
+/**
  * Extract clean account name from transaction description
- * Removes common prefixes/suffixes and standardizes format
- * @param {string} description - Transaction description
- * @param {string} accountType - Account type
- * @param {string|null} institution - Extracted institution
- * @returns {string} Clean account name
  */
 function extractAccountName(description, accountType, institution) {
   let cleaned = description.trim();
@@ -150,31 +158,7 @@ function extractAccountName(description, accountType, institution) {
 }
 
 /**
- * Get Hebrew label for account type
- * @param {string} accountType - Account type
- * @returns {string} Hebrew label
- */
-function getAccountTypeLabel(accountType) {
-  const labels = {
-    pension: 'קרן פנסיה',
-    provident: 'קרן השתלמות',
-    study_fund: 'קופת גמל לחינוך',
-    brokerage: 'חשבון ברוקר',
-    crypto: 'מטבעות דיגיטליים',
-    savings: 'חשבון חיסכון',
-    mutual_fund: 'קרנות נאמנות',
-    bonds: 'אג"ח',
-    real_estate: 'נדל"ן',
-    other: 'השקעות אחרות'
-  };
-
-  return labels[accountType] || accountType;
-}
-
-/**
  * Detect account type from transaction description
- * @param {string} description - Transaction description
- * @returns {object|null} {accountType, confidence, matchReason}
  */
 function detectAccountType(description) {
   if (!description) return null;
@@ -205,8 +189,8 @@ function detectAccountType(description) {
     }
   }
 
-  // Only return if confidence is above threshold (30%)
-  if (bestConfidence >= 0.3) {
+  // REMOVED confidence threshold - return best match even if low confidence
+  if (bestMatch) {
     return {
       accountType: bestMatch,
       confidence: bestConfidence,
@@ -219,16 +203,28 @@ function detectAccountType(description) {
 
 /**
  * Analyze a single transaction for investment account suggestion
- * @param {object} transaction - Transaction object
- * @returns {object|null} Suggestion object or null
+ * Now uses the actual category from database instead of only pattern matching
  */
 function analyzeTransaction(transaction) {
   const detection = detectAccountType(transaction.description);
 
-  if (!detection) return null;
+  // Use pattern detection if available, otherwise use the category from database
+  let accountType, institution, accountName, confidence, matchReason;
 
-  const institution = extractInstitution(transaction.description, detection.accountType);
-  const accountName = extractAccountName(transaction.description, detection.accountType, institution);
+  if (detection) {
+    accountType = detection.accountType;
+    institution = extractInstitution(transaction.description, detection.accountType);
+    accountName = extractAccountName(transaction.description, detection.accountType, institution);
+    confidence = detection.confidence;
+    matchReason = detection.matchReason;
+  } else {
+    // Fallback: use the category name from database
+    accountType = 'other';
+    institution = null;
+    accountName = transaction.category_name || transaction.description.substring(0, 50);
+    confidence = 0.5; // Medium confidence when using database category
+    matchReason = `Category: ${transaction.category_name}`;
+  }
 
   return {
     transactionIdentifier: transaction.identifier,
@@ -236,18 +232,17 @@ function analyzeTransaction(transaction) {
     transactionName: transaction.description,
     transactionDate: transaction.date,
     transactionAmount: transaction.price,
-    suggestedAccountType: detection.accountType,
+    categoryName: transaction.category_name, // Add actual category from DB
+    suggestedAccountType: accountType,
     suggestedInstitution: institution,
     suggestedAccountName: accountName,
-    confidence: detection.confidence,
-    matchReason: detection.matchReason
+    confidence: confidence,
+    matchReason: matchReason
   };
 }
 
 /**
  * Get all investment-categorized transactions without linked accounts
- * @param {number} thresholdDays - Only fetch transactions from last N days (default 90)
- * @returns {Promise<Array>} Array of unlinked transactions
  */
 async function getUnlinkedInvestmentTransactions(thresholdDays = 90) {
   const query = `
@@ -270,29 +265,27 @@ async function getUnlinkedInvestmentTransactions(thresholdDays = 90) {
     ORDER BY t.date DESC
   `;
 
-  const result = await pool.query(query, [thresholdDays]);
+  const result = await database.query(query, [thresholdDays]);
   return result.rows;
 }
 
 /**
- * Group transactions by detected account (same type + institution)
- * @param {Array} suggestions - Array of suggestion objects
- * @returns {Array} Grouped suggestions with aggregated data
+ * Group transactions by category name from database
+ * This shows ALL unlinked investment transactions grouped by their actual category
  */
 function groupSuggestionsByAccount(suggestions) {
   const groups = new Map();
 
   for (const suggestion of suggestions) {
-    // Create grouping key: accountType + institution (or accountName if no institution)
-    const groupKey = suggestion.suggestedInstitution
-      ? `${suggestion.suggestedAccountType}::${suggestion.suggestedInstitution}`
-      : `${suggestion.suggestedAccountType}::${suggestion.suggestedAccountName}`;
+    // Group by actual category name from database, not pattern-detected type
+    const groupKey = suggestion.categoryName || 'Unknown';
 
     if (!groups.has(groupKey)) {
       groups.set(groupKey, {
+        categoryName: suggestion.categoryName,
         suggestedAccountType: suggestion.suggestedAccountType,
         suggestedInstitution: suggestion.suggestedInstitution,
-        suggestedAccountName: suggestion.suggestedAccountName,
+        suggestedAccountName: suggestion.categoryName || suggestion.suggestedAccountName,
         avgConfidence: 0,
         transactions: [],
         totalAmount: 0,
@@ -319,57 +312,37 @@ function groupSuggestionsByAccount(suggestions) {
     group.avgConfidence = confidenceSum / group.transactions.length;
   }
 
-  // Convert map to array and sort by confidence
-  return Array.from(groups.values()).sort((a, b) => b.avgConfidence - a.avgConfidence);
+  // Convert map to array and sort by transaction count (most transactions first)
+  return Array.from(groups.values()).sort((a, b) => b.transactionCount - a.transactionCount);
 }
 
 /**
  * Main function: Analyze all unlinked investment transactions
- * @param {number} thresholdDays - Days to look back (default 90)
- * @returns {Promise<Array>} Grouped account suggestions
+ * Returns ALL unlinked transactions grouped by their database category
  */
 async function analyzeInvestmentTransactions(thresholdDays = 90) {
   const transactions = await getUnlinkedInvestmentTransactions(thresholdDays);
+
+  console.log(`Found ${transactions.length} unlinked investment txns`);
 
   if (transactions.length === 0) {
     return [];
   }
 
-  // Analyze each transaction
-  const suggestions = transactions
-    .map(analyzeTransaction)
-    .filter(s => s !== null);
+  // Analyze each transaction - ALL transactions are now included
+  const suggestions = transactions.map(analyzeTransaction);
 
-  // Group by detected account
-  return groupSuggestionsByAccount(suggestions);
+  // Group by database category name
+  const grouped = groupSuggestionsByAccount(suggestions);
+
+  console.log(`Created ${grouped.length} suggestion groups`);
+
+  return grouped;
 }
 
-/**
- * Check if a suggestion should be shown based on dismissal threshold
- * @param {number} dismissCount - Number of times dismissed
- * @param {string|null} lastDismissedAt - Last dismissal timestamp
- * @param {number} newTransactionCount - New transactions since dismissal
- * @param {number} threshold - Threshold for re-showing (default 3)
- * @returns {boolean} Should show suggestion
- */
-function shouldShowSuggestion(dismissCount, lastDismissedAt, newTransactionCount, threshold = 3) {
-  // Never dismissed, always show
-  if (dismissCount === 0 || !lastDismissedAt) {
-    return true;
-  }
-
-  // If new transactions exceed threshold, show again
-  return newTransactionCount >= threshold;
-}
-
-export {
-  detectAccountType,
-  analyzeTransaction,
+module.exports = {
   analyzeInvestmentTransactions,
   getUnlinkedInvestmentTransactions,
-  groupSuggestionsByAccount,
-  shouldShowSuggestion,
-  extractInstitution,
-  extractAccountName,
-  calculateConfidence
+  detectAccountType,
+  analyzeTransaction
 };

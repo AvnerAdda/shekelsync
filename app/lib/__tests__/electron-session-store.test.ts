@@ -81,6 +81,23 @@ async function loadSessionStore(options: LoadOptions) {
   const Module = requireModule('module');
   const originalLoad = Module._load;
 
+  const pathsModulePath = requireModule.resolve(path.join(repoRoot, 'electron', 'paths.js'));
+
+  const pathsModule = {
+    requireFromApp: (moduleName: string) => {
+      if (moduleName === 'keytar') {
+        if (keytarMock) {
+          return keytarMock;
+        }
+        const err: NodeJS.ErrnoException = new Error('module not found');
+        err.code = 'MODULE_NOT_FOUND';
+        throw err;
+      }
+      return requireModule(moduleName);
+    },
+    resolveAppPath: (...segments: string[]) => path.join(repoRoot, 'app', ...segments),
+  };
+
   Module._load = function patched(request: string, parent: any, isMain: boolean) {
     if (request === 'electron') {
       return electronExports;
@@ -92,6 +109,14 @@ async function loadSessionStore(options: LoadOptions) {
 
     if (request === encryptionModulePath) {
       return encryptionExports;
+    }
+
+    if (
+      request === './paths' ||
+      request === path.join('..', 'electron', 'paths.js') ||
+      request === pathsModulePath
+    ) {
+      return pathsModule;
     }
 
     if (request === appKeytarPath || request === 'keytar') {

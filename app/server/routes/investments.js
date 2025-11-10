@@ -9,6 +9,7 @@ const accountsService = require('../services/investments/accounts.js');
 const assetsService = require('../services/investments/assets.js');
 const holdingsService = require('../services/investments/holdings.js');
 const summaryService = require('../services/investments/summary.js');
+const suggestionAnalyzerCJS = require('../services/investments/suggestion-analyzer-cjs.js');
 
 // Dynamic imports for ES modules
 let suggestionAnalyzer;
@@ -123,6 +124,32 @@ function createInvestmentsRouter() {
       res.status(error?.status || 500).json({
         success: false,
         error: error?.message || 'Failed to update suggestion',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * GET /api/investments/smart-suggestions
+   * NEW: Working CommonJS version that analyzes unlinked transactions
+   * Query params: thresholdDays (default: 90)
+   */
+  router.get('/smart-suggestions', async (req, res) => {
+    try {
+      const { thresholdDays = 90 } = req.query;
+
+      const suggestions = await suggestionAnalyzerCJS.analyzeInvestmentTransactions(parseInt(thresholdDays, 10));
+
+      res.json({
+        success: true,
+        count: suggestions.length,
+        suggestions: suggestions
+      });
+    } catch (error) {
+      console.error('Smart suggestions error:', error);
+      res.status(error?.status || 500).json({
+        success: false,
+        error: error?.message || 'Failed to analyze transactions',
         details: error?.stack,
       });
     }
@@ -331,11 +358,17 @@ function createInvestmentsRouter() {
    */
   router.get('/suggestions/pending', async (req, res) => {
     try {
+      console.log('[Suggestions API] Loading ES modules...');
       await loadESModules();
+      console.log('[Suggestions API] ES modules loaded successfully');
+
       const { thresholdDays = 90, dismissalThreshold = 3 } = req.query;
+      console.log('[Suggestions API] Query params:', { thresholdDays, dismissalThreshold });
 
       // Get all suggestions
+      console.log('[Suggestions API] Analyzing investment transactions...');
       const allSuggestions = await suggestionAnalyzer.analyzeInvestmentTransactions(parseInt(thresholdDays));
+      console.log('[Suggestions API] Found', allSuggestions.length, 'suggestions');
 
       // Filter based on dismissal threshold
       // Note: This would require fetching existing pending_transaction_suggestions to check dismiss_count
@@ -348,8 +381,10 @@ function createInvestmentsRouter() {
         threshold: parseInt(dismissalThreshold)
       });
     } catch (error) {
-      console.error('Investments pending suggestions error:', error);
+      console.error('[Suggestions API] Error:', error);
+      console.error('[Suggestions API] Stack:', error?.stack);
       res.status(error?.statusCode || 500).json({
+        success: false,
         error: error?.message || 'Failed to fetch pending suggestions',
         details: error?.stack,
       });
@@ -371,8 +406,8 @@ function createInvestmentsRouter() {
         });
       }
 
-      const { getPool } = require('../../../pages/api/db');
-      const pool = getPool();
+      const database = require('../services/database.js');
+      const pool = database;
 
       let dismissedCount = 0;
 
@@ -405,6 +440,187 @@ function createInvestmentsRouter() {
       console.error('Investments dismiss suggestion error:', error);
       res.status(error?.statusCode || 500).json({
         error: error?.message || 'Failed to dismiss suggestions',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * POST /api/investments/transaction-links
+   * Links a single transaction to an investment account
+   * Body: {
+   *   transaction_identifier: string,
+   *   transaction_vendor: string,
+   *   account_id: number,
+   *   link_method: string (optional, default: 'manual'),
+   *   confidence: number (optional, default: 1.0)
+   * }
+   */
+  router.post('/transaction-links', async (req, res) => {
+    try {
+      const {
+        transaction_identifier,
+        transaction_vendor,
+        account_id,
+        link_method = 'manual',
+        confidence = 1.0
+      } = req.body;
+
+      if (!transaction_identifier || !transaction_vendor || !account_id) {
+        return res.status(400).json({
+          error: 'transaction_identifier, transaction_vendor, and account_id are required'
+        });
+      }
+
+      const database = require('../services/database.js');
+      const pool = database;
+
+      // First, get the transaction date
+      const txnQuery = `
+        SELECT date FROM transactions
+        WHERE identifier = ? AND vendor = ?
+        LIMIT 1
+      `;
+      const txnResult = await pool.query(txnQuery, [transaction_identifier, transaction_vendor]);
+
+      if (!txnResult.rows || txnResult.rows.length === 0) {
+        return res.status(404).json({
+          error: 'Transaction not found',
+          transaction_identifier,
+          transaction_vendor
+        });
+      }
+
+      const transactionDate = txnResult.rows[0].date;
+
+      // Insert or update the link
+      const insertQuery = `
+        INSERT INTO transaction_account_links (
+          transaction_identifier,
+          transaction_vendor,
+          transaction_date,
+          account_id,
+          link_method,
+          confidence,
+          created_by
+        )
+        VALUES (?, ?, ?, ?, ?, ?, 'user')
+        ON CONFLICT(transaction_identifier, transaction_vendor) DO UPDATE SET
+          account_id = excluded.account_id,
+          link_method = excluded.link_method,
+          confidence = excluded.confidence,
+          created_at = datetime('now')
+      `;
+
+      await pool.query(insertQuery, [
+        transaction_identifier,
+        transaction_vendor,
+        transactionDate,
+        account_id,
+        link_method,
+        confidence
+      ]);
+
+      res.status(201).json({
+        success: true,
+        message: 'Transaction linked successfully',
+        link: {
+          transaction_identifier,
+          transaction_vendor,
+          account_id,
+          link_method,
+          confidence
+        }
+      });
+    } catch (error) {
+      console.error('Investments transaction-link create error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to link transaction',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * GET /api/investments/transaction-links
+   * Get all transaction links for a specific account
+   * Query params: account_id
+   */
+  router.get('/transaction-links', async (req, res) => {
+    try {
+      const { account_id } = req.query;
+
+      if (!account_id) {
+        return res.status(400).json({
+          error: 'account_id is required'
+        });
+      }
+
+      const database = require('../services/database.js');
+      const pool = database;
+
+      const query = `
+        SELECT
+          tal.*,
+          t.name as transaction_name,
+          t.price as transaction_amount,
+          t.date as transaction_date
+        FROM transaction_account_links tal
+        LEFT JOIN transactions t ON tal.transaction_identifier = t.identifier
+          AND tal.transaction_vendor = t.vendor
+        WHERE tal.account_id = ?
+        ORDER BY tal.created_at DESC
+      `;
+
+      const result = await pool.query(query, [account_id]);
+
+      res.json({
+        success: true,
+        count: result.rows.length,
+        links: result.rows
+      });
+    } catch (error) {
+      console.error('Investments transaction-links list error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch transaction links',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * DELETE /api/investments/transaction-links
+   * Unlink a transaction from an investment account
+   * Query params: transaction_identifier, transaction_vendor
+   */
+  router.delete('/transaction-links', async (req, res) => {
+    try {
+      const { transaction_identifier, transaction_vendor } = req.query;
+
+      if (!transaction_identifier || !transaction_vendor) {
+        return res.status(400).json({
+          error: 'transaction_identifier and transaction_vendor are required'
+        });
+      }
+
+      const database = require('../services/database.js');
+      const pool = database;
+
+      const deleteQuery = `
+        DELETE FROM transaction_account_links
+        WHERE transaction_identifier = ? AND transaction_vendor = ?
+      `;
+
+      await pool.query(deleteQuery, [transaction_identifier, transaction_vendor]);
+
+      res.json({
+        success: true,
+        message: 'Transaction unlinked successfully'
+      });
+    } catch (error) {
+      console.error('Investments transaction-link delete error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to unlink transaction',
         details: error?.stack,
       });
     }

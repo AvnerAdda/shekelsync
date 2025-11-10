@@ -1,5 +1,35 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+const sendLog = (level, message, data) => {
+  try {
+    ipcRenderer.send('log:report', {
+      level,
+      message: typeof message === 'string' ? message : JSON.stringify(message),
+      data,
+    });
+  } catch (error) {
+    console.warn('Failed to send log message:', error);
+  }
+};
+
+const logBridge = Object.freeze({
+  info: (message, data) => sendLog('info', message, data),
+  warn: (message, data) => sendLog('warn', message, data),
+  error: (message, data) => sendLog('error', message, data),
+  debug: (message, data) => sendLog('debug', message, data),
+});
+
+const diagnosticsBridge = Object.freeze({
+  getInfo: () => ipcRenderer.invoke('diagnostics:getInfo'),
+  openLogDirectory: () => ipcRenderer.invoke('diagnostics:openLogDirectory'),
+  exportDiagnostics: (filePath) => {
+    if (!filePath) {
+      throw new Error('Diagnostics export requires a destination path');
+    }
+    return ipcRenderer.invoke('diagnostics:export', filePath);
+  },
+});
+
 const authBridge = Object.freeze({
   getSession: () => ipcRenderer.invoke('auth:getSession'),
   setSession: (session) => {
@@ -47,7 +77,13 @@ const eventsBridge = Object.freeze({
     ipcRenderer.on('auth:session-changed', wrappedCallback);
 
     return () => ipcRenderer.removeListener('auth:session-changed', wrappedCallback);
-  }
+  },
+  onWindowStateChanged: (callback) => {
+    const wrappedCallback = (event, ...args) => callback(...args);
+    ipcRenderer.on('window:state-changed', wrappedCallback);
+
+    return () => ipcRenderer.removeListener('window:state-changed', wrappedCallback);
+  },
 });
 
 // Expose protected methods that allow the renderer process to use
@@ -57,7 +93,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   window: {
     minimize: () => ipcRenderer.invoke('window:minimize'),
     maximize: () => ipcRenderer.invoke('window:maximize'),
-    close: () => ipcRenderer.invoke('window:close')
+    close: () => ipcRenderer.invoke('window:close'),
+    isMaximized: () => ipcRenderer.invoke('window:isMaximized')
   },
 
   // Database operations
@@ -120,6 +157,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Auth/session persistence
   auth: authBridge,
+  log: logBridge,
+  diagnostics: diagnosticsBridge,
 
   // App information
   app: {

@@ -16,6 +16,9 @@ import {
   Tooltip,
   Badge,
   CircularProgress,
+  Popover,
+  Paper,
+  Chip,
 } from '@mui/material';
 import {
   Home as HomeIcon,
@@ -58,11 +61,20 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const [accountsModalOpen, setAccountsModalOpen] = useState(false);
   const [scrapeModalOpen, setScrapeModalOpen] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  interface AccountSyncStatus {
+    id: string;
+    vendor: string;
+    nickname: string | null;
+    lastSync: Date | null;
+    status: 'green' | 'orange' | 'red' | 'never';
+  }
+
   const [stats, setStats] = useState({
     totalAccounts: 0,
     lastSync: null as Date | null,
     dbStatus: 'checking' as 'connected' | 'disconnected' | 'checking',
   });
+  const [accountSyncStatuses, setAccountSyncStatuses] = useState<AccountSyncStatus[]>([]);
   const [accountAlerts, setAccountAlerts] = useState({
     noBank: false,
     noCredit: false,
@@ -70,6 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   });
   const [uncategorizedCount, setUncategorizedCount] = useState<number>(0);
   const [isBulkSyncing, setIsBulkSyncing] = useState(false);
+  const [syncPopoverAnchor, setSyncPopoverAnchor] = useState<HTMLElement | null>(null);
   const { showNotification } = useNotification();
   const { getPageAccessStatus } = useOnboarding();
   const theme = useTheme();
@@ -84,20 +97,47 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     { id: 'settings', label: 'Settings', icon: <SettingsIcon /> },
   ];
 
+  const getAccountSyncStatus = (lastSyncDate: Date | null): 'green' | 'orange' | 'red' | 'never' => {
+    if (!lastSyncDate) return 'never';
+    const now = Date.now();
+    const diffMs = now - lastSyncDate.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    if (diffHours < 24) return 'green'; // < 24 hours
+    if (diffHours < 48) return 'orange'; // 1-2 days
+    return 'red'; // > 2 days
+  };
+
   const fetchStats = useCallback(async () => {
     try {
       const accountsRes = await apiClient.get('/api/credentials');
       const accountsData = accountsRes.ok ? (accountsRes.data as any) : [];
       const accounts = Array.isArray(accountsData) ? accountsData : accountsData?.items ?? [];
 
-      const scrapeRes = await apiClient.get('/api/scrape_events?limit=1');
-      const scrapeData = scrapeRes.ok ? (scrapeRes.data as any) : [];
-      const scrapeEvents = Array.isArray(scrapeData) ? scrapeData : [];
+      // Process accounts with sync status
+      const accountStatuses: AccountSyncStatus[] = accounts.map((account: any) => {
+        const lastSyncDate = account.lastUpdate ? new Date(account.lastUpdate) : null;
+        return {
+          id: account.id,
+          vendor: account.vendor,
+          nickname: account.nickname,
+          lastSync: lastSyncDate,
+          status: getAccountSyncStatus(lastSyncDate),
+        };
+      });
 
+      // Find the oldest (farthest) sync time
+      const oldestSync = accountStatuses.reduce<Date | null>((oldest, account) => {
+        if (!account.lastSync) return oldest;
+        if (!oldest || account.lastSync < oldest) return account.lastSync;
+        return oldest;
+      }, null);
+
+      setAccountSyncStatuses(accountStatuses);
       setStats(prev => ({
         ...prev,
         totalAccounts: accounts.length || 0,
-        lastSync: scrapeEvents[0]?.created_at ? new Date(scrapeEvents[0].created_at) : null,
+        lastSync: oldestSync,
       }));
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -305,6 +345,51 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     return 'Just now';
   };
 
+  const formatAccountLastSync = (lastSync: Date | null) => {
+    if (!lastSync) return 'Never synced';
+    const now = new Date();
+    const diff = now.getTime() - lastSync.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 1) return `${days} days ago`;
+    if (days === 1) return 'Yesterday';
+    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    return 'Just now';
+  };
+
+  const getStatusColor = (status: 'green' | 'orange' | 'red' | 'never') => {
+    switch (status) {
+      case 'green':
+        return theme.palette.success.main;
+      case 'orange':
+        return theme.palette.warning.main;
+      case 'red':
+        return theme.palette.error.main;
+      case 'never':
+        return theme.palette.text.disabled;
+    }
+  };
+
+  const handleSyncPopoverOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setSyncPopoverAnchor(event.currentTarget);
+  };
+
+  const handleSyncPopoverClose = () => {
+    setSyncPopoverAnchor(null);
+  };
+
+  const handleRefreshStaleAccounts = () => {
+    handleSyncPopoverClose();
+    handleBulkRefresh();
+  };
+
+  const staleAccounts = accountSyncStatuses.filter(
+    (account) => account.status === 'orange' || account.status === 'red'
+  );
+
   const drawerWidth = open ? DRAWER_WIDTH : DRAWER_WIDTH_COLLAPSED;
 
   return (
@@ -454,55 +539,141 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     {stats.totalAccounts} Accounts
                   </Typography>
                 </Box>
-                <Tooltip 
-                  title={
-                    isBulkSyncing 
-                      ? 'Syncing accounts...' 
-                      : (stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS)
-                        ? 'Click to sync all stale accounts'
-                        : 'Manage accounts'
-                  }
-                >
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      cursor: isBulkSyncing ? 'wait' : 'pointer',
-                      '&:hover': {
-                        backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                        borderRadius: 1,
-                      },
-                      padding: '4px',
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    cursor: isBulkSyncing ? 'wait' : 'pointer',
+                    '&:hover': {
+                      backgroundColor: 'rgba(0, 0, 0, 0.04)',
                       borderRadius: 1,
-                      transition: 'background-color 0.2s',
-                    }}
-                    onClick={handleSyncIconClick}
-                  >
-                    {isBulkSyncing ? (
-                      <CircularProgress size={16} />
-                    ) : (
-                      <SyncIcon 
-                        fontSize="small" 
-                        color={
-                          stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS
-                            ? 'warning'
-                            : 'action'
-                        } 
-                      />
-                    )}
-                    <Typography 
-                      variant="caption" 
+                    },
+                    padding: '4px',
+                    borderRadius: 1,
+                    transition: 'background-color 0.2s',
+                  }}
+                  onClick={handleSyncIconClick}
+                  onMouseEnter={handleSyncPopoverOpen}
+                  onMouseLeave={handleSyncPopoverClose}
+                >
+                  {isBulkSyncing ? (
+                    <CircularProgress size={16} />
+                  ) : (
+                    <SyncIcon
+                      fontSize="small"
                       color={
                         stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS
-                          ? 'warning.main'
-                          : 'text.secondary'
+                          ? 'warning'
+                          : 'action'
                       }
-                    >
-                      {formatLastSync()}
-                    </Typography>
+                    />
+                  )}
+                  <Typography
+                    variant="caption"
+                    color={
+                      stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS
+                        ? 'warning.main'
+                        : 'text.secondary'
+                    }
+                  >
+                    {formatLastSync()}
+                  </Typography>
+                </Box>
+                <Popover
+                  open={Boolean(syncPopoverAnchor)}
+                  anchorEl={syncPopoverAnchor}
+                  onClose={handleSyncPopoverClose}
+                  anchorOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                  }}
+                  transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'left',
+                  }}
+                  sx={{
+                    pointerEvents: 'none',
+                  }}
+                  slotProps={{
+                    paper: {
+                      onMouseEnter: () => setSyncPopoverAnchor(syncPopoverAnchor),
+                      onMouseLeave: handleSyncPopoverClose,
+                      sx: {
+                        pointerEvents: 'auto',
+                        maxWidth: 320,
+                        p: 2,
+                      },
+                    },
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
+                    Account Sync Status
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
+                    {accountSyncStatuses.length === 0 ? (
+                      <Typography variant="caption" color="text.secondary">
+                        No accounts configured
+                      </Typography>
+                    ) : (
+                      accountSyncStatuses.map((account) => (
+                        <Box
+                          key={account.id}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 1,
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0 }}>
+                            <Box
+                              sx={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                backgroundColor: getStatusColor(account.status),
+                                flexShrink: 0,
+                              }}
+                            />
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {account.nickname || account.vendor}
+                            </Typography>
+                          </Box>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ flexShrink: 0, fontSize: '0.7rem' }}
+                          >
+                            {formatAccountLastSync(account.lastSync)}
+                          </Typography>
+                        </Box>
+                      ))
+                    )}
                   </Box>
-                </Tooltip>
+                  {staleAccounts.length > 0 && (
+                    <>
+                      <Divider sx={{ my: 1 }} />
+                      <Button
+                        variant="contained"
+                        size="small"
+                        fullWidth
+                        startIcon={<SyncIcon />}
+                        onClick={handleRefreshStaleAccounts}
+                        disabled={isBulkSyncing}
+                      >
+                        Refresh {staleAccounts.length} Stale Account{staleAccounts.length > 1 ? 's' : ''}
+                      </Button>
+                    </>
+                  )}
+                </Popover>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   {stats.dbStatus === 'connected' ? (
                     <>

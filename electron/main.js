@@ -1,14 +1,30 @@
 require('./setup-module-alias');
 
-const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, session, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const {
+  appRoot,
+  rendererRoot,
+  resolveAppPath,
+  resolveRendererPath,
+  requireFromApp,
+} = require('./paths');
+const {
+  logger,
+  recordRendererLog,
+} = require('./logger');
+const {
+  getDiagnosticsInfo,
+  openDiagnosticsLogDirectory,
+  exportDiagnosticsToFile,
+} = require('./diagnostics');
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 // Load environment variables from the Next.js app if present (e.g., USE_SQLITE)
 try {
-  const dotenv = require(path.join(__dirname, '..', 'app', 'node_modules', 'dotenv'));
-  const envFile = path.join(__dirname, '..', 'app', '.env.local');
+  const dotenv = requireFromApp('dotenv');
+  const envFile = path.join(appRoot, '.env.local');
   if (fs.existsSync(envFile)) {
     dotenv.config({ path: envFile });
   }
@@ -28,7 +44,7 @@ try {
 let autoUpdater;
 try {
   if (isDev) {
-    autoUpdater = require(path.join(__dirname, '..', 'app', 'node_modules', 'electron-updater')).autoUpdater;
+    autoUpdater = requireFromApp('electron-updater').autoUpdater;
   } else {
     autoUpdater = require('electron-updater').autoUpdater;
   }
@@ -58,22 +74,14 @@ let setupAPIServer = null;
 // Helper to lazy-load services only when needed (and not in SQLite dev mode)
 function getHealthService() {
   if (!healthService) {
-    healthService = require(path.join(__dirname, '..', 'app', 'server', 'services', 'health.js'));
+    healthService = require(resolveAppPath('server', 'services', 'health.js'));
   }
   return healthService;
 }
 
 function getScrapingService() {
   if (!scrapingService) {
-    scrapingService = require(path.join(
-      __dirname,
-      '..',
-      'app',
-      'server',
-      'services',
-      'scraping',
-      'run.js',
-    ));
+    scrapingService = require(resolveAppPath('server', 'services', 'scraping', 'run.js'));
   }
   return scrapingService;
 }
@@ -82,11 +90,16 @@ function getScrapingService() {
 let mainWindow;
 let apiServer;
 let apiPort;
+let appTray;
 
 // Development mode logging
 if (isDev) {
   console.log('Running in development mode');
 }
+logger.info('Booting ShekelSync Electron shell', {
+  environment: process.env.NODE_ENV || 'development',
+  isDev,
+});
 
 function sanitizeSession(session) {
   if (!session) {
@@ -121,26 +134,126 @@ function createScrapeLogger(vendor) {
   };
 }
 
+function formatDiagnosticsFilename() {
+  return `shekelsync-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+}
+
+async function handleOpenLogFolderRequest() {
+  const result = await openDiagnosticsLogDirectory();
+  if (!result.success) {
+    dialog.showErrorBox('Open Log Folder Failed', result.error || 'Unable to open log folder.');
+  }
+}
+
+async function handleDiagnosticsExportRequest() {
+  const browserWindow = mainWindow || BrowserWindow.getFocusedWindow() || undefined;
+  const saveResult = await dialog.showSaveDialog(browserWindow, {
+    defaultPath: formatDiagnosticsFilename(),
+    filters: [{ name: 'Diagnostics Bundle', extensions: ['json'] }],
+  });
+
+  if (saveResult.canceled || !saveResult.filePath) {
+    return { success: false, canceled: true };
+  }
+
+  const exportResult = await exportDiagnosticsToFile(saveResult.filePath, {
+    appVersion: app.getVersion(),
+  });
+
+  if (!exportResult.success) {
+    dialog.showErrorBox('Diagnostics Export Failed', exportResult.error || 'Unable to export diagnostics bundle.');
+  }
+
+  return exportResult;
+}
+
+function getTrayIconPath() {
+  const iconDir = path.join(__dirname, '..', 'build-resources');
+  if (process.platform === 'win32') {
+    const winIcon = path.join(iconDir, 'logo.ico');
+    if (fs.existsSync(winIcon)) {
+      return winIcon;
+    }
+  }
+  if (process.platform === 'darwin') {
+    const templateIcon = path.join(iconDir, 'trayTemplate.png');
+    if (fs.existsSync(templateIcon)) {
+      return templateIcon;
+    }
+  }
+  const pngIcon = path.join(iconDir, 'logo.png');
+  if (fs.existsSync(pngIcon)) {
+    return pngIcon;
+  }
+  return path.join(iconDir, 'logo.png');
+}
+
+function setupTray() {
+  if (appTray) {
+    return;
+  }
+  const trayIconPath = getTrayIconPath();
+  const icon = nativeImage.createFromPath(trayIconPath);
+  appTray = new Tray(icon);
+  appTray.setToolTip('ShekelSync');
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Show ShekelSync',
+      click: () => {
+        if (mainWindow) {
+          if (!mainWindow.isVisible()) {
+            mainWindow.show();
+          }
+          mainWindow.focus();
+        } else {
+          createWindow();
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Open Log Folder',
+      click: () => {
+        handleOpenLogFolderRequest();
+      },
+    },
+    {
+      label: 'Export Diagnostics…',
+      click: () => {
+        handleDiagnosticsExportRequest();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        app.quit();
+      },
+    },
+  ]);
+  appTray.setContextMenu(contextMenu);
+  appTray.on('click', () => {
+    if (mainWindow) {
+      if (!mainWindow.isVisible()) {
+        mainWindow.show();
+      }
+      mainWindow.focus();
+    }
+  });
+}
+
 async function createWindow() {
   const skipEmbeddedApi = process.env.SKIP_EMBEDDED_API === 'true';
-  const useViteRenderer = (() => {
-    if (typeof process.env.USE_VITE_RENDERER !== 'undefined') {
-      return process.env.USE_VITE_RENDERER === 'true';
-    }
-    if (isDev) {
-      return true;
-    }
-    const viteDistPath = path.join(__dirname, '..', 'renderer', 'dist', 'index.html');
-    return fs.existsSync(viteDistPath);
-  })();
-  const devRendererUrl =
-    process.env.RENDERER_DEV_URL ||
-    (useViteRenderer ? 'http://localhost:5173' : 'http://localhost:3000');
+  const devRendererUrl = process.env.RENDERER_DEV_URL || 'http://localhost:5173';
 
   // Initialize configuration and database
   try {
     console.log('Initializing application configuration...');
+    logger.info('Initializing configuration');
     const config = await configManager.initializeConfig();
+    logger.info('Configuration initialised', {
+      databaseMode: config?.database?.mode,
+    });
 
     const usingSqliteEnv =
       process.env.USE_SQLITE === 'true' ||
@@ -192,10 +305,15 @@ async function createWindow() {
       console.log('Skipping main-process database initialization (SKIP_EMBEDDED_API=true).');
     } else {
       console.log('Initializing database connection...');
+      logger.info('Connecting to database', { mode: config.database.mode });
       dbResult = await dbManager.initialize(config.database);
 
       if (!dbResult.success) {
         console.error('Database initialization failed:', dbResult.message);
+        logger.error('Database initialization failed', {
+          error: dbResult.message,
+          mode: config.database.mode,
+        });
         dialog.showErrorBox(
           'Database Connection Error',
           `Failed to connect to database: ${dbResult.message}\n\nThe app will run in limited mode.`
@@ -204,6 +322,7 @@ async function createWindow() {
     }
   } catch (error) {
     console.error('Initialization error:', error);
+    logger.error('Fatal initialization error', { error: error.message });
     dialog.showErrorBox(
       'Initialization Error',
       `Failed to initialize application: ${error.message}`
@@ -265,6 +384,10 @@ async function createWindow() {
     minHeight: 700,
     title: 'ShekelSync - Personal Finance Tracker',
     backgroundColor: isDarkMode ? '#0a0a0a' : '#f8fef9', // Adapts to system theme
+    frame: false, // Frameless window for custom title bar
+    transparent: false,
+    roundedCorners: process.platform === 'darwin',
+    hasShadow: true,
     webPreferences: {
       nodeIntegration: false, // Security: disable node integration
       contextIsolation: true, // Security: enable context isolation
@@ -279,8 +402,6 @@ async function createWindow() {
     },
     icon: getIconPath(),
     show: false, // Don't show until ready
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    ...(process.platform === 'darwin' && { trafficLightPosition: { x: 10, y: 10 } })
   });
 
   let windowShown = false;
@@ -314,6 +435,15 @@ async function createWindow() {
     ensureWindowVisible();
   }, 1500);
 
+  // Send window state changes to renderer
+  const emitWindowState = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send('window:state-changed', { maximized: mainWindow.isMaximized() });
+  };
+
+  mainWindow.on('maximize', emitWindowState);
+  mainWindow.on('unmaximize', emitWindowState);
+
   // Set up API server (optional)
   if (!skipEmbeddedApi && setupAPIServer) {
     try {
@@ -321,8 +451,10 @@ async function createWindow() {
       apiServer = serverResult.server;
       apiPort = serverResult.port;
       console.log(`API server started on port ${apiPort}`);
+      logger.info('Embedded API server started', { port: apiPort });
     } catch (error) {
       console.error('Failed to start API server:', error);
+      logger.error('Failed to start embedded API server', { error: error.message });
       console.log('Running without internal API server - using external Next.js dev server');
     }
   } else if (skipEmbeddedApi) {
@@ -337,37 +469,20 @@ async function createWindow() {
     console.log(`Loading renderer from ${devRendererUrl}`);
     await mainWindow.loadURL(devRendererUrl);
   } else {
-    // In production, check for static export vs server build
-    const fs = require('fs');
-    if (useViteRenderer) {
-      const viteDist = path.join(__dirname, '..', 'renderer', 'dist', 'index.html');
-      if (fs.existsSync(viteDist)) {
-        console.log('Loading Vite renderer bundle');
-        await mainWindow.loadFile(viteDist);
-      } else {
-        console.error('Vite renderer build not found. Expected at', viteDist);
-        app.quit();
-        return;
-      }
+    const viteDist = resolveRendererPath('dist', 'index.html');
+    if (fs.existsSync(viteDist)) {
+      console.log('Loading Vite renderer bundle');
+      await mainWindow.loadFile(viteDist);
     } else {
-      const outPath = path.join(__dirname, '..', 'app', 'out', 'index.html');
-      const buildPath = path.join(__dirname, '..', 'app', 'build', 'index.html');
-
-      if (fs.existsSync(outPath)) {
-        console.log('Loading from Next.js static export');
-        await mainWindow.loadFile(outPath);
-      } else if (fs.existsSync(buildPath)) {
-        console.log('Loading from Next.js build directory');
-        await mainWindow.loadFile(buildPath);
-      } else {
-        console.error('No built app found! Please run npm run build first.');
-        app.quit();
-        return;
-      }
+      console.error('Vite renderer build not found. Expected at', viteDist);
+      logger.error('Missing Vite renderer bundle', { path: viteDist });
+      app.quit();
+      return;
     }
   }
 
   ensureWindowVisible();
+  emitWindowState();
 
   // Handle window closed
   mainWindow.on('closed', () => {
@@ -398,6 +513,7 @@ async function createWindow() {
 // App event handlers
 app.whenReady().then(() => {
   createWindow();
+  setupTray();
 
   // Auto-updater setup (production only)
   if (!isDev && autoUpdater) {
@@ -455,6 +571,12 @@ app.on('activate', () => {
   }
 });
 
+app.on('before-quit', () => {
+  if (appTray) {
+    appTray.destroy();
+  }
+});
+
 // Security: Prevent new window creation
 app.on('web-contents-created', (event, contents) => {
   contents.on('new-window', (event, navigationUrl) => {
@@ -465,6 +587,32 @@ app.on('web-contents-created', (event, contents) => {
 
 
 // IPC Handlers
+
+ipcMain.on('log:report', (event, payload) => {
+  try {
+    recordRendererLog({
+      ...payload,
+      webContentsId: event.sender.id,
+    });
+  } catch (error) {
+    logger.warn('Failed to record renderer log', { error: error.message });
+  }
+});
+
+ipcMain.handle('diagnostics:getInfo', async () => {
+  return getDiagnosticsInfo({ appVersion: app.getVersion() });
+});
+
+ipcMain.handle('diagnostics:openLogDirectory', async () => {
+  return openDiagnosticsLogDirectory();
+});
+
+ipcMain.handle('diagnostics:export', async (_event, outputPath) => {
+  if (!outputPath) {
+    return { success: false, error: 'No destination selected' };
+  }
+  return exportDiagnosticsToFile(outputPath, { appVersion: app.getVersion() });
+});
 
 // Database operations
 ipcMain.handle('db:query', async (event, sql, params = []) => {
@@ -674,7 +822,7 @@ ipcMain.handle('scrape:test', async (event, companyId) => {
     const path = require('path');
     let CompanyTypes;
     try {
-      const scraperModule = require(path.join(__dirname, '..', 'app', 'node_modules', 'israeli-bank-scrapers'));
+      const scraperModule = requireFromApp('israeli-bank-scrapers');
       CompanyTypes = scraperModule.CompanyTypes;
     } catch (error) {
       const scraperModule = require('israeli-bank-scrapers');
@@ -707,19 +855,25 @@ ipcMain.handle('window:minimize', () => {
 });
 
 ipcMain.handle('window:maximize', () => {
-  if (mainWindow) {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize();
-    } else {
-      mainWindow.maximize();
-    }
+  if (!mainWindow) return false;
+
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow.maximize();
   }
+
+  return mainWindow.isMaximized();
 });
 
 ipcMain.handle('window:close', () => {
   if (mainWindow) {
     mainWindow.close();
   }
+});
+
+ipcMain.handle('window:isMaximized', () => {
+  return mainWindow ? mainWindow.isMaximized() : false;
 });
 
 // API proxy handler
@@ -869,11 +1023,15 @@ if (isDev) {
 // Error handling
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
+  logger.error('Uncaught exception', { error: error.message, stack: error.stack });
   dialog.showErrorBox('Unexpected Error', `An unexpected error occurred: ${error.message}`);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('Unhandled rejection', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+  });
   dialog.showErrorBox('Unexpected Error', `An unexpected error occurred: ${reason}`);
 });
 
