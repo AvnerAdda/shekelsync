@@ -145,9 +145,43 @@ declare global {
       logFile?: string;
       appVersion?: string;
       platform?: NodeJS.Platform;
+      telemetry?: {
+        enabled?: boolean;
+        initialized?: boolean;
+        dsnConfigured?: boolean;
+        dsnHost?: string | null;
+        dsnProjectId?: string | null;
+        debug?: boolean;
+      } | null;
+      telemetrySummary?: {
+        status: 'opted-in' | 'opted-out';
+        destination: string | null;
+        initialized: boolean;
+        debug: boolean;
+      } | null;
     }>;
     openLogDirectory?: () => Promise<{ success: boolean; error?: string }>;
     exportDiagnostics?: (filePath: string) => Promise<ElectronDiagnosticsExportResult>;
+  }
+
+  interface ElectronSettingsApi {
+    get?: () => Promise<{ success: boolean; settings?: Record<string, unknown>; error?: string }>;
+    update?: (
+      patch: Record<string, unknown>,
+    ) => Promise<{ success: boolean; settings?: Record<string, unknown>; error?: string }>;
+    onChange?: (callback: (settings: Record<string, unknown>) => void) => ElectronEventUnsubscribe | void;
+  }
+
+  interface ElectronTelemetryApi {
+    getConfig?: () => Promise<{
+      dsn?: string | null;
+      environment?: string;
+      release?: string;
+      debug?: boolean;
+      enabled?: boolean;
+    }>;
+    triggerMainSmoke?: () => Promise<{ success: boolean; error?: string }>;
+    triggerRendererSmoke?: () => Promise<{ success: boolean; error?: string }>;
   }
 
   interface ElectronAPI {
@@ -163,6 +197,8 @@ declare global {
     dev?: ElectronDevTools;
     log?: ElectronLogBridge;
     diagnostics?: ElectronDiagnosticsApi;
+    settings?: ElectronSettingsApi;
+    telemetry?: ElectronTelemetryApi;
   }
 
   interface Window {

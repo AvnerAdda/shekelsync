@@ -25,7 +25,9 @@
       "@mui/x-date-pickers": ["../app/node_modules/@mui/x-date-pickers"],
       "@mui/x-charts": ["../app/node_modules/@mui/x-charts"],
       "@mui/styled-engine-sc": ["../app/node_modules/@mui/styled-engine-sc"],
-      "date-fns": ["../app/node_modules/date-fns"]
+      "date-fns": ["../app/node_modules/date-fns"],
+      "@sentry/electron": ["../app/node_modules/@sentry/electron"],
+      "@sentry/electron/*": ["../app/node_modules/@sentry/electron/*"]
     },
     "types": ["vite/client", "node"]
   },

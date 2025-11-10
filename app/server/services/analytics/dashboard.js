@@ -2,6 +2,7 @@ const actualDatabase = require('../database.js');
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
+const { BANK_VENDORS, SPECIAL_BANK_VENDORS } = require('../../../utils/constants.js');
 
 let database = actualDatabase;
 
@@ -42,6 +43,73 @@ function buildCategoryBreakdown(rows) {
 
   result.sort((a, b) => b.total - a.total);
   return result;
+}
+
+/**
+ * Computes wealth trajectory by working backwards from the current balance
+ * @param {Object} options - Configuration options
+ * @param {string} options.start - Start date
+ * @param {string} options.end - End date
+ * @param {number} options.currentBalance - Current bank balance from scraper
+ * @param {string} options.balanceDate - Date when balance was updated
+ * @param {Array} options.history - Daily income/expense history (already filtered for paired transactions)
+ * @returns {Array} Array of {date, balance, income, expenses, netFlow} objects
+ */
+async function computeWealthTrajectory({ start, end, currentBalance, balanceDate, history }) {
+  if (!currentBalance || !balanceDate || !history || history.length === 0) {
+    return [];
+  }
+
+  // Create a map of date -> {income, expenses} for quick lookup
+  const dateMap = new Map();
+  history.forEach((row) => {
+    const dateStr = new Date(row.date).toISOString().split('T')[0];
+    dateMap.set(dateStr, {
+      income: Number.parseFloat(row.income || 0),
+      expenses: Number.parseFloat(row.expenses || 0),
+    });
+  });
+
+  // Parse balance date (normalize to YYYY-MM-DD)
+  const balanceDateObj = new Date(balanceDate);
+  const balanceDateStr = balanceDateObj.toISOString().split('T')[0];
+
+  // Create array of all dates from start to balance date
+  const startDate = new Date(start);
+  const endDate = new Date(balanceDateStr);
+  const dates = [];
+  const currentDate = new Date(startDate);
+
+  while (currentDate <= endDate) {
+    dates.push(currentDate.toISOString().split('T')[0]);
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  // Work backwards from balance date to compute historical balances
+  const trajectory = [];
+  let runningBalance = currentBalance;
+
+  // Start from the most recent date (balance date) and work backwards
+  for (let i = dates.length - 1; i >= 0; i--) {
+    const dateStr = dates[i];
+    const dayData = dateMap.get(dateStr) || { income: 0, expenses: 0 };
+
+    trajectory.unshift({
+      date: dateStr,
+      balance: runningBalance,
+      income: dayData.income,
+      expenses: dayData.expenses,
+      netFlow: dayData.income - dayData.expenses,
+    });
+
+    // For previous day: balance = current_balance + expenses - income
+    // (because current_balance = previous_balance + income - expenses)
+    if (i > 0) {
+      runningBalance = runningBalance + dayData.expenses - dayData.income;
+    }
+  }
+
+  return trajectory;
 }
 
 async function getDashboardAnalytics(query = {}) {
@@ -244,6 +312,51 @@ async function getDashboardAnalytics(query = {}) {
   const netInvestments = investmentOutflow - investmentInflow;
   const netBalance = totalIncome - totalExpenses;
 
+  // Query bank balances at start of period for wealth trajectory baseline
+  // Only include actual bank accounts (not credit cards)
+  const allBankVendors = [...BANK_VENDORS, ...SPECIAL_BANK_VENDORS];
+  const bankVendorPlaceholders = allBankVendors.map((_, i) => `$${i + 3}`).join(', ');
+
+  const bankBalancesResult = await database.query(
+    `SELECT
+        SUM(current_balance) as total_bank_balance,
+        MAX(balance_updated_at) as last_balance_update,
+        COUNT(*) as accounts_with_balance
+      FROM vendor_credentials
+      WHERE current_balance IS NOT NULL
+        AND current_balance > 0
+        AND vendor IN (${bankVendorPlaceholders})
+        AND vendor IN (
+          SELECT DISTINCT vendor FROM transactions
+          WHERE date >= $1 AND date <= $2
+        )`,
+    [start, end, ...allBankVendors],
+  );
+
+  const bankBalance = bankBalancesResult.rows[0] || {};
+  const totalBankBalance = Number.parseFloat(bankBalance.total_bank_balance || 0);
+  const lastBalanceUpdate = bankBalance.last_balance_update;
+  const accountsWithBalance = Number.parseInt(bankBalance.accounts_with_balance || 0, 10);
+
+  // Get last sync date (most recent successful scrape)
+  const lastSyncResult = await database.query(
+    `SELECT MAX(created_at) as last_sync_date
+      FROM scrape_events
+      WHERE status = 'success'
+        AND created_at <= $1`,
+    [end],
+  );
+  const lastSyncDate = lastSyncResult.rows[0]?.last_sync_date || null;
+
+  // Compute wealth trajectory by working backwards from current balance
+  const wealthTrajectory = await computeWealthTrajectory({
+    start,
+    end,
+    currentBalance: totalBankBalance,
+    balanceDate: lastBalanceUpdate,
+    history: historyResult.rows,
+  });
+
   return {
     dateRange: { start, end },
     summary: {
@@ -255,11 +368,18 @@ async function getDashboardAnalytics(query = {}) {
       netInvestments,
       totalAccounts: Number.parseInt(summary.total_accounts || 0, 10) || 0,
     },
+    bankBalances: {
+      totalBalance: totalBankBalance,
+      lastUpdate: lastBalanceUpdate,
+      accountsCount: accountsWithBalance,
+    },
+    lastSyncDate,
     history: historyResult.rows.map((row) => ({
       date: row.date,
       income: Number.parseFloat(row.income || 0),
       expenses: Number.parseFloat(row.expenses || 0),
     })),
+    wealthTrajectory,
     breakdowns: {
       byCategory: buildCategoryBreakdown(categoryDataResult.rows),
       byVendor: vendorResult.rows.map((row) => ({

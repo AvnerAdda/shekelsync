@@ -20,6 +20,7 @@ import {
   FormatSize as TextSizeIcon,
   SmartToy as ChatbotIcon,
   Security as SecurityIcon,
+  BugReport as BugReportIcon,
 } from '@mui/icons-material';
 import { useThemeMode } from '../contexts/ThemeContext';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
@@ -27,6 +28,7 @@ import { useChatbotPermissions } from '../contexts/ChatbotPermissionsContext';
 import DataExportPanel from './DataExportPanel';
 import DiagnosticsPanel from './DiagnosticsPanel';
 import EnhancedProfileSection from './EnhancedProfileSection';
+import { useTelemetry } from '../contexts/TelemetryContext';
 
 const SettingsPage: React.FC = () => {
   const { mode, setMode, fontSize, setFontSize } = useThemeMode();
@@ -42,6 +44,13 @@ const SettingsPage: React.FC = () => {
     allowAnalyticsAccess,
     setAllowAnalyticsAccess,
   } = useChatbotPermissions();
+  const {
+    telemetryEnabled,
+    loading: telemetryLoading,
+    supported: telemetrySupported,
+    error: telemetryError,
+    setTelemetryEnabled,
+  } = useTelemetry();
 
   return (
     <Box sx={{ pb: 10, maxWidth: 900, mx: 'auto' }}>
@@ -142,6 +151,61 @@ const SettingsPage: React.FC = () => {
       </Box>
 
       <Divider sx={{ my: 4 }} />
+
+      <Paper sx={{ p: 3, mb: 4 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+          <BugReportIcon color="primary" />
+          <Typography variant="h6">Diagnostics & Crash Reports</Typography>
+        </Box>
+
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Share anonymized crash reports to help us resolve stability issues faster. Sensitive data such as account
+          credentials and personal identifiers are never included in crash payloads.
+        </Typography>
+
+        {!telemetrySupported && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Crash reporting is only available in the desktop app.
+          </Alert>
+        )}
+
+        {telemetryError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {telemetryError}
+          </Alert>
+        )}
+
+        <FormControlLabel
+          control={
+            <Switch
+              checked={telemetryEnabled}
+              onChange={(event) => {
+                setTelemetryEnabled(event.target.checked).catch(() => {
+                  /* errors are surfaced via telemetryError */
+                });
+              }}
+              disabled={!telemetrySupported || telemetryLoading}
+              color="primary"
+            />
+          }
+          label={
+            <Box>
+              <Typography variant="body2" fontWeight="bold">
+                Send crash reports automatically
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {telemetryEnabled
+                  ? 'Crash details will be securely uploaded to our monitoring service.'
+                  : 'Crash details remain on your device until you opt in.'}
+              </Typography>
+            </Box>
+          }
+        />
+
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+          You can always export logs manually from the Diagnostics panel below.
+        </Typography>
+      </Paper>
 
       {/* AI Chatbot Settings */}
       <Paper sx={{ p: 3, mb: 3 }}>

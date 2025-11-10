@@ -12,11 +12,21 @@ import BugReportIcon from '@mui/icons-material/BugReport';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 
+type TelemetryDiagnosticsInfo = {
+  enabled?: boolean;
+  initialized?: boolean;
+  dsnConfigured?: boolean;
+  dsnHost?: string | null;
+  dsnProjectId?: string | null;
+  debug?: boolean;
+};
+
 type DiagnosticsInfo = {
   logDirectory?: string;
   logFile?: string;
   appVersion?: string;
   platform?: string;
+  telemetry?: TelemetryDiagnosticsInfo | null;
 };
 
 type Status = 'idle' | 'loading' | 'success' | 'error';
@@ -26,6 +36,7 @@ const defaultInfo: DiagnosticsInfo = {
   logDirectory: undefined,
   logFile: undefined,
   platform: undefined,
+  telemetry: null,
 };
 
 export const DiagnosticsPanel: React.FC = () => {
@@ -54,6 +65,7 @@ export const DiagnosticsPanel: React.FC = () => {
             logDirectory: result.logDirectory,
             logFile: result.logFile,
             platform: result.platform,
+            telemetry: result.telemetry ?? null,
           });
         }
       })
@@ -189,6 +201,27 @@ export const DiagnosticsPanel: React.FC = () => {
           </Typography>
         )}
       </Stack>
+
+      {info.telemetry && (
+        <Box mt={3} p={2} borderRadius={2} bgcolor={(theme) => theme.palette.action.hover}>
+          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+            Crash reporting status
+          </Typography>
+          <Typography variant="body2" fontWeight="bold">
+            {info.telemetry.enabled ? 'Opted in' : 'Opted out'}
+          </Typography>
+          {!info.telemetry.dsnConfigured && (
+            <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
+              SENTRY_DSN is not configured. Crash reports stay local even if you opt in.
+            </Typography>
+          )}
+          {info.telemetry.dsnConfigured && info.telemetry.dsnHost && (
+            <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
+              Destination: {info.telemetry.dsnHost}
+            </Typography>
+          )}
+        </Box>
+      )}
     </Paper>
   );
 };
