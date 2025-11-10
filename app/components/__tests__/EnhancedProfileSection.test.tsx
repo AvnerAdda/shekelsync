@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import EnhancedProfileSection from '../EnhancedProfileSection';
@@ -54,6 +54,10 @@ function renderProfile() {
   );
 }
 
+function cloneBaseResponse() {
+  return JSON.parse(JSON.stringify(baseProfileResponse));
+}
+
 describe('EnhancedProfileSection', () => {
   beforeAll(() => {
     (global as any).ResizeObserver = class {
@@ -88,7 +92,7 @@ describe('EnhancedProfileSection', () => {
     renderProfile();
 
     expect(await screen.findByDisplayValue('Jane Doe')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /save enhanced profile/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save profile/i })).toBeInTheDocument();
   });
 
   it('shows a success message after saving profile data', async () => {
@@ -103,9 +107,10 @@ describe('EnhancedProfileSection', () => {
 
     renderProfile();
 
+    await waitFor(() => expect(getMock).toHaveBeenCalled());
     await screen.findByDisplayValue('Jane Doe');
 
-    const saveButton = screen.getByRole('button', { name: /save enhanced profile/i });
+    const saveButton = screen.getByRole('button', { name: /save profile/i });
     fireEvent.click(saveButton);
 
     await waitFor(() => expect(putMock).toHaveBeenCalled());
@@ -126,7 +131,7 @@ describe('EnhancedProfileSection', () => {
     renderProfile();
     await screen.findByDisplayValue('Jane Doe');
 
-    fireEvent.click(screen.getByRole('button', { name: /save enhanced profile/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
 
     await waitFor(() => expect(putMock).toHaveBeenCalled());
     expect(await screen.findByText(/failed to save profile/i)).toBeInTheDocument();
@@ -157,8 +162,9 @@ describe('EnhancedProfileSection', () => {
 
     renderProfile();
 
+    await waitFor(() => expect(getMock).toHaveBeenCalled());
     expect(await screen.findByText(/session expired/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /save enhanced profile/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save profile/i })).toBeInTheDocument();
     consoleSpy.mockRestore();
   });
 
@@ -168,7 +174,178 @@ describe('EnhancedProfileSection', () => {
 
     renderProfile();
 
+    await waitFor(() => expect(getMock).toHaveBeenCalled());
     expect(await screen.findByText(/failed to load profile/i)).toBeInTheDocument();
     consoleSpy.mockRestore();
+  });
+
+  it('shows a generic message when profile fetch returns a non-401 error response', async () => {
+    getMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: 'Server error',
+      data: {},
+    });
+
+    renderProfile();
+
+    await waitFor(() => expect(getMock).toHaveBeenCalled());
+    expect(await screen.findByText(/failed to load profile/i)).toBeInTheDocument();
+  });
+
+  it('renders legacy profile responses that do not include a nested profile object', async () => {
+    getMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      data: {
+        id: 77,
+        username: 'Legacy User',
+        marital_status: 'Single',
+        age: 40,
+        birth_date: '1985-01-01',
+        occupation: 'Teacher',
+        monthly_income: 9000,
+        family_status: 'Single',
+        location: 'Haifa',
+        industry: 'Education',
+        children_count: 0,
+        household_size: 1,
+        home_ownership: 'rent',
+        education_level: 'master',
+        employment_status: 'employed',
+      },
+    });
+
+    renderProfile();
+
+    expect(await screen.findByDisplayValue('Legacy User')).toBeInTheDocument();
+    expect(screen.getByText(/household of 1/i)).toBeInTheDocument();
+  });
+
+  it('recalculates age when the selected birth date is still upcoming this year', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2025-03-01T12:00:00Z'));
+
+    try {
+      getMock.mockResolvedValue(baseProfileResponse);
+
+      renderProfile();
+      await screen.findByDisplayValue('Jane Doe');
+
+      const birthDateInput = screen.getByLabelText('Birth Date');
+      fireEvent.change(birthDateInput, { target: { value: '1995-03-15' } });
+
+      expect(await screen.findByText('Age: 29')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('updates household size, spouse section, and chip when marital status toggles', async () => {
+    getMock.mockResolvedValue(baseProfileResponse);
+
+    renderProfile();
+    await screen.findByDisplayValue('Jane Doe');
+
+    const usernameField = screen.getByLabelText(/username/i);
+    fireEvent.change(usernameField, { target: { value: 'Jane Updated' } });
+    expect(screen.getByDisplayValue('Jane Updated')).toBeInTheDocument();
+
+    const openMaritalMenu = async (optionText: RegExp | string) => {
+      const selectRoot = screen.getByTestId('marital-status-select');
+      const trigger = (selectRoot.querySelector('[role="combobox"]') ?? selectRoot) as HTMLElement;
+      fireEvent.mouseDown(trigger);
+      const option = await screen.findByRole('option', { name: optionText });
+      fireEvent.click(option);
+    };
+
+    await openMaritalMenu(/married/i);
+
+    expect(await screen.findByLabelText(/spouse name/i)).toBeInTheDocument();
+
+    const spouseName = screen.getByLabelText(/spouse name/i);
+    fireEvent.change(spouseName, { target: { value: 'Ari' } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/household of 2/i)).toBeInTheDocument();
+      expect(screen.getByText('Ari')).toBeInTheDocument();
+    });
+
+    await openMaritalMenu(/single/i);
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText(/spouse name/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/household of 1/i)).toBeInTheDocument();
+    });
+  });
+
+  it('adds a new child and updates the household summary chip', async () => {
+    const dateSpy = vi.spyOn(Date, 'now').mockReturnValue(1700000000000);
+    try {
+      getMock.mockResolvedValue(baseProfileResponse);
+
+      renderProfile();
+      await screen.findByDisplayValue('Jane Doe');
+
+      fireEvent.click(screen.getByRole('button', { name: /children information/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add child/i }));
+
+      const childNameInput = await screen.findByLabelText(/child name/i);
+      fireEvent.change(childNameInput, { target: { value: 'Noa' } });
+
+      const childDialog = childNameInput.closest('[role=\"dialog\"]') as HTMLElement | null;
+      const dialogScope = childDialog ? within(childDialog) : screen;
+
+      fireEvent.change(dialogScope.getByLabelText(/birth date/i), { target: { value: '2018-01-15' } });
+
+      fireEvent.click(dialogScope.getByRole('button', { name: /^add child$/i }));
+
+      await waitFor(() => expect(screen.getByText('Noa')).toBeInTheDocument());
+      expect(screen.getByText(/household of 2/i)).toBeInTheDocument();
+      const summaryLine = screen.getByText(/household summary/i).closest('p') ?? screen.getByText(/household summary/i);
+      expect(summaryLine).toHaveTextContent(/1 child/i);
+    } finally {
+      dateSpy.mockRestore();
+    }
+  });
+
+  it('edits and deletes an existing child, updating household totals accordingly', async () => {
+    const responseWithChild = cloneBaseResponse();
+    responseWithChild.data.profile.children_count = 1;
+    responseWithChild.data.profile.household_size = 2;
+    responseWithChild.data.children = [
+      {
+        id: 101,
+        name: 'Kiddo',
+        birth_date: '2015-05-10',
+        gender: 'female',
+        education_stage: 'middle_school',
+        special_needs: true,
+      },
+    ];
+
+    getMock.mockResolvedValue(responseWithChild);
+
+    renderProfile();
+    await screen.findByDisplayValue('Jane Doe');
+
+    fireEvent.click(screen.getByRole('button', { name: /children information/i }));
+
+    fireEvent.click(screen.getByLabelText(/edit child/i));
+
+    const nameField = await screen.findByLabelText(/child name/i);
+    fireEvent.change(nameField, { target: { value: 'Updated Kid' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /update child/i }));
+
+    await waitFor(() => expect(screen.getByText('Updated Kid')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText(/delete child/i));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Updated Kid')).not.toBeInTheDocument();
+      expect(screen.getByText(/household of 1/i)).toBeInTheDocument();
+    });
   });
 });

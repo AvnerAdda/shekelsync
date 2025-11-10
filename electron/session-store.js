@@ -1,11 +1,12 @@
 const path = require('path');
 const fs = require('fs');
 const { app } = require('electron');
+const { resolveAppPath, requireFromApp } = require('./paths');
 
 let keytar;
 try {
   // Try to load keytar from either the app bundle or root node_modules.
-  keytar = require(path.join(__dirname, '..', 'app', 'node_modules', 'keytar'));
+  keytar = requireFromApp('keytar');
 } catch (appLoadError) {
   try {
     keytar = require('keytar');
@@ -15,14 +16,7 @@ try {
   }
 }
 
-const { encrypt, decrypt } = require(path.join(
-  __dirname,
-  '..',
-  'app',
-  'lib',
-  'server',
-  'encryption.js',
-));
+const { encrypt, decrypt } = require(resolveAppPath('lib', 'server', 'encryption.js'));
 
 const { mkdir, readFile, unlink, writeFile } = fs.promises;
 

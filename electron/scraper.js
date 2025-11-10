@@ -1,9 +1,10 @@
 const path = require('path');
+const { requireFromApp } = require('./paths');
 
 // Load israeli-bank-scrapers from app directory
 let CompanyTypes, createScraper;
 try {
-  const scraperModule = require(path.join(__dirname, '..', 'app', 'node_modules', 'israeli-bank-scrapers'));
+  const scraperModule = requireFromApp('israeli-bank-scrapers');
   CompanyTypes = scraperModule.CompanyTypes;
   createScraper = scraperModule.createScraper;
 } catch (error) {
@@ -454,7 +455,7 @@ class ElectronScraper {
         executablePath: (() => {
           try {
             // Try to get Puppeteer's bundled Chrome first
-            const puppeteer = require(path.join(__dirname, '..', 'app', 'node_modules', 'puppeteer'));
+            const puppeteer = requireFromApp('puppeteer');
             return puppeteer.executablePath();
           } catch (error) {
             console.warn('Could not find Puppeteer Chrome in Electron, using default');

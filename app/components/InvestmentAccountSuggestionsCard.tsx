@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -8,24 +8,26 @@ import {
   Chip,
   Alert,
   CircularProgress,
-  Divider,
   IconButton,
   Collapse,
   List,
   ListItem,
   ListItemText,
-  Grid
+  Stack,
+  Divider,
+  Menu,
+  MenuItem
 } from '@mui/material';
 import {
-  TrendingUp,
   ExpandMore,
   ExpandLess,
   Close,
-  AccountBalance,
-  Lightbulb
+  Lightbulb,
+  Link as LinkIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
-import SmartInvestmentAccountForm from './SmartInvestmentAccountForm';
 import { useNotification } from './NotificationContext';
+import { apiClient } from '@/lib/api-client';
 
 interface Transaction {
   transactionIdentifier: string;
@@ -36,7 +38,19 @@ interface Transaction {
   confidence?: number;
 }
 
+interface InvestmentAccount {
+  id: number;
+  account_name: string;
+  account_type: string;
+  institution?: string;
+  current_value?: number;
+  current_value_explicit?: number | null;
+  total_invested?: number | null;
+  currency: string;
+}
+
 interface GroupedSuggestion {
+  categoryName?: string;
   suggestedAccountType: string;
   suggestedInstitution: string | null;
   suggestedAccountName: string;
@@ -48,6 +62,7 @@ interface GroupedSuggestion {
     earliest: string;
     latest: string;
   };
+  matchingAccounts?: InvestmentAccount[];
 }
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -78,66 +93,101 @@ const ACCOUNT_TYPE_ICONS: Record<string, string> = {
 
 interface InvestmentAccountSuggestionsCardProps {
   onSuggestionCreated?: () => void;
+  onCreateAccountClick?: (suggestion: GroupedSuggestion) => void;
+  onLinkToAccountClick?: (suggestion: GroupedSuggestion, accountId: number) => void;
 }
 
 export default function InvestmentAccountSuggestionsCard({
-  onSuggestionCreated
+  onSuggestionCreated,
+  onCreateAccountClick,
+  onLinkToAccountClick
 }: InvestmentAccountSuggestionsCardProps) {
   const { showNotification } = useNotification();
+
+  const getSuggestionKey = useCallback((suggestion: GroupedSuggestion) => {
+    if (suggestion.transactions?.length) {
+      return suggestion.transactions
+        .map((txn) => txn.transactionIdentifier)
+        .sort()
+        .join('|');
+    }
+    return `${suggestion.suggestedAccountType}-${suggestion.suggestedAccountName}-${suggestion.suggestedInstitution ?? 'none'}`;
+  }, []);
   const [loading, setLoading] = useState(true);
   const [suggestions, setSuggestions] = useState<GroupedSuggestion[]>([]);
-  const [expandedSuggestions, setExpandedSuggestions] = useState<Set<number>>(new Set());
-  const [selectedSuggestion, setSelectedSuggestion] = useState<GroupedSuggestion | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<number>>(new Set());
+  const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set());
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
+  const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([]);
+  const [linkMenuAnchor, setLinkMenuAnchor] = useState<{ element: HTMLElement; suggestionKey: string } | null>(null);
+  const [linkingInProgress, setLinkingInProgress] = useState(false);
 
   useEffect(() => {
     fetchSuggestions();
+    fetchInvestmentAccounts();
 
-    // Listen for data refresh events
     const handleDataRefresh = () => {
       fetchSuggestions();
+      fetchInvestmentAccounts();
     };
 
     window.addEventListener('dataRefresh', handleDataRefresh);
-
     return () => {
       window.removeEventListener('dataRefresh', handleDataRefresh);
     };
   }, []);
 
+  const fetchInvestmentAccounts = async () => {
+    try {
+      const response = await apiClient.get('/api/investments/accounts');
+      const data = response.data as any;
+      setInvestmentAccounts(data.accounts || []);
+    } catch (error) {
+      console.error('Error fetching investment accounts:', error);
+    }
+  };
+
+  const findMatchingAccounts = (suggestion: GroupedSuggestion): InvestmentAccount[] => {
+    return investmentAccounts.filter(account => {
+      if (account.account_type === suggestion.suggestedAccountType) {
+        return true;
+      }
+      if (suggestion.suggestedInstitution && account.institution) {
+        const instMatch = account.institution.toLowerCase().includes(suggestion.suggestedInstitution.toLowerCase()) ||
+                         suggestion.suggestedInstitution.toLowerCase().includes(account.institution.toLowerCase());
+        if (instMatch) return true;
+      }
+      return false;
+    });
+  };
+
   const fetchSuggestions = async () => {
     setLoading(true);
-
     try {
-      const response = await fetch('/api/investments/suggestions/pending?thresholdDays=90');
-      const data = await response.json();
-
+      const response = await apiClient.get('/api/investments/smart-suggestions?thresholdDays=90');
+      const data = response.data as any;
       if (data.success) {
         setSuggestions(data.suggestions || []);
       } else {
         console.error('Failed to fetch suggestions:', data.error);
       }
     } catch (error) {
-      console.error('Error fetching investment suggestions:', error);
+      console.error('Error fetching suggestions:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleToggleExpand = (index: number) => {
+  const handleToggleExpand = (key: string) => {
     const newExpanded = new Set(expandedSuggestions);
-
-    if (newExpanded.has(index)) {
-      newExpanded.delete(index);
+    if (newExpanded.has(key)) {
+      newExpanded.delete(key);
     } else {
-      newExpanded.add(index);
+      newExpanded.add(key);
     }
-
     setExpandedSuggestions(newExpanded);
   };
 
-  const handleDismiss = async (suggestion: GroupedSuggestion, index: number) => {
+  const handleDismiss = async (suggestion: GroupedSuggestion) => {
     try {
       const transactionIdentifiers = suggestion.transactions.map(t => ({
         identifier: t.transactionIdentifier,
@@ -146,238 +196,309 @@ export default function InvestmentAccountSuggestionsCard({
 
       const response = await fetch('/api/investments/suggestions/dismiss', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transactionIdentifiers })
       });
 
       const data = await response.json();
 
       if (data.success) {
-        // Add to dismissed set
         const newDismissed = new Set(dismissedSuggestions);
-        newDismissed.add(index);
+        newDismissed.add(getSuggestionKey(suggestion));
         setDismissedSuggestions(newDismissed);
-
-        showNotification('ההצעה נדחתה. תופיע שוב לאחר 3 עסקאות נוספות.', 'info');
+        showNotification('Suggestion dismissed', 'info');
       } else {
         throw new Error(data.error);
       }
     } catch (error: any) {
       console.error('Error dismissing suggestion:', error);
-      showNotification('שגיאה בדחיית ההצעה', 'error');
+      showNotification('Failed to dismiss suggestion', 'error');
     }
   };
 
   const handleCreateAccount = (suggestion: GroupedSuggestion) => {
-    setSelectedSuggestion(suggestion);
-    setFormOpen(true);
+    if (onCreateAccountClick) {
+      onCreateAccountClick(suggestion);
+    }
   };
 
-  const handleFormClose = () => {
-    setFormOpen(false);
-    setSelectedSuggestion(null);
+  const handleOpenLinkMenu = (event: React.MouseEvent<HTMLElement>, suggestionKey: string) => {
+    setLinkMenuAnchor({ element: event.currentTarget, suggestionKey });
   };
 
-  const handleFormSuccess = () => {
-    fetchSuggestions();
+  const handleCloseLinkMenu = () => {
+    setLinkMenuAnchor(null);
+  };
 
-    if (onSuggestionCreated) {
-      onSuggestionCreated();
+  const handleLinkToAccount = async (suggestion: GroupedSuggestion, accountId: number) => {
+    handleCloseLinkMenu();
+    setLinkingInProgress(true);
+
+    try {
+      console.log('Linking transactions to account:', accountId, 'Transactions:', suggestion.transactions);
+
+      let successCount = 0;
+      for (const txn of suggestion.transactions) {
+        const payload = {
+          transaction_identifier: txn.transactionIdentifier,
+          transaction_vendor: txn.transactionVendor,
+          account_id: accountId,
+          link_method: 'manual_suggestion',
+          confidence: 0.9
+        };
+
+        console.log('Linking transaction:', payload);
+
+        const response = await apiClient.post('/api/investments/transaction-links', payload);
+
+        console.log('Link response:', response);
+
+        if (response.ok) {
+          successCount++;
+        } else {
+          console.error('Failed to link transaction:', response);
+        }
+      }
+
+      if (successCount > 0) {
+        showNotification(`Successfully linked ${successCount} transaction${successCount > 1 ? 's' : ''} to account`, 'success');
+
+        // Refresh data
+        await fetchSuggestions();
+        if (onSuggestionCreated) {
+          onSuggestionCreated();
+        }
+        window.dispatchEvent(new CustomEvent('dataRefresh'));
+      } else {
+        showNotification('Failed to link transactions', 'error');
+      }
+    } catch (error: any) {
+      console.error('Error linking transactions:', error);
+      showNotification('Failed to link transactions: ' + (error.message || 'Unknown error'), 'error');
+    } finally {
+      setLinkingInProgress(false);
     }
   };
 
   if (loading) {
     return (
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box display="flex" alignItems="center" justifyContent="center" p={3}>
-            <CircularProgress size={30} sx={{ mr: 2 }} />
-            <Typography>טוען המלצות חכמות...</Typography>
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ py: 2 }}>
+          <Box display="flex" alignItems="center" justifyContent="center">
+            <CircularProgress size={20} sx={{ mr: 1 }} />
+            <Typography variant="body2">Loading suggestions...</Typography>
           </Box>
         </CardContent>
       </Card>
     );
   }
 
-  const visibleSuggestions = suggestions.filter((_, index) => !dismissedSuggestions.has(index));
+  const visibleSuggestions = suggestions.filter((suggestion) => !dismissedSuggestions.has(getSuggestionKey(suggestion)));
 
   if (visibleSuggestions.length === 0) {
-    return null; // Don't show card if no suggestions
+    return null;
   }
 
   return (
     <>
-      <Card
-        sx={{
-          mb: 3,
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white'
-        }}
-      >
-        <CardContent>
-          <Box display="flex" alignItems="center" mb={2}>
-            <Lightbulb sx={{ fontSize: 32, mr: 1 }} />
-            <Typography variant="h6" sx={{ flexGrow: 1 }}>
-              💡 המלצות חכמות - חשבונות השקעה
+      <Card sx={{ mb: 2, border: (theme) => `1px solid ${theme.palette.divider}` }}>
+        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+          <Box display="flex" alignItems="center" mb={1.5}>
+            <Lightbulb sx={{ fontSize: 20, mr: 1, color: 'warning.main' }} />
+            <Typography variant="subtitle2" fontWeight={600}>
+              Smart Suggestions ({visibleSuggestions.length})
             </Typography>
           </Box>
 
-          <Alert
-            severity="info"
-            sx={{
-              mb: 2,
-              bgcolor: 'rgba(255, 255, 255, 0.9)',
-              '& .MuiAlert-icon': { color: '#667eea' }
-            }}
-          >
-            <Typography variant="body2">
-              זיהינו {visibleSuggestions.length} חשבונות השקעה פוטנציאליים בהתבסס על העסקאות שסיווגת.
-              לחץ על "צור חשבון" כדי להתחיל.
-            </Typography>
-          </Alert>
+          <Stack spacing={1}>
+            {visibleSuggestions.map((suggestion) => {
+              const suggestionKey = getSuggestionKey(suggestion);
+              const matchingAccounts = findMatchingAccounts(suggestion);
+              const hasMatches = matchingAccounts.length > 0;
+              const isExpanded = expandedSuggestions.has(suggestionKey);
 
-          <Box>
-            {visibleSuggestions.map((suggestion, index) => (
-              <Card
-                key={index}
-                sx={{
-                  mb: 2,
-                  bgcolor: 'rgba(255, 255, 255, 0.95)',
-                  '&:last-child': { mb: 0 }
-                }}
-              >
-                <CardContent>
-                  <Box display="flex" alignItems="flex-start" justifyContent="space-between">
-                    <Box flexGrow={1}>
-                      <Box display="flex" alignItems="center" mb={1}>
-                        <Typography variant="h6" sx={{ mr: 1 }}>
-                          {ACCOUNT_TYPE_ICONS[suggestion.suggestedAccountType] || '💼'}{' '}
-                          {suggestion.suggestedAccountName}
+              return (
+                <Card
+                  key={suggestionKey}
+                  variant="outlined"
+                  sx={{
+                    bgcolor: 'background.paper',
+                    border: hasMatches ? '1.5px solid' : '1px solid',
+                    borderColor: hasMatches ? 'success.main' : 'divider'
+                  }}
+                >
+                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    {/* Compact Row Layout */}
+                    <Box display="flex" alignItems="center" gap={1.5}>
+                      {/* LEFT: Description */}
+                      <Box flex={1} minWidth={0}>
+                        <Box display="flex" alignItems="center" gap={0.5} mb={0.25}>
+                          <Typography variant="body2" fontWeight={600} noWrap>
+                            {ACCOUNT_TYPE_ICONS[suggestion.suggestedAccountType] || '💼'}{' '}
+                            {suggestion.categoryName || suggestion.suggestedAccountName}
+                          </Typography>
+                          {hasMatches && (
+                            <Chip
+                              label={matchingAccounts.length}
+                              size="small"
+                              color="success"
+                              sx={{ height: 18, fontSize: '0.65rem', minWidth: 24 }}
+                            />
+                          )}
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.7rem' }}>
+                          {suggestion.transactionCount} txns • ₪{suggestion.totalAmount.toLocaleString()}
+                          {suggestion.suggestedInstitution && ` • ${suggestion.suggestedInstitution}`}
                         </Typography>
-                        <Chip
-                          label={`${Math.round(suggestion.avgConfidence * 100)}% ביטחון`}
-                          size="small"
-                          color={suggestion.avgConfidence >= 0.8 ? 'success' : 'warning'}
-                        />
                       </Box>
 
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
-                        {ACCOUNT_TYPE_LABELS[suggestion.suggestedAccountType]}
-                        {suggestion.suggestedInstitution && ` | ${suggestion.suggestedInstitution}`}
-                      </Typography>
+                      {/* RIGHT: Actions */}
+                      <Stack direction="row" spacing={0.5} alignItems="center">
+                        {hasMatches && (
+                          <Button
+                            variant="contained"
+                            color="success"
+                            size="small"
+                            disabled={linkingInProgress}
+                            startIcon={linkingInProgress ? <CircularProgress size={14} /> : <LinkIcon />}
+                            onClick={(e) => handleOpenLinkMenu(e, suggestionKey)}
+                            sx={{
+                              textTransform: 'none',
+                              fontSize: '0.7rem',
+                              py: 0.5,
+                              px: 1,
+                              minWidth: 60
+                            }}
+                          >
+                            Link
+                          </Button>
+                        )}
+                        <Button
+                          variant={hasMatches ? "outlined" : "contained"}
+                          color="primary"
+                          size="small"
+                          startIcon={<AddIcon />}
+                          onClick={() => handleCreateAccount(suggestion)}
+                          sx={{
+                            textTransform: 'none',
+                            fontSize: '0.7rem',
+                            py: 0.5,
+                            px: 1,
+                            minWidth: 70
+                          }}
+                        >
+                          Create
+                        </Button>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDismiss(suggestion)}
+                          sx={{ p: 0.5 }}
+                          aria-label="Dismiss suggestion"
+                        >
+                          <Close fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    </Box>
 
-                      <Grid container spacing={2} sx={{ mt: 1 }}>
-                        <Grid item xs={12} sm={4}>
-                          <Typography variant="caption" color="text.secondary">
-                            עסקאות
-                          </Typography>
-                          <Typography variant="body1" fontWeight="bold">
-                            {suggestion.transactionCount}
-                          </Typography>
-                        </Grid>
-
-                        <Grid item xs={12} sm={4}>
-                          <Typography variant="caption" color="text.secondary">
-                            סכום כולל
-                          </Typography>
-                          <Typography variant="body1" fontWeight="bold">
-                            ₪{suggestion.totalAmount.toLocaleString()}
-                          </Typography>
-                        </Grid>
-
-                        <Grid item xs={12} sm={4}>
-                          <Typography variant="caption" color="text.secondary">
-                            טווח תאריכים
-                          </Typography>
-                          <Typography variant="body2">
-                            {new Date(suggestion.dateRange.earliest).toLocaleDateString('he-IL')} -{' '}
-                            {new Date(suggestion.dateRange.latest).toLocaleDateString('he-IL')}
-                          </Typography>
-                        </Grid>
-                      </Grid>
-
-                      {/* Expandable transaction list */}
-                      <Box mt={2}>
+                    {/* Expandable Transactions */}
+                    {suggestion.transactions.length > 0 && (
+                      <>
+                        <Divider sx={{ my: 1 }} />
                         <Button
                           size="small"
-                          onClick={() => handleToggleExpand(index)}
-                          endIcon={
-                            expandedSuggestions.has(index) ? <ExpandLess /> : <ExpandMore />
-                          }
+                          onClick={() => handleToggleExpand(suggestionKey)}
+                          endIcon={isExpanded ? <ExpandLess /> : <ExpandMore />}
+                          sx={{
+                            textTransform: 'none',
+                            fontSize: '0.65rem',
+                            py: 0.25,
+                            color: 'text.secondary'
+                          }}
                         >
-                          {expandedSuggestions.has(index) ? 'הסתר עסקאות' : 'הצג עסקאות'}
+                          {isExpanded ? 'Hide' : 'Show'} {suggestion.transactions.length} transactions
                         </Button>
 
-                        <Collapse in={expandedSuggestions.has(index)}>
-                          <List dense sx={{ mt: 1, bgcolor: 'rgba(0,0,0,0.02)', borderRadius: 1 }}>
+                        <Collapse in={isExpanded}>
+                          <List dense sx={{
+                            mt: 0.5,
+                            bgcolor: 'action.hover',
+                            borderRadius: 1,
+                            maxHeight: 200,
+                            overflow: 'auto'
+                          }}>
                             {suggestion.transactions.map((txn, txnIndex) => (
-                              <ListItem key={txnIndex}>
+                              <ListItem key={txnIndex} sx={{ py: 0.5 }}>
                                 <ListItemText
                                   primary={txn.transactionName}
-                                  secondary={
-                                    <>
-                                      {new Date(txn.transactionDate).toLocaleDateString('he-IL')} |{' '}
-                                      ₪{Math.abs(txn.transactionAmount).toLocaleString()}
-                                    </>
-                                  }
+                                  secondary={`${new Date(txn.transactionDate).toLocaleDateString('he-IL')} • ₪${Math.abs(txn.transactionAmount).toLocaleString()}`}
+                                  primaryTypographyProps={{
+                                    variant: 'caption',
+                                    fontWeight: 500,
+                                    sx: { fontSize: '0.7rem' }
+                                  }}
+                                  secondaryTypographyProps={{
+                                    variant: 'caption',
+                                    sx: { fontSize: '0.65rem' }
+                                  }}
                                 />
                               </ListItem>
                             ))}
                           </List>
                         </Collapse>
-                      </Box>
-                    </Box>
-
-                    <Box display="flex" flexDirection="column" alignItems="flex-end" ml={2}>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDismiss(suggestion, index)}
-                        sx={{ mb: 1 }}
-                      >
-                        <Close fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  </Box>
-
-                  <Divider sx={{ my: 2 }} />
-
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Button
-                      variant="contained"
-                      startIcon={<AccountBalance />}
-                      onClick={() => handleCreateAccount(suggestion)}
-                      sx={{
-                        bgcolor: '#667eea',
-                        '&:hover': { bgcolor: '#5568d3' }
-                      }}
-                    >
-                      צור חשבון
-                    </Button>
-
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() => handleDismiss(suggestion, index)}
-                    >
-                      דחה
-                    </Button>
-                  </Box>
-                </CardContent>
-              </Card>
-            ))}
-          </Box>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </Stack>
         </CardContent>
       </Card>
 
-      {/* Smart Account Creation Form */}
-      <SmartInvestmentAccountForm
-        open={formOpen}
-        onClose={handleFormClose}
-        suggestion={selectedSuggestion || undefined}
-        onSuccess={handleFormSuccess}
-      />
+      {/* Link Menu */}
+      <Menu
+        anchorEl={linkMenuAnchor?.element}
+        open={Boolean(linkMenuAnchor)}
+        onClose={handleCloseLinkMenu}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        {linkMenuAnchor && (() => {
+          const suggestion = visibleSuggestions.find(
+            (item) => getSuggestionKey(item) === linkMenuAnchor.suggestionKey
+          );
+          if (!suggestion) {
+            return null;
+          }
+          const matchingAccounts = findMatchingAccounts(suggestion);
+
+          return matchingAccounts.map((account) => (
+            <MenuItem
+              key={account.id}
+              onClick={() => handleLinkToAccount(suggestion, account.id)}
+              sx={{ fontSize: '0.8rem', minWidth: 200 }}
+            >
+              <Box>
+                <Typography variant="body2" fontWeight={500}>
+                  {account.account_name}
+                </Typography>
+                {account.current_value && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      {account.currency} {account.current_value.toLocaleString()}
+                    </Typography>
+                    {!account.current_value_explicit && (
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.6rem', fontStyle: 'italic', ml: 0.5 }}>
+                        (calc)
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+              </Box>
+            </MenuItem>
+          ));
+        })()}
+      </Menu>
     </>
   );
 }

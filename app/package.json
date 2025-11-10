@@ -39,6 +39,7 @@
     "d3-sankey": "^0.12.3",
     "date-fns": "^4.1.0",
     "dotenv": "^16.5.0",
+    "electron-log": "^5.4.3",
     "electron-updater": "^6.6.2",
     "express": "^5.1.0",
     "israeli-bank-scrapers": "^6.2.3",
@@ -70,6 +71,7 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.0.0",
     "vitest": "^4.0.6",
+    "react-router-dom": "^6.28.0",
     "wait-on": "^9.0.1"
   },
   "build": {
@@ -80,18 +82,25 @@
       "buildResources": "../build-resources"
     },
     "files": [
-      "out/**/*",
       "server/**/*",
-      "electron/**/*",
       "node_modules/**/*",
-      "package.json"
-    ],
-    "extraResources": [
+      "package.json",
       {
-        "from": "out",
-        "to": "app/out"
+        "from": "../electron",
+        "to": "electron",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../renderer/dist",
+        "to": "renderer/dist",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
+    "extraResources": [],
     "win": {
       "icon": "../build-resources/logo.ico",
       "target": [

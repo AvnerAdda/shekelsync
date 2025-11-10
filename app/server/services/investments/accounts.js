@@ -61,7 +61,14 @@ async function listAccounts(params = {}) {
         WHERE account_id = ia.id
         ORDER BY as_of_date DESC
         LIMIT 1
-      ) AS current_value
+      ) AS current_value,
+      (
+        SELECT SUM(ABS(t.price))
+        FROM transaction_account_links tal
+        JOIN transactions t ON tal.transaction_identifier = t.identifier
+          AND tal.transaction_vendor = t.vendor
+        WHERE tal.account_id = ia.id
+      ) AS total_invested
     FROM investment_accounts ia
     LEFT JOIN investment_holdings ih ON ia.id = ih.account_id
     ${whereClause}
@@ -72,13 +79,20 @@ async function listAccounts(params = {}) {
   const result = await database.query(query, values);
 
   return {
-    accounts: result.rows.map((row) => ({
-      ...row,
-      current_value: row.current_value ? Number.parseFloat(row.current_value) : null,
-      holdings_count: Number.parseInt(row.holdings_count, 10),
-      is_liquid: row.is_liquid,
-      investment_category: row.investment_category,
-    })),
+    accounts: result.rows.map((row) => {
+      const explicitValue = row.current_value ? Number.parseFloat(row.current_value) : null;
+      const totalInvested = row.total_invested ? Number.parseFloat(row.total_invested) : null;
+
+      return {
+        ...row,
+        current_value: explicitValue || totalInvested, // Use explicit value if set, otherwise use sum of transactions
+        current_value_explicit: explicitValue, // Keep track of whether it was explicitly set
+        total_invested: totalInvested,
+        holdings_count: Number.parseInt(row.holdings_count, 10),
+        is_liquid: row.is_liquid,
+        investment_category: row.investment_category,
+      };
+    }),
   };
 }
 

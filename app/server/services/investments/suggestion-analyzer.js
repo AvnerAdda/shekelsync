@@ -4,7 +4,7 @@
  * Uses pattern matching from investment-patterns.js
  */
 
-import { getPool } from '../../../utils/db.js';
+import pool from '../../../utils/db.js';
 import { ACCOUNT_PATTERNS, getAllPatterns } from '../../../config/investment-patterns.js';
 
 /**
@@ -250,12 +250,11 @@ function analyzeTransaction(transaction) {
  * @returns {Promise<Array>} Array of unlinked transactions
  */
 async function getUnlinkedInvestmentTransactions(thresholdDays = 90) {
-  const pool = getPool();
   const query = `
     SELECT
       t.identifier,
       t.vendor,
-      t.description,
+      t.name as description,
       t.date,
       t.price,
       cd.name as category_name,
@@ -267,11 +266,11 @@ async function getUnlinkedInvestmentTransactions(thresholdDays = 90) {
     WHERE
       cd.category_type = 'investment'
       AND tal.id IS NULL
-      AND t.date >= date('now', '-${thresholdDays} days')
+      AND date(t.date) >= date('now', '-' || $1 || ' days')
     ORDER BY t.date DESC
   `;
 
-  const result = await pool.query(query);
+  const result = await pool.query(query, [thresholdDays]);
   return result.rows;
 }
 

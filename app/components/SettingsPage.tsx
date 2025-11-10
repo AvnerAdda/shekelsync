@@ -36,6 +36,7 @@ import {
 import { useThemeMode } from '../contexts/ThemeContext';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
 import DataExportPanel from './DataExportPanel';
+import DiagnosticsPanel from './DiagnosticsPanel';
 import EnhancedProfileSection from './EnhancedProfileSection';
 
 const SettingsPage: React.FC = () => {
@@ -171,6 +172,10 @@ const SettingsPage: React.FC = () => {
             : 'Currency amounts will display their full values until masking is enabled.'}
         </Alert>
       </Paper>
+
+      <Divider sx={{ my: 4 }} />
+
+      <DiagnosticsPanel />
 
       <Divider sx={{ my: 4 }} />
 

@@ -127,6 +127,14 @@ RENDERER_DEV_URL=http://localhost:6006 npm run dev:electron
 
 ---
 
+### 🛠 Diagnostics & Support
+
+- **Settings → Diagnostics & Logs** now surfaces the log and bundle export controls directly inside the renderer UI. Use “Open Log Folder” to jump to the `logs/main.log` file, or “Export Diagnostics” to capture a JSON bundle (recent log tail + environment metadata) for support.
+- The same shortcuts are available in the **Title Bar → Help** menu (`Open Log Folder`, `Export Diagnostics…`) and via the **system tray icon** context menu, so you can guide users to the tooling even if Settings is inaccessible.
+- Exported bundles intentionally omit secrets; they only contain platform data and the last ~250KB of structured log output.
+
+---
+
 ### 🐳 Docker Deployment
 
 1. Build and run the app using Docker:

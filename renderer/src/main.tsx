@@ -2,6 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { AppProviders } from './providers/AppProviders';
+import { installElectronLoggerBridge } from '@app/lib/install-electron-logger';
+
+installElectronLoggerBridge();
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>

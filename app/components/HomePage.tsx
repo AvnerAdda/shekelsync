@@ -13,19 +13,26 @@ import {
   Grid,
   Alert,
   AlertTitle,
+  Tooltip as MuiTooltip,
+  IconButton,
+  Chip,
 } from '@mui/material';
 import {
   AccountBalance as AccountBalanceIcon,
   DateRange as DateRangeIcon,
   Add as AddIcon,
   InfoOutlined as InfoOutlinedIcon,
+  TrendingUp as TrendingUpIcon,
+  ShowChart as ShowChartIcon,
+  CompareArrows as CompareArrowsIcon,
+  ZoomIn as ZoomInIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Brush, ReferenceLine, Area, AreaChart } from 'recharts';
 import SankeyChart from './SankeyChart';
-import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
+import { startOfMonth, endOfMonth, subMonths, format, differenceInDays } from 'date-fns';
 import SummaryCards from '../components/SummaryCards';
 import BreakdownPanel from '../components/BreakdownPanel';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
@@ -57,6 +64,8 @@ interface DashboardData {
 }
 
 type AggregationPeriod = 'daily' | 'weekly' | 'monthly';
+type YAxisScale = 'linear' | 'log';
+type ChartView = 'transaction' | 'cumulative' | 'velocity';
 
 interface Transaction {
   identifier: string;
@@ -166,6 +175,11 @@ const HomePage: React.FC = () => {
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const [dateTransactions, setDateTransactions] = useState<Transaction[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [yAxisScale, setYAxisScale] = useState<YAxisScale>('linear');
+  const [chartView, setChartView] = useState<ChartView>('transaction');
+  const [showComparison, setShowComparison] = useState(false);
+  const [comparisonData, setComparisonData] = useState<any[]>([]);
+  const [cumulativeData, setCumulativeData] = useState<any[]>([]);
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
   const { status: onboardingStatus } = useOnboarding();
@@ -236,31 +250,6 @@ const HomePage: React.FC = () => {
     );
   };
 
-  const fetchDashboardData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await apiClient.get(
-        `/api/analytics/dashboard?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&aggregation=${aggregationPeriod}`
-      );
-      if (!response.ok) {
-        throw new Error('Failed to fetch dashboard data');
-      }
-      const result = response.data as any;
-
-      // Fill in missing days/weeks/months with zero values for better visualization
-      if (result.history && aggregationPeriod === 'daily') {
-        result.history = fillMissingDates(result.history, startDate, endDate);
-      }
-
-      setData(result);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [aggregationPeriod, endDate, startDate]);
-
   // Helper function to fill missing dates in the history array
   const fillMissingDates = (history: any[], start: Date, end: Date) => {
     if (!history || history.length === 0) {
@@ -283,6 +272,169 @@ const HomePage: React.FC = () => {
 
     return filled;
   };
+
+  // Calculate cumulative balance data for wealth trajectory view
+  const calculateCumulativeData = useCallback((history: any[]) => {
+    if (!history || history.length === 0) return [];
+
+    let runningBalance = 0;
+    const cumulative = history.map((item) => {
+      runningBalance += item.income - item.expenses;
+      return {
+        date: item.date,
+        balance: runningBalance,
+        income: item.income,
+        expenses: item.expenses,
+        netFlow: item.income - item.expenses,
+        savingsRate: item.income > 0 ? ((item.income - item.expenses) / item.income) * 100 : 0,
+      };
+    });
+
+    // Simple linear projection for next 3 periods
+    if (cumulative.length >= 3) {
+      const lastThree = cumulative.slice(-3);
+      const avgDailyChange = lastThree.reduce((sum, item) => sum + item.netFlow, 0) / 3;
+
+      // Add projection points
+      const projections = [];
+      for (let i = 1; i <= 3; i++) {
+        const lastDate = new Date(cumulative[cumulative.length - 1].date);
+        lastDate.setDate(lastDate.getDate() + (aggregationPeriod === 'daily' ? i : aggregationPeriod === 'weekly' ? i * 7 : i * 30));
+
+        projections.push({
+          date: format(lastDate, 'yyyy-MM-dd'),
+          projectedBalance: runningBalance + (avgDailyChange * i),
+          isProjection: true,
+        });
+      }
+
+      return [...cumulative, ...projections];
+    }
+
+    return cumulative;
+  }, [aggregationPeriod]);
+
+  // Auto-detect if log scale is better (when income >> expenses)
+  const shouldUseLogScale = useCallback((history: any[]) => {
+    if (!history || history.length === 0) return false;
+
+    const avgIncome = history.reduce((sum, item) => sum + item.income, 0) / history.length;
+    const avgExpenses = history.reduce((sum, item) => sum + item.expenses, 0) / history.length;
+
+    // If average income is 3x or more than average expenses, suggest log scale
+    return avgIncome > 0 && avgExpenses > 0 && avgIncome / avgExpenses >= 3;
+  }, []);
+
+  // Detect anomalies (unusual spikes)
+  const detectAnomalies = useCallback((history: any[]) => {
+    if (!history || history.length < 5) return [];
+
+    const anomalies: any[] = [];
+    const expenseValues = history.map(h => h.expenses).filter(e => e > 0);
+
+    if (expenseValues.length === 0) return [];
+
+    const mean = expenseValues.reduce((sum, val) => sum + val, 0) / expenseValues.length;
+    const variance = expenseValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / expenseValues.length;
+    const stdDev = Math.sqrt(variance);
+
+    history.forEach((item) => {
+      if (item.expenses > mean + (2 * stdDev)) {
+        anomalies.push({
+          date: item.date,
+          value: item.expenses,
+          type: 'expense_spike',
+          message: `Unusual expense spike: ${formatCurrency(item.expenses, { absolute: true, maximumFractionDigits: 0 })}`,
+        });
+      }
+    });
+
+    return anomalies;
+  }, [formatCurrency]);
+
+  // Detect spending trends (consecutive high/low spending periods)
+  const detectTrends = useCallback((history: any[]) => {
+    if (!history || history.length < 7) return [];
+
+    const trends: any[] = [];
+    const avgExpenses = history.reduce((sum, item) => sum + item.expenses, 0) / history.length;
+
+    let consecutiveHigh = 0;
+    let consecutiveLow = 0;
+    let highStartIdx = -1;
+    let lowStartIdx = -1;
+
+    history.forEach((item, idx) => {
+      if (item.expenses > avgExpenses * 1.3) {
+        if (consecutiveHigh === 0) highStartIdx = idx;
+        consecutiveHigh++;
+        consecutiveLow = 0;
+      } else if (item.expenses < avgExpenses * 0.7 && item.expenses > 0) {
+        if (consecutiveLow === 0) lowStartIdx = idx;
+        consecutiveLow++;
+        consecutiveHigh = 0;
+      } else {
+        if (consecutiveHigh >= 3) {
+          trends.push({
+            type: 'high_spending',
+            startDate: history[highStartIdx].date,
+            endDate: history[idx - 1].date,
+            label: 'High spending period',
+          });
+        }
+        if (consecutiveLow >= 3) {
+          trends.push({
+            type: 'low_spending',
+            startDate: history[lowStartIdx].date,
+            endDate: history[idx - 1].date,
+            label: 'Low spending period',
+          });
+        }
+        consecutiveHigh = 0;
+        consecutiveLow = 0;
+      }
+    });
+
+    return trends;
+  }, []);
+
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await apiClient.get(
+        `/api/analytics/dashboard?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&aggregation=${aggregationPeriod}`
+      );
+      if (!response.ok) {
+        throw new Error('Failed to fetch dashboard data');
+      }
+      const result = response.data as any;
+
+      // Fill in missing days/weeks/months with zero values for better visualization
+      if (result.history && aggregationPeriod === 'daily') {
+        result.history = fillMissingDates(result.history, startDate, endDate);
+      }
+
+      setData(result);
+
+      // Calculate cumulative data for wealth trajectory view
+      if (result.history && result.history.length > 0) {
+        const cumulative = calculateCumulativeData(result.history);
+        setCumulativeData(cumulative);
+
+        // Auto-suggest log scale if income >> expenses
+        const useLog = shouldUseLogScale(result.history);
+        if (useLog && yAxisScale === 'linear') {
+          // Only auto-switch once, don't override user choice
+          console.log('Auto-suggesting logarithmic scale due to high income/expense ratio');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [aggregationPeriod, endDate, startDate, calculateCumulativeData, shouldUseLogScale, yAxisScale]);
 
   const fetchPortfolioValue = useCallback(async () => {
     try {
@@ -600,27 +752,80 @@ const HomePage: React.FC = () => {
     return format(localDate, 'dd/MM');
   };
 
+  // Format Y-axis for log scale (show original values but with log positioning)
+  const formatYAxisLog = (value: number) => {
+    if (value <= 0) return '0';
+    // Convert back from log to actual value for display
+    const actualValue = Math.pow(10, value);
+    return formatCurrencyValue(actualValue);
+  };
+
+  // Transform data for log scale visualization
+  const getLogScaleData = (history: any[]) => {
+    if (!history) return [];
+    return history.map(item => ({
+      ...item,
+      // Transform to log10, handling zeros (use 0.1 as minimum to avoid -infinity)
+      income: item.income > 0 ? Math.log10(item.income) : 0,
+      expenses: item.expenses > 0 ? Math.log10(item.expenses) : 0,
+      // Keep original values for tooltip
+      originalIncome: item.income,
+      originalExpenses: item.expenses,
+    }));
+  };
+
   // Custom tooltip for transaction history chart
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const dateStr = payload[0].payload.date;
-      const income = payload.find((p: any) => p.dataKey === 'income')?.value || 0;
-      const expenses = payload.find((p: any) => p.dataKey === 'expenses')?.value || 0;
+      // Use original values if available (for log scale), otherwise use direct values
+      const income = payload[0].payload.originalIncome ?? (payload.find((p: any) => p.dataKey === 'income')?.value || 0);
+      const expenses = payload[0].payload.originalExpenses ?? (payload.find((p: any) => p.dataKey === 'expenses')?.value || 0);
+      const netFlow = income - expenses;
       const localDate = parseLocalDate(dateStr);
 
+      // Check if this is an anomaly
+      const anomalies = detectAnomalies(data?.history || []);
+      const isAnomaly = anomalies.some(a => a.date === dateStr);
+
+      // Calculate average for comparison
+      const avgExpenses = data?.history ?
+        data.history.reduce((sum, item) => sum + item.expenses, 0) / data.history.length : 0;
+
+      const diffFromAvg = expenses - avgExpenses;
+      const percentDiff = avgExpenses > 0 ? (diffFromAvg / avgExpenses) * 100 : 0;
+
       return (
-        <Paper sx={{ p: 2, border: `1px solid ${theme.palette.divider}` }}>
-          <Typography variant="body2" fontWeight="bold">
+        <Paper sx={{ p: 2, border: `1px solid ${theme.palette.divider}`, minWidth: 200 }}>
+          <Typography variant="body2" fontWeight="bold" sx={{ mb: 1 }}>
             {format(localDate, 'MMM dd, yyyy')}
           </Typography>
           <Typography variant="body2" color="success.main">
-            Income: {formatCurrencyValue(income)}
+            ↑ Income: {formatCurrencyValue(income)}
           </Typography>
           <Typography variant="body2" color="error.main">
-            Expenses: {formatCurrencyValue(expenses)}
+            ↓ Expenses: {formatCurrencyValue(expenses)}
           </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            Click to see transactions
+          <Typography
+            variant="body2"
+            fontWeight="medium"
+            color={netFlow > 0 ? 'success.main' : 'error.main'}
+            sx={{ mt: 0.5, pt: 0.5, borderTop: `1px solid ${theme.palette.divider}` }}
+          >
+            Net: {netFlow > 0 ? '+' : ''}{formatCurrencyValue(netFlow)}
+          </Typography>
+          {Math.abs(percentDiff) > 20 && (
+            <Typography variant="caption" color={percentDiff > 0 ? 'warning.main' : 'info.main'} sx={{ display: 'block', mt: 0.5 }}>
+              {percentDiff > 0 ? '↑' : '↓'} {Math.abs(percentDiff).toFixed(0)}% vs avg
+            </Typography>
+          )}
+          {isAnomaly && (
+            <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
+              ⚠ Unusual spending
+            </Typography>
+          )}
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', fontStyle: 'italic' }}>
+            Click to see details
           </Typography>
         </Paper>
       );
@@ -707,56 +912,424 @@ const HomePage: React.FC = () => {
 
       {/* Transaction History Chart */}
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">
-            Transaction History
-          </Typography>
-          <ToggleButtonGroup
-            value={aggregationPeriod}
-            exclusive
-            onChange={(e, newPeriod) => newPeriod && setAggregationPeriod(newPeriod)}
-            size="small"
-          >
-            <ToggleButton value="daily">Daily</ToggleButton>
-            <ToggleButton value="weekly">Weekly</ToggleButton>
-            <ToggleButton value="monthly">Monthly</ToggleButton>
-          </ToggleButtonGroup>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="h6">
+              {chartView === 'transaction' && 'Transaction History'}
+              {chartView === 'cumulative' && 'Wealth Trajectory'}
+              {chartView === 'velocity' && 'Financial Velocity'}
+            </Typography>
+            {shouldUseLogScale(data.history) && yAxisScale === 'linear' && chartView === 'transaction' && (
+              <Chip
+                label="Log scale recommended"
+                size="small"
+                color="info"
+                icon={<InfoOutlinedIcon />}
+                onClick={() => setYAxisScale('log')}
+                sx={{ cursor: 'pointer' }}
+              />
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+            <ToggleButtonGroup
+              value={chartView}
+              exclusive
+              onChange={(e, newView) => newView && setChartView(newView)}
+              size="small"
+            >
+              <MuiTooltip title="Transaction view">
+                <ToggleButton value="transaction">
+                  <ShowChartIcon fontSize="small" />
+                </ToggleButton>
+              </MuiTooltip>
+              <MuiTooltip title="Cumulative wealth">
+                <ToggleButton value="cumulative">
+                  <TrendingUpIcon fontSize="small" />
+                </ToggleButton>
+              </MuiTooltip>
+            </ToggleButtonGroup>
+
+            {chartView === 'transaction' && (
+              <ToggleButtonGroup
+                value={yAxisScale}
+                exclusive
+                onChange={(e, newScale) => newScale && setYAxisScale(newScale)}
+                size="small"
+              >
+                <MuiTooltip title="Linear scale">
+                  <ToggleButton value="linear">Linear</ToggleButton>
+                </MuiTooltip>
+                <MuiTooltip title="Logarithmic scale">
+                  <ToggleButton value="log">Log</ToggleButton>
+                </MuiTooltip>
+              </ToggleButtonGroup>
+            )}
+
+            <ToggleButtonGroup
+              value={aggregationPeriod}
+              exclusive
+              onChange={(e, newPeriod) => newPeriod && setAggregationPeriod(newPeriod)}
+              size="small"
+            >
+              <ToggleButton value="daily">Daily</ToggleButton>
+              <ToggleButton value="weekly">Weekly</ToggleButton>
+              <ToggleButton value="monthly">Monthly</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
         </Box>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={data.history} onClick={handleChartAreaClick} style={{ cursor: 'pointer' }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis
-              dataKey="date"
-              tickFormatter={formatXAxis}
-              tick={{ fill: theme.palette.text.secondary }}
-            />
-            <YAxis
-              tick={{ fill: theme.palette.text.secondary }}
-              tickFormatter={formatCurrencyValue}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="income"
-              stroke={theme.palette.success.main}
-              name="Income"
-              strokeWidth={2}
-              dot={<CustomDot stroke={theme.palette.success.main} />}
-              activeDot={{ r: 8, cursor: 'pointer' }}
-            />
-            <Line
-              type="monotone"
-              dataKey="expenses"
-              stroke={theme.palette.error.main}
-              name="Expenses"
-              strokeWidth={2}
-              dot={<CustomDot stroke={theme.palette.error.main} />}
-              activeDot={{ r: 8, cursor: 'pointer' }}
-            />
-          </LineChart>
+
+        {/* Chart Info Messages */}
+        {chartView === 'cumulative' && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="body2">
+              Shows your cumulative wealth trajectory. Dotted lines indicate projected balance based on recent trends.
+            </Typography>
+          </Alert>
+        )}
+
+        <ResponsiveContainer width="100%" height={chartView === 'cumulative' ? 400 : 350}>
+          {chartView === 'transaction' ? (
+            <LineChart
+              data={yAxisScale === 'log' ? getLogScaleData(data.history) : data.history}
+              onClick={handleChartAreaClick}
+              style={{ cursor: 'pointer' }}
+            >
+              <defs>
+                <linearGradient id="savingsGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={theme.palette.success.main} stopOpacity={0.1}/>
+                  <stop offset="95%" stopColor={theme.palette.success.main} stopOpacity={0.05}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="date"
+                tickFormatter={formatXAxis}
+                tick={{ fill: theme.palette.text.secondary }}
+              />
+              <YAxis
+                tick={{ fill: theme.palette.text.secondary }}
+                tickFormatter={yAxisScale === 'log' ? formatYAxisLog : formatCurrencyValue}
+                domain={['auto', 'auto']}
+                allowDataOverflow={false}
+                scale="linear"
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend />
+
+              {/* Average expense reference line */}
+              {data.history.length > 0 && (() => {
+                const avgExpenses = data.history.reduce((sum, item) => sum + item.expenses, 0) / data.history.length;
+                const yValue = yAxisScale === 'log' && avgExpenses > 0 ? Math.log10(avgExpenses) : avgExpenses;
+                return (
+                  <ReferenceLine
+                    y={yValue}
+                    stroke={theme.palette.error.light}
+                    strokeDasharray="5 5"
+                    strokeOpacity={0.6}
+                    label={{
+                      value: `Avg: ${formatCurrencyValue(avgExpenses)}`,
+                      position: 'right',
+                      fill: theme.palette.error.main,
+                      fontSize: 11,
+                    }}
+                  />
+                );
+              })()}
+
+              {/* Average income reference line */}
+              {data.history.length > 0 && data.history.some(h => h.income > 0) && (() => {
+                const avgIncome = data.history.reduce((sum, item) => sum + item.income, 0) / data.history.filter(h => h.income > 0).length;
+                const yValue = yAxisScale === 'log' && avgIncome > 0 ? Math.log10(avgIncome) : avgIncome;
+                return (
+                  <ReferenceLine
+                    y={yValue}
+                    stroke={theme.palette.success.light}
+                    strokeDasharray="5 5"
+                    strokeOpacity={0.6}
+                    label={{
+                      value: `Avg: ${formatCurrencyValue(avgIncome)}`,
+                      position: 'right',
+                      fill: theme.palette.success.main,
+                      fontSize: 11,
+                    }}
+                  />
+                );
+              })()}
+
+              <Line
+                type="monotone"
+                dataKey="income"
+                stroke={theme.palette.success.main}
+                name="Income"
+                strokeWidth={2}
+                dot={<CustomDot stroke={theme.palette.success.main} />}
+                activeDot={{ r: 8, cursor: 'pointer' }}
+              />
+              <Line
+                type="monotone"
+                dataKey="expenses"
+                stroke={theme.palette.error.main}
+                name="Expenses"
+                strokeWidth={2}
+                dot={<CustomDot stroke={theme.palette.error.main} />}
+                activeDot={{ r: 8, cursor: 'pointer' }}
+              />
+
+              {/* Anomaly markers */}
+              {detectAnomalies(data.history).map((anomaly, idx) => (
+                <ReferenceLine
+                  key={`anomaly-${idx}`}
+                  x={anomaly.date}
+                  stroke={theme.palette.warning.main}
+                  strokeDasharray="3 3"
+                  label={{
+                    value: '⚠',
+                    position: 'top',
+                    fill: theme.palette.warning.main,
+                    fontSize: 16,
+                  }}
+                />
+              ))}
+
+              {/* Highlight highest expense day */}
+              {(() => {
+                const maxExpense = data.history.reduce((max, item) => item.expenses > max.expenses ? item : max, data.history[0]);
+                return maxExpense.expenses > 0 ? (
+                  <ReferenceLine
+                    x={maxExpense.date}
+                    stroke={theme.palette.error.dark}
+                    strokeDasharray="2 2"
+                    strokeOpacity={0.4}
+                    label={{
+                      value: '📌',
+                      position: 'top',
+                      fill: theme.palette.error.dark,
+                      fontSize: 14,
+                    }}
+                  />
+                ) : null;
+              })()}
+
+              {/* Trend period markers */}
+              {detectTrends(data.history).map((trend, idx) => (
+                <ReferenceLine
+                  key={`trend-${idx}`}
+                  x={trend.startDate}
+                  stroke={trend.type === 'high_spending' ? theme.palette.warning.main : theme.palette.info.main}
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.3}
+                  label={{
+                    value: trend.type === 'high_spending' ? '📈' : '📉',
+                    position: 'insideTopLeft',
+                    fill: trend.type === 'high_spending' ? theme.palette.warning.main : theme.palette.info.main,
+                    fontSize: 12,
+                  }}
+                />
+              ))}
+
+              <Brush
+                dataKey="date"
+                height={30}
+                stroke={theme.palette.primary.main}
+                tickFormatter={formatXAxis}
+              />
+            </LineChart>
+          ) : (
+            <AreaChart data={cumulativeData}>
+              <defs>
+                <linearGradient id="balanceGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0.1}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="date"
+                tickFormatter={formatXAxis}
+                tick={{ fill: theme.palette.text.secondary }}
+              />
+              <YAxis
+                tick={{ fill: theme.palette.text.secondary }}
+                tickFormatter={formatCurrencyValue}
+              />
+              <Tooltip
+                content={({ active, payload }: any) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload;
+                    return (
+                      <Paper sx={{ p: 2, border: `1px solid ${theme.palette.divider}` }}>
+                        <Typography variant="body2" fontWeight="bold">
+                          {format(parseLocalDate(data.date), 'MMM dd, yyyy')}
+                        </Typography>
+                        {data.isProjection ? (
+                          <Typography variant="body2" color="primary.main">
+                            Projected: {formatCurrencyValue(data.projectedBalance)}
+                          </Typography>
+                        ) : (
+                          <>
+                            <Typography variant="body2" color="primary.main">
+                              Balance: {formatCurrencyValue(data.balance)}
+                            </Typography>
+                            <Typography variant="body2" color={data.netFlow > 0 ? 'success.main' : 'error.main'}>
+                              Net Flow: {data.netFlow > 0 ? '+' : ''}{formatCurrencyValue(data.netFlow)}
+                            </Typography>
+                            {data.savingsRate !== undefined && (
+                              <Typography variant="body2" color="text.secondary">
+                                Savings Rate: {data.savingsRate.toFixed(1)}%
+                              </Typography>
+                            )}
+                          </>
+                        )}
+                      </Paper>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Legend />
+
+              {/* Mark positive milestones */}
+              {(() => {
+                const milestones = [];
+                const maxBalance = Math.max(...cumulativeData.filter(d => !d.isProjection).map(d => d.balance || 0));
+                if (maxBalance > 0) {
+                  const roundedMilestone = Math.floor(maxBalance / 10000) * 10000;
+                  if (roundedMilestone > 0) {
+                    milestones.push(
+                      <ReferenceLine
+                        key="milestone"
+                        y={roundedMilestone}
+                        stroke={theme.palette.success.main}
+                        strokeDasharray="3 3"
+                        strokeOpacity={0.5}
+                        label={{
+                          value: `🎯 ${formatCurrencyValue(roundedMilestone)}`,
+                          position: 'right',
+                          fill: theme.palette.success.main,
+                          fontSize: 11,
+                        }}
+                      />
+                    );
+                  }
+                }
+                return milestones;
+              })()}
+
+              {/* Highlight periods with high savings rate */}
+              {cumulativeData
+                .filter(d => !d.isProjection && d.savingsRate > 30)
+                .slice(0, 3)
+                .map((d, idx) => (
+                  <ReferenceLine
+                    key={`high-savings-${idx}`}
+                    x={d.date}
+                    stroke={theme.palette.success.light}
+                    strokeDasharray="2 2"
+                    strokeOpacity={0.3}
+                    label={{
+                      value: '💰',
+                      position: 'top',
+                      fill: theme.palette.success.main,
+                      fontSize: 12,
+                    }}
+                  />
+                ))}
+
+              <Area
+                type="monotone"
+                dataKey="balance"
+                stroke={theme.palette.primary.main}
+                fill="url(#balanceGradient)"
+                name="Cumulative Balance"
+                strokeWidth={3}
+              />
+              <Line
+                type="monotone"
+                dataKey="projectedBalance"
+                stroke={theme.palette.primary.light}
+                strokeDasharray="5 5"
+                name="Projected"
+                strokeWidth={2}
+                dot={false}
+              />
+              <ReferenceLine
+                y={0}
+                stroke={theme.palette.text.secondary}
+                strokeDasharray="3 3"
+                label={{
+                  value: 'Break-even',
+                  position: 'right',
+                  fill: theme.palette.text.secondary,
+                  fontSize: 10,
+                }}
+              />
+              <Brush
+                dataKey="date"
+                height={30}
+                stroke={theme.palette.primary.main}
+                tickFormatter={formatXAxis}
+              />
+            </AreaChart>
+          )}
         </ResponsiveContainer>
-        
+
+        {/* Integrated Insights - Shown below chart */}
+        {chartView === 'transaction' && data.history.length > 0 && (
+          <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  Avg {aggregationPeriod === 'daily' ? 'Daily' : aggregationPeriod === 'weekly' ? 'Weekly' : 'Monthly'}
+                </Typography>
+                <Typography variant="body2" fontWeight="medium">
+                  ↓ {formatCurrencyValue(data.history.reduce((sum, item) => sum + item.expenses, 0) / data.history.length)}
+                  {' / '}
+                  ↑ {formatCurrencyValue(data.history.reduce((sum, item) => sum + item.income, 0) / data.history.length)}
+                </Typography>
+              </Box>
+              {data.summary.totalIncome > 0 && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    Savings Rate
+                  </Typography>
+                  <Typography variant="body2" fontWeight="medium" color={
+                    ((data.summary.totalIncome - data.summary.totalExpenses) / data.summary.totalIncome) > 0.2
+                      ? 'success.main'
+                      : 'error.main'
+                  }>
+                    {(((data.summary.totalIncome - data.summary.totalExpenses) / data.summary.totalIncome) * 100).toFixed(1)}%
+                  </Typography>
+                </Box>
+              )}
+              {detectAnomalies(data.history).length > 0 && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    Anomalies
+                  </Typography>
+                  <Typography variant="body2" fontWeight="medium" color="warning.main">
+                    ⚠ {detectAnomalies(data.history).length} spike{detectAnomalies(data.history).length !== 1 ? 's' : ''}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+            {detectAnomalies(data.history).length > 0 && (
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {detectAnomalies(data.history).slice(0, 2).map((anomaly, idx) => (
+                  <Chip
+                    key={idx}
+                    label={`⚠ ${format(parseLocalDate(anomaly.date), 'MMM dd')}`}
+                    size="small"
+                    color="warning"
+                    variant="outlined"
+                    sx={{ cursor: 'pointer' }}
+                    onClick={() => fetchTransactionsByDate(anomaly.date)}
+                  />
+                ))}
+              </Box>
+            )}
+          </Box>
+        )}
+
         {/* Transaction List for Selected Date */}
         {hoveredDate && (
           <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>

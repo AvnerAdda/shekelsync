@@ -1,11 +1,11 @@
 require('./setup-module-alias');
 
 // Add app directory to module search paths since dependencies are installed there
-const path = require('path');
-require('module').globalPaths.push(path.join(__dirname, '..', 'app', 'node_modules'));
+const { resolveAppPath, requireFromApp } = require('./paths');
+require('module').globalPaths.push(resolveAppPath('node_modules'));
 
-const express = require(path.join(__dirname, '..', 'app', 'node_modules', 'express'));
-const cors = require(path.join(__dirname, '..', 'app', 'node_modules', 'cors'));
+const express = requireFromApp('express');
+const cors = requireFromApp('cors');
 
 // Import existing API routes from the Next.js app
 const isDev = process.env.NODE_ENV === 'development';
@@ -13,29 +13,26 @@ const isDev = process.env.NODE_ENV === 'development';
 // Import our core API routes
 const coreRoutes = require('./api-routes/core');
 const migrationsRoutes = require('./api-routes/migrations');
-const { createAnalyticsRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'analytics.js'));
-const { createAccountsRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'accounts.js'));
-const { createBudgetsRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'budgets.js'));
-const transactionHandlers = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'transactions.js'));
-const { createOnboardingRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'onboarding.js'));
-const { createNotificationsRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'notifications.js'));
-const { createDataExportRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'data-export.js'));
-const { createScrapingRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'scraping.js'));
-const { createProfileRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'profile.js'));
-const { createChatRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'chat.js'));
-const { createInvestmentsRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'investments.js'));
-const { createPatternsRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'patterns.js'));
-const { createAnalyticsActionItemsRouter } = require(path.join(
-  __dirname,
-  '..',
-  'app',
+const { createAnalyticsRouter } = require(resolveAppPath('server', 'routes', 'analytics.js'));
+const { createAccountsRouter } = require(resolveAppPath('server', 'routes', 'accounts.js'));
+const { createBudgetsRouter } = require(resolveAppPath('server', 'routes', 'budgets.js'));
+const transactionHandlers = require(resolveAppPath('server', 'routes', 'transactions.js'));
+const { createOnboardingRouter } = require(resolveAppPath('server', 'routes', 'onboarding.js'));
+const { createNotificationsRouter } = require(resolveAppPath('server', 'routes', 'notifications.js'));
+const { createDataExportRouter } = require(resolveAppPath('server', 'routes', 'data-export.js'));
+const { createScrapingRouter } = require(resolveAppPath('server', 'routes', 'scraping.js'));
+const { createProfileRouter } = require(resolveAppPath('server', 'routes', 'profile.js'));
+const { createChatRouter } = require(resolveAppPath('server', 'routes', 'chat.js'));
+const { createInvestmentsRouter } = require(resolveAppPath('server', 'routes', 'investments.js'));
+const { createPatternsRouter } = require(resolveAppPath('server', 'routes', 'patterns.js'));
+const { createAnalyticsActionItemsRouter } = require(resolveAppPath(
   'server',
   'routes',
   'analytics-action-items.js',
 ));
-const { createCredentialsRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'credentials.js'));
-const { createCategorizationRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'categorization.js'));
-const { createCategoriesRouter } = require(path.join(__dirname, '..', 'app', 'server', 'routes', 'categories.js'));
+const { createCredentialsRouter } = require(resolveAppPath('server', 'routes', 'credentials.js'));
+const { createCategorizationRouter } = require(resolveAppPath('server', 'routes', 'categorization.js'));
+const { createCategoriesRouter } = require(resolveAppPath('server', 'routes', 'categories.js'));
 
 async function setupAPIServer(mainWindow) {
   const app = express();

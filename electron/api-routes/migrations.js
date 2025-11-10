@@ -1,9 +1,5 @@
-const path = require('path');
-const migrationsService = require(path.join(
-  __dirname,
-  '..',
-  '..',
-  'app',
+const { resolveAppPath } = require('../paths');
+const migrationsService = require(resolveAppPath(
   'server',
   'services',
   'migrations',

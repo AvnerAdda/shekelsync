@@ -64,7 +64,7 @@ test('child add/edit/delete flows update payload', async ({ page }) => {
   await goHome(page);
 
   await page.getByRole('button', { name: 'Settings' }).click();
-  await expect(page.getByRole('heading', { name: 'Enhanced Profile Information' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /profile information/i })).toBeVisible();
 
   await page.getByRole('button', { name: 'Children Information' }).click();
 
@@ -74,24 +74,24 @@ test('child add/edit/delete flows update payload', async ({ page }) => {
   await childName.fill('Noa Updated');
   await editDialog.getByRole('button', { name: 'Update Child' }).click();
 
-  await page.getByRole('button', { name: 'Save Enhanced Profile' }).click();
+  await page.getByRole('button', { name: 'Save Profile' }).click();
   await expect(page.getByText(/updated successfully/i)).toBeVisible();
   expect(payloads.at(-1)?.children?.[0]?.name).toBe('Noa Updated');
 
   await page.getByRole('button', { name: 'Add child' }).click();
   const addDialog = page.getByRole('dialog', { name: /Add Child Information/i });
   await addDialog.getByLabel('Child Name').fill('Omer');
-  await addDialog.getByLabel('Birth Date', { exact: true }).fill('2020-11-05');
+  await addDialog.getByLabel(/Birth Date/i).fill('2020-11-05');
   await addDialog.getByRole('button', { name: 'Add Child' }).click();
-  await page.getByRole('button', { name: 'Save Enhanced Profile' }).click();
+  await page.getByRole('button', { name: 'Save Profile' }).click();
   await expect(page.getByText(/updated successfully/i)).toBeVisible();
 
   const latest = payloads.at(-1);
   expect(latest?.children?.length).toBeGreaterThan(1);
   expect(latest?.children?.some((child: any) => child.name === 'Omer')).toBe(true);
 
-  await page.getAllByRole('button', { name: 'Delete child' }).first().click();
-  await page.getByRole('button', { name: 'Save Enhanced Profile' }).click();
+  await page.getByRole('button', { name: 'Delete child' }).first().click();
+  await page.getByRole('button', { name: 'Save Profile' }).click();
   await expect(page.getByText(/updated successfully/i)).toBeVisible();
 
   const finalPayload = payloads.at(-1);

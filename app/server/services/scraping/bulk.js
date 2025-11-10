@@ -86,7 +86,12 @@ async function bulkScrape(options = {}) {
 
     const totalAccounts = staleAccounts.length;
 
-    const scrapePromises = staleAccounts.map(async (account, index) => {
+    // Process accounts sequentially to avoid SQLite transaction conflicts
+    // SQLite doesn't support concurrent transactions on the same connection
+    const processedResults = [];
+
+    for (let index = 0; index < staleAccounts.length; index++) {
+      const account = staleAccounts[index];
       onAccountStart?.({ account, index, total: totalAccounts });
 
       try {
@@ -152,7 +157,7 @@ async function bulkScrape(options = {}) {
           `[Bulk Scrape] ${account.vendor} - status=${summary.status}, transactions=${transactionCount}`,
         );
 
-        return summary;
+        processedResults.push(summary);
       } catch (error) {
         log.error?.(`[Bulk Scrape] Error scraping ${account.vendor}:`, error);
 
@@ -167,26 +172,9 @@ async function bulkScrape(options = {}) {
 
         onAccountComplete?.({ account, index, total: totalAccounts, result: failure, error });
 
-        return failure;
+        processedResults.push(failure);
       }
-    });
-
-    const settledResults = await Promise.allSettled(scrapePromises);
-
-    const processedResults = settledResults.map((item) => {
-      if (item.status === 'fulfilled') {
-        return item.value;
-      }
-
-      return {
-        vendor: 'unknown',
-        nickname: 'unknown',
-        success: false,
-        status: 'failed',
-        message: item.reason?.message || 'Promise rejected',
-        transactionCount: 0,
-      };
-    });
+    }
 
     const successCount = processedResults.filter((entry) => entry.success).length;
     const failureCount = processedResults.length - successCount;

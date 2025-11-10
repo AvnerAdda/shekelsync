@@ -147,19 +147,32 @@ describe('categorization rules service', () => {
       await expect(rulesService.createAutoRule({})).rejects.toMatchObject({ status: 400 });
     });
 
-    it('throws conflict when pattern already exists', async () => {
+    it('returns existing rule metadata when pattern already exists', async () => {
       queryMock
         .mockImplementationOnce(async () => ({ rows: [{ id: 99 }] }))
-        .mockImplementationOnce(async () => {
-          throw new Error('should not hit category lookup when conflict');
-        });
+        .mockImplementationOnce(async () => ({
+          rows: [
+            {
+              id: 99,
+              name_pattern: 'SPOTIFY',
+              target_category: 'Subscriptions',
+              category_path: 'Entertainment > Subscriptions',
+              category_definition_id: 55,
+              category_type: 'expense',
+            },
+          ],
+        }));
 
       await expect(
         rulesService.createAutoRule({
           transactionName: 'SPOTIFY',
           categoryDefinitionId: 10,
         }),
-      ).rejects.toMatchObject({ status: 409, ruleId: 99 });
+      ).resolves.toMatchObject({
+        success: true,
+        alreadyExists: true,
+        rule: expect.objectContaining({ id: 99 }),
+      });
     });
 
     it('creates rule using category metadata', async () => {
