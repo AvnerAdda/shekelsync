@@ -4,6 +4,7 @@ import { FinancePrivacyProvider } from '@app/contexts/FinancePrivacyContext';
 import { ChatbotPermissionsProvider } from '@app/contexts/ChatbotPermissionsContext';
 import { NotificationProvider } from '@app/components/NotificationContext';
 import { OnboardingProvider } from '@app/contexts/OnboardingContext';
+import { TelemetryProvider } from '@app/contexts/TelemetryContext';
 import type { PropsWithChildren } from 'react';
 
 export const AppProviders: React.FC<PropsWithChildren> = ({ children }) => (
@@ -12,7 +13,9 @@ export const AppProviders: React.FC<PropsWithChildren> = ({ children }) => (
       <FinancePrivacyProvider>
         <ChatbotPermissionsProvider>
           <NotificationProvider>
-            <OnboardingProvider>{children}</OnboardingProvider>
+            <TelemetryProvider>
+              <OnboardingProvider>{children}</OnboardingProvider>
+            </TelemetryProvider>
           </NotificationProvider>
         </ChatbotPermissionsProvider>
       </FinancePrivacyProvider>

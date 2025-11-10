@@ -503,25 +503,37 @@ async function updateVendorAccountNumbers(client, options, credentials, discover
   );
 }
 
-async function updateVendorBalance(client, options, account) {
+async function updateVendorBalance(client, options, credentials, account, logger = console) {
   if (account.balance === undefined || account.balance === null) {
+    logger?.debug?.(`No balance found for account ${account.accountNumber || 'unknown'}`);
     return;
   }
 
-  await client.query(
+  logger?.info?.(`Captured balance for ${options.companyId}: ₪${account.balance} (account: ${account.accountNumber || 'N/A'})`);
+
+  // Match by credential ID (primary key) for reliability
+  // If account number exists, also match it for multi-account support
+  const result = await client.query(
     `UPDATE vendor_credentials
         SET current_balance = $1,
             balance_updated_at = CURRENT_TIMESTAMP,
             last_scrape_success = CURRENT_TIMESTAMP,
             last_scrape_status = 'success'
       WHERE vendor = $2
+        AND id = $3
         AND (
-          bank_account_number = $3 OR
-          card6_digits = $3 OR
-          $3 IS NULL
+          $4 IS NULL OR
+          bank_account_number = $4 OR
+          card6_digits = $4
         )`,
-    [account.balance, options.companyId, account.accountNumber || null],
+    [account.balance, options.companyId, credentials.id, account.accountNumber || null],
   );
+
+  if (result.rowCount > 0) {
+    logger?.info?.(`✓ Balance updated successfully for credential ID ${credentials.id}`);
+  } else {
+    logger?.warn?.(`✗ Balance update failed - no matching credential found (vendor: ${options.companyId}, credID: ${credentials.id}, account: ${account.accountNumber || 'N/A'})`);
+  }
 }
 
 async function processScrapeResult(client, { options, credentials, result, isBank, logger = console }) {
@@ -534,7 +546,7 @@ async function processScrapeResult(client, { options, credentials, result, isBan
     }
 
     try {
-      await updateVendorBalance(client, options, account);
+      await updateVendorBalance(client, options, credentials, account, logger);
     } catch (balanceError) {
       logger?.error?.(`Failed to update balance for ${account.accountNumber}:`, balanceError);
     }

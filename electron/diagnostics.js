@@ -3,13 +3,27 @@ const os = require('os');
 const { shell } = require('electron');
 const { getLogDirectory, getLogFilePath, readRecentLogs } = require('./logger');
 
-function getDiagnosticsInfo({ appVersion }) {
+function summarizeTelemetry(telemetry = null) {
+  if (!telemetry) {
+    return null;
+  }
+  return {
+    status: telemetry.enabled ? 'opted-in' : 'opted-out',
+    destination: telemetry.dsnHost || null,
+    initialized: Boolean(telemetry.initialized),
+    debug: Boolean(telemetry.debug),
+  };
+}
+
+function getDiagnosticsInfo({ appVersion, telemetry } = {}) {
   return {
     success: true,
     logDirectory: getLogDirectory(),
     logFile: getLogFilePath(),
     appVersion,
     platform: process.platform,
+    telemetry,
+    telemetrySummary: summarizeTelemetry(telemetry),
   };
 }
 
@@ -27,7 +41,7 @@ async function openDiagnosticsLogDirectory() {
   }
 }
 
-async function buildDiagnosticsPayload({ appVersion } = {}) {
+async function buildDiagnosticsPayload({ appVersion, telemetry } = {}) {
   return {
     generatedAt: new Date().toISOString(),
     platform: process.platform,
@@ -37,6 +51,8 @@ async function buildDiagnosticsPayload({ appVersion } = {}) {
     versions: process.versions,
     logDirectory: getLogDirectory(),
     logTail: await readRecentLogs(),
+    telemetry,
+    telemetrySummary: summarizeTelemetry(telemetry),
   };
 }
 

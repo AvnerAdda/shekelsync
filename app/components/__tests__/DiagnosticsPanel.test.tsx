@@ -51,6 +51,7 @@ describe('DiagnosticsPanel', () => {
       logDirectory: '/tmp/logs',
       appVersion: '0.3.0',
       platform: 'linux',
+      telemetry: { enabled: true, dsnConfigured: true, dsnHost: 'ingest.us.sentry.io' },
     });
     window.electronAPI = buildElectronApi({
       diagnostics: { getInfo },
@@ -62,6 +63,9 @@ describe('DiagnosticsPanel', () => {
     expect(screen.getByText('/tmp/logs')).toBeInTheDocument();
     expect(screen.getByText(/version: 0\.3\.0/i)).toBeInTheDocument();
     expect(screen.getByText(/platform: linux/i)).toBeInTheDocument();
+    expect(screen.getByText(/crash reporting status/i)).toBeInTheDocument();
+    expect(screen.getByText(/opted in/i)).toBeInTheDocument();
+    expect(screen.getByText(/ingest\.us\.sentry\.io/i)).toBeInTheDocument();
   });
 
   it('invokes open log directory handler and shows success state', async () => {
@@ -99,6 +103,6 @@ describe('DiagnosticsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /export diagnostics/i }));
 
     await waitFor(() => expect(showSaveDialog).toHaveBeenCalledTimes(1));
-    expect(exportDiagnostics).toHaveBeenCalledWith('/tmp/diag.json');
+    await waitFor(() => expect(exportDiagnostics).toHaveBeenCalledWith('/tmp/diag.json'));
   });
 });

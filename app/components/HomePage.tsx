@@ -53,6 +53,13 @@ interface DashboardData {
     income: number;
     expenses: number;
   }>;
+  wealthTrajectory?: Array<{
+    date: string;
+    balance: number;
+    income: number;
+    expenses: number;
+    netFlow: number;
+  }>;
   breakdowns: {
     byCategory: Array<{ category: string; total: number; count: number }>;
     byVendor: Array<{ vendor: string; total: number; count: number }>;
@@ -251,41 +258,86 @@ const HomePage: React.FC = () => {
   };
 
   // Calculate cumulative balance data for wealth trajectory view
-  const calculateCumulativeData = useCallback((history: any[]) => {
+  const calculateCumulativeData = useCallback((
+    history: any[],
+    initialBankBalance: number = 0,
+    lastSyncDate: string | null = null,
+    wealthTrajectory?: any[]
+  ) => {
     if (!history || history.length === 0) return [];
 
-    let runningBalance = 0;
-    const cumulative = history.map((item) => {
-      runningBalance += item.income - item.expenses;
-      return {
-        date: item.date,
-        balance: runningBalance,
-        income: item.income,
-        expenses: item.expenses,
-        netFlow: item.income - item.expenses,
-        savingsRate: item.income > 0 ? ((item.income - item.expenses) / item.income) * 100 : 0,
-      };
-    });
+    // Use backend's wealth trajectory if available (computed backwards from current balance)
+    let cumulative: any[];
+    if (wealthTrajectory && wealthTrajectory.length > 0) {
+      // Backend already computed balances working backwards from current balance
+      cumulative = wealthTrajectory.map((item) => {
+        const itemDate = new Date(item.date);
+        const syncDate = lastSyncDate ? new Date(lastSyncDate) : null;
+        const isHistorical = !syncDate || itemDate <= syncDate;
 
-    // Simple linear projection for next 3 periods
-    if (cumulative.length >= 3) {
-      const lastThree = cumulative.slice(-3);
-      const avgDailyChange = lastThree.reduce((sum, item) => sum + item.netFlow, 0) / 3;
+        return {
+          date: item.date,
+          balance: item.balance,
+          income: item.income,
+          expenses: item.expenses,
+          netFlow: item.netFlow,
+          savingsRate: item.income > 0 ? ((item.income - item.expenses) / item.income) * 100 : 0,
+          isHistorical,
+        };
+      });
+    } else {
+      // Fallback: old method (forward computation from initial balance)
+      let runningBalance = initialBankBalance;
+      cumulative = history.map((item) => {
+        runningBalance += item.income - item.expenses;
+        const itemDate = new Date(item.date);
+        const syncDate = lastSyncDate ? new Date(lastSyncDate) : null;
+        const isHistorical = !syncDate || itemDate <= syncDate;
 
-      // Add projection points
-      const projections = [];
-      for (let i = 1; i <= 3; i++) {
-        const lastDate = new Date(cumulative[cumulative.length - 1].date);
-        lastDate.setDate(lastDate.getDate() + (aggregationPeriod === 'daily' ? i : aggregationPeriod === 'weekly' ? i * 7 : i * 30));
+        return {
+          date: item.date,
+          balance: runningBalance,
+          income: item.income,
+          expenses: item.expenses,
+          netFlow: item.income - item.expenses,
+          savingsRate: item.income > 0 ? ((item.income - item.expenses) / item.income) * 100 : 0,
+          isHistorical,
+        };
+      });
+    }
 
-        projections.push({
-          date: format(lastDate, 'yyyy-MM-dd'),
-          projectedBalance: runningBalance + (avgDailyChange * i),
-          isProjection: true,
-        });
+    // Find the last historical data point
+    const lastHistoricalIndex = cumulative.findIndex(item => !item.isHistorical);
+    const lastHistorical = lastHistoricalIndex > 0 ? cumulative[lastHistoricalIndex - 1] : cumulative[cumulative.length - 1];
+
+    // Simple linear projection for future periods (only after last sync)
+    if (cumulative.length >= 3 && lastHistorical) {
+      const historicalData = cumulative.filter(item => item.isHistorical);
+      if (historicalData.length >= 3) {
+        const lastThree = historicalData.slice(-3);
+        const avgDailyChange = lastThree.reduce((sum, item) => sum + item.netFlow, 0) / 3;
+
+        // Calculate projections from last historical point to end of period
+        const lastHistoricalDate = new Date(lastHistorical.date);
+        const endDate = new Date(cumulative[cumulative.length - 1].date);
+        const projections = [];
+
+        let currentBalance = lastHistorical.balance;
+        let currentDate = new Date(lastHistoricalDate);
+        currentDate.setDate(currentDate.getDate() + (aggregationPeriod === 'daily' ? 1 : aggregationPeriod === 'weekly' ? 7 : 30));
+
+        while (currentDate <= endDate) {
+          currentBalance += avgDailyChange;
+          projections.push({
+            date: format(currentDate, 'yyyy-MM-dd'),
+            projectedBalance: currentBalance,
+            isProjection: true,
+          });
+          currentDate.setDate(currentDate.getDate() + (aggregationPeriod === 'daily' ? 1 : aggregationPeriod === 'weekly' ? 7 : 30));
+        }
+
+        return [...cumulative, ...projections];
       }
-
-      return [...cumulative, ...projections];
     }
 
     return cumulative;
@@ -395,7 +447,16 @@ const HomePage: React.FC = () => {
 
       // Calculate cumulative data for wealth trajectory view
       if (result.history && result.history.length > 0) {
-        const cumulative = calculateCumulativeData(result.history);
+        const initialBalance = result.bankBalances?.totalBalance || 0;
+        const lastSync = result.lastSyncDate;
+        console.log(`Wealth Trajectory: Starting balance ₪${initialBalance.toLocaleString()}, Last sync: ${lastSync || 'N/A'}`);
+
+        const cumulative = calculateCumulativeData(
+          result.history,
+          initialBalance,
+          lastSync,
+          result.wealthTrajectory
+        );
         setCumulativeData(cumulative);
 
         // Auto-suggest log scale if income >> expenses
@@ -952,7 +1013,12 @@ const HomePage: React.FC = () => {
         {chartView === 'cumulative' && (
           <Alert severity="info" sx={{ mb: 2 }}>
             <Typography variant="body2">
-              Shows your cumulative wealth trajectory. Dotted lines indicate projected balance based on recent trends.
+              Shows your cumulative wealth trajectory starting from your current bank balance.
+              {data?.bankBalances?.totalBalance && data.bankBalances.totalBalance > 0 && (
+                <> Starting balance: <strong>{formatCurrency(data.bankBalances.totalBalance, { absolute: true })}</strong>.</>
+              )}
+              {' '}Solid line shows actual balance from transactions, dashed line shows projections based on recent spending trends.
+              {' '}The vertical "Last Sync" line separates real data from projections.
             </Typography>
           </Alert>
         )}
@@ -1151,6 +1217,31 @@ const HomePage: React.FC = () => {
               />
               <Legend />
 
+              {/* Mark last sync date - separates historical data from projections */}
+              {(() => {
+                const lastHistoricalPoint = cumulativeData.find(d => d.isHistorical === false);
+                const lastHistoricalIndex = lastHistoricalPoint ? cumulativeData.indexOf(lastHistoricalPoint) - 1 : -1;
+                if (lastHistoricalIndex > 0) {
+                  const lastSyncPoint = cumulativeData[lastHistoricalIndex];
+                  return (
+                    <ReferenceLine
+                      x={lastSyncPoint.date}
+                      stroke={theme.palette.warning.main}
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      label={{
+                        value: 'Last Sync',
+                        position: 'top',
+                        fill: theme.palette.warning.main,
+                        fontSize: 11,
+                        fontWeight: 'bold',
+                      }}
+                    />
+                  );
+                }
+                return null;
+              })()}
+
               {/* Mark positive milestones */}
               {(() => {
                 const milestones = [];
@@ -1198,22 +1289,26 @@ const HomePage: React.FC = () => {
                   />
                 ))}
 
+              {/* Historical balance - solid area chart */}
               <Area
                 type="monotone"
                 dataKey="balance"
                 stroke={theme.palette.primary.main}
                 fill="url(#balanceGradient)"
-                name="Cumulative Balance"
+                name="Actual Balance"
                 strokeWidth={3}
+                connectNulls={false}
               />
+              {/* Projected balance - dashed line */}
               <Line
                 type="monotone"
                 dataKey="projectedBalance"
-                stroke={theme.palette.primary.light}
+                stroke={theme.palette.info.main}
                 strokeDasharray="5 5"
-                name="Projected"
+                name="Projected Balance"
                 strokeWidth={2}
                 dot={false}
+                connectNulls={false}
               />
               <ReferenceLine
                 y={0}

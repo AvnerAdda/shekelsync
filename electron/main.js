@@ -1,6 +1,17 @@
 require('./setup-module-alias');
 
-const { app, BrowserWindow, ipcMain, dialog, shell, session, Tray, Menu, nativeImage } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  shell,
+  session,
+  Tray,
+  Menu,
+  nativeImage,
+  crashReporter,
+} = require('electron');
 const path = require('path');
 const fs = require('fs');
 const {
@@ -65,6 +76,100 @@ if (process.env[MIGRATION_ENV_FLAG] === 'true') {
 const { configManager } = require('./config');
 const { dbManager } = require('./database');
 const sessionStore = require('./session-store');
+const { describeTelemetryState } = require('./telemetry-utils');
+
+const telemetryState = {
+  enabled: false,
+  initialized: false,
+  sentry: null,
+};
+
+process.env.CRASH_REPORTS_ENABLED = 'false';
+
+function initializeTelemetry() {
+  const dsn = process.env.SENTRY_DSN;
+  if (!dsn) {
+    // DSN not configured, skip initialization silently
+    return false;
+  }
+
+  try {
+    crashReporter.start({
+      submitURL: '',
+      productName: app.getName(),
+      companyName: 'ShekelSync',
+      uploadToServer: false,
+      ignoreSystemCrashHandler: true,
+    });
+
+    const sentryModule = (isDev
+      ? requireFromApp('@sentry/electron/main')
+      : require('@sentry/electron/main'));
+    sentryModule.init({
+      dsn,
+      release: app.getVersion(),
+      environment: process.env.NODE_ENV || 'production',
+      debug: process.env.SENTRY_DEBUG === 'true',
+      tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE || '0'),
+      beforeSend(event) {
+        return telemetryState.enabled ? event : null;
+      },
+    });
+
+    telemetryState.sentry = sentryModule;
+    logger.info('Crash reporting initialized (events will only be sent if user enables telemetry)');
+    return true;
+  } catch (error) {
+    logger.warn('Failed to initialize crash reporting', { error: error.message });
+    return false;
+  }
+}
+
+// Initialize Sentry early (before app.ready) if DSN is configured
+// The beforeSend hook will prevent events from being sent unless user enables telemetry
+if (process.env.SENTRY_DSN) {
+  telemetryState.initialized = initializeTelemetry();
+}
+
+async function applyTelemetryPreference(settings = {}) {
+  const nextEnabled = Boolean(settings?.telemetry?.crashReportsEnabled);
+  telemetryState.enabled = nextEnabled;
+  process.env.CRASH_REPORTS_ENABLED = nextEnabled ? 'true' : 'false';
+
+  // If telemetry is now enabled and Sentry hasn't been initialized yet, try to initialize it
+  if (nextEnabled && !telemetryState.initialized) {
+    telemetryState.initialized = initializeTelemetry();
+  }
+
+  // Note: We don't close Sentry when disabled anymore since we initialize early
+  // The beforeSend hook will filter out events when telemetryState.enabled is false
+}
+
+async function loadInitialSettings() {
+  try {
+    const initialSettings = await sessionStore.getSettings();
+    await applyTelemetryPreference(initialSettings);
+  } catch (error) {
+    logger.warn('Failed to load user settings', { error: error.message });
+  }
+}
+
+function getTelemetryDiagnostics() {
+  return describeTelemetryState({
+    enabled: telemetryState.enabled,
+    initialized: telemetryState.initialized,
+  });
+}
+
+function reportException(error) {
+  if (telemetryState.initialized && telemetryState.sentry?.captureException) {
+    try {
+      telemetryState.sentry.captureException(error);
+    } catch (captureError) {
+      logger.warn('Failed to forward exception to telemetry client', { error: captureError.message });
+    }
+  }
+}
 
 // Lazy-loaded services (to avoid loading better-sqlite3 in dev mode)
 let healthService = null;
@@ -280,8 +385,8 @@ async function createWindow() {
     } else {
       process.env.USE_SQLITE = 'true';
       const sqlitePath =
-        config.database.path ||
         process.env.SQLITE_DB_PATH ||
+        config.database.path ||
         path.join(app.getPath('userData'), 'clarify.sqlite');
       process.env.SQLITE_DB_PATH = sqlitePath;
       config.database.path = sqlitePath;
@@ -392,6 +497,7 @@ async function createWindow() {
       nodeIntegration: false, // Security: disable node integration
       contextIsolation: true, // Security: enable context isolation
       enableRemoteModule: false, // Security: disable remote module
+      sandbox: true, // Security: enable sandbox mode
       preload: path.join(__dirname, 'preload.js'), // Load preload script
       webSecurity: true,
       // Performance optimizations
@@ -511,8 +617,9 @@ async function createWindow() {
 }
 
 // App event handlers
-app.whenReady().then(() => {
-  createWindow();
+app.whenReady().then(async () => {
+  await loadInitialSettings();
+  await createWindow();
   setupTray();
 
   // Auto-updater setup (production only)
@@ -600,7 +707,10 @@ ipcMain.on('log:report', (event, payload) => {
 });
 
 ipcMain.handle('diagnostics:getInfo', async () => {
-  return getDiagnosticsInfo({ appVersion: app.getVersion() });
+  return getDiagnosticsInfo({
+    appVersion: app.getVersion(),
+    telemetry: getTelemetryDiagnostics(),
+  });
 });
 
 ipcMain.handle('diagnostics:openLogDirectory', async () => {
@@ -611,7 +721,10 @@ ipcMain.handle('diagnostics:export', async (_event, outputPath) => {
   if (!outputPath) {
     return { success: false, error: 'No destination selected' };
   }
-  return exportDiagnosticsToFile(outputPath, { appVersion: app.getVersion() });
+  return exportDiagnosticsToFile(outputPath, {
+    appVersion: app.getVersion(),
+    telemetry: getTelemetryDiagnostics(),
+  });
 });
 
 // Database operations
@@ -947,6 +1060,51 @@ ipcMain.handle('api:request', async (event, { method, endpoint, data, headers = 
   }
 });
 
+ipcMain.handle('settings:get', async () => {
+  try {
+    const settings = await sessionStore.getSettings();
+    return { success: true, settings };
+  } catch (error) {
+    logger.error('Failed to load application settings', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('settings:update', async (event, patch = {}) => {
+  try {
+    const updated = await sessionStore.updateSettings(patch);
+    await applyTelemetryPreference(updated);
+    BrowserWindow.getAllWindows().forEach((win) => {
+      win.webContents.send('settings:changed', updated);
+    });
+    return { success: true, settings: updated };
+  } catch (error) {
+    logger.error('Failed to update application settings', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('telemetry:getConfig', () => ({
+  dsn: process.env.SENTRY_DSN || null,
+  environment: process.env.NODE_ENV || 'production',
+  release: app.getVersion(),
+  debug: process.env.SENTRY_DEBUG === 'true',
+  enabled: telemetryState.enabled,
+}));
+
+ipcMain.handle('telemetry:triggerMainSmoke', async () => {
+  if (!telemetryState.sentry || !telemetryState.initialized) {
+    return { success: false, error: 'Crash reporting is disabled.' };
+  }
+  try {
+    reportException(new Error(`Telemetry smoke test (main process) @ ${new Date().toISOString()}`));
+    return { success: true };
+  } catch (error) {
+    logger.warn('Telemetry smoke test failed', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('auth:getSession', async () => {
   try {
     const session = await sessionStore.load();
@@ -1049,6 +1207,7 @@ if (isDev) {
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
   logger.error('Uncaught exception', { error: error.message, stack: error.stack });
+  reportException(error);
   dialog.showErrorBox('Unexpected Error', `An unexpected error occurred: ${error.message}`);
 });
 
@@ -1057,6 +1216,11 @@ process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled rejection', {
     reason: reason instanceof Error ? reason.message : String(reason),
   });
+  if (reason instanceof Error) {
+    reportException(reason);
+  } else {
+    reportException(new Error(String(reason)));
+  }
   dialog.showErrorBox('Unexpected Error', `An unexpected error occurred: ${reason}`);
 });
 

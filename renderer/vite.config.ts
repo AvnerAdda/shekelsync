@@ -27,6 +27,7 @@ export default defineConfig({
       '@emotion/styled': path.resolve(__dirname, '../app/node_modules/@emotion/styled'),
       'date-fns': path.resolve(__dirname, '../app/node_modules/date-fns'),
       '@fontsource/roboto': path.resolve(__dirname, '../app/node_modules/@fontsource/roboto'),
+      '@sentry/electron': path.resolve(__dirname, '../app/node_modules/@sentry/electron'),
     },
     extensions: ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.json'],
   },

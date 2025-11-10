@@ -1,5 +1,16 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+const createRequire = module?.constructor?.createRequire;
+const requireFromApp = createRequire ? createRequire(`${__dirname}/../app/package.json`) : null;
+
+try {
+  if (requireFromApp) {
+    requireFromApp('@sentry/electron/preload');
+  }
+} catch (error) {
+  console.warn('[Preload] Failed to initialize Sentry preload bridge:', error.message);
+}
+
 const sendLog = (level, message, data) => {
   try {
     ipcRenderer.send('log:report', {
@@ -27,6 +38,17 @@ const diagnosticsBridge = Object.freeze({
       throw new Error('Diagnostics export requires a destination path');
     }
     return ipcRenderer.invoke('diagnostics:export', filePath);
+  },
+});
+
+const telemetryBridge = Object.freeze({
+  getConfig: () => ipcRenderer.invoke('telemetry:getConfig'),
+  triggerMainSmoke: () => ipcRenderer.invoke('telemetry:triggerMainSmoke'),
+  triggerRendererSmoke: () => {
+    setTimeout(() => {
+      throw new Error('Telemetry smoke test (renderer process)');
+    }, 0);
+    return Promise.resolve({ success: true });
   },
 });
 
@@ -163,6 +185,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   auth: authBridge,
   log: logBridge,
   diagnostics: diagnosticsBridge,
+  telemetry: telemetryBridge,
 
   // App information
   app: {
