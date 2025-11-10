@@ -11,6 +11,8 @@ import {
   CircularProgress,
   Chip,
   Divider,
+  useTheme,
+  Alert,
 } from '@mui/material';
 import {
   Chat as ChatIcon,
@@ -18,8 +20,10 @@ import {
   Send as SendIcon,
   SmartToy as BotIcon,
   Person as PersonIcon,
+  Lock as LockIcon,
 } from '@mui/icons-material';
 import { apiClient } from '@/lib/api-client';
+import { useChatbotPermissions } from '../contexts/ChatbotPermissionsContext';
 
 interface Message {
   id: string;
@@ -29,18 +33,27 @@ interface Message {
 }
 
 const FinancialChatbot: React.FC = () => {
+  const theme = useTheme();
+  const {
+    chatbotEnabled,
+    allowTransactionAccess,
+    allowCategoryAccess,
+    allowAnalyticsAccess,
+  } = useChatbotPermissions();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
       role: 'assistant',
-      content: 'שלום! 👋 אני העוזר הפינסי החכם שלך. אני יכול לעזור לך להבין את ההוצאות שלך, למצוא דפוסי הוצאה, ולתת המלצות מותאמות אישית. איך אוכל לעזור לך היום?',
+      content: 'Hello! 👋 I\'m your smart financial assistant. I can help you understand your expenses, find spending patterns, and provide personalized recommendations. How can I help you today?',
       timestamp: new Date(),
     },
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const hasAnyPermission = allowTransactionAccess || allowCategoryAccess || allowAnalyticsAccess;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -51,7 +64,7 @@ const FinancialChatbot: React.FC = () => {
   }, [messages]);
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return;
+    if (!inputValue.trim() || isLoading || !hasAnyPermission) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -68,6 +81,11 @@ const FinancialChatbot: React.FC = () => {
       const response = await apiClient.post('/api/chat', {
         message: inputValue,
         conversationHistory: messages,
+        permissions: {
+          allowTransactionAccess,
+          allowCategoryAccess,
+          allowAnalyticsAccess,
+        },
       });
 
       if (!response.ok) {
@@ -89,7 +107,7 @@ const FinancialChatbot: React.FC = () => {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'מצטער, נתקלתי בבעיה. אנא נסה שוב.',
+        content: 'Sorry, I encountered an issue. Please try again.',
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -106,11 +124,16 @@ const FinancialChatbot: React.FC = () => {
   };
 
   const suggestedQuestions = [
-    'כמה הוצאתי החודש?',
-    'מה הקטגוריה שהוצאתי בה הכי הרבה?',
-    'תן לי המלצות לחיסכון',
-    'האם יש הוצאות חריגות?',
+    'How much did I spend this month?',
+    'What category did I spend the most on?',
+    'Give me savings recommendations',
+    'Are there any unusual expenses?',
   ];
+
+  // Don't render if chatbot is disabled
+  if (!chatbotEnabled) {
+    return null;
+  }
 
   return (
     <>
@@ -122,7 +145,7 @@ const FinancialChatbot: React.FC = () => {
           position: 'fixed',
           bottom: 24,
           right: 24,
-          zIndex: 1000,
+          zIndex: (muiTheme) => muiTheme.zIndex.drawer + 2,
           boxShadow: 3,
         }}
         onClick={() => setIsOpen(true)}
@@ -140,15 +163,21 @@ const FinancialChatbot: React.FC = () => {
             width: { xs: '100%', sm: 400 },
             display: 'flex',
             flexDirection: 'column',
+            zIndex: (muiTheme) => muiTheme.zIndex.drawer + 2,
           },
+        }}
+        sx={{
+          zIndex: (muiTheme) => muiTheme.zIndex.drawer + 2,
         }}
       >
         {/* Header */}
         <Box
           sx={{
             p: 2,
-            background: 'linear-gradient(135deg, #c8facf 0%, #78e88b 100%)',
-            color: '#000000',
+            background: theme.palette.mode === 'dark'
+              ? 'linear-gradient(135deg, rgba(62,165,77,0.3) 0%, rgba(200,250,207,0.2) 100%)'
+              : 'linear-gradient(135deg, #c8facf 0%, #78e88b 100%)',
+            color: theme.palette.mode === 'dark' ? theme.palette.text.primary : '#000000',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -158,12 +187,17 @@ const FinancialChatbot: React.FC = () => {
             <BotIcon />
             <Box>
               <Typography variant="h6" fontWeight="bold">
-                עוזר פיננסי
+                Financial Assistant
               </Typography>
-              <Typography variant="caption">מופעל בבינה מלאכותית</Typography>
+              <Typography variant="caption">AI-Powered</Typography>
             </Box>
           </Box>
-          <IconButton onClick={() => setIsOpen(false)} sx={{ color: 'white' }}>
+          <IconButton
+            onClick={() => setIsOpen(false)}
+            sx={{
+              color: theme.palette.mode === 'dark' ? theme.palette.text.primary : '#000000',
+            }}
+          >
             <CloseIcon />
           </IconButton>
         </Box>
@@ -174,7 +208,7 @@ const FinancialChatbot: React.FC = () => {
             flex: 1,
             overflowY: 'auto',
             p: 2,
-            bgcolor: '#f5f5f5',
+            bgcolor: theme.palette.mode === 'dark' ? theme.palette.background.default : '#f5f5f5',
             display: 'flex',
             flexDirection: 'column',
             gap: 2,
@@ -199,8 +233,16 @@ const FinancialChatbot: React.FC = () => {
                 sx={{
                   p: 2,
                   maxWidth: '75%',
-                  bgcolor: message.role === 'user' ? 'primary.main' : 'white',
-                  color: message.role === 'user' ? 'white' : 'text.primary',
+                  bgcolor: message.role === 'user'
+                    ? 'primary.main'
+                    : theme.palette.mode === 'dark'
+                      ? theme.palette.background.paper
+                      : 'white',
+                  color: message.role === 'user'
+                    ? theme.palette.mode === 'dark'
+                      ? theme.palette.text.primary
+                      : '#000000'
+                    : theme.palette.text.primary,
                   borderRadius: 2,
                   boxShadow: 1,
                 }}
@@ -236,7 +278,15 @@ const FinancialChatbot: React.FC = () => {
               <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
                 <BotIcon fontSize="small" />
               </Avatar>
-              <Paper sx={{ p: 2, borderRadius: 2 }}>
+              <Paper
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: theme.palette.mode === 'dark'
+                    ? theme.palette.background.paper
+                    : 'white',
+                }}
+              >
                 <CircularProgress size={20} />
               </Paper>
             </Box>
@@ -245,11 +295,28 @@ const FinancialChatbot: React.FC = () => {
           <div ref={messagesEndRef} />
         </Box>
 
+        {/* No Permissions Warning */}
+        {!hasAnyPermission && (
+          <Alert severity="warning" icon={<LockIcon />} sx={{ mx: 2 }}>
+            <Typography variant="body2" fontWeight="bold">
+              Limited Access
+            </Typography>
+            <Typography variant="caption">
+              Enable data permissions in Settings to use the chatbot features.
+            </Typography>
+          </Alert>
+        )}
+
         {/* Suggested Questions */}
-        {messages.length === 1 && (
-          <Box sx={{ p: 2, bgcolor: '#f5f5f5' }}>
+        {messages.length === 1 && hasAnyPermission && (
+          <Box
+            sx={{
+              p: 2,
+              bgcolor: theme.palette.mode === 'dark' ? theme.palette.background.default : '#f5f5f5',
+            }}
+          >
             <Typography variant="caption" color="text.secondary" gutterBottom>
-              שאלות מוצעות:
+              Suggested questions:
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
               {suggestedQuestions.map((question, idx) => (
@@ -268,17 +335,22 @@ const FinancialChatbot: React.FC = () => {
         <Divider />
 
         {/* Input Area */}
-        <Box sx={{ p: 2, bgcolor: 'white' }}>
+        <Box
+          sx={{
+            p: 2,
+            bgcolor: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'white',
+          }}
+        >
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
             <TextField
               fullWidth
               multiline
               maxRows={3}
-              placeholder="שאל אותי משהו..."
+              placeholder={hasAnyPermission ? 'Ask me something...' : 'Enable permissions in Settings'}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
-              disabled={isLoading}
+              disabled={isLoading || !hasAnyPermission}
               size="small"
               sx={{
                 '& .MuiOutlinedInput-root': {
@@ -289,10 +361,10 @@ const FinancialChatbot: React.FC = () => {
             <IconButton
               color="primary"
               onClick={handleSendMessage}
-              disabled={!inputValue.trim() || isLoading}
+              disabled={!inputValue.trim() || isLoading || !hasAnyPermission}
               sx={{
                 bgcolor: 'primary.main',
-                color: 'white',
+                color: theme.palette.mode === 'dark' ? theme.palette.text.primary : '#000000',
                 '&:hover': { bgcolor: 'primary.dark' },
                 '&.Mui-disabled': { bgcolor: 'action.disabledBackground' },
               }}
@@ -300,9 +372,16 @@ const FinancialChatbot: React.FC = () => {
               <SendIcon />
             </IconButton>
           </Box>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-            💡 העוזר מנתח את כל העסקאות וההכנסות שלך
-          </Typography>
+          {hasAnyPermission && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              💡 The assistant analyzes your transactions and income
+            </Typography>
+          )}
+          {!hasAnyPermission && (
+            <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 1 }}>
+              🔒 Grant data access permissions in Settings to use this feature
+            </Typography>
+          )}
         </Box>
       </Drawer>
     </>

@@ -32,9 +32,12 @@ import {
   AttachMoney as MoneyIcon,
   VisibilityOff as MaskIcon,
   FormatSize as TextSizeIcon,
+  SmartToy as ChatbotIcon,
+  Security as SecurityIcon,
 } from '@mui/icons-material';
 import { useThemeMode } from '../contexts/ThemeContext';
 import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { useChatbotPermissions } from '../contexts/ChatbotPermissionsContext';
 import DataExportPanel from './DataExportPanel';
 import DiagnosticsPanel from './DiagnosticsPanel';
 import EnhancedProfileSection from './EnhancedProfileSection';
@@ -43,6 +46,16 @@ const SettingsPage: React.FC = () => {
   const { mode, setMode, fontSize, setFontSize } = useThemeMode();
   const theme = useTheme();
   const { maskAmounts, setMaskAmounts } = useFinancePrivacy();
+  const {
+    chatbotEnabled,
+    setChatbotEnabled,
+    allowTransactionAccess,
+    setAllowTransactionAccess,
+    allowCategoryAccess,
+    setAllowCategoryAccess,
+    allowAnalyticsAccess,
+    setAllowAnalyticsAccess,
+  } = useChatbotPermissions();
 
   return (
     <Box sx={{ pb: 10, maxWidth: 900, mx: 'auto' }}>
@@ -141,6 +154,140 @@ const SettingsPage: React.FC = () => {
       <Box sx={{ mb: 4 }}>
         <DataExportPanel />
       </Box>
+
+      <Divider sx={{ my: 4 }} />
+
+      {/* AI Chatbot Settings */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+          <ChatbotIcon color="primary" />
+          <Typography variant="h6">AI Chatbot Settings</Typography>
+        </Box>
+
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Configure your AI financial assistant and control what data it can access.
+          The chatbot never has access to your bank credentials or passwords.
+        </Typography>
+
+        <Box sx={{ mb: 3 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={chatbotEnabled}
+                onChange={(event) => setChatbotEnabled(event.target.checked)}
+                color="primary"
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2" fontWeight="bold">
+                  Enable AI Chatbot
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Show the chatbot button and allow AI assistant interactions
+                </Typography>
+              </Box>
+            }
+          />
+        </Box>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2 }}>
+          Data Access Permissions
+        </Typography>
+
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Grant the chatbot access to specific data to enable personalized insights.
+          {!chatbotEnabled && ' (Enable chatbot first to configure permissions)'}
+        </Typography>
+
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={allowTransactionAccess}
+                onChange={(event) => setAllowTransactionAccess(event.target.checked)}
+                color="primary"
+                disabled={!chatbotEnabled}
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2" fontWeight="bold">
+                  Transaction Data
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Allow access to transaction history, amounts, dates, and descriptions
+                </Typography>
+              </Box>
+            }
+          />
+
+          <FormControlLabel
+            control={
+              <Switch
+                checked={allowCategoryAccess}
+                onChange={(event) => setAllowCategoryAccess(event.target.checked)}
+                color="primary"
+                disabled={!chatbotEnabled}
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2" fontWeight="bold">
+                  Category Data
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Allow access to spending categories and categorization rules
+                </Typography>
+              </Box>
+            }
+          />
+
+          <FormControlLabel
+            control={
+              <Switch
+                checked={allowAnalyticsAccess}
+                onChange={(event) => setAllowAnalyticsAccess(event.target.checked)}
+                color="primary"
+                disabled={!chatbotEnabled}
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2" fontWeight="bold">
+                  Analytics & Insights
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Allow access to behavioral analytics, trends, and spending patterns
+                </Typography>
+              </Box>
+            }
+          />
+        </Box>
+
+        <Alert severity="info" icon={<SecurityIcon />}>
+          <Typography variant="body2" fontWeight="bold" gutterBottom>
+            Your Privacy is Protected
+          </Typography>
+          <Typography variant="caption">
+            • The chatbot NEVER has access to your bank credentials or passwords<br />
+            • All permissions can be revoked at any time<br />
+            • Data is only used to answer your questions and provide insights<br />
+            • No data is shared with third parties
+          </Typography>
+        </Alert>
+
+        {chatbotEnabled && !allowTransactionAccess && !allowCategoryAccess && !allowAnalyticsAccess && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            <Typography variant="body2">
+              The chatbot is enabled but has no data access permissions.
+              Grant at least one permission for the chatbot to provide useful insights.
+            </Typography>
+          </Alert>
+        )}
+      </Paper>
 
       <Divider sx={{ my: 4 }} />
 
