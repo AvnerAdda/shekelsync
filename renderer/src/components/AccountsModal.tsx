@@ -60,13 +60,13 @@ import {
   OTHER_BANK_VENDORS,
   ACCOUNT_CATEGORIES,
   INVESTMENT_ACCOUNT_TYPES
-} from '../utils/constants';
-import type { AccountCategory } from '../utils/constants';
-import { formatDate } from '../utils/date';
+} from '@app/utils/constants';
+import type { AccountCategory } from '@app/utils/constants';
+import { formatDate } from '@app/utils/date';
 import { useNotification } from './NotificationContext';
 import ModalHeader from './ModalHeader';
-import { useOnboarding } from '../contexts/OnboardingContext';
-import { calculateSimilarity } from '../utils/account-matcher';
+import { useOnboarding } from '@app/contexts/OnboardingContext';
+import { calculateSimilarity } from '@app/utils/account-matcher';
 import { apiClient } from '@/lib/api-client';
 
 export interface Account {

@@ -1,10 +1,10 @@
 import { createHashRouter } from 'react-router-dom';
 import AppLayout, { AppLayoutContext } from './routes/AppLayout';
-import HomePage from '@app/components/HomePage';
-import AnalysisPage from '@app/components/AnalysisPage';
-import InvestmentsPage from '@app/components/InvestmentsPage';
-import BudgetsPage from '@app/components/BudgetsPage';
-import SettingsPage from '@app/components/SettingsPage';
+import HomePage from '@renderer/components/HomePage';
+import AnalysisPage from '@renderer/components/AnalysisPage';
+import InvestmentsPage from '@renderer/components/InvestmentsPage';
+import BudgetsPage from '@renderer/components/BudgetsPage';
+import SettingsPage from '@renderer/components/SettingsPage';
 import { useOutletContext } from 'react-router-dom';
 
 type OutletContext = AppLayoutContext;

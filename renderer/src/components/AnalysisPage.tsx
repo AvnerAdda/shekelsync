@@ -45,8 +45,8 @@ import {
 } from '@mui/icons-material';
 import { BarChart } from '@mui/x-charts/BarChart';
 import { SparkLineChart } from '@mui/x-charts/SparkLineChart';
-import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
-import { useOnboarding } from '../contexts/OnboardingContext';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
+import { useOnboarding } from '@app/contexts/OnboardingContext';
 import LockedPagePlaceholder from './EmptyState/LockedPagePlaceholder';
 import ActionabilitySetupModal from './AnalysisPage/ActionabilitySetupModal';
 import RecurringTransactionManager from './AnalysisPage/RecurringTransactionManager';

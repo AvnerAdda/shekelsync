@@ -6,6 +6,10 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
     globals: true,
+    include: [
+      '**/*.{test,spec}.{js,ts,jsx,tsx}',
+      '../renderer/src/components/__tests__/**/*.{test,spec}.{js,ts,jsx,tsx}',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
@@ -18,6 +22,9 @@ export default defineConfig({
       '@renderer': path.resolve(__dirname, '../renderer/src'),
       '@mui/material': path.resolve(__dirname, 'node_modules/@mui/material'),
       '@mui/icons-material': path.resolve(__dirname, 'node_modules/@mui/icons-material'),
+      '@testing-library/react': path.resolve(__dirname, 'node_modules/@testing-library/react'),
+      '@testing-library/jest-dom': path.resolve(__dirname, 'node_modules/@testing-library/jest-dom'),
+      'date-fns': path.resolve(__dirname, 'node_modules/date-fns'),
       react: path.resolve(__dirname, 'node_modules/react'),
       'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
       'react-router-dom': path.resolve(__dirname, 'node_modules/react-router-dom'),

@@ -36,7 +36,7 @@ import {
   Lightbulb as LightbulbIcon,
   Info as InfoIcon,
 } from '@mui/icons-material';
-import { useFinancePrivacy } from '../../contexts/FinancePrivacyContext';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { apiClient } from '@/lib/api-client';
 
 interface RecurringPattern {

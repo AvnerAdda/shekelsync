@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useOnboarding } from '../contexts/OnboardingContext';
+import { useOnboarding } from '@app/contexts/OnboardingContext';
 import LockedPagePlaceholder from './EmptyState/LockedPagePlaceholder';
 import {
   Box,
@@ -53,7 +53,7 @@ import {
   Analytics as AnalyticsIcon,
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
-import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import InvestmentAccountsModal from './InvestmentAccountsModal';
 import { apiClient } from '@/lib/api-client';
 

@@ -166,7 +166,7 @@ interface TransactionAssignment {
 interface CategoryHierarchyModalProps {
   open: boolean;
   onClose: () => void;
-  onCategoriesUpdated: () => void;
+  onCategoriesUpdated?: () => void;
 }
 
 // Icon mapping for dynamic icon rendering
@@ -214,7 +214,7 @@ const ICON_MAP: Record<string, React.ComponentType<any>> = {
 const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   open,
   onClose,
-  onCategoriesUpdated,
+  onCategoriesUpdated = () => {},
 }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);

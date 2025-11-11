@@ -40,8 +40,8 @@ import AccountsModal from './AccountsModal';
 import ScrapeModal from './ScrapeModal';
 import CategoryHierarchyModal from './CategoryHierarchyModal';
 import { useNotification } from './NotificationContext';
-import { useOnboarding } from '../contexts/OnboardingContext';
-import { STALE_SYNC_THRESHOLD_MS } from '../utils/constants';
+import { useOnboarding } from '@app/contexts/OnboardingContext';
+import { STALE_SYNC_THRESHOLD_MS } from '@app/utils/constants';
 import { apiClient } from '@/lib/api-client';
 import { useScrapeProgress } from '@/hooks/useScrapeProgress';
 

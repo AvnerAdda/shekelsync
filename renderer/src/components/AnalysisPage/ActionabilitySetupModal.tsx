@@ -36,7 +36,7 @@ import {
   TrendingFlat as MediumIcon,
   TrendingUp as HighIcon,
 } from '@mui/icons-material';
-import { useFinancePrivacy } from '../../contexts/FinancePrivacyContext';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { apiClient } from '@/lib/api-client';
 
 interface Category {
@@ -69,7 +69,7 @@ const ActionabilitySetupModal: React.FC<ActionabilitySetupModalProps> = ({ open,
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('amount');
-  const sortDirection: SortDirection = 'desc';
+  const [sortDirection] = useState<SortDirection>('desc');
   const [searchQuery, setSearchQuery] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
   const { formatCurrency } = useFinancePrivacy();

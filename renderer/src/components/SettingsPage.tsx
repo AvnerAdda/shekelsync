@@ -22,13 +22,13 @@ import {
   Security as SecurityIcon,
   BugReport as BugReportIcon,
 } from '@mui/icons-material';
-import { useThemeMode } from '../contexts/ThemeContext';
-import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
-import { useChatbotPermissions } from '../contexts/ChatbotPermissionsContext';
+import { useThemeMode } from '@app/contexts/ThemeContext';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
+import { useChatbotPermissions } from '@app/contexts/ChatbotPermissionsContext';
 import DataExportPanel from './DataExportPanel';
 import DiagnosticsPanel from './DiagnosticsPanel';
 import EnhancedProfileSection from './EnhancedProfileSection';
-import { useTelemetry } from '../contexts/TelemetryContext';
+import { useTelemetry } from '@app/contexts/TelemetryContext';
 
 const SettingsPage: React.FC = () => {
   const { mode, setMode, fontSize, setFontSize } = useThemeMode();

@@ -4,8 +4,8 @@ import {
   Box,
   useTheme,
 } from '@mui/material';
-import Sidebar from '@app/components/Sidebar';
-import FinancialChatbot from '@app/components/FinancialChatbot';
+import Sidebar from '@renderer/components/Sidebar';
+import FinancialChatbot from '@renderer/components/FinancialChatbot';
 import TitleBar from '../components/TitleBar';
 import { useAuth } from '@app/contexts/AuthContext';
 

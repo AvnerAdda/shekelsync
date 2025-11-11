@@ -28,8 +28,8 @@ import {
   Warning as WarningIcon,
   CheckCircle as CheckIcon,
 } from '@mui/icons-material';
-import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
-import { useOnboarding } from '../contexts/OnboardingContext';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
+import { useOnboarding } from '@app/contexts/OnboardingContext';
 import LockedPagePlaceholder from './EmptyState/LockedPagePlaceholder';
 import { apiClient } from '@/lib/api-client';
 

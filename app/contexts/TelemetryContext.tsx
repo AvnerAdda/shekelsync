@@ -64,9 +64,16 @@ export const TelemetryProvider: React.FC<PropsWithChildren> = ({ children }) => 
     })();
 
     window.electronAPI?.telemetry?.getConfig?.().then((cfg) => {
-      if (!cancelled && cfg) {
-        setConfig(cfg);
+      if (cancelled || !cfg) {
+        return;
       }
+
+      setConfig({
+        dsn: cfg.dsn ?? null,
+        environment: cfg.environment,
+        release: cfg.release,
+        debug: cfg.debug,
+      });
     });
 
     const unsubscribe = window.electronAPI?.settings?.onChange?.((nextSettings) => {
