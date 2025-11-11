@@ -74,8 +74,8 @@ interface CandidateTransaction {
 interface AccountPairingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  creditCardAccounts: Account[];
-  bankAccounts: Account[];
+  creditCardAccounts?: Account[];
+  bankAccounts?: Account[];
 }
 
 interface PairingStats {
@@ -135,8 +135,8 @@ const steps = ['Select Accounts', 'Review Transactions', 'Confirm'];
 export default function AccountPairingModal({
   isOpen,
   onClose,
-  creditCardAccounts,
-  bankAccounts
+  creditCardAccounts = [],
+  bankAccounts = [],
 }: AccountPairingModalProps) {
   const [activeStep, setActiveStep] = useState(0);
   const [selectedCreditCard, setSelectedCreditCard] = useState<Account | null>(null);

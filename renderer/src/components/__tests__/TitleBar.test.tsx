@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentProps } from 'react';
 import TitleBar from '@renderer/components/TitleBar';
 
-vi.mock('@app/components/SmartNotifications', () => ({
+vi.mock('@renderer/components/SmartNotifications', () => ({
   __esModule: true,
   default: () => <div data-testid="smart-notifications" />,
 }));

@@ -51,7 +51,7 @@ import {
   Category as CategoryOutlined,
 } from '@mui/icons-material';
 import * as MuiIcons from '@mui/icons-material';
-import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { apiClient } from '@/lib/api-client';
 
 // Helper component to render Material-UI icon dynamically from icon name string

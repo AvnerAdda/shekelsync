@@ -46,7 +46,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import logoUrl from '@app/public/logo.svg?url';
-import SmartNotifications from '@app/components/SmartNotifications';
+import SmartNotifications from './SmartNotifications';
 
 interface TitleBarProps {
   sessionDisplayName?: string | null;

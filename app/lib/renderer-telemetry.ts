@@ -5,19 +5,31 @@ type TelemetryConfig = {
   debug?: boolean;
 };
 
-let rendererTelemetryInitialized = false;
-let pendingInitialization: Promise<void> | null = null;
-let rendererSentry: { close?: () => PromiseLike<boolean> | boolean } | null = null;
+type RendererSentryModule = typeof import('@sentry/electron/renderer') & {
+  close?: () => PromiseLike<boolean> | boolean;
+};
 
-async function loadRendererSentry() {
+let rendererTelemetryInitialized = false;
+let pendingInitialization: Promise<RendererSentryModule> | null = null;
+let rendererSentry: RendererSentryModule | null = null;
+
+async function loadRendererSentry(): Promise<RendererSentryModule> {
+  if (rendererSentry) {
+    return rendererSentry;
+  }
+
   if (!pendingInitialization) {
     pendingInitialization = import('@sentry/electron/renderer').then((module) => {
       rendererSentry = module;
+      return module;
     });
   }
-  await pendingInitialization;
-  pendingInitialization = null;
-  return rendererSentry;
+
+  try {
+    return await pendingInitialization;
+  } finally {
+    pendingInitialization = null;
+  }
 }
 
 export async function syncRendererTelemetry(enabled: boolean, config: TelemetryConfig | null) {

@@ -20,7 +20,7 @@ import {
   CloudDownload as CloudDownloadIcon,
   Explore as ExploreIcon
 } from '@mui/icons-material';
-import { useOnboarding } from '../../contexts/OnboardingContext';
+import { useOnboarding } from '@app/contexts/OnboardingContext';
 
 interface OnboardingChecklistProps {
   onProfileClick?: () => void;

@@ -2,7 +2,7 @@ import { ThemeContextProvider } from '@app/contexts/ThemeContext';
 import { AuthProvider } from '@app/contexts/AuthContext';
 import { FinancePrivacyProvider } from '@app/contexts/FinancePrivacyContext';
 import { ChatbotPermissionsProvider } from '@app/contexts/ChatbotPermissionsContext';
-import { NotificationProvider } from '@app/components/NotificationContext';
+import { NotificationProvider } from '@renderer/components/NotificationContext';
 import { OnboardingProvider } from '@app/contexts/OnboardingContext';
 import { TelemetryProvider } from '@app/contexts/TelemetryContext';
 import type { PropsWithChildren } from 'react';

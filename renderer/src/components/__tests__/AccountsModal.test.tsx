@@ -5,7 +5,7 @@ import {
   buildInitialSyncPayload,
   type Account,
 } from '../AccountsModal';
-import { SPECIAL_BANK_VENDORS } from '../../utils/constants';
+import { SPECIAL_BANK_VENDORS } from '@app/utils/constants';
 
 const baseAccount: Account = {
   id: 0,

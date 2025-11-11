@@ -35,11 +35,24 @@ declare global {
     error?: string;
   }
 
+  interface ElectronTelemetryPreferences {
+    crashReportsEnabled?: boolean;
+    lastUpdatedAt?: string | null;
+  }
+
+  interface ElectronAppSettings {
+    telemetry?: ElectronTelemetryPreferences;
+    [key: string]: unknown;
+  }
+
   interface ElectronWindowControls {
     minimize?: () => Promise<void>;
     maximize?: () => Promise<void>;
     close?: () => Promise<void>;
     isMaximized?: () => Promise<boolean>;
+    zoomIn?: () => Promise<void>;
+    zoomOut?: () => Promise<void>;
+    zoomReset?: () => Promise<void>;
   }
 
   interface ElectronDbApi {
@@ -165,11 +178,11 @@ declare global {
   }
 
   interface ElectronSettingsApi {
-    get?: () => Promise<{ success: boolean; settings?: Record<string, unknown>; error?: string }>;
+    get?: () => Promise<{ success: boolean; settings?: ElectronAppSettings; error?: string }>;
     update?: (
-      patch: Record<string, unknown>,
-    ) => Promise<{ success: boolean; settings?: Record<string, unknown>; error?: string }>;
-    onChange?: (callback: (settings: Record<string, unknown>) => void) => ElectronEventUnsubscribe | void;
+      patch: Partial<ElectronAppSettings>,
+    ) => Promise<{ success: boolean; settings?: ElectronAppSettings; error?: string }>;
+    onChange?: (callback: (settings: ElectronAppSettings) => void) => ElectronEventUnsubscribe | void;
   }
 
   interface ElectronTelemetryApi {

@@ -27,11 +27,15 @@
       "@mui/styled-engine-sc": ["../app/node_modules/@mui/styled-engine-sc"],
       "date-fns": ["../app/node_modules/date-fns"],
       "@sentry/electron": ["../app/node_modules/@sentry/electron"],
-      "@sentry/electron/*": ["../app/node_modules/@sentry/electron/*"]
+      "@sentry/electron/*": ["../app/node_modules/@sentry/electron/*"],
+      "recharts": ["../app/node_modules/recharts"],
+      "d3": ["./node_modules/@types/d3", "../app/node_modules/d3"],
+      "d3-sankey": ["./node_modules/@types/d3-sankey", "../app/node_modules/d3-sankey"]
     },
-    "types": ["vite/client", "node"]
+    "types": ["vite/client", "node"],
+    "typeRoots": ["./node_modules/@types", "../app/node_modules/@types"]
   },
   "include": ["src"],
-  "exclude": ["dist", "node_modules"],
+  "exclude": ["dist", "node_modules", "src/components/__tests__"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

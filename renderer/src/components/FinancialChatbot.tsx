@@ -23,7 +23,7 @@ import {
   Lock as LockIcon,
 } from '@mui/icons-material';
 import { apiClient } from '@/lib/api-client';
-import { useChatbotPermissions } from '../contexts/ChatbotPermissionsContext';
+import { useChatbotPermissions } from '@app/contexts/ChatbotPermissionsContext';
 
 interface Message {
   id: string;

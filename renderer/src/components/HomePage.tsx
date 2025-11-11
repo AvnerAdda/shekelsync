@@ -21,19 +21,19 @@ import {
   DateRange as DateRangeIcon,
   Add as AddIcon,
   InfoOutlined as InfoOutlinedIcon,
-  TrendingUp as TrendingUpIcon,
   ShowChart as ShowChartIcon,
+  TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine, Area, AreaChart } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine, AreaChart, Area } from 'recharts';
 import SankeyChart from './SankeyChart';
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import SummaryCards from '../components/SummaryCards';
 import BreakdownPanel from '../components/BreakdownPanel';
-import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
-import { useOnboarding } from '../contexts/OnboardingContext';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
+import { useOnboarding } from '@app/contexts/OnboardingContext';
 import { EmptyState, OnboardingChecklist } from './EmptyState';
 import { apiClient } from '@/lib/api-client';
 
@@ -53,13 +53,6 @@ interface DashboardData {
     income: number;
     expenses: number;
   }>;
-  wealthTrajectory?: Array<{
-    date: string;
-    balance: number;
-    income: number;
-    expenses: number;
-    netFlow: number;
-  }>;
   breakdowns: {
     byCategory: Array<{ category: string; total: number; count: number }>;
     byVendor: Array<{ vendor: string; total: number; count: number }>;
@@ -69,7 +62,7 @@ interface DashboardData {
 
 type AggregationPeriod = 'daily' | 'weekly' | 'monthly';
 type YAxisScale = 'linear' | 'log';
-type ChartView = 'transaction' | 'cumulative' | 'velocity';
+type ChartView = 'transaction' | 'cumulative';
 
 interface Transaction {
   identifier: string;
@@ -175,6 +168,7 @@ const HomePage: React.FC = () => {
   const [yAxisScale, setYAxisScale] = useState<YAxisScale>('linear');
   const [chartView, setChartView] = useState<ChartView>('transaction');
   const [cumulativeData, setCumulativeData] = useState<any[]>([]);
+  const [lastMonthHistory, setLastMonthHistory] = useState<any[]>([]);
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
   const { status: onboardingStatus } = useOnboarding();
@@ -214,7 +208,13 @@ const HomePage: React.FC = () => {
 
   // Custom dot component that handles clicks
   const CustomDot = (props: any) => {
-    const { cx, cy, payload } = props;
+    const { cx, cy, payload, value } = props;
+
+    // Don't render dot if value is null (future dates with no data)
+    if (value === null || value === undefined) {
+      return null;
+    }
+
     return (
       <circle
         cx={cx}
@@ -242,13 +242,28 @@ const HomePage: React.FC = () => {
 
     const dateMap = new Map(history.map(h => [h.date, h]));
     const filled = [];
+
+    // Find the last actual data date in history
+    const lastDataDate = history.length > 0
+      ? new Date(Math.max(...history.map(h => new Date(h.date).getTime())))
+      : new Date(start);
+
     const current = new Date(start.getTime()); // Clone to avoid mutation
 
-    while (current <= end) {
+    // If viewing current month, extend to end of month to show empty future days
+    const actualEndDate = isCurrentMonth() ? endOfMonth(new Date()) : new Date(end);
+
+    while (current <= actualEndDate) {
       const dateStr = format(current, 'yyyy-MM-dd');
+      const isFutureDate = current > lastDataDate;
+
       if (dateMap.has(dateStr)) {
         filled.push(dateMap.get(dateStr));
+      } else if (isFutureDate) {
+        // Future dates after last scrape: use null to stop lines
+        filled.push({ date: dateStr, income: null, expenses: null });
       } else {
+        // Past dates with no data: use 0
         filled.push({ date: dateStr, income: 0, expenses: 0 });
       }
       current.setDate(current.getDate() + 1);
@@ -257,91 +272,94 @@ const HomePage: React.FC = () => {
     return filled;
   };
 
-  // Calculate cumulative balance data for wealth trajectory view
+  // Check if selected date range is current month
+  const isCurrentMonth = useCallback(() => {
+    const now = new Date();
+    const currentMonthStart = startOfMonth(now);
+    const currentMonthEnd = endOfMonth(now);
+
+    // Check if selected range matches current month
+    return (
+      format(startDate, 'yyyy-MM') === format(now, 'yyyy-MM') &&
+      format(endDate, 'yyyy-MM') === format(now, 'yyyy-MM')
+    );
+  }, [startDate, endDate]);
+
+  // Calculate cumulative data with predictions for current month
   const calculateCumulativeData = useCallback((
     history: any[],
-    initialBankBalance: number = 0,
-    lastSyncDate: string | null = null,
-    wealthTrajectory?: any[]
+    lastMonthData: any[]
   ) => {
     if (!history || history.length === 0) return [];
 
-    // Use backend's wealth trajectory if available (computed backwards from current balance)
-    let cumulative: any[];
-    if (wealthTrajectory && wealthTrajectory.length > 0) {
-      // Backend already computed balances working backwards from current balance
-      cumulative = wealthTrajectory.map((item) => {
-        const itemDate = new Date(item.date);
-        const syncDate = lastSyncDate ? new Date(lastSyncDate) : null;
-        const isHistorical = !syncDate || itemDate <= syncDate;
+    const now = new Date();
+    const todayStr = format(now, 'yyyy-MM-dd');
+    const endOfMonthDate = endOfMonth(startDate);
+    const isViewingCurrentMonth = isCurrentMonth();
 
-        return {
-          date: item.date,
-          balance: item.balance,
-          income: item.income,
-          expenses: item.expenses,
-          netFlow: item.netFlow,
-          savingsRate: item.income > 0 ? ((item.income - item.expenses) / item.income) * 100 : 0,
-          isHistorical,
-        };
+    // Build cumulative from ACTUAL data (only up to today if current month)
+    let runningTotal = 0;
+    const cumulative: any[] = [];
+
+    // Filter history to only include dates up to today if viewing current month
+    const actualHistory = isViewingCurrentMonth
+      ? history.filter(day => day.date <= todayStr)
+      : history;
+
+    actualHistory.forEach((day) => {
+      runningTotal += day.income - day.expenses;
+      cumulative.push({
+        date: day.date,
+        cumulative: runningTotal,
+        netFlow: day.income - day.expenses,
+        income: day.income,
+        expenses: day.expenses,
+        isActual: true,
+        isPrediction: false,
       });
-    } else {
-      // Fallback: old method (forward computation from initial balance)
-      let runningBalance = initialBankBalance;
-      cumulative = history.map((item) => {
-        runningBalance += item.income - item.expenses;
-        const itemDate = new Date(item.date);
-        const syncDate = lastSyncDate ? new Date(lastSyncDate) : null;
-        const isHistorical = !syncDate || itemDate <= syncDate;
+    });
 
-        return {
-          date: item.date,
-          balance: runningBalance,
-          income: item.income,
-          expenses: item.expenses,
-          netFlow: item.income - item.expenses,
-          savingsRate: item.income > 0 ? ((item.income - item.expenses) / item.income) * 100 : 0,
-          isHistorical,
-        };
+    // If we're viewing current month, add predictions for remaining days
+    if (isViewingCurrentMonth && cumulative.length > 0 && lastMonthData.length > 0) {
+      const lastActualDate = new Date(cumulative[cumulative.length - 1].date);
+      let predictionDate = new Date(lastActualDate);
+      predictionDate.setDate(predictionDate.getDate() + 1);
+
+      // Build last month lookup map (day of month -> net flow)
+      const lastMonthMap = new Map();
+      lastMonthData.forEach((day) => {
+        const date = new Date(day.date);
+        const dayOfMonth = date.getDate();
+        lastMonthMap.set(dayOfMonth, day.income - day.expenses);
       });
-    }
 
-    // Find the last historical data point
-    const lastHistoricalIndex = cumulative.findIndex(item => !item.isHistorical);
-    const lastHistorical = lastHistoricalIndex > 0 ? cumulative[lastHistoricalIndex - 1] : cumulative[cumulative.length - 1];
+      console.log(`Generating predictions from ${format(predictionDate, 'yyyy-MM-dd')} to ${format(endOfMonthDate, 'yyyy-MM-dd')}`);
 
-    // Simple linear projection for future periods (only after last sync)
-    if (cumulative.length >= 3 && lastHistorical) {
-      const historicalData = cumulative.filter(item => item.isHistorical);
-      if (historicalData.length >= 3) {
-        const lastThree = historicalData.slice(-3);
-        const avgDailyChange = lastThree.reduce((sum, item) => sum + item.netFlow, 0) / 3;
+      // Generate predictions until end of month
+      while (predictionDate <= endOfMonthDate) {
+        const dayOfMonth = predictionDate.getDate();
+        const predDateStr = format(predictionDate, 'yyyy-MM-dd');
 
-        // Calculate projections from last historical point to end of period
-        const lastHistoricalDate = new Date(lastHistorical.date);
-        const endDate = new Date(cumulative[cumulative.length - 1].date);
-        const projections = [];
+        // Use same day from last month, or 0 if no data
+        const predictedNetFlow = lastMonthMap.get(dayOfMonth) || 0;
+        runningTotal += predictedNetFlow;
 
-        let currentBalance = lastHistorical.balance;
-        let currentDate = new Date(lastHistoricalDate);
-        currentDate.setDate(currentDate.getDate() + (aggregationPeriod === 'daily' ? 1 : aggregationPeriod === 'weekly' ? 7 : 30));
+        cumulative.push({
+          date: predDateStr,
+          cumulative: runningTotal,
+          netFlow: predictedNetFlow,
+          isActual: false,
+          isPrediction: true,
+        });
 
-        while (currentDate <= endDate) {
-          currentBalance += avgDailyChange;
-          projections.push({
-            date: format(currentDate, 'yyyy-MM-dd'),
-            projectedBalance: currentBalance,
-            isProjection: true,
-          });
-          currentDate.setDate(currentDate.getDate() + (aggregationPeriod === 'daily' ? 1 : aggregationPeriod === 'weekly' ? 7 : 30));
-        }
-
-        return [...cumulative, ...projections];
+        predictionDate.setDate(predictionDate.getDate() + 1);
       }
+
+      console.log(`Added ${cumulative.filter(d => d.isPrediction).length} prediction days`);
     }
 
     return cumulative;
-  }, [aggregationPeriod]);
+  }, [startDate, isCurrentMonth]);
 
   // Auto-detect if log scale is better (when income >> expenses)
   const shouldUseLogScale = useCallback((history: any[]) => {
@@ -445,26 +463,25 @@ const HomePage: React.FC = () => {
 
       setData(result);
 
-      // Calculate cumulative data for wealth trajectory view
-      if (result.history && result.history.length > 0) {
-        const initialBalance = result.bankBalances?.totalBalance || 0;
-        const lastSync = result.lastSyncDate;
-        console.log(`Wealth Trajectory: Starting balance ₪${initialBalance.toLocaleString()}, Last sync: ${lastSync || 'N/A'}`);
+      // If viewing current month, fetch last month data for predictions and calculate cumulative
+      if (isCurrentMonth() && result.history) {
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const actualCount = result.history.filter((h: any) => h.date <= today).length;
+        const futureCount = result.history.filter((h: any) => h.date > today).length;
+        console.log(`Current month detected. History: ${result.history.length} days (${actualCount} actual, ${futureCount} future). Today: ${today}`);
 
-        const cumulative = calculateCumulativeData(
-          result.history,
-          initialBalance,
-          lastSync,
-          result.wealthTrajectory
-        );
+        fetchLastMonthData().then((lastMonth) => {
+          console.log(`Last month data fetched: ${lastMonth.length} days`);
+          const cumulative = calculateCumulativeData(result.history, lastMonth);
+          const predCount = cumulative.filter(d => d.isPrediction).length;
+          console.log(`✓ Cumulative data: ${cumulative.length} total points, ${predCount} predictions`);
+          setCumulativeData(cumulative);
+        });
+      } else if (result.history) {
+        // For non-current months, just calculate cumulative without predictions
+        const cumulative = calculateCumulativeData(result.history, []);
+        console.log(`Cumulative data calculated (no predictions): ${cumulative.length} points`);
         setCumulativeData(cumulative);
-
-        // Auto-suggest log scale if income >> expenses
-        const useLog = shouldUseLogScale(result.history);
-        if (useLog && yAxisScale === 'linear') {
-          // Only auto-switch once, don't override user choice
-          console.log('Auto-suggesting logarithmic scale due to high income/expense ratio');
-        }
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -472,7 +489,30 @@ const HomePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [aggregationPeriod, endDate, startDate, calculateCumulativeData, shouldUseLogScale, yAxisScale]);
+  }, [aggregationPeriod, endDate, startDate, isCurrentMonth, calculateCumulativeData]);
+
+  const fetchLastMonthData = useCallback(async () => {
+    try {
+      const lastMonth = subMonths(startDate, 1);
+      const lastMonthStart = startOfMonth(lastMonth);
+      const lastMonthEnd = endOfMonth(lastMonth);
+
+      const response = await apiClient.get(
+        `/api/analytics/dashboard?startDate=${lastMonthStart.toISOString()}&endDate=${lastMonthEnd.toISOString()}&aggregation=daily`
+      );
+
+      if (response.ok) {
+        const result = response.data as any;
+        const history = result.history || [];
+        setLastMonthHistory(history);
+        return history;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching last month data:', error);
+      return [];
+    }
+  }, [startDate]);
 
   const fetchPortfolioValue = useCallback(async () => {
     try {
@@ -945,12 +985,8 @@ const HomePage: React.FC = () => {
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography variant="h6">
-              {chartView === 'transaction' && 'Transaction History'}
-              {chartView === 'cumulative' && 'Wealth Trajectory'}
-              {chartView === 'velocity' && 'Financial Velocity'}
-            </Typography>
-            {shouldUseLogScale(data.history) && yAxisScale === 'linear' && chartView === 'transaction' && (
+            <Typography variant="h6">Transaction History</Typography>
+            {shouldUseLogScale(data.history) && yAxisScale === 'linear' && (
               <Chip
                 label="Log scale recommended"
                 size="small"
@@ -962,44 +998,41 @@ const HomePage: React.FC = () => {
             )}
           </Box>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Cumulative View - Coming Soon */}
+            {isCurrentMonth() && (
+              <MuiTooltip title="Feature in development: Will show cash flow predictions based on historical patterns">
+                <Chip
+                  label="Cumulative View (Coming Soon)"
+                  icon={<TrendingUpIcon />}
+                  disabled
+                  size="small"
+                  sx={{
+                    opacity: 0.6,
+                    cursor: 'not-allowed',
+                    '& .MuiChip-icon': { opacity: 0.6 }
+                  }}
+                />
+              </MuiTooltip>
+            )}
+
             <ToggleButtonGroup
-              value={chartView}
+              value={yAxisScale}
               exclusive
-              onChange={(e, newView) => newView && setChartView(newView)}
+              onChange={(_, newScale) => newScale && setYAxisScale(newScale)}
               size="small"
             >
-              <MuiTooltip title="Transaction view">
-                <ToggleButton value="transaction">
-                  <ShowChartIcon fontSize="small" />
-                </ToggleButton>
+              <MuiTooltip title="Linear scale">
+                <ToggleButton value="linear">Linear</ToggleButton>
               </MuiTooltip>
-              <MuiTooltip title="Cumulative wealth">
-                <ToggleButton value="cumulative">
-                  <TrendingUpIcon fontSize="small" />
-                </ToggleButton>
+              <MuiTooltip title="Logarithmic scale">
+                <ToggleButton value="log">Log</ToggleButton>
               </MuiTooltip>
             </ToggleButtonGroup>
-
-            {chartView === 'transaction' && (
-              <ToggleButtonGroup
-                value={yAxisScale}
-                exclusive
-                onChange={(e, newScale) => newScale && setYAxisScale(newScale)}
-                size="small"
-              >
-                <MuiTooltip title="Linear scale">
-                  <ToggleButton value="linear">Linear</ToggleButton>
-                </MuiTooltip>
-                <MuiTooltip title="Logarithmic scale">
-                  <ToggleButton value="log">Log</ToggleButton>
-                </MuiTooltip>
-              </ToggleButtonGroup>
-            )}
 
             <ToggleButtonGroup
               value={aggregationPeriod}
               exclusive
-              onChange={(e, newPeriod) => newPeriod && setAggregationPeriod(newPeriod)}
+              onChange={(_, newPeriod) => newPeriod && setAggregationPeriod(newPeriod)}
               size="small"
             >
               <ToggleButton value="daily">Daily</ToggleButton>
@@ -1009,23 +1042,8 @@ const HomePage: React.FC = () => {
           </Box>
         </Box>
 
-        {/* Chart Info Messages */}
-        {chartView === 'cumulative' && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            <Typography variant="body2">
-              Shows your cumulative wealth trajectory starting from your current bank balance.
-              {data?.bankBalances?.totalBalance && data.bankBalances.totalBalance > 0 && (
-                <> Starting balance: <strong>{formatCurrency(data.bankBalances.totalBalance, { absolute: true })}</strong>.</>
-              )}
-              {' '}Solid line shows actual balance from transactions, dashed line shows projections based on recent spending trends.
-              {' '}The vertical "Last Sync" line separates real data from projections.
-            </Typography>
-          </Alert>
-        )}
-
-        <ResponsiveContainer width="100%" height={chartView === 'cumulative' ? 400 : 350}>
-          {chartView === 'transaction' ? (
-            <LineChart
+        <ResponsiveContainer width="100%" height={350}>
+          <LineChart
               data={yAxisScale === 'log' ? getLogScaleData(data.history) : data.history}
               onClick={handleChartAreaClick}
               style={{ cursor: 'pointer' }}
@@ -1092,6 +1110,33 @@ const HomePage: React.FC = () => {
                 );
               })()}
 
+              {/* Last synced marker - show where actual data ends */}
+              {isCurrentMonth() && data.history.length > 0 && (() => {
+                // Find last date with actual data (non-null income or expenses)
+                const lastActualData = data.history
+                  .filter(h => h.income !== null || h.expenses !== null)
+                  .pop();
+
+                if (lastActualData) {
+                  return (
+                    <ReferenceLine
+                      x={lastActualData.date}
+                      stroke={theme.palette.warning.main}
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      label={{
+                        value: 'Last Synced',
+                        position: 'top',
+                        fill: theme.palette.warning.main,
+                        fontSize: 11,
+                        fontWeight: 'bold',
+                      }}
+                    />
+                  );
+                }
+                return null;
+              })()}
+
               <Line
                 type="monotone"
                 dataKey="income"
@@ -1100,11 +1145,13 @@ const HomePage: React.FC = () => {
                 strokeWidth={2}
                 dot={<CustomDot stroke={theme.palette.success.main} />}
                 activeDot={{ r: 8, cursor: 'pointer' }}
+                connectNulls={false}
               />
               <Line
                 type="monotone"
                 dataKey="expenses"
                 stroke={theme.palette.error.main}
+                connectNulls={false}
                 name="Expenses"
                 strokeWidth={2}
                 dot={<CustomDot stroke={theme.palette.error.main} />}
@@ -1163,170 +1210,10 @@ const HomePage: React.FC = () => {
                 />
               ))}
             </LineChart>
-          ) : (
-            <AreaChart data={cumulativeData}>
-              <defs>
-                <linearGradient id="balanceGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0.1}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="date"
-                tickFormatter={formatXAxis}
-                tick={{ fill: theme.palette.text.secondary }}
-              />
-              <YAxis
-                tick={{ fill: theme.palette.text.secondary }}
-                tickFormatter={formatCurrencyValue}
-              />
-              <Tooltip
-                content={({ active, payload }: any) => {
-                  if (active && payload && payload.length) {
-                    const data = payload[0].payload;
-                    return (
-                      <Paper sx={{ p: 2, border: `1px solid ${theme.palette.divider}` }}>
-                        <Typography variant="body2" fontWeight="bold">
-                          {format(parseLocalDate(data.date), 'MMM dd, yyyy')}
-                        </Typography>
-                        {data.isProjection ? (
-                          <Typography variant="body2" color="primary.main">
-                            Projected: {formatCurrencyValue(data.projectedBalance)}
-                          </Typography>
-                        ) : (
-                          <>
-                            <Typography variant="body2" color="primary.main">
-                              Balance: {formatCurrencyValue(data.balance)}
-                            </Typography>
-                            <Typography variant="body2" color={data.netFlow > 0 ? 'success.main' : 'error.main'}>
-                              Net Flow: {data.netFlow > 0 ? '+' : ''}{formatCurrencyValue(data.netFlow)}
-                            </Typography>
-                            {data.savingsRate !== undefined && (
-                              <Typography variant="body2" color="text.secondary">
-                                Savings Rate: {data.savingsRate.toFixed(1)}%
-                              </Typography>
-                            )}
-                          </>
-                        )}
-                      </Paper>
-                    );
-                  }
-                  return null;
-                }}
-              />
-              <Legend />
-
-              {/* Mark last sync date - separates historical data from projections */}
-              {(() => {
-                const lastHistoricalPoint = cumulativeData.find(d => d.isHistorical === false);
-                const lastHistoricalIndex = lastHistoricalPoint ? cumulativeData.indexOf(lastHistoricalPoint) - 1 : -1;
-                if (lastHistoricalIndex > 0) {
-                  const lastSyncPoint = cumulativeData[lastHistoricalIndex];
-                  return (
-                    <ReferenceLine
-                      x={lastSyncPoint.date}
-                      stroke={theme.palette.warning.main}
-                      strokeWidth={2}
-                      strokeDasharray="5 5"
-                      label={{
-                        value: 'Last Sync',
-                        position: 'top',
-                        fill: theme.palette.warning.main,
-                        fontSize: 11,
-                        fontWeight: 'bold',
-                      }}
-                    />
-                  );
-                }
-                return null;
-              })()}
-
-              {/* Mark positive milestones */}
-              {(() => {
-                const milestones = [];
-                const maxBalance = Math.max(...cumulativeData.filter(d => !d.isProjection).map(d => d.balance || 0));
-                if (maxBalance > 0) {
-                  const roundedMilestone = Math.floor(maxBalance / 10000) * 10000;
-                  if (roundedMilestone > 0) {
-                    milestones.push(
-                      <ReferenceLine
-                        key="milestone"
-                        y={roundedMilestone}
-                        stroke={theme.palette.success.main}
-                        strokeDasharray="3 3"
-                        strokeOpacity={0.5}
-                        label={{
-                          value: `🎯 ${formatCurrencyValue(roundedMilestone)}`,
-                          position: 'right',
-                          fill: theme.palette.success.main,
-                          fontSize: 11,
-                        }}
-                      />
-                    );
-                  }
-                }
-                return milestones;
-              })()}
-
-              {/* Highlight periods with high savings rate */}
-              {cumulativeData
-                .filter(d => !d.isProjection && d.savingsRate > 30)
-                .slice(0, 3)
-                .map((d, idx) => (
-                  <ReferenceLine
-                    key={`high-savings-${idx}`}
-                    x={d.date}
-                    stroke={theme.palette.success.light}
-                    strokeDasharray="2 2"
-                    strokeOpacity={0.3}
-                    label={{
-                      value: '💰',
-                      position: 'top',
-                      fill: theme.palette.success.main,
-                      fontSize: 12,
-                    }}
-                  />
-                ))}
-
-              {/* Historical balance - solid area chart */}
-              <Area
-                type="monotone"
-                dataKey="balance"
-                stroke={theme.palette.primary.main}
-                fill="url(#balanceGradient)"
-                name="Actual Balance"
-                strokeWidth={3}
-                connectNulls={false}
-              />
-              {/* Projected balance - dashed line */}
-              <Line
-                type="monotone"
-                dataKey="projectedBalance"
-                stroke={theme.palette.info.main}
-                strokeDasharray="5 5"
-                name="Projected Balance"
-                strokeWidth={2}
-                dot={false}
-                connectNulls={false}
-              />
-              <ReferenceLine
-                y={0}
-                stroke={theme.palette.text.secondary}
-                strokeDasharray="3 3"
-                label={{
-                  value: 'Break-even',
-                  position: 'right',
-                  fill: theme.palette.text.secondary,
-                  fontSize: 10,
-                }}
-              />
-            </AreaChart>
-          )}
         </ResponsiveContainer>
 
         {/* Integrated Insights - Shown below chart */}
-        {chartView === 'transaction' && data.history.length > 0 && (
+        {data.history.length > 0 && (
           <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
               <Box>

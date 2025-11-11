@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Box, Typography } from '@mui/material';
-import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import * as d3 from 'd3';
 import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
 import transformToSankeyData from '@/lib/sankey-transform';

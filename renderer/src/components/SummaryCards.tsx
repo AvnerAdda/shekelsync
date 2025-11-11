@@ -14,7 +14,7 @@ import {
   PieChart as BudgetIcon,
   Savings as PortfolioIcon,
 } from '@mui/icons-material';
-import { useFinancePrivacy } from '../contexts/FinancePrivacyContext';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 
 interface SummaryCardsProps {
   totalIncome: number;
@@ -170,22 +170,6 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                   height: '100%',
                   background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
                   transition: 'left 0.6s',
-                },
-                '&:hover': {
-                  transform: isNetBalance ? 'translateY(-12px) scale(1.04)' : 'translateY(-8px) scale(1.02)',
-                  boxShadow: `
-                    0 20px 60px rgba(0, 0, 0, 0.15),
-                    0 0 20px rgba(200, 250, 207, 0.3),
-                    inset 0 1px 1px rgba(255, 255, 255, ${theme.palette.mode === 'dark' ? '0.2' : '0.8'})
-                  `,
-                  border: `1px solid ${
-                    theme.palette.mode === 'dark'
-                      ? 'rgba(200, 250, 207, 0.4)'
-                      : 'rgba(200, 250, 207, 0.6)'
-                  }`,
-                },
-                '&:hover::before': {
-                  left: '100%',
                 }
               }}
             >
