@@ -1,4 +1,8 @@
 const database = require('../database.js');
+const {
+  INSTITUTION_SELECT_FIELDS,
+  buildInstitutionFromRow,
+} = require('../institutions.js');
 
 function serviceError(status, message) {
   const error = new Error(message);
@@ -11,12 +15,14 @@ async function listPendingSuggestions(params = {}) {
 
   const result = await database.query(
     `
-      SELECT 
+      SELECT
         pts.*,
         ia.account_name,
-        ia.account_type
+        ia.account_type,
+        ${INSTITUTION_SELECT_FIELDS}
       FROM pending_transaction_suggestions pts
       LEFT JOIN investment_accounts ia ON pts.suggested_account_id = ia.id
+      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
       WHERE pts.status = $1
       ORDER BY pts.confidence DESC, pts.created_at DESC
     `,
@@ -24,7 +30,10 @@ async function listPendingSuggestions(params = {}) {
   );
 
   return {
-    pendingSuggestions: result.rows,
+    pendingSuggestions: result.rows.map(row => ({
+      ...row,
+      institution: buildInstitutionFromRow(row),
+    })),
     total: result.rows.length,
   };
 }

@@ -1,4 +1,8 @@
 const database = require('../database.js');
+const {
+  INSTITUTION_SELECT_FIELDS,
+  buildInstitutionFromRow,
+} = require('../institutions.js');
 
 function serviceError(status, message) {
   const error = new Error(message);
@@ -25,13 +29,15 @@ async function listAssets(params = {}) {
   const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
 
   const query = `
-    SELECT 
+    SELECT
       iasset.*,
       ia.account_name,
       ia.account_type,
-      ia.institution
+      ia.institution,
+      ${INSTITUTION_SELECT_FIELDS}
     FROM investment_assets iasset
     JOIN investment_accounts ia ON iasset.account_id = ia.id
+    LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
     ${whereClause}
     ORDER BY ia.account_name, iasset.asset_name
   `;
@@ -43,6 +49,7 @@ async function listAssets(params = {}) {
       ...row,
       units: row.units !== null ? Number.parseFloat(row.units) : null,
       average_cost: row.average_cost !== null ? Number.parseFloat(row.average_cost) : null,
+      institution: buildInstitutionFromRow(row),
     })),
   };
 }

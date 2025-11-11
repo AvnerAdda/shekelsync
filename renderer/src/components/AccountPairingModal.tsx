@@ -57,6 +57,22 @@ interface Pairing {
   matchPatterns: string[];
   isActive: boolean;
   createdAt: string;
+  creditCardInstitution?: {
+    id: number;
+    vendor_code: string;
+    display_name_he: string;
+    display_name_en: string;
+    logo_url?: string;
+    institution_type: string;
+  };
+  bankInstitution?: {
+    id: number;
+    vendor_code: string;
+    display_name_he: string;
+    display_name_en: string;
+    logo_url?: string;
+    institution_type: string;
+  };
 }
 
 interface CandidateTransaction {
@@ -764,7 +780,7 @@ export default function AccountPairingModal({
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                         <LinkIcon fontSize="small" />
                         <Typography variant="body1">
-                          {pairing.creditCardVendor} ({pairing.creditCardAccountNumber || 'Not specified'}) → {pairing.bankVendor} ({pairing.bankAccountNumber || 'All accounts'})
+                          {pairing.creditCardInstitution?.display_name_he || pairing.creditCardVendor} ({pairing.creditCardAccountNumber || 'Not specified'}) → {pairing.bankInstitution?.display_name_he || pairing.bankVendor} ({pairing.bankAccountNumber || 'All accounts'})
                         </Typography>
                         {pairing.isActive && (
                           <Chip label="Active" size="small" color="success" />

@@ -63,9 +63,16 @@ async function fetchCandidateTransactions(client) {
         t.price,
         t.category_definition_id,
         t.account_number,
-        cd.name AS category_name
+        cd.name AS category_name,
+        fi.id as institution_id,
+        fi.display_name_he as institution_name_he,
+        fi.display_name_en as institution_name_en,
+        fi.logo_url as institution_logo,
+        fi.institution_type as institution_type
       FROM transactions t
       LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
+      LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
+      LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id
       WHERE t.category_definition_id IN (25, 75)
         AND t.vendor IN (
           SELECT DISTINCT vendor
@@ -109,6 +116,13 @@ async function getTrulyUnpairedTransactions(params = {}) {
         categoryId: txn.category_definition_id,
         categoryName: txn.category_name,
         accountNumber: txn.account_number,
+        institution: txn.institution_id ? {
+          id: txn.institution_id,
+          display_name_he: txn.institution_name_he,
+          display_name_en: txn.institution_name_en,
+          logo_url: txn.institution_logo,
+          institution_type: txn.institution_type,
+        } : null,
       })),
     };
   } finally {

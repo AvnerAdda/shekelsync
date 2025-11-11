@@ -75,6 +75,14 @@ interface Transaction {
   categoryType: string;
   parent_name?: string;
   category_name?: string;
+  institution?: {
+    id: number;
+    vendor_code: string;
+    display_name_he: string;
+    display_name_en: string;
+    logo_url?: string;
+    institution_type: string;
+  };
 }
 
 interface PortfolioBreakdownItem {
@@ -1329,18 +1337,18 @@ const HomePage: React.FC = () => {
                             </Typography>
                           </>
                         )}
-                        {txn.vendor && (
+                        {(txn.institution?.display_name_he || txn.vendor) && (
                           <>
                             <Typography variant="caption" color="text.secondary">•</Typography>
-                            <Typography 
-                              variant="caption" 
-                              sx={{ 
+                            <Typography
+                              variant="caption"
+                              sx={{
                                 color: 'text.secondary',
                                 textTransform: 'capitalize',
                                 fontSize: '0.7rem',
                               }}
                             >
-                              {txn.vendor}
+                              {txn.institution?.display_name_he || txn.vendor}
                             </Typography>
                           </>
                         )}

@@ -90,7 +90,19 @@ interface BreakdownData {
     count: number;
     subcategories: Subcategory[];
   }>;
-  byVendor: Array<{ vendor: string; total: number; count: number }>;
+  byVendor: Array<{
+    vendor: string;
+    total: number;
+    count: number;
+    institution?: {
+      id: number;
+      vendor_code: string;
+      display_name_he: string;
+      display_name_en: string;
+      logo_url?: string;
+      institution_type: string;
+    };
+  }>;
   byMonth: Array<{ month: string; total: number; inflow?: number; outflow?: number }>;
 }
 
@@ -840,7 +852,9 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
                             justifyContent: 'space-between',
                           }}
                         >
-                          <Typography variant="body2">{vendor.vendor}</Typography>
+                          <Typography variant="body2">
+                            {vendor.institution?.display_name_he || vendor.vendor}
+                          </Typography>
                           <Typography variant="body2" fontWeight="bold">
                             {formatCurrencyValue(vendor.total)}
                           </Typography>
@@ -875,7 +889,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
                               ****{card.accountNumber}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {card.vendor}
+                              {card.institution?.display_name_he || card.vendor}
                             </Typography>
                           </Box>
                           <Typography variant="body2" fontWeight="bold">

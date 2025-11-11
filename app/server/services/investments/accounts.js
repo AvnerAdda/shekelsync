@@ -1,4 +1,11 @@
 const database = require('../database.js');
+const {
+  INSTITUTION_JOIN_INVESTMENT_ACCOUNT,
+  INSTITUTION_SELECT_FIELDS,
+  buildInstitutionFromRow,
+  mapVendorCodeToInstitutionId,
+  getInstitutionById,
+} = require('../institutions.js');
 
 const VALID_TYPES = new Set([
   'pension',
@@ -53,6 +60,7 @@ async function listAccounts(params = {}) {
   const query = `
     SELECT
       ia.*,
+      ${INSTITUTION_SELECT_FIELDS},
       COUNT(DISTINCT ih.id) AS holdings_count,
       MAX(ih.as_of_date) AS last_update_date,
       (
@@ -70,9 +78,12 @@ async function listAccounts(params = {}) {
         WHERE tal.account_id = ia.id
       ) AS total_invested
     FROM investment_accounts ia
+    ${INSTITUTION_JOIN_INVESTMENT_ACCOUNT}
     LEFT JOIN investment_holdings ih ON ia.id = ih.account_id
     ${whereClause}
-    GROUP BY ia.id
+    GROUP BY ia.id, fi.id, fi.vendor_code, fi.display_name_he, fi.display_name_en,
+             fi.institution_type, fi.category, fi.subcategory, fi.logo_url,
+             fi.is_scrapable, fi.scraper_company_id
     ORDER BY ia.investment_category, ia.account_type, ia.account_name
   `;
 
@@ -82,6 +93,7 @@ async function listAccounts(params = {}) {
     accounts: result.rows.map((row) => {
       const explicitValue = row.current_value ? Number.parseFloat(row.current_value) : null;
       const totalInvested = row.total_invested ? Number.parseFloat(row.total_invested) : null;
+      const institution = buildInstitutionFromRow(row);
 
       return {
         ...row,
@@ -91,6 +103,7 @@ async function listAccounts(params = {}) {
         holdings_count: Number.parseInt(row.holdings_count, 10),
         is_liquid: row.is_liquid,
         investment_category: row.investment_category,
+        institution: institution || null, // Add institution object
       };
     }),
   };
@@ -101,6 +114,7 @@ async function createAccount(payload = {}) {
     account_name,
     account_type,
     institution,
+    institution_id,
     account_number,
     currency = 'ILS',
     notes,
@@ -114,13 +128,28 @@ async function createAccount(payload = {}) {
     throw serviceError(400, `Invalid account_type. Must be one of: ${Array.from(VALID_TYPES).join(', ')}`);
   }
 
+  // Map between account_type and institution_id
+  let institutionIdValue = institution_id;
+  let accountTypeValue = account_type;
+
+  if (!institutionIdValue && accountTypeValue) {
+    // Auto-map account_type (e.g., 'pension') to institution_id
+    institutionIdValue = await mapVendorCodeToInstitutionId(database, accountTypeValue);
+  } else if (institutionIdValue && !accountTypeValue) {
+    // If only institution_id provided, get vendor_code for account_type
+    const inst = await getInstitutionById(database, institutionIdValue);
+    if (inst) {
+      accountTypeValue = inst.vendor_code;
+    }
+  }
+
   let isLiquid = null;
   let investmentCategory = null;
 
-  if (LIQUID_TYPES.has(account_type)) {
+  if (LIQUID_TYPES.has(accountTypeValue)) {
     isLiquid = true;
     investmentCategory = 'liquid';
-  } else if (RESTRICTED_TYPES.has(account_type)) {
+  } else if (RESTRICTED_TYPES.has(accountTypeValue)) {
     isLiquid = false;
     investmentCategory = 'restricted';
   }
@@ -129,23 +158,41 @@ async function createAccount(payload = {}) {
     `
       INSERT INTO investment_accounts (
         account_name, account_type, institution, account_number, currency, notes,
-        is_liquid, investment_category
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        is_liquid, investment_category, institution_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
     `,
     [
       account_name,
-      account_type,
+      accountTypeValue,
       institution || null,
       account_number || null,
       currency,
       notes || null,
       isLiquid,
       investmentCategory,
+      institutionIdValue,
     ],
   );
 
-  return { account: result.rows[0] };
+  // Fetch with institution data
+  const accountWithInstitution = await database.query(
+    `
+      SELECT ia.*, ${INSTITUTION_SELECT_FIELDS}
+      FROM investment_accounts ia
+      ${INSTITUTION_JOIN_INVESTMENT_ACCOUNT}
+      WHERE ia.id = $1
+    `,
+    [result.rows[0].id]
+  );
+
+  const row = accountWithInstitution.rows[0];
+  return {
+    account: {
+      ...row,
+      institution: buildInstitutionFromRow(row),
+    },
+  };
 }
 
 async function updateAccount(payload = {}) {
@@ -154,6 +201,7 @@ async function updateAccount(payload = {}) {
     account_name,
     account_type,
     institution,
+    institution_id,
     account_number,
     currency,
     is_active,
@@ -192,11 +240,25 @@ async function updateAccount(payload = {}) {
       updates.push(`investment_category = $${paramIndex++}`);
       values.push('restricted');
     }
+
+    // Auto-update institution_id when account_type changes
+    if (account_type) {
+      const instId = await mapVendorCodeToInstitutionId(database, account_type);
+      if (instId) {
+        updates.push(`institution_id = $${paramIndex++}`);
+        values.push(instId);
+      }
+    }
   }
 
   if (institution !== undefined) {
     updates.push(`institution = $${paramIndex++}`);
     values.push(institution);
+  }
+
+  if (institution_id !== undefined) {
+    updates.push(`institution_id = $${paramIndex++}`);
+    values.push(institution_id);
   }
 
   if (account_number !== undefined) {
@@ -242,7 +304,24 @@ async function updateAccount(payload = {}) {
     throw serviceError(404, 'Account not found');
   }
 
-  return { account: result.rows[0] };
+  // Fetch with institution data
+  const accountWithInstitution = await database.query(
+    `
+      SELECT ia.*, ${INSTITUTION_SELECT_FIELDS}
+      FROM investment_accounts ia
+      ${INSTITUTION_JOIN_INVESTMENT_ACCOUNT}
+      WHERE ia.id = $1
+    `,
+    [id]
+  );
+
+  const row = accountWithInstitution.rows[0];
+  return {
+    account: {
+      ...row,
+      institution: buildInstitutionFromRow(row),
+    },
+  };
 }
 
 async function deactivateAccount(params = {}) {

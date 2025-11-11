@@ -137,8 +137,15 @@ async function getDashboardAnalytics(query = {}) {
     `SELECT
         t.vendor,
         COUNT(*) as count,
-        SUM(ABS(price)) as total
+        SUM(ABS(price)) as total,
+        fi.id as institution_id,
+        fi.display_name_he as institution_name_he,
+        fi.display_name_en as institution_name_en,
+        fi.logo_url as institution_logo,
+        fi.institution_type as institution_type
       FROM transactions t
+      LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
+      LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id
       LEFT JOIN account_pairings ap ON (
         t.vendor = ap.bank_vendor
         AND ap.is_active = 1
@@ -153,7 +160,7 @@ async function getDashboardAnalytics(query = {}) {
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND ap.id IS NULL
-      GROUP BY t.vendor
+      GROUP BY t.vendor, fi.id, fi.display_name_he, fi.display_name_en, fi.logo_url, fi.institution_type
       ORDER BY total DESC`,
     [start, end],
   );
@@ -267,6 +274,13 @@ async function getDashboardAnalytics(query = {}) {
         vendor: row.vendor,
         count: Number.parseInt(row.count || 0, 10),
         total: Number.parseFloat(row.total || 0),
+        institution: row.institution_id ? {
+          id: row.institution_id,
+          display_name_he: row.institution_name_he,
+          display_name_en: row.institution_name_en,
+          logo_url: row.institution_logo,
+          institution_type: row.institution_type,
+        } : null,
       })),
       byMonth: monthResult.rows.map((row) => ({
         month: row.month,

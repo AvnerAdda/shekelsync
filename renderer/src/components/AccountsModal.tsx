@@ -91,13 +91,21 @@ export interface Account {
   balance_updated_at?: string;
   suggestedStartDate?: string;
   startDateMessage?: string;
+  institution?: {
+    id: number;
+    vendor_code: string;
+    display_name_he: string;
+    display_name_en: string;
+    logo_url?: string;
+    institution_type: string;
+  };
 }
 
 interface InvestmentAccount {
   id?: number;
   account_name: string;
   account_type: string;
-  institution?: string;
+  institution?: string; // Legacy string field
   account_number?: string;
   currency: string;
   notes?: string;
@@ -108,6 +116,15 @@ interface InvestmentAccount {
   total_invested?: number | null;
   holdings_count?: number;
   last_update_date?: string;
+  institution_id?: number;
+  institutionObj?: { // New object field
+    id: number;
+    vendor_code: string;
+    display_name_he: string;
+    display_name_en: string;
+    logo_url?: string;
+    institution_type: string;
+  };
 }
 
 interface AccountsModalProps {
@@ -889,7 +906,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2">
-                    {account.institution || '-'}
+                    {account.institutionObj?.display_name_he || (typeof account.institution === 'string' ? account.institution : '-')}
                   </Typography>
                 </TableCell>
                 <TableCell>
@@ -1013,7 +1030,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                 </TableCell>
                 <TableCell>
                   <Chip
-                    label={account.vendor}
+                    label={account.institution?.display_name_he || account.vendor}
                     size="small"
                     variant="outlined"
                     color={type === 'bank' ? 'primary' : 'secondary'}
