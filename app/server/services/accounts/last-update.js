@@ -9,8 +9,14 @@ async function listAccountLastUpdates() {
         vc.nickname,
         COALESCE(last_scrapes.last_successful_scrape, vc.created_at) AS last_update,
         last_scrapes.status AS last_scrape_status,
-        account_numbers.account_numbers
+        account_numbers.account_numbers,
+        fi.id as institution_id,
+        fi.display_name_he as institution_name_he,
+        fi.display_name_en as institution_name_en,
+        fi.logo_url as institution_logo,
+        fi.institution_type as institution_type
       FROM vendor_credentials vc
+      LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id
       LEFT JOIN (
         SELECT
           se.vendor,
@@ -45,6 +51,13 @@ async function listAccountLastUpdates() {
     lastUpdate: row.last_update,
     lastScrapeStatus: row.last_scrape_status || 'never',
     accountNumbers: row.account_numbers ? row.account_numbers.split(',') : [],
+    institution: row.institution_id ? {
+      id: row.institution_id,
+      display_name_he: row.institution_name_he,
+      display_name_en: row.institution_name_en,
+      logo_url: row.institution_logo,
+      institution_type: row.institution_type,
+    } : null,
   }));
 }
 

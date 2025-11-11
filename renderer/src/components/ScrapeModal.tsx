@@ -275,27 +275,27 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
           label="Vendor"
           onChange={(e) => handleConfigChange('options.companyId', e.target.value)}
         >
-          <MenuItem disabled sx={{ fontWeight: 600, color: 'primary.main' }}>Credit Cards</MenuItem>
-          <MenuItem value="isracard">Isracard</MenuItem>
-          <MenuItem value="amex">American Express</MenuItem>
-          <MenuItem value="visaCal">Visa CAL</MenuItem>
-          <MenuItem value="max">Max</MenuItem>
-          
-          <MenuItem disabled sx={{ fontWeight: 600, color: 'primary.main', mt: 1 }}>Banks</MenuItem>
-          <MenuItem value="hapoalim">Bank Hapoalim</MenuItem>
-          <MenuItem value="leumi">Bank Leumi</MenuItem>
-          <MenuItem value="discount">Discount Bank</MenuItem>
-          <MenuItem value="mizrahi">Mizrahi Bank</MenuItem>
-          <MenuItem value="beinleumi">Beinleumi</MenuItem>
-          <MenuItem value="union">Union Bank</MenuItem>
-          <MenuItem value="yahav">Bank Yahav</MenuItem>
-          <MenuItem value="otsarHahayal">Bank Otsar Hahayal</MenuItem>
-          <MenuItem value="mercantile">Mercantile Bank</MenuItem>
-          <MenuItem value="massad">Massad Bank</MenuItem>
-          <MenuItem value="beyahadBishvilha">Beyahad Bishvilha</MenuItem>
-          <MenuItem value="behatsdaa">Behatsdaa</MenuItem>
-          <MenuItem value="pagi">Pagi</MenuItem>
-          <MenuItem value="oneZero">One Zero</MenuItem>
+          <MenuItem disabled sx={{ fontWeight: 600, color: 'primary.main' }}>כרטיסי אשראי - Credit Cards</MenuItem>
+          <MenuItem value="isracard">ישראכרט - Isracard</MenuItem>
+          <MenuItem value="amex">אמריקן אקספרס - American Express</MenuItem>
+          <MenuItem value="visaCal">ויזה כאל - Visa CAL</MenuItem>
+          <MenuItem value="max">מקס - Max</MenuItem>
+
+          <MenuItem disabled sx={{ fontWeight: 600, color: 'primary.main', mt: 1 }}>בנקים - Banks</MenuItem>
+          <MenuItem value="hapoalim">בנק הפועלים - Bank Hapoalim</MenuItem>
+          <MenuItem value="leumi">בנק לאומי - Bank Leumi</MenuItem>
+          <MenuItem value="discount">בנק דיסקונט - Discount Bank</MenuItem>
+          <MenuItem value="mizrahi">בנק מזרחי טפחות - Mizrahi Tefahot</MenuItem>
+          <MenuItem value="beinleumi">בנק בינלאומי - Bank Beinleumi</MenuItem>
+          <MenuItem value="union">בנק יוניון - Union Bank</MenuItem>
+          <MenuItem value="yahav">בנק יהב - Bank Yahav</MenuItem>
+          <MenuItem value="otsarHahayal">בנק אוצר החייל - Bank Otsar Hahayal</MenuItem>
+          <MenuItem value="mercantile">בנק מרכנתיל - Mercantile Bank</MenuItem>
+          <MenuItem value="massad">בנק מסד - Massad Bank</MenuItem>
+          <MenuItem value="beyahadBishvilha">ביחד בשבילה - Beyahad Bishvilha</MenuItem>
+          <MenuItem value="behatsdaa">בהצדעה - Behatsdaa</MenuItem>
+          <MenuItem value="pagi">פאגי - Pagi</MenuItem>
+          <MenuItem value="oneZero">וואן זירו - One Zero</MenuItem>
         </Select>
       </FormControl>
 

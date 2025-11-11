@@ -63,6 +63,24 @@ Options:
 }
 
 const TABLE_DEFINITIONS = [
+  `CREATE TABLE IF NOT EXISTS financial_institutions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      vendor_code TEXT NOT NULL UNIQUE,
+      institution_type TEXT NOT NULL CHECK (institution_type IN ('bank','credit_card','investment','insurance','broker','crypto','other')),
+      display_name_he TEXT NOT NULL,
+      display_name_en TEXT NOT NULL,
+      category TEXT NOT NULL CHECK (category IN ('banking','investments','insurance','brokerage','crypto','other')),
+      subcategory TEXT,
+      is_scrapable INTEGER NOT NULL DEFAULT 0 CHECK (is_scrapable IN (0,1)),
+      logo_url TEXT,
+      scraper_company_id TEXT,
+      credential_fields TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+      display_order INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`,
   `CREATE TABLE IF NOT EXISTS category_definitions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -162,9 +180,11 @@ const TABLE_DEFINITIONS = [
       last_scrape_success TEXT,
       last_scrape_attempt TEXT,
       last_scrape_status TEXT NOT NULL DEFAULT 'never',
+      institution_id INTEGER,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(id_number, username, vendor)
+      UNIQUE(id_number, username, vendor),
+      FOREIGN KEY (institution_id) REFERENCES financial_institutions(id) ON DELETE SET NULL
     );`,
   `CREATE TABLE IF NOT EXISTS transactions (
       identifier TEXT NOT NULL,
@@ -252,10 +272,12 @@ const TABLE_DEFINITIONS = [
       currency TEXT NOT NULL DEFAULT 'ILS',
       is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
       notes TEXT,
+      institution_id INTEGER,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       is_liquid INTEGER,
-      investment_category TEXT
+      investment_category TEXT,
+      FOREIGN KEY (institution_id) REFERENCES financial_institutions(id) ON DELETE SET NULL
     );`,
   `CREATE TABLE IF NOT EXISTS investment_assets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -447,6 +469,11 @@ const TABLE_DEFINITIONS = [
 ];
 
 const INDEX_STATEMENTS = [
+  'CREATE INDEX IF NOT EXISTS idx_financial_institutions_vendor_code ON financial_institutions (vendor_code);',
+  'CREATE INDEX IF NOT EXISTS idx_financial_institutions_type ON financial_institutions (institution_type);',
+  'CREATE INDEX IF NOT EXISTS idx_financial_institutions_category ON financial_institutions (category);',
+  'CREATE INDEX IF NOT EXISTS idx_financial_institutions_active ON financial_institutions (is_active);',
+  'CREATE INDEX IF NOT EXISTS idx_financial_institutions_scrapable ON financial_institutions (is_scrapable);',
   'CREATE INDEX IF NOT EXISTS idx_action_items_created ON user_action_items (created_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_action_items_priority ON user_action_items (priority);',
   'CREATE INDEX IF NOT EXISTS idx_action_items_status ON user_action_items (status);',
@@ -515,6 +542,74 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_pairings_bank ON account_pairings(bank_vendor, bank_account_number);',
   'CREATE INDEX IF NOT EXISTS idx_pairing_log_pairing_id ON account_pairing_log(pairing_id);',
   'CREATE INDEX IF NOT EXISTS idx_pairing_log_created_at ON account_pairing_log(created_at);'
+];
+
+const FINANCIAL_INSTITUTIONS = [
+  // ========== BANKS ==========
+  // Regular Banks
+  { code: 'hapoalim', type: 'bank', nameHe: 'בנק הפועלים', nameEn: 'Bank Hapoalim', category: 'banking', scrapable: 1, scraperCompanyId: 'hapoalim', credentialFields: '["userCode","password"]', displayOrder: 10 },
+  { code: 'leumi', type: 'bank', nameHe: 'בנק לאומי', nameEn: 'Bank Leumi', category: 'banking', scrapable: 1, scraperCompanyId: 'leumi', credentialFields: '["username","password","bankAccountNumber"]', displayOrder: 20 },
+  { code: 'mizrahi', type: 'bank', nameHe: 'בנק מזרחי טפחות', nameEn: 'Mizrahi Tefahot Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'mizrahi', credentialFields: '["username","password"]', displayOrder: 30 },
+  { code: 'discount', type: 'bank', nameHe: 'בנק דיסקונט', nameEn: 'Discount Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'discount', credentialFields: '["id","password","num"]', displayOrder: 40 },
+  { code: 'otsarHahayal', type: 'bank', nameHe: 'בנק אוצר החייל', nameEn: 'Bank Otsar Hahayal', category: 'banking', scrapable: 1, scraperCompanyId: 'otsarHahayal', credentialFields: '["username","password"]', displayOrder: 50 },
+  { code: 'beinleumi', type: 'bank', nameHe: 'בנק בינלאומי', nameEn: 'First International Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'beinleumi', credentialFields: '["username","password"]', displayOrder: 60 },
+  { code: 'massad', type: 'bank', nameHe: 'בנק מסד', nameEn: 'Bank Massad', category: 'banking', scrapable: 1, scraperCompanyId: 'massad', credentialFields: '["username","password"]', displayOrder: 70 },
+  { code: 'yahav', type: 'bank', nameHe: 'בנק יהב', nameEn: 'Bank Yahav', category: 'banking', scrapable: 1, scraperCompanyId: 'yahav', credentialFields: '["username","password","nationalID"]', displayOrder: 80 },
+  { code: 'union', type: 'bank', nameHe: 'בנק יוניון', nameEn: 'Union Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'union', credentialFields: '["username","password"]', displayOrder: 90 },
+  { code: 'mercantile', type: 'bank', nameHe: 'בנק מרכנתיל', nameEn: 'Mercantile Discount Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'mercantile', credentialFields: '["id","password","num"]', displayOrder: 100 },
+
+  // Other Banks
+  { code: 'beyahadBishvilha', type: 'bank', nameHe: 'בנק ביחד בשבילך', nameEn: 'Beyahad Bishvilha Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'beyahadBishvilha', credentialFields: '["id","password"]', displayOrder: 110 },
+  { code: 'behatsdaa', type: 'bank', nameHe: 'בנק בהצדעה', nameEn: 'Behatsdaa Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'behatsdaa', credentialFields: '["id","password"]', displayOrder: 120 },
+  { code: 'pagi', type: 'bank', nameHe: 'בנק פאגי', nameEn: 'Pagi Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'pagi', credentialFields: '["username","password"]', displayOrder: 130 },
+  { code: 'oneZero', type: 'bank', nameHe: 'וואן זירו', nameEn: 'One Zero Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'oneZero', credentialFields: '["email","password","otpCode","otpToken"]', displayOrder: 140 },
+
+  // ========== CREDIT CARDS ==========
+  { code: 'visaCal', type: 'credit_card', nameHe: 'ויזה כאל', nameEn: 'Visa Cal', category: 'banking', scrapable: 1, scraperCompanyId: 'visaCal', credentialFields: '["username","password"]', displayOrder: 200 },
+  { code: 'max', type: 'credit_card', nameHe: 'מקס', nameEn: 'Max', category: 'banking', scrapable: 1, scraperCompanyId: 'max', credentialFields: '["username","password"]', displayOrder: 210 },
+  { code: 'isracard', type: 'credit_card', nameHe: 'ישראכרט', nameEn: 'Isracard', category: 'banking', scrapable: 1, scraperCompanyId: 'isracard', credentialFields: '["id","card6Digits","password"]', displayOrder: 220 },
+  { code: 'amex', type: 'credit_card', nameHe: 'אמריקן אקספרס', nameEn: 'American Express', category: 'banking', scrapable: 1, scraperCompanyId: 'amex', credentialFields: '["id","card6Digits","password"]', displayOrder: 230 },
+
+  // ========== INVESTMENT TYPES (Manual Entry) ==========
+  { code: 'pension', type: 'investment', nameHe: 'קרן פנסיה', nameEn: 'Pension Fund', category: 'investments', subcategory: 'restricted', scrapable: 0, displayOrder: 300 },
+  { code: 'provident', type: 'investment', nameHe: 'קרן השתלמות', nameEn: 'Provident Fund', category: 'investments', subcategory: 'restricted', scrapable: 0, displayOrder: 310 },
+  { code: 'study_fund', type: 'investment', nameHe: 'קופת גמל', nameEn: 'Study Fund', category: 'investments', subcategory: 'restricted', scrapable: 0, displayOrder: 320 },
+  { code: 'savings', type: 'investment', nameHe: 'פיקדון', nameEn: 'Savings', category: 'investments', subcategory: 'liquid', scrapable: 0, displayOrder: 330 },
+  { code: 'brokerage', type: 'investment', nameHe: 'ברוקר', nameEn: 'Brokerage', category: 'investments', subcategory: 'liquid', scrapable: 0, displayOrder: 340 },
+  { code: 'crypto', type: 'investment', nameHe: 'קריפטו', nameEn: 'Crypto', category: 'investments', subcategory: 'liquid', scrapable: 0, displayOrder: 350 },
+  { code: 'mutual_fund', type: 'investment', nameHe: 'קרנות נאמנות', nameEn: 'Mutual Funds', category: 'investments', subcategory: 'liquid', scrapable: 0, displayOrder: 360 },
+  { code: 'bonds', type: 'investment', nameHe: 'אג"ח', nameEn: 'Bonds', category: 'investments', subcategory: 'alternative', scrapable: 0, displayOrder: 370 },
+  { code: 'real_estate', type: 'investment', nameHe: 'נדל"ן', nameEn: 'Real Estate', category: 'investments', subcategory: 'alternative', scrapable: 0, displayOrder: 380 },
+  { code: 'cash', type: 'investment', nameHe: 'מזומן', nameEn: 'Cash', category: 'investments', subcategory: 'cash', scrapable: 0, displayOrder: 390 },
+  { code: 'foreign_bank', type: 'investment', nameHe: 'בנק חוץ', nameEn: 'Foreign Bank', category: 'investments', subcategory: 'cash', scrapable: 0, displayOrder: 400 },
+  { code: 'foreign_investment', type: 'investment', nameHe: 'השקעה חוץ', nameEn: 'Foreign Investment', category: 'investments', subcategory: 'alternative', scrapable: 0, displayOrder: 410 },
+  { code: 'other_investment', type: 'investment', nameHe: 'אחר', nameEn: 'Other', category: 'investments', subcategory: 'alternative', scrapable: 0, displayOrder: 420 },
+
+  // ========== INSURANCE COMPANIES ==========
+  { code: 'harel', type: 'insurance', nameHe: 'הראל', nameEn: 'Harel Insurance', category: 'insurance', scrapable: 0, displayOrder: 500 },
+  { code: 'menora', type: 'insurance', nameHe: 'מנורה מבטחים', nameEn: 'Menora Mivtachim', category: 'insurance', scrapable: 0, displayOrder: 510 },
+  { code: 'clal', type: 'insurance', nameHe: 'כלל ביטוח', nameEn: 'Clal Insurance', category: 'insurance', scrapable: 0, displayOrder: 520 },
+  { code: 'migdal', type: 'insurance', nameHe: 'מגדל', nameEn: 'Migdal Insurance', category: 'insurance', scrapable: 0, displayOrder: 530 },
+  { code: 'phoenix', type: 'insurance', nameHe: 'פניקס', nameEn: 'Phoenix Insurance', category: 'insurance', scrapable: 0, displayOrder: 540 },
+  { code: 'ayalon', type: 'insurance', nameHe: 'איילון', nameEn: 'Ayalon Insurance', category: 'insurance', scrapable: 0, displayOrder: 550 },
+  { code: 'hachshara', type: 'insurance', nameHe: 'הכשרה', nameEn: 'Hachshara Insurance', category: 'insurance', scrapable: 0, displayOrder: 560 },
+  { code: 'aig', type: 'insurance', nameHe: 'AIG', nameEn: 'AIG Israel', category: 'insurance', scrapable: 0, displayOrder: 570 },
+
+  // ========== STOCK BROKERS / INVESTMENT HOUSES ==========
+  { code: 'ibi', type: 'broker', nameHe: 'IBI', nameEn: 'Israel Brokerage & Investments', category: 'brokerage', scrapable: 0, displayOrder: 600 },
+  { code: 'psagot', type: 'broker', nameHe: 'פסגות', nameEn: 'Psagot Investment House', category: 'brokerage', scrapable: 0, displayOrder: 610 },
+  { code: 'excellence', type: 'broker', nameHe: 'אקסלנס', nameEn: 'Excellence Investment House', category: 'brokerage', scrapable: 0, displayOrder: 620 },
+  { code: 'meitav', type: 'broker', nameHe: 'מיטב דש', nameEn: 'Meitav Dash', category: 'brokerage', scrapable: 0, displayOrder: 630 },
+  { code: 'leader', type: 'broker', nameHe: 'לידר', nameEn: 'Leader Capital Markets', category: 'brokerage', scrapable: 0, displayOrder: 640 },
+  { code: 'altshuler', type: 'broker', nameHe: 'אלטשולר שחם', nameEn: 'Altshuler Shaham', category: 'brokerage', scrapable: 0, displayOrder: 650 },
+  { code: 'more', type: 'broker', nameHe: 'מור', nameEn: 'More Investment House', category: 'brokerage', scrapable: 0, displayOrder: 660 },
+
+  // ========== CRYPTO EXCHANGES ==========
+  { code: 'bit2c', type: 'crypto', nameHe: 'Bit2C', nameEn: 'Bit2C', category: 'crypto', scrapable: 0, displayOrder: 700, notes: 'Israeli cryptocurrency exchange regulated by ISA' },
+  { code: 'bits_of_gold', type: 'crypto', nameHe: 'Bits of Gold', nameEn: 'Bits of Gold', category: 'crypto', scrapable: 0, displayOrder: 710, notes: 'Largest Israeli crypto brokerage' },
+  { code: 'coins', type: 'crypto', nameHe: 'Coins', nameEn: 'Coins.co.il', category: 'crypto', scrapable: 0, displayOrder: 720, notes: 'Israeli crypto exchange' },
+  { code: 'binance', type: 'crypto', nameHe: 'בינאנס', nameEn: 'Binance', category: 'crypto', scrapable: 0, displayOrder: 730, notes: 'Global crypto exchange' },
+  { code: 'coinbase', type: 'crypto', nameHe: 'קוינבייס', nameEn: 'Coinbase', category: 'crypto', scrapable: 0, displayOrder: 740, notes: 'Global crypto exchange' }
 ];
 
 const CATEGORY_TREE = [
@@ -834,6 +929,39 @@ function seedCategorizationRules(db, helpers) {
   })();
 }
 
+function seedFinancialInstitutions(db) {
+  const insert = db.prepare(`
+    INSERT INTO financial_institutions
+      (vendor_code, institution_type, display_name_he, display_name_en, category, subcategory,
+       is_scrapable, logo_url, scraper_company_id, credential_fields, is_active, display_order, notes)
+    VALUES
+      (@code, @type, @nameHe, @nameEn, @category, @subcategory,
+       @scrapable, NULL, @scraperCompanyId, @credentialFields, 1, @displayOrder, @notes)
+  `);
+
+  let insertedCount = 0;
+  db.transaction(() => {
+    for (const institution of FINANCIAL_INSTITUTIONS) {
+      insert.run({
+        code: institution.code,
+        type: institution.type,
+        nameHe: institution.nameHe,
+        nameEn: institution.nameEn,
+        category: institution.category,
+        subcategory: institution.subcategory || null,
+        scrapable: institution.scrapable,
+        scraperCompanyId: institution.scraperCompanyId || null,
+        credentialFields: institution.credentialFields || null,
+        displayOrder: institution.displayOrder,
+        notes: institution.notes || null
+      });
+      insertedCount++;
+    }
+  })();
+
+  return insertedCount;
+}
+
 function ensureDestination(outputPath, force) {
   if (fs.existsSync(outputPath)) {
     if (!force) {
@@ -867,6 +995,7 @@ function main() {
       db.exec(statement);
     }
 
+    const institutionCount = seedFinancialInstitutions(db);
     const helpers = seedCategories(db);
     seedCategoryActionability(db, helpers);
     seedCategoryMapping(db, helpers);
@@ -883,6 +1012,7 @@ function main() {
     const incomeRulesCount = db.prepare('SELECT COUNT(*) as count FROM categorization_rules WHERE category_type = ?').get('income').count;
 
     console.log('✅ Schema created with foreign keys and indexes');
+    console.log(`✅ Seeded ${institutionCount} financial institutions`);
     console.log(`✅ Seeded ${helpers.categoriesByKey.size} category definitions`);
     console.log(`✅ Seeded ${expenseLeafCount} default actionability entries`);
     console.log(`✅ Seeded ${CATEGORY_MAPPINGS.length} category mappings`);

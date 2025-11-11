@@ -96,10 +96,17 @@ async function getBreakdownAnalytics(query = {}) {
         ct.level1_name as parent_name,
         ct.level1_color as parent_color,
         ct.level1_icon as parent_icon,
-        ct.level1_description as parent_description
+        ct.level1_description as parent_description,
+        fi.id as institution_id,
+        fi.display_name_he as institution_name_he,
+        fi.display_name_en as institution_name_en,
+        fi.logo_url as institution_logo,
+        fi.institution_type as institution_type
       FROM transactions t
       JOIN category_definitions cd ON t.category_definition_id = cd.id
       JOIN category_tree ct ON cd.id = ct.category_id
+      LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
+      LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id
       LEFT JOIN account_pairings ap ON (
         t.vendor = ap.bank_vendor
         AND ap.is_active = 1
@@ -187,7 +194,18 @@ async function getBreakdownAnalytics(query = {}) {
 
     const vendorKey = tx.vendor || 'Unknown';
     if (!vendorMap.has(vendorKey)) {
-      vendorMap.set(vendorKey, { vendor: vendorKey, count: 0, total: 0 });
+      vendorMap.set(vendorKey, {
+        vendor: vendorKey,
+        count: 0,
+        total: 0,
+        institution: tx.institution_id ? {
+          id: tx.institution_id,
+          display_name_he: tx.institution_name_he,
+          display_name_en: tx.institution_name_en,
+          logo_url: tx.institution_logo,
+          institution_type: tx.institution_type,
+        } : null,
+      });
     }
     const vendorEntry = vendorMap.get(vendorKey);
     vendorEntry.count += 1;
@@ -227,6 +245,7 @@ async function getBreakdownAnalytics(query = {}) {
       vendor: row.vendor,
       count: row.count,
       total: row.total,
+      institution: row.institution,
     }));
 
   const byMonth = Array.from(monthMap.values())

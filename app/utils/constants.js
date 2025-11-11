@@ -138,4 +138,119 @@ export const getAccountSubcategory = (accountType) => {
   if (investmentType) return investmentType.category;
 
   return 'cash';
-}; 
+};
+
+// ========== FINANCIAL INSTITUTIONS HELPERS ==========
+// These helpers work with the financial_institutions table
+
+/**
+ * Get institution by vendor code from database
+ * @param {object} db - Database connection
+ * @param {string} vendorCode - Vendor code (e.g., 'hapoalim', 'visaCal')
+ * @returns {Promise<object|null>} Institution record or null
+ */
+export async function getInstitutionByVendorCode(db, vendorCode) {
+  try {
+    const result = await db.query(
+      'SELECT * FROM financial_institutions WHERE vendor_code = $1 AND is_active = 1',
+      [vendorCode]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('[getInstitutionByVendorCode] Error:', error);
+    return null;
+  }
+}
+
+/**
+ * Get institution by ID from database
+ * @param {object} db - Database connection
+ * @param {number} institutionId - Institution ID
+ * @returns {Promise<object|null>} Institution record or null
+ */
+export async function getInstitutionById(db, institutionId) {
+  try {
+    const result = await db.query(
+      'SELECT * FROM financial_institutions WHERE id = $1',
+      [institutionId]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('[getInstitutionById] Error:', error);
+    return null;
+  }
+}
+
+/**
+ * Get all institutions by type
+ * @param {object} db - Database connection
+ * @param {string} institutionType - Type filter ('bank', 'credit_card', 'investment', etc.)
+ * @returns {Promise<array>} Array of institution records
+ */
+export async function getInstitutionsByType(db, institutionType) {
+  try {
+    const result = await db.query(
+      'SELECT * FROM financial_institutions WHERE institution_type = $1 AND is_active = 1 ORDER BY display_order',
+      [institutionType]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('[getInstitutionsByType] Error:', error);
+    return [];
+  }
+}
+
+/**
+ * Get all institutions by category
+ * @param {object} db - Database connection
+ * @param {string} category - Category filter ('banking', 'investments', 'insurance', etc.)
+ * @returns {Promise<array>} Array of institution records
+ */
+export async function getInstitutionsByCategory(db, category) {
+  try {
+    const result = await db.query(
+      'SELECT * FROM financial_institutions WHERE category = $1 AND is_active = 1 ORDER BY display_order',
+      [category]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('[getInstitutionsByCategory] Error:', error);
+    return [];
+  }
+}
+
+/**
+ * Get all scrapable institutions
+ * @param {object} db - Database connection
+ * @returns {Promise<array>} Array of scrapable institution records
+ */
+export async function getScrapableInstitutions(db) {
+  try {
+    const result = await db.query(
+      'SELECT * FROM financial_institutions WHERE is_scrapable = 1 AND is_active = 1 ORDER BY display_order',
+      []
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('[getScrapableInstitutions] Error:', error);
+    return [];
+  }
+}
+
+/**
+ * Get all active institutions
+ * @param {object} db - Database connection
+ * @returns {Promise<array>} Array of all active institution records
+ */
+export async function getAllInstitutions(db) {
+  try {
+    const result = await db.query(
+      'SELECT * FROM financial_institutions WHERE is_active = 1 ORDER BY category, display_order',
+      []
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('[getAllInstitutions] Error:', error);
+    return [];
+  }
+} 

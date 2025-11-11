@@ -1,4 +1,8 @@
 const database = require('../database.js');
+const {
+  INSTITUTION_SELECT_FIELDS,
+  buildInstitutionFromRow,
+} = require('../institutions.js');
 
 function serviceError(status, message) {
   const error = new Error(message);
@@ -13,24 +17,28 @@ async function listHoldings(params = {}) {
   if (includeHistory) {
     const query = accountId
       ? `
-        SELECT 
+        SELECT
           ihh.*,
           ia.account_name,
           ia.account_type,
-          ia.institution
+          ia.institution,
+          ${INSTITUTION_SELECT_FIELDS}
         FROM investment_holdings_history ihh
         JOIN investment_accounts ia ON ihh.account_id = ia.id
+        LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
         WHERE ihh.account_id = $1
         ORDER BY ihh.snapshot_date DESC
       `
       : `
-        SELECT 
+        SELECT
           ihh.*,
           ia.account_name,
           ia.account_type,
-          ia.institution
+          ia.institution,
+          ${INSTITUTION_SELECT_FIELDS}
         FROM investment_holdings_history ihh
         JOIN investment_accounts ia ON ihh.account_id = ia.id
+        LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
         ORDER BY ihh.snapshot_date DESC, ia.account_name
       `;
 
@@ -43,20 +51,23 @@ async function listHoldings(params = {}) {
         ...row,
         total_value: row.total_value !== null ? Number.parseFloat(row.total_value) : null,
         cost_basis: row.cost_basis !== null ? Number.parseFloat(row.cost_basis) : null,
+        institution: buildInstitutionFromRow(row),
       })),
     };
   }
 
   const query = accountId
     ? `
-      SELECT 
+      SELECT
         ih.*,
         ia.account_name,
         ia.account_type,
         ia.institution,
-        ia.currency
+        ia.currency,
+        ${INSTITUTION_SELECT_FIELDS}
       FROM investment_holdings ih
       JOIN investment_accounts ia ON ih.account_id = ia.id
+      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
       WHERE ih.account_id = $1
       ORDER BY ih.as_of_date DESC
       LIMIT 1
@@ -67,9 +78,11 @@ async function listHoldings(params = {}) {
         ia.account_name,
         ia.account_type,
         ia.institution,
-        ia.currency
+        ia.currency,
+        ${INSTITUTION_SELECT_FIELDS}
       FROM investment_holdings ih
       JOIN investment_accounts ia ON ih.account_id = ia.id
+      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
       WHERE ia.is_active = true
       ORDER BY ih.account_id, ih.as_of_date DESC
     `;
@@ -84,6 +97,7 @@ async function listHoldings(params = {}) {
       current_value: row.current_value !== null ? Number.parseFloat(row.current_value) : null,
       cost_basis: row.cost_basis !== null ? Number.parseFloat(row.cost_basis) : null,
       units: row.units !== null ? Number.parseFloat(row.units) : null,
+      institution: buildInstitutionFromRow(row),
     })),
   };
 }

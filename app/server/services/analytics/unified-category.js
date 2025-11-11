@@ -117,6 +117,7 @@ function buildBreakdownConfig(groupBy) {
         `,
         groupBy: 'COALESCE(parent.name, cd.name), cd.name, COALESCE(parent.id, cd.id), cd.id, parent.id',
         additionalWhere: '',
+        includeInstitution: false,
       };
     case 'month': {
       const monthExpr = "TO_CHAR(t.date, 'YYYY-MM')";
@@ -127,28 +128,44 @@ function buildBreakdownConfig(groupBy) {
         `,
         groupBy: monthExpr,
         additionalWhere: '',
+        includeInstitution: false,
       };
     }
     case 'vendor':
       return {
-        select: 't.vendor',
-        groupBy: 't.vendor',
+        select: `
+          t.vendor,
+          fi.id as institution_id,
+          fi.display_name_he as institution_name_he,
+          fi.display_name_en as institution_name_en,
+          fi.logo_url as institution_logo,
+          fi.institution_type as institution_type
+        `,
+        groupBy: 't.vendor, fi.id, fi.display_name_he, fi.display_name_en, fi.logo_url, fi.institution_type',
         additionalWhere: '',
+        includeInstitution: true,
       };
     case 'card':
       return {
         select: `
           t.account_number,
-          t.vendor
+          t.vendor,
+          fi.id as institution_id,
+          fi.display_name_he as institution_name_he,
+          fi.display_name_en as institution_name_en,
+          fi.logo_url as institution_logo,
+          fi.institution_type as institution_type
         `,
-        groupBy: 't.account_number, t.vendor',
+        groupBy: 't.account_number, t.vendor, fi.id, fi.display_name_he, fi.display_name_en, fi.logo_url, fi.institution_type',
         additionalWhere: ' AND t.account_number IS NOT NULL',
+        includeInstitution: true,
       };
     default:
       return {
         select: 't.vendor',
         groupBy: 't.vendor',
         additionalWhere: '',
+        includeInstitution: false,
       };
   }
 }
@@ -194,9 +211,11 @@ async function getUnifiedCategoryAnalytics(query = {}) {
       subcategoryId,
     });
 
-    const { select, groupBy: breakdownGroupBy, additionalWhere } = buildBreakdownConfig(groupBy);
+    const { select, groupBy: breakdownGroupBy, additionalWhere, includeInstitution } = buildBreakdownConfig(groupBy);
 
     const whereClause = `
+      LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
+      LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id
       LEFT JOIN account_pairings ap ON (
         t.vendor = ap.bank_vendor
         AND ap.is_active = 1
@@ -268,7 +287,12 @@ async function getUnifiedCategoryAnalytics(query = {}) {
             t.account_number,
             cd.id as category_definition_id,
             cd.name as category_name,
-            parent.name as parent_name
+            parent.name as parent_name,
+            fi.id as institution_id,
+            fi.display_name_he as institution_name_he,
+            fi.display_name_en as institution_name_en,
+            fi.logo_url as institution_logo,
+            fi.institution_type as institution_type
           FROM transactions t
           LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
           LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
@@ -288,6 +312,13 @@ async function getUnifiedCategoryAnalytics(query = {}) {
         categoryName: row.category_name,
         parentName: row.parent_name,
         accountNumber: row.account_number,
+        institution: row.institution_id ? {
+          id: row.institution_id,
+          display_name_he: row.institution_name_he,
+          display_name_en: row.institution_name_en,
+          logo_url: row.institution_logo,
+          institution_type: row.institution_type,
+        } : null,
       }));
     }
 
@@ -304,11 +335,32 @@ async function getUnifiedCategoryAnalytics(query = {}) {
         minAmount: Number.parseFloat(summary.min_amount || 0),
         maxAmount: Number.parseFloat(summary.max_amount || 0),
       },
-      breakdown: breakdownResult.rows.map((row) => ({
-        ...row,
-        count: Number.parseInt(row.count || 0, 10) || 0,
-        total: Number.parseFloat(row.total || 0),
-      })),
+      breakdown: breakdownResult.rows.map((row) => {
+        const item = {
+          ...row,
+          count: Number.parseInt(row.count || 0, 10) || 0,
+          total: Number.parseFloat(row.total || 0),
+        };
+
+        // Add institution object for vendor/card grouping
+        if (includeInstitution && row.institution_id) {
+          item.institution = {
+            id: row.institution_id,
+            display_name_he: row.institution_name_he,
+            display_name_en: row.institution_name_en,
+            logo_url: row.institution_logo,
+            institution_type: row.institution_type,
+          };
+          // Clean up the raw fields from the item
+          delete item.institution_id;
+          delete item.institution_name_he;
+          delete item.institution_name_en;
+          delete item.institution_logo;
+          delete item.institution_type;
+        }
+
+        return item;
+      }),
       ...(includeTransactions === 'true' ? { transactions } : {}),
     }, {
       filters: {

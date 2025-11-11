@@ -1,10 +1,12 @@
 const database = require('./database.js');
 const { encrypt, decrypt } = require('../../lib/server/encryption.js');
+const { buildInstitutionFromRow } = require('./institutions.js');
 
 function mapCredentialRow(row) {
-  return {
+  const credential = {
     id: row.id,
     vendor: row.vendor,
+    institution_id: row.institution_id,
     username: row.username ? decrypt(row.username) : null,
     password: row.password ? decrypt(row.password) : null,
     id_number: row.id_number ? decrypt(row.id_number) : null,
@@ -19,28 +21,45 @@ function mapCredentialRow(row) {
     lastScrapeStatus: row.lastscrapestatus || row.last_scrape_status,
     last_scrape_attempt: row.last_scrape_attempt,
   };
+
+  // Add institution object if available
+  const institution = buildInstitutionFromRow(row);
+  if (institution) {
+    credential.institution = institution;
+  }
+
+  return credential;
 }
 
 async function listCredentials(params = {}) {
   const { vendor } = params;
+  const { INSTITUTION_JOIN_VENDOR_CRED, INSTITUTION_SELECT_FIELDS } = require('./institutions.js');
 
   let sql;
   let sqlParams = [];
 
   if (vendor) {
-    sql = 'SELECT * FROM vendor_credentials WHERE vendor = $1 ORDER BY created_at DESC';
+    sql = `
+      SELECT vc.*, ${INSTITUTION_SELECT_FIELDS}
+      FROM vendor_credentials vc
+      ${INSTITUTION_JOIN_VENDOR_CRED}
+      WHERE vc.vendor = $1
+      ORDER BY vc.created_at DESC
+    `;
     sqlParams = [vendor];
   } else {
     sql = `
-      SELECT *,
+      SELECT vc.*,
+             ${INSTITUTION_SELECT_FIELDS},
              CASE
-               WHEN last_scrape_status = 'success' THEN 'success'
-               WHEN last_scrape_status = 'failed' THEN 'failed'
+               WHEN vc.last_scrape_status = 'success' THEN 'success'
+               WHEN vc.last_scrape_status = 'failed' THEN 'failed'
                ELSE 'never'
              END as lastScrapeStatus,
-             last_scrape_success as lastUpdate
-      FROM vendor_credentials
-      ORDER BY vendor
+             vc.last_scrape_success as lastUpdate
+      FROM vendor_credentials vc
+      ${INSTITUTION_JOIN_VENDOR_CRED}
+      ORDER BY vc.vendor
     `;
   }
 
@@ -80,22 +99,40 @@ function buildEncryptedPayload(payload = {}) {
 }
 
 async function createCredential(payload = {}) {
-  if (!payload.vendor) {
-    const error = new Error('Vendor is required');
+  if (!payload.vendor && !payload.institution_id) {
+    const error = new Error('Vendor or institution_id is required');
     error.statusCode = 400;
     throw error;
   }
 
   const encryptedData = buildEncryptedPayload(payload);
 
+  // If institution_id provided but no vendor, lookup vendor_code
+  let vendor = encryptedData.vendor;
+  let institutionId = payload.institution_id;
+
+  if (institutionId && !vendor) {
+    const { getInstitutionById } = require('./institutions.js');
+    const institution = await getInstitutionById(database, institutionId);
+    if (institution) {
+      vendor = institution.vendor_code;
+    }
+  } else if (vendor && !institutionId) {
+    // If vendor provided but no institution_id, lookup institution
+    const { mapVendorCodeToInstitutionId } = require('./institutions.js');
+    institutionId = await mapVendorCodeToInstitutionId(database, vendor);
+  }
+
+  const { INSTITUTION_JOIN_VENDOR_CRED, INSTITUTION_SELECT_FIELDS } = require('./institutions.js');
+
   const result = await database.query(
     `
-      INSERT INTO vendor_credentials (vendor, username, password, id_number, card6_digits, nickname, bank_account_number, identification_code)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO vendor_credentials (vendor, username, password, id_number, card6_digits, nickname, bank_account_number, identification_code, institution_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
     `,
     [
-      encryptedData.vendor,
+      vendor,
       encryptedData.username,
       encryptedData.password,
       encryptedData.id_number,
@@ -103,10 +140,22 @@ async function createCredential(payload = {}) {
       encryptedData.nickname,
       encryptedData.bank_account_number,
       encryptedData.identification_code,
+      institutionId,
     ],
   );
 
-  return mapCredentialRow(result.rows[0]);
+  // Fetch with institution data
+  const credWithInstitution = await database.query(
+    `
+      SELECT vc.*, ${INSTITUTION_SELECT_FIELDS}
+      FROM vendor_credentials vc
+      ${INSTITUTION_JOIN_VENDOR_CRED}
+      WHERE vc.id = $1
+    `,
+    [result.rows[0].id]
+  );
+
+  return mapCredentialRow(credWithInstitution.rows[0]);
 }
 
 async function deleteCredential(params = {}) {

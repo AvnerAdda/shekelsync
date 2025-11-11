@@ -2,7 +2,7 @@ const actualDatabase = require('../database.js');
 let database = actualDatabase;
 
 function normalizePairing(row) {
-  return {
+  const pairing = {
     id: row.id,
     creditCardVendor: row.credit_card_vendor,
     creditCardAccountNumber: row.credit_card_account_number,
@@ -13,6 +13,32 @@ function normalizePairing(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+
+  // Add credit card institution if available
+  if (row.cc_institution_id) {
+    pairing.creditCardInstitution = {
+      id: row.cc_institution_id,
+      vendor_code: row.cc_institution_vendor_code,
+      display_name_he: row.cc_institution_name_he,
+      display_name_en: row.cc_institution_name_en,
+      logo_url: row.cc_institution_logo,
+      institution_type: row.cc_institution_type,
+    };
+  }
+
+  // Add bank institution if available
+  if (row.bank_institution_id) {
+    pairing.bankInstitution = {
+      id: row.bank_institution_id,
+      vendor_code: row.bank_institution_vendor_code,
+      display_name_he: row.bank_institution_name_he,
+      display_name_en: row.bank_institution_name_en,
+      logo_url: row.bank_institution_logo,
+      institution_type: row.bank_institution_type,
+    };
+  }
+
+  return pairing;
 }
 
 function buildNullSafeEquality(column, placeholder) {
@@ -29,28 +55,42 @@ async function listPairings(params = {}) {
 
   let query = `
     SELECT
-      id,
-      credit_card_vendor,
-      credit_card_account_number,
-      bank_vendor,
-      bank_account_number,
-      match_patterns,
-      is_active,
-      created_at,
-      updated_at
-    FROM account_pairings
+      ap.*,
+      fi_cc.id as cc_institution_id,
+      fi_cc.vendor_code as cc_institution_vendor_code,
+      fi_cc.display_name_he as cc_institution_name_he,
+      fi_cc.display_name_en as cc_institution_name_en,
+      fi_cc.logo_url as cc_institution_logo,
+      fi_cc.institution_type as cc_institution_type,
+      fi_bank.id as bank_institution_id,
+      fi_bank.vendor_code as bank_institution_vendor_code,
+      fi_bank.display_name_he as bank_institution_name_he,
+      fi_bank.display_name_en as bank_institution_name_en,
+      fi_bank.logo_url as bank_institution_logo,
+      fi_bank.institution_type as bank_institution_type
+    FROM account_pairings ap
+    LEFT JOIN vendor_credentials vc_cc
+      ON ap.credit_card_vendor = vc_cc.vendor
+      AND (ap.credit_card_account_number IS NULL OR ap.credit_card_account_number = vc_cc.bank_account_number)
+    LEFT JOIN financial_institutions fi_cc
+      ON vc_cc.institution_id = fi_cc.id
+    LEFT JOIN vendor_credentials vc_bank
+      ON ap.bank_vendor = vc_bank.vendor
+      AND (ap.bank_account_number IS NULL OR ap.bank_account_number = vc_bank.bank_account_number)
+    LEFT JOIN financial_institutions fi_bank
+      ON vc_bank.institution_id = fi_bank.id
   `;
 
   const predicates = [];
   if (!includeInactive) {
-    predicates.push('is_active = 1');
+    predicates.push('ap.is_active = 1');
   }
 
   if (predicates.length > 0) {
     query += ` WHERE ${predicates.join(' AND ')}`;
   }
 
-  query += ' ORDER BY created_at DESC';
+  query += ' ORDER BY ap.created_at DESC';
 
   const result = await database.query(query);
   return result.rows.map(normalizePairing);
@@ -249,25 +289,35 @@ async function getActivePairings(clientInstance) {
     const result = await client.query(
       `
         SELECT
-          id,
-          credit_card_vendor,
-          credit_card_account_number,
-          bank_vendor,
-          bank_account_number,
-          match_patterns
-        FROM account_pairings
-        WHERE is_active = 1
+          ap.*,
+          fi_cc.id as cc_institution_id,
+          fi_cc.vendor_code as cc_institution_vendor_code,
+          fi_cc.display_name_he as cc_institution_name_he,
+          fi_cc.display_name_en as cc_institution_name_en,
+          fi_cc.logo_url as cc_institution_logo,
+          fi_cc.institution_type as cc_institution_type,
+          fi_bank.id as bank_institution_id,
+          fi_bank.vendor_code as bank_institution_vendor_code,
+          fi_bank.display_name_he as bank_institution_name_he,
+          fi_bank.display_name_en as bank_institution_name_en,
+          fi_bank.logo_url as bank_institution_logo,
+          fi_bank.institution_type as bank_institution_type
+        FROM account_pairings ap
+        LEFT JOIN vendor_credentials vc_cc
+          ON ap.credit_card_vendor = vc_cc.vendor
+          AND (ap.credit_card_account_number IS NULL OR ap.credit_card_account_number = vc_cc.bank_account_number)
+        LEFT JOIN financial_institutions fi_cc
+          ON vc_cc.institution_id = fi_cc.id
+        LEFT JOIN vendor_credentials vc_bank
+          ON ap.bank_vendor = vc_bank.vendor
+          AND (ap.bank_account_number IS NULL OR ap.bank_account_number = vc_bank.bank_account_number)
+        LEFT JOIN financial_institutions fi_bank
+          ON vc_bank.institution_id = fi_bank.id
+        WHERE ap.is_active = 1
       `,
     );
 
-    return result.rows.map((row) => ({
-      id: row.id,
-      creditCardVendor: row.credit_card_vendor,
-      creditCardAccountNumber: row.credit_card_account_number,
-      bankVendor: row.bank_vendor,
-      bankAccountNumber: row.bank_account_number,
-      matchPatterns: row.match_patterns ? JSON.parse(row.match_patterns) : [],
-    }));
+    return result.rows.map(normalizePairing);
   } finally {
     if (shouldRelease) {
       client.release();

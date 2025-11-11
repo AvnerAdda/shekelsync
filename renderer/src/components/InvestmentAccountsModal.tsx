@@ -215,7 +215,16 @@ const TransactionLinksTabContent: React.FC<{ onRefresh: () => void }> = ({ onRef
                   <TableCell>{new Date(s.transaction_date).toLocaleDateString('he-IL')}</TableCell>
                   <TableCell>{s.transaction_name}</TableCell>
                   <TableCell>₪{s.transaction_amount?.toLocaleString()}</TableCell>
-                  <TableCell>{s.account_name}</TableCell>
+                  <TableCell>
+                    <Box>
+                      <Typography variant="body2">{s.account_name}</Typography>
+                      {s.institution?.display_name_he && (
+                        <Typography variant="caption" color="text.secondary">
+                          {s.institution.display_name_he}
+                        </Typography>
+                      )}
+                    </Box>
+                  </TableCell>
                   <TableCell>
                     <Chip label={`${((s.confidence || 0) * 100).toFixed(0)}%`} size="small" color="success" />
                   </TableCell>
