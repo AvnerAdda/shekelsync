@@ -33,6 +33,7 @@ const { createAnalyticsActionItemsRouter } = require(resolveAppPath(
 const { createCredentialsRouter } = require(resolveAppPath('server', 'routes', 'credentials.js'));
 const { createCategorizationRouter } = require(resolveAppPath('server', 'routes', 'categorization.js'));
 const { createCategoriesRouter } = require(resolveAppPath('server', 'routes', 'categories.js'));
+const { createInstitutionsRouter } = require(resolveAppPath('server', 'routes', 'institutions.js'));
 
 async function setupAPIServer(mainWindow) {
   const app = express();
@@ -79,6 +80,9 @@ async function setupAPIServer(mainWindow) {
 
   // Investment routes (migrated)
   app.use('/api/investments', createInvestmentsRouter());
+
+  // Financial institutions
+  app.use('/api/institutions', createInstitutionsRouter());
 
   // Pattern routes (migrated)
   app.use('/api/patterns', createPatternsRouter());
