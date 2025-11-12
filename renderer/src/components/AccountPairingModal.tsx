@@ -37,10 +37,13 @@ import { useNotification } from './NotificationContext';
 import ModalHeader from './ModalHeader';
 import UnpairedTransactionsDialog from './UnpairedTransactionsDialog';
 import { apiClient } from '@/lib/api-client';
+import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from './InstitutionBadge';
 
 interface Account {
   id: number;
   vendor: string;
+  institution_id?: number | null;
+  institution?: InstitutionMetadata | null;
   nickname?: string;
   card6_digits?: string; // Deprecated - kept for backward compatibility
   bank_account_number?: string; // Deprecated - kept for backward compatibility
@@ -185,7 +188,10 @@ export default function AccountPairingModal({
 
     // Part 1: Vendor (if requested)
     if (includeVendor) {
-      parts.push(account.vendor);
+      const vendorLabel = account.institution
+        ? getInstitutionLabel(account.institution)
+        : null;
+      parts.push(vendorLabel || account.vendor);
     }
 
     // Part 2: Nickname (always show if available)
@@ -872,7 +878,15 @@ export default function AccountPairingModal({
 
                   return (
                     <MenuItem key={key} value={`${account.id}-${account.account_number || 'undefined'}`}>
-                      {getAccountDisplayName(account)}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <InstitutionBadge
+                          institution={account.institution}
+                          fallback={account.vendor}
+                        />
+                        <Typography variant="body2">
+                          {getAccountDisplayName(account, false) || account.nickname || account.account_number || 'No nickname yet'}
+                        </Typography>
+                      </Box>
                     </MenuItem>
                   );
                 })}
@@ -901,7 +915,15 @@ export default function AccountPairingModal({
 
                   return (
                     <MenuItem key={key} value={`${account.id}-${account.account_number || 'undefined'}`}>
-                      {getAccountDisplayName(account)}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <InstitutionBadge
+                          institution={account.institution}
+                          fallback={account.vendor}
+                        />
+                        <Typography variant="body2">
+                          {getAccountDisplayName(account, false) || account.nickname || account.account_number || 'No nickname yet'}
+                        </Typography>
+                      </Box>
                     </MenuItem>
                   );
                 })}
@@ -920,12 +942,38 @@ export default function AccountPairingModal({
               <>
                 <Alert severity="info" sx={{ mb: 2 }}>
                   <AlertTitle>Selected Accounts</AlertTitle>
-                  <Typography variant="body2">
-                    <strong>Credit Card:</strong> {selectedCreditCard && getAccountDisplayName(selectedCreditCard)}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Bank Account:</strong> {selectedBank && getAccountDisplayName(selectedBank)}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Credit Card:</Typography>
+                    {selectedCreditCard ? (
+                      <>
+                        <InstitutionBadge
+                          institution={selectedCreditCard.institution}
+                          fallback={selectedCreditCard.vendor}
+                        />
+                        <Typography variant="body2">
+                          {getAccountDisplayName(selectedCreditCard, false) || selectedCreditCard.card6_digits || selectedCreditCard.account_number || 'No nickname yet'}
+                        </Typography>
+                      </>
+                    ) : (
+                      <Typography variant="body2">Not selected</Typography>
+                    )}
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Bank Account:</Typography>
+                    {selectedBank ? (
+                      <>
+                        <InstitutionBadge
+                          institution={selectedBank.institution}
+                          fallback={selectedBank.vendor}
+                        />
+                        <Typography variant="body2">
+                          {getAccountDisplayName(selectedBank, false) || selectedBank.account_number || 'All accounts'}
+                        </Typography>
+                      </>
+                    ) : (
+                      <Typography variant="body2">Not selected</Typography>
+                    )}
+                  </Box>
                 </Alert>
 
                 {stats && (
@@ -1076,14 +1124,38 @@ export default function AccountPairingModal({
           <Box>
             <Alert severity="success" sx={{ mb: 3 }}>
               <AlertTitle>Ready to Create Pairing</AlertTitle>
-              <Typography variant="body2">
-                <strong>Credit Card:</strong> {selectedCreditCard?.vendor} ({selectedCreditCard?.account_number || 'N/A'})
-                {selectedCreditCard?.nickname && ` - ${selectedCreditCard.nickname}`}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Bank Account:</strong> {selectedBank?.vendor} ({selectedBank?.account_number || 'N/A'})
-                {selectedBank?.nickname && ` - ${selectedBank.nickname}`}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>Credit Card:</Typography>
+                {selectedCreditCard ? (
+                  <>
+                    <InstitutionBadge
+                      institution={selectedCreditCard.institution}
+                      fallback={selectedCreditCard.vendor}
+                    />
+                    <Typography variant="body2">
+                      {getAccountDisplayName(selectedCreditCard, false) || selectedCreditCard.card6_digits || selectedCreditCard.account_number || 'No nickname yet'}
+                    </Typography>
+                  </>
+                ) : (
+                  <Typography variant="body2">Not selected</Typography>
+                )}
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>Bank Account:</Typography>
+                {selectedBank ? (
+                  <>
+                    <InstitutionBadge
+                      institution={selectedBank.institution}
+                      fallback={selectedBank.vendor}
+                    />
+                    <Typography variant="body2">
+                      {getAccountDisplayName(selectedBank, false) || selectedBank.account_number || 'All accounts'}
+                    </Typography>
+                  </>
+                ) : (
+                  <Typography variant="body2">Not selected</Typography>
+                )}
+              </Box>
               <Typography variant="body2" sx={{ mt: 1 }}>
                 <strong>Match Patterns ({matchPatterns.length}):</strong>
               </Typography>
@@ -1152,12 +1224,26 @@ export default function AccountPairingModal({
           <Box>
             <Alert severity="info" sx={{ mb: 3 }}>
               <AlertTitle>Current Pairing</AlertTitle>
-              <Typography variant="body2">
-                <strong>Credit Card:</strong> {editingPairing.creditCardVendor} ({editingPairing.creditCardAccountNumber || 'N/A'})
-              </Typography>
-              <Typography variant="body2">
-                <strong>Bank Account:</strong> {editingPairing.bankVendor} ({editingPairing.bankAccountNumber || 'N/A'})
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>Credit Card:</Typography>
+                <InstitutionBadge
+                  institution={editingPairing.creditCardInstitution}
+                  fallback={editingPairing.creditCardVendor}
+                />
+                <Typography variant="body2">
+                  {editingPairing.creditCardAccountNumber || 'N/A'}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>Bank Account:</Typography>
+                <InstitutionBadge
+                  institution={editingPairing.bankInstitution}
+                  fallback={editingPairing.bankVendor}
+                />
+                <Typography variant="body2">
+                  {editingPairing.bankAccountNumber || 'N/A'}
+                </Typography>
+              </Box>
               <Typography variant="body2" sx={{ mt: 1 }}>
                 <strong>Status:</strong> {editingPairing.isActive ? (
                   <Chip label="Active" size="small" color="success" sx={{ ml: 1 }} />
@@ -1193,8 +1279,15 @@ export default function AccountPairingModal({
                       const key = `${account.id}-${account.account_number || idx}`;
                       return (
                         <MenuItem key={key} value={`${account.id}-${account.account_number || 'undefined'}`}>
-                          {account.vendor} ({accountNumberDisplay})
-                          {account.nickname && ` - ${account.nickname}`}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <InstitutionBadge
+                              institution={account.institution}
+                              fallback={account.vendor}
+                            />
+                            <Typography variant="body2">
+                              {account.nickname || accountNumberDisplay}
+                            </Typography>
+                          </Box>
                         </MenuItem>
                       );
                     })}
@@ -1222,8 +1315,15 @@ export default function AccountPairingModal({
                       const key = `${account.id}-${account.account_number || idx}`;
                       return (
                         <MenuItem key={key} value={`${account.id}-${account.account_number || 'undefined'}`}>
-                          {account.vendor} ({accountNumberDisplay})
-                          {account.nickname && ` - ${account.nickname}`}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <InstitutionBadge
+                              institution={account.institution}
+                              fallback={account.vendor}
+                            />
+                            <Typography variant="body2">
+                              {account.nickname || accountNumberDisplay}
+                            </Typography>
+                          </Box>
                         </MenuItem>
                       );
                     })}
@@ -1286,12 +1386,38 @@ export default function AccountPairingModal({
                 ) : (
                   <>
                     <Alert severity="info" sx={{ mb: 2 }}>
-                      <Typography variant="body2">
-                        <strong>Credit Card:</strong> {editCreditCard?.vendor} ({editCreditCard?.account_number || 'N/A'})
-                      </Typography>
-                      <Typography variant="body2">
-                        <strong>Bank Account:</strong> {editBank?.vendor} ({editBank?.account_number || 'N/A'})
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>Credit Card:</Typography>
+                        {editCreditCard ? (
+                          <>
+                            <InstitutionBadge
+                              institution={editCreditCard.institution}
+                              fallback={editCreditCard.vendor}
+                            />
+                            <Typography variant="body2">
+                              {editCreditCard.account_number || editCreditCard.nickname || 'N/A'}
+                            </Typography>
+                          </>
+                        ) : (
+                          <Typography variant="body2">Not selected</Typography>
+                        )}
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>Bank Account:</Typography>
+                        {editBank ? (
+                          <>
+                            <InstitutionBadge
+                              institution={editBank.institution}
+                              fallback={editBank.vendor}
+                            />
+                            <Typography variant="body2">
+                              {editBank.account_number || editBank.nickname || 'N/A'}
+                            </Typography>
+                          </>
+                        ) : (
+                          <Typography variant="body2">Not selected</Typography>
+                        )}
+                      </Box>
                     </Alert>
 
                     <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

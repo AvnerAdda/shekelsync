@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { startOfMonth, subMonths } from 'date-fns';
 import {
   Dialog,
@@ -68,10 +68,50 @@ import ModalHeader from './ModalHeader';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
 import { calculateSimilarity } from '@app/utils/account-matcher';
 import { apiClient } from '@/lib/api-client';
+import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from './InstitutionBadge';
+
+const CREDIT_CARD_VENDOR_LABELS: Record<string, string> = {
+  isracard: 'Isracard',
+  amex: 'American Express',
+  visaCal: 'Visa Cal',
+  max: 'Max',
+};
+
+const BANK_VENDOR_LABELS: Record<string, string> = {
+  hapoalim: 'Bank Hapoalim',
+  leumi: 'Bank Leumi',
+  discount: 'Discount Bank',
+  mizrahi: 'Mizrahi Tefahot',
+  otsarHahayal: 'Otsar Hahayal',
+  beinleumi: 'Beinleumi',
+  massad: 'Massad',
+  yahav: 'Bank Yahav',
+  union: 'Union Bank',
+  mercantile: 'Mercantile Bank',
+  beyahadBishvilha: 'Beyahad Bishvilha',
+  behatsdaa: 'Behatsdaa',
+  pagi: 'Pagi',
+  oneZero: 'One Zero',
+};
+
+const toFallbackInstitution = (vendor: string, type: 'bank' | 'credit_card'): InstitutionMetadata => {
+  const label = type === 'bank'
+    ? BANK_VENDOR_LABELS[vendor] || vendor
+    : CREDIT_CARD_VENDOR_LABELS[vendor] || vendor;
+
+  return {
+    id: -1,
+    vendor_code: vendor,
+    display_name_he: label,
+    display_name_en: label,
+    institution_type: type,
+  };
+};
 
 export interface Account {
   id: number;
   vendor: string;
+  institution_id?: number | null;
   username?: string;
   userCode?: string;
   id_number?: string;
@@ -91,21 +131,14 @@ export interface Account {
   balance_updated_at?: string;
   suggestedStartDate?: string;
   startDateMessage?: string;
-  institution?: {
-    id: number;
-    vendor_code: string;
-    display_name_he: string;
-    display_name_en: string;
-    logo_url?: string;
-    institution_type: string;
-  };
+  institution?: InstitutionMetadata | null;
 }
 
 interface InvestmentAccount {
   id?: number;
   account_name: string;
   account_type: string;
-  institution?: string; // Legacy string field
+  institution?: string | InstitutionMetadata | null; // Legacy string field or populated object
   account_number?: string;
   currency: string;
   notes?: string;
@@ -116,15 +149,8 @@ interface InvestmentAccount {
   total_invested?: number | null;
   holdings_count?: number;
   last_update_date?: string;
-  institution_id?: number;
-  institutionObj?: { // New object field
-    id: number;
-    vendor_code: string;
-    display_name_he: string;
-    display_name_en: string;
-    logo_url?: string;
-    institution_type: string;
-  };
+  institution_id?: number | null;
+  institutionObj?: InstitutionMetadata | null; // Backward compatibility for older API payloads
 }
 
 interface AccountsModalProps {
@@ -254,6 +280,7 @@ const AccountSection = styled(Box)(({ theme }) => ({
 export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([]);
+  const [institutions, setInstitutions] = useState<InstitutionMetadata[]>([]);
   const [, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -269,6 +296,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const { refetch: refetchOnboardingStatus } = useOnboarding();
   const [newAccount, setNewAccount] = useState<Account>({
     vendor: 'isracard',
+    institution_id: null,
     username: '',
     userCode: '',
     id_number: '',
@@ -291,7 +319,60 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     institution: '',
     account_number: '',
     notes: '',
+    institution_id: null,
   });
+
+  const creditCardInstitutionOptions = useMemo(() => {
+    const sorted = institutions
+      .filter((institution) => institution.institution_type === 'credit_card')
+      .sort((a, b) => {
+        const left = getInstitutionLabel(a) || a.vendor_code;
+        const right = getInstitutionLabel(b) || b.vendor_code;
+        return left.localeCompare(right, 'he', { sensitivity: 'base' });
+      });
+
+    if (sorted.length > 0) {
+      return sorted;
+    }
+
+    return CREDIT_CARD_VENDORS.map((vendor) => toFallbackInstitution(vendor, 'credit_card'));
+  }, [institutions]);
+
+  const bankInstitutionOptions = useMemo(() => {
+    const sorted = institutions
+      .filter((institution) => institution.institution_type === 'bank')
+      .sort((a, b) => {
+        const left = getInstitutionLabel(a) || a.vendor_code;
+        const right = getInstitutionLabel(b) || b.vendor_code;
+        return left.localeCompare(right, 'he', { sensitivity: 'base' });
+      });
+
+    if (sorted.length > 0) {
+      return sorted;
+    }
+
+    const fallbackVendors = [...BANK_VENDORS, ...SPECIAL_BANK_VENDORS, ...OTHER_BANK_VENDORS];
+    return fallbackVendors.map((vendor) => toFallbackInstitution(vendor, 'bank'));
+  }, [institutions]);
+
+  const investmentInstitutionOptions = useMemo(() => {
+    const allowedTypes = new Set(['investment', 'insurance', 'broker', 'crypto']);
+    return institutions
+      .filter((institution) => allowedTypes.has(institution.institution_type))
+      .sort((a, b) => {
+        const left = getInstitutionLabel(a) || a.vendor_code;
+        const right = getInstitutionLabel(b) || b.vendor_code;
+        return left.localeCompare(right, 'he', { sensitivity: 'base' });
+      });
+  }, [institutions]);
+
+  const findInstitutionByVendor = useCallback(
+    (vendor?: string | null) => {
+      if (!vendor) return undefined;
+      return institutions.find((institution) => institution.vendor_code === vendor);
+    },
+    [institutions],
+  );
 
   // Holdings management state
   const [existingInvestments, setExistingInvestments] = useState<any>(null);
@@ -331,15 +412,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     name: string;
   } | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchAccounts();
-      fetchInvestmentAccounts();
-      loadExistingInvestments();
-    }
-  }, [isOpen]);
-
-  const fetchAccounts = async () => {
+  const fetchAccounts = useCallback(async () => {
     try {
       setIsLoading(true);
       const accountsResponse = await apiClient.get('/api/accounts/last-update');
@@ -374,9 +447,9 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchInvestmentAccounts = async () => {
+  const fetchInvestmentAccounts = useCallback(async () => {
     try {
       const response = await apiClient.get('/api/investments/accounts');
       if (response.ok) {
@@ -386,7 +459,22 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     } catch (err) {
       console.error('Error loading investment accounts:', err);
     }
-  };
+  }, []);
+
+  const fetchInstitutions = useCallback(async () => {
+    try {
+      const response = await apiClient.get('/api/institutions');
+      if (response.ok) {
+        const payload = response.data as any;
+        const list = Array.isArray(payload?.institutions)
+          ? payload.institutions
+          : (payload?.institution ? [payload.institution] : []);
+        setInstitutions(list);
+      }
+    } catch (err) {
+      console.error('Error loading institutions:', err);
+    }
+  }, []);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -468,6 +556,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
         setNewAccount({
           vendor: 'isracard',
+          institution_id: null,
           username: '',
           userCode: '',
           id_number: '',
@@ -499,6 +588,10 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     // Set adding mode
     setIsAdding(true);
 
+    const suggestedInstitution = findInstitutionByVendor(
+      suggestion.suggestedInstitutionVendor || suggestion.suggestedAccountType
+    );
+
     // Pre-populate the form with suggestion data
     setNewInvestmentAccount({
       account_name: suggestion.categoryName || suggestion.suggestedAccountName,
@@ -507,6 +600,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       institution: suggestion.suggestedInstitution || '',
       account_number: '',
       notes: `Created from smart suggestion (${suggestion.transactionCount} transactions)`,
+      institution_id: suggestedInstitution?.id ?? null,
     });
 
     // Store transactions for later linking
@@ -558,6 +652,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           institution: '',
           account_number: '',
           notes: '',
+          institution_id: null,
         });
         setIsAdding(false);
         window.dispatchEvent(new CustomEvent('dataRefresh'));
@@ -627,7 +722,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   };
 
   // Existing investments matching functionality
-  const loadExistingInvestments = async () => {
+  const loadExistingInvestments = useCallback(async () => {
     try {
       const response = await apiClient.get('/api/investments/check-existing');
       if (response.ok) {
@@ -636,7 +731,16 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     } catch (err) {
       console.error('Error loading existing investments:', err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchAccounts();
+      fetchInvestmentAccounts();
+      loadExistingInvestments();
+      fetchInstitutions();
+    }
+  }, [isOpen, fetchAccounts, fetchInvestmentAccounts, loadExistingInvestments, fetchInstitutions]);
 
   // Check if account name matches existing investment transactions
   const isExistingInvestment = (accountName: string): { match: boolean; category?: string; count?: number; confidence?: number } => {
@@ -884,6 +988,11 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         <TableBody>
           {accounts.map((account) => {
             const accountType = INVESTMENT_ACCOUNT_TYPES.find(t => t.value === account.account_type);
+            const institutionMeta = (account.institution && typeof account.institution !== 'string'
+              ? account.institution as InstitutionMetadata
+              : account.institutionObj) || null;
+            const institutionFallback =
+              typeof account.institution === 'string' ? account.institution : undefined;
             return (
               <StyledTableRow key={account.id}>
                 <TableCell>
@@ -905,9 +1014,14 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   />
                 </TableCell>
                 <TableCell>
-                  <Typography variant="body2">
-                    {account.institutionObj?.display_name_he || (typeof account.institution === 'string' ? account.institution : '-')}
-                  </Typography>
+                  {institutionFallback && !institutionMeta ? (
+                    <Typography variant="body2">{institutionFallback}</Typography>
+                  ) : (
+                    <InstitutionBadge
+                      institution={institutionMeta}
+                      fallback={institutionFallback || '-'}
+                    />
+                  )}
                 </TableCell>
                 <TableCell>
                   <Box>
@@ -1029,14 +1143,9 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   </Box>
                 </TableCell>
                 <TableCell>
-                  <Chip
-                    label={account.institution?.display_name_he || account.vendor}
-                    size="small"
-                    variant="outlined"
-                    color={type === 'bank' ? 'primary' : 'secondary'}
-                    sx={{
-                      textTransform: 'capitalize',
-                    }}
+                  <InstitutionBadge
+                    institution={account.institution as InstitutionMetadata | null}
+                    fallback={account.vendor}
                   />
                 </TableCell>
                 <TableCell>
@@ -1221,9 +1330,12 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             value={CREDIT_CARD_VENDORS.includes(newAccount.vendor) ? newAccount.vendor : ''}
                             onChange={(e) => {
                               const vendor = e.target.value;
+                              const institution = findInstitutionByVendor(vendor);
+                              const institutionId = institution && institution.id > 0 ? institution.id : null;
                               setNewAccount({
                                 ...newAccount,
                                 vendor,
+                                institution_id: institutionId,
                                 username: (vendor === 'visaCal' || vendor === 'max') ? newAccount.username : '',
                                 id_number: (vendor === 'isracard' || vendor === 'amex') ? newAccount.id_number : '',
                                 identification_code: '',
@@ -1231,10 +1343,11 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                               });
                             }}
                           >
-                            <MenuItem value="isracard">Isracard</MenuItem>
-                            <MenuItem value="amex">American Express</MenuItem>
-                            <MenuItem value="visaCal">Visa Cal</MenuItem>
-                            <MenuItem value="max">Max</MenuItem>
+                            {creditCardInstitutionOptions.map((institution) => (
+                              <MenuItem key={institution.vendor_code} value={institution.vendor_code}>
+                                {getInstitutionLabel(institution)}
+                              </MenuItem>
+                            ))}
                           </TextField>
                         </Grid>
 
@@ -1334,9 +1447,12 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             value={[...BANK_VENDORS, ...SPECIAL_BANK_VENDORS, ...OTHER_BANK_VENDORS].includes(newAccount.vendor) ? newAccount.vendor : ''}
                             onChange={(e) => {
                               const vendor = e.target.value;
+                              const institution = findInstitutionByVendor(vendor);
+                              const institutionId = institution && institution.id > 0 ? institution.id : null;
                               setNewAccount({
                                 ...newAccount,
                                 vendor,
+                                institution_id: institutionId,
                                 username: '',
                                 userCode: '',
                                 id_number: '',
@@ -1349,20 +1465,11 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                               });
                             }}
                           >
-                            <MenuItem value="hapoalim">Bank Hapoalim</MenuItem>
-                            <MenuItem value="leumi">Bank Leumi</MenuItem>
-                            <MenuItem value="discount">Discount Bank</MenuItem>
-                            <MenuItem value="mizrahi">Mizrahi Tefahot</MenuItem>
-                            <MenuItem value="beinleumi">Beinleumi</MenuItem>
-                            <MenuItem value="union">Union Bank</MenuItem>
-                            <MenuItem value="yahav">Bank Yahav</MenuItem>
-                            <MenuItem value="otsarHahayal">Otsar Hahayal</MenuItem>
-                            <MenuItem value="mercantile">Mercantile Bank</MenuItem>
-                            <MenuItem value="massad">Massad</MenuItem>
-                            <MenuItem value="beyahadBishvilha">Beyahad Bishvilha</MenuItem>
-                            <MenuItem value="behatsdaa">Behatsdaa</MenuItem>
-                            <MenuItem value="pagi">Pagi</MenuItem>
-                            <MenuItem value="oneZero">One Zero</MenuItem>
+                            {bankInstitutionOptions.map((institution) => (
+                              <MenuItem key={institution.vendor_code} value={institution.vendor_code}>
+                                {getInstitutionLabel(institution)}
+                              </MenuItem>
+                            ))}
                           </TextField>
                         </Grid>
 
@@ -1647,6 +1754,48 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           onChange={(e) => setNewInvestmentAccount({ ...newInvestmentAccount, institution: e.target.value })}
                           placeholder="e.g., Migdal, Meitav Dash"
                         />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          select
+                          label="Known Institution (optional)"
+                          value={newInvestmentAccount.institution_id ?? ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            const selectedId = value ? Number(value) : null;
+                            const selectedInstitution = investmentInstitutionOptions.find(
+                              (institution) => institution.id === selectedId
+                            );
+
+                            const currentName =
+                              typeof newInvestmentAccount.institution === 'string'
+                                ? newInvestmentAccount.institution
+                                : '';
+                            const updatedName = selectedInstitution
+                              ? (selectedInstitution.display_name_he ||
+                                  selectedInstitution.display_name_en ||
+                                  currentName)
+                              : currentName;
+
+                            setNewInvestmentAccount({
+                              ...newInvestmentAccount,
+                              institution_id: selectedId,
+                              institution: updatedName,
+                            });
+                          }}
+                          SelectProps={{ displayEmpty: true }}
+                          helperText="Select from registry or leave blank for a custom institution"
+                        >
+                          <MenuItem value="">
+                            <em>None</em>
+                          </MenuItem>
+                          {investmentInstitutionOptions.map((institution) => (
+                            <MenuItem key={institution.id} value={institution.id}>
+                              {getInstitutionLabel(institution)} ({institution.institution_type})
+                            </MenuItem>
+                          ))}
+                        </TextField>
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <TextField
