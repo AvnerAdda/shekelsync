@@ -52,7 +52,7 @@ describe('accounts pairings service', () => {
 
     expect(queryMock).toHaveBeenCalledTimes(1);
     const sql = queryMock.mock.calls[0][0] as string;
-    expect(sql).toContain('WHERE is_active = 1');
+    expect(sql).toContain('WHERE ap.is_active = 1');
     expect(result).toEqual([
       {
         id: 1,

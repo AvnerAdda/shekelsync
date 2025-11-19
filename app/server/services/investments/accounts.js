@@ -5,6 +5,7 @@ const {
   buildInstitutionFromRow,
   mapVendorCodeToInstitutionId,
   getInstitutionById,
+  getInstitutionByVendorCode,
 } = require('../institutions.js');
 
 const VALID_TYPES = new Set([
@@ -17,11 +18,16 @@ const VALID_TYPES = new Set([
   'mutual_fund',
   'bonds',
   'real_estate',
+  'bank_balance',
+  'cash',
+  'foreign_bank',
+  'foreign_investment',
   'other',
 ]);
 
-const LIQUID_TYPES = new Set(['brokerage', 'crypto', 'mutual_fund', 'bonds', 'real_estate', 'savings', 'other']);
+const LIQUID_TYPES = new Set(['brokerage', 'crypto', 'mutual_fund', 'bonds', 'real_estate', 'savings']);
 const RESTRICTED_TYPES = new Set(['pension', 'provident', 'study_fund']);
+const CASH_TYPES = new Set(['bank_balance', 'cash', 'foreign_bank', 'foreign_investment', 'other']);
 
 function serviceError(status, message) {
   const error = new Error(message);
@@ -89,11 +95,15 @@ async function listAccounts(params = {}) {
 
   const result = await database.query(query, values);
 
-  return {
-    accounts: result.rows.map((row) => {
+  const accounts = await Promise.all(
+    result.rows.map(async (row) => {
       const explicitValue = row.current_value ? Number.parseFloat(row.current_value) : null;
       const totalInvested = row.total_invested ? Number.parseFloat(row.total_invested) : null;
-      const institution = buildInstitutionFromRow(row);
+      let institution = buildInstitutionFromRow(row);
+
+      if (!institution && row.account_type) {
+        institution = await getInstitutionByVendorCode(database, row.account_type);
+      }
 
       return {
         ...row,
@@ -106,7 +116,9 @@ async function listAccounts(params = {}) {
         institution: institution || null, // Add institution object
       };
     }),
-  };
+  );
+
+  return { accounts };
 }
 
 async function createAccount(payload = {}) {
@@ -152,6 +164,13 @@ async function createAccount(payload = {}) {
   } else if (RESTRICTED_TYPES.has(accountTypeValue)) {
     isLiquid = false;
     investmentCategory = 'restricted';
+  } else if (CASH_TYPES.has(accountTypeValue)) {
+    isLiquid = true;
+    investmentCategory = 'cash';
+  }
+
+  if (!institutionIdValue) {
+    throw serviceError(400, 'institution_id is required. Please select a known institution.');
   }
 
   const result = await database.query(
@@ -239,6 +258,11 @@ async function updateAccount(payload = {}) {
       values.push(false);
       updates.push(`investment_category = $${paramIndex++}`);
       values.push('restricted');
+    } else if (CASH_TYPES.has(account_type)) {
+      updates.push(`is_liquid = $${paramIndex++}`);
+      values.push(true);
+      updates.push(`investment_category = $${paramIndex++}`);
+      values.push('cash');
     }
 
     // Auto-update institution_id when account_type changes
@@ -257,6 +281,9 @@ async function updateAccount(payload = {}) {
   }
 
   if (institution_id !== undefined) {
+    if (institution_id === null) {
+      throw serviceError(400, 'institution_id is required when updating an investment account');
+    }
     updates.push(`institution_id = $${paramIndex++}`);
     values.push(institution_id);
   }

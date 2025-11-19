@@ -1,4 +1,5 @@
 const database = require('../database.js');
+const { getInstitutionById, getInstitutionByVendorCode } = require('../institutions.js');
 
 async function getActionItems(params = {}) {
   const { status, priority, includeProgress = 'true' } = params;
@@ -41,6 +42,31 @@ async function getActionItems(params = {}) {
 
   const result = await database.query(query, values);
   const items = result.rows;
+
+  for (const item of items) {
+    if (item.metadata && typeof item.metadata === 'string') {
+      try {
+        item.metadata = JSON.parse(item.metadata);
+      } catch {
+        item.metadata = null;
+      }
+    }
+    if (item.metadata && typeof item.metadata === 'object') {
+      if (item.metadata.institution_id && !item.metadata.institution) {
+        item.metadata.institution = await getInstitutionById(database, item.metadata.institution_id);
+      } else if (item.metadata.vendor && !item.metadata.institution) {
+        item.metadata.institution = await getInstitutionByVendorCode(database, item.metadata.vendor);
+      }
+
+      if (!item.metadata.institution && (item.metadata.institution_id || item.metadata.vendor)) {
+        console.warn('[ActionItems] Missing institution metadata', {
+          id: item.id,
+          vendor: item.metadata.vendor,
+          institution_id: item.metadata.institution_id,
+        });
+      }
+    }
+  }
 
   if (includeProgress === 'true' && items.length > 0) {
     const itemIds = items.map((item) => item.id);

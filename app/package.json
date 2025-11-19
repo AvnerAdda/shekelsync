@@ -9,7 +9,9 @@
     "build": "npm --prefix ../renderer run build",
     "build:renderer:electron": "npm --prefix ../renderer run build",
     "build-electron": "npm run build:renderer:electron && electron-builder",
-    "start": "electron ../electron/main.js",
+    "start": "electron .", 
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-builder install-app-deps",
     "lint": "npm run lint:app && npm run lint:renderer",
     "lint:app": "eslint --ext .ts,.tsx,.js,.jsx .",
     "lint:renderer": "npm --prefix ../renderer run lint",
@@ -20,7 +22,6 @@
     "pack": "npm run build:renderer:electron && electron-builder --dir",
     "release": "npm run build:renderer:electron && electron-builder --publish=always",
     "clean": "rm -rf out build dist",
-    "postinstall": "patch-package",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },

@@ -1,4 +1,9 @@
 const database = require('../database.js');
+const {
+  INSTITUTION_SELECT_FIELDS,
+  buildInstitutionFromRow,
+  getInstitutionByVendorCode,
+} = require('../institutions.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
 
 let dateFnsPromise = null;
@@ -34,7 +39,8 @@ async function fetchAccounts(client) {
         ih.as_of_date,
         ih.units,
         ih.asset_name,
-        ih.asset_type
+        ih.asset_type,
+        ${INSTITUTION_SELECT_FIELDS}
       FROM investment_accounts ia
       LEFT JOIN investment_holdings ih
         ON ih.id = (
@@ -44,25 +50,17 @@ async function fetchAccounts(client) {
           ORDER BY ih2.as_of_date DESC
           LIMIT 1
         )
+      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
       WHERE ia.is_active = ${booleanTrue}
       ORDER BY ia.investment_category, ia.account_type, ia.account_name
     `,
   );
 }
 
+// DEPRECATED: Bank accounts are now fetched from investment_accounts with account_type = 'bank_balance'
+// This function is kept for backward compatibility but returns empty results
 async function fetchBankAccounts(client) {
-  return client.query(
-    `
-      SELECT
-        vendor,
-        nickname,
-        current_balance,
-        balance_updated_at
-      FROM vendor_credentials
-      WHERE current_balance > 0
-      ORDER BY vendor, nickname
-    `,
-  );
+  return { rows: [] };
 }
 
 async function fetchAssets(client) {
@@ -82,7 +80,7 @@ async function fetchAssets(client) {
   );
 }
 
-function buildAccountSummaries(accountsResult, bankAccountsResult) {
+function buildAccountSummaries(accountsRows, bankAccountsRows) {
   let totalPortfolioValue = 0;
   let totalCostBasis = 0;
   let accountsWithValues = 0;
@@ -95,7 +93,7 @@ function buildAccountSummaries(accountsResult, bankAccountsResult) {
   const accountsByType = {};
   const accountsByCategory = { liquid: [], restricted: [] };
 
-  accountsResult.rows.forEach((account) => {
+  accountsRows.forEach((account) => {
     const value = toNumber(account.current_value) || 0;
     const cost = toNumber(account.cost_basis) || 0;
     const category = account.investment_category;
@@ -147,6 +145,7 @@ function buildAccountSummaries(accountsResult, bankAccountsResult) {
       current_value: value,
       cost_basis: cost,
       units: toNumber(account.units),
+      institution: account.institution || null,
     };
 
     accountsByType[account.account_type].accounts.push(processedAccount);
@@ -159,7 +158,7 @@ function buildAccountSummaries(accountsResult, bankAccountsResult) {
     }
   });
 
-  bankAccountsResult.rows.forEach((bankAccount) => {
+  bankAccountsRows.forEach((bankAccount) => {
     const balance = toNumber(bankAccount.current_balance);
 
     if (balance > 0) {
@@ -185,7 +184,7 @@ function buildAccountSummaries(accountsResult, bankAccountsResult) {
         id: `bank_${bankAccount.vendor}_${bankAccount.nickname || 'default'}`,
         account_name: bankAccount.nickname || `${bankAccount.vendor} Account`,
         account_type: 'savings',
-        institution: bankAccount.vendor,
+        institution: bankAccount.institution || null,
         account_number: null,
         currency: 'ILS',
         notes: 'Bank Account Balance',
@@ -282,7 +281,24 @@ async function getInvestmentSummary(params = {}) {
       fetchAssets(client),
     ]);
 
-    const summary = buildAccountSummaries(accountsResult, bankAccountsResult);
+    const accountsRows = await Promise.all(
+      accountsResult.rows.map(async (row) => {
+        let institution = buildInstitutionFromRow(row);
+        if (!institution && row.account_type) {
+          institution = await getInstitutionByVendorCode(database, row.account_type);
+        }
+        return { ...row, institution: institution || null };
+      }),
+    );
+
+    const bankAccountsRows = await Promise.all(
+      bankAccountsResult.rows.map(async (row) => {
+        const institution = await getInstitutionByVendorCode(database, row.vendor);
+        return { ...row, institution: institution || null };
+      }),
+    );
+
+    const summary = buildAccountSummaries(accountsRows, bankAccountsRows);
 
     const assetsByAccount = {};
     const normalizedAssets = assetsResult.rows.map((row) => {
@@ -329,6 +345,7 @@ async function getInvestmentSummary(params = {}) {
       brokerage: { name: 'Brokerage Account', name_he: 'חשבון ברוקר', category: 'liquid' },
       crypto: { name: 'Cryptocurrency', name_he: 'מטבעות דיגיטליים', category: 'liquid' },
       savings: { name: 'Bank Savings & Cash', name_he: 'חשבונות בנק ומזומן', category: 'liquid' },
+      bank_balance: { name: 'Bank Savings & Cash', name_he: 'חשבונות בנק ומזומן', category: 'liquid' },
       mutual_fund: { name: 'Mutual Funds', name_he: 'קרנות נאמנות', category: 'liquid' },
       bonds: { name: 'Bonds & Fixed Income', name_he: 'אג"ח והלוואות', category: 'liquid' },
       real_estate: { name: 'Real Estate', name_he: 'נדל"ן והשקעות רע"ן', category: 'liquid' },
@@ -367,7 +384,7 @@ async function getInvestmentSummary(params = {}) {
       };
     });
 
-    const investmentAccounts = accountsResult.rows.map((account) => ({
+    const investmentAccounts = accountsRows.map((account) => ({
       ...account,
       current_value: toNumber(account.current_value),
       cost_basis: toNumber(account.cost_basis),
@@ -381,7 +398,7 @@ async function getInvestmentSummary(params = {}) {
         totalCostBasis,
         unrealizedGainLoss,
         roi,
-        totalAccounts: accountsResult.rows.length,
+        totalAccounts: accountsRows.length,
         accountsWithValues: summary.totals.accountsWithValues,
         oldestUpdateDate: summary.totals.oldestDate,
         newestUpdateDate: summary.totals.newestDate,

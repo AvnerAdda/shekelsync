@@ -1,25 +1,45 @@
 const database = require('../../services/database.js');
 const { getUnpairedTransactionCount } = require('../accounts/unpaired.js');
+const { getVendorCodesByTypes } = require('../institutions.js');
+const { dialect } = require('../../../lib/sql-dialect.js');
 
-// Vendor constants
-const BANK_VENDORS = [
-  'hapoalim',
-  'leumi',
-  'discount',
-  'mizrahi',
-  'beinleumi',
-  'union',
-  'yahav',
-  'otsarHahayal',
-  'mercantile',
-  'massad',
-  'beyahadBishvilha',
-  'behatsdaa',
-  'pagi',
-  'oneZero',
-];
+function buildVendorClause(vendors) {
+  if (!vendors || vendors.length === 0) {
+    return null;
+  }
 
-const CREDIT_CARD_VENDORS = ['visaCal', 'max', 'isracard', 'amex'];
+  if (dialect.useSqlite) {
+    const placeholders = vendors.map(() => '?').join(',');
+    return {
+      clause: `vendor IN (${placeholders})`,
+      params: vendors,
+    };
+  }
+
+  return {
+    clause: 'vendor = ANY($1)',
+    params: [vendors],
+  };
+}
+
+async function countCredentialsByVendors(vendors) {
+  const clauseDetails = buildVendorClause(vendors);
+  if (!clauseDetails) {
+    return 0;
+  }
+
+  const result = await database.query(
+    `SELECT COUNT(*) AS count FROM vendor_credentials WHERE ${clauseDetails.clause}`,
+    clauseDetails.params,
+  );
+
+  return Number.parseInt(result.rows[0]?.count || 0, 10);
+}
+
+async function countTotalCredentials() {
+  const result = await database.query('SELECT COUNT(*) AS count FROM vendor_credentials');
+  return Number.parseInt(result.rows[0]?.count || 0, 10);
+}
 
 /**
  * Validates data quality and returns warnings for missing or incomplete data
@@ -30,25 +50,19 @@ async function validateDataQuality() {
 
   try {
     // Check 1: Bank and Credit Card Credentials
-    // Use simple OR conditions instead of IN with many parameters for SQLite compatibility
-    const bankConditions = BANK_VENDORS.map((v, i) => `vendor = $${i + 1}`).join(' OR ');
-    const creditConditions = CREDIT_CARD_VENDORS.map((v, i) => `vendor = $${i + BANK_VENDORS.length + 1}`).join(' OR ');
+    const [bankVendors = [], creditVendors = []] = await Promise.all([
+      getVendorCodesByTypes(database, ['bank']),
+      getVendorCodesByTypes(database, ['credit_card']),
+    ]);
 
-    const credentialsResult = await database.query(
-      `
-      SELECT
-        SUM(CASE WHEN ${bankConditions} THEN 1 ELSE 0 END) as bank_count,
-        SUM(CASE WHEN ${creditConditions} THEN 1 ELSE 0 END) as credit_count,
-        COUNT(*) as total_count
-      FROM vendor_credentials
-      `,
-      [...BANK_VENDORS, ...CREDIT_CARD_VENDORS],
-    );
+    const [bankAccountCount, creditCardCount, totalCount] = await Promise.all([
+      countCredentialsByVendors(bankVendors),
+      countCredentialsByVendors(creditVendors),
+      countTotalCredentials(),
+    ]);
 
-    const row = credentialsResult.rows[0] || { bank_count: 0, credit_count: 0, total_count: 0 };
-    const hasBankAccounts = parseInt(row.bank_count, 10) > 0;
-    const hasCreditCards = parseInt(row.credit_count, 10) > 0;
-    const totalCount = parseInt(row.total_count, 10);
+    const hasBankAccounts = bankAccountCount > 0;
+    const hasCreditCards = creditCardCount > 0;
 
     // Critical: No bank accounts
     if (!hasBankAccounts) {

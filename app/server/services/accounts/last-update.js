@@ -7,30 +7,35 @@ async function listAccountLastUpdates() {
         vc.id,
         vc.vendor,
         vc.nickname,
-        COALESCE(last_scrapes.last_successful_scrape, vc.created_at) AS last_update,
-        last_scrapes.status AS last_scrape_status,
+        COALESCE(
+          (
+            SELECT MAX(se.created_at)
+            FROM scrape_events se
+            WHERE (se.credential_id = vc.id OR (se.credential_id IS NULL AND se.vendor = vc.vendor))
+              AND se.status = 'success'
+          ),
+          vc.created_at
+        ) AS last_update,
+        COALESCE(
+          (
+            SELECT se.status
+            FROM scrape_events se
+            WHERE se.credential_id = vc.id OR (se.credential_id IS NULL AND se.vendor = vc.vendor)
+            ORDER BY se.created_at DESC
+            LIMIT 1
+          ),
+          'never'
+        ) AS last_scrape_status,
         account_numbers.account_numbers,
-        fi.id as institution_id,
-        fi.display_name_he as institution_name_he,
-        fi.display_name_en as institution_name_en,
-        fi.logo_url as institution_logo,
-        fi.institution_type as institution_type
+        COALESCE(fi.id, fi_vendor.id) as institution_id,
+        COALESCE(fi.vendor_code, fi_vendor.vendor_code, vc.vendor) as institution_vendor_code,
+        COALESCE(fi.display_name_he, fi_vendor.display_name_he, vc.vendor) as institution_name_he,
+        COALESCE(fi.display_name_en, fi_vendor.display_name_en, vc.vendor) as institution_name_en,
+        COALESCE(fi.logo_url, fi_vendor.logo_url) as institution_logo,
+        COALESCE(fi.institution_type, fi_vendor.institution_type) as institution_type
       FROM vendor_credentials vc
       LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id
-      LEFT JOIN (
-        SELECT
-          se.vendor,
-          MAX(CASE WHEN se.status = 'success' THEN se.created_at ELSE NULL END) AS last_successful_scrape,
-          (
-            SELECT se2.status
-            FROM scrape_events se2
-            WHERE se2.vendor = se.vendor
-            ORDER BY se2.created_at DESC
-            LIMIT 1
-          ) AS status
-        FROM scrape_events se
-        GROUP BY se.vendor
-      ) last_scrapes ON vc.vendor = last_scrapes.vendor
+      LEFT JOIN financial_institutions fi_vendor ON vc.vendor = fi_vendor.vendor_code
       LEFT JOIN (
         SELECT
           t.vendor,
@@ -53,6 +58,7 @@ async function listAccountLastUpdates() {
     accountNumbers: row.account_numbers ? row.account_numbers.split(',') : [],
     institution: row.institution_id ? {
       id: row.institution_id,
+      vendor_code: row.institution_vendor_code,
       display_name_he: row.institution_name_he,
       display_name_en: row.institution_name_en,
       logo_url: row.institution_logo,

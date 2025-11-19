@@ -6,6 +6,7 @@ const pairingsService = require('../services/accounts/pairings.js');
 const unpairedService = require('../services/accounts/unpaired.js');
 const lastTransactionDateService = require('../services/accounts/last-transaction-date.js');
 const smartMatchService = require('../services/accounts/smart-match.js');
+const creditCardDetectorService = require('../services/accounts/credit-card-detector.js');
 
 function handleServiceError(res, error, fallbackMessage) {
   const status = error?.status || error?.statusCode || 500;
@@ -120,6 +121,16 @@ function createAccountsRouter() {
     } catch (error) {
       console.error('Smart match error:', error);
       handleServiceError(res, error, 'Failed to perform smart match');
+    }
+  });
+
+  router.get('/credit-card-suggestions', async (req, res) => {
+    try {
+      const result = await creditCardDetectorService.detectCreditCardSuggestions();
+      res.json(result);
+    } catch (error) {
+      console.error('Credit card suggestions error:', error);
+      handleServiceError(res, error, 'Failed to detect credit card suggestions');
     }
   });
 

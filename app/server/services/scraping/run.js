@@ -13,8 +13,10 @@ const {
 } = require('../../../lib/category-helpers.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const { getInstitutionById, mapInstitutionToVendorCode } = require('../institutions.js');
+const { syncBankBalanceToInvestments } = require('../investments/balance-sync.js');
 
-const DEFAULT_TIMEOUT = 120000;
+const DEFAULT_TIMEOUT = 120000; // 2 minutes
+const MAX_TIMEOUT = 300000; // 5 minutes for problematic scrapers
 const DEFAULT_LOOKBACK_MONTHS = 3;
 let cachedBankCategory = null;
 
@@ -53,27 +55,55 @@ async function getPuppeteerExecutable(logger = console) {
   }
 }
 
-function resolveStartDate(input) {
+async function resolveStartDate(input, credentials) {
+  // 1. If user provides explicit startDate, use it (highest priority)
   if (input?.startDate) {
     const date = new Date(input.startDate);
     if (!Number.isNaN(date.getTime())) {
-      return date;
+      return { date, reason: 'User-provided date' };
     }
   }
 
-  const fallback = new Date();
-  fallback.setMonth(fallback.getMonth() - DEFAULT_LOOKBACK_MONTHS);
-  return fallback;
+  // 2. Smart detection: Check last transaction for this credential
+  const { getLastTransactionDate } = require('../accounts/last-transaction-date.js');
+
+  try {
+    const lastTxnInfo = await getLastTransactionDate({
+      vendor: input.companyId,
+      credentialNickname: credentials?.nickname,
+    });
+
+    return {
+      date: new Date(lastTxnInfo.lastTransactionDate),
+      reason: lastTxnInfo.message,
+      hasTransactions: lastTxnInfo.hasTransactions,
+    };
+  } catch (error) {
+    // Fallback if service fails: use default 3-month lookback
+    const fallback = new Date();
+    fallback.setMonth(fallback.getMonth() - DEFAULT_LOOKBACK_MONTHS);
+    return {
+      date: fallback,
+      reason: `Fallback to ${DEFAULT_LOOKBACK_MONTHS} months ago (service error)`,
+      hasTransactions: false,
+    };
+  }
 }
 
 function buildScraperOptions(options, isBank, executablePath, startDate) {
+  // Show browser for banks and problematic credit card scrapers (MAX)
+  const shouldShowBrowser = isBank || options.companyId === 'max';
+
+  // Use longer timeout for MAX due to frequent login issues
+  const timeout = options.companyId === 'max' ? MAX_TIMEOUT : DEFAULT_TIMEOUT;
+
   return {
     ...options,
     companyId: CompanyTypes[options.companyId],
     startDate,
-    showBrowser: Boolean(isBank),
+    showBrowser: shouldShowBrowser,
     verbose: true,
-    timeout: DEFAULT_TIMEOUT,
+    timeout,
     executablePath,
     args: [
       '--no-sandbox',
@@ -157,12 +187,12 @@ function prepareScraperCredentials(companyId, options, credentials) {
   };
 }
 
-async function insertScrapeEvent(client, { triggeredBy, vendor, startDate }) {
+async function insertScrapeEvent(client, { triggeredBy, vendor, startDate, credentialId }) {
   const result = await client.query(
-    `INSERT INTO scrape_events (triggered_by, vendor, start_date, status, message)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO scrape_events (triggered_by, vendor, start_date, status, message, credential_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id`,
-    [triggeredBy, vendor, startDate, 'started', 'Scrape initiated'],
+    [triggeredBy, vendor, startDate, 'started', 'Scrape initiated', credentialId || null],
   );
   return result.rows[0]?.id || null;
 }
@@ -175,22 +205,21 @@ async function updateScrapeEventStatus(client, auditId, status, message) {
   );
 }
 
-async function markVendorScrapeStatus(client, vendor, status) {
-  const values = [status, vendor];
+async function markCredentialScrapeStatus(client, credentialId, status) {
   const queries = {
     success: `UPDATE vendor_credentials
                 SET last_scrape_attempt = CURRENT_TIMESTAMP,
                     last_scrape_success = CURRENT_TIMESTAMP,
                     last_scrape_status = 'success'
-              WHERE vendor = $2`,
+              WHERE id = $1`,
     failed: `UPDATE vendor_credentials
                 SET last_scrape_attempt = CURRENT_TIMESTAMP,
                     last_scrape_status = 'failed'
-              WHERE vendor = $2`,
+              WHERE id = $1`,
   };
 
   const sql = status === 'success' ? queries.success : queries.failed;
-  await client.query(sql, values);
+  await client.query(sql, [credentialId]);
 }
 
 async function insertTransaction(txn, client, companyId, isBank, accountNumber, vendorNickname) {
@@ -510,30 +539,71 @@ async function updateVendorBalance(client, options, credentials, account, logger
     return;
   }
 
-  logger?.info?.(`Captured balance for ${options.companyId}: ₪${account.balance} (account: ${account.accountNumber || 'N/A'})`);
+  logger?.info?.(`[Scrape:${options.companyId}] Captured balance for ${options.companyId}: ₪${account.balance} (account: ${account.accountNumber || 'N/A'})`);
 
-  // Match by credential ID (primary key) for reliability
-  // If account number exists, also match it for multi-account support
+  // Find the credential record - credentials.id might be user ID number or database row ID
+  // First, try to find by vendor + account number (most specific)
+  let credentialRecord = null;
+  if (account.accountNumber) {
+    const accountResult = await client.query(
+      `SELECT id FROM vendor_credentials
+       WHERE vendor = $1 AND (bank_account_number = $2 OR card6_digits = $2)
+       LIMIT 1`,
+      [options.companyId, account.accountNumber]
+    );
+    if (accountResult.rows.length > 0) {
+      credentialRecord = accountResult.rows[0];
+    }
+  }
+
+  // If not found by account number, try by vendor only (single credential case)
+  if (!credentialRecord) {
+    const vendorResult = await client.query(
+      `SELECT id FROM vendor_credentials
+       WHERE vendor = $1
+       LIMIT 1`,
+      [options.companyId]
+    );
+    if (vendorResult.rows.length > 0) {
+      credentialRecord = vendorResult.rows[0];
+    }
+  }
+
+  if (!credentialRecord) {
+    logger?.warn?.(`[Scrape:${options.companyId}] ✗ No credential record found for vendor ${options.companyId}`);
+    return;
+  }
+
+  const dbCredentialId = credentialRecord.id;
+
+  // Update using database row ID
   const result = await client.query(
     `UPDATE vendor_credentials
         SET current_balance = $1,
             balance_updated_at = CURRENT_TIMESTAMP,
             last_scrape_success = CURRENT_TIMESTAMP,
             last_scrape_status = 'success'
-      WHERE vendor = $2
-        AND id = $3
-        AND (
-          $4 IS NULL OR
-          bank_account_number = $4 OR
-          card6_digits = $4
-        )`,
-    [account.balance, options.companyId, credentials.id, account.accountNumber || null],
+      WHERE id = $2`,
+    [account.balance, dbCredentialId],
   );
 
   if (result.rowCount > 0) {
-    logger?.info?.(`✓ Balance updated successfully for credential ID ${credentials.id}`);
+    logger?.info?.(`[Scrape:${options.companyId}] ✓ Balance updated successfully for credential ID ${dbCredentialId}`);
+
+    // Sync balance to investment holdings (bank accounts only)
+    const isBank = isBankVendor(options.companyId);
+    if (isBank) {
+      try {
+        // Pass credential with correct database ID
+        const credentialForSync = { ...credentials, id: dbCredentialId, dbId: dbCredentialId };
+        await syncBankBalanceToInvestments(client, credentialForSync, account.balance, account.accountNumber, logger);
+      } catch (syncError) {
+        logger?.error?.(`[Scrape:${options.companyId}] Failed to sync balance to investment holdings:`, syncError);
+        // Don't fail the whole scrape if balance sync fails
+      }
+    }
   } else {
-    logger?.warn?.(`✗ Balance update failed - no matching credential found (vendor: ${options.companyId}, credID: ${credentials.id}, account: ${account.accountNumber || 'N/A'})`);
+    logger?.warn?.(`[Scrape:${options.companyId}] ✗ Balance update failed - no matching credential found (vendor: ${options.companyId}, credID: ${credentials.id}, account: ${account.accountNumber || 'N/A'})`);
   }
 }
 
@@ -541,7 +611,12 @@ async function processScrapeResult(client, { options, credentials, result, isBan
   let bankTransactions = 0;
   const discoveredAccountNumbers = new Set();
 
+  logger?.info?.(`[Scrape:${options.companyId}] Processing ${result.accounts?.length || 0} accounts for credential: ${credentials.nickname || credentials.id}`);
+
   for (const account of result.accounts || []) {
+    const txnCount = account.txns?.length || 0;
+    logger?.info?.(`[Scrape:${options.companyId}] Account ${account.accountNumber || 'N/A'}: ${txnCount} transactions, balance: ${account.balance || 'N/A'}`);
+
     if (account.accountNumber) {
       discoveredAccountNumbers.add(account.accountNumber);
     }
@@ -562,6 +637,8 @@ async function processScrapeResult(client, { options, credentials, result, isBan
 
   await updateVendorAccountNumbers(client, options, credentials, discoveredAccountNumbers, isBank);
 
+  logger?.info?.(`[Scrape:${options.companyId}] Completed: ${bankTransactions} bank transactions, ${discoveredAccountNumbers.size} unique accounts`);
+
   return { bankTransactions };
 }
 
@@ -576,9 +653,16 @@ async function runScrape({ options, credentials, execute, logger = console }) {
   }
 
   const isBank = isBankVendor(options.companyId);
-  const resolvedStartDate = resolveStartDate(options);
+  const startDateInfo = await resolveStartDate(options, credentials);
+  const resolvedStartDate = startDateInfo.date;
   const client = await database.getClient();
   let auditId = null;
+
+  // Log the determined scrape date range for transparency
+  const endDate = new Date();
+  logger?.info?.(`[Scrape:${options.companyId}] Credential: ${credentials.nickname || credentials.id}`);
+  logger?.info?.(`[Scrape:${options.companyId}] Date range: ${resolvedStartDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
+  logger?.info?.(`[Scrape:${options.companyId}] Reason: ${startDateInfo.reason}`);
 
   try {
     await client.query('BEGIN');
@@ -588,6 +672,7 @@ async function runScrape({ options, credentials, execute, logger = console }) {
       triggeredBy,
       vendor: options.companyId,
       startDate: resolvedStartDate,
+      credentialId: credentials.id || null,
     });
 
     const executablePath = await getPuppeteerExecutable(logger);
@@ -603,10 +688,20 @@ async function runScrape({ options, credentials, execute, logger = console }) {
 
     const result = await scraperExecutor();
 
+    // Log raw scraper result for debugging
+    logger?.info?.(`[Scrape:${options.companyId}] Raw result: success=${result?.success}, accounts=${result?.accounts?.length || 0}`);
+    if (result?.accounts) {
+      result.accounts.forEach((acc, idx) => {
+        logger?.info?.(`[Scrape:${options.companyId}] Account ${idx + 1}: accountNumber=${acc.accountNumber}, txns=${acc.txns?.length || 0}, balance=${acc.balance}`);
+      });
+    }
+
     if (!result?.success) {
       const message = `${result?.errorType || 'ScrapeError'}: ${result?.errorMessage || 'Unknown error'}`;
       await updateScrapeEventStatus(client, auditId, 'failed', message);
-      await markVendorScrapeStatus(client, options.companyId, 'failed');
+      if (credentials.id) {
+        await markCredentialScrapeStatus(client, credentials.id, 'failed');
+      }
       throw createHttpError(400, message, { errorType: result?.errorType });
     }
 
@@ -620,7 +715,9 @@ async function runScrape({ options, credentials, execute, logger = console }) {
 
     await applyCategorizationRules(client);
     await applyAccountPairings(client);
-    await markVendorScrapeStatus(client, options.companyId, 'success');
+    if (credentials.id) {
+      await markCredentialScrapeStatus(client, credentials.id, 'success');
+    }
 
     const accountsCount = Array.isArray(result.accounts) ? result.accounts.length : 0;
     const message = `Success: accounts=${accountsCount}, bankTxns=${summary.bankTransactions}`;
@@ -644,7 +741,9 @@ async function runScrape({ options, credentials, execute, logger = console }) {
         error?.message || 'Unknown error',
       );
     }
-    await markVendorScrapeStatus(client, options.companyId, 'failed');
+    if (credentials.id) {
+      await markCredentialScrapeStatus(client, credentials.id, 'failed');
+    }
     throw error;
   } finally {
     client.release();

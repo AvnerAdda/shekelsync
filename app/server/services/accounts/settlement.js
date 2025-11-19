@@ -88,6 +88,12 @@ async function findSettlementCandidates(params = {}) {
         t.account_number,
         cd.name AS category_name,
         cd.name_en AS category_name_en,
+        COALESCE(fi_cred.id, fi_vendor.id) as institution_id,
+        COALESCE(fi_cred.vendor_code, fi_vendor.vendor_code, t.vendor) as institution_vendor_code,
+        COALESCE(fi_cred.display_name_he, fi_vendor.display_name_he, t.vendor) as institution_name_he,
+        COALESCE(fi_cred.display_name_en, fi_vendor.display_name_en, t.vendor) as institution_name_en,
+        COALESCE(fi_cred.logo_url, fi_vendor.logo_url) as institution_logo,
+        COALESCE(fi_cred.institution_type, fi_vendor.institution_type) as institution_type,
         CASE
           WHEN LOWER(t.name) LIKE '%' || LOWER($1) || '%' THEN 'account_number_match'
           WHEN t.category_definition_id IN (25, 75) THEN 'category_match'
@@ -96,6 +102,9 @@ async function findSettlementCandidates(params = {}) {
         END AS match_reason
       FROM transactions t
       LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
+      LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
+      LEFT JOIN financial_institutions fi_cred ON vc.institution_id = fi_cred.id
+      LEFT JOIN financial_institutions fi_vendor ON t.vendor = fi_vendor.vendor_code
       WHERE t.vendor = $2
         AND (
           LOWER(t.name) LIKE '%' || LOWER($1) || '%'
@@ -115,17 +124,29 @@ async function findSettlementCandidates(params = {}) {
 
     const result = await client.query(query, paramsList);
 
-    const candidates = filterWithActivePairings(result.rows, activePairings).map((row) => ({
-      identifier: row.identifier,
-      vendor: row.vendor,
-      date: row.date,
-      name: row.name,
-      price: row.price,
-      categoryId: row.category_definition_id,
-      categoryName: row.category_name || row.category_name_en,
-      accountNumber: row.account_number,
-      matchReason: row.match_reason,
-    }));
+    const candidates = filterWithActivePairings(result.rows, activePairings).map((row) => {
+      const institution = row.institution_id ? {
+        id: row.institution_id,
+        vendor_code: row.institution_vendor_code,
+        display_name_he: row.institution_name_he,
+        display_name_en: row.institution_name_en,
+        logo_url: row.institution_logo,
+        institution_type: row.institution_type,
+      } : null;
+
+      return {
+        identifier: row.identifier,
+        vendor: row.vendor,
+        date: row.date,
+        name: row.name,
+        price: row.price,
+        categoryId: row.category_definition_id,
+        categoryName: row.category_name || row.category_name_en,
+        accountNumber: row.account_number,
+        matchReason: row.match_reason,
+        institution,
+      };
+    });
 
     const stats = candidates.reduce(
       (acc, candidate) => {

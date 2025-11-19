@@ -3,7 +3,49 @@
  * Automatically links transactions to investment accounts when accounts are created from suggestions
  */
 
-import { getPool } from '../../../utils/db.js';
+const pool = require('../../../utils/db');
+const database = require('../database.js');
+const { getInstitutionByVendorCode } = require('../institutions.js');
+
+async function fetchAccountInstitution(accountId) {
+  const accountQuery = `
+    SELECT
+      ia.account_type,
+      fi.id as institution_id,
+      fi.vendor_code,
+      fi.display_name_he,
+      fi.display_name_en,
+      fi.institution_type,
+      fi.logo_url
+    FROM investment_accounts ia
+    LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
+    WHERE ia.id = ?
+  `;
+
+  const result = await pool.query(accountQuery, [accountId]);
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  if (row.institution_id) {
+    return {
+      id: row.institution_id,
+      vendor_code: row.vendor_code,
+      display_name_he: row.display_name_he,
+      display_name_en: row.display_name_en,
+      institution_type: row.institution_type,
+      logo_url: row.logo_url,
+    };
+  }
+
+  try {
+    return await getInstitutionByVendorCode(database, row.account_type);
+  } catch (error) {
+    console.warn('[auto-linker] Failed to resolve institution metadata', error);
+    return null;
+  }
+}
 
 /**
  * Link a single transaction to an investment account
@@ -27,8 +69,6 @@ async function linkTransactionToAccount(params) {
     confidence = 1.0,
     createdBy = 'system'
   } = params;
-
-  const pool = getPool();
 
   const query = `
     INSERT INTO transaction_account_links (
@@ -73,6 +113,7 @@ async function linkTransactionToAccount(params) {
 async function linkMultipleTransactions(accountId, transactions, linkMethod = 'auto', confidence = 1.0) {
   const successfulLinks = [];
   const failedLinks = [];
+  const accountInstitution = await fetchAccountInstitution(accountId);
 
   for (const transaction of transactions) {
     try {
@@ -99,7 +140,10 @@ async function linkMultipleTransactions(accountId, transactions, linkMethod = 'a
     totalAttempted: transactions.length,
     successCount: successfulLinks.length,
     failureCount: failedLinks.length,
-    successfulLinks,
+    successfulLinks: successfulLinks.map((link) => ({
+      ...link,
+      institution: accountInstitution || null,
+    })),
     failedLinks
   };
 }
@@ -111,8 +155,6 @@ async function linkMultipleTransactions(accountId, transactions, linkMethod = 'a
  * @returns {Promise<object>} Linking result summary
  */
 async function linkFromSuggestions(accountId, suggestionIds) {
-  const pool = getPool();
-
   // Get all transactions from the suggestions
   const placeholders = suggestionIds.map(() => '?').join(',');
   const query = `
@@ -181,8 +223,6 @@ async function linkFromGroupedSuggestion(accountId, groupedSuggestion) {
   const linkResult = await linkMultipleTransactions(accountId, transactions, 'auto');
 
   // Mark as processed in pending_transaction_suggestions if they exist
-  const pool = getPool();
-
   for (const transaction of transactions) {
     try {
       const updateQuery = `
@@ -215,8 +255,6 @@ async function linkFromGroupedSuggestion(accountId, groupedSuggestion) {
  * @returns {Promise<boolean>} Success status
  */
 async function unlinkTransaction(transactionIdentifier, transactionVendor) {
-  const pool = getPool();
-
   const query = `
     DELETE FROM transaction_account_links
     WHERE transaction_identifier = ?
@@ -234,8 +272,6 @@ async function unlinkTransaction(transactionIdentifier, transactionVendor) {
  * @returns {Promise<Array>} Array of linked transactions
  */
 async function getLinkedTransactions(accountId) {
-  const pool = getPool();
-
   const query = `
     SELECT
       tal.*,
@@ -261,8 +297,6 @@ async function getLinkedTransactions(accountId) {
  * @returns {Promise<number>} Total cost basis
  */
 async function calculateCostBasis(accountId) {
-  const pool = getPool();
-
   const query = `
     SELECT SUM(ABS(t.price)) as total_cost
     FROM transaction_account_links tal
@@ -283,8 +317,6 @@ async function calculateCostBasis(accountId) {
  * @returns {Promise<number>} Transaction count
  */
 async function getTransactionCount(accountId) {
-  const pool = getPool();
-
   const query = `
     SELECT COUNT(*) as count
     FROM transaction_account_links
@@ -296,7 +328,7 @@ async function getTransactionCount(accountId) {
   return result.rows[0]?.count || 0;
 }
 
-export {
+module.exports = {
   linkTransactionToAccount,
   linkMultipleTransactions,
   linkFromSuggestions,

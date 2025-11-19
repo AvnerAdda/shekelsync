@@ -4,8 +4,10 @@
  * Uses pattern matching from investment-patterns.js
  */
 
-import pool from '../../../utils/db.js';
-import { ACCOUNT_PATTERNS } from '../../../config/investment-patterns.js';
+const pool = require('../../../utils/db');
+const database = require('../database.js');
+const { getInstitutionByVendorCode } = require('../institutions.js');
+const { ACCOUNT_PATTERNS } = require('../../../config/investment-patterns-cjs');
 
 /**
  * Known Israeli financial institutions for extraction
@@ -222,13 +224,30 @@ function detectAccountType(description) {
  * @param {object} transaction - Transaction object
  * @returns {object|null} Suggestion object or null
  */
-function analyzeTransaction(transaction) {
+async function analyzeTransaction(transaction) {
   const detection = detectAccountType(transaction.description);
 
   if (!detection) return null;
 
   const institution = extractInstitution(transaction.description, detection.accountType);
   const accountName = extractAccountName(transaction.description, detection.accountType, institution);
+  let institutionMetadata = null;
+
+  try {
+    institutionMetadata = await getInstitutionByVendorCode(database, detection.accountType);
+  } catch (error) {
+    console.warn('[suggestion-analyzer] Failed to load institution metadata', error);
+  }
+
+  if (!institutionMetadata && institution) {
+    institutionMetadata = {
+      id: null,
+      vendor_code: detection.accountType,
+      display_name_he: institution,
+      display_name_en: institution,
+      institution_type: 'investment',
+    };
+  }
 
   return {
     transactionIdentifier: transaction.identifier,
@@ -240,7 +259,8 @@ function analyzeTransaction(transaction) {
     suggestedInstitution: institution,
     suggestedAccountName: accountName,
     confidence: detection.confidence,
-    matchReason: detection.matchReason
+    matchReason: detection.matchReason,
+    institution: institutionMetadata || null,
   };
 }
 
@@ -284,15 +304,16 @@ function groupSuggestionsByAccount(suggestions) {
 
   for (const suggestion of suggestions) {
     // Create grouping key: accountType + institution (or accountName if no institution)
-    const groupKey = suggestion.suggestedInstitution
-      ? `${suggestion.suggestedAccountType}::${suggestion.suggestedInstitution}`
-      : `${suggestion.suggestedAccountType}::${suggestion.suggestedAccountName}`;
+    const institutionCode = suggestion.institution?.vendor_code || suggestion.suggestedAccountType;
+    const institutionLabel = suggestion.institution?.display_name_he || suggestion.suggestedInstitution || suggestion.suggestedAccountName;
+    const groupKey = `${institutionCode}::${institutionLabel}`;
 
     if (!groups.has(groupKey)) {
       groups.set(groupKey, {
         suggestedAccountType: suggestion.suggestedAccountType,
         suggestedInstitution: suggestion.suggestedInstitution,
         suggestedAccountName: suggestion.suggestedAccountName,
+        institution: suggestion.institution || null,
         avgConfidence: 0,
         transactions: [],
         totalAmount: 0,
@@ -336,9 +357,8 @@ async function analyzeInvestmentTransactions(thresholdDays = 90) {
   }
 
   // Analyze each transaction
-  const suggestions = transactions
-    .map(analyzeTransaction)
-    .filter(s => s !== null);
+  const analyzed = await Promise.all(transactions.map((transaction) => analyzeTransaction(transaction)));
+  const suggestions = analyzed.filter((s) => s !== null);
 
   // Group by detected account
   return groupSuggestionsByAccount(suggestions);
@@ -362,7 +382,7 @@ function shouldShowSuggestion(dismissCount, lastDismissedAt, newTransactionCount
   return newTransactionCount >= threshold;
 }
 
-export {
+module.exports = {
   detectAccountType,
   analyzeTransaction,
   analyzeInvestmentTransactions,

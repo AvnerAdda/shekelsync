@@ -252,6 +252,184 @@ async function getDashboardAnalytics(query = {}) {
   const netInvestments = investmentOutflow - investmentInflow;
   const netBalance = totalIncome - totalExpenses;
 
+  // Query for pending expenses (processed_date > today)
+  const pendingExpensesResult = await database.query(
+    `SELECT
+        SUM(CASE
+          WHEN (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0))
+            AND t.price < 0 THEN ABS(t.price)
+          ELSE 0
+        END) as pending_expenses,
+        COUNT(CASE
+          WHEN (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0))
+            AND t.price < 0 THEN 1
+          ELSE NULL
+        END) as pending_count
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
+      WHERE t.date >= $1 AND t.date <= $2
+        AND t.processed_date IS NOT NULL
+        AND DATE(t.processed_date) > DATE('now')
+        AND ap.id IS NULL`,
+    [start, end],
+  );
+
+  const pendingData = pendingExpensesResult.rows[0] || {};
+  const pendingExpenses = Number.parseFloat(pendingData.pending_expenses || 0);
+  const pendingCount = Number.parseInt(pendingData.pending_count || 0, 10);
+
+  // Query 1: Current bank balances (latest snapshot per account)
+  const currentBankBalancesResult = await database.query(
+    `SELECT
+      ia.id as account_id,
+      ia.account_name,
+      ia.institution_id,
+      fi.display_name_he as institution_name_he,
+      fi.display_name_en as institution_name_en,
+      fi.logo_url as institution_logo,
+      ih.current_value as current_balance,
+      ih.as_of_date
+    FROM investment_accounts ia
+    JOIN investment_holdings ih ON ia.id = ih.account_id
+    LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
+    WHERE ia.account_type = 'bank_balance'
+      AND ia.is_active = 1
+      AND ih.as_of_date = (
+        SELECT MAX(as_of_date)
+        FROM investment_holdings
+        WHERE account_id = ia.id
+      )
+    ORDER BY ia.account_name`,
+    []
+  );
+
+  // Query 2: Month-start bank balance (at start of first month in range)
+  const startDateStr = start.toISOString().split('T')[0]; // Convert Date to YYYY-MM-DD
+  const monthStartDate = startDateStr.substring(0, 7) + '-01'; // YYYY-MM-01
+  const monthStartBalancesResult = await database.query(
+    `SELECT
+      COALESCE(SUM(ihh.total_value), 0) as total_balance
+    FROM investment_holdings_history ihh
+    JOIN investment_accounts ia ON ihh.account_id = ia.id
+    WHERE ia.account_type = 'bank_balance'
+      AND ia.is_active = 1
+      AND ihh.snapshot_date = $1`,
+    [monthStartDate]
+  );
+
+  // Query 3: Bank balance history aggregated by period
+  let balanceHistoryGroupBy;
+  let balanceHistorySelect;
+  switch (aggregation) {
+    case 'weekly':
+      balanceHistoryGroupBy = dialect.dateTrunc('week', 'ihh.snapshot_date');
+      balanceHistorySelect = `${dialect.dateTrunc('week', 'ihh.snapshot_date')} as date`;
+      break;
+    case 'monthly':
+      balanceHistoryGroupBy = dialect.dateTrunc('month', 'ihh.snapshot_date');
+      balanceHistorySelect = `${dialect.dateTrunc('month', 'ihh.snapshot_date')} as date`;
+      break;
+    case 'daily':
+    default:
+      balanceHistoryGroupBy = dialect.dateTrunc('day', 'ihh.snapshot_date');
+      balanceHistorySelect = `${dialect.dateTrunc('day', 'ihh.snapshot_date')} as date`;
+  }
+
+  const balanceHistoryResult = await database.query(
+    `SELECT
+      ${balanceHistorySelect},
+      SUM(ihh.total_value) as total_balance
+    FROM investment_holdings_history ihh
+    JOIN investment_accounts ia ON ihh.account_id = ia.id
+    WHERE ia.account_type = 'bank_balance'
+      AND ia.is_active = 1
+      AND ihh.snapshot_date >= $1
+      AND ihh.snapshot_date <= $2
+    GROUP BY ${balanceHistoryGroupBy}
+    ORDER BY date ASC`,
+    [start, end]
+  );
+
+  // Calculate bank balance metrics
+  const currentBankBalance = currentBankBalancesResult.rows.reduce(
+    (sum, row) => sum + Number.parseFloat(row.current_balance || 0),
+    0
+  );
+
+  const monthStartBankBalance = Number.parseFloat(
+    monthStartBalancesResult.rows[0]?.total_balance || 0
+  );
+
+  const bankBalanceChange = currentBankBalance - monthStartBankBalance;
+
+  // Query 4: Calculate pikadon (savings/deposits) balance
+  // Pikadon transactions are investments (category_definition_id = 84)
+  const pikkadonResult = await database.query(
+    `SELECT
+      SUM(CASE WHEN price > 0 THEN price ELSE 0 END) as pikadon_inflow,
+      SUM(CASE WHEN price < 0 THEN price ELSE 0 END) as pikadon_outflow,
+      SUM(price) as net_pikadon
+    FROM transactions
+    WHERE category_definition_id = 84
+      AND vendor IN (
+        SELECT vendor_code FROM financial_institutions
+        WHERE institution_type IN ('bank', 'financial')
+      )
+      AND date >= $1`,
+    [monthStartDate]
+  );
+
+  const pikkadonBalance = Number.parseFloat(
+    pikkadonResult.rows[0]?.net_pikadon || 0
+  );
+
+  // Query 5: Calculate pending CC debt (expenses after last completed repayment)
+  const pendingCCDebtResult = await database.query(
+    `WITH last_repayment AS (
+      SELECT MAX(t.date) as last_date
+      FROM transactions t
+      JOIN category_definitions cd ON t.category_definition_id = cd.id
+      WHERE cd.name = 'פרעון כרטיס אשראי'
+        AND t.status = 'completed'
+    ),
+    cc_vendors AS (
+      SELECT DISTINCT credit_card_vendor as vendor
+      FROM account_pairings
+      WHERE is_active = 1
+    )
+    SELECT COALESCE(SUM(ABS(price)), 0) as pending_debt
+    FROM transactions t, last_repayment lr
+    WHERE t.vendor IN (SELECT vendor FROM cc_vendors)
+      AND t.price < 0
+      AND t.date > lr.last_date`,
+    []
+  );
+
+  const pendingCCDebt = Number.parseFloat(
+    pendingCCDebtResult.rows[0]?.pending_debt || 0
+  );
+
+  // Calculate final balances
+  const checkingBalance = currentBankBalance - pikkadonBalance;
+  const availableBalance = checkingBalance - pendingCCDebt;
+
+  // Create a map for merging balance history with transaction history
+  const balanceHistoryMap = new Map();
+  balanceHistoryResult.rows.forEach((row) => {
+    balanceHistoryMap.set(row.date, Number.parseFloat(row.total_balance || 0));
+  });
+
   return {
     dateRange: { start, end },
     summary: {
@@ -262,11 +440,25 @@ async function getDashboardAnalytics(query = {}) {
       investmentInflow,
       netInvestments,
       totalAccounts: Number.parseInt(summary.total_accounts || 0, 10) || 0,
+      // Pending expenses (future processed_date)
+      pendingExpenses,
+      pendingCount,
+      // Bank balance summary fields
+      currentBankBalance,
+      monthStartBankBalance,
+      bankBalanceChange,
+      // Pikadon & available balance (NEW Nov 2025)
+      pikkadonBalance,
+      checkingBalance,
+      pendingCCDebt,
+      availableBalance,
     },
     history: historyResult.rows.map((row) => ({
       date: row.date,
       income: Number.parseFloat(row.income || 0),
       expenses: Number.parseFloat(row.expenses || 0),
+      // NEW: Add bank balance to history
+      bankBalance: balanceHistoryMap.get(row.date) || 0,
     })),
     breakdowns: {
       byCategory: buildCategoryBreakdown(categoryDataResult.rows),
@@ -286,6 +478,19 @@ async function getDashboardAnalytics(query = {}) {
         month: row.month,
         income: Number.parseFloat(row.income || 0),
         expenses: Number.parseFloat(row.expenses || 0),
+      })),
+      // NEW: Bank account breakdown
+      byBankAccount: currentBankBalancesResult.rows.map((row) => ({
+        accountId: row.account_id,
+        accountName: row.account_name,
+        currentBalance: Number.parseFloat(row.current_balance || 0),
+        asOfDate: row.as_of_date,
+        institution: row.institution_id ? {
+          id: row.institution_id,
+          display_name_he: row.institution_name_he,
+          display_name_en: row.institution_name_en,
+          logo_url: row.institution_logo,
+        } : null,
       })),
     },
   };

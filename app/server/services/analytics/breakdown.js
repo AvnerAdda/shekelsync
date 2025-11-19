@@ -83,6 +83,7 @@ async function getBreakdownAnalytics(query = {}) {
         t.vendor,
         t.date,
         t.price,
+        t.processed_date,
         t.name as transaction_name,
         t.account_number,
         cd.id as subcategory_id,
@@ -127,12 +128,28 @@ async function getBreakdownAnalytics(query = {}) {
     [startStr, endStr, config.categoryType],
   );
 
-  const transactions = transactionsResult.rows.map((row) => ({
+  let transactions = transactionsResult.rows.map((row) => ({
     ...row,
     price: Number.parseFloat(row.price),
     date: new Date(row.date),
   }));
 
+  // Deduplicate transactions (recursive CTE can return duplicate rows for multi-level categories)
+  const identifiers = transactions.map(tx => tx.identifier);
+  const uniqueIdentifiers = new Set(identifiers);
+  if (identifiers.length !== uniqueIdentifiers.size) {
+    // Keep the first occurrence of each transaction ID
+    const seen = new Set();
+    transactions = transactions.filter(tx => {
+      if (seen.has(tx.identifier)) {
+        return false;
+      }
+      seen.add(tx.identifier);
+      return true;
+    });
+  }
+
+  // Use all transactions (including pending) for summary and breakdown calculations
   const amounts = transactions.map((tx) => config.amountFn(tx.price));
   const totalAmount = amounts.reduce((sum, value) => sum + value, 0);
   const count = transactions.length;
@@ -144,6 +161,7 @@ async function getBreakdownAnalytics(query = {}) {
   const vendorMap = new Map();
   const monthMap = new Map();
 
+  // Use all transactions (including pending) for breakdown calculations
   transactions.forEach((tx) => {
     const amount = config.amountFn(tx.price);
 

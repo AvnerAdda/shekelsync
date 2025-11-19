@@ -106,7 +106,7 @@ function levenshteinDistance(str1, str2) {
 /**
  * Match an account name against transactions
  * Returns match info with confidence score
- * 
+ *
  * @param {string} accountName - Account name to match
  * @param {string} accountType - Account type (savings, brokerage, etc.)
  * @param {Array} transactions - Optional list of transaction names to check against
@@ -204,15 +204,15 @@ export function buildSQLPatterns(accountType) {
 export function detectAccountType(accountName) {
   const normalized = normalizeText(accountName);
   let bestMatch = { type: null, confidence: 0 };
-  
+
   const allPatterns = getAllPatterns();
-  
+
   for (const { pattern, type } of allPatterns) {
     const similarity = calculateSimilarity(normalized, pattern);
     if (similarity > bestMatch.confidence) {
       bestMatch = { type, confidence: similarity };
     }
   }
-  
+
   return bestMatch.confidence > 0.6 ? bestMatch.type : null;
 }

@@ -1,18 +1,32 @@
 const database = require('../database.js');
 const pairingsService = require('./pairings.js');
+const { getVendorCodesByTypes } = require('../institutions.js');
 
-const BANK_VENDORS = [
-  'hapoalim',
-  'leumi',
-  'discount',
-  'mizrahi',
-  'beinleumi',
-  'union',
-  'yahav',
-  'otsarHahayal',
-  'mercantile',
-  'massad',
-];
+let cachedBankVendors = null;
+let bankVendorCacheTimestamp = 0;
+const VENDOR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function getBankVendors() {
+  const now = Date.now();
+  if (cachedBankVendors && (now - bankVendorCacheTimestamp) < VENDOR_CACHE_TTL) {
+    return cachedBankVendors;
+  }
+
+  try {
+    const vendors = await getVendorCodesByTypes(database, ['bank']);
+    if (vendors && vendors.length > 0) {
+      cachedBankVendors = vendors;
+      bankVendorCacheTimestamp = now;
+      return cachedBankVendors;
+    }
+  } catch (error) {
+    console.warn('[accounts/unpaired] Failed to load bank vendors from registry', error);
+  }
+
+  cachedBankVendors = [];
+  bankVendorCacheTimestamp = now;
+  return cachedBankVendors;
+}
 
 function matchesPairing(transaction, pairing) {
   if (transaction.vendor !== pairing.bankVendor) {
@@ -50,8 +64,13 @@ function filterUnpairedTransactions(transactions, activePairings) {
 }
 
 async function fetchCandidateTransactions(client) {
+  const bankVendors = await getBankVendors();
+  if (!bankVendors.length) {
+    return [];
+  }
+
   // SQLite doesn't support ANY operator, so we build IN clause with placeholders
-  const placeholders = BANK_VENDORS.map((_, i) => `$${i + 1}`).join(', ');
+  const placeholders = bankVendors.map((_, i) => `$${i + 1}`).join(', ');
 
   const result = await client.query(
     `
@@ -64,15 +83,16 @@ async function fetchCandidateTransactions(client) {
         t.category_definition_id,
         t.account_number,
         cd.name AS category_name,
-        fi.id as institution_id,
-        fi.display_name_he as institution_name_he,
-        fi.display_name_en as institution_name_en,
-        fi.logo_url as institution_logo,
-        fi.institution_type as institution_type
+        COALESCE(fi_cred.id, fi_vendor.id) as institution_id,
+        COALESCE(fi_cred.display_name_he, fi_vendor.display_name_he) as institution_name_he,
+        COALESCE(fi_cred.display_name_en, fi_vendor.display_name_en) as institution_name_en,
+        COALESCE(fi_cred.logo_url, fi_vendor.logo_url) as institution_logo,
+        COALESCE(fi_cred.institution_type, fi_vendor.institution_type) as institution_type
       FROM transactions t
       LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
       LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
-      LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id
+      LEFT JOIN financial_institutions fi_cred ON vc.institution_id = fi_cred.id
+      LEFT JOIN financial_institutions fi_vendor ON t.vendor = fi_vendor.vendor_code
       WHERE t.category_definition_id IN (25, 75)
         AND t.vendor IN (
           SELECT DISTINCT vendor
@@ -81,7 +101,7 @@ async function fetchCandidateTransactions(client) {
         )
       ORDER BY t.date DESC
     `,
-    BANK_VENDORS,
+    bankVendors,
   );
 
   return result.rows;

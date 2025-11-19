@@ -2,6 +2,7 @@ const database = require('../database.js');
 const {
   INSTITUTION_SELECT_FIELDS,
   buildInstitutionFromRow,
+  getInstitutionByVendorCode,
 } = require('../institutions.js');
 
 function serviceError(status, message) {
@@ -19,7 +20,9 @@ async function listPendingSuggestions(params = {}) {
         pts.*,
         ia.account_name,
         ia.account_type,
-        ${INSTITUTION_SELECT_FIELDS}
+        ${INSTITUTION_SELECT_FIELDS},
+        pts.suggested_institution as raw_suggested_institution,
+        pts.suggested_institution_vendor
       FROM pending_transaction_suggestions pts
       LEFT JOIN investment_accounts ia ON pts.suggested_account_id = ia.id
       LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
@@ -29,12 +32,34 @@ async function listPendingSuggestions(params = {}) {
     [status],
   );
 
+  const pendingSuggestions = await Promise.all(
+    result.rows.map(async (row) => {
+      let institution = buildInstitutionFromRow(row);
+
+      if (!institution && row.suggested_institution_vendor) {
+        institution = await getInstitutionByVendorCode(database, row.suggested_institution_vendor);
+      }
+
+      if (!institution && row.raw_suggested_institution) {
+        institution = {
+          id: null,
+          vendor_code: row.raw_suggested_institution,
+          display_name_he: row.raw_suggested_institution,
+          display_name_en: row.raw_suggested_institution,
+          institution_type: null,
+        };
+      }
+
+      return {
+        ...row,
+        institution: institution || null,
+      };
+    }),
+  );
+
   return {
-    pendingSuggestions: result.rows.map(row => ({
-      ...row,
-      institution: buildInstitutionFromRow(row),
-    })),
-    total: result.rows.length,
+    pendingSuggestions,
+    total: pendingSuggestions.length,
   };
 }
 

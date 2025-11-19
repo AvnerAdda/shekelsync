@@ -5,6 +5,7 @@
 
 const database = require('../database.js');
 const { ACCOUNT_PATTERNS } = require('../../../config/investment-patterns-cjs.js');
+const { getInstitutionByVendorCode } = require('../institutions.js');
 
 /**
  * Known Israeli financial institutions for extraction
@@ -205,7 +206,7 @@ function detectAccountType(description) {
  * Analyze a single transaction for investment account suggestion
  * Now uses the actual category from database instead of only pattern matching
  */
-function analyzeTransaction(transaction) {
+async function analyzeTransaction(transaction) {
   const detection = detectAccountType(transaction.description);
 
   // Use pattern detection if available, otherwise use the category from database
@@ -226,6 +227,23 @@ function analyzeTransaction(transaction) {
     matchReason = `Category: ${transaction.category_name}`;
   }
 
+  let institutionMetadata = null;
+  try {
+    institutionMetadata = await getInstitutionByVendorCode(database, accountType);
+  } catch (error) {
+    console.warn('[suggestion-analyzer-cjs] Failed to load institution metadata', error);
+  }
+
+  if (!institutionMetadata && institution) {
+    institutionMetadata = {
+      id: null,
+      vendor_code: accountType,
+      display_name_he: institution,
+      display_name_en: institution,
+      institution_type: 'investment',
+    };
+  }
+
   return {
     transactionIdentifier: transaction.identifier,
     transactionVendor: transaction.vendor,
@@ -237,7 +255,8 @@ function analyzeTransaction(transaction) {
     suggestedInstitution: institution,
     suggestedAccountName: accountName,
     confidence: confidence,
-    matchReason: matchReason
+    matchReason: matchReason,
+    institution: institutionMetadata || null,
   };
 }
 
@@ -278,17 +297,18 @@ function groupSuggestionsByAccount(suggestions) {
 
   for (const suggestion of suggestions) {
     // Group by actual category name from database, not pattern-detected type
-    const groupKey = suggestion.categoryName || 'Unknown';
+      const groupKey = suggestion.categoryName || 'Unknown';
 
-    if (!groups.has(groupKey)) {
-      groups.set(groupKey, {
-        categoryName: suggestion.categoryName,
-        suggestedAccountType: suggestion.suggestedAccountType,
-        suggestedInstitution: suggestion.suggestedInstitution,
-        suggestedAccountName: suggestion.categoryName || suggestion.suggestedAccountName,
-        avgConfidence: 0,
-        transactions: [],
-        totalAmount: 0,
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          categoryName: suggestion.categoryName,
+          suggestedAccountType: suggestion.suggestedAccountType,
+          suggestedInstitution: suggestion.suggestedInstitution,
+          suggestedAccountName: suggestion.categoryName || suggestion.suggestedAccountName,
+          institution: suggestion.institution || null,
+          avgConfidence: 0,
+          transactions: [],
+          totalAmount: 0,
         transactionCount: 0,
         dateRange: { earliest: suggestion.transactionDate, latest: suggestion.transactionDate }
       });
@@ -330,7 +350,7 @@ async function analyzeInvestmentTransactions(thresholdDays = 90) {
   }
 
   // Analyze each transaction - ALL transactions are now included
-  const suggestions = transactions.map(analyzeTransaction);
+  const suggestions = await Promise.all(transactions.map((txn) => analyzeTransaction(txn)));
 
   // Group by database category name
   const grouped = groupSuggestionsByAccount(suggestions);

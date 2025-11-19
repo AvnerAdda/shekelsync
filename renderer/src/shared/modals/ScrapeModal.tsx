@@ -1,0 +1,557 @@
+import { useState, useEffect, useMemo } from 'react';
+import Dialog from '@mui/material/Dialog';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import TextField from '@mui/material/TextField';
+import FormControl from '@mui/material/FormControl';
+import InputLabel from '@mui/material/InputLabel';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
+import Box from '@mui/material/Box';
+import Alert from '@mui/material/Alert';
+import Typography from '@mui/material/Typography';
+import ListSubheader from '@mui/material/ListSubheader';
+import CircularProgress from '@mui/material/CircularProgress';
+import { useTheme } from '@mui/material/styles';
+import { useNotification } from '@renderer/features/notifications/NotificationContext';
+import ModalHeader from './ModalHeader';
+import { apiClient } from '@/lib/api-client';
+import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from '@renderer/shared/components/InstitutionBadge';
+
+interface ScraperConfig {
+  options: {
+    companyId: string;
+    startDate: Date;
+    combineInstallments: boolean;
+    showBrowser: boolean;
+    additionalTransactionInformation: boolean;
+  };
+  credentials: {
+    // Common fields
+    password?: string;
+    nickname?: string;
+    
+    // ID-based authentication
+    id?: string;
+    
+    // Username-based authentication
+    username?: string;
+    userCode?: string;
+    
+    // Additional authentication fields
+    card6Digits?: string;
+    nationalID?: string;
+    num?: string;
+    identification_code?: string;
+    
+    // Bank-specific
+    bankAccountNumber?: string;
+    
+    // Email-based (oneZero)
+    email?: string;
+    otpCode?: string;
+    otpToken?: string;
+  };
+}
+
+interface SyncModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess?: () => void;
+  onStart?: () => void;
+  onComplete?: () => void;
+  initialConfig?: ScraperConfig;
+}
+
+const createEmptyCredentials = () => ({
+  password: '',
+  nickname: '',
+  id: '',
+  username: '',
+  userCode: '',
+  card6Digits: '',
+  nationalID: '',
+  num: '',
+  identification_code: '',
+  bankAccountNumber: '',
+  email: '',
+  otpCode: '',
+  otpToken: '',
+});
+
+const parseCredentialFields = (raw: unknown): string[] => {
+  if (Array.isArray(raw)) {
+    return raw.map((value) => String(value));
+  }
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((value) => String(value));
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+  return [];
+};
+
+const formatFieldLabel = (fieldKey: string) =>
+  fieldKey
+    .replace(/_/g, ' ')
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .trim();
+
+const SCRAPER_FIELD_CONFIG: Record<
+  string,
+  { label: string; type?: string; helperText?: string }
+> = {
+  username: { label: 'Username' },
+  password: { label: 'Password', type: 'password' },
+  userCode: { label: 'User Code' },
+  id: { label: 'ID Number' },
+  card6Digits: { label: 'Card last 6 digits', helperText: 'Last 6 digits printed on the card' },
+  bankAccountNumber: { label: 'Bank Account Number' },
+  nationalID: { label: 'National ID' },
+  num: { label: 'Identification code (num)' },
+  email: { label: 'Email Address', type: 'email' },
+  otpCode: { label: 'OTP Code' },
+  otpToken: { label: 'OTP Token' },
+  identification_code: { label: 'Identification Code' },
+};
+
+const createDefaultConfig = (): ScraperConfig => ({
+  options: {
+    companyId: '',
+    startDate: new Date(),
+    combineInstallments: false,
+    showBrowser: true,
+    additionalTransactionInformation: true
+  },
+  credentials: createEmptyCredentials(),
+});
+
+export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onComplete, initialConfig }: SyncModalProps) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { showNotification } = useNotification();
+  const theme = useTheme();
+  const [config, setConfig] = useState<ScraperConfig>(initialConfig || createDefaultConfig());
+  const [institutions, setInstitutions] = useState<InstitutionMetadata[]>([]);
+  const [institutionsLoading, setInstitutionsLoading] = useState(false);
+  const [institutionsError, setInstitutionsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialConfig) {
+      setConfig(initialConfig);
+    }
+  }, [initialConfig]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadInstitutions = async () => {
+      setInstitutionsLoading(true);
+      try {
+        const response = await apiClient.get('/api/institutions?scrapable=true');
+        if (!response.ok) {
+          throw new Error(response.statusText || 'Failed to load institutions');
+        }
+        const payload = response.data as any;
+        const list = Array.isArray(payload?.institutions)
+          ? payload.institutions
+          : payload?.institution
+            ? [payload.institution]
+            : [];
+        const normalized = list.map((inst: InstitutionMetadata) => ({
+          ...inst,
+          credentialFieldList: parseCredentialFields((inst as any).credential_fields),
+        }));
+        if (isMounted) {
+          setInstitutions(normalized);
+          setInstitutionsError(null);
+        }
+      } catch (fetchError) {
+        console.error('[SyncModal] Failed to load institutions', fetchError);
+        if (isMounted) {
+          setInstitutions([]);
+          setInstitutionsError('Failed to load institutions. Try again in a few moments.');
+        }
+      } finally {
+        if (isMounted) {
+          setInstitutionsLoading(false);
+        }
+      }
+    };
+
+    loadInstitutions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (initialConfig || config.options.companyId || institutions.length === 0) {
+      return;
+    }
+
+    setConfig((prev) => ({
+      ...prev,
+      options: {
+        ...prev.options,
+        companyId: institutions[0]?.vendor_code || '',
+      },
+    }));
+  }, [initialConfig, institutions, config.options.companyId]);
+
+  const selectedInstitution = useMemo(
+    () => institutions.find((inst) => inst.vendor_code === config.options.companyId) || null,
+    [institutions, config.options.companyId],
+  );
+
+  const vendorSections = useMemo(() => {
+    const sections = [
+      { key: 'credit_card', label: 'כרטיסי אשראי - Credit Cards' },
+      { key: 'bank', label: 'בנקים - Banks' },
+    ];
+
+    return sections
+      .map((section) => ({
+        ...section,
+        institutions: institutions
+          .filter((inst) => inst.institution_type === section.key)
+          .sort((a, b) => {
+            const left = getInstitutionLabel(a) || a.vendor_code;
+            const right = getInstitutionLabel(b) || b.vendor_code;
+            return left.localeCompare(right, 'he', { sensitivity: 'base' });
+          }),
+      }))
+      .filter((section) => section.institutions.length > 0);
+  }, [institutions]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setConfig(initialConfig || createDefaultConfig());
+      setError(null);
+      setIsLoading(false);
+    }
+  }, [isOpen, initialConfig]);
+
+  const handleConfigChange = (field: string, value: any) => {
+    if (field.includes('.')) {
+      const [parent, child] = field.split('.');
+      setConfig(prev => ({
+        ...prev,
+        [parent]: {
+          ...prev[parent as keyof ScraperConfig],
+          [child]: value
+        }
+      }));
+    } else {
+      setConfig(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
+  };
+
+  const handleSync = async () => {
+    setIsLoading(true);
+    setError(null);
+    onStart?.();
+
+    try {
+      const response = await apiClient.post('/api/scrape', config);
+      if (!response.ok) {
+        throw new Error(response.statusText || 'Failed to start scraping');
+      }
+
+      showNotification('Sync started successfully!', 'success');
+      onClose();
+      onSuccess?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+      onComplete?.();
+    }
+  };
+
+  const renderCredentialFields = () => {
+    if (institutionsLoading) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+          <CircularProgress size={24} />
+        </Box>
+      );
+    }
+
+    if (!selectedInstitution) {
+      return (
+        <Alert severity="info" sx={{ mt: 2 }}>
+          Select an institution to see the required credentials.
+        </Alert>
+      );
+    }
+
+    const fields = selectedInstitution.credentialFieldList ?? [];
+    const hasExplicitFields = fields.length > 0;
+    const finalFields = hasExplicitFields
+      ? Array.from(new Set([...fields, 'password']))
+      : ['username', 'password'];
+
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+        {!hasExplicitFields && (
+          <Alert severity="info">
+            No credential metadata yet. Provide a username and password for this institution.
+          </Alert>
+        )}
+        {finalFields.map((fieldKey) => {
+          const configEntry = SCRAPER_FIELD_CONFIG[fieldKey] || {
+            label: formatFieldLabel(fieldKey),
+          };
+          const value = (config.credentials as Record<string, string | undefined>)[fieldKey] ?? '';
+
+          return (
+            <TextField
+              key={`${selectedInstitution.vendor_code}-${fieldKey}`}
+              label={configEntry.label}
+              type={configEntry.type || 'text'}
+              value={value}
+              onChange={(e) => handleConfigChange(`credentials.${fieldKey}`, e.target.value)}
+              fullWidth
+              required
+              helperText={configEntry.helperText}
+            />
+          );
+        })}
+      </Box>
+    );
+  };
+
+  const renderNewScrapeForm = () => (
+    <>
+      {institutionsError && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {institutionsError}
+        </Alert>
+      )}
+      <FormControl fullWidth>
+        <InputLabel>Institution</InputLabel>
+        <Select
+          value={config.options.companyId}
+          label="Institution"
+          onChange={(e) => {
+            const vendor = e.target.value as string;
+            setConfig((prev) => ({
+              ...prev,
+              options: {
+                ...prev.options,
+                companyId: vendor,
+              },
+              credentials: {
+                ...createEmptyCredentials(),
+                nickname: prev.credentials.nickname,
+              },
+            }));
+          }}
+          disabled={vendorSections.length === 0 || institutionsLoading}
+        >
+          {vendorSections.length === 0 ? (
+            <MenuItem value="" disabled>
+              {institutionsLoading ? 'Loading institutions…' : 'No institutions available'}
+            </MenuItem>
+          ) : (
+            <>
+              {!config.options.companyId && (
+                <MenuItem value="" disabled>
+                  Select an institution
+                </MenuItem>
+              )}
+              {vendorSections.flatMap((section) => [
+                <ListSubheader key={`${section.key}-header`}>{section.label}</ListSubheader>,
+                section.institutions.map((institution) => (
+                  <MenuItem key={institution.vendor_code} value={institution.vendor_code}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <InstitutionBadge institution={institution} fallback={institution.vendor_code} />
+                      <Typography variant="body2">{getInstitutionLabel(institution)}</Typography>
+                    </Box>
+                  </MenuItem>
+                )),
+              ])}
+            </>
+          )}
+        </Select>
+      </FormControl>
+
+      {selectedInstitution && (
+        <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <InstitutionBadge institution={selectedInstitution} fallback={selectedInstitution.vendor_code} />
+          <Typography variant="caption" color="text.secondary">
+            {selectedInstitution.display_name_en}
+          </Typography>
+        </Box>
+      )}
+
+      {renderCredentialFields()}
+    </>
+  );
+
+  const renderExistingAccountForm = () => {
+    const creds = config.credentials;
+    
+    return (
+      <>
+        {selectedInstitution && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <InstitutionBadge institution={selectedInstitution} fallback={selectedInstitution.vendor_code} />
+            <Typography variant="caption" color="text.secondary">
+              {selectedInstitution.display_name_en}
+            </Typography>
+          </Box>
+        )}
+        {creds.nickname && (
+          <TextField
+            label="Account Nickname"
+            value={creds.nickname}
+            disabled
+            fullWidth
+          />
+        )}
+        {creds.username && (
+          <TextField
+            label="Username"
+            value={creds.username}
+            disabled
+            fullWidth
+          />
+        )}
+        {creds.userCode && (
+          <TextField
+            label="User Code"
+            value={creds.userCode}
+            disabled
+            fullWidth
+          />
+        )}
+        {creds.id && (
+          <TextField
+            label="ID"
+            value={creds.id}
+            disabled
+            fullWidth
+          />
+        )}
+        {creds.email && (
+          <TextField
+            label="Email"
+            value={creds.email}
+            disabled
+            fullWidth
+          />
+        )}
+        {creds.card6Digits && (
+          <TextField
+            label="Card 6 Digits"
+            value={creds.card6Digits}
+            disabled
+            fullWidth
+          />
+        )}
+        {creds.nationalID && (
+          <TextField
+            label="National ID"
+            value={creds.nationalID}
+            disabled
+            fullWidth
+          />
+        )}
+        {creds.num && (
+          <TextField
+            label="Identification Code (num)"
+            value={creds.num}
+            disabled
+            fullWidth
+          />
+        )}
+        {creds.identification_code && (
+          <TextField
+            label="Identification Code"
+            value={creds.identification_code}
+            disabled
+            fullWidth
+          />
+        )}
+        {creds.bankAccountNumber && (
+          <TextField
+            label="Bank Account Number"
+            value={creds.bankAccountNumber}
+            disabled
+            fullWidth
+          />
+        )}
+      </>
+    );
+  };
+
+  return (
+    <Dialog 
+      open={isOpen} 
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{
+        style: {
+          backgroundColor: theme.palette.background.paper,
+          borderRadius: '24px',
+          boxShadow: theme.palette.mode === 'dark' 
+            ? '0 8px 32px rgba(0, 0, 0, 0.5)' 
+            : '0 8px 32px rgba(0, 0, 0, 0.1)'
+        }
+      }}
+    >
+      <ModalHeader title="Sync Transactions" onClose={onClose} />
+      <DialogContent style={{ padding: '0 24px 24px' }}>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2, mt: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2 }}>
+          {initialConfig ? renderExistingAccountForm() : renderNewScrapeForm()}
+        </Box>
+      </DialogContent>
+      <DialogActions style={{ padding: '16px 24px' }}>
+        <Button 
+          onClick={onClose}
+          sx={{ color: theme.palette.text.secondary }}
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={handleSync}
+          variant="contained"
+          disabled={isLoading}
+          sx={{
+            backgroundColor: theme.palette.primary.main,
+            color: theme.palette.primary.contrastText,
+            padding: '8px 24px',
+            borderRadius: '8px',
+            textTransform: 'none',
+            fontWeight: 500,
+            '&:hover': {
+              backgroundColor: theme.palette.primary.dark,
+            }
+          }}
+        >
+          {isLoading ? 'SYNCING...' : 'SYNC'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+} 

@@ -1,24 +1,24 @@
 // Credit card vendors
-export const CREDIT_CARD_VENDORS = ['visaCal', 'max', 'isracard', 'amex'];
+const CREDIT_CARD_VENDORS = ['visaCal', 'max', 'isracard', 'amex'];
 
 // Bank vendors (excluding discount/mercantile which have special requirements)
-export const BANK_VENDORS = ['hapoalim', 'leumi', 'mizrahi', 'otsarHahayal', 'beinleumi', 'massad', 'yahav', 'union'];
+const BANK_VENDORS = ['hapoalim', 'leumi', 'mizrahi', 'otsarHahayal', 'beinleumi', 'massad', 'yahav', 'union'];
 
 // Special bank vendors that use id + num + password (like credit cards but with num)
-export const SPECIAL_BANK_VENDORS = ['discount', 'mercantile'];
+const SPECIAL_BANK_VENDORS = ['discount', 'mercantile'];
 
 // Other bank vendors with unique authentication
-export const OTHER_BANK_VENDORS = ['beyahadBishvilha', 'behatsdaa', 'pagi', 'oneZero'];
+const OTHER_BANK_VENDORS = ['beyahadBishvilha', 'behatsdaa', 'pagi', 'oneZero'];
 
 // All vendors
-export const ALL_VENDORS = [...CREDIT_CARD_VENDORS, ...BANK_VENDORS, ...SPECIAL_BANK_VENDORS, ...OTHER_BANK_VENDORS];
+const ALL_VENDORS = [...CREDIT_CARD_VENDORS, ...BANK_VENDORS, ...SPECIAL_BANK_VENDORS, ...OTHER_BANK_VENDORS];
 
 // Sync threshold - accounts not synced in this time are considered stale
-export const STALE_SYNC_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48 hours
+const STALE_SYNC_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48 hours
 
 // Unified Account Type Taxonomy for enhanced AccountsModal
 // Updated with website color palette (primary green and secondary peach)
-export const ACCOUNT_CATEGORIES = {
+const ACCOUNT_CATEGORIES = {
   BANKING: {
     id: 'banking',
     label: 'Banking & Transactions',
@@ -100,7 +100,7 @@ export const ACCOUNT_CATEGORIES = {
 };
 
 // Investment account types (from PortfolioSetupModal)
-export const INVESTMENT_ACCOUNT_TYPES = [
+const INVESTMENT_ACCOUNT_TYPES = [
   { value: 'pension', label: 'Pension Fund', label_he: 'קרן פנסיה', category: 'restricted' },
   { value: 'provident', label: 'Provident Fund', label_he: 'קרן השתלמות', category: 'restricted' },
   { value: 'study_fund', label: 'Study Fund', label_he: 'קופת גמל', category: 'restricted' },
@@ -110,6 +110,7 @@ export const INVESTMENT_ACCOUNT_TYPES = [
   { value: 'mutual_fund', label: 'Mutual Funds', label_he: 'קרנות נאמנות', category: 'liquid' },
   { value: 'bonds', label: 'Bonds', label_he: 'אג"ח', category: 'alternative' },
   { value: 'real_estate', label: 'Real Estate', label_he: 'נדל"ן', category: 'alternative' },
+  { value: 'bank_balance', label: 'Bank Balance', label_he: 'יתרת בנק', category: 'other' },
   { value: 'cash', label: 'Cash', label_he: 'מזומן', category: 'other' },
   { value: 'foreign_bank', label: 'Foreign Bank', label_he: 'בנק חוץ', category: 'other' },
   { value: 'foreign_investment', label: 'Foreign Investment', label_he: 'השקעה חוץ', category: 'other' },
@@ -117,7 +118,7 @@ export const INVESTMENT_ACCOUNT_TYPES = [
 ];
 
 // Helper functions
-export const getAccountCategory = (accountType) => {
+const getAccountCategory = (accountType) => {
   if (CREDIT_CARD_VENDORS.includes(accountType)) return 'banking';
   if (BANK_VENDORS.includes(accountType) || SPECIAL_BANK_VENDORS.includes(accountType)) return 'banking';
 
@@ -130,7 +131,7 @@ export const getAccountCategory = (accountType) => {
   return 'other';
 };
 
-export const getAccountSubcategory = (accountType) => {
+const getAccountSubcategory = (accountType) => {
   if (CREDIT_CARD_VENDORS.includes(accountType)) return 'credit';
   if (BANK_VENDORS.includes(accountType) || SPECIAL_BANK_VENDORS.includes(accountType)) return 'bank';
 
@@ -149,7 +150,7 @@ export const getAccountSubcategory = (accountType) => {
  * @param {string} vendorCode - Vendor code (e.g., 'hapoalim', 'visaCal')
  * @returns {Promise<object|null>} Institution record or null
  */
-export async function getInstitutionByVendorCode(db, vendorCode) {
+async function getInstitutionByVendorCode(db, vendorCode) {
   try {
     const result = await db.query(
       'SELECT * FROM financial_institutions WHERE vendor_code = $1 AND is_active = 1',
@@ -168,7 +169,7 @@ export async function getInstitutionByVendorCode(db, vendorCode) {
  * @param {number} institutionId - Institution ID
  * @returns {Promise<object|null>} Institution record or null
  */
-export async function getInstitutionById(db, institutionId) {
+async function getInstitutionById(db, institutionId) {
   try {
     const result = await db.query(
       'SELECT * FROM financial_institutions WHERE id = $1',
@@ -187,7 +188,7 @@ export async function getInstitutionById(db, institutionId) {
  * @param {string} institutionType - Type filter ('bank', 'credit_card', 'investment', etc.)
  * @returns {Promise<array>} Array of institution records
  */
-export async function getInstitutionsByType(db, institutionType) {
+async function getInstitutionsByType(db, institutionType) {
   try {
     const result = await db.query(
       'SELECT * FROM financial_institutions WHERE institution_type = $1 AND is_active = 1 ORDER BY display_order',
@@ -206,7 +207,7 @@ export async function getInstitutionsByType(db, institutionType) {
  * @param {string} category - Category filter ('banking', 'investments', 'insurance', etc.)
  * @returns {Promise<array>} Array of institution records
  */
-export async function getInstitutionsByCategory(db, category) {
+async function getInstitutionsByCategory(db, category) {
   try {
     const result = await db.query(
       'SELECT * FROM financial_institutions WHERE category = $1 AND is_active = 1 ORDER BY display_order',
@@ -224,7 +225,7 @@ export async function getInstitutionsByCategory(db, category) {
  * @param {object} db - Database connection
  * @returns {Promise<array>} Array of scrapable institution records
  */
-export async function getScrapableInstitutions(db) {
+async function getScrapableInstitutions(db) {
   try {
     const result = await db.query(
       'SELECT * FROM financial_institutions WHERE is_scrapable = 1 AND is_active = 1 ORDER BY display_order',
@@ -242,7 +243,7 @@ export async function getScrapableInstitutions(db) {
  * @param {object} db - Database connection
  * @returns {Promise<array>} Array of all active institution records
  */
-export async function getAllInstitutions(db) {
+async function getAllInstitutions(db) {
   try {
     const result = await db.query(
       'SELECT * FROM financial_institutions WHERE is_active = 1 ORDER BY category, display_order',
@@ -253,4 +254,24 @@ export async function getAllInstitutions(db) {
     console.error('[getAllInstitutions] Error:', error);
     return [];
   }
-} 
+}
+
+// CommonJS exports for Node.js/Electron backend compatibility
+module.exports = {
+  CREDIT_CARD_VENDORS,
+  BANK_VENDORS,
+  SPECIAL_BANK_VENDORS,
+  OTHER_BANK_VENDORS,
+  ALL_VENDORS,
+  STALE_SYNC_THRESHOLD_MS,
+  ACCOUNT_CATEGORIES,
+  INVESTMENT_ACCOUNT_TYPES,
+  getAccountCategory,
+  getAccountSubcategory,
+  getInstitutionByVendorCode,
+  getInstitutionById,
+  getInstitutionsByType,
+  getInstitutionsByCategory,
+  getScrapableInstitutions,
+  getAllInstitutions,
+};
