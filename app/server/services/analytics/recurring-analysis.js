@@ -7,6 +7,7 @@ function loadDateFns() {
   return dateFnsPromise;
 }
 const database = require('../database.js');
+const { getInstitutionByVendorCode } = require('../institutions.js');
 
 const DEFAULT_MIN_CONFIDENCE = 0.5;
 
@@ -209,10 +210,18 @@ async function getRecurringAnalysis(params = {}) {
           ABS(t.price) AS amount,
           cd.name AS category,
           parent.name AS parent_category,
-          cd.id AS category_definition_id
+          cd.id AS category_definition_id,
+          fi.id as institution_id,
+          fi.vendor_code as institution_vendor_code,
+          fi.display_name_he as institution_display_name_he,
+          fi.display_name_en as institution_display_name_en,
+          fi.institution_type as institution_type,
+          fi.logo_url as institution_logo_url
         FROM transactions t
         LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
         LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
+        LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
+        LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id
         LEFT JOIN account_pairings ap ON (
           t.vendor = ap.bank_vendor
           AND ap.is_active = 1
@@ -233,10 +242,22 @@ async function getRecurringAnalysis(params = {}) {
       [startDate, endDate],
     );
 
-    const transactions = transactionsResult.rows.map((row) => ({
-      ...row,
-      amount: parseFloat(row.amount),
-    }));
+    const transactions = transactionsResult.rows.map((row) => {
+      const institution = row.institution_id ? {
+        id: row.institution_id,
+        vendor_code: row.institution_vendor_code,
+        display_name_he: row.institution_display_name_he,
+        display_name_en: row.institution_display_name_en,
+        institution_type: row.institution_type,
+        logo_url: row.institution_logo_url,
+      } : null;
+
+      return {
+        ...row,
+        amount: parseFloat(row.amount),
+        institution,
+      };
+    });
 
     const merchantGroups = groupByMerchant(transactions);
     const recurringPatterns = [];
@@ -249,6 +270,48 @@ async function getRecurringAnalysis(params = {}) {
         addDays,
       });
       if (pattern && pattern.confidence >= minConfidence) {
+        const vendorCounts = {};
+        txns.forEach((txn) => {
+          if (!txn.vendor) return;
+          vendorCounts[txn.vendor] = (vendorCounts[txn.vendor] || 0) + 1;
+        });
+
+        const primaryVendor = Object.entries(vendorCounts)
+          .sort((a, b) => b[1] - a[1])[0]?.[0];
+
+        if (primaryVendor) {
+          pattern.vendor = primaryVendor;
+          const txnWithInstitution = txns.find(
+            (txn) => txn.vendor === primaryVendor && txn.institution,
+          );
+          if (txnWithInstitution?.institution) {
+            pattern.institution = txnWithInstitution.institution;
+          } else {
+            pattern.institution = await getInstitutionByVendorCode(database, primaryVendor);
+          }
+        }
+
+        if (!pattern.vendor && txns[0]?.vendor) {
+          pattern.vendor = txns[0].vendor;
+        }
+
+        if (!pattern.institution) {
+          const fallbackInstitution = txns.find((txn) => txn.institution)?.institution;
+          if (fallbackInstitution) {
+            pattern.institution = fallbackInstitution;
+          } else if (pattern.vendor) {
+            pattern.institution = await getInstitutionByVendorCode(database, pattern.vendor);
+          }
+        }
+
+        if (!pattern.institution) {
+          console.warn('[RecurringAnalysis] Missing institution metadata', {
+            merchant_pattern: merchantPattern,
+            vendor: pattern.vendor,
+            frequency: pattern.frequency,
+          });
+        }
+
         const existingResult = await client.query(
           `
             SELECT user_status, optimization_note

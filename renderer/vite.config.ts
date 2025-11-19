@@ -1,9 +1,52 @@
-import { defineConfig } from 'vite';
+import { defineConfig, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
+import fs from 'node:fs';
+
+// Plugin to transform CommonJS constants.js to ES6 for Vite
+function commonjsToEsm(): Plugin {
+  const constantsPath = path.resolve(__dirname, '../app/utils/constants.js');
+
+  return {
+    name: 'commonjs-to-esm',
+    transform(code, id) {
+      if (id === constantsPath) {
+        // Read the .d.ts file to get the export names
+        const dtsPath = id.replace('.js', '.d.ts');
+        if (fs.existsSync(dtsPath)) {
+          // Transform CommonJS module.exports to ES6 export
+          // We append ES6 exports that reference module.exports
+          const transformed = code + `\n\n// Auto-generated ES6 exports for Vite
+export const CREDIT_CARD_VENDORS = module.exports.CREDIT_CARD_VENDORS;
+export const BANK_VENDORS = module.exports.BANK_VENDORS;
+export const SPECIAL_BANK_VENDORS = module.exports.SPECIAL_BANK_VENDORS;
+export const OTHER_BANK_VENDORS = module.exports.OTHER_BANK_VENDORS;
+export const ALL_VENDORS = module.exports.ALL_VENDORS;
+export const STALE_SYNC_THRESHOLD_MS = module.exports.STALE_SYNC_THRESHOLD_MS;
+export const ACCOUNT_CATEGORIES = module.exports.ACCOUNT_CATEGORIES;
+export const INVESTMENT_ACCOUNT_TYPES = module.exports.INVESTMENT_ACCOUNT_TYPES;
+export const getAccountCategory = module.exports.getAccountCategory;
+export const getAccountSubcategory = module.exports.getAccountSubcategory;
+export const getInstitutionByVendorCode = module.exports.getInstitutionByVendorCode;
+export const getInstitutionById = module.exports.getInstitutionById;
+export const getInstitutionsByType = module.exports.getInstitutionsByType;
+export const getInstitutionsByCategory = module.exports.getInstitutionsByCategory;
+export const getScrapableInstitutions = module.exports.getScrapableInstitutions;
+export const getAllInstitutions = module.exports.getAllInstitutions;
+`;
+          return { code: transformed, map: null };
+        }
+      }
+      return null;
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    commonjsToEsm(),
+  ],
   resolve: {
     alias: {
       '@app': path.resolve(__dirname, '../app'),
@@ -31,6 +74,12 @@ export default defineConfig({
     },
     extensions: ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.json'],
   },
+  optimizeDeps: {
+    include: ['@app/utils/constants'],
+    esbuildOptions: {
+      mainFields: ['module', 'main'],
+    },
+  },
   build: {
     outDir: 'dist',
     sourcemap: true,
@@ -38,6 +87,13 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true, // Fail if port is already in use instead of trying another port
+    proxy: {
+      '/api': {
+        target: process.env.ELECTRON_API_URL || 'http://localhost:44373',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
     fs: {
       allow: [
         path.resolve(__dirname),

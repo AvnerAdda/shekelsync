@@ -4,9 +4,9 @@ import {
   Box,
   useTheme,
 } from '@mui/material';
-import Sidebar from '@renderer/components/Sidebar';
-import FinancialChatbot from '@renderer/components/FinancialChatbot';
-import TitleBar from '../components/TitleBar';
+import Sidebar from '@renderer/features/layout/components/Sidebar';
+import FinancialChatbot from '@renderer/features/chatbot/components/FinancialChatbot';
+import TitleBar from '@renderer/features/layout/components/TitleBar';
 import { useAuth } from '@app/contexts/AuthContext';
 
 const DRAWER_WIDTH_COLLAPSED = 65;

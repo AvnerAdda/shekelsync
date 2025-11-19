@@ -1,5 +1,10 @@
 const database = require('../database.js');
-const { getAllPatterns } = require('../../../config/investment-patterns.js');
+const { getAllPatterns } = require('../../../config/investment-patterns-cjs.js');
+const {
+  INSTITUTION_SELECT_FIELDS,
+  buildInstitutionFromRow,
+  getInstitutionByVendorCode,
+} = require('../institutions.js');
 
 async function getExistingInvestments() {
   const vendorResult = await database.query(
@@ -50,12 +55,15 @@ async function getExistingInvestments() {
         ia.id,
         ia.account_name,
         ia.account_type,
-        COUNT(tal.id) as link_count
+        COUNT(tal.id) as link_count,
+        ${INSTITUTION_SELECT_FIELDS}
       FROM investment_accounts ia
       LEFT JOIN transaction_account_links tal ON ia.id = tal.account_id
+      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
       WHERE tal.id IS NOT NULL
-      GROUP BY ia.id, ia.account_name, ia.account_type
-      HAVING COUNT(tal.id) > 0`,
+      GROUP BY ia.id, ia.account_name, ia.account_type, fi.id, fi.vendor_code, fi.display_name_he,
+               fi.display_name_en, fi.institution_type, fi.category, fi.subcategory, fi.logo_url,
+               fi.is_scrapable, fi.scraper_company_id`,
   );
 
   const vendors = vendorResult.rows.map((row) => ({
@@ -84,12 +92,22 @@ async function getExistingInvestments() {
     patternsByType[type].push(pattern);
   }
 
-  const linkedAccounts = linkedAccountsResult.rows.map((row) => ({
-    id: row.id,
-    accountName: row.account_name,
-    accountType: row.account_type,
-    linkCount: parseInt(row.link_count, 10),
-  }));
+  const linkedAccounts = await Promise.all(
+    linkedAccountsResult.rows.map(async (row) => {
+      let institution = buildInstitutionFromRow(row);
+      if (!institution && row.account_type) {
+        institution = await getInstitutionByVendorCode(database, row.account_type);
+      }
+
+      return {
+        id: row.id,
+        accountName: row.account_name,
+        accountType: row.account_type,
+        linkCount: parseInt(row.link_count, 10),
+        institution: institution || null,
+      };
+    }),
+  );
 
   return {
     vendors,

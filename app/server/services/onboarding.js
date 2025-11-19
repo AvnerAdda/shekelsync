@@ -1,10 +1,12 @@
 const database = require('./database.js');
-const { BANK_VENDORS, SPECIAL_BANK_VENDORS, CREDIT_CARD_VENDORS } = require('../../utils/constants');
 const { dialect } = require('../../lib/sql-dialect.js');
-
-const ALL_BANK_VENDORS = [...BANK_VENDORS, ...SPECIAL_BANK_VENDORS];
+const { getVendorCodesByTypes } = require('./institutions.js');
 
 function buildVendorQueryFragments(vendors) {
+  if (!vendors || vendors.length === 0) {
+    return null;
+  }
+
   if (dialect.useSqlite) {
     const placeholders = vendors.map(() => '?').join(',');
     return {
@@ -23,6 +25,14 @@ async function getOnboardingStatus() {
   const client = await database.getClient();
 
   try {
+    const [dbBankVendors, dbCreditVendors] = await Promise.all([
+      getVendorCodesByTypes(database, ['bank']),
+      getVendorCodesByTypes(database, ['credit_card']),
+    ]);
+
+    const bankVendors = Array.isArray(dbBankVendors) ? dbBankVendors : [];
+    const creditVendors = Array.isArray(dbCreditVendors) ? dbCreditVendors : [];
+
     const profileResult = await client.query(
       `SELECT
          id,
@@ -39,19 +49,25 @@ async function getOnboardingStatus() {
     const accountsResult = await client.query('SELECT COUNT(*) AS count FROM vendor_credentials');
     const accountCount = Number.parseInt(accountsResult.rows[0]?.count || 0, 10);
 
-    const bankQuery = buildVendorQueryFragments(ALL_BANK_VENDORS);
-    const bankAccountsResult = await client.query(
-      `SELECT COUNT(*) AS count FROM vendor_credentials WHERE ${bankQuery.clause}`,
-      bankQuery.params,
-    );
-    const bankAccountCount = Number.parseInt(bankAccountsResult.rows[0]?.count || 0, 10);
+    let bankAccountCount = 0;
+    const bankQuery = buildVendorQueryFragments(bankVendors);
+    if (bankQuery) {
+      const bankAccountsResult = await client.query(
+        `SELECT COUNT(*) AS count FROM vendor_credentials WHERE ${bankQuery.clause}`,
+        bankQuery.params,
+      );
+      bankAccountCount = Number.parseInt(bankAccountsResult.rows[0]?.count || 0, 10);
+    }
 
-    const creditQuery = buildVendorQueryFragments(CREDIT_CARD_VENDORS);
-    const creditCardResult = await client.query(
-      `SELECT COUNT(*) AS count FROM vendor_credentials WHERE ${creditQuery.clause}`,
-      creditQuery.params,
-    );
-    const creditCardCount = Number.parseInt(creditCardResult.rows[0]?.count || 0, 10);
+    let creditCardCount = 0;
+    const creditQuery = buildVendorQueryFragments(creditVendors);
+    if (creditQuery) {
+      const creditCardResult = await client.query(
+        `SELECT COUNT(*) AS count FROM vendor_credentials WHERE ${creditQuery.clause}`,
+        creditQuery.params,
+      );
+      creditCardCount = Number.parseInt(creditCardResult.rows[0]?.count || 0, 10);
+    }
 
     const transactionsResult = await client.query('SELECT COUNT(*) AS count FROM transactions');
     const transactionCount = Number.parseInt(transactionsResult.rows[0]?.count || 0, 10);

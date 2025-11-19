@@ -371,21 +371,6 @@ const TABLE_DEFINITIONS = [
         ON DELETE CASCADE,
       FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE
     );`,
-  `CREATE TABLE IF NOT EXISTS recurring_transactions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      merchant_name TEXT NOT NULL,
-      category TEXT,
-      subcategory TEXT,
-      frequency TEXT,
-      expected_amount REAL,
-      amount_tolerance REAL NOT NULL DEFAULT 10.0,
-      last_occurrence_date TEXT,
-      next_expected_date TEXT,
-      occurrence_count INTEGER NOT NULL DEFAULT 0,
-      is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );`,
   `CREATE TABLE IF NOT EXISTS recurring_transaction_analysis (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       merchant_pattern TEXT NOT NULL,
@@ -426,36 +411,22 @@ const TABLE_DEFINITIONS = [
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (pairing_id) REFERENCES account_pairings(id) ON DELETE CASCADE
     );`,
-  `CREATE TABLE IF NOT EXISTS spending_patterns (
+  `CREATE TABLE IF NOT EXISTS credit_card_expense_matches (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL DEFAULT 1,
-      category TEXT NOT NULL,
-      subcategory TEXT,
-      period_type TEXT NOT NULL CHECK (period_type IN ('weekly','monthly','yearly')),
-      avg_amount REAL NOT NULL,
-      std_deviation REAL NOT NULL DEFAULT 0,
-      min_amount REAL NOT NULL DEFAULT 0,
-      max_amount REAL NOT NULL DEFAULT 0,
-      transaction_count INTEGER NOT NULL DEFAULT 0,
-      last_calculated TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(category, subcategory, period_type)
-    );`,
-  `CREATE TABLE IF NOT EXISTS spending_anomalies (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      transaction_identifier TEXT NOT NULL,
-      transaction_vendor TEXT NOT NULL,
-      anomaly_type TEXT NOT NULL,
-      category TEXT,
-      subcategory TEXT,
-      expected_amount REAL,
-      actual_amount REAL,
-      deviation_percentage REAL,
-      severity TEXT,
-      is_dismissed INTEGER NOT NULL DEFAULT 0 CHECK (is_dismissed IN (0,1)),
-      detected_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (transaction_identifier, transaction_vendor)
-        REFERENCES transactions(identifier, vendor)
-        ON DELETE CASCADE
+      repayment_txn_id TEXT NOT NULL,
+      repayment_vendor TEXT NOT NULL,
+      repayment_date TEXT NOT NULL,
+      repayment_amount REAL NOT NULL,
+      card_number TEXT,
+      expense_txn_id TEXT NOT NULL,
+      expense_vendor TEXT NOT NULL,
+      expense_date TEXT NOT NULL,
+      expense_amount REAL NOT NULL,
+      match_confidence REAL DEFAULT 1.0,
+      match_method TEXT DEFAULT 'manual',
+      matched_at TEXT NOT NULL,
+      notes TEXT,
+      UNIQUE(repayment_txn_id, repayment_vendor, expense_txn_id, expense_vendor)
     );`,
   `CREATE TABLE IF NOT EXISTS scrape_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -464,7 +435,121 @@ const TABLE_DEFINITIONS = [
       start_date TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'started',
       message TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      credential_id INTEGER
+    );`,
+  // Spending Category Intelligence Tables
+  `CREATE TABLE IF NOT EXISTS spending_category_mappings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category_definition_id INTEGER NOT NULL UNIQUE,
+      spending_category TEXT NOT NULL CHECK(spending_category IN ('growth', 'stability', 'essential', 'reward', 'other')),
+      variability_type TEXT NOT NULL DEFAULT 'variable' CHECK(variability_type IN ('fixed', 'variable', 'seasonal')),
+      is_auto_detected INTEGER NOT NULL DEFAULT 1 CHECK(is_auto_detected IN (0, 1)),
+      target_percentage REAL CHECK(target_percentage >= 0 AND target_percentage <= 100),
+      detection_confidence REAL DEFAULT 0.0 CHECK(detection_confidence >= 0 AND detection_confidence <= 1),
+      user_overridden INTEGER NOT NULL DEFAULT 0 CHECK(user_overridden IN (0, 1)),
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE CASCADE
+    );`,
+  `CREATE TABLE IF NOT EXISTS spending_category_targets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      spending_category TEXT NOT NULL UNIQUE CHECK(spending_category IN ('growth', 'stability', 'essential', 'reward', 'other')),
+      target_percentage REAL NOT NULL CHECK(target_percentage >= 0 AND target_percentage <= 100),
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`,
+  // Smart Action Items Tables
+  `CREATE TABLE IF NOT EXISTS smart_action_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      action_type TEXT NOT NULL CHECK(action_type IN (
+        'anomaly', 'budget_overrun', 'optimization', 'fixed_variation', 'unusual_purchase', 'seasonal_alert'
+      )),
+      trigger_category_id INTEGER,
+      severity TEXT NOT NULL DEFAULT 'medium' CHECK(severity IN ('low', 'medium', 'high', 'critical')),
+      title TEXT NOT NULL,
+      description TEXT,
+      detected_at TEXT NOT NULL DEFAULT (datetime('now')),
+      resolved_at TEXT,
+      dismissed_at TEXT,
+      snoozed_until TEXT,
+      user_status TEXT NOT NULL DEFAULT 'active' CHECK(user_status IN ('active', 'dismissed', 'resolved', 'snoozed')),
+      metadata TEXT,
+      potential_impact REAL,
+      detection_confidence REAL DEFAULT 0.5 CHECK(detection_confidence >= 0 AND detection_confidence <= 1),
+      is_recurring INTEGER NOT NULL DEFAULT 0 CHECK(is_recurring IN (0, 1)),
+      recurrence_key TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (trigger_category_id) REFERENCES category_definitions(id) ON DELETE SET NULL
+    );`,
+  `CREATE TABLE IF NOT EXISTS action_item_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      smart_action_item_id INTEGER NOT NULL,
+      action TEXT NOT NULL CHECK(action IN ('created', 'dismissed', 'resolved', 'snoozed', 'reactivated', 'updated')),
+      previous_status TEXT,
+      new_status TEXT,
+      user_note TEXT,
+      metadata TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (smart_action_item_id) REFERENCES smart_action_items(id) ON DELETE CASCADE
+    );`,
+  // Budget Intelligence Tables
+  `CREATE TABLE IF NOT EXISTS budget_suggestions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category_definition_id INTEGER NOT NULL,
+      period_type TEXT NOT NULL CHECK(period_type IN ('weekly', 'monthly', 'yearly')),
+      suggested_limit REAL NOT NULL CHECK(suggested_limit > 0),
+      confidence_score REAL DEFAULT 0.5 CHECK(confidence_score >= 0 AND confidence_score <= 1),
+      variability_coefficient REAL,
+      based_on_months INTEGER NOT NULL DEFAULT 3 CHECK(based_on_months > 0),
+      is_active INTEGER NOT NULL DEFAULT 0 CHECK(is_active IN (0, 1)),
+      activated_at TEXT,
+      deactivated_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      historical_data TEXT,
+      calculation_metadata TEXT,
+      FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE CASCADE,
+      UNIQUE(category_definition_id, period_type)
+    );`,
+  `CREATE TABLE IF NOT EXISTS budget_trajectory (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      budget_id INTEGER NOT NULL,
+      period_start TEXT NOT NULL,
+      period_end TEXT NOT NULL,
+      budget_limit REAL NOT NULL,
+      spent_amount REAL NOT NULL DEFAULT 0,
+      remaining_amount REAL NOT NULL,
+      days_remaining INTEGER NOT NULL,
+      days_total INTEGER NOT NULL,
+      daily_limit REAL NOT NULL,
+      projected_total REAL,
+      is_on_track INTEGER NOT NULL DEFAULT 1 CHECK(is_on_track IN (0, 1)),
+      overrun_risk TEXT CHECK(overrun_risk IN ('none', 'low', 'medium', 'high', 'critical')),
+      snapshot_date TEXT NOT NULL DEFAULT (datetime('now')),
+      metadata TEXT,
+      FOREIGN KEY (budget_id) REFERENCES category_budgets(id) ON DELETE CASCADE
+    );`,
+  `CREATE TABLE IF NOT EXISTS budget_alerts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      budget_id INTEGER NOT NULL,
+      alert_type TEXT NOT NULL CHECK(alert_type IN (
+        'approaching_limit', 'exceeded', 'projected_overrun', 'unusual_spike'
+      )),
+      severity TEXT NOT NULL DEFAULT 'medium' CHECK(severity IN ('low', 'medium', 'high', 'critical')),
+      message TEXT NOT NULL,
+      threshold_percentage REAL,
+      current_amount REAL NOT NULL,
+      budget_limit REAL NOT NULL,
+      triggered_at TEXT NOT NULL DEFAULT (datetime('now')),
+      acknowledged_at TEXT,
+      resolved_at TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+      metadata TEXT,
+      FOREIGN KEY (budget_id) REFERENCES category_budgets(id) ON DELETE CASCADE
     );`
 ];
 
@@ -482,8 +567,6 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_actionability_amount ON category_actionability_settings (monthly_average DESC);',
   'CREATE INDEX IF NOT EXISTS idx_actionability_category ON category_actionability_settings (category_definition_id);',
   'CREATE INDEX IF NOT EXISTS idx_actionability_level ON category_actionability_settings (actionability_level);',
-  'CREATE INDEX IF NOT EXISTS idx_anomalies_dismissed ON spending_anomalies (is_dismissed, detected_at DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_anomalies_transaction ON spending_anomalies (transaction_identifier, transaction_vendor);',
   'CREATE INDEX IF NOT EXISTS idx_categorization_rules_active ON categorization_rules (is_active);',
   'CREATE INDEX IF NOT EXISTS idx_categorization_rules_active_priority ON categorization_rules (is_active, priority DESC) WHERE (is_active = 1);',
   'CREATE INDEX IF NOT EXISTS idx_categorization_rules_pattern ON categorization_rules (name_pattern);',
@@ -515,13 +598,11 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_pending_account_type ON pending_transaction_suggestions (suggested_account_type);',
   'CREATE INDEX IF NOT EXISTS idx_pending_dismissed ON pending_transaction_suggestions (dismiss_count, last_dismissed_at);',
   'CREATE INDEX IF NOT EXISTS idx_recurring_confidence ON recurring_transaction_analysis (confidence_score DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_recurring_merchant ON recurring_transactions (merchant_name, is_active);',
-  'CREATE INDEX IF NOT EXISTS idx_recurring_next_date ON recurring_transactions (next_expected_date, is_active);',
   'CREATE INDEX IF NOT EXISTS idx_recurring_status ON recurring_transaction_analysis (user_status);',
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_created_at ON scrape_events (created_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_vendor ON scrape_events (vendor);',
-  'CREATE INDEX IF NOT EXISTS idx_spending_patterns_calculated ON spending_patterns (last_calculated DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_spending_patterns_category ON spending_patterns (category, subcategory);',
+  'CREATE INDEX IF NOT EXISTS idx_scrape_events_credential_id ON scrape_events (credential_id);',
+  'CREATE INDEX IF NOT EXISTS idx_scrape_events_cred_date ON scrape_events (credential_id, created_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_spouse_profile_user_id ON spouse_profile (user_profile_id);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_account_number ON transactions (account_number);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_category_def ON transactions (category_definition_id);',
@@ -541,7 +622,31 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_pairings_credit_card ON account_pairings(credit_card_vendor, credit_card_account_number);',
   'CREATE INDEX IF NOT EXISTS idx_pairings_bank ON account_pairings(bank_vendor, bank_account_number);',
   'CREATE INDEX IF NOT EXISTS idx_pairing_log_pairing_id ON account_pairing_log(pairing_id);',
-  'CREATE INDEX IF NOT EXISTS idx_pairing_log_created_at ON account_pairing_log(created_at);'
+  'CREATE INDEX IF NOT EXISTS idx_pairing_log_created_at ON account_pairing_log(created_at);',
+  'CREATE INDEX IF NOT EXISTS idx_cc_matches_repayment ON credit_card_expense_matches(repayment_txn_id, repayment_vendor);',
+  'CREATE INDEX IF NOT EXISTS idx_cc_matches_expense ON credit_card_expense_matches(expense_txn_id, expense_vendor);',
+  'CREATE INDEX IF NOT EXISTS idx_cc_matches_dates ON credit_card_expense_matches(repayment_date, expense_date);',
+  'CREATE INDEX IF NOT EXISTS idx_cc_matches_method ON credit_card_expense_matches(match_method);',
+  // Spending Category Intelligence Indexes
+  'CREATE INDEX IF NOT EXISTS idx_spending_category_mappings_category_id ON spending_category_mappings(category_definition_id);',
+  'CREATE INDEX IF NOT EXISTS idx_spending_category_mappings_spending_cat ON spending_category_mappings(spending_category);',
+  'CREATE INDEX IF NOT EXISTS idx_spending_category_mappings_variability ON spending_category_mappings(variability_type);',
+  // Smart Action Items Indexes
+  'CREATE INDEX IF NOT EXISTS idx_smart_action_items_type ON smart_action_items(action_type);',
+  'CREATE INDEX IF NOT EXISTS idx_smart_action_items_status ON smart_action_items(user_status);',
+  'CREATE INDEX IF NOT EXISTS idx_smart_action_items_severity ON smart_action_items(severity);',
+  'CREATE INDEX IF NOT EXISTS idx_smart_action_items_category ON smart_action_items(trigger_category_id);',
+  'CREATE INDEX IF NOT EXISTS idx_smart_action_items_detected_at ON smart_action_items(detected_at DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_smart_action_items_recurrence ON smart_action_items(recurrence_key, user_status);',
+  'CREATE INDEX IF NOT EXISTS idx_action_item_history_item_id ON action_item_history(smart_action_item_id, created_at DESC);',
+  // Budget Intelligence Indexes
+  'CREATE INDEX IF NOT EXISTS idx_budget_suggestions_category ON budget_suggestions(category_definition_id);',
+  'CREATE INDEX IF NOT EXISTS idx_budget_suggestions_active ON budget_suggestions(is_active, category_definition_id);',
+  'CREATE INDEX IF NOT EXISTS idx_budget_suggestions_confidence ON budget_suggestions(confidence_score DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_budget_trajectory_budget_id ON budget_trajectory(budget_id, snapshot_date DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_budget_trajectory_risk ON budget_trajectory(overrun_risk, snapshot_date DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_budget_alerts_budget_id ON budget_alerts(budget_id, triggered_at DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_budget_alerts_active ON budget_alerts(is_active, severity);'
 ];
 
 const FINANCIAL_INSTITUTIONS = [
@@ -580,6 +685,7 @@ const FINANCIAL_INSTITUTIONS = [
   { code: 'mutual_fund', type: 'investment', nameHe: 'קרנות נאמנות', nameEn: 'Mutual Funds', category: 'investments', subcategory: 'liquid', scrapable: 0, displayOrder: 360 },
   { code: 'bonds', type: 'investment', nameHe: 'אג"ח', nameEn: 'Bonds', category: 'investments', subcategory: 'alternative', scrapable: 0, displayOrder: 370 },
   { code: 'real_estate', type: 'investment', nameHe: 'נדל"ן', nameEn: 'Real Estate', category: 'investments', subcategory: 'alternative', scrapable: 0, displayOrder: 380 },
+  { code: 'bank_balance', type: 'investment', nameHe: 'יתרת בנק', nameEn: 'Bank Balance', category: 'investments', subcategory: 'cash', scrapable: 0, displayOrder: 385, notes: 'Auto-tracked bank account balance from scraped data' },
   { code: 'cash', type: 'investment', nameHe: 'מזומן', nameEn: 'Cash', category: 'investments', subcategory: 'cash', scrapable: 0, displayOrder: 390 },
   { code: 'foreign_bank', type: 'investment', nameHe: 'בנק חוץ', nameEn: 'Foreign Bank', category: 'investments', subcategory: 'cash', scrapable: 0, displayOrder: 400 },
   { code: 'foreign_investment', type: 'investment', nameHe: 'השקעה חוץ', nameEn: 'Foreign Investment', category: 'investments', subcategory: 'alternative', scrapable: 0, displayOrder: 410 },
@@ -962,6 +1068,37 @@ function seedFinancialInstitutions(db) {
   return insertedCount;
 }
 
+function seedSpendingCategoryTargets(db) {
+  console.log('  → Seeding spending category targets...');
+
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO spending_category_targets (spending_category, target_percentage, is_active)
+    VALUES (@category, @percentage, 1)
+  `);
+
+  const targets = [
+    { category: 'essential', percentage: 50.0 },  // 50% for essentials (rent, utilities, groceries)
+    { category: 'growth', percentage: 20.0 },      // 20% for growth (investments, savings, education)
+    { category: 'stability', percentage: 10.0 },   // 10% for stability (emergency fund, insurance)
+    { category: 'reward', percentage: 15.0 },      // 15% for rewards (entertainment, dining, travel)
+    { category: 'other', percentage: 5.0 }         // 5% for other/uncategorized
+  ];
+
+  let insertedCount = 0;
+  db.transaction(() => {
+    for (const target of targets) {
+      insert.run({
+        category: target.category,
+        percentage: target.percentage
+      });
+      insertedCount++;
+    }
+  })();
+
+  console.log(`    ✓ Seeded ${insertedCount} spending category targets`);
+  return insertedCount;
+}
+
 function ensureDestination(outputPath, force) {
   if (fs.existsSync(outputPath)) {
     if (!force) {
@@ -1000,6 +1137,7 @@ function main() {
     seedCategoryActionability(db, helpers);
     seedCategoryMapping(db, helpers);
     seedCategorizationRules(db, helpers);
+    const spendingTargetCount = seedSpendingCategoryTargets(db);
 
     db.exec('COMMIT');
     transactionStarted = false;
@@ -1017,6 +1155,7 @@ function main() {
     console.log(`✅ Seeded ${expenseLeafCount} default actionability entries`);
     console.log(`✅ Seeded ${CATEGORY_MAPPINGS.length} category mappings`);
     console.log(`✅ Seeded ${incomeRulesCount} income categorization rules`);
+    console.log(`✅ Seeded ${spendingTargetCount} spending category targets`);
     console.log('\nDone. You can now run `npm run dev` to start the app against the new database.\n');
   } catch (error) {
     if (transactionStarted && db.inTransaction) {

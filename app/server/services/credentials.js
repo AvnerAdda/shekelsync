@@ -15,8 +15,9 @@ function mapCredentialRow(row) {
     nickname: row.nickname,
     bank_account_number: row.bank_account_number,
     created_at: row.created_at,
-    current_balance: row.current_balance,
-    balance_updated_at: row.balance_updated_at,
+    // Balance now comes from investment_holdings
+    current_balance: row.current_balance !== undefined ? row.current_balance : (row.holding_balance || null),
+    balance_updated_at: row.balance_updated_at || row.holding_as_of_date || null,
     lastUpdate: row.lastscrapesuccess || row.lastupdate || row.last_scrape_success,
     lastScrapeStatus: row.lastscrapestatus || row.last_scrape_status,
     last_scrape_attempt: row.last_scrape_attempt,
@@ -40,9 +41,18 @@ async function listCredentials(params = {}) {
 
   if (vendor) {
     sql = `
-      SELECT vc.*, ${INSTITUTION_SELECT_FIELDS}
+      SELECT vc.*,
+             ${INSTITUTION_SELECT_FIELDS},
+             (SELECT current_value FROM investment_holdings ih
+              WHERE ih.account_id = ia.id
+              ORDER BY ih.as_of_date DESC LIMIT 1) as holding_balance,
+             (SELECT as_of_date FROM investment_holdings ih
+              WHERE ih.account_id = ia.id
+              ORDER BY ih.as_of_date DESC LIMIT 1) as holding_as_of_date
       FROM vendor_credentials vc
       ${INSTITUTION_JOIN_VENDOR_CRED}
+      LEFT JOIN investment_accounts ia ON ia.account_type = 'bank_balance'
+        AND ia.notes LIKE '%credential_id:' || vc.id || '%'
       WHERE vc.vendor = $1
       ORDER BY vc.created_at DESC
     `;
@@ -51,6 +61,12 @@ async function listCredentials(params = {}) {
     sql = `
       SELECT vc.*,
              ${INSTITUTION_SELECT_FIELDS},
+             (SELECT current_value FROM investment_holdings ih
+              WHERE ih.account_id = ia.id
+              ORDER BY ih.as_of_date DESC LIMIT 1) as holding_balance,
+             (SELECT as_of_date FROM investment_holdings ih
+              WHERE ih.account_id = ia.id
+              ORDER BY ih.as_of_date DESC LIMIT 1) as holding_as_of_date,
              CASE
                WHEN vc.last_scrape_status = 'success' THEN 'success'
                WHEN vc.last_scrape_status = 'failed' THEN 'failed'
@@ -59,6 +75,8 @@ async function listCredentials(params = {}) {
              vc.last_scrape_success as lastUpdate
       FROM vendor_credentials vc
       ${INSTITUTION_JOIN_VENDOR_CRED}
+      LEFT JOIN investment_accounts ia ON ia.account_type = 'bank_balance'
+        AND ia.notes LIKE '%credential_id:' || vc.id || '%'
       ORDER BY vc.vendor
     `;
   }
@@ -121,6 +139,12 @@ async function createCredential(payload = {}) {
     // If vendor provided but no institution_id, lookup institution
     const { mapVendorCodeToInstitutionId } = require('./institutions.js');
     institutionId = await mapVendorCodeToInstitutionId(database, vendor);
+  }
+
+  if (!institutionId) {
+    const error = new Error('Unknown institution. Please choose a supported financial institution.');
+    error.statusCode = 400;
+    throw error;
   }
 
   const { INSTITUTION_JOIN_VENDOR_CRED, INSTITUTION_SELECT_FIELDS } = require('./institutions.js');

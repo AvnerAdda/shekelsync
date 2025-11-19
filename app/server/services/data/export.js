@@ -13,7 +13,7 @@ function escapeCSV(field) {
   return str;
 }
 
-function formatTransactionsCSV(transactions = []) {
+function formatTransactionsCSV(transactions = [], includeInstitutions = true) {
   const headers = [
     'Date',
     'Vendor',
@@ -25,6 +25,10 @@ function formatTransactionsCSV(transactions = []) {
     'Status',
     'Account Number',
   ];
+
+  if (includeInstitutions) {
+    headers.push('Institution', 'Institution Type');
+  }
 
   const csvRows = [headers.join(',')];
 
@@ -40,6 +44,17 @@ function formatTransactionsCSV(transactions = []) {
       escapeCSV(txn.status),
       escapeCSV(txn.account_number),
     ];
+
+    if (includeInstitutions) {
+      const institutionName =
+        txn.institution?.display_name_he ||
+        txn.institution?.display_name_en ||
+        '';
+      row.push(
+        escapeCSV(institutionName),
+        escapeCSV(txn.institution?.institution_type || ''),
+      );
+    }
     csvRows.push(row.join(','));
   });
 
@@ -63,8 +78,18 @@ function formatCategoriesCSV(categories = []) {
   return csvRows.join('\n');
 }
 
-function formatVendorsCSV(vendors = []) {
-  const headers = ['Vendor', 'Transaction Count', 'Total Amount', 'First Transaction', 'Last Transaction'];
+function formatVendorsCSV(vendors = [], includeInstitutions = true) {
+  const headers = [
+    'Vendor',
+    'Transaction Count',
+    'Total Amount',
+    'First Transaction',
+    'Last Transaction',
+  ];
+
+  if (includeInstitutions) {
+    headers.splice(1, 0, 'Institution', 'Institution Type');
+  }
   const csvRows = [headers.join(',')];
 
   vendors.forEach((vendor) => {
@@ -75,10 +100,61 @@ function formatVendorsCSV(vendors = []) {
       escapeCSV(vendor.first_transaction),
       escapeCSV(vendor.last_transaction),
     ];
+
+    if (includeInstitutions) {
+      const institutionName =
+        vendor.institution?.display_name_he ||
+        vendor.institution?.display_name_en ||
+        '';
+      row.splice(
+        1,
+        0,
+        escapeCSV(institutionName),
+        escapeCSV(vendor.institution?.institution_type || ''),
+      );
+    }
     csvRows.push(row.join(','));
   });
 
   return csvRows.join('\n');
+}
+
+function buildInstitutionFromRow(row = {}) {
+  if (!row.institution_id && !row.institution_vendor_code) {
+    return null;
+  }
+  return {
+    id: row.institution_id,
+    vendor_code: row.institution_vendor_code,
+    display_name_he: row.institution_name_he,
+    display_name_en: row.institution_name_en,
+    institution_type: row.institution_type,
+    logo_url: row.institution_logo_url,
+  };
+}
+
+function attachInstitution(row = {}) {
+  const {
+    institution_id,
+    institution_vendor_code,
+    institution_name_he,
+    institution_name_en,
+    institution_type,
+    institution_logo_url,
+    ...rest
+  } = row;
+
+  return {
+    ...rest,
+    institution: buildInstitutionFromRow({
+      institution_id,
+      institution_vendor_code,
+      institution_name_he,
+      institution_name_en,
+      institution_type,
+      institution_logo_url,
+    }),
+  };
 }
 
 async function resolveCategoryFilters(categoryValues = []) {
@@ -147,6 +223,7 @@ async function exportData(params = {}) {
     includeIncome = 'true',
     includeExpenses = 'true',
     includeInvestments = 'true',
+    includeInstitutions = 'true',
   } = params;
 
   if (!VALID_FORMATS.has(format)) {
@@ -185,6 +262,7 @@ async function exportData(params = {}) {
   if (includeInvestments !== 'true') {
     typeFilters.push("(cd.category_type IS NULL OR cd.category_type != 'investment')");
   }
+  const includeInstitutionsFlag = includeInstitutions !== 'false';
 
   const typeFilterClause = typeFilters.length > 0 ? `AND (${typeFilters.join(' OR ')})` : '';
 
@@ -228,10 +306,17 @@ async function exportData(params = {}) {
             cd.name_en AS category_name_en,
             parent.name AS parent_category_name,
             parent.name_en AS parent_category_name_en,
-            cd.category_type
+            cd.category_type,
+            fi.id as institution_id,
+            fi.vendor_code as institution_vendor_code,
+            fi.display_name_he as institution_name_he,
+            fi.display_name_en as institution_name_en,
+            fi.institution_type,
+            fi.logo_url as institution_logo_url
           FROM transactions t
           LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
           LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+          LEFT JOIN financial_institutions fi ON fi.vendor_code = t.vendor
           WHERE t.date >= $1
           AND t.date <= $2
           ${typeFilterClause}
@@ -242,7 +327,12 @@ async function exportData(params = {}) {
       queryParams,
     );
 
-    exportData.transactions = transactionsResult.rows;
+    exportData.transactions = includeInstitutionsFlag
+      ? transactionsResult.rows.map(attachInstitution)
+      : transactionsResult.rows.map((row) => {
+          const { institution_id, institution_vendor_code, institution_name_he, institution_name_en, institution_type, institution_logo_url, ...rest } = row;
+          return rest;
+        });
   }
 
   if (dataType === 'categories' || dataType === 'full') {
@@ -287,10 +377,17 @@ async function exportData(params = {}) {
             COUNT(*) AS transaction_count,
             SUM(ABS(t.price)) AS total_amount,
             MIN(t.date) AS first_transaction,
-            MAX(t.date) AS last_transaction
+            MAX(t.date) AS last_transaction,
+            fi.id as institution_id,
+            fi.vendor_code as institution_vendor_code,
+            fi.display_name_he as institution_name_he,
+            fi.display_name_en as institution_name_en,
+            fi.institution_type,
+            fi.logo_url as institution_logo_url
           FROM transactions t
           LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
           LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+          LEFT JOIN financial_institutions fi ON fi.vendor_code = t.vendor
           WHERE t.date >= $1
           AND t.date <= $2
           ${typeFilterClause}
@@ -302,7 +399,12 @@ async function exportData(params = {}) {
       queryParams,
     );
 
-    exportData.vendors = vendorsResult.rows;
+    exportData.vendors = includeInstitutionsFlag
+      ? vendorsResult.rows.map(attachInstitution)
+      : vendorsResult.rows.map((row) => {
+          const { institution_id, institution_vendor_code, institution_name_he, institution_name_en, institution_type, institution_logo_url, ...rest } = row;
+          return rest;
+        });
   }
 
   if (dataType === 'budgets' || dataType === 'full') {
@@ -333,17 +435,17 @@ async function exportData(params = {}) {
     let filename = `clarify-export-${dataType}-${timestamp}.csv`;
 
     if (dataType === 'transactions') {
-      csvContent = formatTransactionsCSV(exportData.transactions);
+      csvContent = formatTransactionsCSV(exportData.transactions, includeInstitutionsFlag);
     } else if (dataType === 'categories') {
       csvContent = formatCategoriesCSV(exportData.categories);
     } else if (dataType === 'vendors') {
-      csvContent = formatVendorsCSV(exportData.vendors);
+      csvContent = formatVendorsCSV(exportData.vendors, includeInstitutionsFlag);
     } else if (dataType === 'full') {
       const sections = [];
 
       if (exportData.transactions) {
         sections.push('=== TRANSACTIONS ===');
-        sections.push(formatTransactionsCSV(exportData.transactions));
+        sections.push(formatTransactionsCSV(exportData.transactions, includeInstitutionsFlag));
         sections.push('');
       }
 
@@ -355,7 +457,7 @@ async function exportData(params = {}) {
 
       if (exportData.vendors) {
         sections.push('=== VENDORS SUMMARY ===');
-        sections.push(formatVendorsCSV(exportData.vendors));
+        sections.push(formatVendorsCSV(exportData.vendors, includeInstitutionsFlag));
         sections.push('');
       }
 
@@ -384,6 +486,7 @@ async function exportData(params = {}) {
           includeIncome: includeIncome === 'true',
           includeExpenses: includeExpenses === 'true',
           includeInvestments: includeInvestments === 'true',
+          includeInstitutions: includeInstitutionsFlag,
         },
         recordCounts: {
           transactions: exportData.transactions?.length || 0,

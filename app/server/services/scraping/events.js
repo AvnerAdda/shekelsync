@@ -11,14 +11,16 @@ async function listScrapeEvents({ limit = 100 } = {}) {
        se.status,
        se.message,
        se.created_at,
-       fi.id as institution_id,
-       fi.display_name_he as institution_name_he,
-       fi.display_name_en as institution_name_en,
-       fi.logo_url as institution_logo,
-       fi.institution_type as institution_type
+       COALESCE(fi_cred.id, fi_vendor.id) as institution_id,
+       COALESCE(fi_cred.vendor_code, fi_vendor.vendor_code, se.vendor) as institution_vendor_code,
+       COALESCE(fi_cred.display_name_he, fi_vendor.display_name_he, se.vendor) as institution_name_he,
+       COALESCE(fi_cred.display_name_en, fi_vendor.display_name_en, se.vendor) as institution_name_en,
+       COALESCE(fi_cred.logo_url, fi_vendor.logo_url) as institution_logo,
+       COALESCE(fi_cred.institution_type, fi_vendor.institution_type) as institution_type
      FROM scrape_events se
      LEFT JOIN vendor_credentials vc ON se.vendor = vc.vendor
-     LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id
+     LEFT JOIN financial_institutions fi_cred ON vc.institution_id = fi_cred.id
+     LEFT JOIN financial_institutions fi_vendor ON se.vendor = fi_vendor.vendor_code
      ORDER BY se.created_at DESC
      LIMIT $1`,
     [cappedLimit],
@@ -34,6 +36,7 @@ async function listScrapeEvents({ limit = 100 } = {}) {
     created_at: row.created_at,
     institution: row.institution_id ? {
       id: row.institution_id,
+      vendor_code: row.institution_vendor_code,
       display_name_he: row.institution_name_he,
       display_name_en: row.institution_name_en,
       logo_url: row.institution_logo,
@@ -52,14 +55,16 @@ async function getScrapeEvent(id) {
        se.status,
        se.message,
        se.created_at,
-       fi.id as institution_id,
-       fi.display_name_he as institution_name_he,
-       fi.display_name_en as institution_name_en,
-       fi.logo_url as institution_logo,
-       fi.institution_type as institution_type
+       COALESCE(fi_cred.id, fi_vendor.id) as institution_id,
+       COALESCE(fi_cred.vendor_code, fi_vendor.vendor_code, se.vendor) as institution_vendor_code,
+       COALESCE(fi_cred.display_name_he, fi_vendor.display_name_he, se.vendor) as institution_name_he,
+       COALESCE(fi_cred.display_name_en, fi_vendor.display_name_en, se.vendor) as institution_name_en,
+       COALESCE(fi_cred.logo_url, fi_vendor.logo_url) as institution_logo,
+       COALESCE(fi_cred.institution_type, fi_vendor.institution_type) as institution_type
      FROM scrape_events se
      LEFT JOIN vendor_credentials vc ON se.vendor = vc.vendor
-     LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id
+     LEFT JOIN financial_institutions fi_cred ON vc.institution_id = fi_cred.id
+     LEFT JOIN financial_institutions fi_vendor ON se.vendor = fi_vendor.vendor_code
      WHERE se.id = $1`,
     [id],
   );
@@ -77,6 +82,7 @@ async function getScrapeEvent(id) {
     created_at: row.created_at,
     institution: row.institution_id ? {
       id: row.institution_id,
+      vendor_code: row.institution_vendor_code,
       display_name_he: row.institution_name_he,
       display_name_en: row.institution_name_en,
       logo_url: row.institution_logo,

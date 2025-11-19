@@ -9,7 +9,9 @@ const accountsService = require('../services/investments/accounts.js');
 const assetsService = require('../services/investments/assets.js');
 const holdingsService = require('../services/investments/holdings.js');
 const summaryService = require('../services/investments/summary.js');
+const bankSummaryService = require('../services/investments/bank-summary.js');
 const suggestionAnalyzerCJS = require('../services/investments/suggestion-analyzer-cjs.js');
+const manualMatchingService = require('../services/investments/manual-matching.js');
 
 // Dynamic imports for ES modules
 let suggestionAnalyzer;
@@ -319,6 +321,25 @@ function createInvestmentsRouter() {
       console.error('Investments summary error:', error);
       res.status(error?.status || 500).json({
         error: error?.message || 'Failed to fetch investment summary',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * GET /api/investments/bank-summary
+   * Get comprehensive bank balance summary with historical data
+   * Query params: startDate, endDate, months (default: 3), aggregation (daily/weekly/monthly)
+   */
+  router.get('/bank-summary', async (req, res) => {
+    try {
+      const result = await bankSummaryService.getBankBalanceSummary(req.query || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Bank balance summary error:', error);
+      res.status(error?.status || 500).json({
+        success: false,
+        error: error?.message || 'Failed to fetch bank balance summary',
         details: error?.stack,
       });
     }
@@ -646,18 +667,20 @@ function createInvestmentsRouter() {
       }
 
       // Step 1: Create account
-      const account = await accountsService.createAccount(accountDetails);
+      const accountResponse = await accountsService.createAccount(accountDetails);
+      const account = accountResponse?.account || accountResponse;
 
       if (!account || !account.id) {
         throw new Error('Failed to create investment account');
       }
 
       // Step 2: Create holding with history
-      const holding = await holdingsService.upsertHolding({
+      const holdingResponse = await holdingsService.upsertHolding({
         account_id: account.id,
         ...holdingDetails,
         save_history: true
       });
+      const holding = holdingResponse?.holding || holdingResponse;
 
       // Step 3: Link transactions if provided
       let linkResult = null;
@@ -682,6 +705,348 @@ function createInvestmentsRouter() {
       console.error('Investments create-from-suggestion error:', error);
       res.status(error?.statusCode || 500).json({
         error: error?.message || 'Failed to create account from suggestion',
+        details: error?.stack,
+      });
+    }
+  });
+
+  // Manual Matching Routes
+  router.get('/manual-matching/unmatched-repayments', async (req, res) => {
+    try {
+      const {
+        creditCardAccountNumber,
+        creditCardVendor,
+        bankVendor,
+        bankAccountNumber,
+        matchPatterns
+      } = req.query;
+
+      if (!creditCardAccountNumber || !creditCardVendor || !bankVendor) {
+        return res.status(400).json({
+          error: 'Missing required parameters: creditCardAccountNumber, creditCardVendor, bankVendor'
+        });
+      }
+
+      // Parse matchPatterns from JSON string if provided
+      let patternsArray = null;
+      if (matchPatterns) {
+        try {
+          patternsArray = JSON.parse(matchPatterns);
+        } catch (e) {
+          return res.status(400).json({
+            error: 'Invalid matchPatterns format - must be JSON array'
+          });
+        }
+      }
+
+      const repayments = await manualMatchingService.getUnmatchedRepayments({
+        creditCardAccountNumber,
+        creditCardVendor,
+        bankVendor,
+        bankAccountNumber: bankAccountNumber || null,
+        matchPatterns: patternsArray
+      });
+
+      res.json({
+        success: true,
+        repayments
+      });
+    } catch (error) {
+      console.error('Manual matching - get unmatched repayments error:', error);
+      res.status(error?.statusCode || 500).json({
+        error: error?.message || 'Failed to fetch unmatched repayments',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/manual-matching/available-expenses', async (req, res) => {
+    try {
+      const {
+        repaymentDate,
+        creditCardAccountNumber,
+        creditCardVendor,
+        processedDate  // NEW: Smart date filtering
+      } = req.query;
+
+      if (!repaymentDate || !creditCardAccountNumber || !creditCardVendor) {
+        return res.status(400).json({
+          error: 'Missing required parameters: repaymentDate, creditCardAccountNumber, creditCardVendor'
+        });
+      }
+
+      const expenses = await manualMatchingService.getAvailableExpenses({
+        repaymentDate,
+        creditCardAccountNumber,
+        creditCardVendor,
+        processedDate: processedDate || null  // NEW: Optional smart date filter
+      });
+
+      res.json({
+        success: true,
+        expenses,
+        smartDateUsed: !!processedDate  // Indicate if smart matching was used
+      });
+    } catch (error) {
+      console.error('Manual matching - get available expenses error:', error);
+      res.status(error?.statusCode || 500).json({
+        error: error?.message || 'Failed to fetch available expenses',
+        details: error?.stack,
+      });
+    }
+  });
+
+  // NEW: Get available processed dates (billing cycles) for smart matching
+  router.get('/manual-matching/processed-dates', async (req, res) => {
+    try {
+      const {
+        creditCardAccountNumber,
+        creditCardVendor,
+        startDate,
+        endDate
+      } = req.query;
+
+      if (!creditCardAccountNumber || !creditCardVendor) {
+        return res.status(400).json({
+          error: 'Missing required parameters: creditCardAccountNumber, creditCardVendor'
+        });
+      }
+
+      const processedDates = await manualMatchingService.getAvailableProcessedDates({
+        creditCardAccountNumber,
+        creditCardVendor,
+        startDate: startDate || null,
+        endDate: endDate || null
+      });
+
+      res.json({
+        success: true,
+        processedDates,
+        count: processedDates.length
+      });
+    } catch (error) {
+      console.error('Manual matching - get processed dates error:', error);
+      res.status(error?.statusCode || 500).json({
+        error: error?.message || 'Failed to fetch processed dates',
+        details: error?.stack,
+      });
+    }
+  });
+
+  // NEW: Get bank repayments for a specific processed date
+  router.get('/manual-matching/bank-repayments-for-date', async (req, res) => {
+    try {
+      const {
+        processedDate,
+        bankVendor,
+        bankAccountNumber,
+        matchPatterns
+      } = req.query;
+
+      if (!processedDate || !bankVendor) {
+        return res.status(400).json({
+          error: 'Missing required parameters: processedDate, bankVendor'
+        });
+      }
+
+      // Parse matchPatterns from JSON string if provided
+      let patternsArray = null;
+      if (matchPatterns) {
+        try {
+          patternsArray = JSON.parse(matchPatterns);
+        } catch (e) {
+          return res.status(400).json({
+            error: 'Invalid matchPatterns format - must be JSON array'
+          });
+        }
+      }
+
+      const result = await manualMatchingService.getBankRepaymentsForProcessedDate({
+        processedDate,
+        bankVendor,
+        bankAccountNumber: bankAccountNumber || null,
+        matchPatterns: patternsArray
+      });
+
+      res.json({
+        success: true,
+        ...result
+      });
+    } catch (error) {
+      console.error('Manual matching - get bank repayments for date error:', error);
+      res.status(error?.statusCode || 500).json({
+        error: error?.message || 'Failed to fetch bank repayments for date',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.post('/manual-matching/save-match', async (req, res) => {
+    try {
+      const {
+        repaymentTxnId,
+        repaymentVendor,
+        repaymentDate,
+        repaymentAmount,
+        cardNumber,
+        ccVendor,
+        expenses,
+        tolerance  // NEW: Optional tolerance parameter (default: 2, max: 50)
+      } = req.body;
+
+      if (!repaymentTxnId || !repaymentVendor || !repaymentDate || !repaymentAmount || !cardNumber || !ccVendor || !expenses || !Array.isArray(expenses)) {
+        return res.status(400).json({
+          error: 'Missing required parameters: repaymentTxnId, repaymentVendor, repaymentDate, repaymentAmount, cardNumber, ccVendor, expenses (array)'
+        });
+      }
+
+      const result = await manualMatchingService.saveManualMatch({
+        repaymentTxnId,
+        repaymentVendor,
+        repaymentDate,
+        repaymentAmount,
+        cardNumber,
+        ccVendor,
+        expenses,
+        tolerance: tolerance ? parseFloat(tolerance) : 2  // NEW: Pass tolerance (default: 2)
+      });
+
+      res.json({
+        success: true,
+        ...result
+      });
+    } catch (error) {
+      console.error('Manual matching - save match error:', error);
+      res.status(error?.statusCode || 500).json({
+        error: error?.message || 'Failed to save manual match',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/manual-matching/stats', async (req, res) => {
+    try {
+      const { bankVendor, bankAccountNumber } = req.query;
+
+      if (!bankVendor) {
+        return res.status(400).json({
+          error: 'Missing required parameter: bankVendor'
+        });
+      }
+
+      const stats = await manualMatchingService.getMatchingStats({
+        bankVendor,
+        bankAccountNumber: bankAccountNumber || null
+      });
+
+      res.json({
+        success: true,
+        stats
+      });
+    } catch (error) {
+      console.error('Manual matching - get stats error:', error);
+      res.status(error?.statusCode || 500).json({
+        error: error?.message || 'Failed to fetch matching stats',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/manual-matching/weekly-stats', async (req, res) => {
+    try {
+      const {
+        creditCardAccountNumber,
+        creditCardVendor,
+        bankVendor,
+        bankAccountNumber,
+        matchPatterns,
+        startDate,
+        endDate
+      } = req.query;
+
+      if (!creditCardVendor || !bankVendor) {
+        return res.status(400).json({
+          error: 'Missing required parameters: creditCardVendor, bankVendor'
+        });
+      }
+
+      // Parse matchPatterns if provided
+      let patternsArray = null;
+      if (matchPatterns) {
+        try {
+          patternsArray = JSON.parse(matchPatterns);
+        } catch (e) {
+          return res.status(400).json({
+            error: 'Invalid matchPatterns format - must be JSON array'
+          });
+        }
+      }
+
+      const weeklyStats = await manualMatchingService.getWeeklyMatchingStats({
+        creditCardAccountNumber: creditCardAccountNumber || '',
+        creditCardVendor,
+        bankVendor,
+        bankAccountNumber: bankAccountNumber || null,
+        matchPatterns: patternsArray,
+        startDate,
+        endDate
+      });
+
+      res.json({
+        success: true,
+        weeklyStats,
+        count: weeklyStats.length
+      });
+    } catch (error) {
+      console.error('Manual matching - weekly stats error:', error);
+      res.status(error?.statusCode || 500).json({
+        error: error?.message || 'Failed to fetch weekly stats',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/manual-matching/find-combinations', async (req, res) => {
+    try {
+      const {
+        repaymentTxnId,
+        repaymentDate,
+        repaymentAmount,
+        creditCardAccountNumber,
+        creditCardVendor,
+        tolerance,
+        maxCombinationSize,
+        includeMatched,
+        processedDate  // NEW: Smart date filtering
+      } = req.query;
+
+      if (!repaymentTxnId || !repaymentDate || !repaymentAmount || !creditCardVendor) {
+        return res.status(400).json({
+          error: 'Missing required parameters: repaymentTxnId, repaymentDate, repaymentAmount, creditCardVendor'
+        });
+      }
+
+      const combinations = await manualMatchingService.findMatchingCombinations({
+        repaymentTxnId,
+        repaymentDate,
+        repaymentAmount: parseFloat(repaymentAmount),
+        creditCardAccountNumber: creditCardAccountNumber || '',
+        creditCardVendor,
+        tolerance: tolerance ? parseFloat(tolerance) : 0,  // Default: 0 for perfect match
+        maxCombinationSize: maxCombinationSize ? parseInt(maxCombinationSize) : 15,
+        includeMatched: includeMatched === 'true' || includeMatched === true,  // Include already matched expenses
+        processedDate: processedDate || null  // NEW: Optional smart date filter
+      });
+
+      res.json({
+        success: true,
+        combinations,
+        count: combinations.length
+      });
+    } catch (error) {
+      console.error('Manual matching - find combinations error:', error);
+      res.status(error?.statusCode || 500).json({
+        error: error?.message || 'Failed to find matching combinations',
         details: error?.stack,
       });
     }

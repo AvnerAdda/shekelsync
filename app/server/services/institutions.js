@@ -229,6 +229,44 @@ async function mapVendorCodeToInstitutionId(db, vendorCode) {
 }
 
 /**
+ * Get vendor codes for the requested institution types
+ * @param {object} db - Database connection
+ * @param {string[]} types - Array of institution types
+ * @returns {Promise<string[]>} Array of vendor codes
+ */
+async function getVendorCodesByTypes(db, types = []) {
+  if (!Array.isArray(types) || types.length === 0) {
+    return [];
+  }
+
+  await loadInstitutionsCache(db);
+  const typeSet = new Set(types);
+
+  return institutionsCache
+    .filter(inst => typeSet.has(inst.institution_type))
+    .map(inst => inst.vendor_code);
+}
+
+/**
+ * Get vendor codes for the requested categories
+ * @param {object} db - Database connection
+ * @param {string[]} categories - Array of categories
+ * @returns {Promise<string[]>} Array of vendor codes
+ */
+async function getVendorCodesByCategories(db, categories = []) {
+  if (!Array.isArray(categories) || categories.length === 0) {
+    return [];
+  }
+
+  await loadInstitutionsCache(db);
+  const categorySet = new Set(categories);
+
+  return institutionsCache
+    .filter(inst => categorySet.has(inst.category))
+    .map(inst => inst.vendor_code);
+}
+
+/**
  * Build institution object from query result row
  * Extracts institution fields prefixed with 'institution_'
  * @param {object} row - Database query result row
@@ -289,6 +327,55 @@ async function enrichAccountWithInstitution(db, account) {
   return account;
 }
 
+/**
+ * Backfill missing institution_id values for vendor_credentials and investment_accounts.
+ * Runs safe UPDATE statements mapping existing vendor / account_type strings to institution IDs.
+ * @param {object} db - Database connection (defaults to shared database module)
+ */
+async function backfillMissingInstitutionIds(db) {
+  const databaseModule = db || require('./database.js');
+
+  try {
+    const vendorUpdate = await databaseModule.query(
+      `
+        UPDATE vendor_credentials
+           SET institution_id = (
+             SELECT fi.id FROM financial_institutions fi
+             WHERE fi.vendor_code = vendor_credentials.vendor
+           )
+         WHERE institution_id IS NULL
+           AND vendor IN (SELECT vendor_code FROM financial_institutions)
+      `,
+    );
+
+    if (vendorUpdate.rowCount > 0) {
+      console.info(`[institutions] Backfilled institution_id for ${vendorUpdate.rowCount} vendor credential(s)`);
+    }
+  } catch (error) {
+    console.error('[institutions] Failed to backfill vendor_credentials.institution_id', error);
+  }
+
+  try {
+    const investmentUpdate = await databaseModule.query(
+      `
+        UPDATE investment_accounts
+           SET institution_id = (
+             SELECT fi.id FROM financial_institutions fi
+             WHERE fi.vendor_code = investment_accounts.account_type
+           )
+         WHERE institution_id IS NULL
+           AND account_type IN (SELECT vendor_code FROM financial_institutions)
+      `,
+    );
+
+    if (investmentUpdate.rowCount > 0) {
+      console.info(`[institutions] Backfilled institution_id for ${investmentUpdate.rowCount} investment account(s)`);
+    }
+  } catch (error) {
+    console.error('[institutions] Failed to backfill investment_accounts.institution_id', error);
+  }
+}
+
 module.exports = {
   // Cache management
   loadInstitutionsCache,
@@ -305,6 +392,8 @@ module.exports = {
   // Mapping helpers
   mapInstitutionToVendorCode,
   mapVendorCodeToInstitutionId,
+  getVendorCodesByTypes,
+  getVendorCodesByCategories,
 
   // Query fragments (export for reuse in services)
   INSTITUTION_JOIN_VENDOR_CRED,
@@ -316,5 +405,8 @@ module.exports = {
 
   // Enrichment helpers
   enrichCredentialWithInstitution,
-  enrichAccountWithInstitution
+  enrichAccountWithInstitution,
+
+  // Backfill helpers
+  backfillMissingInstitutionIds,
 };

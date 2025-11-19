@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import path from 'path';
 import { createRequire } from 'module';
 
-type LoadOptions =
-  | { mode: 'available' }
-  | { mode: 'error' }
-  | { mode: 'missing' };
+type LoadMode = 'available' | 'error' | 'missing';
+
+type LoadOptions = {
+  mode: LoadMode;
+  deleteFailure?: boolean;
+};
 
 const repoRoot = path.resolve(process.cwd(), '..');
 const sessionStorePath = path.join(repoRoot, 'electron', 'session-store.js');
@@ -65,7 +67,7 @@ async function loadSessionStore(options: LoadOptions) {
       }
     | null = null;
 
-  if (options.mode === 'available' || options.mode === 'error') {
+  if (options.mode !== 'missing') {
     keytarMock = {
       setPassword: vi.fn(async () => {
         if (options.mode === 'error') {
@@ -73,7 +75,11 @@ async function loadSessionStore(options: LoadOptions) {
         }
       }),
       getPassword: vi.fn(async () => null),
-      deletePassword: vi.fn(async () => {}),
+      deletePassword: vi.fn(async () => {
+        if (options.deleteFailure) {
+          throw new Error('delete failed');
+        }
+      }),
     };
   }
 
@@ -220,6 +226,41 @@ describe('electron session store', () => {
     const merged = await sessionStore.updateSettings({ language: 'en' });
     expect(merged).toEqual({ theme: 'dark', language: 'en' });
     expect(fs.writeFile).toHaveBeenCalledTimes(1);
+
+    warnSpy.mockRestore();
+  });
+
+  it('migrates encrypted file payloads into keytar when available', async () => {
+    const { sessionStore, mocks } = await loadSessionStore({ mode: 'available' });
+    const { keytar, fs, warnSpy } = mocks;
+
+    const encryptedPayload = 'enc:{"token":"legacy"}';
+    fs.state.set(sessionStore.getFilePath(), encryptedPayload);
+
+    const session = await sessionStore.getSession();
+    expect(session).toEqual({ token: 'legacy' });
+    expect(keytar?.getPassword).toHaveBeenCalledTimes(1);
+    expect(keytar?.setPassword).toHaveBeenCalledWith(
+      'ShekelSync',
+      'auth-session',
+      encryptedPayload,
+    );
+    expect(fs.unlink).toHaveBeenCalledTimes(1);
+
+    warnSpy.mockRestore();
+  });
+
+  it('continues clearing the file store when keytar.deletePassword fails', async () => {
+    const { sessionStore, mocks } = await loadSessionStore({ mode: 'available', deleteFailure: true });
+    const { keytar, fs, warnSpy } = mocks;
+
+    await sessionStore.storeSession({ token: 'abc' });
+    fs.unlink.mockClear();
+
+    await sessionStore.clearSession();
+    expect(keytar?.deletePassword).toHaveBeenCalledTimes(1);
+    expect(fs.unlink).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to clear keytar entry:'), expect.anything());
 
     warnSpy.mockRestore();
   });

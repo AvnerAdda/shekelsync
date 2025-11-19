@@ -2,6 +2,7 @@ const database = require('../database.js');
 const {
   INSTITUTION_SELECT_FIELDS,
   buildInstitutionFromRow,
+  getInstitutionByVendorCode,
 } = require('../institutions.js');
 
 function serviceError(status, message) {
@@ -46,14 +47,23 @@ async function listHoldings(params = {}) {
       ? await database.query(query, [accountId])
       : await database.query(query);
 
-    return {
-      history: result.rows.map((row) => ({
-        ...row,
-        total_value: row.total_value !== null ? Number.parseFloat(row.total_value) : null,
-        cost_basis: row.cost_basis !== null ? Number.parseFloat(row.cost_basis) : null,
-        institution: buildInstitutionFromRow(row),
-      })),
-    };
+    const history = await Promise.all(
+      result.rows.map(async (row) => {
+        let institution = buildInstitutionFromRow(row);
+        if (!institution && row.account_type) {
+          institution = await getInstitutionByVendorCode(database, row.account_type);
+        }
+
+        return {
+          ...row,
+          total_value: row.total_value !== null ? Number.parseFloat(row.total_value) : null,
+          cost_basis: row.cost_basis !== null ? Number.parseFloat(row.cost_basis) : null,
+          institution: institution || null,
+        };
+      }),
+    );
+
+    return { history };
   }
 
   const query = accountId
@@ -91,15 +101,24 @@ async function listHoldings(params = {}) {
     ? await database.query(query, [accountId])
     : await database.query(query);
 
-  return {
-    holdings: result.rows.map((row) => ({
-      ...row,
-      current_value: row.current_value !== null ? Number.parseFloat(row.current_value) : null,
-      cost_basis: row.cost_basis !== null ? Number.parseFloat(row.cost_basis) : null,
-      units: row.units !== null ? Number.parseFloat(row.units) : null,
-      institution: buildInstitutionFromRow(row),
-    })),
-  };
+  const holdings = await Promise.all(
+    result.rows.map(async (row) => {
+      let institution = buildInstitutionFromRow(row);
+      if (!institution && row.account_type) {
+        institution = await getInstitutionByVendorCode(database, row.account_type);
+      }
+
+      return {
+        ...row,
+        current_value: row.current_value !== null ? Number.parseFloat(row.current_value) : null,
+        cost_basis: row.cost_basis !== null ? Number.parseFloat(row.cost_basis) : null,
+        units: row.units !== null ? Number.parseFloat(row.units) : null,
+        institution: institution || null,
+      };
+    }),
+  );
+
+  return { holdings };
 }
 
 async function verifyAccount(accountId) {

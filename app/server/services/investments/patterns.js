@@ -1,4 +1,9 @@
 const database = require('../database.js');
+const {
+  INSTITUTION_SELECT_FIELDS,
+  buildInstitutionFromRow,
+  getInstitutionByVendorCode,
+} = require('../institutions.js');
 
 async function listPatterns({ account_id } = {}) {
   let query = `
@@ -11,9 +16,12 @@ async function listPatterns({ account_id } = {}) {
       atp.match_count,
       atp.created_at,
       atp.last_matched,
-      ia.account_name
+      ia.account_name,
+      ia.account_type,
+      ${INSTITUTION_SELECT_FIELDS}
     FROM account_transaction_patterns atp
     JOIN investment_accounts ia ON atp.account_id = ia.id
+    LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
   `;
 
   const params = [];
@@ -25,10 +33,23 @@ async function listPatterns({ account_id } = {}) {
   query += ' ORDER BY ia.account_name, atp.pattern';
 
   const result = await database.query(query, params);
+  const patterns = await Promise.all(
+    result.rows.map(async (row) => {
+      let institution = buildInstitutionFromRow(row);
+      if (!institution && row.account_type) {
+        institution = await getInstitutionByVendorCode(database, row.account_type);
+      }
+      return {
+        ...row,
+        institution: institution || null,
+      };
+    }),
+  );
+
   return {
     success: true,
-    patterns: result.rows,
-    total: result.rows.length,
+    patterns,
+    total: patterns.length,
   };
 }
 

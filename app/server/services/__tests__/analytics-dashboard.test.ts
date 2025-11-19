@@ -87,6 +87,25 @@ describe('analytics dashboard service', () => {
           },
         ],
       },
+      {
+        rows: [
+          {
+            account_id: 1,
+            account_name: 'Checking',
+            current_balance: '1500.25',
+            as_of_date: '2025-01-31',
+          },
+        ],
+      },
+      { rows: [{ total_balance: '1000' }] },
+      {
+        rows: [
+          { date: '2025-01-01', total_balance: '1200' },
+          { date: '2025-01-02', total_balance: '1300.25' },
+        ],
+      },
+      { rows: [{ net_pikadon: '200' }] },
+      { rows: [{ pending_debt: '50' }] },
     ]);
 
     const result = await getDashboardAnalytics({
@@ -95,7 +114,7 @@ describe('analytics dashboard service', () => {
       aggregation: 'weekly',
     });
 
-    expect(queryMock).toHaveBeenCalledTimes(5);
+    expect(queryMock).toHaveBeenCalledTimes(10);
     const historyArgs = queryMock.mock.calls[0][1];
     expect(historyArgs[0]).toBeInstanceOf(Date);
     expect(historyArgs[0].toISOString().startsWith('2025-01-01')).toBe(true);
@@ -113,11 +132,18 @@ describe('analytics dashboard service', () => {
       investmentInflow: 20,
       netInvestments: 100,
       totalAccounts: 4,
+      currentBankBalance: 1500.25,
+      monthStartBankBalance: 1000,
+      bankBalanceChange: 500.25,
+      pikkadonBalance: 200,
+      checkingBalance: 1300.25,
+      pendingCCDebt: 50,
+      availableBalance: 1250.25,
     });
 
     expect(result.history).toEqual([
-      { date: '2025-01-01', income: 100.5, expenses: 10.25 },
-      { date: '2025-01-02', income: 50, expenses: 20.75 },
+      { date: '2025-01-01', income: 100.5, expenses: 10.25, bankBalance: 1200 },
+      { date: '2025-01-02', income: 50, expenses: 20.75, bankBalance: 1300.25 },
     ]);
 
     expect(result.breakdowns.byCategory).toEqual([
@@ -141,25 +167,34 @@ describe('analytics dashboard service', () => {
     ]);
 
     expect(result.breakdowns.byVendor).toEqual([
-      { vendor: 'Supermarket', count: 5, total: 800 },
-      { vendor: 'Restaurant', count: 2, total: 200 },
+      { vendor: 'Supermarket', count: 5, total: 800, institution: null },
+      { vendor: 'Restaurant', count: 2, total: 200, institution: null },
     ]);
 
     expect(result.breakdowns.byMonth).toEqual([
       { month: '2025-01', income: 200, expenses: 150 },
       { month: '2025-02', income: 250, expenses: 160 },
     ]);
+    expect(result.breakdowns.byBankAccount).toEqual([
+      {
+        accountId: 1,
+        accountName: 'Checking',
+        currentBalance: 1500.25,
+        asOfDate: '2025-01-31',
+        institution: null,
+      },
+    ]);
   });
 
   it('handles empty datasets by returning zeros', async () => {
-    mockQuerySequence(Array.from({ length: 5 }, () => ({ rows: [] })));
+    mockQuerySequence(Array.from({ length: 10 }, () => ({ rows: [] })));
 
     const result = await getDashboardAnalytics({
       startDate: '2024-12-01',
       endDate: '2024-12-31',
     });
 
-    expect(queryMock).toHaveBeenCalledTimes(5);
+    expect(queryMock).toHaveBeenCalledTimes(10);
     expect(result.summary).toEqual({
       totalIncome: 0,
       totalExpenses: 0,
@@ -168,11 +203,19 @@ describe('analytics dashboard service', () => {
       investmentInflow: 0,
       netInvestments: 0,
       totalAccounts: 0,
+      currentBankBalance: 0,
+      monthStartBankBalance: 0,
+      bankBalanceChange: 0,
+      pikkadonBalance: 0,
+      checkingBalance: 0,
+      pendingCCDebt: 0,
+      availableBalance: 0,
     });
     expect(result.history).toEqual([]);
     expect(result.breakdowns.byCategory).toEqual([]);
     expect(result.breakdowns.byVendor).toEqual([]);
     expect(result.breakdowns.byMonth).toEqual([]);
+    expect(result.breakdowns.byBankAccount).toEqual([]);
   });
 
   it('summarizes investment-only datasets correctly', async () => {
@@ -201,6 +244,11 @@ describe('analytics dashboard service', () => {
           },
         ],
       },
+      { rows: [] },
+      { rows: [] },
+      { rows: [] },
+      { rows: [] },
+      { rows: [] },
     ]);
 
     const result = await getDashboardAnalytics({
@@ -208,7 +256,7 @@ describe('analytics dashboard service', () => {
       endDate: '2025-02-28',
     });
 
-    expect(queryMock).toHaveBeenCalledTimes(5);
+    expect(queryMock).toHaveBeenCalledTimes(10);
     expect(result.summary).toEqual({
       totalIncome: 0,
       totalExpenses: 0,
@@ -217,13 +265,21 @@ describe('analytics dashboard service', () => {
       investmentInflow: 130,
       netInvestments: 620,
       totalAccounts: 2,
+      currentBankBalance: 0,
+      monthStartBankBalance: 0,
+      bankBalanceChange: 0,
+      pikkadonBalance: 0,
+      checkingBalance: 0,
+      pendingCCDebt: 0,
+      availableBalance: 0,
     });
     expect(result.history).toEqual([
-      { date: '2025-02-01', income: 0, expenses: 0 },
-      { date: '2025-02-02', income: 0, expenses: 0 },
+      { date: '2025-02-01', income: 0, expenses: 0, bankBalance: 0 },
+      { date: '2025-02-02', income: 0, expenses: 0, bankBalance: 0 },
     ]);
     expect(result.breakdowns.byCategory).toEqual([]);
     expect(result.breakdowns.byVendor).toEqual([]);
     expect(result.breakdowns.byMonth).toEqual([{ month: '2025-02', income: 0, expenses: 0 }]);
+    expect(result.breakdowns.byBankAccount).toEqual([]);
   });
 });

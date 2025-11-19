@@ -1,10 +1,10 @@
 import { createHashRouter } from 'react-router-dom';
 import AppLayout, { AppLayoutContext } from './routes/AppLayout';
-import HomePage from '@renderer/components/HomePage';
-import AnalysisPage from '@renderer/components/AnalysisPage';
-import InvestmentsPage from '@renderer/components/InvestmentsPage';
-import BudgetsPage from '@renderer/components/BudgetsPage';
-import SettingsPage from '@renderer/components/SettingsPage';
+import HomePage from '@renderer/features/dashboard/pages/HomePage';
+import AnalysisPageNew from '@renderer/features/analysis/pages/AnalysisPageNew';
+import InvestmentsPage from '@renderer/features/investments/pages/InvestmentsPage';
+import BudgetsPage from '@renderer/features/budgets/pages/BudgetsPage';
+import SettingsPage from '@renderer/features/settings/pages/SettingsPage';
 import { useOutletContext } from 'react-router-dom';
 
 type OutletContext = AppLayoutContext;
@@ -16,7 +16,7 @@ const DashboardRoute: React.FC = () => {
 
 const AnalysisRoute: React.FC = () => {
   const { dataRefreshKey } = useOutletContext<OutletContext>();
-  return <AnalysisPage key={`analysis-${dataRefreshKey}`} />;
+  return <AnalysisPageNew key={`analysis-${dataRefreshKey}`} />;
 };
 
 const InvestmentsRoute: React.FC = () => {

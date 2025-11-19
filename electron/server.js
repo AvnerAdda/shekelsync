@@ -33,7 +33,12 @@ const { createAnalyticsActionItemsRouter } = require(resolveAppPath(
 const { createCredentialsRouter } = require(resolveAppPath('server', 'routes', 'credentials.js'));
 const { createCategorizationRouter } = require(resolveAppPath('server', 'routes', 'categorization.js'));
 const { createCategoriesRouter } = require(resolveAppPath('server', 'routes', 'categories.js'));
+const institutionsService = require(resolveAppPath('server', 'services', 'institutions.js'));
 const { createInstitutionsRouter } = require(resolveAppPath('server', 'routes', 'institutions.js'));
+const createSpendingCategoriesRouter = require(resolveAppPath('server', 'routes', 'spending-categories.js'));
+const createSmartActionsRouter = require(resolveAppPath('server', 'routes', 'smart-actions.js'));
+const createBudgetIntelligenceRouter = require(resolveAppPath('server', 'routes', 'budget-intelligence.js'));
+const createCategoryVariabilityRouter = require(resolveAppPath('server', 'routes', 'category-variability.js'));
 
 async function setupAPIServer(mainWindow) {
   const app = express();
@@ -121,11 +126,26 @@ async function setupAPIServer(mainWindow) {
   // Action items (migrated)
   app.use('/api/analytics/action-items', createAnalyticsActionItemsRouter());
 
+  // Spending categories (new intelligent system)
+  app.use('/api/spending-categories', createSpendingCategoriesRouter());
+
+  // Smart actions (AI-generated action items)
+  app.use('/api/smart-actions', createSmartActionsRouter());
+
+  // Budget intelligence (auto-suggestions & forecasting)
+  app.use('/api/budget-intelligence', createBudgetIntelligenceRouter());
+
+  // Category variability analysis
+  app.use('/api/category-variability', createCategoryVariabilityRouter());
+
   // Data export (migrated)
   app.use('/api/data', createDataExportRouter());
 
   // Scraping API routes (shared router)
   app.use('/api', createScrapingRouter({ mainWindow }));
+  // Fire-and-forget backfill to ensure legacy accounts gain institution IDs
+  institutionsService.backfillMissingInstitutionIds()
+    .catch((error) => console.error('Institution backfill failed:', error));
 
   // Health check endpoint
   app.get('/health', (req, res) => {

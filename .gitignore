@@ -69,6 +69,7 @@ coverage/
 .cache/
 
 website/
+analysis/
 .venv/
 
 *.md

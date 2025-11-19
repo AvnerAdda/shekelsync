@@ -1,9 +1,8 @@
 {
   "scripts": {
     "init:sqlite": "node scripts/init_sqlite_db.js",
-    "migrate:schema-v2": "node scripts/migrate_schema_v2.js",
     "dev:electron": "npm --prefix app run electron-dev",
-    "test": "ALLOW_DEV_NO_ENCRYPTION=true npm --prefix app run test:coverage && npm --prefix renderer run test:e2e",
+    "test": "ALLOW_DEV_NO_ENCRYPTION=true npm --prefix app run test:coverage && npm --prefix renderer run test:unit && npm --prefix renderer run test:e2e",
     "icons:icns": "node scripts/generate-icns.js",
     "logs:bundle": "node scripts/collect-logs.js"
   },

@@ -2,6 +2,7 @@ const database = require('../database.js');
 const {
   INSTITUTION_SELECT_FIELDS,
   buildInstitutionFromRow,
+  getInstitutionByVendorCode,
 } = require('../institutions.js');
 
 function serviceError(status, message) {
@@ -44,14 +45,23 @@ async function listAssets(params = {}) {
 
   const result = await database.query(query, values);
 
-  return {
-    assets: result.rows.map((row) => ({
-      ...row,
-      units: row.units !== null ? Number.parseFloat(row.units) : null,
-      average_cost: row.average_cost !== null ? Number.parseFloat(row.average_cost) : null,
-      institution: buildInstitutionFromRow(row),
-    })),
-  };
+  const assets = await Promise.all(
+    result.rows.map(async (row) => {
+      let institution = buildInstitutionFromRow(row);
+      if (!institution && row.account_type) {
+        institution = await getInstitutionByVendorCode(database, row.account_type);
+      }
+
+      return {
+        ...row,
+        units: row.units !== null ? Number.parseFloat(row.units) : null,
+        average_cost: row.average_cost !== null ? Number.parseFloat(row.average_cost) : null,
+        institution: institution || null,
+      };
+    }),
+  );
+
+  return { assets };
 }
 
 async function verifyAccount(accountId) {

@@ -128,6 +128,40 @@ const ACCOUNT_PATTERNS = {
   }
 };
 
+/**
+ * Get all patterns for a specific account type
+ */
+function getPatternsForType(accountType) {
+  const patterns = ACCOUNT_PATTERNS[accountType];
+  if (!patterns) return [];
+
+  return [
+    ...(patterns.hebrew || []),
+    ...(patterns.english || []),
+  ];
+}
+
+/**
+ * Get only keywords (most important patterns) for an account type
+ */
+function getKeywordsForType(accountType) {
+  return ACCOUNT_PATTERNS[accountType]?.keywords || [];
+}
+
+/**
+ * Get all patterns across all account types (for fuzzy search)
+ */
+function getAllPatterns() {
+  const all = [];
+  for (const [type] of Object.entries(ACCOUNT_PATTERNS)) {
+    all.push(...getPatternsForType(type).map(p => ({ pattern: p, type })));
+  }
+  return all;
+}
+
 module.exports = {
-  ACCOUNT_PATTERNS
+  ACCOUNT_PATTERNS,
+  getPatternsForType,
+  getKeywordsForType,
+  getAllPatterns
 };

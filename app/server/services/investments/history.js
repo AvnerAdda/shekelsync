@@ -1,4 +1,9 @@
 const database = require('../database.js');
+const {
+  INSTITUTION_SELECT_FIELDS,
+  buildInstitutionFromRow,
+  getInstitutionByVendorCode,
+} = require('../institutions.js');
 
 function calculateStartDate(timeRange) {
   const date = new Date();
@@ -37,9 +42,11 @@ async function getInvestmentHistory(params = {}) {
         ihh.cost_basis,
         ihh.account_id,
         ia.account_name,
-        ia.account_type
+        ia.account_type,
+        ${INSTITUTION_SELECT_FIELDS}
       FROM investment_holdings_history ihh
       JOIN investment_accounts ia ON ihh.account_id = ia.id
+      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
       WHERE ihh.account_id = $1
       ${startDate ? 'AND ihh.snapshot_date >= $2' : ''}
       ORDER BY ihh.snapshot_date ASC
@@ -58,9 +65,11 @@ async function getInvestmentHistory(params = {}) {
         ihh.cost_basis,
         ihh.account_id,
         ia.account_name,
-        ia.account_type
+        ia.account_type,
+        ${INSTITUTION_SELECT_FIELDS}
       FROM investment_holdings_history ihh
       JOIN investment_accounts ia ON ihh.account_id = ia.id
+      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
       WHERE ihh.account_id IN (${placeholders})
       ${startDate ? `AND ihh.snapshot_date >= $${ids.length + 1}` : ''}
       ORDER BY ihh.snapshot_date ASC, ihh.account_id
@@ -76,9 +85,11 @@ async function getInvestmentHistory(params = {}) {
         ihh.cost_basis,
         ihh.account_id,
         ia.account_name,
-        ia.account_type
+        ia.account_type,
+        ${INSTITUTION_SELECT_FIELDS}
       FROM investment_holdings_history ihh
       JOIN investment_accounts ia ON ihh.account_id = ia.id
+      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
       ${startDate ? 'WHERE ihh.snapshot_date >= $1' : ''}
       ORDER BY ihh.snapshot_date ASC, ihh.account_id
     `;
@@ -90,10 +101,14 @@ async function getInvestmentHistory(params = {}) {
   let history;
 
   if (accountId || accountIds) {
-    history = result.rows.map((row) => {
+    history = await Promise.all(result.rows.map(async (row) => {
       const currentValue = parseFloat(row.current_value || 0);
       const costBasis = parseFloat(row.cost_basis || 0);
       const gainLoss = currentValue - costBasis;
+      let institution = buildInstitutionFromRow(row);
+      if (!institution && row.account_type) {
+        institution = await getInstitutionByVendorCode(database, row.account_type);
+      }
       return {
         date: row.snapshot_date,
         currentValue,
@@ -105,8 +120,9 @@ async function getInvestmentHistory(params = {}) {
         accountType: row.account_type,
         accountCount: row.account_count ? parseInt(row.account_count, 10) : undefined,
         accounts: row.accounts || [],
+        institution: institution || null,
       };
-    });
+    }));
   } else {
     const grouped = new Map();
 
@@ -129,15 +145,24 @@ async function getInvestmentHistory(params = {}) {
       entry.accounts.push({
         account_id: row.account_id,
         account_name: row.account_name,
+        account_type: row.account_type,
         current_value: currentValue,
         cost_basis: costBasis,
+        institution: buildInstitutionFromRow(row),
       });
     });
 
-    history = Array.from(grouped.entries())
+    history = await Promise.all(Array.from(grouped.entries())
       .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
-      .map(([date, entry]) => {
+      .map(async ([date, entry]) => {
         const gainLoss = entry.currentValue - entry.costBasis;
+        const accountsWithInstitutions = await Promise.all(entry.accounts.map(async (acct) => {
+          if (acct.institution) return acct;
+          const institution = acct.account_type
+            ? await getInstitutionByVendorCode(database, acct.account_type)
+            : null;
+          return { ...acct, institution: institution || null };
+        }));
         return {
           date,
           currentValue: entry.currentValue,
@@ -148,9 +173,9 @@ async function getInvestmentHistory(params = {}) {
           accountName: null,
           accountType: null,
           accountCount: entry.accounts.length,
-          accounts: entry.accounts,
+          accounts: accountsWithInstitutions,
         };
-      });
+      }));
   }
 
   return {
