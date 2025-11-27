@@ -1,4 +1,17 @@
 import '@testing-library/jest-dom';
+import { vi } from 'vitest';
+
+vi.mock('better-sqlite3', () => {
+  function FakeDatabase() {}
+  FakeDatabase.prototype.pragma = () => {};
+  FakeDatabase.prototype.prepare = () => ({
+    run: () => {},
+    get: () => undefined,
+    all: () => [],
+  });
+  FakeDatabase.prototype.close = () => {};
+  return FakeDatabase;
+});
 
 const originalConsoleError = console.error;
 const suppressedPatterns = [

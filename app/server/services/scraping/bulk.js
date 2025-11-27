@@ -96,6 +96,7 @@ async function bulkScrape(options = {}) {
 
       try {
         const decryptedCredentials = {
+          dbId: account.id, // Database row ID for scrape event tracking
           id: account.id_number ? decrypt(account.id_number) : null,
           card6Digits: account.card6_digits ? decrypt(account.card6_digits) : null,
           password: account.password ? decrypt(account.password) : null,

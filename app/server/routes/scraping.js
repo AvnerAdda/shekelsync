@@ -67,9 +67,22 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
 
       const logger = createLogger(vendor);
 
+      // Try to look up the credential ID from the database for scrape event tracking
+      let dbId = null;
+      try {
+        const credentialsService = require('../services/credentials.js');
+        const dbCredentials = await credentialsService.listCredentials({ vendor });
+        // Match by vendor (there's usually only one credential per vendor)
+        if (dbCredentials && dbCredentials.length > 0) {
+          dbId = dbCredentials[0].id;
+        }
+      } catch (lookupError) {
+        logger.warn?.('Failed to lookup credential ID, scrape will proceed without it:', lookupError);
+      }
+
       const result = await runScrapeFn({
         options,
-        credentials,
+        credentials: { ...credentials, dbId },
         logger,
       });
 

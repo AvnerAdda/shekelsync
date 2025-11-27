@@ -39,7 +39,7 @@ function createBudgetsRouter() {
       res.status(201).json(budget);
     } catch (error) {
       console.error('Budget create error:', error);
-      sendError(res, error, 'Failed to create budget');
+      sendError(res, { status: 500, message: 'Failed to create budget' }, 'Failed to create budget');
     }
   });
 

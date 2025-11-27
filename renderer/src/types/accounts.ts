@@ -3,4 +3,4 @@ export interface BudgetUsageSummary {
   [key: string]: unknown;
 }
 
-export interface BudgetUsageResponse extends Array<BudgetUsageSummary> {}
+export type BudgetUsageResponse = BudgetUsageSummary[];

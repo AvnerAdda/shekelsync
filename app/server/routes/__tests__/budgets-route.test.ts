@@ -69,4 +69,52 @@ describe('Electron /api/budgets routes', () => {
     expect(res.body.success).toBe(false);
     expect(res.body.error).toMatch(/unavailable/i);
   });
+
+  it(
+    'returns 500 when create fails unexpectedly',
+    async () => {
+      vi.spyOn(budgetsService, 'upsertBudget').mockRejectedValue(new Error('boom'));
+
+      const res = await request(app).post('/api/budgets').send({ name: 'Err' }).expect(500);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBeDefined();
+    },
+    10000,
+  );
+
+  it(
+    'returns 500 when update fails unexpectedly',
+    async () => {
+      vi.spyOn(budgetsService, 'updateBudget').mockRejectedValue(new Error('boom'));
+
+      const res = await request(app).put('/api/budgets').send({ id: '1' }).expect(500);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBeDefined();
+    },
+    10000,
+  );
+
+  it(
+    'returns 500 when delete fails unexpectedly',
+    async () => {
+      vi.spyOn(budgetsService, 'deactivateBudget').mockRejectedValue(new Error('boom'));
+
+      const res = await request(app).delete('/api/budgets?id=1').expect(500);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBeDefined();
+    },
+    10000,
+  );
+
+  it(
+    'returns 500 when budget usage fails',
+    async () => {
+      vi.spyOn(budgetsService, 'listBudgetUsage').mockRejectedValue(new Error('boom'));
+
+      const res = await request(app).get('/api/budgets/usage').expect(500);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBeDefined();
+    },
+    10000,
+  );
 });

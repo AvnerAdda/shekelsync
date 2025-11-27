@@ -1,4 +1,9 @@
-const database = require('../database.js');
+const { performance } = require('node:perf_hooks');
+const actualDatabase = require('../database.js');
+const actualMetricsStore = require('./metrics-store.js');
+
+let database = actualDatabase;
+let metricsStore = actualMetricsStore;
 
 function parseIntOrDefault(value, defaultValue) {
   const parsed = Number.parseInt(value, 10);
@@ -11,6 +16,7 @@ function parseFloatSafe(value) {
 }
 
 async function getCategoryOpportunities(params = {}) {
+  const timerStart = performance.now();
   const months = parseIntOrDefault(params.months, 6);
   const minTransactions = parseIntOrDefault(params.minTransactions, 3);
 
@@ -121,7 +127,7 @@ async function getCategoryOpportunities(params = {}) {
 
   actionableOpportunities.sort((a, b) => b.opportunity_score - a.opportunity_score);
 
-  return {
+  const response = {
     period: {
       start_date: startDate,
       end_date: new Date(),
@@ -145,6 +151,23 @@ async function getCategoryOpportunities(params = {}) {
       ).length,
     },
   };
+
+  const durationMs = Number((performance.now() - timerStart).toFixed(2));
+  const metricPayload = {
+    durationMs,
+    months,
+    minTransactions,
+    rowCounts: {
+      transactions: transactionsResult.rows.length,
+      actionability: actionabilityResult.rows.length,
+      opportunities: actionableOpportunities.length,
+    },
+  };
+
+  console.info('[analytics:category-opportunities]', JSON.stringify(metricPayload));
+  metricsStore.recordCategoryOpportunitiesMetric(metricPayload);
+
+  return response;
 }
 
 function calculateCategorySummaries(transactions, minTransactions, actionabilityMap) {
@@ -406,6 +429,33 @@ function calculateOpportunityScore(category, outliers, trend, suggestions) {
 
 module.exports = {
   getCategoryOpportunities,
+  __setDatabase(mock) {
+    database = mock || actualDatabase;
+  },
+  __resetDatabase() {
+    database = actualDatabase;
+  },
+  __setMetricsStore(mock) {
+    if (!mock) {
+      metricsStore = actualMetricsStore;
+      return;
+    }
+
+    if (mock.recordCategoryOpportunitiesMetric) {
+      metricsStore = mock;
+      return;
+    }
+
+    if (mock.default && mock.default.recordCategoryOpportunitiesMetric) {
+      metricsStore = mock.default;
+      return;
+    }
+
+    throw new Error('Invalid metrics store provided');
+  },
+  __resetMetricsStore() {
+    metricsStore = actualMetricsStore;
+  },
 };
 
 module.exports.default = module.exports;

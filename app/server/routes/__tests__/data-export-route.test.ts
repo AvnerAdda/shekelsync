@@ -62,4 +62,13 @@ describe('Electron /api/data/export route', () => {
     const res = await request(app).get('/api/data/export').expect(500);
     expect(res.body).toEqual(errorPayload);
   });
+
+  it('returns 400 on invalid export parameters', async () => {
+    vi.spyOn(dataExportService, 'exportData').mockRejectedValue({
+      error: { code: 'VALIDATION_ERROR', message: 'invalid format' },
+    });
+
+    const res = await request(app).get('/api/data/export').expect(400);
+    expect(res.body.error?.code).toBe('VALIDATION_ERROR');
+  });
 });

@@ -94,8 +94,9 @@ function buildScraperOptions(options, isBank, executablePath, startDate) {
   // Show browser for banks and problematic credit card scrapers (MAX)
   const shouldShowBrowser = isBank || options.companyId === 'max';
 
-  // Use longer timeout for MAX due to frequent login issues
-  const timeout = options.companyId === 'max' ? MAX_TIMEOUT : DEFAULT_TIMEOUT;
+  // Use longer timeout for problematic scrapers (MAX and Discount)
+  const slowScrapers = ['max', 'discount'];
+  const timeout = slowScrapers.includes(options.companyId) ? MAX_TIMEOUT : DEFAULT_TIMEOUT;
 
   return {
     ...options,
@@ -672,7 +673,7 @@ async function runScrape({ options, credentials, execute, logger = console }) {
       triggeredBy,
       vendor: options.companyId,
       startDate: resolvedStartDate,
-      credentialId: credentials.id || null,
+      credentialId: credentials.dbId || null,
     });
 
     const executablePath = await getPuppeteerExecutable(logger);
@@ -697,10 +698,22 @@ async function runScrape({ options, credentials, execute, logger = console }) {
     }
 
     if (!result?.success) {
+      // Log detailed error information for debugging
+      logger?.error?.(`[Scrape:${options.companyId}] Scrape failed with errorType: ${result?.errorType || 'unknown'}`);
+      logger?.error?.(`[Scrape:${options.companyId}] Error message: ${result?.errorMessage || 'No error message provided'}`);
+      logger?.error?.(`[Scrape:${options.companyId}] Full result object: ${JSON.stringify({
+        success: result?.success,
+        errorType: result?.errorType,
+        errorMessage: result?.errorMessage,
+        accounts: result?.accounts?.length || 0,
+        // Include any additional fields that might provide context
+        ...(result?.error && { error: String(result.error) }),
+      })}`);
+
       const message = `${result?.errorType || 'ScrapeError'}: ${result?.errorMessage || 'Unknown error'}`;
       await updateScrapeEventStatus(client, auditId, 'failed', message);
-      if (credentials.id) {
-        await markCredentialScrapeStatus(client, credentials.id, 'failed');
+      if (credentials.dbId) {
+        await markCredentialScrapeStatus(client, credentials.dbId, 'failed');
       }
       throw createHttpError(400, message, { errorType: result?.errorType });
     }
@@ -715,8 +728,8 @@ async function runScrape({ options, credentials, execute, logger = console }) {
 
     await applyCategorizationRules(client);
     await applyAccountPairings(client);
-    if (credentials.id) {
-      await markCredentialScrapeStatus(client, credentials.id, 'success');
+    if (credentials.dbId) {
+      await markCredentialScrapeStatus(client, credentials.dbId, 'success');
     }
 
     const accountsCount = Array.isArray(result.accounts) ? result.accounts.length : 0;
@@ -741,8 +754,8 @@ async function runScrape({ options, credentials, execute, logger = console }) {
         error?.message || 'Unknown error',
       );
     }
-    if (credentials.id) {
-      await markCredentialScrapeStatus(client, credentials.id, 'failed');
+    if (credentials.dbId) {
+      await markCredentialScrapeStatus(client, credentials.dbId, 'failed');
     }
     throw error;
   } finally {

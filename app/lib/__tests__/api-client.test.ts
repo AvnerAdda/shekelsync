@@ -1,81 +1,94 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { apiClient } from '../api-client';
-import * as sessionStore from '@/lib/session-store';
 
-const originalFetch = globalThis.fetch;
+describe('api-client', () => {
+  const originalFetch = global.fetch;
+  const originalElectron = (global as any).window?.electronAPI;
 
-afterEach(() => {
-  vi.restoreAllMocks();
-  window.localStorage.clear();
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
-  if (originalFetch) {
-    globalThis.fetch = originalFetch.bind(globalThis);
-  } else {
-    // @ts-expect-error - cleanup stub
-    delete globalThis.fetch;
-  }
-  // Clean up injected electron API
-  // @ts-expect-error - cleanup for tests
-  delete window.electronAPI;
-});
+  afterEach(() => {
+    global.fetch = originalFetch as any;
+    (global as any).window = { electronAPI: originalElectron };
+  });
 
-describe('apiClient', () => {
-  it('falls back to window.fetch when electron API is unavailable', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
+  it('uses electron bridge when available', async () => {
+    const requestMock = vi.fn().mockResolvedValue({
       status: 200,
       statusText: 'OK',
       ok: true,
-      text: () => Promise.resolve(JSON.stringify({ message: 'success' })),
+      data: { foo: 'bar' },
     });
-
-    vi.stubGlobal('fetch', fetchMock);
-
-    const response = await apiClient.post('/api/test', { foo: 'bar' });
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/test', expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({ foo: 'bar' }),
-    }));
-    expect(response.ok).toBe(true);
-    expect(response.data).toEqual({ message: 'success' });
-  });
-
-  it('uses electron IPC when available', async () => {
-    const requestMock = vi.fn().mockResolvedValue({
-      status: 201,
-      statusText: 'Created',
-      ok: true,
-      data: { id: 123 },
-    });
-
-    window.electronAPI = {
-      api: {
-        request: requestMock,
+    (global as any).window = {
+      electronAPI: {
+        api: { request: requestMock },
       },
     };
 
-    const response = await apiClient.put('/api/resource/123', { name: 'Test' });
+    const res = await apiClient.post('/api/test', { hello: 'world' }, { headers: { 'X-T': '1' } });
 
-    expect(requestMock).toHaveBeenCalledWith(
-      'PUT',
-      '/api/resource/123',
-      { name: 'Test' },
-      {},
+    expect(requestMock).toHaveBeenCalledWith('POST', '/api/test', { hello: 'world' }, { 'X-T': '1' });
+    expect(res).toEqual(
+      expect.objectContaining({ ok: true, data: { foo: 'bar' }, status: 200 }),
     );
-    expect(response.status).toBe(201);
-    expect(response.data).toEqual({ id: 123 });
   });
-});
 
-describe('sessionStore', () => {
-  it('produces Authorization header when an access token is cached locally', async () => {
-    window.localStorage.setItem('clarify.auth.session', JSON.stringify({
-      accessToken: 'test-token',
-      tokenType: 'Bearer',
+  it('falls back to fetch and parses json response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 201,
+      statusText: 'Created',
+      ok: true,
+      text: async () => JSON.stringify({ created: true }),
+    });
+    global.fetch = fetchMock as any;
+    // remove electron bridge
+    (global as any).window = {};
+
+    const res = await apiClient.put('/api/resource', { id: 1 });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/resource', expect.objectContaining({
+      method: 'PUT',
+      headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ id: 1 }),
     }));
+    expect(res.data).toEqual({ created: true });
+    expect(res.ok).toBe(true);
+  });
 
-    const headers = await sessionStore.getAuthorizationHeader();
-    expect(headers).toEqual({ Authorization: 'Bearer test-token' });
+  it('returns raw text when json parsing fails', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 500,
+      statusText: 'Error',
+      ok: false,
+      text: async () => 'plain-text-error',
+    });
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    const res = await apiClient.get('/api/fail');
+
+    expect(res.data).toBe('plain-text-error');
+    expect(res.ok).toBe(false);
+  });
+
+  it('supports sending raw bodies without JSON stringification', async () => {
+    const requestMock = vi.fn().mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      ok: true,
+      data: null,
+    });
+    (global as any).window = {
+      electronAPI: {
+        api: { request: requestMock },
+      },
+    };
+
+    const payload = 'raw-blob';
+    await apiClient.patch('/api/raw', payload, { rawBody: true });
+
+    expect(requestMock).toHaveBeenCalledWith('PATCH', '/api/raw', payload, {});
   });
 });

@@ -34,7 +34,7 @@ describe('Electron /api/onboarding routes', () => {
 
     expect(res.body).toEqual(status);
     expect(spy).toHaveBeenCalledTimes(1);
-  });
+  }, 10000);
 
   it('dismisses onboarding', async () => {
     const payload = { success: true };

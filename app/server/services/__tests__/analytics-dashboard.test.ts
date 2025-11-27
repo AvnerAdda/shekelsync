@@ -90,6 +90,14 @@ describe('analytics dashboard service', () => {
       {
         rows: [
           {
+            pending_expenses: '30',
+            pending_count: '2',
+          },
+        ],
+      },
+      {
+        rows: [
+          {
             account_id: 1,
             account_name: 'Checking',
             current_balance: '1500.25',
@@ -114,7 +122,7 @@ describe('analytics dashboard service', () => {
       aggregation: 'weekly',
     });
 
-    expect(queryMock).toHaveBeenCalledTimes(10);
+    expect(queryMock).toHaveBeenCalledTimes(11);
     const historyArgs = queryMock.mock.calls[0][1];
     expect(historyArgs[0]).toBeInstanceOf(Date);
     expect(historyArgs[0].toISOString().startsWith('2025-01-01')).toBe(true);
@@ -127,6 +135,7 @@ describe('analytics dashboard service', () => {
     expect(result.summary).toEqual({
       totalIncome: 500,
       totalExpenses: 300,
+      totalCapitalReturns: 0,
       netBalance: 200,
       investmentOutflow: 120,
       investmentInflow: 20,
@@ -135,6 +144,8 @@ describe('analytics dashboard service', () => {
       currentBankBalance: 1500.25,
       monthStartBankBalance: 1000,
       bankBalanceChange: 500.25,
+      pendingExpenses: 30,
+      pendingCount: 2,
       pikkadonBalance: 200,
       checkingBalance: 1300.25,
       pendingCCDebt: 50,
@@ -187,17 +198,18 @@ describe('analytics dashboard service', () => {
   });
 
   it('handles empty datasets by returning zeros', async () => {
-    mockQuerySequence(Array.from({ length: 10 }, () => ({ rows: [] })));
+    mockQuerySequence(Array.from({ length: 11 }, () => ({ rows: [] })));
 
     const result = await getDashboardAnalytics({
       startDate: '2024-12-01',
       endDate: '2024-12-31',
     });
 
-    expect(queryMock).toHaveBeenCalledTimes(10);
+    expect(queryMock).toHaveBeenCalledTimes(11);
     expect(result.summary).toEqual({
       totalIncome: 0,
       totalExpenses: 0,
+      totalCapitalReturns: 0,
       netBalance: 0,
       investmentOutflow: 0,
       investmentInflow: 0,
@@ -206,6 +218,8 @@ describe('analytics dashboard service', () => {
       currentBankBalance: 0,
       monthStartBankBalance: 0,
       bankBalanceChange: 0,
+      pendingExpenses: 0,
+      pendingCount: 0,
       pikkadonBalance: 0,
       checkingBalance: 0,
       pendingCCDebt: 0,
@@ -244,6 +258,8 @@ describe('analytics dashboard service', () => {
           },
         ],
       },
+      { rows: [{ pending_expenses: '0', pending_count: '0' }] },
+      { rows: [] },
       { rows: [] },
       { rows: [] },
       { rows: [] },
@@ -256,10 +272,11 @@ describe('analytics dashboard service', () => {
       endDate: '2025-02-28',
     });
 
-    expect(queryMock).toHaveBeenCalledTimes(10);
+    expect(queryMock).toHaveBeenCalledTimes(11);
     expect(result.summary).toEqual({
       totalIncome: 0,
       totalExpenses: 0,
+      totalCapitalReturns: 0,
       netBalance: 0,
       investmentOutflow: 750,
       investmentInflow: 130,
@@ -268,6 +285,8 @@ describe('analytics dashboard service', () => {
       currentBankBalance: 0,
       monthStartBankBalance: 0,
       bankBalanceChange: 0,
+      pendingExpenses: 0,
+      pendingCount: 0,
       pikkadonBalance: 0,
       checkingBalance: 0,
       pendingCCDebt: 0,
@@ -281,5 +300,46 @@ describe('analytics dashboard service', () => {
     expect(result.breakdowns.byVendor).toEqual([]);
     expect(result.breakdowns.byMonth).toEqual([{ month: '2025-02', income: 0, expenses: 0 }]);
     expect(result.breakdowns.byBankAccount).toEqual([]);
+  });
+
+  it('keeps capital returns out of income while reporting them separately', async () => {
+    mockQuerySequence([
+      { rows: [] }, // history
+      { rows: [] }, // category breakdown
+      { rows: [] }, // vendor breakdown
+      { rows: [] }, // month breakdown
+      {
+        rows: [
+          {
+            total_income: '1000',
+            total_capital_returns: '300',
+            total_expenses: '500',
+            investment_outflow: '0',
+            investment_inflow: '0',
+            total_accounts: '1',
+          },
+        ],
+      },
+      { rows: [{ pending_expenses: '0', pending_count: '0' }] },
+      { rows: [] }, // current bank balances
+      { rows: [{ total_balance: '0' }] }, // month start balance
+      { rows: [] }, // balance history
+      { rows: [{ net_pikadon: '0' }] }, // pikadon balance
+      { rows: [{ pending_debt: '0' }] }, // pending CC debt
+    ]);
+
+    const result = await getDashboardAnalytics({
+      startDate: '2025-03-01',
+      endDate: '2025-03-31',
+      aggregation: 'monthly',
+    });
+
+    expect(result.summary).toMatchObject({
+      totalIncome: 1000,
+      totalExpenses: 500,
+      totalCapitalReturns: 300,
+      netBalance: 500, // income - expenses (capital returns excluded)
+      pikkadonBalance: 0,
+    });
   });
 });

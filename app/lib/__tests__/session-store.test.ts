@@ -1,112 +1,171 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   getSession,
   setSession,
   clearSession,
   subscribeToSessionChanges,
   getAuthorizationHeader,
-} from '@/lib/session-store';
+} from '../session-store';
 
+const mockStorage = () => {
+  const store: Record<string, string> = {};
+  return {
+    getItem: vi.fn((key: string) => store[key] ?? null),
+    setItem: vi.fn((key: string, val: string) => {
+      store[key] = val;
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete store[key];
+    }),
+    clear: vi.fn(() => {
+      Object.keys(store).forEach((k) => delete store[k]);
+    }),
+  };
+};
 
-function resetGlobals() {
-  vi.restoreAllMocks();
-  window.localStorage.clear();
-  delete (window as any).electronAPI;
-  delete (window as any).electronAPI;
-}
+describe('session-store', () => {
+  const session = { accessToken: 'abc', tokenType: 'Bearer' } as any;
 
-beforeEach(() => {
-  resetGlobals();
-});
-
-afterEach(() => {
-  resetGlobals();
-});
-
-describe('session-store (browser fallback)', () => {
-  it('persists and retrieves session via localStorage when electron bridge is unavailable', async () => {
-    const session = {
-      accessToken: 'abc',
-      tokenType: 'Bearer',
-      user: { id: '123' },
-    };
-
-    await setSession(session);
-    const stored = await getSession();
-    expect(stored).toEqual(session);
-
-    const headers = await getAuthorizationHeader();
-    expect(headers).toEqual({ Authorization: 'Bearer abc' });
-
-    await clearSession();
-    expect(await getSession()).toBeNull();
+  beforeEach(() => {
+    (global as any).window = {
+      localStorage: mockStorage(),
+      dispatchEvent: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      CustomEvent,
+    } as any;
   });
 
-  it('emits DOM events for session changes when electron bridge is absent', async () => {
-    const listener = vi.fn();
-    subscribeToSessionChanges(listener);
-
-    await setSession({ accessToken: 'xyz' });
-    expect(listener).toHaveBeenCalledWith({ accessToken: 'xyz' });
-
-    await clearSession();
-    expect(listener).toHaveBeenLastCalledWith(null);
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
-});
 
-describe('session-store with electron bridge', () => {
-  it('delegates to electron auth bridge and returns sanitized headers', async () => {
-    const getSessionMock = vi.fn().mockResolvedValue({ success: true, session: { accessToken: 'token123' } });
-    const setSessionMock = vi.fn().mockResolvedValue({ success: true, session: { accessToken: 'token123' } });
-    const clearSessionMock = vi.fn().mockResolvedValue({ success: true });
+  it('returns null when localStorage parsing fails', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (window as any).localStorage.getItem.mockReturnValue('{"bad json"');
+    (window as any).electronAPI = undefined;
+
+    const result = await getSession();
+
+    expect(result).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to parse session'),
+      expect.anything(),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('falls back when bridge getSession returns error', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (window as any).localStorage.setItem('clarify.auth.session', JSON.stringify(session));
     (window as any).electronAPI = {
-      auth: {
-        getSession: getSessionMock,
-        setSession: setSessionMock,
-        clearSession: clearSessionMock,
-      },
-      events: {
-        onAuthSessionChanged: vi.fn(),
-      },
+      auth: { getSession: vi.fn().mockResolvedValue({ success: false, error: 'nope' }) },
     };
 
-    await setSession({ accessToken: 'token123' });
-    expect(setSessionMock).toHaveBeenCalledWith({ accessToken: 'token123' });
+    const result = await getSession();
 
-    const session = await getSession();
-    expect(getSessionMock).toHaveBeenCalled();
-    expect(session).toEqual({ accessToken: 'token123' });
-
-    const headers = await getAuthorizationHeader();
-    expect(headers).toEqual({ Authorization: 'Bearer token123' });
-
-    await clearSession();
-    expect(clearSessionMock).toHaveBeenCalled();
+    expect(result).toEqual(session);
+    expect(warnSpy).toHaveBeenCalledWith('[session-store] getSession failed:', 'nope');
+    warnSpy.mockRestore();
   });
 
-  it('subscribes to electron auth events when available', () => {
+  it('uses electron auth bridge when available and persists to localStorage', async () => {
+    const getSessionMock = vi.fn().mockResolvedValue({ success: true, session });
+    (window as any).electronAPI = { auth: { getSession: getSessionMock } };
+
+    const result = await getSession();
+
+    expect(getSessionMock).toHaveBeenCalled();
+    expect(result).toEqual(session);
+    expect((window as any).localStorage.setItem).toHaveBeenCalled();
+  });
+
+  it('falls back to localStorage when bridge is missing', async () => {
+    (window as any).electronAPI = undefined;
+    window.localStorage.setItem('clarify.auth.session', JSON.stringify(session));
+
+    const result = await getSession();
+
+    expect(result).toEqual(session);
+  });
+
+  it('setSession emits update and persists even when bridge fails', async () => {
+    const setSessionMock = vi.fn().mockRejectedValue(new Error('no bridge'));
+    (window as any).electronAPI = { auth: { setSession: setSessionMock } };
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+
+    const result = await setSession(session);
+
+    expect(dispatchSpy).toHaveBeenCalled();
+    expect((window as any).localStorage.setItem).toHaveBeenCalled();
+    expect(result).toEqual(session);
+  });
+
+  it('clearSession clears storage and notifies listeners', async () => {
+    const clearMock = vi.fn().mockResolvedValue({ success: true });
+    (window as any).electronAPI = { auth: { clearSession: clearMock } };
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+
+    await clearSession();
+
+    expect(clearMock).toHaveBeenCalled();
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith('clarify.auth.session');
+    expect(dispatchSpy).toHaveBeenCalled();
+  });
+
+  it('subscribeToSessionChanges uses electron events bridge when available', () => {
     const unsubscribe = vi.fn();
     const onAuthSessionChanged = vi.fn().mockReturnValue(unsubscribe);
+    (window as any).electronAPI = { events: { onAuthSessionChanged } };
+    const listener = vi.fn();
 
+    const result = subscribeToSessionChanges(listener);
+
+    expect(onAuthSessionChanged).toHaveBeenCalledWith(listener);
+    result();
+    expect(unsubscribe).toHaveBeenCalled();
+  });
+
+  it('subscribeToSessionChanges falls back to window event', () => {
+    (window as any).electronAPI = undefined;
+    const listener = vi.fn();
+    const remover = subscribeToSessionChanges(listener);
+    expect(window.addEventListener).toHaveBeenCalledWith('authSessionChanged', expect.any(Function));
+
+    const [, handler] = (window.addEventListener as any).mock.calls[0];
+    handler(new CustomEvent('authSessionChanged', { detail: session }));
+    expect(listener).toHaveBeenCalledWith(session);
+
+    remover();
+    expect(window.removeEventListener).toHaveBeenCalled();
+  });
+
+  it('clearSession falls back when bridge throws', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (window as any).electronAPI = { auth: { clearSession: vi.fn().mockRejectedValue(new Error('fail')) } };
+
+    await clearSession();
+
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith('clarify.auth.session');
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('getAuthorizationHeader returns token header when session exists', async () => {
     (window as any).electronAPI = {
-      auth: {
-        getSession: vi.fn().mockResolvedValue({ success: true, session: null }),
-        setSession: vi.fn().mockResolvedValue({ success: true, session: null }),
-        clearSession: vi.fn().mockResolvedValue({ success: true }),
-      },
-      events: {
-        onAuthSessionChanged,
-      },
+      auth: { getSession: vi.fn().mockResolvedValue({ success: true, session }) },
     };
 
-    const listener = vi.fn();
-    const dispose = subscribeToSessionChanges(listener);
+    const header = await getAuthorizationHeader();
+    expect(header).toEqual({ Authorization: 'Bearer abc' });
+  });
 
-    expect(onAuthSessionChanged).toHaveBeenCalledTimes(1);
-    expect(onAuthSessionChanged.mock.calls[0][0]).toBeInstanceOf(Function);
+  it('getAuthorizationHeader returns empty object without token', async () => {
+    (window as any).electronAPI = {
+      auth: { getSession: vi.fn().mockResolvedValue({ success: true, session: null }) },
+    };
 
-    dispose();
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    const header = await getAuthorizationHeader();
+    expect(header).toEqual({});
   });
 });

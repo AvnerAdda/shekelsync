@@ -26,6 +26,7 @@ export interface DashboardData {
   dateRange: { start: Date; end: Date };
   summary: {
     totalIncome: number;
+    totalCapitalReturns?: number;
     totalExpenses: number;
     netBalance: number;
     investmentOutflow: number;
@@ -35,6 +36,8 @@ export interface DashboardData {
     currentBankBalance?: number;
     monthStartBankBalance?: number;
     bankBalanceChange?: number;
+    pendingExpenses?: number;
+    pendingCount?: number;
   };
   history: DashboardHistoryEntry[];
   breakdowns: {

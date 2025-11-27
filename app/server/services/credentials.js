@@ -2,16 +2,31 @@ const database = require('./database.js');
 const { encrypt, decrypt } = require('../../lib/server/encryption.js');
 const { buildInstitutionFromRow } = require('./institutions.js');
 
+function safeDecrypt(value) {
+  if (!value) {
+    return value;
+  }
+
+  try {
+    return decrypt(value);
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[credentials] Failed to decrypt value, returning raw payload for dev data');
+    }
+    return value;
+  }
+}
+
 function mapCredentialRow(row) {
   const credential = {
     id: row.id,
     vendor: row.vendor,
     institution_id: row.institution_id,
-    username: row.username ? decrypt(row.username) : null,
-    password: row.password ? decrypt(row.password) : null,
-    id_number: row.id_number ? decrypt(row.id_number) : null,
+    username: safeDecrypt(row.username),
+    password: safeDecrypt(row.password),
+    id_number: safeDecrypt(row.id_number),
     card6_digits: row.card6_digits,
-    identification_code: row.identification_code ? decrypt(row.identification_code) : null,
+    identification_code: safeDecrypt(row.identification_code),
     nickname: row.nickname,
     bank_account_number: row.bank_account_number,
     created_at: row.created_at,
@@ -48,7 +63,17 @@ async function listCredentials(params = {}) {
               ORDER BY ih.as_of_date DESC LIMIT 1) as holding_balance,
              (SELECT as_of_date FROM investment_holdings ih
               WHERE ih.account_id = ia.id
-              ORDER BY ih.as_of_date DESC LIMIT 1) as holding_as_of_date
+              ORDER BY ih.as_of_date DESC LIMIT 1) as holding_as_of_date,
+             CASE
+               WHEN EXISTS (SELECT 1 FROM scrape_events se WHERE se.credential_id = vc.id AND se.status = 'success') THEN 'success'
+               WHEN EXISTS (SELECT 1 FROM scrape_events se WHERE se.credential_id = vc.id AND se.status = 'failed') THEN 'failed'
+               ELSE 'never'
+             END as lastScrapeStatus,
+             COALESCE(
+               (SELECT MAX(se.created_at) FROM scrape_events se
+                WHERE se.credential_id = vc.id AND se.status = 'success'),
+               NULL
+             ) as lastUpdate
       FROM vendor_credentials vc
       ${INSTITUTION_JOIN_VENDOR_CRED}
       LEFT JOIN investment_accounts ia ON ia.account_type = 'bank_balance'
@@ -68,11 +93,15 @@ async function listCredentials(params = {}) {
               WHERE ih.account_id = ia.id
               ORDER BY ih.as_of_date DESC LIMIT 1) as holding_as_of_date,
              CASE
-               WHEN vc.last_scrape_status = 'success' THEN 'success'
-               WHEN vc.last_scrape_status = 'failed' THEN 'failed'
+               WHEN EXISTS (SELECT 1 FROM scrape_events se WHERE se.credential_id = vc.id AND se.status = 'success') THEN 'success'
+               WHEN EXISTS (SELECT 1 FROM scrape_events se WHERE se.credential_id = vc.id AND se.status = 'failed') THEN 'failed'
                ELSE 'never'
              END as lastScrapeStatus,
-             vc.last_scrape_success as lastUpdate
+             COALESCE(
+               (SELECT MAX(se.created_at) FROM scrape_events se
+                WHERE se.credential_id = vc.id AND se.status = 'success'),
+               NULL
+             ) as lastUpdate
       FROM vendor_credentials vc
       ${INSTITUTION_JOIN_VENDOR_CRED}
       LEFT JOIN investment_accounts ia ON ia.account_type = 'bank_balance'

@@ -68,6 +68,8 @@ const useBreakdownDrilldown = ({
         description: item.description,
         value: Math.abs(item.total),
         count: item.count,
+        previousValue: item.previousTotal ? Math.abs(item.previousTotal) : undefined,
+        history: item.history,
         subcategories: item.subcategories,
       }));
     }

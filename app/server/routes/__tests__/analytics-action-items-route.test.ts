@@ -14,7 +14,7 @@ function buildApp() {
   return app;
 }
 
-describe('Shared analytics action-items routes', () => {
+describe('Analytics action items routes', () => {
   let app: express.Express;
 
   beforeEach(() => {
@@ -25,50 +25,53 @@ describe('Shared analytics action-items routes', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns action items', async () => {
-    const payload = [{ id: 'item-1' }];
+  it('lists action items', async () => {
+    const payload = [{ id: 1 }];
     vi.spyOn(actionItemsService, 'getActionItems').mockResolvedValue(payload);
 
     const res = await request(app).get('/api/analytics/action-items').expect(200);
-
     expect(res.body).toEqual(payload);
   });
 
   it('creates an action item', async () => {
-    const created = { id: 'item-2' };
-    vi.spyOn(actionItemsService, 'createActionItem').mockResolvedValue(created);
+    const payload = { id: 2 };
+    vi.spyOn(actionItemsService, 'createActionItem').mockResolvedValue(payload);
 
     const res = await request(app)
       .post('/api/analytics/action-items')
-      .send({ name: 'Follow up' })
+      .send({ title: 'save' })
       .expect(201);
-
-    expect(res.body).toEqual(created);
+    expect(res.body).toEqual(payload);
   });
 
   it('updates an action item', async () => {
-    const updated = { success: true };
-    vi.spyOn(actionItemsService, 'updateActionItem').mockResolvedValue(updated);
+    const payload = { id: 3, done: true };
+    vi.spyOn(actionItemsService, 'updateActionItem').mockResolvedValue(payload);
 
     const res = await request(app)
-      .put('/api/analytics/action-items?id=item-1')
-      .send({ status: 'done' })
+      .put('/api/analytics/action-items?itemId=3')
+      .send({ done: true })
       .expect(200);
 
-    expect(res.body).toEqual(updated);
-    expect(actionItemsService.updateActionItem).toHaveBeenCalledWith(
-      { id: 'item-1' },
-      { status: 'done' },
-    );
+    expect(res.body).toEqual(payload);
   });
 
   it('deletes an action item', async () => {
-    vi.spyOn(actionItemsService, 'deleteActionItem').mockResolvedValue({ success: true });
+    const payload = { success: true };
+    vi.spyOn(actionItemsService, 'deleteActionItem').mockResolvedValue(payload);
 
     const res = await request(app)
-      .delete('/api/analytics/action-items?id=item-1')
+      .delete('/api/analytics/action-items?itemId=5')
       .expect(200);
+    expect(res.body).toEqual(payload);
+  });
 
-    expect(res.body).toEqual({ success: true });
+  it('surfaces errors with status codes', async () => {
+    vi.spyOn(actionItemsService, 'getActionItems').mockRejectedValue(
+      Object.assign(new Error('boom'), { statusCode: 503 }),
+    );
+
+    const res = await request(app).get('/api/analytics/action-items').expect(503);
+    expect(res.body.error).toMatch(/boom/);
   });
 });

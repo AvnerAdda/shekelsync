@@ -30,6 +30,7 @@ const {
   openDiagnosticsLogDirectory,
   exportDiagnosticsToFile,
 } = require('./diagnostics');
+const analyticsMetricsStore = require(resolveAppPath('server', 'services', 'analytics', 'metrics-store.js'));
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 // Load environment variables from the Next.js app if present (e.g., USE_SQLITE)
@@ -85,6 +86,40 @@ const telemetryState = {
 };
 
 process.env.CRASH_REPORTS_ENABLED = 'false';
+wireTelemetryMetricsReporter();
+
+function emitTelemetryMetric(bucket, payload = {}) {
+  if (!telemetryState.enabled || !telemetryState.initialized) {
+    return;
+  }
+  if (!telemetryState.sentry?.captureMessage) {
+    return;
+  }
+
+  telemetryState.sentry.captureMessage('analytics-metric', {
+    level: 'info',
+    tags: {
+      bucket,
+      component: 'analytics',
+    },
+    extra: {
+      bucket,
+      ...payload,
+    },
+  });
+}
+
+function wireTelemetryMetricsReporter() {
+  if (analyticsMetricsStore?.setMetricReporter) {
+    analyticsMetricsStore.setMetricReporter((bucket, sample) => {
+      try {
+        emitTelemetryMetric(bucket, sample);
+      } catch (error) {
+        logger.warn('Failed to forward analytics metric to telemetry', { error: error.message });
+      }
+    });
+  }
+}
 
 function initializeTelemetry() {
   const dsn = process.env.SENTRY_DSN;
@@ -478,9 +513,6 @@ async function createWindow() {
     }
   };
 
-  // Detect system theme preference
-  const isDarkMode = require('electron').nativeTheme.shouldUseDarkColors;
-
   // Create the browser window
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -488,9 +520,11 @@ async function createWindow() {
     minWidth: 1200,
     minHeight: 700,
     title: 'ShekelSync - Personal Finance Tracker',
-    backgroundColor: isDarkMode ? '#0a0a0a' : '#f8fef9', // Adapts to system theme
-    frame: false, // Frameless window for custom title bar
-    transparent: false,
+    backgroundColor: '#00000000', // Transparent to support rounded corners
+    frame: false, // Frameless on all platforms
+    titleBarStyle: 'hidden', // Custom title bar handling
+    titleBarOverlay: process.platform === 'darwin', // Only needed for macOS traffic lights
+    transparent: true, // Enable transparency for rounded corners
     roundedCorners: process.platform === 'darwin',
     hasShadow: true,
     webPreferences: {
@@ -517,6 +551,7 @@ async function createWindow() {
     }
     windowShown = true;
     console.log('Electron main window ready, displaying now...');
+    mainWindow.center(); // Ensure window appears on primary display
     if (!mainWindow.isVisible()) {
       mainWindow.show();
     }

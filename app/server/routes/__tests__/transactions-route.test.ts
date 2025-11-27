@@ -18,12 +18,18 @@ function buildApp() {
   const app = express();
   app.use(express.json());
   app.get('/api/available_months', transactionsHandlers.getAvailableMonths);
+  app.get('/api/box_panel_data', transactionsHandlers.getBoxPanelData);
+  app.get('/api/category_by_month', transactionsHandlers.getCategoryByMonth);
   app.get('/api/transactions/recent', transactionsHandlers.getRecentTransactions);
   app.get('/api/transactions/search', transactionsHandlers.searchTransactions);
   app.get('/api/category_expenses', transactionsHandlers.getCategoryExpenses);
+  app.get('/api/expenses_by_month', transactionsHandlers.getExpensesByMonth);
+  app.get('/api/month_by_categories', transactionsHandlers.getMonthByCategories);
   app.post('/api/manual_transaction', transactionsHandlers.createManualTransaction);
   app.put('/api/transactions/:id', transactionsHandlers.updateTransaction);
+  app.put('/api/transactions', transactionsHandlers.updateTransaction);
   app.delete('/api/transactions/:id', transactionsHandlers.deleteTransaction);
+  app.delete('/api/transactions', transactionsHandlers.deleteTransaction);
   return app;
 }
 
@@ -48,6 +54,16 @@ describe('Electron transaction endpoints', () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
+  it('returns box panel data', async () => {
+    const payload = { categories: 5, nonMapped: 1, allTransactions: 10, lastMonth: '01-01-2025' };
+    const spy = vi.spyOn(metricsService, 'getBoxPanelData').mockResolvedValue(payload);
+
+    const res = await request(app).get('/api/box_panel_data').expect(200);
+
+    expect(res.body).toEqual(payload);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
   it('lists recent transactions', async () => {
     const payload = { transactions: [{ identifier: 't-1' }], count: 1, hasMore: false };
     const spy = vi.spyOn(listService, 'listRecentTransactions').mockResolvedValue(payload);
@@ -66,6 +82,38 @@ describe('Electron transaction endpoints', () => {
 
     expect(res.body).toEqual(payload);
     expect(spy).toHaveBeenCalledWith({ vendor: 'acme' });
+  });
+
+  it('returns category spending timeline', async () => {
+    const payload = [{ amount: -50, year: '2025' }];
+    const spy = vi.spyOn(metricsService, 'getCategorySpendingTimeline').mockResolvedValue(payload);
+
+    const res = await request(app)
+      .get('/api/category_by_month?category=Food&month=3&groupByYear=true')
+      .expect(200);
+
+    expect(res.body).toEqual(payload);
+    expect(spy).toHaveBeenCalledWith({ category: 'Food', month: '3', groupByYear: 'true' });
+  });
+
+  it('returns expenses by month', async () => {
+    const payload = [{ amount: -100, year: '2024' }];
+    const spy = vi.spyOn(metricsService, 'getExpensesByMonth').mockResolvedValue(payload);
+
+    const res = await request(app).get('/api/expenses_by_month?month=6&groupByYear=false').expect(200);
+
+    expect(res.body).toEqual(payload);
+    expect(spy).toHaveBeenCalledWith({ month: '6', groupByYear: 'false' });
+  });
+
+  it('returns month by categories data', async () => {
+    const payload = [{ category_definition_id: 1, value: 20 }];
+    const spy = vi.spyOn(metricsService, 'getMonthByCategories').mockResolvedValue(payload);
+
+    const res = await request(app).get('/api/month_by_categories?month=2025-01').expect(200);
+
+    expect(res.body).toEqual(payload);
+    expect(spy).toHaveBeenCalledWith({ month: '2025-01' });
   });
 
   it('propagates metric service errors', async () => {
@@ -105,6 +153,16 @@ describe('Electron transaction endpoints', () => {
     });
   });
 
+  it('rejects transaction update when id missing', async () => {
+    const res = await request(app).put('/api/transactions').send({ price: 10 }).expect(400);
+    expect(res.body.error).toMatch(/ID parameter is required/i);
+  });
+
+  it('rejects transaction update when no updatable fields provided', async () => {
+    const res = await request(app).put('/api/transactions/abc').send({}).expect(400);
+    expect(res.body.error).toMatch(/updatable field/i);
+  });
+
   it('deletes a transaction', async () => {
     const payload = { success: true };
     vi.spyOn(adminService, 'deleteTransaction').mockResolvedValue(payload);
@@ -113,5 +171,10 @@ describe('Electron transaction endpoints', () => {
 
     expect(res.body).toEqual(payload);
     expect(adminService.deleteTransaction).toHaveBeenCalledWith('abc');
+  });
+
+  it('rejects delete when id missing', async () => {
+    const res = await request(app).delete('/api/transactions').expect(400);
+    expect(res.body.error).toMatch(/ID parameter is required/i);
   });
 });

@@ -12,6 +12,7 @@ const summaryService = require('../services/investments/summary.js');
 const bankSummaryService = require('../services/investments/bank-summary.js');
 const suggestionAnalyzerCJS = require('../services/investments/suggestion-analyzer-cjs.js');
 const manualMatchingService = require('../services/investments/manual-matching.js');
+const pikadonService = require('../services/investments/pikadon.js');
 
 // Dynamic imports for ES modules
 let suggestionAnalyzer;
@@ -1047,6 +1048,245 @@ function createInvestmentsRouter() {
       console.error('Manual matching - find combinations error:', error);
       res.status(error?.statusCode || 500).json({
         error: error?.message || 'Failed to find matching combinations',
+        details: error?.stack,
+      });
+    }
+  });
+
+  // ==========================================
+  // PIKADON (Term Deposit) Routes
+  // ==========================================
+
+  /**
+   * GET /api/investments/pikadon
+   * List all pikadon holdings
+   * Query params: accountId, status, includeTransactions
+   */
+  router.get('/pikadon', async (req, res) => {
+    try {
+      const result = await pikadonService.listPikadon(req.query || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Pikadon list error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch pikadon list',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * GET /api/investments/pikadon/summary
+   * Get pikadon summary statistics
+   */
+  router.get('/pikadon/summary', async (req, res) => {
+    try {
+      const result = await pikadonService.getPikadonSummary();
+      res.json(result);
+    } catch (error) {
+      console.error('Pikadon summary error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch pikadon summary',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * GET /api/investments/pikadon/detect
+   * Detect potential pikadon deposit/return pairs from transactions
+   * Query params: startDate, endDate, vendor
+   */
+  router.get('/pikadon/detect', async (req, res) => {
+    try {
+      const result = await pikadonService.detectPikadonPairs(req.query || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Pikadon detect error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to detect pikadon pairs',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * GET /api/investments/pikadon/interest-income
+   * Get pikadon interest income for analytics
+   * Query params: startDate, endDate
+   */
+  router.get('/pikadon/interest-income', async (req, res) => {
+    try {
+      const result = await pikadonService.getPikadonInterestIncome(req.query || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Pikadon interest income error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch pikadon interest income',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * GET /api/investments/pikadon/maturity-breakdown
+   * Get pikadon maturity breakdown for analytics
+   * Shows principal returned, interest earned, and new deposits (for rollovers)
+   * Query params: startDate, endDate
+   */
+  router.get('/pikadon/maturity-breakdown', async (req, res) => {
+    try {
+      const result = await pikadonService.getPikadonMaturityBreakdown(req.query || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Pikadon maturity breakdown error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch pikadon maturity breakdown',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * GET /api/investments/pikadon/auto-detect
+   * Smart event-based detection of pikadon transactions
+   * Groups by date into maturity events and builds chains automatically
+   * Query params: startDate, endDate, vendor
+   */
+  router.get('/pikadon/auto-detect', async (req, res) => {
+    try {
+      const result = await pikadonService.autoDetectPikadonEvents(req.query || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Pikadon auto-detect error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to auto-detect pikadon events',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * POST /api/investments/pikadon/auto-setup
+   * One-click setup: Create all pikadon entries from detected events
+   * Body: { account_id, startDate?, endDate?, vendor? }
+   */
+  router.post('/pikadon/auto-setup', async (req, res) => {
+    try {
+      const { account_id, ...params } = req.body || {};
+      const result = await pikadonService.autoSetupPikadon(account_id, params);
+      res.json(result);
+    } catch (error) {
+      console.error('Pikadon auto-setup error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to auto-setup pikadon',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * POST /api/investments/pikadon
+   * Create a new pikadon holding
+   * Body: { account_id, cost_basis, maturity_date, deposit_transaction_id, deposit_transaction_vendor, interest_rate, notes, as_of_date, parent_pikadon_id }
+   */
+  router.post('/pikadon', async (req, res) => {
+    try {
+      const result = await pikadonService.createPikadon(req.body || {});
+      res.status(201).json(result);
+    } catch (error) {
+      console.error('Pikadon create error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to create pikadon',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * PUT /api/investments/pikadon/:id/link-return
+   * Link a return transaction to a pikadon and mark as matured
+   * Body: { return_transaction_id, return_transaction_vendor, return_amount }
+   */
+  router.put('/pikadon/:id/link-return', async (req, res) => {
+    try {
+      const result = await pikadonService.linkReturnTransaction(req.params.id, req.body || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Pikadon link return error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to link return transaction',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * PUT /api/investments/pikadon/:id/status
+   * Update pikadon status
+   * Body: { status: 'active' | 'matured' | 'rolled_over' }
+   */
+  router.put('/pikadon/:id/status', async (req, res) => {
+    try {
+      const { status } = req.body;
+      const result = await pikadonService.updatePikadonStatus(req.params.id, status);
+      res.json(result);
+    } catch (error) {
+      console.error('Pikadon status update error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to update pikadon status',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * DELETE /api/investments/pikadon/:id
+   * Delete a pikadon holding
+   */
+  router.delete('/pikadon/:id', async (req, res) => {
+    try {
+      const result = await pikadonService.deletePikadon(req.params.id);
+      res.json(result);
+    } catch (error) {
+      console.error('Pikadon delete error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to delete pikadon',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * POST /api/investments/pikadon/:id/rollover
+   * Rollover a matured pikadon into a new one
+   * Links return transaction, marks old as rolled_over, creates new pikadon
+   */
+  router.post('/pikadon/:id/rollover', async (req, res) => {
+    try {
+      const result = await pikadonService.rolloverPikadon(req.params.id, req.body || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Pikadon rollover error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to rollover pikadon',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * GET /api/investments/pikadon/:id/chain
+   * Get the rollover chain for a pikadon (all ancestors and descendants)
+   */
+  router.get('/pikadon/:id/chain', async (req, res) => {
+    try {
+      const result = await pikadonService.getRolloverChain(req.params.id);
+      res.json(result);
+    } catch (error) {
+      console.error('Pikadon chain error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch pikadon chain',
         details: error?.stack,
       });
     }

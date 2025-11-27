@@ -3,24 +3,42 @@
  * Intelligent investment account detection from transaction descriptions
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
+const mockPoolQuery = vi.fn();
+const mockDatabaseQuery = vi.fn();
 
-// Mock the database module BEFORE importing the analyzer
-vi.mock('../../../../utils/db.js', () => ({
-  getPool: vi.fn(() => ({
-    query: vi.fn()
-  }))
+vi.mock(new URL('../../../../utils/db.js', import.meta.url).pathname, () => ({
+  query: (...args) => mockPoolQuery(...args),
 }));
 
-import {
-  detectAccountType,
-  analyzeTransaction,
-  extractInstitution,
-  extractAccountName,
-  calculateConfidence,
-  groupSuggestionsByAccount,
-  shouldShowSuggestion
-} from '../suggestion-analyzer.js';
+vi.mock(new URL('../../institutions.js', import.meta.url).pathname, () => ({
+  getInstitutionByVendorCode: vi.fn(async () => null),
+}));
+
+let detectAccountType;
+let analyzeTransaction;
+let extractInstitution;
+let extractAccountName;
+let calculateConfidence;
+let groupSuggestionsByAccount;
+let shouldShowSuggestion;
+
+beforeAll(async () => {
+  globalThis.__TEST_DB_POOL__ = {
+    query: (...args) => mockPoolQuery(...args),
+  };
+  const databaseModule = await import('../../database.js');
+  const databaseExport = databaseModule.default || databaseModule;
+  databaseExport.query = (...args) => mockDatabaseQuery(...args);
+  const module = await import('../suggestion-analyzer.js');
+  detectAccountType = module.detectAccountType;
+  analyzeTransaction = module.analyzeTransaction;
+  extractInstitution = module.extractInstitution;
+  extractAccountName = module.extractAccountName;
+  calculateConfidence = module.calculateConfidence;
+  groupSuggestionsByAccount = module.groupSuggestionsByAccount;
+  shouldShowSuggestion = module.shouldShowSuggestion;
+});
 
 describe('suggestion-analyzer', () => {
   describe('detectAccountType', () => {
@@ -194,7 +212,7 @@ describe('suggestion-analyzer', () => {
   });
 
   describe('analyzeTransaction', () => {
-    it('should analyze pension transaction correctly', () => {
+    it('should analyze pension transaction correctly', async () => {
       const transaction = {
         identifier: 'txn123',
         vendor: 'leumi',
@@ -203,7 +221,7 @@ describe('suggestion-analyzer', () => {
         price: -1500
       };
 
-      const result = analyzeTransaction(transaction);
+      const result = await analyzeTransaction(transaction);
 
       expect(result).toBeDefined();
       expect(result.transactionIdentifier).toBe('txn123');
@@ -214,7 +232,7 @@ describe('suggestion-analyzer', () => {
       expect(result.confidence).toBeGreaterThan(0);
     });
 
-    it('should return null for non-investment transaction', () => {
+    it('should return null for non-investment transaction', async () => {
       const transaction = {
         identifier: 'txn456',
         vendor: 'visa',
@@ -223,7 +241,7 @@ describe('suggestion-analyzer', () => {
         price: -25
       };
 
-      const result = analyzeTransaction(transaction);
+      const result = await analyzeTransaction(transaction);
 
       expect(result).toBeNull();
     });

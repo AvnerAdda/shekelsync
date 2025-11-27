@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -8,7 +8,8 @@ import {
   ListItemText,
   Button,
   Chip,
-  Paper
+  Paper,
+  Alert
 } from '@mui/material';
 import {
   CheckCircle as CheckCircleIcon,
@@ -26,6 +27,7 @@ interface OnboardingChecklistProps {
   onProfileClick?: () => void;
   onBankAccountClick?: () => void;
   onCreditCardClick?: () => void;
+  onScrapeClick?: () => void;
   onDismiss?: () => void;
   compact?: boolean;
 }
@@ -34,6 +36,7 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   onProfileClick,
   onBankAccountClick,
   onCreditCardClick,
+  onScrapeClick,
   onDismiss,
   compact = false
 }) => {
@@ -42,6 +45,16 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   if (!status) return null;
 
   const { completedSteps, suggestedAction, stats } = status;
+
+  const triggerScrape = useCallback(() => {
+    if (onScrapeClick) {
+      onScrapeClick();
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('openScrapeModal'));
+    }
+  }, [onScrapeClick]);
 
   const steps = [
     {
@@ -74,10 +87,10 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
     {
       id: 'firstScrape',
       title: 'Auto-sync transactions',
-      description: 'Automatic sync when accounts are added',
+      description: 'Kick off your first sync from the sidebar once accounts are linked',
       icon: CloudDownloadIcon,
       completed: completedSteps.firstScrape,
-      onClick: null,
+      onClick: triggerScrape,
       locked: !completedSteps.bankAccount || !completedSteps.creditCard
     },
     {
@@ -166,6 +179,13 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
             </ListItem>
           ))}
         </List>
+
+        {!completedSteps.firstScrape && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Once you connect an account, start a sync from the sidebar or Accounts panel. Finished syncing?
+            Go to Settings → Data Export to download a CSV for taxes or backups.
+          </Alert>
+        )}
       </Paper>
     );
   }
@@ -278,6 +298,12 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
           );
         })}
       </List>
+
+      {!completedSteps.firstScrape && (
+        <Alert severity="info" sx={{ mt: 3 }}>
+          Ready for reports? Kick off your first sync using the button above, then visit Settings → Data Export to grab a full backup once transactions arrive.
+        </Alert>
+      )}
 
       <Box sx={{ mt: 3, textAlign: 'center' }}>
         <Button

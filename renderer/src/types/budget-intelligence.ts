@@ -76,9 +76,12 @@ export interface BudgetHealthItem {
   category_name: string;
   category_name_en?: string;
   budget_limit: number;
-  spent_amount: number;
-  remaining_amount: number;
-  percent_used: number;
+  current_spent: number;
+  percentage_used: number;
+  days_remaining: number;
+  projected_total: number;
+  daily_limit: number;
+  daily_avg?: number;
   status: 'on_track' | 'warning' | 'exceeded';
 }
 
@@ -92,6 +95,8 @@ export interface BudgetHealthSummary {
 }
 
 export interface BudgetHealthResponse {
+  success: boolean;
   budgets: BudgetHealthItem[];
   summary: BudgetHealthSummary;
+  overall_status: 'good' | 'warning' | 'critical';
 }

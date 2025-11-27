@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   CircularProgress,
+  Grid,
   Paper,
   Stack,
   Typography,
@@ -11,6 +12,24 @@ import {
 import BugReportIcon from '@mui/icons-material/BugReport';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+
+type AnalyticsMetricSample = {
+  durationMs?: number;
+  recordedAt?: string;
+  type?: string;
+  months?: number;
+  aggregation?: string;
+  groupBy?: string;
+  rowCounts?: Record<string, number>;
+};
+
+type AnalyticsMetricsSnapshot = {
+  breakdown?: AnalyticsMetricSample[];
+  dashboard?: AnalyticsMetricSample[];
+  unifiedCategory?: AnalyticsMetricSample[];
+  waterfall?: AnalyticsMetricSample[];
+  categoryOpportunities?: AnalyticsMetricSample[];
+} | null;
 
 type TelemetryDiagnosticsInfo = {
   enabled?: boolean;
@@ -27,6 +46,7 @@ type DiagnosticsInfo = {
   appVersion?: string;
   platform?: string;
   telemetry?: TelemetryDiagnosticsInfo | null;
+  analyticsMetrics?: AnalyticsMetricsSnapshot;
 };
 
 type Status = 'idle' | 'loading' | 'success' | 'error';
@@ -37,7 +57,32 @@ const defaultInfo: DiagnosticsInfo = {
   logFile: undefined,
   platform: undefined,
   telemetry: null,
+  analyticsMetrics: null,
 };
+
+const METRIC_LABELS: Record<string, string> = {
+  breakdown: 'Category Breakdown',
+  dashboard: 'Dashboard Overview',
+  unifiedCategory: 'Unified Category',
+  waterfall: 'Cash Flow Waterfall',
+  categoryOpportunities: 'Category Opportunities',
+};
+
+function formatMetricKey(key: string) {
+  const spaced = key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function formatTimestamp(value?: string) {
+  if (!value) {
+    return null;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toLocaleString();
+}
 
 export const DiagnosticsPanel: React.FC = () => {
   const [info, setInfo] = useState<DiagnosticsInfo>(defaultInfo);
@@ -66,6 +111,7 @@ export const DiagnosticsPanel: React.FC = () => {
             logFile: result.logFile,
             platform: result.platform,
             telemetry: result.telemetry ?? null,
+            analyticsMetrics: result.analyticsMetrics ?? null,
           });
         }
       })
@@ -134,6 +180,34 @@ export const DiagnosticsPanel: React.FC = () => {
   }, [diagnosticsApi, fileApi]);
 
   const actionDisabled = useMemo(() => !supportsDiagnostics || loading, [loading, supportsDiagnostics]);
+  const metricsSummary = useMemo(() => {
+    if (!info.analyticsMetrics) {
+      return [];
+    }
+    return Object.entries(info.analyticsMetrics)
+      .filter(([, samples]) => Array.isArray(samples) && samples.length > 0)
+      .map(([bucket, samples]) => {
+        const safeSamples = samples as AnalyticsMetricSample[];
+        const latest = safeSamples[safeSamples.length - 1];
+        const avgDuration =
+          safeSamples.length > 0
+            ? Number(
+                (
+                  safeSamples.reduce((sum, sample) => sum + (sample.durationMs || 0), 0) /
+                  safeSamples.length
+                ).toFixed(1),
+              )
+            : null;
+        return {
+          bucket,
+          label: METRIC_LABELS[bucket] || formatMetricKey(bucket),
+          totalRuns: safeSamples.length,
+          avgDuration,
+          latest,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [info.analyticsMetrics]);
 
   return (
     <Paper sx={{ p: 3 }}>
@@ -220,6 +294,49 @@ export const DiagnosticsPanel: React.FC = () => {
               Destination: {info.telemetry.dsnHost}
             </Typography>
           )}
+        </Box>
+      )}
+
+      {metricsSummary.length > 0 && (
+        <Box mt={3}>
+          <Typography variant="subtitle2" gutterBottom>
+            Recent analytics runs
+          </Typography>
+          <Grid container spacing={2}>
+            {metricsSummary.map((summary) => {
+              const lastRun = formatTimestamp(summary.latest?.recordedAt);
+              const rowCountsEntries = summary.latest?.rowCounts
+                ? Object.entries(summary.latest.rowCounts)
+                : [];
+              return (
+                <Grid item xs={12} md={6} key={summary.bucket}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="body2" fontWeight="bold">
+                      {summary.label}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Runs: {summary.totalRuns}
+                      {summary.avgDuration ? ` · Avg ${summary.avgDuration}ms` : ''}
+                    </Typography>
+                    {lastRun && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Last run: {lastRun}
+                      </Typography>
+                    )}
+                    {rowCountsEntries.length > 0 && (
+                      <Box mt={1}>
+                        {rowCountsEntries.map(([key, value]) => (
+                          <Typography variant="caption" color="text.secondary" display="block" key={key}>
+                            {formatMetricKey(key)}: {value}
+                          </Typography>
+                        ))}
+                      </Box>
+                    )}
+                  </Paper>
+                </Grid>
+              );
+            })}
+          </Grid>
         </Box>
       )}
     </Paper>

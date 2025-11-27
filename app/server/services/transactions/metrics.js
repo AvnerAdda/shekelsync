@@ -1,6 +1,17 @@
-const database = require('../database.js');
+const actualDatabase = require('../database.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
+
+// Helper to exclude pikadon transactions from analytics
+const EXCLUDE_PIKADON = dialect.excludePikadon('t');
+
+let database = actualDatabase;
+function __setDatabase(mock) {
+  database = mock || actualDatabase;
+}
+function __resetDatabase() {
+  database = actualDatabase;
+}
 
 function serviceError(status, message) {
   const error = new Error(message);
@@ -133,7 +144,7 @@ async function getCategoryExpenses(params = {}) {
             WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
           )
         )
-        ${whereSql ? `${whereSql} AND ap.id IS NULL` : 'WHERE ap.id IS NULL'}
+        ${whereSql ? `${whereSql} AND ap.id IS NULL AND ${EXCLUDE_PIKADON}` : `WHERE ap.id IS NULL AND ${EXCLUDE_PIKADON}`}
         ORDER BY t.date DESC
       `,
       parameters,
@@ -193,6 +204,7 @@ async function getCategoryExpenses(params = {}) {
       )
       WHERE t.category_definition_id IN (SELECT id FROM category_tree)
         AND ap.id IS NULL
+        AND ${EXCLUDE_PIKADON}
       ${monthClause}
       ORDER BY t.date DESC
     `,
@@ -580,6 +592,8 @@ module.exports = {
   getExpensesByMonth,
   getMonthByCategories,
   listCategories,
+  __setDatabase,
+  __resetDatabase,
 };
 
 module.exports.default = module.exports;

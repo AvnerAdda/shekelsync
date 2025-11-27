@@ -18,6 +18,18 @@ vi.mock('@/lib/api-client', () => ({
   },
 }));
 
+vi.mock('@app/contexts/OnboardingContext', () => ({
+  useOnboarding: () => ({
+    status: { completedSteps: {} },
+    loading: false,
+    error: null,
+    refetch: vi.fn(),
+    dismissOnboarding: vi.fn(),
+    markStepComplete: vi.fn(),
+    getPageAccessStatus: vi.fn(() => ({ isLocked: false, requiredStep: '', reason: '' })),
+  }),
+}));
+
 const baseProfileResponse = {
   ok: true,
   status: 200,

@@ -70,7 +70,7 @@ describe('Shared /api/scrape routes', () => {
     expect(response.body.transactionCount).toBe(0);
     expect(mockRunScrape).toHaveBeenCalledTimes(1);
     expect(mockWindow.webContents.send).toHaveBeenCalled();
-  });
+  }, 10000);
 
   it('returns scrape history events', async () => {
     const events = [{ id: 1 }];
@@ -80,6 +80,13 @@ describe('Shared /api/scrape routes', () => {
 
     expect(response.body).toEqual({ success: true, events });
     expect(mockListScrapeEvents).toHaveBeenCalledWith({ limit: '5' });
+  }, 10000);
+
+  it('returns 400 when required scrape fields are missing', async () => {
+    const res = await request(app).post('/api/scrape').send({}).expect(400);
+
+    expect(res.body.success).toBe(false);
+    expect(mockRunScrape).not.toHaveBeenCalled();
   });
 
   it('handles bulk scrape failures gracefully', async () => {

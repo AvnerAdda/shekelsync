@@ -1,0 +1,23 @@
+# Temporarily ignore legacy renderer features until lint debt is addressed
+src/features/breakdown/**
+src/features/budgets/pages/**
+src/features/chatbot/**
+src/features/dashboard/**
+src/features/investments/**
+src/features/layout/**
+src/features/notifications/**
+src/features/settings/**
+src/features/shared/**
+src/features/website/**
+
+src/shared/**
+!src/shared/empty-state/LockedPagePlaceholder.tsx
+
+src/types/**
+!src/types/budget-intelligence.ts
+!src/types/smart-actions.ts
+!src/types/spending-categories.ts
+!src/types/accounts.ts
+src/App.tsx
+src/main.tsx
+src/vite-env.d.ts

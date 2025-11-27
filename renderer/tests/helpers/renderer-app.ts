@@ -611,6 +611,167 @@ const actionItems = {
   },
 };
 
+const budgetHealth = {
+  success: true,
+  budgets: [
+    {
+      category_id: 1,
+      category_name: 'Groceries',
+      budget_limit: 2000,
+      current_spent: 1200,
+      percentage_used: 60,
+      days_remaining: 10,
+      projected_total: 1800,
+      daily_limit: 80,
+      status: 'on_track',
+      daily_avg: 40,
+      overrun_risk: 'none',
+    },
+    {
+      category_id: 2,
+      category_name: 'Transport',
+      budget_limit: 800,
+      current_spent: 700,
+      percentage_used: 88,
+      days_remaining: 10,
+      projected_total: 950,
+      daily_limit: 10,
+      status: 'warning',
+      daily_avg: 23,
+      overrun_risk: 'high',
+    },
+  ],
+  overall_status: 'warning',
+  summary: {
+    total_budgets: 2,
+    on_track: 1,
+    warning: 1,
+    exceeded: 0,
+    total_budget: 2800,
+    total_spent: 1900,
+  },
+};
+
+export const setBudgetHealthMock = (next: typeof budgetHealth) => {
+  budgetHealth.budgets = next.budgets;
+  budgetHealth.overall_status = next.overall_status;
+  budgetHealth.summary = next.summary;
+};
+
+const budgetSuggestionsData = {
+  suggestions: [
+    {
+      id: 1,
+      category_definition_id: 1,
+      category_name: 'Groceries',
+      suggested_limit: 2100,
+      confidence_score: 0.82,
+      based_on_months: 6,
+      is_active: false,
+      has_active_budget: false,
+    },
+    {
+      id: 2,
+      category_definition_id: 2,
+      category_name: 'Transport',
+      suggested_limit: 900,
+      confidence_score: 0.7,
+      based_on_months: 6,
+      is_active: false,
+      has_active_budget: false,
+    },
+  ],
+};
+
+const budgetSuggestionsHandler: Handler = async ({ route }) => {
+  await route.fulfill(jsonResponse(budgetSuggestionsData));
+};
+
+const spendingBreakdown = {
+  period: { start: '2025-01-01', end: '2025-01-31' },
+  breakdown: [
+    {
+      spending_category: 'essential',
+      transaction_count: 15,
+      total_amount: 3200,
+      avg_transaction: 213,
+      first_transaction_date: '2025-01-01',
+      last_transaction_date: '2025-01-25',
+      actual_percentage: 52,
+      target_percentage: 50,
+      variance: 2,
+      status: 'over',
+    },
+    {
+      spending_category: 'reward',
+      transaction_count: 8,
+      total_amount: 900,
+      avg_transaction: 112,
+      first_transaction_date: '2025-01-02',
+      last_transaction_date: '2025-01-24',
+      actual_percentage: 15,
+      target_percentage: 15,
+      variance: 0,
+      status: 'on_track',
+    },
+  ],
+  total_spending: 4100,
+  total_income: 8000,
+  targets: {
+    essential: 50,
+    growth: 20,
+    stability: 10,
+    reward: 15,
+  },
+  categories_by_allocation: {
+    essential: [
+      {
+        category_definition_id: 1,
+        category_name: 'Groceries',
+        spending_category: 'essential',
+        total_amount: 2000,
+        percentage_of_income: 25,
+        transaction_count: 10,
+      },
+    ],
+    reward: [],
+    growth: [],
+    stability: [],
+    unallocated: [],
+  },
+};
+
+const smartActions = {
+  actions: [
+    {
+      id: 1,
+      title: 'Unusual fuel spike',
+      description: 'Fuel spending is up 30% vs last month.',
+      severity: 'high',
+      action_type: 'unusual_purchase',
+      category_name: 'Fuel',
+      detected_at: '2025-09-10T00:00:00.000Z',
+      potential_impact: 200,
+      detection_confidence: 0.82,
+      user_status: 'active',
+      metadata: { spike: 30 },
+    },
+    {
+      id: 2,
+      title: 'Budget overrun risk',
+      description: 'Transport budget likely to exceed limit.',
+      severity: 'medium',
+      action_type: 'budget_overrun',
+      category_name: 'Transport',
+      detected_at: '2025-09-11T00:00:00.000Z',
+      potential_impact: 150,
+      detection_confidence: 0.75,
+      user_status: 'active',
+      metadata: { overrun: 15 },
+    },
+  ],
+};
+
 const notificationsResponse = {
   success: true,
   data: {
@@ -710,6 +871,28 @@ const defaultHandlers: Record<string, Handler> = {
   'POST /api/analytics/action-items': respondOK,
   'PUT /api/analytics/action-items': respondOK,
   'DELETE /api/analytics/action-items': respondOK,
+  'GET /api/budget-intelligence/health': respondWith(budgetHealth),
+  'GET /api/budget-intelligence/suggestions': budgetSuggestionsHandler,
+  'POST /api/budget-intelligence/generate': respondWith({ success: true }),
+  'POST /api/budget-intelligence/suggestions/1/activate': async ({ route }) => {
+    budgetSuggestionsData.suggestions = budgetSuggestionsData.suggestions.map((s) =>
+      s.id === 1 ? { ...s, is_active: true, has_active_budget: true } : s,
+    );
+    await route.fulfill(jsonResponse({ success: true }));
+  },
+  'POST /api/budget-intelligence/suggestions/2/activate': async ({ route }) => {
+    budgetSuggestionsData.suggestions = budgetSuggestionsData.suggestions.map((s) =>
+      s.id === 2 ? { ...s, is_active: true, has_active_budget: true } : s,
+    );
+    await route.fulfill(jsonResponse({ success: true }));
+  },
+  'GET /api/spending-categories/breakdown': respondWith(spendingBreakdown),
+  'POST /api/spending-categories/initialize': respondWith({ success: true, created: 4, skipped: 0, total: 4 }),
+  'GET /api/spending-categories/mappings': respondWith({ mappings: [] }),
+  'PUT /api/spending-categories/targets': respondOK,
+  'POST /api/smart-actions/generate': respondWith({ success: true, generated: 2 }),
+  'GET /api/smart-actions': respondWith(smartActions),
+  'PUT /api/smart-actions/1/status': respondWith({ success: true, id: 1, status: 'resolved' }),
 'GET /api/analytics/category-spending-summary': respondWith({
   categories: [
     {

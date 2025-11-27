@@ -22,7 +22,6 @@ import {
   Home as HomeIcon,
   TrendingUp as AnalysisIcon,
   ShowChart as InvestmentIcon,
-  AccountBalanceWallet as BudgetIcon,
   Settings as SettingsIcon,
   Menu as MenuIcon,
   ChevronLeft as ChevronLeftIcon,
@@ -91,7 +90,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     { id: 'home', label: 'Overview', icon: <HomeIcon /> },
     { id: 'analysis', label: 'Analysis', icon: <AnalysisIcon /> },
     { id: 'investments', label: 'Investments', icon: <InvestmentIcon /> },
-    { id: 'budgets', label: 'Budgets', icon: <BudgetIcon /> },
     { id: 'settings', label: 'Settings', icon: <SettingsIcon /> },
   ];
 

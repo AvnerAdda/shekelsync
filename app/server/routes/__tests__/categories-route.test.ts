@@ -36,6 +36,13 @@ describe('Shared categories routes', () => {
     expect(res.body).toEqual(hierarchy);
   });
 
+  it('handles hierarchy list errors', async () => {
+    vi.spyOn(hierarchyService, 'listHierarchy').mockRejectedValue(new Error('boom'));
+
+    const res = await request(app).get('/api/categories/hierarchy').expect(500);
+    expect(res.body.error).toBeDefined();
+  });
+
   it('creates a category', async () => {
     const category = { id: 1 };
     vi.spyOn(hierarchyService, 'createCategory').mockResolvedValue(category);
@@ -46,6 +53,37 @@ describe('Shared categories routes', () => {
       .expect(201);
 
     expect(res.body).toEqual(category);
+  });
+
+  it('handles hierarchy create errors', async () => {
+    vi.spyOn(hierarchyService, 'createCategory').mockRejectedValue(new Error('fail'));
+
+    const res = await request(app)
+      .post('/api/categories/hierarchy')
+      .send({ name: 'Bad' })
+      .expect(500);
+
+    expect(res.body.error).toBeDefined();
+  });
+
+  it('updates a category', async () => {
+    vi.spyOn(hierarchyService, 'updateCategory').mockResolvedValue({ id: 2, name: 'Updated' });
+
+    const res = await request(app)
+      .put('/api/categories/hierarchy')
+      .send({ id: 2, name: 'Updated' })
+      .expect(200);
+
+    expect(res.body).toEqual({ id: 2, name: 'Updated' });
+  });
+
+  it('handles hierarchy update errors', async () => {
+    vi.spyOn(hierarchyService, 'updateCategory').mockRejectedValue(
+      Object.assign(new Error('boom'), { status: 422 }),
+    );
+
+    const res = await request(app).put('/api/categories/hierarchy').send({ id: 2 }).expect(422);
+    expect(res.body.error).toBeDefined();
   });
 
   it('deletes a category', async () => {
@@ -65,5 +103,14 @@ describe('Shared categories routes', () => {
       .expect(200);
 
     expect(res.body).toEqual(transactions);
+  });
+
+  it('handles category transactions errors', async () => {
+    vi.spyOn(transactionsService, 'listCategoryTransactions').mockRejectedValue(
+      Object.assign(new Error('nope'), { status: 502 }),
+    );
+
+    const res = await request(app).get('/api/categories/transactions?categoryId=1').expect(502);
+    expect(res.body.error).toBeDefined();
   });
 });

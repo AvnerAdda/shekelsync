@@ -9,6 +9,14 @@ const electronRoot = path.join(repoRoot, 'electron');
 const coreRoutesPath = path.join(electronRoot, 'api-routes', 'core.js');
 const databaseModulePath = path.join(electronRoot, 'database.js');
 const healthModulePath = path.join(repoRoot, 'app', 'server', 'services', 'health.js');
+const metricsStorePath = path.join(
+  repoRoot,
+  'app',
+  'server',
+  'services',
+  'analytics',
+  'metrics-store.js',
+);
 const transactionsMetricsModulePath = path.join(
   repoRoot,
   'app',
@@ -25,6 +33,7 @@ const dbManagerMock = {
   query: vi.fn(),
   getStats: vi.fn(),
   isConnected: true,
+  mode: 'sqlite',
 };
 
 const healthServiceMock = {
@@ -33,6 +42,13 @@ const healthServiceMock = {
 
 const transactionsMetricsMock = {
   listCategories: vi.fn(),
+};
+
+const metricsStoreMock = {
+  getMetricsSnapshot: vi.fn(() => ({
+    breakdown: [{ durationMs: 5, recordedAt: '2025-01-01T00:00:00.000Z' }],
+    dashboard: [],
+  })),
 };
 
 function loadCoreRoutes() {
@@ -63,6 +79,9 @@ function loadCoreRoutes() {
     }
     if (resolved === transactionsMetricsModulePath) {
       return transactionsMetricsMock;
+    }
+    if (resolved === metricsStorePath) {
+      return metricsStoreMock;
     }
 
     return originalLoad(request, parent, isMain);
@@ -134,6 +153,105 @@ describe('electron core routes', () => {
     expect(res.result.body).toEqual({
       status: 'degraded',
       message: 'Database connectivity check failed',
+      error: 'db failed',
+    });
+    expect(dbManagerMock.testConnection).not.toHaveBeenCalled();
+  });
+
+  it('returns healthz payload with sanitized metrics and telemetry flags', async () => {
+    const prevDsn = process.env.SENTRY_DSN;
+    const prevCrash = process.env.CRASH_REPORTS_ENABLED;
+    const prevSqlitePath = process.env.SQLITE_DB_PATH;
+
+    process.env.SENTRY_DSN = 'https://example.ingest.sentry.io/123';
+    process.env.CRASH_REPORTS_ENABLED = 'true';
+    process.env.SQLITE_DB_PATH = '/tmp/clarify.sqlite';
+
+    healthServiceMock.ping.mockResolvedValue({ ok: true, status: 'ok' });
+    dbManagerMock.testConnection.mockResolvedValue({ success: true });
+    metricsStoreMock.getMetricsSnapshot.mockReturnValue({
+      breakdown: [{ durationMs: 12.3, recordedAt: '2025-01-01T00:00:00.000Z' }],
+      dashboard: [],
+    });
+
+    const res = createMockRes();
+    await coreRoutes.healthz({} as any, res as any);
+
+    expect(res.result.statusCode).toBe(200);
+    expect(res.result.body.status).toBe('ok');
+    expect(res.result.body.responseTimeMs).toBeGreaterThanOrEqual(0);
+    expect(res.result.body.telemetry).toMatchObject({
+      enabled: true,
+      dsnConfigured: true,
+    });
+    expect(res.result.body.database).toMatchObject({
+      mode: expect.any(String),
+      connected: true,
+      sqlitePath: 'clarify.sqlite',
+    });
+    expect(res.result.body.metrics).toMatchObject({
+      breakdown: {
+        count: 1,
+        lastDurationMs: 12.3,
+        lastRecordedAt: '2025-01-01T00:00:00.000Z',
+      },
+      dashboard: {
+        count: 0,
+        lastDurationMs: null,
+        lastRecordedAt: null,
+      },
+    });
+
+    process.env.SENTRY_DSN = prevDsn;
+    process.env.CRASH_REPORTS_ENABLED = prevCrash;
+    process.env.SQLITE_DB_PATH = prevSqlitePath;
+  });
+
+  it('does not leak raw metrics fields or DSN values in healthz payload', async () => {
+    process.env.SENTRY_DSN = 'https://public@example.ingest.sentry.io/abc123';
+    metricsStoreMock.getMetricsSnapshot.mockReturnValue({
+      breakdown: [
+        {
+          durationMs: 42,
+          months: 6,
+          vendor: 'sensitive-bank',
+          recordedAt: '2025-02-01T00:00:00.000Z',
+        },
+      ],
+    });
+
+    healthServiceMock.ping.mockResolvedValue({ ok: true, status: 'ok' });
+    dbManagerMock.testConnection.mockResolvedValue({ success: true });
+
+    const res = createMockRes();
+    await coreRoutes.healthz({} as any, res as any);
+
+    expect(res.result.statusCode).toBe(200);
+    expect(res.result.body.telemetry).toEqual({
+      enabled: false,
+      dsnConfigured: true,
+    });
+    expect(res.result.body.metrics).toMatchObject({
+      breakdown: {
+        count: 1,
+        lastDurationMs: 42,
+        lastRecordedAt: '2025-02-01T00:00:00.000Z',
+      },
+    });
+    expect(res.result.body.metrics?.dashboard).toBeUndefined();
+    expect(JSON.stringify(res.result.body)).not.toContain('sensitive-bank');
+    expect(JSON.stringify(res.result.body)).not.toContain('example.ingest.sentry.io');
+  });
+
+  it('surfaces database errors in healthz response', async () => {
+    healthServiceMock.ping.mockResolvedValue({ ok: false, status: 'degraded', error: 'db failed' });
+
+    const res = createMockRes();
+    await coreRoutes.healthz({} as any, res as any);
+
+    expect(res.result.statusCode).toBe(500);
+    expect(res.result.body).toMatchObject({
+      status: 'degraded',
       error: 'db failed',
     });
     expect(dbManagerMock.testConnection).not.toHaveBeenCalled();

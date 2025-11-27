@@ -1,8 +1,13 @@
-const useSqlite =
+const dbMode = (process.env.CLARIFY_DB_MODE || '').toLowerCase();
+const explicitSqlite =
   process.env.USE_SQLITE === 'true' ||
   process.env.USE_SQLCIPHER === 'true' ||
   Boolean(process.env.SQLITE_DB_PATH) ||
-  Boolean(process.env.SQLCIPHER_DB_PATH);
+  Boolean(process.env.SQLCIPHER_DB_PATH) ||
+  dbMode === 'sqlite';
+const explicitPostgres = process.env.USE_SQLITE === 'false' || dbMode === 'postgres';
+
+const useSqlite = explicitPostgres ? false : explicitSqlite || !process.env.DATABASE_URL;
 
 const dialect = {
   useSqlite,
@@ -69,6 +74,15 @@ const dialect = {
 
   likeInsensitive(column, placeholder) {
     return `LOWER(${column}) LIKE LOWER(${placeholder})`;
+  },
+
+  /**
+   * SQL clause to exclude pikadon-related transactions
+   * Use in WHERE clauses: `WHERE ... AND ${dialect.excludePikadon('t')}`
+   * @param {string} tableAlias - The alias for the transactions table (e.g., 't')
+   */
+  excludePikadon(tableAlias = 't') {
+    return `(${tableAlias}.is_pikadon_related IS NULL OR ${tableAlias}.is_pikadon_related = 0)`;
   },
 };
 

@@ -1,5 +1,13 @@
-const database = require('../database.js');
+const actualDatabase = require('../database.js');
 const { INCOME_ROOT_NAME } = require('../../../lib/category-constants.js');
+
+let database = actualDatabase;
+function __setDatabase(mock) {
+  database = mock || actualDatabase;
+}
+function __resetDatabase() {
+  database = actualDatabase;
+}
 
 function serviceError(status, message) {
   const error = new Error(message);
@@ -184,6 +192,8 @@ module.exports = {
   createManualTransaction,
   updateTransaction,
   deleteTransaction,
+  __setDatabase,
+  __resetDatabase,
 };
 
 module.exports.default = module.exports;

@@ -1,10 +1,14 @@
-const database = require('../database.js');
+const actualDatabase = require('../database.js');
 const {
   resolveDateRange,
   buildTypeFilters,
   standardizeResponse,
   standardizeError,
 } = require('../../../lib/server/query-utils.js');
+const { dialect } = require('../../../lib/sql-dialect.js');
+const { recordUnifiedCategoryMetric } = require('./metrics-store.js');
+
+let database = actualDatabase;
 
 const VALID_TYPES = new Set(['expense', 'income', 'investment']);
 const VALID_GROUP_BY = new Set(['category', 'month', 'vendor', 'card']);
@@ -199,6 +203,7 @@ async function getUnifiedCategoryAnalytics(query = {}) {
     );
   }
 
+  const timerStart = performance.now();
   const client = await database.getClient();
 
   try {
@@ -233,6 +238,7 @@ async function getUnifiedCategoryAnalytics(query = {}) {
       ${categoryFilter ? `AND ${categoryFilter}` : ''}
       ${categoryResolution.clause ? `AND ${categoryResolution.clause}` : ''}
       AND ap.id IS NULL
+      AND ${dialect.excludePikadon('t')}
       ${additionalWhere}
     `;
 
@@ -324,7 +330,7 @@ async function getUnifiedCategoryAnalytics(query = {}) {
 
     const summary = summaryResult.rows[0] || {};
 
-    return standardizeResponse({
+    const response = standardizeResponse({
       dateRange: { start, end },
       type,
       groupBy,
@@ -370,6 +376,29 @@ async function getUnifiedCategoryAnalytics(query = {}) {
         excludeDuplicates: excludeDuplicates === 'true',
       },
     });
+
+    const durationMs = Number((performance.now() - timerStart).toFixed(2));
+    const metricPayload = {
+      durationMs,
+      type,
+      groupBy,
+      months,
+      includeTransactions: includeTransactions === 'true',
+      dateRange: {
+        start: start.toISOString(),
+        end: end.toISOString(),
+      },
+      rowCounts: {
+        summaryRows: summaryResult.rows.length,
+        breakdownRows: breakdownResult.rows.length,
+        sampledTransactions: transactions.length,
+      },
+    };
+
+    console.info('[analytics:unified-category]', JSON.stringify(metricPayload));
+    recordUnifiedCategoryMetric(metricPayload);
+
+    return response;
   } catch (error) {
     if (error?.error) {
       throw error;
@@ -386,5 +415,11 @@ async function getUnifiedCategoryAnalytics(query = {}) {
 
 module.exports = {
   getUnifiedCategoryAnalytics,
+  __setDatabase(mock) {
+    database = mock || actualDatabase;
+  },
+  __resetDatabase() {
+    database = actualDatabase;
+  },
 };
 module.exports.default = module.exports;
