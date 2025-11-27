@@ -34,6 +34,7 @@ import {
   ButtonGroup,
   Menu,
   ListItemIcon,
+  LinearProgress,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -87,6 +88,8 @@ import {
   MenuBook as MenuBookIcon,
   Search as SearchIcon,
   Clear as ClearIcon,
+  Sort as SortIcon,
+  SwapVert as SwapVertIcon,
 } from '@mui/icons-material';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
@@ -262,6 +265,9 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [loadingCategoryTransactions, setLoadingCategoryTransactions] = useState(false);
   const [transactionToMove, setTransactionToMove] = useState<TransactionMatch | null>(null);
   const [transactionMoveMenuAnchor, setTransactionMoveMenuAnchor] = useState<HTMLElement | null>(null);
+
+  // Sorting State for Uncategorized Transactions
+  const [sortBy, setSortBy] = useState<'name' | 'amount' | 'date'>('date');
 
   const formatCurrency = (value: number) => {
     const amount = Number.isFinite(value) ? Math.abs(value) : 0;
@@ -1326,11 +1332,47 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     );
   };
 
+  // Helper function to sort and group transactions
+  const getSortedTransactions = (transactions: UncategorizedTransaction[]): UncategorizedTransaction[] => {
+    if (!transactions || transactions.length === 0) return [];
+
+    // Create a copy to avoid mutating the original array
+    const txnsCopy = [...transactions];
+
+    if (sortBy === 'name') {
+      // Group by transaction name and sort by count (number of similar transactions)
+      const grouped = new Map<string, UncategorizedTransaction[]>();
+      txnsCopy.forEach(txn => {
+        const key = txn.name || 'Unknown';
+        if (!grouped.has(key)) {
+          grouped.set(key, []);
+        }
+        grouped.get(key)!.push(txn);
+      });
+
+      // Sort groups by size (descending) and flatten
+      const sortedGroups = Array.from(grouped.entries())
+        .sort((a, b) => b[1].length - a[1].length);
+
+      return sortedGroups.flatMap(([_, txns]) =>
+        txns.sort((a, b) => Math.abs(b.price) - Math.abs(a.price))
+      );
+    } else if (sortBy === 'amount') {
+      // Sort by transaction amount (descending)
+      return txnsCopy.sort((a, b) => Math.abs(b.price) - Math.abs(a.price));
+    } else {
+      // Default: sort by date (most recent first)
+      return txnsCopy.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }
+  };
+
   const renderHierarchyTab = () => {
   const expenseCategories = categories.filter((c: CategoryDefinition) => c.category_type === 'expense');
   const investmentCategories = categories.filter((c: CategoryDefinition) => c.category_type === 'investment');
   const incomeCategories = categories.filter((c: CategoryDefinition) => c.category_type === 'income');
-    const uncategorizedPreview = uncategorized?.recentTransactions?.slice(0, 10) ?? [];
+    const allUncategorizedTxns = uncategorized?.recentTransactions ?? [];
+    const sortedTransactions = getSortedTransactions(allUncategorizedTxns);
+    const uncategorizedPreview = sortedTransactions.slice(0, 10);
 
     return (
       <Box>
@@ -1351,9 +1393,9 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             })}
           >
             <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-              <Box display="flex" alignItems="center" gap={2}>
+              <Box display="flex" alignItems="center" gap={2} flex={1}>
                 <CategoryIcon sx={{ fontSize: 40, color: '#c8facf' }} />
-                <Box>
+                <Box flex={1}>
                   <Typography variant="h5" fontWeight="bold" gutterBottom sx={{ mb: 0 }}>
                     Transactions to Categorize
                   </Typography>
@@ -1373,27 +1415,195 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   )}
                 </Box>
               </Box>
-              {uncategorized.totalCount > 0 && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={handleApplyRules}
-                  disabled={isApplyingRules}
-                  startIcon={isApplyingRules ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
-                  sx={(theme) => ({
-                    borderColor: theme.palette.primary.main,
-                    color: theme.palette.primary.main,
-                    fontWeight: 600,
-                    '&:hover': {
-                      borderColor: theme.palette.primary.dark,
-                      backgroundColor: `${theme.palette.primary.main}20`,
-                    },
-                  })}
-                >
-                  {isApplyingRules ? 'Applying Rules...' : 'Apply Rules Now'}
-                </Button>
-              )}
+              <Box display="flex" alignItems="center" gap={1}>
+                {uncategorized.totalCount > 0 && (
+                  <>
+                    <FormControl size="small" sx={{ minWidth: 150 }}>
+                      <InputLabel>Sort By</InputLabel>
+                      <Select
+                        value={sortBy}
+                        label="Sort By"
+                        onChange={(e) => setSortBy(e.target.value as 'name' | 'amount' | 'date')}
+                        startAdornment={<SortIcon sx={{ mr: 1, color: 'text.secondary' }} />}
+                      >
+                        <MenuItem value="date">Date (Recent First)</MenuItem>
+                        <MenuItem value="name">Similar Transactions</MenuItem>
+                        <MenuItem value="amount">Amount (High to Low)</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={handleApplyRules}
+                      disabled={isApplyingRules}
+                      startIcon={isApplyingRules ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+                      sx={(theme) => ({
+                        borderColor: theme.palette.primary.main,
+                        color: theme.palette.primary.main,
+                        fontWeight: 600,
+                        '&:hover': {
+                          borderColor: theme.palette.primary.dark,
+                          backgroundColor: `${theme.palette.primary.main}20`,
+                        },
+                      })}
+                    >
+                      {isApplyingRules ? 'Applying Rules...' : 'Apply Rules Now'}
+                    </Button>
+                  </>
+                )}
+              </Box>
             </Box>
+
+            {/* Progress Bar */}
+            {(uncategorized && uncategorized.totalCount >= 0) && (
+              <>
+                <Box sx={{ mb: 3, mt: 2 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                    <Typography variant="body2" fontWeight="medium">
+                      Categorization Progress
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {(() => {
+                        // Helper to check if a category is a leaf (has no children)
+                        const isLeafCategory = (cat: CategoryDefinition): boolean => {
+                          return !cat.children || cat.children.length === 0;
+                        };
+
+                        // Recursively collect all leaf categories
+                        const collectLeafCategories = (cats: CategoryDefinition[]): CategoryDefinition[] => {
+                          const leaves: CategoryDefinition[] = [];
+                          cats.forEach(cat => {
+                            if (isLeafCategory(cat)) {
+                              leaves.push(cat);
+                            }
+                            if (cat.children && cat.children.length > 0) {
+                              leaves.push(...collectLeafCategories(cat.children));
+                            }
+                          });
+                          return leaves;
+                        };
+
+                        // Get all leaf categories and sum their transaction counts
+                        const leafCategories = collectLeafCategories(categories);
+                        const assignedToLeaf = leafCategories.reduce((sum, cat) => sum + (cat.transaction_count || 0), 0);
+
+                        // Transactions NOT assigned to terminal categories (from backend)
+                        const notAssignedToLeaf = uncategorized.totalCount;
+
+                        // Total unique transactions in database
+                        const total = assignedToLeaf + notAssignedToLeaf;
+
+                        const percentage = total > 0
+                          ? Math.round((assignedToLeaf / total) * 100)
+                          : 0;
+                        return `${assignedToLeaf.toLocaleString()} assigned to terminal, ${notAssignedToLeaf.toLocaleString()} missing (${percentage}% complete)`;
+                      })()}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ position: 'relative', height: 24, borderRadius: 2, overflow: 'hidden', bgcolor: 'grey.200' }}>
+                    {(() => {
+                      // Helper to check if a category is a leaf (has no children)
+                      const isLeafCategory = (cat: CategoryDefinition): boolean => {
+                        return !cat.children || cat.children.length === 0;
+                      };
+
+                      // Recursively collect all leaf categories
+                      const collectLeafCategories = (cats: CategoryDefinition[]): CategoryDefinition[] => {
+                        const leaves: CategoryDefinition[] = [];
+                        cats.forEach(cat => {
+                          if (isLeafCategory(cat)) {
+                            leaves.push(cat);
+                          }
+                          if (cat.children && cat.children.length > 0) {
+                            leaves.push(...collectLeafCategories(cat.children));
+                          }
+                        });
+                        return leaves;
+                      };
+
+                      // Get all leaf categories and sum their transaction counts
+                      const leafCategories = collectLeafCategories(categories);
+                      const assignedToLeaf = leafCategories.reduce((sum, cat) => sum + (cat.transaction_count || 0), 0);
+
+                      // Transactions NOT assigned to terminal categories
+                      const notAssignedToLeaf = uncategorized.totalCount;
+
+                      // Total unique transactions
+                      const total = assignedToLeaf + notAssignedToLeaf;
+
+                      const assignedPercent = total > 0 ? (assignedToLeaf / total) * 100 : 0;
+                      const missingPercent = total > 0 ? (notAssignedToLeaf / total) * 100 : 0;
+
+                      return (
+                        <>
+                          {/* Green bar for assigned */}
+                          {assignedPercent > 0 && (
+                            <Box
+                              sx={{
+                                position: 'absolute',
+                                left: 0,
+                                top: 0,
+                                bottom: 0,
+                                width: `${assignedPercent}%`,
+                                bgcolor: '#66bb6a',
+                                transition: 'width 0.3s ease',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {assignedPercent > 15 && (
+                                <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold' }}>
+                                  {assignedToLeaf.toLocaleString()} complete
+                                </Typography>
+                              )}
+                            </Box>
+                          )}
+                          {/* Red bar for missing */}
+                          {missingPercent > 0 && (
+                            <Box
+                              sx={{
+                                position: 'absolute',
+                                left: `${assignedPercent}%`,
+                                top: 0,
+                                bottom: 0,
+                                width: `${missingPercent}%`,
+                                bgcolor: '#ef5350',
+                                transition: 'width 0.3s ease',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {missingPercent > 15 && (
+                                <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold' }}>
+                                  {notAssignedToLeaf.toLocaleString()} incomplete
+                                </Typography>
+                              )}
+                            </Box>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </Box>
+                  <Box display="flex" gap={2} mt={1} justifyContent="flex-start">
+                    <Box display="flex" alignItems="center" gap={0.5}>
+                      <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#66bb6a' }} />
+                      <Typography variant="caption" color="text.secondary">
+                        Assigned to terminal category
+                      </Typography>
+                    </Box>
+                    <Box display="flex" alignItems="center" gap={0.5}>
+                      <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#ef5350' }} />
+                      <Typography variant="caption" color="text.secondary">
+                        Not assigned to terminal category
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              </>
+            )}
+
             {uncategorized.totalCount > 0 && (
               <>
                 <List dense sx={{ pt: 1, mt: 2 }}>
@@ -1407,6 +1617,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                       ...categoryRootsByType.income,
                     ];
                     const isSaving = Boolean(savingAssignments[key]);
+
+                    // Count similar transactions (same name) for grouping indicator
+                    const similarCount = sortBy === 'name'
+                      ? allUncategorizedTxns.filter(t => t.name === txn.name).length
+                      : 0;
 
                     // Determine card styling based on category type and status
                     const hasExistingCategory = Boolean(txn.categoryDefinitionId);
@@ -1465,6 +1680,21 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                               <Typography variant="h6" fontWeight="600" sx={{ fontSize: '1.1rem' }}>
                                 {txn.name || 'Unknown transaction'}
                               </Typography>
+                              {similarCount > 1 && (
+                                <Chip
+                                  label={`${similarCount} similar`}
+                                  size="small"
+                                  color="info"
+                                  variant="outlined"
+                                  sx={{
+                                    fontWeight: 600,
+                                    borderWidth: 2,
+                                    '& .MuiChip-label': {
+                                      px: 1,
+                                    },
+                                  }}
+                                />
+                              )}
                               {hasExistingCategory && txn.categoryName && (
                                 <Chip
                                   icon={getCategoryIcon({ icon: txn.categoryIcon, color: txn.categoryColor } as any)}
