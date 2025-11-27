@@ -151,6 +151,32 @@ declare global {
     path?: string;
   }
 
+  interface AnalyticsMetricSample {
+    durationMs: number;
+    recordedAt: string;
+    type?: string;
+    months?: number;
+    aggregation?: string;
+    groupBy?: string;
+    includeTransactions?: boolean;
+    dateRange?: {
+      start: string;
+      end: string;
+      previousStart?: string;
+      previousEnd?: string;
+    };
+    rowCounts?: Record<string, number>;
+    [key: string]: unknown;
+  }
+
+  interface AnalyticsMetricsSnapshot {
+    breakdown?: AnalyticsMetricSample[];
+    dashboard?: AnalyticsMetricSample[];
+    unifiedCategory?: AnalyticsMetricSample[];
+    waterfall?: AnalyticsMetricSample[];
+    categoryOpportunities?: AnalyticsMetricSample[];
+  }
+
   interface ElectronDiagnosticsApi {
     getInfo?: () => Promise<{
       success: boolean;
@@ -172,6 +198,7 @@ declare global {
         initialized: boolean;
         debug: boolean;
       } | null;
+      analyticsMetrics?: AnalyticsMetricsSnapshot | null;
     }>;
     openLogDirectory?: () => Promise<{ success: boolean; error?: string }>;
     exportDiagnostics?: (filePath: string) => Promise<ElectronDiagnosticsExportResult>;

@@ -116,6 +116,33 @@ describe('InvestmentNotificationService', () => {
 
       unsubscribe();
     });
+
+    it('should handle missing count as zero and notify listeners', async () => {
+      (global.fetch as any).mockResolvedValue({
+        json: async () => ({ success: true })
+      });
+
+      const callback = vi.fn();
+      const unsubscribe = subscribeToPendingSuggestions(callback);
+      callback.mockClear();
+
+      const count = await refreshPendingSuggestionsCount();
+
+      expect(count).toBe(0);
+      expect(callback).toHaveBeenCalledWith(0);
+
+      unsubscribe();
+    });
+
+    it('should return 0 when response json parsing fails', async () => {
+      (global.fetch as any).mockResolvedValue({
+        json: async () => {
+          throw new Error('invalid json');
+        }
+      });
+
+      await expect(refreshPendingSuggestionsCount()).resolves.toBe(0);
+    });
   });
 
   describe('getPendingSuggestionsCount', () => {
@@ -238,6 +265,155 @@ describe('InvestmentNotificationService', () => {
 
       // Callback should be ready to be called (via toast click)
       expect(onCreateAccountClick).toBeDefined();
+    });
+
+    it('dispatches notification and sets default navigation when no custom callback', async () => {
+      const dispatchedEvents: any[] = [];
+      (global.window as any).dispatchEvent = vi.fn((evt) => dispatchedEvents.push(evt));
+      (global.window as any).location.hash = '';
+
+      (global.fetch as any)
+        .mockResolvedValueOnce({
+          json: async () => ({
+            success: true,
+            suggestions: [
+              {
+                suggestedAccountName: 'Investment Account',
+                transactions: [
+                  { transactionIdentifier: 'txn123', transactionVendor: 'leumi' }
+                ]
+              }
+            ]
+          })
+        })
+        .mockResolvedValueOnce({
+          json: async () => ({ success: true, count: 2 })
+        });
+
+      const event = {
+        transactionId: 'txn123',
+        transactionVendor: 'leumi',
+        transactionDescription: 'Some transaction',
+        categoryName: 'Investment',
+        categoryType: 'investment'
+      };
+
+      await handleInvestmentCategoryAssigned(event);
+
+      expect(dispatchedEvents[0].type).toBe('showInvestmentNotification');
+      const notification = dispatchedEvents[0];
+      expect(notification.detail.message).toContain('Investment Account');
+
+      // Trigger default navigation handler
+      notification.detail.onCreateClick();
+      expect((global.window as any).location.hash).toBe('#/accounts?tab=investment');
+    });
+
+    it('uses provided callback instead of default navigation', async () => {
+      const dispatchedEvents: any[] = [];
+      (global.window as any).dispatchEvent = vi.fn((evt) => dispatchedEvents.push(evt));
+      (global.window as any).location.hash = '';
+
+      const onCreateAccountClick = vi.fn();
+
+      (global.fetch as any)
+        .mockResolvedValueOnce({
+          json: async () => ({
+            success: true,
+            suggestions: [
+              {
+                suggestedAccountName: 'Custom Account',
+                transactions: [
+                  { transactionIdentifier: 'txn999', transactionVendor: 'ibi' }
+                ]
+              }
+            ]
+          })
+        })
+        .mockResolvedValueOnce({
+          json: async () => ({ success: true, count: 1 })
+        });
+
+      const event = {
+        transactionId: 'txn999',
+        transactionVendor: 'ibi',
+        transactionDescription: 'Another transaction',
+        categoryName: 'Investment',
+        categoryType: 'investment'
+      };
+
+      await handleInvestmentCategoryAssigned(event, onCreateAccountClick);
+
+      const notification = dispatchedEvents[0];
+      expect(notification.detail.message).toContain('Custom Account');
+
+      notification.detail.onCreateClick();
+      expect(onCreateAccountClick).toHaveBeenCalled();
+      expect((global.window as any).location.hash).toBe('');
+    });
+
+    it('initializes listeners and handles categoryAssigned events', async () => {
+      let capturedCallback: EventListener | null = null;
+      (global.window as any).addEventListener = vi.fn((eventName: string, cb: EventListener) => {
+        if (eventName === 'categoryAssigned') {
+          capturedCallback = cb;
+        }
+      });
+      (global.window as any).dispatchEvent = vi.fn();
+      (global.window as any).location.hash = '';
+      (global.fetch as any)
+        .mockResolvedValueOnce({ json: async () => ({ success: true, count: 0 }) }) // initial refresh
+        .mockResolvedValueOnce({ json: async () => ({ success: true, suggestions: [] }) }); // analyzer
+
+      const module = await import('../InvestmentNotificationService.tsx');
+      await module.initializeInvestmentNotifications();
+
+      const event = new CustomEvent('categoryAssigned', {
+        detail: {
+          transactionId: 't-1',
+          transactionVendor: 'v-1',
+          transactionDescription: 'desc',
+          categoryName: 'Investment',
+          categoryType: 'investment',
+        },
+      });
+
+      capturedCallback?.(event as Event);
+
+      // refresh fetch + analyzer call
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(global.fetch).toHaveBeenLastCalledWith(
+        '/api/investments/analyze-transactions',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('auto-initializes on import and swallows initialization errors', async () => {
+      vi.useFakeTimers();
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      (global.window as any) = {
+        addEventListener: vi.fn(),
+        location: { hash: '' },
+        setTimeout,
+      };
+
+      vi.resetModules();
+      vi.doMock('../InvestmentNotificationService.tsx', async (importOriginal) => {
+        const actual = await importOriginal();
+        return {
+          ...actual,
+          refreshPendingSuggestionsCount: vi.fn().mockRejectedValue(new Error('init-fail')),
+        };
+      });
+
+      await import('../InvestmentNotificationService.tsx');
+
+      await vi.runAllTimersAsync();
+
+      expect(errorSpy).toHaveBeenCalled();
+      vi.useRealTimers();
+      errorSpy.mockRestore();
     });
   });
 });

@@ -1,5 +1,24 @@
-export type SpendingCategory = 'growth' | 'stability' | 'essential' | 'reward' | 'other';
+export type SpendingCategory = 'growth' | 'stability' | 'essential' | 'reward';
 export type VariabilityType = 'fixed' | 'variable' | 'seasonal';
+
+// Allocation type descriptions
+export const ALLOCATION_DESCRIPTIONS: Record<SpendingCategory, string> = {
+  essential: 'Fixed costs: rent, utilities, groceries, transport',
+  growth: 'Investments, savings, education, deposits',
+  stability: 'Insurance, emergency funds, debt payments',
+  reward: 'Entertainment, dining, travel, hobbies',
+};
+
+// Category with spending data for display
+export interface CategoryWithSpending {
+  category_definition_id: number;
+  category_name: string;
+  category_name_en?: string;
+  spending_category: SpendingCategory | null;
+  total_amount: number;
+  percentage_of_income: number;
+  transaction_count: number;
+}
 
 export interface SpendingCategoryMapping {
   id: number;
@@ -48,7 +67,9 @@ export interface SpendingCategoryBreakdownResponse {
   };
   breakdown: SpendingCategoryBreakdownItem[];
   total_spending: number;
+  total_income: number;
   targets: Record<SpendingCategory, number>;
+  categories_by_allocation: Record<SpendingCategory | 'unallocated', CategoryWithSpending[]>;
 }
 
 export interface SpendingCategoryMappingsResponse {

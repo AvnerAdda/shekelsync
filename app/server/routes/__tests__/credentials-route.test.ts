@@ -56,4 +56,27 @@ describe('Shared /api/credentials routes', () => {
     expect(res.body).toEqual({ success: true });
     expect(spy).toHaveBeenCalledWith({ id: '123' });
   });
+
+  it('handles credential creation errors', async () => {
+    vi.spyOn(credentialsService, 'createCredential').mockRejectedValue(new Error('boom'));
+
+    const res = await request(app).post('/api/credentials').send({ vendor: 'err' }).expect(500);
+    expect(res.body.error).toBeDefined();
+  });
+
+  it('handles credential deletion errors', async () => {
+    vi.spyOn(credentialsService, 'deleteCredential').mockRejectedValue(
+      Object.assign(new Error('forbidden'), { statusCode: 403 }),
+    );
+
+    const res = await request(app).delete('/api/credentials/999').expect(403);
+    expect(res.body.error).toBeDefined();
+  });
+
+  it('handles credential listing errors', async () => {
+    vi.spyOn(credentialsService, 'listCredentials').mockRejectedValue(new Error('boom'));
+
+    const res = await request(app).get('/api/credentials').expect(500);
+    expect(res.body.error).toBeDefined();
+  });
 });

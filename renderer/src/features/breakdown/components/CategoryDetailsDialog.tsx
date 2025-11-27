@@ -22,6 +22,7 @@ import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
 import { CategoryDetails, CategoryType, FormatCurrencyFn } from '../types';
 import { isPendingTransaction } from '../utils';
+import { getBreakdownStrings } from '../strings';
 
 interface CategoryDetailsDialogProps {
   open: boolean;
@@ -43,6 +44,8 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
   onSubcategoryClick,
 }) => {
   const theme = useTheme();
+  const strings = getBreakdownStrings();
+  const generalStrings = strings.general;
 
   if (!details) {
     return (
@@ -78,7 +81,12 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
               <Card variant="outlined">
                 <CardContent>
                   <Typography variant="caption" color="text.secondary">
-                    Total {categoryType === 'income' ? 'Income' : categoryType === 'investment' ? 'Invested' : 'Spent'}
+                    {generalStrings.total}{' '}
+                    {categoryType === 'income'
+                      ? generalStrings.income
+                      : categoryType === 'investment'
+                      ? generalStrings.invested
+                      : generalStrings.spent}
                   </Typography>
                   <Typography
                     variant="h6"
@@ -94,7 +102,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
               <Card variant="outlined">
                 <CardContent>
                   <Typography variant="caption" color="text.secondary">
-                    Transactions
+                    {generalStrings.transactions}
                   </Typography>
                   <Typography variant="h6" fontWeight="bold">
                     {details.summary.count}
@@ -105,7 +113,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                     if (pendingCount > 0) {
                       return (
                         <Typography variant="caption" color="text.secondary">
-                          {processedCount} processed, {pendingCount} pending
+                          {strings.categoryDetails.processedBreakdown(processedCount, pendingCount)}
                         </Typography>
                       );
                     }
@@ -118,7 +126,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
               <Card variant="outlined">
                 <CardContent>
                   <Typography variant="caption" color="text.secondary">
-                    Average
+                    {generalStrings.average}
                   </Typography>
                   <Typography variant="h6" fontWeight="bold">
                     {formatCurrencyValue(details.summary.average)}
@@ -131,7 +139,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
           {details.subcategories && details.subcategories.length > 0 && (
             <>
               <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                Subcategories
+                {generalStrings.subcategories}
               </Typography>
               <Grid container spacing={1} sx={{ mb: 3 }}>
                 {details.subcategories.map(sub => (
@@ -157,7 +165,11 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                         <Typography variant="body2" fontWeight="medium">
                           {sub.name}
                         </Typography>
-                        <Chip label={`${sub.count} transactions`} size="small" variant="outlined" />
+                        <Chip
+                          label={`${sub.count} ${generalStrings.transactions}`}
+                          size="small"
+                          variant="outlined"
+                        />
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="body2" fontWeight="bold">
@@ -175,7 +187,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
           {details.byVendor && details.byVendor.length > 0 && (
             <>
               <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                By Vendor
+                {generalStrings.vendors}
               </Typography>
               <Grid container spacing={1} sx={{ mb: 3 }}>
                 {details.byVendor.map((vendor, index) => (
@@ -205,7 +217,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
           {details.byCard && details.byCard.length > 0 && (
             <>
               <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                By Card
+                {generalStrings.cards}
               </Typography>
               <Grid container spacing={1} sx={{ mb: 3 }}>
                 {details.byCard.map((card, index) => (
@@ -237,7 +249,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
           )}
 
           <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-            Recent Transactions
+            {generalStrings.recentTransactions}
           </Typography>
           <List dense>
             {transactions.map((txn, index) => {
@@ -260,7 +272,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                           {pending && (
                             <Chip
                               icon={<HourglassEmptyIcon sx={{ fontSize: 14 }} />}
-                              label="Pending"
+                              label={generalStrings.pendingBadge}
                               size="small"
                               color="warning"
                               sx={{
@@ -295,7 +307,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                                 •
                               </Typography>
                               <Typography variant="caption" color="warning.main">
-                                Processes: {new Date(processedDate).toLocaleDateString()}
+                                {`${generalStrings.processedDatePrefix}: ${new Date(processedDate).toLocaleDateString()}`}
                               </Typography>
                             </>
                           )}

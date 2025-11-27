@@ -31,8 +31,9 @@ describe('SummaryCards', () => {
     render(<SummaryCards {...baseProps} />);
 
     expect(screen.getByText('Bank: ₪2,000')).toBeInTheDocument();
-    expect(screen.getByText('Savings Score')).toBeInTheDocument();
-    expect(screen.getByText('100')).toBeInTheDocument();
+    const savingsScoreLabel = screen.getByText('Savings Score');
+    expect(savingsScoreLabel).toBeInTheDocument();
+    expect(savingsScoreLabel.previousElementSibling).toHaveTextContent('100');
   });
 
   it('renders portfolio breakdown entries', () => {

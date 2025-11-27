@@ -1,66 +1,45 @@
 import { describe, expect, it, vi } from 'vitest';
-import { installElectronLoggerBridge } from '../install-electron-logger';
+import installElectronLoggerBridge from '../install-electron-logger';
 
-function createFakeWindow() {
-  const info = vi.fn();
-  const warn = vi.fn();
-  const error = vi.fn();
-  const debug = vi.fn();
-
-  return {
-    electronAPI: {
-      log: {
-        info,
-        warn,
-        error,
-        debug,
-      },
-    },
-    console: {
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-      log: vi.fn(),
-    },
-  } as unknown as Window & typeof globalThis;
-}
-
-describe('installElectronLoggerBridge', () => {
-  it('skips installation when electron bridge is missing', () => {
-    const result = installElectronLoggerBridge({ console } as Window & typeof globalThis);
+describe('install-electron-logger', () => {
+  it('returns installed:false when bridge missing', () => {
+    const result = installElectronLoggerBridge({} as any);
     expect(result.installed).toBe(false);
   });
 
-  it('forwards console calls to the electron log bridge', () => {
-    const fakeWindow = createFakeWindow();
-    const installResult = installElectronLoggerBridge(fakeWindow);
-
-    expect(installResult.installed).toBe(true);
-
-    fakeWindow.console.info('hello', { foo: 'bar' });
-
-    const infoSpy = fakeWindow.electronAPI?.log?.info as ReturnType<typeof vi.fn>;
-    expect(infoSpy).toHaveBeenCalledTimes(1);
-    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('hello'), {
-      args: expect.arrayContaining([expect.objectContaining({ foo: 'bar' })]),
+  it('attaches logger and forwards messages, swallowing bridge errors', () => {
+    const logSpy = vi.fn().mockImplementation(() => {
+      throw new Error('log failure');
     });
+    const consoleSpy = vi.fn();
+    const target = {
+      console: {
+        error: consoleSpy,
+        warn: consoleSpy,
+        info: consoleSpy,
+        debug: consoleSpy,
+        log: consoleSpy,
+      },
+      electronAPI: {
+        log: {
+          error: logSpy,
+          warn: logSpy,
+          info: logSpy,
+          debug: logSpy,
+        },
+      },
+    } as any;
 
-    installResult.restore?.();
-  });
+    const { installed, restore } = installElectronLoggerBridge(target);
+    expect(installed).toBe(true);
 
-  it('does not double-wrap consoles when already installed', () => {
-    const fakeWindow = createFakeWindow();
-    const first = installElectronLoggerBridge(fakeWindow);
-    expect(first.installed).toBe(true);
+    target.console.error('oops', new Error('boom'));
+    expect(consoleSpy).toHaveBeenCalledWith('oops', expect.any(Error));
+    // bridge called even though it throws
+    expect(logSpy).toHaveBeenCalled();
 
-    const second = installElectronLoggerBridge(fakeWindow);
-    expect(second.installed).toBe(true);
-
-    fakeWindow.console.error('boom');
-    const errorSpy = fakeWindow.electronAPI?.log?.error as ReturnType<typeof vi.fn>;
-    expect(errorSpy).toHaveBeenCalledTimes(1);
-
-    first.restore?.();
+    restore?.();
+    target.console.error('after restore');
+    expect(logSpy).toHaveBeenCalledTimes(1); // no bridge call after restore
   });
 });

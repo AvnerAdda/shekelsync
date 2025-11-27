@@ -17,7 +17,7 @@ let database = actualDatabase;
  */
 function autoDetectSpendingCategory(categoryName, categoryNameEn, parentName, categoryType) {
   if (categoryType !== CATEGORY_TYPES.EXPENSE) {
-    return { spendingCategory: 'other', confidence: 1.0, variabilityType: 'variable' };
+    return { spendingCategory: null, confidence: 1.0, variabilityType: 'variable' };
   }
 
   const name = (categoryName || '').toLowerCase();
@@ -66,7 +66,7 @@ function autoDetectSpendingCategory(categoryName, categoryNameEn, parentName, ca
   const isSeasonal = seasonalKeywords.some(kw => combined.includes(kw));
 
   // Determine spending category
-  let spendingCategory = 'other';
+  let spendingCategory = null;
   let confidence = 0.5;
 
   if (isGrowth) {
@@ -113,6 +113,7 @@ async function initializeSpendingCategories() {
       FROM category_definitions cd
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
       WHERE cd.is_active = 1
+        AND cd.category_type = 'expense'
     `);
 
     const categories = categoriesResult.rows;
@@ -279,18 +280,42 @@ async function updateSpendingCategoryMapping(categoryDefinitionId, updates) {
 
 /**
  * Get spending category breakdown with actual spending data
+ * Uses current month income as 100% base for allocation percentages
  */
 async function getSpendingCategoryBreakdown(params = {}) {
-  const { startDate, endDate, months = 3 } = params;
-  const { start, end } = resolveDateRange({ startDate, endDate, months });
+  const { startDate, endDate, months = 3, currentMonthOnly = false } = params;
+
+  let start, end;
+  if (currentMonthOnly) {
+    // Current month only
+    const now = new Date();
+    start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  } else {
+    const resolved = resolveDateRange({ startDate, endDate, months });
+    start = resolved.start;
+    end = resolved.end;
+  }
 
   const client = await database.getClient();
 
   try {
+    // Get total income for the period (salary = positive transactions with Income category)
+    const incomeResult = await client.query(`
+      SELECT COALESCE(SUM(t.price), 0) as total_income
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      WHERE t.date >= $1 AND t.date <= $2
+        AND t.price > 0
+        AND (cd.category_type = 'income' OR t.category_type = 'income')
+    `, [start, end]);
+
+    const totalIncome = parseFloat(incomeResult.rows[0]?.total_income || 0);
+
     // Get spending totals by spending category
     const result = await client.query(`
       SELECT
-        scm.spending_category,
+        COALESCE(scm.spending_category, 'unallocated') as spending_category,
         COUNT(t.identifier) as transaction_count,
         SUM(ABS(t.price)) as total_amount,
         AVG(ABS(t.price)) as avg_transaction,
@@ -298,7 +323,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
         MAX(t.date) as last_transaction_date
       FROM transactions t
       JOIN category_definitions cd ON t.category_definition_id = cd.id
-      JOIN spending_category_mappings scm ON cd.id = scm.category_definition_id
+      LEFT JOIN spending_category_mappings scm ON cd.id = scm.category_definition_id
       LEFT JOIN account_pairings ap ON (
         t.vendor = ap.bank_vendor
         AND ap.is_active = 1
@@ -314,7 +339,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
         AND t.price < 0
         AND cd.category_type = 'expense'
         AND ap.id IS NULL
-      GROUP BY scm.spending_category
+      GROUP BY COALESCE(scm.spending_category, 'unallocated')
       ORDER BY total_amount DESC
     `, [start, end]);
 
@@ -325,7 +350,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
     const targetsResult = await client.query(`
       SELECT spending_category, target_percentage
       FROM spending_category_targets
-      WHERE is_active = 1
+      WHERE is_active = 1 AND spending_category IS NOT NULL
     `);
 
     const targets = {};
@@ -333,16 +358,68 @@ async function getSpendingCategoryBreakdown(params = {}) {
       targets[row.spending_category] = parseFloat(row.target_percentage || 0);
     });
 
-    // Calculate percentages and compare to targets
+    // Get categories grouped by allocation type with spending data
+    const categoriesByAllocationResult = await client.query(`
+      SELECT
+        COALESCE(scm.spending_category, 'unallocated') as allocation_type,
+        cd.id as category_definition_id,
+        cd.name as category_name,
+        cd.name_en as category_name_en,
+        scm.spending_category,
+        COALESCE(SUM(ABS(t.price)), 0) as total_amount,
+        COUNT(t.identifier) as transaction_count
+      FROM category_definitions cd
+      LEFT JOIN spending_category_mappings scm ON cd.id = scm.category_definition_id
+      LEFT JOIN transactions t ON t.category_definition_id = cd.id
+        AND t.date >= $1 AND t.date <= $2
+        AND t.price < 0
+      WHERE cd.category_type = 'expense' AND cd.is_active = 1
+      GROUP BY cd.id, cd.name, cd.name_en, scm.spending_category
+      ORDER BY scm.spending_category, total_amount DESC
+    `, [start, end]);
+
+    // Organize categories by allocation type
+    const categoriesByAllocation = {
+      essential: [],
+      growth: [],
+      stability: [],
+      reward: [],
+      unallocated: [],
+    };
+
+    categoriesByAllocationResult.rows.forEach(row => {
+      const allocationType = row.spending_category || 'unallocated';
+      const categoryData = {
+        category_definition_id: row.category_definition_id,
+        category_name: row.category_name,
+        category_name_en: row.category_name_en,
+        spending_category: row.spending_category,
+        total_amount: parseFloat(row.total_amount || 0),
+        percentage_of_income: totalIncome > 0
+          ? (parseFloat(row.total_amount || 0) / totalIncome) * 100
+          : 0,
+        transaction_count: parseInt(row.transaction_count || 0, 10),
+      };
+
+      if (categoriesByAllocation[allocationType]) {
+        categoriesByAllocation[allocationType].push(categoryData);
+      } else {
+        categoriesByAllocation.unallocated.push(categoryData);
+      }
+    });
+
+    // Calculate percentages based on income (not total spending)
     const enrichedBreakdown = breakdown.map(item => {
-      const actualPercentage = totalSpending > 0
-        ? (parseFloat(item.total_amount) / totalSpending) * 100
+      const spendingCategory = item.spending_category || 'unallocated';
+      const actualPercentage = totalIncome > 0
+        ? (parseFloat(item.total_amount) / totalIncome) * 100
         : 0;
-      const targetPercentage = targets[item.spending_category] || 0;
+      const targetPercentage = targets[spendingCategory] || 0;
       const variance = actualPercentage - targetPercentage;
 
       return {
         ...item,
+        spending_category: spendingCategory,
         total_amount: parseFloat(item.total_amount || 0),
         avg_transaction: parseFloat(item.avg_transaction || 0),
         transaction_count: parseInt(item.transaction_count || 0, 10),
@@ -357,7 +434,57 @@ async function getSpendingCategoryBreakdown(params = {}) {
       period: { start, end },
       breakdown: enrichedBreakdown,
       total_spending: totalSpending,
+      total_income: totalIncome,
       targets,
+      categories_by_allocation: categoriesByAllocation,
+    };
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Bulk assign categories to a spending allocation type
+ */
+async function bulkAssignCategories(categoryDefinitionIds, spendingCategory) {
+  const client = await database.getClient();
+
+  try {
+    for (const categoryDefId of categoryDefinitionIds) {
+      // Check if mapping exists
+      const existingResult = await client.query(
+        `SELECT id FROM spending_category_mappings WHERE category_definition_id = $1`,
+        [categoryDefId]
+      );
+
+      if (existingResult.rows.length > 0) {
+        // Update existing mapping
+        await client.query(`
+          UPDATE spending_category_mappings
+          SET spending_category = $1,
+              user_overridden = 1,
+              is_auto_detected = 0,
+              updated_at = datetime('now')
+          WHERE category_definition_id = $2
+        `, [spendingCategory, categoryDefId]);
+      } else {
+        // Create new mapping
+        await client.query(`
+          INSERT INTO spending_category_mappings (
+            category_definition_id,
+            spending_category,
+            variability_type,
+            is_auto_detected,
+            detection_confidence,
+            user_overridden
+          ) VALUES ($1, $2, 'variable', 0, 1.0, 1)
+        `, [categoryDefId, spendingCategory]);
+      }
+    }
+
+    return {
+      success: true,
+      updated: categoryDefinitionIds.length,
     };
   } finally {
     client.release();
@@ -399,6 +526,7 @@ module.exports = {
   updateSpendingCategoryMapping,
   getSpendingCategoryBreakdown,
   updateSpendingCategoryTargets,
+  bulkAssignCategories,
   autoDetectSpendingCategory, // Export for testing
   __setDatabase(mock) {
     database = mock || actualDatabase;

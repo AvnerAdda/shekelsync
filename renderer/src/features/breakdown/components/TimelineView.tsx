@@ -2,6 +2,7 @@ import React from 'react';
 import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line } from 'recharts';
 import { useTheme } from '@mui/material';
 import { CategoryType, FormatCurrencyFn, MonthlyBreakdownItem } from '../types';
+import { getBreakdownStrings } from '../strings';
 
 interface TimelineViewProps {
   data: MonthlyBreakdownItem[];
@@ -12,6 +13,8 @@ interface TimelineViewProps {
 
 const TimelineView: React.FC<TimelineViewProps> = ({ data, categoryType, title, formatCurrencyValue }) => {
   const theme = useTheme();
+  const strings = getBreakdownStrings();
+  const timelineStrings = strings.timeline;
 
   const chartData = React.useMemo(
     () =>
@@ -43,7 +46,13 @@ const TimelineView: React.FC<TimelineViewProps> = ({ data, categoryType, title, 
         />
         <Legend />
         {shouldFallbackToTotal ? (
-          <Line type="monotone" dataKey="total" stroke={theme.palette.primary.main} strokeWidth={2} name={title} />
+          <Line
+            type="monotone"
+            dataKey="total"
+            stroke={theme.palette.primary.main}
+            strokeWidth={2}
+            name={timelineStrings.fallbackLegend}
+          />
         ) : (
           <>
             {hasOutflow && (
@@ -52,7 +61,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ data, categoryType, title, 
                 dataKey="outflow"
                 stroke={theme.palette.error.main}
                 strokeWidth={2}
-                name={categoryType === 'income' ? 'Outflow' : title}
+                name={categoryType === 'income' ? timelineStrings.outflow : title}
               />
             )}
             {hasInflow && (
@@ -61,7 +70,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ data, categoryType, title, 
                 dataKey="inflow"
                 stroke={theme.palette.success.main}
                 strokeWidth={2}
-                name={categoryType === 'expense' ? 'Income' : 'Inflow'}
+                name={categoryType === 'expense' ? timelineStrings.income : timelineStrings.inflow}
               />
             )}
           </>

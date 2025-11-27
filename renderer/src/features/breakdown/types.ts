@@ -10,6 +10,11 @@ export interface Subcategory {
   total: number;
 }
 
+export interface TrendHistoryPoint {
+  month: string;
+  total: number;
+}
+
 export interface CategoryBreakdownItem {
   parentId: number;
   category: string;
@@ -18,6 +23,9 @@ export interface CategoryBreakdownItem {
   description?: string | null;
   total: number;
   count: number;
+  previousTotal?: number;
+  previousCount?: number;
+  history?: TrendHistoryPoint[];
   subcategories: Subcategory[];
 }
 
@@ -34,6 +42,9 @@ export interface VendorBreakdownItem {
   vendor: string;
   total: number;
   count: number;
+  previousTotal?: number;
+  previousCount?: number;
+  history?: TrendHistoryPoint[];
   institution?: VendorInstitution;
 }
 
@@ -110,5 +121,7 @@ export interface OverviewDataItem {
   description?: string | null;
   value: number;
   count: number;
+  previousValue?: number;
+  history?: TrendHistoryPoint[];
   subcategories?: Subcategory[];
 }

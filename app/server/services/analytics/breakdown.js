@@ -1,4 +1,7 @@
-const database = require('../database.js');
+const { performance } = require('node:perf_hooks');
+const actualDatabase = require('../database.js');
+const { recordBreakdownMetric } = require('./metrics-store.js');
+let database = actualDatabase;
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 
 const VALID_TYPES = new Set(['expense', 'income', 'investment']);
@@ -39,13 +42,19 @@ async function getBreakdownAnalytics(query = {}) {
     endDate,
     months = 3,
   } = query;
+  const timerStart = performance.now();
 
   validateType(type);
 
   const config = TYPE_CONFIG[type];
   const { start, end } = resolveDateRange({ startDate, endDate, months });
+  const periodLengthMs = end.getTime() - start.getTime();
+  const prevEnd = new Date(start.getTime() - 1);
+  const prevStart = new Date(Math.max(start.getTime() - periodLengthMs, 0));
   const startStr = start.toISOString().split('T')[0];
   const endStr = end.toISOString().split('T')[0];
+  const prevStartStr = prevStart.toISOString().split('T')[0];
+  const prevEndStr = prevEnd.toISOString().split('T')[0];
 
   const priceFilterClause = config.priceFilter ? `AND ${config.priceFilter}` : '';
 
@@ -128,6 +137,110 @@ async function getBreakdownAnalytics(query = {}) {
     [startStr, endStr, config.categoryType],
   );
 
+  const previousCategoryResult = await database.query(
+    `WITH RECURSIVE category_tree AS (
+        SELECT
+          id as category_id,
+          id as level1_id,
+          name as level1_name,
+          color as level1_color,
+          icon as level1_icon,
+          description as level1_description,
+          parent_id,
+          depth_level
+        FROM category_definitions
+        WHERE depth_level = 1 AND category_type = $3
+
+        UNION ALL
+
+        SELECT
+          cd.id as category_id,
+          ct.level1_id,
+          ct.level1_name,
+          ct.level1_color,
+          ct.level1_icon,
+          ct.level1_description,
+          cd.parent_id,
+          cd.depth_level
+        FROM category_definitions cd
+        JOIN category_tree ct ON cd.parent_id = ct.category_id
+        WHERE cd.category_type = $3
+      )
+      SELECT
+        ct.level1_id as parent_id,
+        ct.level1_name as parent_name,
+        COUNT(t.identifier) as transaction_count,
+        SUM(${config.amountExpression}) as total_amount
+      FROM transactions t
+      JOIN category_definitions cd ON t.category_definition_id = cd.id
+      JOIN category_tree ct ON cd.id = ct.category_id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
+      WHERE t.date >= $1 AND t.date <= $2
+        AND cd.category_type = $3
+        AND cd.depth_level >= 1
+        ${priceFilterClause}
+        AND ap.id IS NULL
+      GROUP BY ct.level1_id, ct.level1_name`,
+    [prevStartStr, prevEndStr, config.categoryType],
+  );
+
+  const previousVendorResult = await database.query(
+    `SELECT
+        COALESCE(t.vendor, 'Unknown') as vendor,
+        COUNT(t.identifier) as transaction_count,
+        SUM(${config.amountExpression}) as total_amount
+      FROM transactions t
+      JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
+      WHERE t.date >= $1 AND t.date <= $2
+        AND cd.category_type = $3
+        ${priceFilterClause}
+        AND ap.id IS NULL
+      GROUP BY COALESCE(t.vendor, 'Unknown')`,
+    [prevStartStr, prevEndStr, config.categoryType],
+  );
+
+  const previousCategoryTotals = new Map();
+  previousCategoryResult.rows.forEach((row) => {
+    const parentId = row.parent_id !== null && row.parent_id !== undefined
+      ? Number(row.parent_id)
+      : null;
+    const parentKey = parentId ?? row.parent_name ?? 'Uncategorized';
+    previousCategoryTotals.set(parentKey, {
+      count: Number(row.transaction_count || 0),
+      total: Number.parseFloat(row.total_amount || 0),
+    });
+  });
+
+  const previousVendorTotals = new Map();
+  previousVendorResult.rows.forEach((row) => {
+    const vendorKey = row.vendor || 'Unknown';
+    previousVendorTotals.set(vendorKey, {
+      count: Number(row.transaction_count || 0),
+      total: Number.parseFloat(row.total_amount || 0),
+    });
+  });
+
   let transactions = transactionsResult.rows.map((row) => ({
     ...row,
     price: Number.parseFloat(row.price),
@@ -158,12 +271,16 @@ async function getBreakdownAnalytics(query = {}) {
   const maxAmount = count > 0 ? Math.max(...amounts) : 0;
 
   const categoryMap = new Map();
+  const categoryHistoryMap = new Map();
   const vendorMap = new Map();
+  const vendorHistoryMap = new Map();
   const monthMap = new Map();
 
   // Use all transactions (including pending) for breakdown calculations
   transactions.forEach((tx) => {
     const amount = config.amountFn(tx.price);
+
+    const monthKey = tx.date.toISOString().slice(0, 7);
 
     const parentKey = tx.parent_id ?? tx.parent_name ?? 'Uncategorized';
     if (!categoryMap.has(parentKey)) {
@@ -181,6 +298,11 @@ async function getBreakdownAnalytics(query = {}) {
     const parentEntry = categoryMap.get(parentKey);
     parentEntry.count += 1;
     parentEntry.total += amount;
+    if (!categoryHistoryMap.has(parentKey)) {
+      categoryHistoryMap.set(parentKey, new Map());
+    }
+    const catHistory = categoryHistoryMap.get(parentKey);
+    catHistory.set(monthKey, (catHistory.get(monthKey) || 0) + amount);
 
     const isDirectlyAtLevel1 = tx.depth_level === 1 || tx.subcategory_id === tx.parent_id;
     const subKey = isDirectlyAtLevel1
@@ -228,43 +350,73 @@ async function getBreakdownAnalytics(query = {}) {
     const vendorEntry = vendorMap.get(vendorKey);
     vendorEntry.count += 1;
     vendorEntry.total += amount;
+    if (!vendorHistoryMap.has(vendorKey)) {
+      vendorHistoryMap.set(vendorKey, new Map());
+    }
+    const vendorHistory = vendorHistoryMap.get(vendorKey);
+    vendorHistory.set(monthKey, (vendorHistory.get(monthKey) || 0) + amount);
 
-    const monthKey = tx.date.toISOString().slice(0, 7);
     if (!monthMap.has(monthKey)) {
       monthMap.set(monthKey, { month: monthKey, total: 0 });
     }
     monthMap.get(monthKey).total += amount;
   });
 
-  const byCategory = Array.from(categoryMap.values()).map((entry) => ({
-    parentId: entry.parentId,
-    category: entry.category,
-    color: entry.color,
-    icon: entry.icon,
-    description: entry.description,
-    count: entry.count,
-    total: entry.total,
-    subcategories: Array.from(entry.subcategories.values())
-      .sort((a, b) => b.total - a.total)
-      .map((sub) => ({
-        id: sub.id,
-        name: sub.name,
-        color: sub.color,
-        icon: sub.icon,
-        description: sub.description,
-        count: sub.count,
-        total: sub.total,
-      })),
-  })).sort((a, b) => b.total - a.total);
+  const byCategory = Array.from(categoryMap.values()).map((entry) => {
+    const parentKey = entry.parentId ?? entry.category ?? 'Uncategorized';
+    const history = categoryHistoryMap.get(parentKey)
+      ? Array.from(categoryHistoryMap.get(parentKey).entries())
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([month, total]) => ({ month, total }))
+      : [];
+    const previousTotals = previousCategoryTotals.get(parentKey);
+
+    return {
+      parentId: entry.parentId,
+      category: entry.category,
+      color: entry.color,
+      icon: entry.icon,
+      description: entry.description,
+      count: entry.count,
+      total: entry.total,
+      previousTotal: previousTotals ? previousTotals.total : 0,
+      previousCount: previousTotals ? previousTotals.count : 0,
+      history,
+      subcategories: Array.from(entry.subcategories.values())
+        .sort((a, b) => b.total - a.total)
+        .map((sub) => ({
+          id: sub.id,
+          name: sub.name,
+          color: sub.color,
+          icon: sub.icon,
+          description: sub.description,
+          count: sub.count,
+          total: sub.total,
+        })),
+    };
+  }).sort((a, b) => b.total - a.total);
 
   const byVendor = Array.from(vendorMap.values())
     .sort((a, b) => b.total - a.total)
-    .map((row) => ({
-      vendor: row.vendor,
-      count: row.count,
-      total: row.total,
-      institution: row.institution,
-    }));
+    .map((row) => {
+      const history = vendorHistoryMap.get(row.vendor)
+        ? Array.from(vendorHistoryMap.get(row.vendor).entries())
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([month, total]) => ({ month, total }))
+        : [];
+      const previousTotals = previousVendorTotals.get(row.vendor) ??
+        previousVendorTotals.get('Unknown');
+
+      return {
+        vendor: row.vendor,
+        count: row.count,
+        total: row.total,
+        previousTotal: previousTotals ? previousTotals.total : 0,
+        previousCount: previousTotals ? previousTotals.count : 0,
+        history,
+        institution: row.institution,
+      };
+    });
 
   const byMonth = Array.from(monthMap.values())
     .sort((a, b) => a.month.localeCompare(b.month))
@@ -274,7 +426,7 @@ async function getBreakdownAnalytics(query = {}) {
       outflow: type === 'expense' ? row.total : 0,
     }));
 
-  return {
+  const response = {
     dateRange: { start, end },
     summary: {
       total: totalAmount,
@@ -293,9 +445,32 @@ async function getBreakdownAnalytics(query = {}) {
       price: tx.price,
     })),
   };
+
+  const durationMs = Number((performance.now() - timerStart).toFixed(2));
+  const metricPayload = {
+    durationMs,
+    type,
+    dateRange: { start: startStr, end: endStr, previousStart: prevStartStr, previousEnd: prevEndStr },
+    rowCounts: {
+      current: transactionsResult.rows.length,
+      previousCategories: previousCategoryResult.rows.length,
+      previousVendors: previousVendorResult.rows.length,
+    },
+  };
+
+  console.info('[analytics:breakdown]', JSON.stringify(metricPayload));
+  recordBreakdownMetric(metricPayload);
+
+  return response;
 }
 
 module.exports = {
   getBreakdownAnalytics,
+  __setDatabase(mock) {
+    database = mock || actualDatabase;
+  },
+  __resetDatabase() {
+    database = actualDatabase;
+  },
 };
 module.exports.default = module.exports;

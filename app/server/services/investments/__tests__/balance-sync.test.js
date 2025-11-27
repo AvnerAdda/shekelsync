@@ -2,12 +2,12 @@
  * Balance Sync Service Tests
  */
 
-const { describe, it, expect, beforeEach, afterEach } = require('vitest');
-const {
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import {
   syncBankBalanceToInvestments,
   calculateMonthStartBalance,
   getOrCreateBankBalanceAccount,
-} = require('../balance-sync');
+} from '../balance-sync.js';
 
 // Mock database client
 const createMockClient = () => {

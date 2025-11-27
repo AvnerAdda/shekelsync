@@ -36,6 +36,7 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
       <Box sx={{ mb: 4 }}>
         <SummaryCards
           totalIncome={data.summary.totalIncome}
+          totalCapitalReturns={data.summary.totalCapitalReturns}
           totalExpenses={data.summary.totalExpenses}
           netInvestments={data.summary.netInvestments}
           currentBankBalance={data.summary.currentBankBalance}

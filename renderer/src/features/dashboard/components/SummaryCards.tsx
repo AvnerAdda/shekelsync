@@ -7,6 +7,7 @@ import {
   useTheme,
   Divider,
   LinearProgress,
+  Tooltip,
 } from '@mui/material';
 import Grid2 from '@mui/material/Grid2';
 import {
@@ -18,12 +19,14 @@ import {
   Schedule as RunwayIcon,
   Warning as WarningIcon,
   HourglassEmpty as PendingIcon,
+  Info as InfoIcon,
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 
 interface SummaryCardsProps {
   // Card 1: Current Month Finance
   totalIncome: number;
+  totalCapitalReturns?: number;
   totalExpenses: number;
   netInvestments?: number;
   currentBankBalance?: number;
@@ -48,6 +51,7 @@ interface SummaryCardsProps {
 
 const SummaryCards: React.FC<SummaryCardsProps> = ({
   totalIncome,
+  totalCapitalReturns = 0,
   totalExpenses,
   netInvestments = 0,
   currentBankBalance,
@@ -63,7 +67,9 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
 
-  const netSavings = totalIncome - (totalExpenses + netInvestments);
+  // Capital Returns offset investment outflows (it's money coming back from previous investments)
+  const effectiveNetInvestments = Math.max(0, netInvestments - totalCapitalReturns);
+  const netSavings = totalIncome - (totalExpenses + effectiveNetInvestments);
 
   // Calculate if pending expenses will cause financial difficulty
   const netSavingsAfterPending = netSavings - pendingExpenses;
@@ -146,6 +152,21 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Typography variant="body2" color="text.secondary">Investments</Typography>
               <Typography variant="body2" color="info.main">-{formatCurrencyValue(netInvestments)}</Typography>
+            </Box>
+          )}
+          {totalCapitalReturns > 0 && (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography variant="body2" color="text.secondary">Capital Returns</Typography>
+                <Tooltip
+                  title="Principal returned from investments (pikadon, deposits). Not counted as income but offsets investment outflows."
+                  arrow
+                  placement="top"
+                >
+                  <InfoIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
+                </Tooltip>
+              </Box>
+              <Typography variant="body2" sx={{ color: '#B2DFDB' }}>+{formatCurrencyValue(totalCapitalReturns)}</Typography>
             </Box>
           )}
           {hasPendingExpenses && (

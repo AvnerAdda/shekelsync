@@ -17,6 +17,8 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CategoryIcon from './CategoryIcon';
 import { CategoryType, DrillLevel, FormatCurrencyFn, OverviewDataItem } from '../types';
+import { getBreakdownStrings } from '../strings';
+import TrendSparkline from './TrendSparkline';
 
 interface OverviewViewProps {
   data: OverviewDataItem[];
@@ -48,6 +50,15 @@ const OverviewView: React.FC<OverviewViewProps> = ({
   getCategoryTransactionCounts,
 }) => {
   const theme = useTheme();
+  const strings = getBreakdownStrings();
+  const generalStrings = strings.general;
+  const timelineStrings = strings.timeline;
+  const computeDelta = React.useCallback((current: number, previous?: number) => {
+    if (!previous || previous === 0) {
+      return null;
+    }
+    return ((current - previous) / previous) * 100;
+  }, []);
   const isSubcategoryLevel = currentLevel?.type === 'subcategory';
   const totalAmount = React.useMemo(() => data.reduce((sum, item) => sum + item.value, 0), [data]);
 
@@ -131,7 +142,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
             {!isSubcategoryLevel && (
               <Typography variant="caption" display="block" align="center" color="text.secondary">
                 <ZoomInIcon sx={{ fontSize: 14, verticalAlign: 'middle', mr: 0.5 }} />
-                Click to drill down or view details
+                {timelineStrings.hint}
               </Typography>
             )}
           </Box>
@@ -141,6 +152,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
           <Box sx={{ maxHeight: 400, overflowY: 'auto', pr: 1 }}>
             {data.map((item, index) => {
               const percentage = totalAmount ? ((item.value / totalAmount) * 100).toFixed(1) : '0.0';
+              const delta = computeDelta(item.value, item.previousValue);
               const counts = !currentLevel
                 ? getCategoryTransactionCounts(item.id, false)
                 : currentLevel.type === 'parent'
@@ -184,20 +196,37 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                         <CategoryIcon iconName={item.icon} color={item.color} size={24} />
                         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                            <Typography variant="body2" fontWeight="medium" noWrap>
-                              {item.name}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              fontWeight="bold"
-                              color={categoryType === 'income' ? 'success.main' : undefined}
-                            >
-                              {formatCurrencyValue(item.value)}
-                            </Typography>
+                        <Typography variant="body2" fontWeight="medium" noWrap>
+                          {item.name}
+                        </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography
+                                variant="body2"
+                                fontWeight="bold"
+                                color={categoryType === 'income' ? 'success.main' : undefined}
+                              >
+                                {formatCurrencyValue(item.value)}
+                              </Typography>
+                              {delta !== null && (
+                                <Chip
+                                  label={`${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%`}
+                                  size="small"
+                                  color={
+                                    categoryType === 'expense'
+                                      ? delta >= 0 ? 'error' : 'success'
+                                      : delta >= 0 ? 'success' : 'error'
+                                  }
+                                />
+                              )}
+                            </Box>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
                             <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                              <Chip label={`${item.count} transactions`} size="small" variant="outlined" />
+                              <Chip
+                                label={`${item.count} ${generalStrings.transactions}`}
+                                size="small"
+                                variant="outlined"
+                              />
                               {counts.pendingCount > 0 && (
                                 <Chip
                                   label={`${counts.processedCount} + ${counts.pendingCount} pending`}
@@ -214,6 +243,15 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                               color={categoryType === 'income' ? 'success' : undefined}
                             />
                           </Box>
+                          {item.history && item.history.length > 1 && (
+                            <Box sx={{ mt: 1 }}>
+                              <TrendSparkline
+                                points={item.history.map(point => point.total)}
+                                color={categoryType === 'income' ? theme.palette.success.main : theme.palette.error.main}
+                                aria-label={`Trend for ${item.name}`}
+                              />
+                            </Box>
+                          )}
                         </Box>
                         {!isSubcategoryLevel && (
                           <>

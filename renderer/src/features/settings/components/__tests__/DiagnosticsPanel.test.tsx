@@ -105,4 +105,39 @@ describe('DiagnosticsPanel', () => {
     await waitFor(() => expect(showSaveDialog).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(exportDiagnostics).toHaveBeenCalledWith('/tmp/diag.json'));
   });
+
+  it('renders analytics metrics summary when the bridge returns samples', async () => {
+    const getInfo = vi.fn().mockResolvedValue({
+      success: true,
+      analyticsMetrics: {
+        breakdown: [
+          {
+            durationMs: 123.5,
+            rowCounts: { current: 10, previousCategories: 4 },
+            recordedAt: '2025-01-01T00:00:00.000Z',
+          },
+        ],
+        waterfall: [
+          {
+            durationMs: 40,
+            rowCounts: { income: 2, expenses: 3 },
+            recordedAt: '2025-01-02T00:00:00.000Z',
+          },
+        ],
+      },
+    });
+    window.electronAPI = buildElectronApi({
+      diagnostics: { getInfo },
+    });
+
+    render(<DiagnosticsPanel />);
+
+    await waitFor(() => expect(getInfo).toHaveBeenCalled());
+    expect(screen.getByText(/recent analytics runs/i)).toBeInTheDocument();
+    expect(screen.getByText(/Category Breakdown/i)).toBeInTheDocument();
+    expect(screen.getByText(/Runs: 1 · Avg 123\.5ms/i)).toBeInTheDocument();
+    expect(screen.getByText(/Current: 10/i)).toBeInTheDocument();
+    expect(screen.getByText(/Cash Flow Waterfall/i)).toBeInTheDocument();
+    expect(screen.getByText(/Expenses: 3/i)).toBeInTheDocument();
+  });
 });

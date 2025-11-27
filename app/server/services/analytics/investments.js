@@ -1,4 +1,4 @@
-const database = require('../database.js');
+let database = require('../database.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
 
 function parseDateParam(value) {
@@ -24,28 +24,44 @@ function buildDateFilter(startDate, endDate) {
   return { clause: '', params: [] };
 }
 
-function buildSummary(transactions) {
+function buildSummary(transactions, pikadonReturns = new Map()) {
   const summary = {
     totalMovement: 0,
     investmentOutflow: 0,
     investmentInflow: 0,
     netInvestments: 0,
     totalCount: transactions.length,
+    // New: pikadon-specific metrics
+    pikadonPrincipalReturned: 0,
+    pikadonInterestEarned: 0,
+    adjustedInflow: 0, // Inflow minus principal returns
   };
 
   const byCategory = new Map();
 
   transactions.forEach((txn) => {
     const amount = Number.parseFloat(txn.price) || 0;
-    const absAmount = Math.abs(amount);
+    let absAmount = Math.abs(amount);
+    let effectiveInflow = amount > 0 ? amount : 0;
     const categoryName = txn.category_name || 'Unknown';
     const categoryNameEn = txn.category_name_en || 'Unknown';
+
+    // Check if this is a pikadon return transaction
+    const txnKey = `${txn.identifier}|${txn.vendor}`;
+    if (amount > 0 && pikadonReturns.has(txnKey)) {
+      const pikadonInfo = pikadonReturns.get(txnKey);
+      // Only count interest as actual income, not the principal
+      summary.pikadonPrincipalReturned += pikadonInfo.principal;
+      summary.pikadonInterestEarned += pikadonInfo.interest;
+      effectiveInflow = pikadonInfo.interest; // Only interest is real income
+    }
 
     summary.totalMovement += absAmount;
     if (amount < 0) {
       summary.investmentOutflow += absAmount;
     } else {
       summary.investmentInflow += absAmount;
+      summary.adjustedInflow += effectiveInflow;
     }
 
     if (!byCategory.has(categoryName)) {
@@ -109,7 +125,46 @@ async function getInvestmentsAnalytics(query = {}) {
     price: Number.parseFloat(txn.price),
   }));
 
-  const { summary, categories } = buildSummary(transactions);
+  // Fetch pikadon return transactions to separate principal from interest
+  // Include both matured and rolled_over status
+  const pikadonReturnsQuery = `
+    SELECT
+      ih.id,
+      ih.return_transaction_id,
+      ih.return_transaction_vendor,
+      ih.cost_basis as principal,
+      (ih.current_value - ih.cost_basis) as interest,
+      ih.status,
+      ih.maturity_date,
+      child.id as child_pikadon_id,
+      child.cost_basis as child_principal
+    FROM investment_holdings ih
+    LEFT JOIN investment_holdings child ON child.parent_pikadon_id = ih.id AND child.holding_type = 'pikadon'
+    WHERE ih.holding_type = 'pikadon'
+      AND ih.return_transaction_id IS NOT NULL
+      AND ih.status IN ('matured', 'rolled_over')
+  `;
+
+  const pikadonReturnsResult = await database.query(pikadonReturnsQuery);
+  const pikadonReturns = new Map();
+  pikadonReturnsResult.rows.forEach((row) => {
+    const key = `${row.return_transaction_id}|${row.return_transaction_vendor}`;
+    const principal = Number.parseFloat(row.principal) || 0;
+    const interest = Number.parseFloat(row.interest) || 0;
+    const childPrincipal = row.child_principal ? Number.parseFloat(row.child_principal) : null;
+
+    pikadonReturns.set(key, {
+      principal,
+      interest,
+      status: row.status,
+      is_rolled_over: row.status === 'rolled_over',
+      child_principal: childPrincipal,
+      interest_reinvested: childPrincipal ? childPrincipal - principal : null,
+      interest_withdrawn: childPrincipal ? interest - (childPrincipal - principal) : interest,
+    });
+  });
+
+  const { summary, categories } = buildSummary(transactions, pikadonReturns);
 
   const monthExpr = dialect.dateTrunc('month', 't.date');
   const timelineQuery = `
@@ -149,5 +204,12 @@ async function getInvestmentsAnalytics(query = {}) {
 
 module.exports = {
   getInvestmentsAnalytics,
+  // Test hooks
+  __setDatabase(mock) {
+    database = mock || require('../database.js');
+  },
+  __resetDatabase() {
+    database = require('../database.js');
+  },
 };
 module.exports.default = module.exports;

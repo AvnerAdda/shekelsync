@@ -1,4 +1,13 @@
-const database = require('../database.js');
+const actualDatabase = require('../database.js');
+const { dialect } = require('../../../lib/sql-dialect.js');
+
+let database = actualDatabase;
+function __setDatabase(mock) {
+  database = mock || actualDatabase;
+}
+function __resetDatabase() {
+  database = actualDatabase;
+}
 
 function toInteger(value, fallback, fieldName) {
   if (value === undefined || value === null || value === '') {
@@ -32,8 +41,9 @@ async function listRecentTransactions(params = {}) {
         account_number,
         type,
         status
-      FROM transactions
-      ORDER BY date DESC, processed_date DESC
+      FROM transactions t
+      WHERE ${dialect.excludePikadon('t')}
+      ORDER BY t.date DESC, t.processed_date DESC
       LIMIT $1 OFFSET $2
     `,
     [limit, offset],
@@ -90,6 +100,9 @@ async function searchTransactions(params = {}) {
     conditions.push(`date <= $${values.length}`);
   }
 
+  // Always exclude pikadon transactions from search results
+  conditions.push(dialect.excludePikadon());
+
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   values.push(maxRows);
@@ -133,4 +146,6 @@ async function searchTransactions(params = {}) {
 module.exports = {
   listRecentTransactions,
   searchTransactions,
+  __setDatabase,
+  __resetDatabase,
 };

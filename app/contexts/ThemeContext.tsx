@@ -96,6 +96,7 @@ export const ThemeContextProvider: React.FC<{ children: React.ReactNode }> = ({
         primary: actualTheme === 'dark' ? '#ededed' : '#000000',
         secondary: actualTheme === 'dark' ? '#a3a3a3' : '#666666',
       },
+      divider: actualTheme === 'dark' ? '#404040' : '#d3d3d3',
     },
     typography: {
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
@@ -182,8 +183,8 @@ export const ThemeContextProvider: React.FC<{ children: React.ReactNode }> = ({
             transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
             backdropFilter: 'blur(12px)',
             background: actualTheme === 'dark'
-              ? 'rgba(30, 30, 30, 0.7)'
-              : 'rgba(255, 255, 255, 0.7)',
+              ? 'rgba(10, 10, 10, 0.7)'
+              : 'rgba(255, 255, 255, 0.85)',
           },
         },
       },

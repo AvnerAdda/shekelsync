@@ -2,6 +2,7 @@ export type BreakdownType = 'expense' | 'income' | 'investment';
 
 export interface WaterfallSummary {
   totalIncome: number;
+  totalCapitalReturns?: number;
   totalExpenses: number;
   netInvestments: number;
   netBalance: number;
@@ -11,11 +12,12 @@ export interface WaterfallSummary {
 export interface WaterfallDataPoint {
   name: string;
   value: number;
-  type: 'income' | 'expense' | 'investment' | 'net';
+  type: 'income' | 'expense' | 'investment' | 'net' | 'capital_return';
   cumulative: number;
   startValue: number;
   color: string;
   count: number;
+  isCountedAsIncome?: boolean;
 }
 
 export interface WaterfallBreakdownSections {

@@ -1,5 +1,9 @@
-const database = require('../database.js');
+const { performance } = require('node:perf_hooks');
+const actualDatabase = require('../database.js');
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
+const { recordWaterfallMetric } = require('./metrics-store.js');
+
+let database = actualDatabase;
 
 function parseFloatSafe(value) {
   const parsed = Number.parseFloat(value);
@@ -19,7 +23,8 @@ async function getIncomeBreakdown(start, end) {
         cd.name_en AS category_name_en,
         t.vendor,
         SUM(t.price) AS total,
-        COUNT(*) AS count
+        COUNT(*) AS count,
+        COALESCE(cd.is_counted_as_income, 1) AS is_counted_as_income
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN account_pairings ap ON (
@@ -37,7 +42,7 @@ async function getIncomeBreakdown(start, end) {
         AND cd.category_type = 'income'
         AND t.price > 0
         AND ap.id IS NULL
-      GROUP BY cd.name, cd.name_en, t.vendor
+      GROUP BY cd.name, cd.name_en, t.vendor, cd.is_counted_as_income
       ORDER BY total DESC
     `,
     [start, end],
@@ -49,6 +54,8 @@ async function getIncomeBreakdown(start, end) {
     vendor: row.vendor,
     total: parseFloatSafe(row.total),
     count: parseIntSafe(row.count),
+    // Default to true when column is missing/undefined
+    isCountedAsIncome: row.is_counted_as_income !== 0 && row.is_counted_as_income !== false,
   }));
 }
 
@@ -131,22 +138,29 @@ async function getInvestmentBreakdown(start, end) {
   }));
 }
 
-function buildWaterfallData(incomeBreakdown, expenseBreakdown, investmentBreakdown) {
+function buildWaterfallData(incomeBreakdown, expenseBreakdown, investmentBreakdown, totalCapitalReturns) {
   const waterfallData = [];
   let runningTotal = 0;
 
   incomeBreakdown.forEach((row) => {
     const value = row.total;
+    const isCapitalReturn = row.isCountedAsIncome === false;
+
     waterfallData.push({
       name: row.name,
       value,
-      type: 'income',
-      cumulative: runningTotal + value,
+      type: isCapitalReturn ? 'capital_return' : 'income',
+      cumulative: isCapitalReturn ? runningTotal : runningTotal + value,
       startValue: runningTotal,
-      color: '#10b981',
+      color: isCapitalReturn ? '#B2DFDB' : '#10b981',  // Teal for capital returns
       count: row.count,
+      isCountedAsIncome: row.isCountedAsIncome !== false,
     });
-    runningTotal += value;
+
+    // Only add to running total if counted as income
+    if (!isCapitalReturn) {
+      runningTotal += value;
+    }
   });
 
   expenseBreakdown.forEach((row) => {
@@ -163,26 +177,30 @@ function buildWaterfallData(incomeBreakdown, expenseBreakdown, investmentBreakdo
     runningTotal -= value;
   });
 
-  investmentBreakdown.forEach((row) => {
-    if (row.net > 0) {
-      waterfallData.push({
-        name: row.name,
-        value: -row.net,
-        type: 'investment',
-        cumulative: runningTotal - row.net,
-        startValue: runningTotal,
-        color: '#3b82f6',
-        count: row.count,
-      });
-      runningTotal -= row.net;
-    }
-  });
+  // Calculate total net investment considering capital returns
+  const totalInvestmentNet = investmentBreakdown.reduce((sum, row) => sum + row.net, 0);
+  const netNewInvestment = Math.max(0, totalInvestmentNet - totalCapitalReturns);
+
+  // Show net new investment as a single line item (if positive)
+  if (netNewInvestment > 0) {
+    waterfallData.push({
+      name: 'Net New Investment',
+      value: -netNewInvestment,
+      type: 'investment',
+      cumulative: runningTotal - netNewInvestment,
+      startValue: runningTotal,
+      color: '#3b82f6',
+      count: investmentBreakdown.reduce((sum, row) => sum + row.count, 0),
+    });
+    runningTotal -= netNewInvestment;
+  }
 
   return { waterfallData, runningTotal };
 }
 
 async function getWaterfallAnalytics(query = {}) {
   const { startDate, endDate, months = 3 } = query;
+  const timerStart = performance.now();
   const { start, end } = resolveDateRange({ startDate, endDate, months });
 
   const [incomeBreakdown, expenseBreakdown, investmentBreakdown] = await Promise.all([
@@ -191,17 +209,27 @@ async function getWaterfallAnalytics(query = {}) {
     getInvestmentBreakdown(start, end),
   ]);
 
-  const totalIncome = incomeBreakdown.reduce((sum, row) => sum + row.total, 0);
+  // Only count income items that are marked as counted (excludes Capital Returns)
+  const totalIncome = incomeBreakdown
+    .filter((row) => row.isCountedAsIncome !== false)
+    .reduce((sum, row) => sum + row.total, 0);
+  const totalCapitalReturns = incomeBreakdown
+    .filter((row) => row.isCountedAsIncome === false)
+    .reduce((sum, row) => sum + row.total, 0);
   const totalExpenses = expenseBreakdown.reduce((sum, row) => sum + row.total, 0);
   const totalInvestmentOutflow = investmentBreakdown.reduce((sum, row) => sum + row.outflow, 0);
   const totalInvestmentInflow = investmentBreakdown.reduce((sum, row) => sum + row.inflow, 0);
   const netInvestments = totalInvestmentOutflow - totalInvestmentInflow;
-  const netBalance = totalIncome - totalExpenses - netInvestments;
+
+  // Calculate effective net investment (accounting for capital returns)
+  const effectiveNetInvestment = Math.max(0, netInvestments - totalCapitalReturns);
+  const netBalance = totalIncome - totalExpenses - effectiveNetInvestment;
 
   const { waterfallData, runningTotal } = buildWaterfallData(
     incomeBreakdown,
     expenseBreakdown,
     investmentBreakdown,
+    totalCapitalReturns,
   );
 
   waterfallData.push({
@@ -219,10 +247,11 @@ async function getWaterfallAnalytics(query = {}) {
     expenseBreakdown.reduce((sum, row) => sum + row.count, 0) +
     investmentBreakdown.reduce((sum, row) => sum + row.count, 0);
 
-  return {
+  const response = {
     dateRange: { start, end },
     summary: {
       totalIncome,
+      totalCapitalReturns,
       totalExpenses,
       netInvestments,
       netBalance,
@@ -239,10 +268,37 @@ async function getWaterfallAnalytics(query = {}) {
       investments: investmentBreakdown,
     },
   };
+
+  const durationMs = Number((performance.now() - timerStart).toFixed(2));
+  const metricPayload = {
+    durationMs,
+    months,
+    dateRange: {
+      start: start.toISOString(),
+      end: end.toISOString(),
+    },
+    rowCounts: {
+      income: incomeBreakdown.length,
+      expenses: expenseBreakdown.length,
+      investments: investmentBreakdown.length,
+      waterfallPoints: waterfallData.length,
+    },
+  };
+
+  console.info('[analytics:waterfall]', JSON.stringify(metricPayload));
+  recordWaterfallMetric(metricPayload);
+
+  return response;
 }
 
 module.exports = {
   getWaterfallAnalytics,
+  __setDatabase(mock) {
+    database = mock || actualDatabase;
+  },
+  __resetDatabase() {
+    database = actualDatabase;
+  },
 };
 
 module.exports.default = module.exports;

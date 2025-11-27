@@ -18,10 +18,47 @@ const Database = require(path.join(APP_NODE_MODULES, 'better-sqlite3'));
 
 const DEFAULT_DB_PATH = path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite');
 
+function ensureColumnExists(db, tableName, columnName, definitionSql) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
+  const exists = columns.some((col) => col.name === columnName);
+  if (!exists) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${definitionSql}`);
+  }
+}
+
+function applySchemaUpgrades(db) {
+  // Budget intelligence columns (safe no-ops if already present)
+  ensureColumnExists(
+    db,
+    'category_budgets',
+    'is_auto_suggested',
+    "is_auto_suggested INTEGER NOT NULL DEFAULT 0 CHECK(is_auto_suggested IN (0, 1))"
+  );
+  ensureColumnExists(
+    db,
+    'category_budgets',
+    'suggestion_id',
+    'suggestion_id INTEGER REFERENCES budget_suggestions(id) ON DELETE SET NULL'
+  );
+  ensureColumnExists(
+    db,
+    'category_budgets',
+    'auto_adjust',
+    "auto_adjust INTEGER NOT NULL DEFAULT 0 CHECK(auto_adjust IN (0, 1))"
+  );
+  ensureColumnExists(
+    db,
+    'category_budgets',
+    'alert_threshold',
+    'alert_threshold REAL DEFAULT 0.8 CHECK(alert_threshold > 0 AND alert_threshold <= 1)'
+  );
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
   let output = DEFAULT_DB_PATH;
   let force = false;
+  let withDemo = false;
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -39,6 +76,9 @@ function parseArgs() {
       case '-f':
         force = true;
         break;
+      case '--with-demo':
+        withDemo = true;
+        break;
       case '--help':
       case '-h':
         printHelp();
@@ -49,7 +89,7 @@ function parseArgs() {
     }
   }
 
-  return { output, force };
+  return { output, force, withDemo };
 }
 
 function printHelp() {
@@ -58,6 +98,7 @@ function printHelp() {
 Options:
   -o, --output <path>   Output database file (default: dist/clarify.sqlite)
   -f, --force           Overwrite existing database file
+      --with-demo       Seed demo credentials/pairings (local QA only)
   -h, --help            Show this help message
 `);
 }
@@ -92,6 +133,7 @@ const TABLE_DEFINITIONS = [
       color TEXT,
       description TEXT,
       is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+      is_counted_as_income INTEGER NOT NULL DEFAULT 1 CHECK (is_counted_as_income IN (0,1)),
       hierarchy_path TEXT,
       depth_level INTEGER DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -208,6 +250,7 @@ const TABLE_DEFINITIONS = [
       category_type TEXT,
       transaction_datetime TEXT,
       processed_datetime TEXT,
+      is_pikadon_related INTEGER NOT NULL DEFAULT 0 CHECK (is_pikadon_related IN (0,1)),
       PRIMARY KEY (identifier, vendor),
       FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE SET NULL
     );`,
@@ -304,10 +347,20 @@ const TABLE_DEFINITIONS = [
       cost_basis REAL,
       as_of_date TEXT NOT NULL,
       notes TEXT,
+      holding_type TEXT DEFAULT 'standard',
+      deposit_transaction_id TEXT,
+      deposit_transaction_vendor TEXT,
+      return_transaction_id TEXT,
+      return_transaction_vendor TEXT,
+      maturity_date TEXT,
+      interest_rate REAL,
+      status TEXT DEFAULT 'active',
+      parent_pikadon_id INTEGER,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(account_id, as_of_date),
-      FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE
+      FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_pikadon_id) REFERENCES investment_holdings(id) ON DELETE SET NULL
     );`,
   `CREATE TABLE IF NOT EXISTS investment_holdings_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -592,6 +645,11 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_investment_assets_symbol ON investment_assets (asset_symbol);',
   'CREATE INDEX IF NOT EXISTS idx_investment_holdings_account ON investment_holdings (account_id);',
   'CREATE INDEX IF NOT EXISTS idx_investment_holdings_date ON investment_holdings (as_of_date DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_investment_holdings_type ON investment_holdings (holding_type);',
+  'CREATE INDEX IF NOT EXISTS idx_investment_holdings_status ON investment_holdings (status);',
+  'CREATE INDEX IF NOT EXISTS idx_investment_holdings_maturity ON investment_holdings (maturity_date);',
+  'CREATE INDEX IF NOT EXISTS idx_investment_holdings_deposit_txn ON investment_holdings (deposit_transaction_id, deposit_transaction_vendor);',
+  'CREATE INDEX IF NOT EXISTS idx_investment_holdings_parent_pikadon ON investment_holdings (parent_pikadon_id);',
   'CREATE INDEX IF NOT EXISTS idx_patterns_account ON account_transaction_patterns (account_id);',
   'CREATE INDEX IF NOT EXISTS idx_pending_created ON pending_transaction_suggestions (created_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_transaction_suggestions (status);',
@@ -606,12 +664,15 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_spouse_profile_user_id ON spouse_profile (user_profile_id);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_account_number ON transactions (account_number);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_category_def ON transactions (category_definition_id);',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions (category_definition_id, date);',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_price_direction ON transactions (category_definition_id, price);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_category_type ON transactions (category_type);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_date_desc ON transactions (date DESC);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_date_vendor ON transactions (date, vendor);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_datetime ON transactions (transaction_datetime);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_price ON transactions (price);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor ON transactions (vendor);',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_date ON transactions (vendor, date);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_datetime ON transactions (vendor, transaction_datetime DESC);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_nickname ON transactions (vendor, vendor_nickname);',
   'CREATE INDEX IF NOT EXISTS idx_txn_links_account ON transaction_account_links (account_id);',
@@ -815,6 +876,8 @@ const CATEGORY_TREE = [
   { key: 'income_refunds', type: 'income', parent: 'income_root', name: 'החזרים וזיכויים', nameEn: 'Refunds & Credits', displayOrder: 103, color: '#A5D6A7', icon: 'Replay' },
   { key: 'income_gifts', type: 'income', parent: 'income_root', name: 'מתנות', nameEn: 'Gifts & Windfalls', displayOrder: 104, color: '#C8E6C9', icon: 'CardGiftcard' },
   { key: 'income_gov_benefits', type: 'income', parent: 'income_root', name: 'קצבאות ממשלתיות', nameEn: 'Government Benefits', displayOrder: 105, color: '#00C853', icon: 'AccountBalance' },
+  { key: 'income_capital_returns', type: 'income', parent: 'income_root', name: 'החזר קרן', nameEn: 'Capital Returns', displayOrder: 106, color: '#B2DFDB', icon: 'AccountBalanceWallet', isCountedAsIncome: false },
+  { key: 'income_investment_interest', type: 'income', parent: 'income_root', name: 'ריבית מהשקעות', nameEn: 'Investment Interest', displayOrder: 107, color: '#69F0AE', icon: 'TrendingUp' },
 
   // Investment (Blue/Purple tones as requested)
   { key: 'investment_root', type: 'investment', name: 'השקעות', nameEn: 'Investments', displayOrder: 200, color: '#5E35B1', icon: 'TrendingUp' },
@@ -856,9 +919,9 @@ const CATEGORY_MAPPINGS = [
 function seedCategories(db) {
   const insert = db.prepare(`
     INSERT INTO category_definitions
-      (name, name_en, category_type, parent_id, display_order, icon, color, description, is_active)
+      (name, name_en, category_type, parent_id, display_order, icon, color, description, is_active, is_counted_as_income)
     VALUES
-      (@name, @nameEn, @type, @parentId, @displayOrder, @icon, @color, @description, 1)
+      (@name, @nameEn, @type, @parentId, @displayOrder, @icon, @color, @description, 1, @isCountedAsIncome)
   `);
 
   const categoriesByKey = new Map();
@@ -875,7 +938,8 @@ function seedCategories(db) {
         displayOrder: category.displayOrder ?? 0,
         icon: category.icon || null,
         color: category.color || null,
-        description: category.description || null
+        description: category.description || null,
+        isCountedAsIncome: category.isCountedAsIncome === false ? 0 : 1
       });
 
       const record = {
@@ -1002,10 +1066,36 @@ function seedCategorizationRules(db, helpers) {
     { pattern: 'ביטוח לאומי', target: 'Government Benefits', categoryName: 'קצבאות ממשלתיות', priority: 90 },
     { pattern: 'זיכוי', target: 'Refunds & Credits', categoryName: 'החזרים וזיכויים', priority: 80 },
     { pattern: 'קבלת תשלום', target: 'Refunds & Credits', categoryName: 'החזרים וזיכויים', priority: 80 },
-    { pattern: 'פיקדון', target: 'Income', categoryName: 'הכנסות', priority: 70 },
-    { pattern: 'רווח', target: 'Income', categoryName: 'הכנסות', priority: 70 },
-    { pattern: 'דיבידנד', target: 'Income', categoryName: 'הכנסות', priority: 70 },
-    { pattern: 'ריבית', target: 'Income', categoryName: 'הכנסות', priority: 70 }
+    // Capital Returns - principal returned from investments (NOT counted as income)
+    { pattern: 'פירעון פיקדון', target: 'Capital Returns', categoryName: 'החזר קרן', priority: 95 },
+    { pattern: 'פירעון תכנית', target: 'Capital Returns', categoryName: 'החזר קרן', priority: 95 },
+    { pattern: 'פדיון קרן', target: 'Capital Returns', categoryName: 'החזר קרן', priority: 95 },
+    { pattern: 'החזר קרן', target: 'Capital Returns', categoryName: 'החזר קרן', priority: 95 },
+    // Investment Interest - actual income from investments
+    { pattern: 'רווח מפיקדון', target: 'Investment Interest', categoryName: 'ריבית מהשקעות', priority: 95 },
+    { pattern: 'ריבית מפיקדון', target: 'Investment Interest', categoryName: 'ריבית מהשקעות', priority: 95 },
+    { pattern: 'דיבידנד', target: 'Investment Interest', categoryName: 'ריבית מהשקעות', priority: 95 },
+    { pattern: 'ריבית זכות', target: 'Investment Interest', categoryName: 'ריבית מהשקעות', priority: 90 }
+  ];
+
+  // Expense categorization rules aligned with synthetic seed vendors
+  const expenseRules = [
+    { pattern: 'Cafe', target: 'Coffee', categoryName: 'קפה ומאפה', priority: 95 },
+    { pattern: 'FreshFarm', target: 'Groceries', categoryName: 'סופרמרקט', priority: 95 },
+    { pattern: 'SuperSave', target: 'Groceries', categoryName: 'סופרמרקט', priority: 95 },
+    { pattern: 'Fuel', target: 'Fuel', categoryName: 'דלק', priority: 95 },
+    { pattern: 'QuickFuel', target: 'Fuel', categoryName: 'דלק', priority: 95 },
+    { pattern: 'GymFlex', target: 'Gym', categoryName: 'כושר וספורט', priority: 95 },
+    { pattern: 'Rentals', target: 'Rent', categoryName: 'שכירות ומשכנתא', priority: 95 },
+    { pattern: 'TravelEasy', target: 'Travel', categoryName: 'חופשות', priority: 95 },
+    { pattern: 'TelcoNet', target: 'Mobile', categoryName: 'תקשורת', priority: 95 },
+    { pattern: 'Taxi', target: 'Taxi', categoryName: 'מוניות', priority: 95 },
+    { pattern: 'Hardware', target: 'Housewares', categoryName: 'כלי בית', priority: 90 },
+    { pattern: 'Station', target: 'Fuel', categoryName: 'דלק', priority: 85 },
+    { pattern: 'Grocers', target: 'Groceries', categoryName: 'סופרמרקט', priority: 85 },
+    { pattern: 'Market', target: 'Groceries', categoryName: 'סופרמרקט', priority: 85 },
+    { pattern: 'Travel', target: 'Travel', categoryName: 'חופשות', priority: 85 },
+    { pattern: 'Hardware', target: 'Office Supplies', categoryName: 'ציוד משרדי', priority: 80 }
   ];
 
   db.transaction(() => {
@@ -1029,6 +1119,29 @@ function seedCategorizationRules(db, helpers) {
         targetCategory: rule.target,
         categoryId: foundCategory.id,
         categoryType: 'income',
+        priority: rule.priority
+      });
+    }
+
+    for (const rule of expenseRules) {
+      let foundCategory = null;
+      for (const [, info] of categoriesByKey.entries()) {
+        if (info.name === rule.categoryName) {
+          foundCategory = info;
+          break;
+        }
+      }
+
+      if (!foundCategory) {
+        console.warn(`Warning: Category '${rule.categoryName}' not found for rule '${rule.pattern}'`);
+        continue;
+      }
+
+      insert.run({
+        namePattern: rule.pattern,
+        targetCategory: rule.target,
+        categoryId: foundCategory.id,
+        categoryType: 'expense',
         priority: rule.priority
       });
     }
@@ -1099,19 +1212,115 @@ function seedSpendingCategoryTargets(db) {
   return insertedCount;
 }
 
+function seedDemoCredentials(db) {
+  console.log('  → Seeding demo vendor credentials and pairings (if empty)...');
+  const existing = db.prepare('SELECT COUNT(*) as count FROM vendor_credentials').get().count;
+  if (existing > 0) {
+    console.log('    • Skipped (credentials already present)');
+    return 0;
+  }
+
+  const findInstitution = db.prepare('SELECT id FROM financial_institutions WHERE vendor_code = ? LIMIT 1');
+  const insertCredential = db.prepare(`
+    INSERT OR IGNORE INTO vendor_credentials (
+      id_number,
+      username,
+      vendor,
+      nickname,
+      bank_account_number,
+      card6_digits,
+      last_scrape_status,
+      institution_id,
+      created_at,
+      updated_at
+    ) VALUES (
+      @idNumber,
+      @username,
+      @vendor,
+      @nickname,
+      @bankAccountNumber,
+      @card6Digits,
+      'success',
+      @institutionId,
+      datetime('now'),
+      datetime('now')
+    )
+  `);
+
+  const samples = [
+    {
+      vendor: 'hapoalim',
+      nickname: 'Hapoalim Demo',
+      bankAccountNumber: '12345678',
+      idNumber: '111111111',
+      username: 'demo-bank',
+    },
+    {
+      vendor: 'max',
+      nickname: 'Max Demo',
+      card6Digits: '123456',
+      idNumber: '222222222',
+      username: 'demo-cc',
+    },
+  ];
+
+  db.transaction(() => {
+    for (const sample of samples) {
+      insertCredential.run({
+        idNumber: sample.idNumber || null,
+        username: sample.username || null,
+        vendor: sample.vendor,
+        nickname: sample.nickname,
+        bankAccountNumber: sample.bankAccountNumber || null,
+        card6Digits: sample.card6Digits || null,
+        institutionId: findInstitution.get(sample.vendor)?.id || null,
+      });
+    }
+
+    db.prepare(`
+      INSERT OR IGNORE INTO account_pairings (
+        credit_card_vendor,
+        credit_card_account_number,
+        bank_vendor,
+        bank_account_number,
+        match_patterns,
+        is_active,
+        created_at,
+        updated_at
+      ) VALUES (
+        'max',
+        '1234',
+        'hapoalim',
+        '12345678',
+        json('["max","card","credit","repayment"]'),
+        1,
+        datetime('now'),
+        datetime('now')
+      )
+    `).run();
+  })();
+
+  console.log(`    ✓ Seeded ${samples.length} demo credentials + pairing`);
+  return samples.length;
+}
+
 function ensureDestination(outputPath, force) {
   if (fs.existsSync(outputPath)) {
     if (!force) {
       throw new Error(`Destination ${outputPath} already exists. Use --force to overwrite.`);
     }
     fs.unlinkSync(outputPath);
+    const walPath = `${outputPath}-wal`;
+    const shmPath = `${outputPath}-shm`;
+    if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+    if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
   }
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 }
 
 function main() {
-  const { output, force } = parseArgs();
+  const { output, force, withDemo } = parseArgs();
   ensureDestination(output, force);
 
   console.log(`\n📦 Initialising SQLite database at ${output}\n`);
@@ -1128,6 +1337,7 @@ function main() {
     for (const statement of TABLE_DEFINITIONS) {
       db.exec(statement);
     }
+    applySchemaUpgrades(db);
     for (const statement of INDEX_STATEMENTS) {
       db.exec(statement);
     }
@@ -1138,6 +1348,9 @@ function main() {
     seedCategoryMapping(db, helpers);
     seedCategorizationRules(db, helpers);
     const spendingTargetCount = seedSpendingCategoryTargets(db);
+    if (withDemo) {
+      seedDemoCredentials(db);
+    }
 
     db.exec('COMMIT');
     transactionStarted = false;

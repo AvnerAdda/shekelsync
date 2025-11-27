@@ -12,7 +12,8 @@ function createProfileRouter() {
     } catch (error) {
       console.error('Profile fetch error:', error);
       res.status(error?.status || 500).json({
-        error: error?.message || 'Failed to fetch profile',
+        success: false,
+        error: 'Failed to fetch profile',
         details: error?.stack,
       });
     }
@@ -25,7 +26,8 @@ function createProfileRouter() {
     } catch (error) {
       console.error('Profile update error:', error);
       res.status(error?.status || 500).json({
-        error: error?.message || 'Failed to update profile',
+        success: false,
+        error: 'Failed to update profile',
         details: error?.stack,
       });
     }

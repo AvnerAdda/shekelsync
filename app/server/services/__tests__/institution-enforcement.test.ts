@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 const mockMapVendorCodeToInstitutionId = vi.fn();
 const mockGetInstitutionById = vi.fn();
@@ -9,14 +12,17 @@ const databaseModuleMock = vi.hoisted(() => ({
 }));
 
 vi.mock('../database.js', () => databaseModuleMock);
-vi.mock('../../../lib/create-db-pool.js', () => ({
+const mockPool = {
+  query: vi.fn(),
+  connect: vi.fn(),
+  close: vi.fn(),
+  _db: {},
+};
+const mockCreateDbPool = vi.fn(() => mockPool);
+vi.mock('../../../lib/create-db-pool.js', () => mockCreateDbPool);
+vi.mock('../../../lib/sqlite-pool.js', () => ({
   __esModule: true,
-  default: vi.fn(() => ({
-    query: vi.fn(),
-    connect: vi.fn(),
-    close: vi.fn(),
-    _db: {},
-  })),
+  default: vi.fn(() => mockPool),
 }));
 vi.mock('../../../lib/better-sqlite3-wrapper.js', () => ({
   __esModule: true,
@@ -54,9 +60,14 @@ async function loadServices() {
 }
 
 const originalStubEnv = process.env.BETTER_SQLITE3_STUB;
+const tmpDbPath = path.join(os.tmpdir(), 'clarify-test.sqlite');
 
 beforeAll(async () => {
   process.env.BETTER_SQLITE3_STUB = 'true';
+  process.env.SQLITE_DB_PATH = tmpDbPath;
+  if (!fs.existsSync(tmpDbPath)) {
+    fs.writeFileSync(tmpDbPath, '');
+  }
   await loadServices();
 });
 
@@ -65,6 +76,10 @@ afterAll(() => {
     delete process.env.BETTER_SQLITE3_STUB;
   } else {
     process.env.BETTER_SQLITE3_STUB = originalStubEnv;
+  }
+  delete process.env.SQLITE_DB_PATH;
+  if (fs.existsSync(tmpDbPath)) {
+    fs.unlinkSync(tmpDbPath);
   }
 });
 

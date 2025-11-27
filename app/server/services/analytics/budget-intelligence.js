@@ -13,6 +13,103 @@ const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 
 let database = actualDatabase;
 
+async function fetchBudgetSuggestions(client, params = {}) {
+  const {
+    minConfidence = 0.5,
+    periodType = 'monthly',
+    includeActive = true,
+  } = params;
+
+  let query = `
+      SELECT
+        bs.*,
+        cd.name as category_name,
+        cd.name_en as category_name_en,
+        parent.name as parent_category_name,
+        cb.id as active_budget_id,
+        cb.budget_limit as active_budget_limit
+      FROM budget_suggestions bs
+      JOIN category_definitions cd ON bs.category_definition_id = cd.id
+      LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
+      LEFT JOIN category_budgets cb ON (
+        cd.id = cb.category_definition_id
+        AND cb.is_active = 1
+        AND cb.period_type = bs.period_type
+      )
+      WHERE bs.confidence_score >= $1
+        AND bs.period_type = $2
+    `;
+
+  const values = [minConfidence, periodType];
+
+  if (!includeActive) {
+    query += ' AND cb.id IS NULL';
+  }
+
+  query += ' ORDER BY bs.confidence_score DESC, bs.suggested_limit DESC';
+
+  const result = await client.query(query, values);
+
+  return result.rows.map((row) => ({
+    ...row,
+    historical_data: row.historical_data ? JSON.parse(row.historical_data) : null,
+    calculation_metadata: row.calculation_metadata ? JSON.parse(row.calculation_metadata) : null,
+    has_active_budget: row.active_budget_id !== null,
+  }));
+}
+
+async function ensureBaselineBudgets(options = {}) {
+  const {
+    months = 6,
+    minConfidence = 0.6,
+    maxBudgets = 4,
+    periodType = 'monthly',
+  } = options;
+
+  const client = await database.getClient();
+
+  try {
+    const result = await client.query(
+      'SELECT COUNT(1) AS count FROM category_budgets WHERE is_active = 1 AND period_type = $1',
+      [periodType],
+    );
+    const activeBudgets = parseInt(result.rows[0]?.count || '0', 10);
+    if (activeBudgets > 0) {
+      return { activated: 0 };
+    }
+  } finally {
+    client.release();
+  }
+
+  // Generate suggestions so we have fresh data to auto-activate
+  await generateBudgetSuggestions({ months, periodType });
+
+  const suggestionsClient = await database.getClient();
+  try {
+    const fetchFn = module.exports.fetchBudgetSuggestions || fetchBudgetSuggestions;
+    const suggestions = await fetchFn(suggestionsClient, {
+      minConfidence,
+      periodType,
+      includeActive: true,
+    });
+
+    const candidates = suggestions
+      .filter((suggestion) => !suggestion.has_active_budget)
+      .slice(0, maxBudgets);
+
+    let activated = 0;
+    for (const suggestion of candidates) {
+      const activateFn = module.exports.activateBudgetSuggestion || activateBudgetSuggestion;
+      await activateFn(suggestion.id);
+      activated += 1;
+    }
+
+    return { activated };
+  } finally {
+    suggestionsClient.release();
+  }
+}
+
 /**
  * Calculate statistics for budget suggestion
  */
@@ -222,43 +319,7 @@ async function getBudgetSuggestions(params = {}) {
   const client = await database.getClient();
 
   try {
-    let query = `
-      SELECT
-        bs.*,
-        cd.name as category_name,
-        cd.name_en as category_name_en,
-        parent.name as parent_category_name,
-        cb.id as active_budget_id,
-        cb.budget_limit as active_budget_limit
-      FROM budget_suggestions bs
-      JOIN category_definitions cd ON bs.category_definition_id = cd.id
-      LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
-      LEFT JOIN category_budgets cb ON (
-        cd.id = cb.category_definition_id
-        AND cb.is_active = 1
-        AND cb.period_type = bs.period_type
-      )
-      WHERE bs.confidence_score >= $1
-        AND bs.period_type = $2
-    `;
-
-    const values = [minConfidence, periodType];
-
-    if (!includeActive) {
-      query += ` AND cb.id IS NULL`; // Only show suggestions without active budgets
-    }
-
-    query += ` ORDER BY bs.confidence_score DESC, bs.suggested_limit DESC`;
-
-    const result = await client.query(query, values);
-
-    const suggestions = result.rows.map(row => ({
-      ...row,
-      historical_data: row.historical_data ? JSON.parse(row.historical_data) : null,
-      calculation_metadata: row.calculation_metadata ? JSON.parse(row.calculation_metadata) : null,
-      has_active_budget: row.active_budget_id !== null,
-    }));
-
+    const suggestions = await fetchBudgetSuggestions(client, { minConfidence, periodType, includeActive });
     return { suggestions };
   } finally {
     client.release();
@@ -467,8 +528,18 @@ async function getBudgetHealth() {
   const client = await database.getClient();
 
   try {
+    try {
+      await ensureBaselineBudgets();
+    } catch (error) {
+      console.warn('Auto budget provisioning failed:', error);
+    }
+
     const now = new Date();
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const daysInMonth = periodEnd.getDate();
+    const daysPassed = now.getDate();
+    const daysRemaining = Math.max(0, daysInMonth - daysPassed);
 
     const result = await client.query(`
       SELECT
@@ -492,13 +563,16 @@ async function getBudgetHealth() {
     const budgets = result.rows.map(row => {
       const budgetLimit = parseFloat(row.budget_limit);
       const spentAmount = parseFloat(row.spent_amount);
-      const remaining = budgetLimit - spentAmount;
-      const percentUsed = (spentAmount / budgetLimit) * 100;
+      const remaining = Math.max(0, budgetLimit - spentAmount);
+      const percentUsed = budgetLimit > 0 ? (spentAmount / budgetLimit) * 100 : 0;
+      const dailyAvg = daysPassed > 0 ? spentAmount / daysPassed : 0;
+      const projectedTotal = Math.round(dailyAvg * daysInMonth);
+      const recommendedDailyLimit = daysRemaining > 0 ? remaining / daysRemaining : 0;
 
       let status = 'on_track';
-      if (spentAmount > budgetLimit) {
+      if (spentAmount >= budgetLimit) {
         status = 'exceeded';
-      } else if (percentUsed >= 80) {
+      } else if (projectedTotal > budgetLimit || percentUsed >= 80) {
         status = 'warning';
       }
 
@@ -512,6 +586,11 @@ async function getBudgetHealth() {
         remaining_amount: remaining,
         percent_used: Math.round(percentUsed),
         status,
+        days_remaining: daysRemaining,
+        daily_limit: recommendedDailyLimit,
+        projected_total: projectedTotal,
+        days_passed: daysPassed,
+        daily_avg: dailyAvg,
       };
     });
 
@@ -524,18 +603,44 @@ async function getBudgetHealth() {
       total_spent: budgets.reduce((sum, b) => sum + b.spent_amount, 0),
     };
 
-    return { budgets, summary };
+    // Determine overall status
+    let overall_status = 'good';
+    if (summary.exceeded > 0) {
+      overall_status = 'critical';
+    } else if (summary.warning > 0) {
+      overall_status = 'warning';
+    }
+
+    return {
+      success: true,
+      budgets: budgets.map(b => ({
+        category_id: b.category_id,
+        category_name: b.category_name,
+        budget_limit: b.budget_limit,
+        current_spent: b.spent_amount,
+        percentage_used: b.percent_used,
+        days_remaining: b.days_remaining,
+        projected_total: b.projected_total,
+        daily_limit: b.daily_limit,
+        status: b.status,
+        daily_avg: b.daily_avg,
+      })),
+      overall_status,
+      summary
+    };
   } finally {
     client.release();
   }
 }
 
 module.exports = {
+  fetchBudgetSuggestions,
   generateBudgetSuggestions,
   getBudgetSuggestions,
   activateBudgetSuggestion,
   getBudgetTrajectory,
   getBudgetHealth,
+  ensureBaselineBudgets,
   calculateBudgetStats, // Export for testing
   __setDatabase(mock) {
     database = mock || actualDatabase;

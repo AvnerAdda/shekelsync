@@ -44,4 +44,25 @@ describe('Shared /api/profile routes', () => {
     expect(res.body).toEqual(payload);
     expect(spy).toHaveBeenCalledWith(payload);
   });
+
+  it('returns 500 when profile fetch fails', async () => {
+    vi.spyOn(profileService, 'getProfile').mockRejectedValue(new Error('boom'));
+
+    const res = await request(app).get('/api/profile').expect(500);
+
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toBeDefined();
+  });
+
+  it(
+    'returns 500 when profile update fails',
+    async () => {
+      vi.spyOn(profileService, 'saveProfile').mockRejectedValue(new Error('boom'));
+
+      const res = await request(app).put('/api/profile').send({ name: 'X' }).expect(500);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBeDefined();
+    },
+    10000,
+  );
 });

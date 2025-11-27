@@ -72,4 +72,11 @@ describe('Shared /api/patterns routes', () => {
     expect(res.body).toEqual(payload);
     expect(spy).toHaveBeenCalledWith({ id: '1' });
   });
+
+  it('handles pattern create errors', async () => {
+    vi.spyOn(duplicatePatternsService, 'createPattern').mockRejectedValue(new Error('boom'));
+
+    const res = await request(app).post('/api/patterns').send({ vendor: 'x' }).expect(500);
+    expect(res.body.error).toBeDefined();
+  });
 });

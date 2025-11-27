@@ -57,6 +57,8 @@ async function setupAPIServer(mainWindow) {
 
   // Core API routes (migrated to native Electron)
   app.get('/api/ping', coreRoutes.ping.bind(coreRoutes));
+  app.get('/health', coreRoutes.healthz.bind(coreRoutes));
+  app.get('/healthz', coreRoutes.healthz.bind(coreRoutes));
   app.get('/api/transaction-stats', coreRoutes.getTransactionStats.bind(coreRoutes));
   app.get('/api/get_all_categories', coreRoutes.getCategories.bind(coreRoutes));
   app.get('/api/database-info', coreRoutes.getDatabaseInfo.bind(coreRoutes));
@@ -147,16 +149,6 @@ async function setupAPIServer(mainWindow) {
   institutionsService.backfillMissingInstitutionIds()
     .catch((error) => console.error('Institution backfill failed:', error));
 
-  // Health check endpoint
-  app.get('/health', (req, res) => {
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV,
-      platform: process.platform
-    });
-  });
-
   // Error handling middleware
   app.use((error, req, res, next) => {
     console.error('Express error:', error);
@@ -176,6 +168,7 @@ async function setupAPIServer(mainWindow) {
       message: `Route ${req.originalUrl} not found`,
       availableRoutes: [
         '/health',
+        '/healthz',
         '/api/ping',
         '/api/credentials',
         '/api/available_months',

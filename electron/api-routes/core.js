@@ -1,3 +1,4 @@
+const path = require('path');
 const { dbManager } = require('../database');
 const { resolveAppPath } = require('../paths');
 const healthService = require(resolveAppPath('server', 'services', 'health.js'));
@@ -6,6 +7,12 @@ const transactionsMetrics = require(resolveAppPath(
   'services',
   'transactions',
   'metrics.js',
+));
+const analyticsMetricsStore = require(resolveAppPath(
+  'server',
+  'services',
+  'analytics',
+  'metrics-store.js',
 ));
 
 // Core API route handlers
@@ -43,6 +50,83 @@ class CoreAPIRoutes {
         status: 'error',
         message: 'Internal server error',
         error: error.message
+      });
+    }
+  }
+
+  async healthz(req, res) {
+    const startedAt = Date.now();
+    try {
+      const dbHealth = await healthService.ping();
+      if (!dbHealth.ok) {
+        return res.status(500).json({
+          status: dbHealth.status || 'degraded',
+          message: 'Database connectivity check failed',
+          error: dbHealth.error,
+          responseTimeMs: Date.now() - startedAt,
+        });
+      }
+
+      let dbTest = { success: false, error: 'Database not initialized' };
+      try {
+        dbTest = await dbManager.testConnection();
+      } catch (error) {
+        dbTest = { success: false, error: error.message };
+      }
+      if (!dbTest?.success) {
+        return res.status(500).json({
+          status: 'degraded',
+          message: 'Database connectivity check failed',
+          error: dbTest?.error || 'Unknown database error',
+          responseTimeMs: Date.now() - startedAt,
+        });
+      }
+
+      const metricsSnapshot = analyticsMetricsStore?.getMetricsSnapshot
+        ? analyticsMetricsStore.getMetricsSnapshot()
+        : null;
+      const metrics = metricsSnapshot
+        ? Object.fromEntries(
+            Object.entries(metricsSnapshot).map(([bucket, samples]) => {
+              const list = Array.isArray(samples) ? samples : [];
+              const last = list[list.length - 1] || {};
+              return [
+                bucket,
+                {
+                  count: list.length,
+                  lastDurationMs: last.durationMs ?? null,
+                  lastRecordedAt: last.recordedAt ?? null,
+                },
+              ];
+            }),
+          )
+        : null;
+
+      const sqlitePath = process.env.SQLITE_DB_PATH || process.env.SQLCIPHER_DB_PATH || null;
+
+      return res.json({
+        status: 'ok',
+        responseTimeMs: Date.now() - startedAt,
+        uptimeSeconds: Math.round(process.uptime()),
+        environment: process.env.NODE_ENV || 'development',
+        database: {
+          mode: dbManager.mode,
+          connected: Boolean(dbTest?.success && dbHealth.ok),
+          sqlitePath: sqlitePath ? path.basename(sqlitePath) : null,
+        },
+        telemetry: {
+          enabled: process.env.CRASH_REPORTS_ENABLED === 'true',
+          dsnConfigured: Boolean(process.env.SENTRY_DSN),
+        },
+        metrics,
+      });
+    } catch (error) {
+      console.error('Health check error:', error);
+      return res.status(500).json({
+        status: 'error',
+        message: 'Internal server error',
+        error: error.message,
+        responseTimeMs: Date.now() - startedAt,
       });
     }
   }

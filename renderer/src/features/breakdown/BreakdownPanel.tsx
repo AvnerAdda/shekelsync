@@ -35,6 +35,7 @@ import {
   FormatCurrencyFn,
   DrillLevel,
 } from '@renderer/features/breakdown/types';
+import { getBreakdownStrings } from './strings';
 
 interface BreakdownPanelProps {
   breakdowns: BreakdownData;
@@ -48,7 +49,8 @@ interface BreakdownPanelProps {
 const BreadcrumbTrail: React.FC<{
   drillStack: DrillLevel[];
   onBreadcrumbClick: (index: number) => void;
-}> = ({ drillStack, onBreadcrumbClick }) => (
+  rootLabel: string;
+}> = ({ drillStack, onBreadcrumbClick, rootLabel }) => (
   <Breadcrumbs separator={<ChevronRightIcon fontSize="small" />}>
     <Link
       component="button"
@@ -60,7 +62,7 @@ const BreadcrumbTrail: React.FC<{
         '&:hover': { textDecoration: 'underline' },
       }}
     >
-      All Categories
+      {rootLabel}
     </Link>
     {drillStack.map((level, index) => (
       <Link
@@ -92,6 +94,8 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
   transactions = [],
 }) => {
   const { formatCurrency } = useFinancePrivacy();
+  const strings = getBreakdownStrings();
+  const panelStrings = strings.panel;
   const categoryBreakdown = breakdowns?.byCategory ?? [];
   const vendorBreakdown = breakdowns?.byVendor ?? [];
   const monthlyBreakdown = breakdowns?.byMonth ?? [];
@@ -214,20 +218,24 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
           >
             <ToggleButton value="overview">
               {currentConfig.icon}
-              Overview
+              {panelStrings.overviewTab}
             </ToggleButton>
-            <ToggleButton value="category">Category</ToggleButton>
-            <ToggleButton value="vendor">Vendor</ToggleButton>
+            <ToggleButton value="category">{panelStrings.categoryTab}</ToggleButton>
+            <ToggleButton value="vendor">{panelStrings.vendorTab}</ToggleButton>
             <ToggleButton value="timeline">
               <TrendIcon sx={{ mr: 0.5, fontSize: 18 }} />
-              Timeline
+              {panelStrings.timelineTab}
             </ToggleButton>
           </ToggleButtonGroup>
         </Box>
 
         {drillStack.length > 0 && (
           <Box sx={{ mb: 2 }}>
-            <BreadcrumbTrail drillStack={drillStack} onBreadcrumbClick={handleBreadcrumbClick} />
+            <BreadcrumbTrail
+              drillStack={drillStack}
+              onBreadcrumbClick={handleBreadcrumbClick}
+              rootLabel={panelStrings.rootBreadcrumb}
+            />
           </Box>
         )}
 
@@ -246,7 +254,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
           />
         )}
         {view === 'category' && (
-          <CategoryView data={currentData} formatCurrencyValue={formatCurrencyValue} />
+          <CategoryView data={currentData} categoryType={categoryType} formatCurrencyValue={formatCurrencyValue} />
         )}
         {view === 'vendor' && (
           <VendorView vendors={vendorBreakdown} categoryType={categoryType} formatCurrencyValue={formatCurrencyValue} />
@@ -260,7 +268,13 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
         open={detailsModalOpen}
         details={categoryDetails}
         onClose={handleDetailsClose}
-        breadcrumbs={<BreadcrumbTrail drillStack={drillStack} onBreadcrumbClick={handleBreadcrumbClick} />}
+        breadcrumbs={
+          <BreadcrumbTrail
+            drillStack={drillStack}
+            onBreadcrumbClick={handleBreadcrumbClick}
+            rootLabel={panelStrings.rootBreadcrumb}
+          />
+        }
         categoryType={categoryType}
         formatCurrencyValue={formatCurrencyValue}
         onSubcategoryClick={handleSubcategoryClick}

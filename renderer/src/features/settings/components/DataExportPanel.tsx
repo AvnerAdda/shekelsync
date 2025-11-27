@@ -78,10 +78,20 @@ const DataExportPanel: React.FC = () => {
     error: null,
     downloadUrl: null,
   });
+  const [hasElectronSaveBridge, setHasElectronSaveBridge] = useState(false);
 
   useEffect(() => {
     fetchCategories();
     fetchVendors();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const fileApi = window.electronAPI?.file;
+    setHasElectronSaveBridge(Boolean(fileApi?.showSaveDialog && fileApi?.writeFile));
   }, []);
 
   useEffect(() => {
@@ -199,7 +209,10 @@ const DataExportPanel: React.FC = () => {
         });
 
         if (!writeResult.success) {
-          throw new Error(writeResult.error || 'Failed to save exported file');
+          throw new Error(
+            writeResult.error ||
+              'Failed to save exported file. Check that the destination is writable and try again.',
+          );
         }
       } else {
         const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
@@ -261,6 +274,11 @@ const DataExportPanel: React.FC = () => {
         Each export now includes the institution names/types you see in the UI, so downstream tools
         can match transactions and vendors to the same institutions.
       </Typography>
+      <Alert severity="info" sx={{ mb: 3 }}>
+        {hasElectronSaveBridge
+          ? 'We will open a native save dialog and write the export directly to your selected folder. Nothing is uploaded to the cloud.'
+          : 'No desktop bridge detected — once the export is ready, it will download via your browser instead.'}
+      </Alert>
 
       <Grid container spacing={3}>
         {/* Export Configuration */}

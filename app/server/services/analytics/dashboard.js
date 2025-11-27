@@ -1,7 +1,9 @@
+const { performance } = require('node:perf_hooks');
 const actualDatabase = require('../database.js');
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
+const { recordDashboardMetric } = require('./metrics-store.js');
 
 let database = actualDatabase;
 
@@ -46,6 +48,7 @@ function buildCategoryBreakdown(rows) {
 
 
 async function getDashboardAnalytics(query = {}) {
+  const timerStart = performance.now();
   const { startDate, endDate, months = 3, aggregation = 'daily' } = query;
   const { start, end } = resolveDateRange({ startDate, endDate, months });
 
@@ -71,7 +74,7 @@ async function getDashboardAnalytics(query = {}) {
         ${dateSelect},
         SUM(CASE
           WHEN (
-            (cd.category_type = 'income' AND t.price > 0)
+            (cd.category_type = 'income' AND t.price > 0 AND COALESCE(cd.is_counted_as_income, 1) = 1)
             OR (cd.category_type IS NULL AND t.price > 0)
             OR (COALESCE(cd.name, '') = $3 AND t.price > 0)
           ) THEN t.price
@@ -97,6 +100,7 @@ async function getDashboardAnalytics(query = {}) {
       )
       WHERE t.date >= $1 AND t.date <= $2
         AND ap.id IS NULL
+        AND ${dialect.excludePikadon('t')}
       GROUP BY ${dateGroupBy}
       ORDER BY date ASC`,
     [start, end, BANK_CATEGORY_NAME],
@@ -128,6 +132,7 @@ async function getDashboardAnalytics(query = {}) {
         AND t.price < 0
         AND cd_parent.category_type = 'expense'
         AND ap.id IS NULL
+        AND ${dialect.excludePikadon('t')}
       GROUP BY cd_parent.id, cd_parent.name, cd_child.id, cd_child.name
       ORDER BY cd_parent.name, total DESC`,
     [start, end],
@@ -160,6 +165,7 @@ async function getDashboardAnalytics(query = {}) {
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND ap.id IS NULL
+        AND ${dialect.excludePikadon('t')}
       GROUP BY t.vendor, fi.id, fi.display_name_he, fi.display_name_en, fi.logo_url, fi.institution_type
       ORDER BY total DESC`,
     [start, end],
@@ -171,7 +177,7 @@ async function getDashboardAnalytics(query = {}) {
         ${monthExpr} as month,
         SUM(CASE
           WHEN (
-            (cd.category_type = 'income' AND t.price > 0)
+            (cd.category_type = 'income' AND t.price > 0 AND COALESCE(cd.is_counted_as_income, 1) = 1)
             OR (cd.category_type IS NULL AND t.price > 0)
             OR (COALESCE(cd.name, '') = $3 AND t.price > 0)
           ) THEN t.price
@@ -197,6 +203,7 @@ async function getDashboardAnalytics(query = {}) {
       )
       WHERE t.date >= $1 AND t.date <= $2
         AND ap.id IS NULL
+        AND ${dialect.excludePikadon('t')}
       GROUP BY ${monthExpr}
       ORDER BY month ASC`,
     [start, end, BANK_CATEGORY_NAME],
@@ -206,12 +213,17 @@ async function getDashboardAnalytics(query = {}) {
     `SELECT
         SUM(CASE
           WHEN (
-            (cd.category_type = 'income' AND t.price > 0)
+            (cd.category_type = 'income' AND t.price > 0 AND COALESCE(cd.is_counted_as_income, 1) = 1)
             OR (cd.category_type IS NULL AND t.price > 0)
             OR (COALESCE(cd.name, '') = $3 AND t.price > 0)
           ) THEN t.price
           ELSE 0
         END) as total_income,
+        SUM(CASE
+          WHEN cd.category_type = 'income' AND t.price > 0 AND COALESCE(cd.is_counted_as_income, 1) = 0
+          THEN t.price
+          ELSE 0
+        END) as total_capital_returns,
         SUM(CASE
           WHEN (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0))
             AND t.price < 0 THEN ABS(t.price)
@@ -240,12 +252,14 @@ async function getDashboardAnalytics(query = {}) {
         )
       )
       WHERE t.date >= $1 AND t.date <= $2
-        AND ap.id IS NULL`,
+        AND ap.id IS NULL
+        AND ${dialect.excludePikadon('t')}`,
     [start, end, BANK_CATEGORY_NAME],
   );
 
   const summary = summaryResult.rows[0] || {};
   const totalIncome = Number.parseFloat(summary.total_income || 0);
+  const totalCapitalReturns = Number.parseFloat(summary.total_capital_returns || 0);
   const totalExpenses = Number.parseFloat(summary.total_expenses || 0);
   const investmentOutflow = Number.parseFloat(summary.investment_outflow || 0);
   const investmentInflow = Number.parseFloat(summary.investment_inflow || 0);
@@ -281,7 +295,8 @@ async function getDashboardAnalytics(query = {}) {
       WHERE t.date >= $1 AND t.date <= $2
         AND t.processed_date IS NOT NULL
         AND DATE(t.processed_date) > DATE('now')
-        AND ap.id IS NULL`,
+        AND ap.id IS NULL
+        AND ${dialect.excludePikadon('t')}`,
     [start, end],
   );
 
@@ -430,10 +445,11 @@ async function getDashboardAnalytics(query = {}) {
     balanceHistoryMap.set(row.date, Number.parseFloat(row.total_balance || 0));
   });
 
-  return {
+  const response = {
     dateRange: { start, end },
     summary: {
       totalIncome,
+      totalCapitalReturns,
       totalExpenses,
       netBalance,
       investmentOutflow,
@@ -494,6 +510,29 @@ async function getDashboardAnalytics(query = {}) {
       })),
     },
   };
+
+  const durationMs = Number((performance.now() - timerStart).toFixed(2));
+  const metricPayload = {
+    durationMs,
+    months,
+    aggregation,
+    dateRange: {
+      start: start.toISOString(),
+      end: end.toISOString(),
+    },
+    rowCounts: {
+      history: historyResult.rows.length,
+      categories: categoryDataResult.rows.length,
+      vendors: vendorResult.rows.length,
+      months: monthResult.rows.length,
+      accounts: currentBankBalancesResult.rows.length,
+    },
+  };
+
+  console.info('[analytics:dashboard]', JSON.stringify(metricPayload));
+  recordDashboardMetric(metricPayload);
+
+  return response;
 }
 
 module.exports = {

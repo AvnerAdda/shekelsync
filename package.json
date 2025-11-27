@@ -4,7 +4,8 @@
     "dev:electron": "npm --prefix app run electron-dev",
     "test": "ALLOW_DEV_NO_ENCRYPTION=true npm --prefix app run test:coverage && npm --prefix renderer run test:unit && npm --prefix renderer run test:e2e",
     "icons:icns": "node scripts/generate-icns.js",
-    "logs:bundle": "node scripts/collect-logs.js"
+    "logs:bundle": "node scripts/collect-logs.js",
+    "benchmark:check": "node scripts/benchmarks/assert-benchmarks.js"
   },
   "dependencies": {
     "electron-is-dev": "^3.0.1",

@@ -6,19 +6,27 @@ import type {
   SpendingCategoryBreakdownResponse,
   SpendingCategoryMappingsResponse,
   InitializeSpendingCategoriesResponse,
+  CategoryWithSpending,
 } from '@renderer/types/spending-categories';
 
 interface UseSpendingCategoriesOptions {
   spendingCategory?: SpendingCategory;
   categoryDefinitionId?: number;
   autoLoad?: boolean;
+  currentMonthOnly?: boolean;
+}
+
+interface BulkAssignResponse {
+  success: boolean;
+  updated: number;
 }
 
 export function useSpendingCategories(options: UseSpendingCategoriesOptions = {}) {
-  const { spendingCategory, categoryDefinitionId, autoLoad = true } = options;
+  const { spendingCategory, categoryDefinitionId, autoLoad = true, currentMonthOnly = true } = options;
 
   const [mappings, setMappings] = useState<SpendingCategoryMapping[]>([]);
   const [breakdown, setBreakdown] = useState<SpendingCategoryBreakdownResponse | null>(null);
+  const [selectedAllocation, setSelectedAllocation] = useState<SpendingCategory | 'unallocated' | null>(null);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,13 +82,13 @@ export function useSpendingCategories(options: UseSpendingCategoriesOptions = {}
     }
   }, [fetchMappings]);
 
-  const fetchBreakdown = useCallback(async (months: number = 3, autoInitialize: boolean = true) => {
+  const fetchBreakdown = useCallback(async (autoInitialize: boolean = true) => {
     setLoading(true);
     setError(null);
 
     try {
       const params = new URLSearchParams();
-      params.append('months', months.toString());
+      params.append('currentMonthOnly', currentMonthOnly.toString());
 
       const response = await apiClient.get(`/api/spending-categories/breakdown?${params.toString()}`);
 
@@ -112,7 +120,7 @@ export function useSpendingCategories(options: UseSpendingCategoriesOptions = {}
     } finally {
       setLoading(false);
     }
-  }, [initialize]);
+  }, [initialize, currentMonthOnly]);
 
   const updateMapping = useCallback(async (
     categoryDefId: number,
@@ -171,6 +179,44 @@ export function useSpendingCategories(options: UseSpendingCategoriesOptions = {}
     }
   }, [breakdown, fetchBreakdown]);
 
+  const bulkAssign = useCallback(async (
+    categoryDefinitionIds: number[],
+    targetCategory: SpendingCategory | null
+  ) => {
+    setError(null);
+
+    try {
+      const response = await apiClient.post('/api/spending-categories/bulk-assign', {
+        categoryDefinitionIds,
+        spendingCategory: targetCategory,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to bulk assign categories');
+      }
+
+      const data = response.data as BulkAssignResponse;
+
+      // Refresh data after assignment
+      await fetchMappings();
+      await fetchBreakdown();
+
+      return data;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      console.error('Error bulk assigning categories:', err);
+      throw err;
+    }
+  }, [fetchMappings, fetchBreakdown]);
+
+  // Get categories for selected allocation type
+  const getCategoriesForAllocation = useCallback((allocationType: SpendingCategory | 'unallocated'): CategoryWithSpending[] => {
+    if (!breakdown?.categories_by_allocation) {
+      return [];
+    }
+    return breakdown.categories_by_allocation[allocationType] || [];
+  }, [breakdown]);
+
   useEffect(() => {
     if (autoLoad) {
       fetchMappings();
@@ -180,6 +226,8 @@ export function useSpendingCategories(options: UseSpendingCategoriesOptions = {}
   return {
     mappings,
     breakdown,
+    selectedAllocation,
+    setSelectedAllocation,
     loading,
     initializing,
     error,
@@ -188,5 +236,7 @@ export function useSpendingCategories(options: UseSpendingCategoriesOptions = {}
     initialize,
     updateMapping,
     updateTargets,
+    bulkAssign,
+    getCategoriesForAllocation,
   };
 }

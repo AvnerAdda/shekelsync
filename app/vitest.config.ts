@@ -9,10 +9,13 @@ export default defineConfig({
     include: [
       '**/*.{test,spec}.{js,ts,jsx,tsx}',
       '../renderer/src/components/__tests__/**/*.{test,spec}.{js,ts,jsx,tsx}',
+      '../electron/__tests__/**/*.{test,spec}.{js,ts,jsx,tsx}',
     ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
+      tempDir: path.resolve(__dirname, 'coverage/tmp'),
+      cleanOnRerun: true,
     },
   },
   resolve: {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { formatDistanceToNow } from 'date-fns';
 import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
@@ -15,6 +16,7 @@ import ListSubheader from '@mui/material/ListSubheader';
 import CircularProgress from '@mui/material/CircularProgress';
 import { useTheme } from '@mui/material/styles';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
+import { useScrapeProgress } from '@/hooks/useScrapeProgress';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
 import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from '@renderer/shared/components/InstitutionBadge';
@@ -142,6 +144,32 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
   const [institutions, setInstitutions] = useState<InstitutionMetadata[]>([]);
   const [institutionsLoading, setInstitutionsLoading] = useState(false);
   const [institutionsError, setInstitutionsError] = useState<string | null>(null);
+  const { latestEvent, isRunning, lastCompletedAt } = useScrapeProgress();
+
+  const lastCompletedLabel = useMemo(() => {
+    if (!lastCompletedAt) {
+      return 'Run your first sync to populate your dashboards.';
+    }
+    return `Last sync completed ${formatDistanceToNow(lastCompletedAt, { addSuffix: true })}.`;
+  }, [lastCompletedAt]);
+
+  const primaryActionLabel = isLoading ? 'Starting sync…' : isRunning ? 'Sync in progress' : 'Start sync';
+  const primaryActionDisabled = isLoading || isRunning;
+
+  const resolvedProgress = useMemo(() => {
+    if (typeof latestEvent?.progress !== 'number') {
+      return null;
+    }
+    const value = latestEvent.progress;
+    const percentage = value > 1 ? value : value * 100;
+    return Math.min(100, Math.max(0, Math.round(percentage)));
+  }, [latestEvent]);
+
+  const statusMessage = isRunning
+    ? `Sync in progress${latestEvent?.vendor ? ` for ${latestEvent.vendor}` : ''}${
+        latestEvent?.message ? ` – ${latestEvent.message}` : ''
+      }`
+    : lastCompletedLabel;
 
   useEffect(() => {
     if (initialConfig) {
@@ -516,6 +544,31 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
     >
       <ModalHeader title="Sync Transactions" onClose={onClose} />
       <DialogContent style={{ padding: '0 24px 24px' }}>
+        <Alert
+          severity={isRunning ? 'info' : 'success'}
+          sx={{ mt: 2 }}
+        >
+          <Typography variant="body2" fontWeight={500}>
+            {statusMessage}
+          </Typography>
+          {isRunning && (resolvedProgress !== null || typeof latestEvent?.transactions === 'number') && (
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+              {resolvedProgress !== null ? `${resolvedProgress}% complete` : null}
+              {resolvedProgress !== null && typeof latestEvent?.transactions === 'number' ? ' • ' : ''}
+              {typeof latestEvent?.transactions === 'number' ? `${latestEvent.transactions} transactions synced` : null}
+            </Typography>
+          )}
+          {isRunning ? (
+            <Typography variant="caption" color="text.secondary" display="block">
+              Sync runs in the background — you can close this window and we&apos;ll notify you when it&apos;s done.
+            </Typography>
+          ) : (
+            <Typography variant="caption" color="text.secondary" display="block">
+              Start a sync any time after connecting an account.
+            </Typography>
+          )}
+        </Alert>
+
         {error && (
           <Alert severity="error" sx={{ mb: 2, mt: 2 }}>
             {error}
@@ -536,7 +589,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         <Button
           onClick={handleSync}
           variant="contained"
-          disabled={isLoading}
+          disabled={primaryActionDisabled}
           sx={{
             backgroundColor: theme.palette.primary.main,
             color: theme.palette.primary.contrastText,
@@ -549,7 +602,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
             }
           }}
         >
-          {isLoading ? 'SYNCING...' : 'SYNC'}
+          {primaryActionLabel}
         </Button>
       </DialogActions>
     </Dialog>
