@@ -1,6 +1,7 @@
 const { CompanyTypes, createScraper } = require('israeli-bank-scrapers');
 const crypto = require('crypto');
 const database = require('../database.js');
+const Mutex = require('../../../lib/mutex.js');
 const {
   BANK_VENDORS,
   SPECIAL_BANK_VENDORS,
@@ -19,6 +20,10 @@ const DEFAULT_TIMEOUT = 120000; // 2 minutes
 const MAX_TIMEOUT = 300000; // 5 minutes for problematic scrapers
 const DEFAULT_LOOKBACK_MONTHS = 3;
 let cachedBankCategory = null;
+
+// Mutex to serialize scrape operations and prevent SQLite transaction conflicts
+// SQLite uses a single connection and doesn't support nested transactions
+const scrapeMutex = new Mutex();
 
 function createHttpError(statusCode, message, extra = {}) {
   const error = new Error(message || 'Scraping failed');
@@ -643,7 +648,11 @@ async function processScrapeResult(client, { options, credentials, result, isBan
   return { bankTransactions };
 }
 
-async function runScrape({ options, credentials, execute, logger = console }) {
+/**
+ * Internal implementation of runScrape
+ * This function contains the actual scraping logic and is wrapped by the mutex
+ */
+async function _runScrapeInternal({ options, credentials, execute, logger = console }) {
   if (!options?.companyId) {
     throw createHttpError(400, 'Missing companyId');
   }
@@ -761,6 +770,27 @@ async function runScrape({ options, credentials, execute, logger = console }) {
   } finally {
     client.release();
   }
+}
+
+/**
+ * Public wrapper for runScrape that ensures only one scrape runs at a time
+ * Uses a mutex to prevent SQLite "cannot start a transaction within a transaction" errors
+ * @param {Object} params - Scrape parameters
+ * @param {Object} params.options - Scrape options including companyId and startDate
+ * @param {Object} params.credentials - Credentials for the scraper
+ * @param {Function} [params.execute] - Optional custom executor function
+ * @param {Object} [params.logger] - Optional logger instance
+ * @returns {Promise<Object>} Scrape result
+ */
+async function runScrape(params) {
+  const queueLength = scrapeMutex.getQueueLength();
+  if (queueLength > 0) {
+    params.logger?.info?.(
+      `[Scrape:${params.options?.companyId}] Waiting for ${queueLength} other scrape(s) to complete...`
+    );
+  }
+
+  return scrapeMutex.runExclusive(() => _runScrapeInternal(params));
 }
 
 module.exports = {

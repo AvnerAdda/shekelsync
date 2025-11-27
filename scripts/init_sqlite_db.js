@@ -791,6 +791,7 @@ const CATEGORY_TREE = [
   { key: 'exp_food_delivery', type: 'expense', parent: 'exp_food', name: 'משלוחים', nameEn: 'Delivery', displayOrder: 24, color: '#FF7043', icon: 'DeliveryDining' },
   { key: 'exp_food_alcohol', type: 'expense', parent: 'exp_food', name: 'אלכוהול ומשקאות', nameEn: 'Alcohol & Beverages', displayOrder: 25, color: '#F4511E', icon: 'LocalBar' },
   { key: 'exp_food_bakery', type: 'expense', parent: 'exp_food', name: 'מאפייה וקינוחים', nameEn: 'Bakery & Desserts', displayOrder: 26, color: '#FFCCBC', icon: 'Cake' },
+  { key: 'exp_food_catering', type: 'expense', parent: 'exp_food', name: 'קייטרינג ואירועים', nameEn: 'Catering & Events', displayOrder: 27, color: '#FF6B6B', icon: 'FoodBank' },
 
   // Transportation (Teal tones)
   { key: 'exp_transport', type: 'expense', parent: 'expense_root', name: 'תחבורה', nameEn: 'Transportation', displayOrder: 30, color: '#4ECDC4', icon: 'DirectionsCar' },
@@ -802,6 +803,9 @@ const CATEGORY_TREE = [
   { key: 'exp_transport_maintenance', type: 'expense', parent: 'exp_transport', name: 'תחזוקת רכב', nameEn: 'Vehicle Maintenance', displayOrder: 36, color: '#B2DFDB', icon: 'Build' },
   { key: 'exp_transport_insurance', type: 'expense', parent: 'exp_transport', name: 'ביטוח רכב', nameEn: 'Vehicle Insurance', displayOrder: 37, color: '#E0F2F1', icon: 'Shield' },
   { key: 'exp_transport_tolls', type: 'expense', parent: 'exp_transport', name: 'כבישי אגרה', nameEn: 'Toll Roads', displayOrder: 38, color: '#009688', icon: 'Toll' },
+  { key: 'exp_transport_rental', type: 'expense', parent: 'exp_transport', name: 'שכירת רכב', nameEn: 'Car Rental', displayOrder: 39, color: '#00BCD4', icon: 'CarRental' },
+  { key: 'exp_transport_leasing', type: 'expense', parent: 'exp_transport', name: 'ליסינג רכב', nameEn: 'Vehicle Leasing', displayOrder: 391, color: '#26C6DA', icon: 'DirectionsCarFilled' },
+  { key: 'exp_transport_micromobility', type: 'expense', parent: 'exp_transport', name: 'קורקינטים ואופניים', nameEn: 'E-Scooters & Bikes', displayOrder: 392, color: '#4DD0E1', icon: 'ElectricScooter' },
 
   // Bills & Utilities (Amber-Yellow tones)
   { key: 'exp_bills', type: 'expense', parent: 'expense_root', name: 'חשבונות', nameEn: 'Bills & Utilities', displayOrder: 40, color: '#FFD93D', icon: 'Receipt' },
@@ -829,6 +833,8 @@ const CATEGORY_TREE = [
   { key: 'exp_health_dental', type: 'expense', parent: 'exp_health', name: 'שיניים', nameEn: 'Dental Care', displayOrder: 53, color: '#00897B', icon: 'Medication' },
   { key: 'exp_health_vision', type: 'expense', parent: 'exp_health', name: 'עיניים ואופטיקה', nameEn: 'Vision & Optometry', displayOrder: 54, color: '#00695C', icon: 'Visibility' },
   { key: 'exp_health_fitness', type: 'expense', parent: 'exp_health', name: 'כושר וספורט', nameEn: 'Gym & Fitness', displayOrder: 55, color: '#80CBC4', icon: 'FitnessCenter' },
+  { key: 'exp_health_mental', type: 'expense', parent: 'exp_health', name: 'בריאות הנפש', nameEn: 'Mental Health & Therapy', displayOrder: 56, color: '#A7FFEB', icon: 'Psychology' },
+  { key: 'exp_health_salon', type: 'expense', parent: 'exp_health', name: 'מספרה וטיפוח', nameEn: 'Salon & Beauty Services', displayOrder: 57, color: '#B2DFDB', icon: 'ContentCut' },
 
   // Leisure & Entertainment (Pink-Red tones)
   { key: 'exp_leisure', type: 'expense', parent: 'expense_root', name: 'פנאי', nameEn: 'Leisure & Entertainment', displayOrder: 60, color: '#F38181', icon: 'Theaters' },
@@ -855,6 +861,9 @@ const CATEGORY_TREE = [
   { key: 'exp_shopping_jewelry', type: 'expense', parent: 'exp_shopping', name: 'תכשיטים ואקססוריז', nameEn: 'Jewelry & Accessories', displayOrder: 81, color: '#C2185B', icon: 'Diamond' },
   { key: 'exp_shopping_sports_equipment', type: 'expense', parent: 'exp_shopping', name: 'ציוד ספורט', nameEn: 'Sports Equipment', displayOrder: 82, color: '#AD1457', icon: 'SportsTennis' },
   { key: 'exp_shopping_religious', type: 'expense', parent: 'exp_shopping', name: 'תשמישי קדושה', nameEn: 'Religious Items & Judaica', displayOrder: 83, color: '#880E4F', icon: 'Synagogue' },
+  { key: 'exp_shopping_digital', type: 'expense', parent: 'exp_shopping', name: 'שירותים דיגיטליים', nameEn: 'Digital Services & Subscriptions', displayOrder: 84, color: '#BA68C8', icon: 'Cloud' },
+  { key: 'exp_shopping_home_improvement', type: 'expense', parent: 'exp_shopping', name: 'שיפוצים ובניה', nameEn: 'Home Improvement & DIY', displayOrder: 85, color: '#9C27B0', icon: 'Handyman' },
+  { key: 'exp_shopping_pet_care', type: 'expense', parent: 'exp_shopping', name: 'וטרינר וטיפוח', nameEn: 'Veterinary & Pet Grooming', displayOrder: 86, color: '#CE93D8', icon: 'MedicalServices' },
 
   // Education (Light Pink tones)
   { key: 'exp_education', type: 'expense', parent: 'expense_root', name: 'חינוך', nameEn: 'Education', displayOrder: 80, color: '#FCBAD3', icon: 'School' },
@@ -863,6 +872,18 @@ const CATEGORY_TREE = [
   { key: 'exp_education_schools', type: 'expense', parent: 'exp_education', name: 'גני ילדים ובתי ספר', nameEn: 'Kindergarten & Schools', displayOrder: 83, color: '#EC407A', icon: 'ChildCare' },
   { key: 'exp_education_tutoring', type: 'expense', parent: 'exp_education', name: 'חוגים ושיעורים פרטיים', nameEn: 'Classes & Tutoring', displayOrder: 84, color: '#E91E63', icon: 'Person' },
   { key: 'exp_education_books', type: 'expense', parent: 'exp_education', name: 'ספרי לימוד', nameEn: 'Educational Books', displayOrder: 85, color: '#C2185B', icon: 'AutoStories' },
+  { key: 'exp_education_childcare', type: 'expense', parent: 'exp_education', name: 'שמרטפות ומטפלות', nameEn: 'Babysitters & Nannies', displayOrder: 86, color: '#F8BBD0', icon: 'FaceRetouchingNatural' },
+
+  // Home & Maintenance (Brown-Beige tones)
+  { key: 'exp_home', type: 'expense', parent: 'expense_root', name: 'בית ותחזוקה', nameEn: 'Home & Maintenance', displayOrder: 85, color: '#A1887F', icon: 'HomeRepairService' },
+  { key: 'exp_home_repairs', type: 'expense', parent: 'exp_home', name: 'תיקונים', nameEn: 'Repairs & Handyman', displayOrder: 851, color: '#8D6E63', icon: 'Construction' },
+  { key: 'exp_home_cleaning', type: 'expense', parent: 'exp_home', name: 'ניקיון', nameEn: 'Cleaning Services', displayOrder: 852, color: '#BCAAA4', icon: 'CleaningServices' },
+
+  // Professional Services (Dark Slate tones)
+  { key: 'exp_professional', type: 'expense', parent: 'expense_root', name: 'שירותים מקצועיים', nameEn: 'Professional Services', displayOrder: 87, color: '#546E7A', icon: 'BusinessCenter' },
+  { key: 'exp_professional_legal', type: 'expense', parent: 'exp_professional', name: 'משפטי', nameEn: 'Legal Services', displayOrder: 871, color: '#455A64', icon: 'Gavel' },
+  { key: 'exp_professional_accounting', type: 'expense', parent: 'exp_professional', name: 'הנהלת חשבונות', nameEn: 'Accounting & Tax', displayOrder: 872, color: '#607D8B', icon: 'Calculate' },
+  { key: 'exp_professional_consulting', type: 'expense', parent: 'exp_professional', name: 'ייעוץ', nameEn: 'Consulting Services', displayOrder: 873, color: '#78909C', icon: 'Psychology' },
 
   // Miscellaneous (Gray-Blue tones)
   { key: 'exp_misc', type: 'expense', parent: 'expense_root', name: 'שונות', nameEn: 'Miscellaneous', displayOrder: 90, color: '#A8DADC', icon: 'MoreHoriz' },
