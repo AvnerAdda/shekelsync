@@ -36,7 +36,7 @@ body.window-restored #root {
   width: calc(100vw - 24px);
   box-shadow: 0 12px 45px rgba(0, 0, 0, 0.35), 0 20px 65px rgba(0, 0, 0, 0.45);
   background-clip: padding-box;
-  border-radius: 16px;
+  border-radius: 0;
 }
 
 body.window-maximized {
@@ -65,7 +65,7 @@ body.window-maximized #root {
 /* Window border radius (platform-specific) */
 @supports (border-radius: 16px) {
   body {
-    border-radius: 16px;
+    border-radius: 0;
   }
 }
 
