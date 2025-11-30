@@ -151,15 +151,21 @@ describe('TitleBar (renderer)', () => {
     await waitFor(() => expect(api.hasStateListener()).toBe(true));
 
     await screen.findByRole('button', { name: /maximize window/i });
+    expect(document.body.classList.contains('window-restored')).toBe(true);
+    expect(document.body.classList.contains('window-maximized')).toBe(false);
 
     await act(async () => {
       api.triggerState({ maximized: true });
     });
     await screen.findByRole('button', { name: /restore window/i });
+    expect(document.body.classList.contains('window-maximized')).toBe(true);
+    expect(document.body.classList.contains('window-restored')).toBe(false);
 
     await act(async () => {
       api.triggerState({ maximized: false });
     });
     await screen.findByRole('button', { name: /maximize window/i });
+    expect(document.body.classList.contains('window-restored')).toBe(true);
+    expect(document.body.classList.contains('window-maximized')).toBe(false);
   });
 });

@@ -495,7 +495,7 @@ const TABLE_DEFINITIONS = [
   `CREATE TABLE IF NOT EXISTS spending_category_mappings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       category_definition_id INTEGER NOT NULL UNIQUE,
-      spending_category TEXT NOT NULL CHECK(spending_category IN ('growth', 'stability', 'essential', 'reward', 'other')),
+      spending_category TEXT CHECK(spending_category IN ('growth', 'stability', 'essential', 'reward')),
       variability_type TEXT NOT NULL DEFAULT 'variable' CHECK(variability_type IN ('fixed', 'variable', 'seasonal')),
       is_auto_detected INTEGER NOT NULL DEFAULT 1 CHECK(is_auto_detected IN (0, 1)),
       target_percentage REAL CHECK(target_percentage >= 0 AND target_percentage <= 100),
@@ -508,7 +508,7 @@ const TABLE_DEFINITIONS = [
     );`,
   `CREATE TABLE IF NOT EXISTS spending_category_targets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      spending_category TEXT NOT NULL UNIQUE CHECK(spending_category IN ('growth', 'stability', 'essential', 'reward', 'other')),
+      spending_category TEXT NOT NULL UNIQUE CHECK(spending_category IN ('growth', 'stability', 'essential', 'reward')),
       target_percentage REAL NOT NULL CHECK(target_percentage >= 0 AND target_percentage <= 100),
       is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -692,6 +692,7 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_spending_category_mappings_category_id ON spending_category_mappings(category_definition_id);',
   'CREATE INDEX IF NOT EXISTS idx_spending_category_mappings_spending_cat ON spending_category_mappings(spending_category);',
   'CREATE INDEX IF NOT EXISTS idx_spending_category_mappings_variability ON spending_category_mappings(variability_type);',
+  'CREATE INDEX IF NOT EXISTS idx_spending_mappings_unallocated ON spending_category_mappings(spending_category) WHERE spending_category IS NULL;',
   // Smart Action Items Indexes
   'CREATE INDEX IF NOT EXISTS idx_smart_action_items_type ON smart_action_items(action_type);',
   'CREATE INDEX IF NOT EXISTS idx_smart_action_items_status ON smart_action_items(user_status);',
@@ -1214,8 +1215,7 @@ function seedSpendingCategoryTargets(db) {
     { category: 'essential', percentage: 50.0 },  // 50% for essentials (rent, utilities, groceries)
     { category: 'growth', percentage: 20.0 },      // 20% for growth (investments, savings, education)
     { category: 'stability', percentage: 10.0 },   // 10% for stability (emergency fund, insurance)
-    { category: 'reward', percentage: 15.0 },      // 15% for rewards (entertainment, dining, travel)
-    { category: 'other', percentage: 5.0 }         // 5% for other/uncategorized
+    { category: 'reward', percentage: 15.0 }       // 15% for rewards (entertainment, dining, travel)
   ];
 
   let insertedCount = 0;
@@ -1231,6 +1231,81 @@ function seedSpendingCategoryTargets(db) {
 
   console.log(`    ✓ Seeded ${insertedCount} spending category targets`);
   return insertedCount;
+}
+
+function detectSpendingCategoryForSeed(name, nameEn, parentName) {
+  const combined = `${(name || '').toLowerCase()} ${(nameEn || '').toLowerCase()} ${(parentName || '').toLowerCase()}`;
+
+  const ignoreKeywords = ['פרעון כרטיס אשראי', 'החזר כרטיס אשראי', 'card repayment'];
+  if (ignoreKeywords.some((kw) => combined.includes(kw))) {
+    return null;
+  }
+
+  const growthKeywords = ['השקעה', 'חיסכון', 'חינוך', 'לימוד', 'השכלה', 'investment', 'savings', 'education', 'course', 'deposit', 'fund'];
+  const stabilityKeywords = ['ביטוח', 'הלווא', 'משכנת', 'חוב', 'pension', 'insurance', 'loan', 'mortgage', 'debt'];
+  const essentialKeywords = ['חשמל', 'מים', 'גז', 'ארנונה', 'סופר', 'אוכל', 'מזון', 'תחבורה', 'דלק', 'rent', 'water', 'gas', 'electric', 'grocery', 'food', 'transport'];
+  const rewardKeywords = ['בילוי', 'מסעד', 'קפה', 'נופש', 'טיול', 'קניות', 'אופנה', 'ספורט', 'entertainment', 'restaurant', 'coffee', 'travel', 'vacation', 'shopping', 'hobby'];
+
+  if (growthKeywords.some((kw) => combined.includes(kw))) return 'growth';
+  if (stabilityKeywords.some((kw) => combined.includes(kw))) return 'stability';
+  if (essentialKeywords.some((kw) => combined.includes(kw))) return 'essential';
+  if (rewardKeywords.some((kw) => combined.includes(kw))) return 'reward';
+  return 'essential';
+}
+
+function seedSpendingCategoryMappings(db) {
+  console.log('  → Seeding spending category mappings...');
+
+  const categories = db.prepare(`
+    SELECT
+      cd.id,
+      cd.name,
+      cd.name_en,
+      cd.category_type,
+      parent.name AS parent_name
+    FROM category_definitions cd
+    LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
+    WHERE cd.category_type IN ('expense', 'investment')
+      AND cd.is_active = 1
+  `).all();
+
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO spending_category_mappings (
+      category_definition_id,
+      spending_category,
+      variability_type,
+      is_auto_detected,
+      detection_confidence,
+      user_overridden
+    ) VALUES (
+      @category_definition_id,
+      @spending_category,
+      @variability_type,
+      1,
+      @confidence,
+      0
+    )
+  `);
+
+  let created = 0;
+  db.transaction(() => {
+    for (const category of categories) {
+      const spendingCategory = detectSpendingCategoryForSeed(category.name, category.name_en, category.parent_name);
+      if (!spendingCategory) {
+        continue;
+      }
+      insert.run({
+        category_definition_id: category.id,
+        spending_category: spendingCategory,
+        variability_type: category.category_type === 'investment' ? 'fixed' : 'variable',
+        confidence: 0.9,
+      });
+      created++;
+    }
+  })();
+
+  console.log(`    ✓ Seeded ${created} spending category mappings`);
+  return created;
 }
 
 function seedDemoCredentials(db) {
@@ -1369,6 +1444,7 @@ function main() {
     seedCategoryMapping(db, helpers);
     seedCategorizationRules(db, helpers);
     const spendingTargetCount = seedSpendingCategoryTargets(db);
+    const spendingMappingCount = seedSpendingCategoryMappings(db);
     if (withDemo) {
       seedDemoCredentials(db);
     }
@@ -1390,6 +1466,7 @@ function main() {
     console.log(`✅ Seeded ${CATEGORY_MAPPINGS.length} category mappings`);
     console.log(`✅ Seeded ${incomeRulesCount} income categorization rules`);
     console.log(`✅ Seeded ${spendingTargetCount} spending category targets`);
+    console.log(`✅ Seeded ${spendingMappingCount} spending category mappings`);
     console.log('\nDone. You can now run `npm run dev` to start the app against the new database.\n');
   } catch (error) {
     if (transactionStarted && db.inTransaction) {

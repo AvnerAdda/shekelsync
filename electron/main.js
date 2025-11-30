@@ -32,6 +32,7 @@ const {
 } = require('./diagnostics');
 const analyticsMetricsStore = require(resolveAppPath('server', 'services', 'analytics', 'metrics-store.js'));
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+const isMac = process.platform === 'darwin';
 
 // Load environment variables from the Next.js app if present (e.g., USE_SQLITE)
 try {
@@ -520,12 +521,12 @@ async function createWindow() {
     minWidth: 1200,
     minHeight: 700,
     title: 'ShekelSync - Personal Finance Tracker',
-    backgroundColor: '#00000000', // Transparent to support rounded corners
+    backgroundColor: isMac ? '#00000000' : '#0a0a0a', // Avoid transparent gaps on Windows/Linux
     frame: false, // Frameless on all platforms
     titleBarStyle: 'hidden', // Custom title bar handling
-    titleBarOverlay: process.platform === 'darwin', // Only needed for macOS traffic lights
-    transparent: true, // Enable transparency for rounded corners
-    roundedCorners: process.platform === 'darwin',
+    titleBarOverlay: isMac, // Only needed for macOS traffic lights
+    transparent: isMac, // Keep transparency only where rounded corners are native
+    roundedCorners: isMac,
     hasShadow: true,
     webPreferences: {
       nodeIntegration: false, // Security: disable node integration

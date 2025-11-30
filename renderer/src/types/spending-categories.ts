@@ -1,5 +1,6 @@
 export type SpendingCategory = 'growth' | 'stability' | 'essential' | 'reward';
 export type VariabilityType = 'fixed' | 'variable' | 'seasonal';
+export type SpendingAllocation = SpendingCategory | 'unallocated';
 
 // Allocation type descriptions
 export const ALLOCATION_DESCRIPTIONS: Record<SpendingCategory, string> = {
@@ -48,7 +49,7 @@ export interface SpendingCategoryTarget {
 }
 
 export interface SpendingCategoryBreakdownItem {
-  spending_category: SpendingCategory;
+  spending_category: SpendingAllocation;
   transaction_count: number;
   total_amount: number;
   avg_transaction: number;
@@ -69,7 +70,7 @@ export interface SpendingCategoryBreakdownResponse {
   total_spending: number;
   total_income: number;
   targets: Record<SpendingCategory, number>;
-  categories_by_allocation: Record<SpendingCategory | 'unallocated', CategoryWithSpending[]>;
+  categories_by_allocation: Record<SpendingAllocation, CategoryWithSpending[]>;
 }
 
 export interface SpendingCategoryMappingsResponse {

@@ -59,6 +59,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [windowClassesApplied, setWindowClassesApplied] = useState(false);
 
   // Platform detection
   const isMacOS = window.electronAPI?.platform?.isMacOS;
@@ -122,7 +123,16 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
       return () => {};
     }
     const applyState = (state: boolean) => {
-      setIsMaximized(state);
+      const maximized = Boolean(state);
+      setIsMaximized(maximized);
+
+      // Toggle body classes so CSS can remove window gaps on restore/maximize
+      const body = document?.body;
+      if (body) {
+        body.classList.toggle('window-maximized', maximized);
+        body.classList.toggle('window-restored', !maximized);
+        setWindowClassesApplied(true);
+      }
     };
 
     let unsubscribe: (() => void) | undefined;
@@ -132,6 +142,8 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         .isMaximized()
         .then((state: boolean) => applyState(Boolean(state)))
         .catch(() => applyState(false));
+    } else {
+      applyState(false);
     }
 
     if (window.electronAPI?.events?.onWindowStateChanged) {
@@ -145,8 +157,11 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
 
     return () => {
       unsubscribe?.();
+      if (windowClassesApplied) {
+        document.body.classList.remove('window-maximized', 'window-restored');
+      }
     };
-  }, []);
+  }, [windowClassesApplied]);
 
   const handleMenuAction = (action: string) => {
     handleMenuClose();
