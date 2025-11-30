@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Card,
   CardContent,
@@ -7,6 +7,7 @@ import {
   useTheme,
   Divider,
   LinearProgress,
+  CircularProgress,
   Tooltip,
 } from '@mui/material';
 import Grid2 from '@mui/material/Grid2';
@@ -22,6 +23,20 @@ import {
   Info as InfoIcon,
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
+import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpendingCategories';
+import { useBudgetIntelligence } from '@renderer/features/budgets/hooks/useBudgetIntelligence';
+import type { SpendingCategory } from '@renderer/types/spending-categories';
+import { apiClient } from '@renderer/lib/api-client';
+
+interface FinancialHealthSnapshot {
+  overallHealthScore: number;
+  healthBreakdown: {
+    savingsScore?: number;
+    diversityScore?: number;
+    impulseScore?: number;
+    runwayScore?: number;
+  };
+}
 
 interface SummaryCardsProps {
   // Card 1: Current Month Finance
@@ -60,7 +75,6 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   portfolioValue,
   portfolioGains,
   assetBreakdown = [],
-  budgetUsage: _budgetUsage, // Keep for potential future use
   topCategories = [],
   categoryCount = 0,
 }) => {
@@ -126,6 +140,161 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     runwayDays: runwayDays.toFixed(1),
     runwayScore,
   });
+
+  const SPENDING_CATEGORY_COLORS: Record<SpendingCategory, string> = {
+    essential: '#2196F3',
+    growth: '#4CAF50',
+    stability: '#FF9800',
+    reward: '#E91E63',
+  };
+
+  const SPENDING_CATEGORY_LABELS: Record<SpendingCategory, string> = {
+    essential: 'Essential',
+    growth: 'Growth',
+    stability: 'Stability',
+    reward: 'Reward',
+  };
+
+  const DEFAULT_TARGETS: Record<SpendingCategory, number> = {
+    essential: 50,
+    growth: 20,
+    stability: 15,
+    reward: 15,
+  };
+
+  const {
+    breakdown: spendingBreakdown,
+    fetchBreakdown: fetchSpendingBreakdown,
+  } = useSpendingCategories({ autoLoad: false, currentMonthOnly: true });
+
+  const { health: budgetHealth, fetchHealth: fetchBudgetHealth } = useBudgetIntelligence({ autoLoad: false });
+
+  const [healthSnapshot, setHealthSnapshot] = useState<FinancialHealthSnapshot | null>(null);
+
+  useEffect(() => {
+    void fetchSpendingBreakdown();
+    void fetchBudgetHealth();
+  }, [fetchSpendingBreakdown, fetchBudgetHealth]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchHealthSnapshot = async () => {
+      try {
+        const response = await apiClient.get<FinancialHealthSnapshot>('/api/analytics/personal-intelligence?months=3');
+        if (response.ok && isMounted) {
+          setHealthSnapshot(response.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch financial health snapshot for dashboard card:', error);
+      }
+    };
+
+    fetchHealthSnapshot();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const allocationTargets = spendingBreakdown?.targets ?? DEFAULT_TARGETS;
+
+  const allocationItems = (['essential', 'growth', 'stability', 'reward'] as SpendingCategory[]).map((key) => {
+    const item = spendingBreakdown?.breakdown.find((b) => b.spending_category === key);
+    return {
+      key,
+      actual: item?.actual_percentage ?? 0,
+      target: allocationTargets[key],
+      label: SPENDING_CATEGORY_LABELS[key],
+      color: SPENDING_CATEGORY_COLORS[key],
+    };
+  });
+
+  const clampPercent = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
+
+  const getMetricColor = (value: number): 'success' | 'warning' | 'error' =>
+    value >= 70 ? 'success' : value >= 40 ? 'warning' : 'error';
+
+  const allocationTotal = allocationItems.reduce((sum, item) => sum + item.actual, 0);
+
+  const normalizedAllocation = allocationItems.map((item) => ({
+    ...item,
+    width: allocationTotal > 0 ? (item.actual / allocationTotal) * 100 : 0,
+  }));
+
+  const budgetSummary = budgetHealth?.summary;
+  const budgetSegments = [
+    {
+      id: 'on_track',
+      label: 'On track',
+      value: budgetSummary?.on_track ?? 0,
+      color: theme.palette.success.main,
+    },
+    {
+      id: 'warning',
+      label: 'Warning',
+      value: budgetSummary?.warning ?? 0,
+      color: theme.palette.warning.main,
+    },
+    {
+      id: 'exceeded',
+      label: 'Exceeded',
+      value: budgetSummary?.exceeded ?? 0,
+      color: theme.palette.error.main,
+    },
+  ];
+
+  const budgetsTotal = budgetSegments.reduce((sum, s) => sum + s.value, 0);
+  const normalizedBudgets = budgetsTotal > 0
+    ? budgetSegments.map((s) => ({
+        ...s,
+        width: (s.value / budgetsTotal) * 100,
+      }))
+    : [{
+        id: 'none',
+        label: 'No budgets yet',
+        value: 0,
+        width: 100,
+        color: theme.palette.divider,
+      }];
+
+  const overallHealthScore = clampPercent(healthSnapshot?.overallHealthScore ?? savingsScore);
+
+  const normalizedHealth = {
+    savings: clampPercent(healthSnapshot?.healthBreakdown?.savingsScore ?? savingsScore),
+    diversity: clampPercent(
+      healthSnapshot?.healthBreakdown?.diversityScore ?? (diversityScore !== undefined ? diversityScore : savingsScore)
+    ),
+    impulse: clampPercent(
+      healthSnapshot?.healthBreakdown?.impulseScore ?? (impulseControl !== undefined ? impulseControl : savingsScore)
+    ),
+    runway: clampPercent(healthSnapshot?.healthBreakdown?.runwayScore ?? runwayScore),
+  };
+
+  const healthMetrics: Array<{ id: string; label: string; value: number; icon: React.ReactNode }> = [
+    {
+      id: 'savings',
+      label: 'Savings',
+      value: normalizedHealth.savings,
+      icon: <SavingsIcon sx={{ fontSize: 16, color: 'text.secondary' }} />,
+    },
+    {
+      id: 'diversity',
+      label: 'Diversity',
+      value: normalizedHealth.diversity,
+      icon: <DiversityIcon sx={{ fontSize: 16, color: 'text.secondary' }} />,
+    },
+    {
+      id: 'impulse',
+      label: 'Impulse',
+      value: normalizedHealth.impulse,
+      icon: <ImpulseIcon sx={{ fontSize: 16, color: 'text.secondary' }} />,
+    },
+    {
+      id: 'runway',
+      label: 'Runway',
+      value: normalizedHealth.runway,
+      icon: <RunwayIcon sx={{ fontSize: 16, color: 'text.secondary' }} />,
+    },
+  ];
 
   const formatCurrencyValue = (amount: number) =>
     formatCurrency(amount, { absolute: true, maximumFractionDigits: 0 });
@@ -237,70 +406,125 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
       id: 'analysis',
       title: 'Financial Health',
       icon: <SavingsIcon />,
-      mainValue: `${Math.round(savingsScore)}`,
-      subtitle: 'Savings Score',
-      color: savingsScore >= 70 ? theme.palette.success.main
-        : savingsScore >= 40 ? theme.palette.warning.main
+      mainValue: `${overallHealthScore}`,
+      subtitle: 'Financial Health Score',
+      color: overallHealthScore >= 70 ? theme.palette.success.main
+        : overallHealthScore >= 40 ? theme.palette.warning.main
         : theme.palette.error.main,
       details: (
-        <>
-          <Divider sx={{ my: 2 }} />
-
-          {/* Diversity Score */}
-          {diversityScore !== undefined && (
-            <Box sx={{ mb: 1.5 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <DiversityIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                  <Typography variant="body2" color="text.secondary">Diversity</Typography>
-                </Box>
-                <Typography variant="body2">{diversityScore}</Typography>
-              </Box>
-              <LinearProgress
-                variant="determinate"
-                value={diversityScore}
-                color={diversityScore >= 60 ? 'success' : diversityScore >= 30 ? 'warning' : 'error'}
-                sx={{ height: 4, borderRadius: 2 }}
-              />
+        <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.75,
+              px: 1,
+              py: 0.75,
+              borderRadius: 1,
+              bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
+            }}
+          >
+            <Typography variant="caption" color="text.secondary">
+              Budgets ({budgetsTotal} total)
+            </Typography>
+            <Box sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: theme.palette.divider }}>
+              {normalizedBudgets.map((segment) => (
+                <Tooltip
+                  key={segment.id}
+                  title={`${segment.label}${segment.value ? `: ${segment.value}` : ''}`}
+                  placement="top"
+                >
+                  <Box
+                    sx={{
+                      width: `${segment.width}%`,
+                      bgcolor: segment.color,
+                      transition: 'width 0.2s ease',
+                    }}
+                  />
+                </Tooltip>
+              ))}
             </Box>
-          )}
-
-          {/* Impulse Control */}
-          {impulseControl !== undefined && (
-            <Box sx={{ mb: 1.5 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <ImpulseIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                  <Typography variant="body2" color="text.secondary">Impulse</Typography>
-                </Box>
-                <Typography variant="body2">{impulseControl}</Typography>
-              </Box>
-              <LinearProgress
-                variant="determinate"
-                value={impulseControl}
-                color={impulseControl >= 70 ? 'success' : impulseControl >= 40 ? 'warning' : 'error'}
-                sx={{ height: 4, borderRadius: 2 }}
-              />
-            </Box>
-          )}
-
-          {/* Runway Score */}
-          <Box sx={{ mb: 0.5 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <RunwayIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                <Typography variant="body2" color="text.secondary">Runway</Typography>
-              </Box>
-              <Typography variant="body2">{Math.round(runwayScore)}</Typography>
-            </Box>
-            <LinearProgress
-              variant="determinate"
-              value={runwayScore}
-              color={runwayScore >= 70 ? 'success' : runwayScore >= 40 ? 'warning' : 'error'}
-              sx={{ height: 4, borderRadius: 2 }}
-            />
           </Box>
-        </>
+
+          <Box
+            sx={{
+              px: 1,
+              py: 0.75,
+              borderRadius: 1,
+              bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)',
+            }}
+          >
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.6 }}>
+              <Typography variant="body2" color="text.secondary">
+                Actual Allocation
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Target: {(['essential', 'growth', 'stability', 'reward'] as SpendingCategory[])
+                  .map((key) => Math.round(allocationTargets[key]))
+                  .join(' / ')}%
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: theme.palette.divider }}>
+              {normalizedAllocation.map((item) => (
+                <Tooltip
+                  key={item.key}
+                  title={`${item.label}: ${Math.round(item.actual)}% (target ${Math.round(item.target)}%)`}
+                  placement="top"
+                >
+                  <Box
+                    sx={{
+                      width: `${item.width}%`,
+                      bgcolor: `${item.color}E6`,
+                      transition: 'width 0.2s ease',
+                    }}
+                  />
+                </Tooltip>
+              ))}
+            </Box>
+          </Box>
+
+          <Divider />
+
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+              flexWrap: 'nowrap',
+            }}
+          >
+            {healthMetrics.map((metric) => (
+              <Tooltip key={metric.id} title={`${metric.label}: ${metric.value}`} placement="top">
+                <Box sx={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+                  <CircularProgress
+                    variant="determinate"
+                    value={metric.value}
+                    size={54}
+                    thickness={5}
+                    color={getMetricColor(metric.value)}
+                  />
+                  <Box
+                    sx={{
+                      top: 0,
+                      left: 0,
+                      bottom: 0,
+                      right: 0,
+                      position: 'absolute',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Typography variant="caption" fontWeight={700}>
+                      {metric.value}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Tooltip>
+            ))}
+          </Box>
+        </Box>
       ),
     },
   ];

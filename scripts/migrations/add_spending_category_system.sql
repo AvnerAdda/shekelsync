@@ -8,7 +8,7 @@
 CREATE TABLE IF NOT EXISTS spending_category_mappings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   category_definition_id INTEGER NOT NULL UNIQUE,
-  spending_category TEXT NOT NULL CHECK(spending_category IN ('growth', 'stability', 'essential', 'reward', 'other')),
+  spending_category TEXT CHECK(spending_category IN ('growth', 'stability', 'essential', 'reward')),
   variability_type TEXT NOT NULL DEFAULT 'variable' CHECK(variability_type IN ('fixed', 'variable', 'seasonal')),
   is_auto_detected INTEGER NOT NULL DEFAULT 1 CHECK(is_auto_detected IN (0, 1)),
   target_percentage REAL CHECK(target_percentage >= 0 AND target_percentage <= 100),
@@ -34,7 +34,7 @@ CREATE INDEX IF NOT EXISTS idx_spending_category_mappings_variability
 -- Stores user-defined target allocations for spending categories
 CREATE TABLE IF NOT EXISTS spending_category_targets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  spending_category TEXT NOT NULL UNIQUE CHECK(spending_category IN ('growth', 'stability', 'essential', 'reward', 'other')),
+  spending_category TEXT NOT NULL UNIQUE CHECK(spending_category IN ('growth', 'stability', 'essential', 'reward')),
   target_percentage REAL NOT NULL CHECK(target_percentage >= 0 AND target_percentage <= 100),
   is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -47,8 +47,7 @@ VALUES
   ('essential', 50.0, 1),  -- 50% for essentials (rent, utilities, groceries)
   ('growth', 20.0, 1),      -- 20% for growth (investments, savings, education)
   ('stability', 10.0, 1),   -- 10% for stability (emergency fund, insurance)
-  ('reward', 15.0, 1),      -- 15% for rewards (entertainment, dining, travel)
-  ('other', 5.0, 1);        -- 5% for other/uncategorized
+  ('reward', 15.0, 1);      -- 15% for rewards (entertainment, dining, travel)
 
 -- Trigger to update updated_at timestamp
 CREATE TRIGGER IF NOT EXISTS update_spending_category_mappings_timestamp

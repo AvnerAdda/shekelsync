@@ -7,6 +7,7 @@ import type {
   SpendingCategoryMappingsResponse,
   InitializeSpendingCategoriesResponse,
   CategoryWithSpending,
+  SpendingAllocation,
 } from '@renderer/types/spending-categories';
 
 interface UseSpendingCategoriesOptions {
@@ -26,7 +27,7 @@ export function useSpendingCategories(options: UseSpendingCategoriesOptions = {}
 
   const [mappings, setMappings] = useState<SpendingCategoryMapping[]>([]);
   const [breakdown, setBreakdown] = useState<SpendingCategoryBreakdownResponse | null>(null);
-  const [selectedAllocation, setSelectedAllocation] = useState<SpendingCategory | 'unallocated' | null>(null);
+  const [selectedAllocation, setSelectedAllocation] = useState<SpendingAllocation | null>(null);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -210,7 +211,7 @@ export function useSpendingCategories(options: UseSpendingCategoriesOptions = {}
   }, [fetchMappings, fetchBreakdown]);
 
   // Get categories for selected allocation type
-  const getCategoriesForAllocation = useCallback((allocationType: SpendingCategory | 'unallocated'): CategoryWithSpending[] => {
+  const getCategoriesForAllocation = useCallback((allocationType: SpendingAllocation): CategoryWithSpending[] => {
     if (!breakdown?.categories_by_allocation) {
       return [];
     }

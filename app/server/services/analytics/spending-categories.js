@@ -1,8 +1,8 @@
 /**
  * Spending Categories Service
  *
- * Manages spending category classification system (Growth, Stability, Essential, Reward, Other)
- * with auto-detection, manual override, and allocation analytics.
+ * Manages spending category classification system (Growth, Stability, Essential, Reward)
+ * with auto-detection, manual override, and allocation analytics (supports unallocated categories).
  */
 
 const actualDatabase = require('../database.js');
@@ -10,6 +10,165 @@ const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 const { CATEGORY_TYPES } = require('../../../lib/category-constants.js');
 
 let database = actualDatabase;
+
+function getRows(result = {}) {
+  return Array.isArray(result) ? result : Array.isArray(result.rows) ? result.rows : [];
+}
+
+let schemaValidated = false;
+
+async function ensureSpendingCategorySchema(client) {
+  if (schemaValidated) {
+    return;
+  }
+
+  const mappingInfo = getRows(await client.query('PRAGMA table_info(spending_category_mappings)'));
+  const mappingTableExists = mappingInfo.length > 0;
+  const mappingSqlResult = getRows(await client.query(`
+    SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'spending_category_mappings'
+  `));
+  const mappingSql = mappingSqlResult[0]?.sql || '';
+  const mappingColumn = mappingInfo.find(col => col.name === 'spending_category');
+  const mappingNotNull = mappingColumn ? Number(mappingColumn.notnull) === 1 : false;
+  const mappingUsesOther = mappingSql.includes("'other'");
+  const needsMappingMigration = !mappingTableExists || mappingNotNull || mappingUsesOther;
+
+  if (needsMappingMigration) {
+    await client.query('BEGIN');
+    try {
+      await client.query('DROP TABLE IF EXISTS spending_category_mappings_new');
+      await client.query(`
+        CREATE TABLE spending_category_mappings_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          category_definition_id INTEGER NOT NULL UNIQUE,
+          spending_category TEXT CHECK(spending_category IN ('growth', 'stability', 'essential', 'reward')),
+          variability_type TEXT NOT NULL DEFAULT 'variable' CHECK(variability_type IN ('fixed', 'variable', 'seasonal')),
+          is_auto_detected INTEGER NOT NULL DEFAULT 1 CHECK(is_auto_detected IN (0, 1)),
+          target_percentage REAL CHECK(target_percentage >= 0 AND target_percentage <= 100),
+          detection_confidence REAL DEFAULT 0.0 CHECK(detection_confidence >= 0 AND detection_confidence <= 1),
+          user_overridden INTEGER NOT NULL DEFAULT 0 CHECK(user_overridden IN (0, 1)),
+          notes TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE CASCADE
+        )
+      `);
+
+      if (mappingTableExists) {
+        await client.query(`
+          INSERT INTO spending_category_mappings_new (
+            id,
+            category_definition_id,
+            spending_category,
+            variability_type,
+            is_auto_detected,
+            target_percentage,
+            detection_confidence,
+            user_overridden,
+            notes,
+            created_at,
+            updated_at
+          )
+          SELECT
+            id,
+            category_definition_id,
+            NULLIF(spending_category, 'other') AS spending_category,
+            variability_type,
+            is_auto_detected,
+            target_percentage,
+            detection_confidence,
+            user_overridden,
+            notes,
+            created_at,
+            updated_at
+          FROM spending_category_mappings
+        `);
+        await client.query('DROP TABLE spending_category_mappings');
+      }
+
+      await client.query('ALTER TABLE spending_category_mappings_new RENAME TO spending_category_mappings');
+      await client.query('CREATE INDEX IF NOT EXISTS idx_spending_category_mappings_category_id ON spending_category_mappings(category_definition_id)');
+      await client.query('CREATE INDEX IF NOT EXISTS idx_spending_category_mappings_spending_cat ON spending_category_mappings(spending_category)');
+      await client.query('CREATE INDEX IF NOT EXISTS idx_spending_category_mappings_variability ON spending_category_mappings(variability_type)');
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_spending_mappings_unallocated
+        ON spending_category_mappings(spending_category)
+        WHERE spending_category IS NULL
+      `);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  }
+
+  const targetInfo = getRows(await client.query('PRAGMA table_info(spending_category_targets)'));
+  const targetsExist = targetInfo.length > 0;
+  const targetSqlResult = getRows(await client.query(`
+    SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'spending_category_targets'
+  `));
+  const targetSql = targetSqlResult[0]?.sql || '';
+  const targetsUseOther = targetSql.includes("'other'");
+  const needsTargetMigration = !targetsExist || targetsUseOther;
+
+  if (needsTargetMigration) {
+    await client.query('BEGIN');
+    try {
+      await client.query('DROP TABLE IF EXISTS spending_category_targets_new');
+      await client.query(`
+        CREATE TABLE spending_category_targets_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          spending_category TEXT NOT NULL UNIQUE CHECK(spending_category IN ('growth', 'stability', 'essential', 'reward')),
+          target_percentage REAL NOT NULL CHECK(target_percentage >= 0 AND target_percentage <= 100),
+          is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+
+      if (targetsExist) {
+        await client.query(`
+          INSERT INTO spending_category_targets_new (
+            id,
+            spending_category,
+            target_percentage,
+            is_active,
+            created_at,
+            updated_at
+          )
+          SELECT
+            id,
+            spending_category,
+            target_percentage,
+            is_active,
+            created_at,
+            updated_at
+          FROM spending_category_targets
+          WHERE spending_category IN ('essential', 'growth', 'stability', 'reward')
+        `);
+        await client.query('DROP TABLE spending_category_targets');
+      }
+
+      await client.query('ALTER TABLE spending_category_targets_new RENAME TO spending_category_targets');
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  }
+
+  // Ensure the four default targets exist even if the table was recreated empty
+  await client.query(`
+    INSERT OR IGNORE INTO spending_category_targets (spending_category, target_percentage, is_active)
+    VALUES
+      ('essential', 50, 1),
+      ('growth', 20, 1),
+      ('stability', 15, 1),
+      ('reward', 15, 1)
+  `);
+
+  schemaValidated = true;
+}
 
 /**
  * Auto-detect spending category based on category name and characteristics
@@ -102,6 +261,7 @@ async function initializeSpendingCategories() {
   const client = await database.getClient();
 
   try {
+    await ensureSpendingCategorySchema(client);
     // Get all expense categories
     const categoriesResult = await client.query(`
       SELECT
@@ -140,7 +300,7 @@ async function initializeSpendingCategories() {
         category.category_type
       );
 
-      // Create mapping
+      // Create mapping (spendingCategory may be NULL for unallocated)
       await client.query(`
         INSERT INTO spending_category_mappings (
           category_definition_id,
@@ -174,6 +334,7 @@ async function getSpendingCategoryMappings(params = {}) {
   const client = await database.getClient();
 
   try {
+    await ensureSpendingCategorySchema(client);
     let query = `
       SELECT
         scm.*,
@@ -219,19 +380,20 @@ async function updateSpendingCategoryMapping(categoryDefinitionId, updates) {
   const client = await database.getClient();
 
   try {
+    await ensureSpendingCategorySchema(client);
     const { spendingCategory, variabilityType, targetPercentage, notes } = updates;
+    const hasSpendingCategory = Object.prototype.hasOwnProperty.call(updates, 'spendingCategory');
 
     const setStatements = [];
     const values = [];
     let paramCount = 0;
 
-    if (spendingCategory) {
+    if (hasSpendingCategory) {
       paramCount++;
       setStatements.push(`spending_category = $${paramCount}`);
       values.push(spendingCategory);
 
       // Mark as user overridden
-      paramCount++;
       setStatements.push(`user_overridden = 1`);
       setStatements.push(`is_auto_detected = 0`);
     }
@@ -269,7 +431,27 @@ async function updateSpendingCategoryMapping(categoryDefinitionId, updates) {
     `, values);
 
     if (result.rows.length === 0) {
-      throw new Error('Spending category mapping not found');
+      const insertResult = await client.query(`
+        INSERT INTO spending_category_mappings (
+          category_definition_id,
+          spending_category,
+          variability_type,
+          is_auto_detected,
+          detection_confidence,
+          user_overridden,
+          target_percentage,
+          notes
+        ) VALUES ($1, $2, $3, 0, 1.0, $4, $5, $6)
+        RETURNING *
+      `, [
+        categoryDefinitionId,
+        hasSpendingCategory ? spendingCategory : null,
+        variabilityType || 'variable',
+        hasSpendingCategory ? 1 : 0,
+        targetPercentage ?? null,
+        notes ?? null,
+      ]);
+      return { mapping: insertResult.rows[0] };
     }
 
     return { mapping: result.rows[0] };
@@ -300,6 +482,16 @@ async function getSpendingCategoryBreakdown(params = {}) {
   const client = await database.getClient();
 
   try {
+    // Exclude capital return categories from income/spending so they don't skew allocations,
+    // but track their inflows to offset growth totals.
+    const capitalReturnSubquery = `
+      SELECT id FROM category_definitions
+      WHERE name = 'החזר קרן'
+         OR name_en = 'Capital Returns'
+         OR (is_counted_as_income IS NOT NULL AND is_counted_as_income = 0)
+    `;
+
+    await ensureSpendingCategorySchema(client);
     // Get total income for the period (salary = positive transactions with Income category)
     const incomeResult = await client.query(`
       SELECT COALESCE(SUM(t.price), 0) as total_income
@@ -308,6 +500,8 @@ async function getSpendingCategoryBreakdown(params = {}) {
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price > 0
         AND (cd.category_type = 'income' OR t.category_type = 'income')
+        AND (cd.is_counted_as_income IS NULL OR cd.is_counted_as_income = 1)
+        AND cd.id NOT IN (${capitalReturnSubquery})
     `, [start, end]);
 
     const totalIncome = parseFloat(incomeResult.rows[0]?.total_income || 0);
@@ -315,7 +509,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
     // Get spending totals by spending category
     const result = await client.query(`
       SELECT
-        COALESCE(scm.spending_category, 'unallocated') as spending_category,
+        COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') as spending_category,
         COUNT(t.identifier) as transaction_count,
         SUM(ABS(t.price)) as total_amount,
         AVG(ABS(t.price)) as avg_transaction,
@@ -337,7 +531,8 @@ async function getSpendingCategoryBreakdown(params = {}) {
       )
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
-        AND cd.category_type = 'expense'
+        AND cd.category_type IN ('expense', 'investment')
+        AND cd.id NOT IN (${capitalReturnSubquery})
         AND ap.id IS NULL
       GROUP BY COALESCE(scm.spending_category, 'unallocated')
       ORDER BY total_amount DESC
@@ -346,11 +541,35 @@ async function getSpendingCategoryBreakdown(params = {}) {
     const breakdown = result.rows;
     const totalSpending = breakdown.reduce((sum, item) => sum + parseFloat(item.total_amount || 0), 0);
 
+    // Capital return inflows offset growth; subtract positive capital-return amounts from growth
+    const capResult = await client.query(`
+      SELECT COALESCE(SUM(t.price), 0) AS total_amount
+      FROM transactions t
+      WHERE t.date >= $1 AND t.date <= $2
+        AND t.price > 0
+        AND t.category_definition_id IN (${capitalReturnSubquery})
+    `, [start, end]);
+    const capitalReturnOffset = parseFloat(getRows(capResult)[0]?.total_amount || 0);
+
+    // Adjust growth total by subtracting capital return inflows
+    const adjustedBreakdown = breakdown.map(item => {
+      if (item.spending_category === 'growth') {
+        const adjustedTotal = Math.max(0, parseFloat(item.total_amount || 0) - capitalReturnOffset);
+        return { ...item, total_amount: adjustedTotal };
+      }
+      return item;
+    });
+
+    const assignedSpending = adjustedBreakdown
+      .filter(item => (item.spending_category && item.spending_category !== 'unallocated'))
+      .reduce((sum, item) => sum + parseFloat(item.total_amount || 0), 0);
+    const totalForPercentages = assignedSpending > 0 ? assignedSpending : totalSpending;
+
     // Get targets
     const targetsResult = await client.query(`
       SELECT spending_category, target_percentage
       FROM spending_category_targets
-      WHERE is_active = 1 AND spending_category IS NOT NULL
+      WHERE is_active = 1 AND spending_category IN ('essential', 'growth', 'stability', 'reward')
     `);
 
     const targets = {};
@@ -361,7 +580,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
     // Get categories grouped by allocation type with spending data
     const categoriesByAllocationResult = await client.query(`
       SELECT
-        COALESCE(scm.spending_category, 'unallocated') as allocation_type,
+        COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') as allocation_type,
         cd.id as category_definition_id,
         cd.name as category_name,
         cd.name_en as category_name_en,
@@ -373,7 +592,8 @@ async function getSpendingCategoryBreakdown(params = {}) {
       LEFT JOIN transactions t ON t.category_definition_id = cd.id
         AND t.date >= $1 AND t.date <= $2
         AND t.price < 0
-      WHERE cd.category_type = 'expense' AND cd.is_active = 1
+      WHERE cd.category_type IN ('expense', 'investment') AND cd.is_active = 1
+        AND cd.id NOT IN (${capitalReturnSubquery})
       GROUP BY cd.id, cd.name, cd.name_en, scm.spending_category
       ORDER BY scm.spending_category, total_amount DESC
     `, [start, end]);
@@ -388,12 +608,13 @@ async function getSpendingCategoryBreakdown(params = {}) {
     };
 
     categoriesByAllocationResult.rows.forEach(row => {
-      const allocationType = row.spending_category || 'unallocated';
+      const allocationType = row.allocation_type || 'unallocated';
+      const mappedCategory = row.spending_category === 'other' ? null : row.spending_category;
       const categoryData = {
         category_definition_id: row.category_definition_id,
         category_name: row.category_name,
         category_name_en: row.category_name_en,
-        spending_category: row.spending_category,
+        spending_category: mappedCategory,
         total_amount: parseFloat(row.total_amount || 0),
         percentage_of_income: totalIncome > 0
           ? (parseFloat(row.total_amount || 0) / totalIncome) * 100
@@ -409,11 +630,17 @@ async function getSpendingCategoryBreakdown(params = {}) {
     });
 
     // Calculate percentages based on income (not total spending)
-    const enrichedBreakdown = breakdown.map(item => {
-      const spendingCategory = item.spending_category || 'unallocated';
-      const actualPercentage = totalIncome > 0
-        ? (parseFloat(item.total_amount) / totalIncome) * 100
-        : 0;
+    const enrichedBreakdown = adjustedBreakdown.map(item => {
+      const spendingCategory = item.spending_category === 'other'
+        ? 'unallocated'
+        : (item.spending_category || 'unallocated');
+
+      const amount = parseFloat(item.total_amount || 0);
+      // Assigned categories share 100% of the assigned spending; unallocated is excluded from that sum.
+      const actualPercentage = spendingCategory === 'unallocated'
+        ? 0
+        : (totalForPercentages > 0 ? (amount / totalForPercentages) * 100 : 0);
+
       const targetPercentage = targets[spendingCategory] || 0;
       const variance = actualPercentage - targetPercentage;
 
@@ -450,6 +677,7 @@ async function bulkAssignCategories(categoryDefinitionIds, spendingCategory) {
   const client = await database.getClient();
 
   try {
+    await ensureSpendingCategorySchema(client);
     for (const categoryDefId of categoryDefinitionIds) {
       // Check if mapping exists
       const existingResult = await client.query(
@@ -498,6 +726,7 @@ async function updateSpendingCategoryTargets(targets) {
   const client = await database.getClient();
 
   try {
+    await ensureSpendingCategorySchema(client);
     // Validate that targets sum to 100%
     const sum = Object.values(targets).reduce((acc, val) => acc + val, 0);
     if (Math.abs(sum - 100) > 0.01) {
@@ -530,9 +759,11 @@ module.exports = {
   autoDetectSpendingCategory, // Export for testing
   __setDatabase(mock) {
     database = mock || actualDatabase;
+    schemaValidated = false;
   },
   __resetDatabase() {
     database = actualDatabase;
+    schemaValidated = false;
   },
 };
 

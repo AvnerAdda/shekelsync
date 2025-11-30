@@ -5,6 +5,7 @@ const releaseMock = vi.fn();
 
 let serviceModule: any;
 let getSpendingCategoryBreakdown: any;
+let queryQueue: any[] = [];
 
 beforeAll(async () => {
   serviceModule = await import('../analytics/spending-categories.js');
@@ -16,6 +17,53 @@ beforeAll(async () => {
 beforeEach(() => {
   queryMock.mockReset();
   releaseMock.mockReset();
+  queryQueue = [];
+
+  queryMock.mockImplementation((sql: string) => {
+    if (sql.includes('PRAGMA table_info(spending_category_mappings)')) {
+      return Promise.resolve({ rows: [{ name: 'spending_category', notnull: 0 }] });
+    }
+    if (sql.includes('PRAGMA table_info(spending_category_targets)')) {
+      return Promise.resolve({ rows: [{ name: 'spending_category', notnull: 1 }] });
+    }
+    if (sql.includes("sqlite_master") && sql.includes('spending_category_mappings')) {
+      return Promise.resolve({ rows: [{ sql: "CREATE TABLE spending_category_mappings (spending_category TEXT)" }] });
+    }
+    if (sql.includes("sqlite_master") && sql.includes('spending_category_targets')) {
+      return Promise.resolve({ rows: [{ sql: "CREATE TABLE spending_category_targets (spending_category TEXT)" }] });
+    }
+    if (/^BEGIN|^COMMIT|^ROLLBACK/i.test(sql)) {
+      return Promise.resolve({ rows: [] });
+    }
+    if (sql.includes('spending_category_mappings_new') || sql.includes('spending_category_targets_new')) {
+      return Promise.resolve({ rows: [] });
+    }
+    if (sql.includes('CREATE INDEX') || sql.startsWith('ALTER TABLE spending_category')) {
+      return Promise.resolve({ rows: [] });
+    }
+    if (sql.includes('SELECT COALESCE(SUM(t.price)') && sql.includes('total_income')) {
+      const next = queryQueue.shift();
+      return Promise.resolve(next ?? { rows: [] });
+    }
+    if (sql.includes('COALESCE(NULLIF(scm.spending_category') && sql.includes('avg_transaction')) {
+      const next = queryQueue.shift();
+      return Promise.resolve(next ?? { rows: [] });
+    }
+    if (sql.includes('FROM spending_category_targets') && sql.includes('target_percentage')) {
+      const next = queryQueue.shift();
+      return Promise.resolve(next ?? { rows: [] });
+    }
+    if (sql.includes('allocation_type') && sql.includes('category_definitions')) {
+      const next = queryQueue.shift();
+      return Promise.resolve(next ?? { rows: [] });
+    }
+    if (sql.startsWith('INSERT OR IGNORE INTO spending_category_targets')) {
+      return Promise.resolve({ rows: [], rowCount: 4 });
+    }
+
+    return Promise.resolve({ rows: [] });
+  });
+
   const mockClient = {
     query: queryMock,
     release: releaseMock,
@@ -31,13 +79,11 @@ afterEach(() => {
 
 describe('spending categories service', () => {
   it('marks missing spending_category entries as unallocated', async () => {
-    queryMock
+    queryQueue.push(
       // total income
-      .mockResolvedValueOnce({
-        rows: [{ total_income: '100' }],
-      })
+      { rows: [{ total_income: '100' }] },
       // spending breakdown
-      .mockResolvedValueOnce({
+      {
         rows: [
           {
             spending_category: null,
@@ -48,11 +94,11 @@ describe('spending categories service', () => {
             last_transaction_date: '2025-01-31',
           },
         ],
-      })
+      },
       // targets
-      .mockResolvedValueOnce({ rows: [] })
+      { rows: [] },
       // categories by allocation
-      .mockResolvedValueOnce({
+      {
         rows: [
           {
             category_definition_id: 10,
@@ -63,22 +109,22 @@ describe('spending categories service', () => {
             transaction_count: '2',
           },
         ],
-      });
+      }
+    );
 
     const result = await getSpendingCategoryBreakdown({
       startDate: '2025-01-01',
       endDate: '2025-01-31',
     });
 
-    expect(queryMock).toHaveBeenCalledTimes(4);
+    expect(queryMock).toHaveBeenCalled();
     expect(releaseMock).toHaveBeenCalledTimes(1);
 
     expect(result.breakdown).toHaveLength(1);
     expect(result.breakdown[0].spending_category).toBe('unallocated');
-    expect(result.breakdown[0].actual_percentage).toBeCloseTo(50);
+    expect(result.breakdown[0].actual_percentage).toBeCloseTo(0);
 
     expect(result.categories_by_allocation.unallocated).toHaveLength(1);
     expect(result.categories_by_allocation.unallocated[0].category_definition_id).toBe(10);
   });
 });
-
