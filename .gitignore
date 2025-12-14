@@ -73,3 +73,5 @@ analysis/
 .venv/
 
 *.md
+
+app/scripts/

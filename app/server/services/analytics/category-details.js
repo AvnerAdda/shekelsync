@@ -1,5 +1,6 @@
 const database = require('../database.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
+const { resolveLocale, getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
 
 function buildCategoryFilter({ category, parentId, subcategoryId }) {
   if (subcategoryId) {
@@ -28,7 +29,7 @@ function buildCategoryFilter({ category, parentId, subcategoryId }) {
     clause: `t.category_definition_id IN (
       WITH RECURSIVE category_tree AS (
         SELECT id FROM category_definitions
-        WHERE LOWER(name) = LOWER($1) OR LOWER(name_en) = LOWER($1)
+        WHERE LOWER(name) = LOWER($1) OR LOWER(name_en) = LOWER($1) OR LOWER(name_fr) = LOWER($1)
         UNION ALL
         SELECT cd.id FROM category_definitions cd
         JOIN category_tree ct ON cd.parent_id = ct.id
@@ -82,7 +83,9 @@ async function getCategoryDetails(params = {}) {
     startDate,
     endDate,
     type = 'expense',
+    locale: localeInput,
   } = params;
+  const locale = resolveLocale(localeInput);
 
   if (!category && !parentId && !subcategoryId) {
     const error = new Error('Category identifier is required');
@@ -175,6 +178,8 @@ async function getCategoryDetails(params = {}) {
           SELECT
             cd.id,
             cd.name,
+            cd.name_en,
+            cd.name_fr,
             cd.color,
             cd.icon,
             cd.description,
@@ -188,7 +193,7 @@ async function getCategoryDetails(params = {}) {
             AND t.date >= $2
             AND t.date <= $3
             AND ap.id IS NULL
-          GROUP BY cd.id, cd.name, cd.color, cd.icon, cd.description
+          GROUP BY cd.id, cd.name, cd.name_en, cd.name_fr, cd.color, cd.icon, cd.description
           ORDER BY total DESC
         `,
         [parentId, start, end],
@@ -206,7 +211,11 @@ async function getCategoryDetails(params = {}) {
           t.account_number,
           cd.id AS category_definition_id,
           cd.name AS category_name,
-          parent.name AS parent_name
+          cd.name_en AS category_name_en,
+          cd.name_fr AS category_name_fr,
+          parent.name AS parent_name,
+          parent.name_en AS parent_name_en,
+          parent.name_fr AS parent_name_fr
         FROM transactions t
         JOIN category_definitions cd ON t.category_definition_id = cd.id
         LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
@@ -267,7 +276,11 @@ async function getCategoryDetails(params = {}) {
       },
       subcategories: (subcategoriesResult.rows || []).map((row) => ({
         id: row.id,
-        name: row.name,
+        name: getLocalizedCategoryName({
+          name: row.name,
+          name_en: row.name_en,
+          name_fr: row.name_fr,
+        }, locale) || row.name,
         count: Number.parseInt(row.count, 10),
         total: Number.parseFloat(row.total),
       })),
@@ -289,8 +302,16 @@ async function getCategoryDetails(params = {}) {
         processedDate: row.processed_date,
         vendor: row.vendor,
         categoryDefinitionId: row.category_definition_id,
-        categoryName: row.category_name,
-        parentName: row.parent_name,
+        categoryName: getLocalizedCategoryName({
+          name: row.category_name,
+          name_en: row.category_name_en,
+          name_fr: row.category_name_fr,
+        }, locale) || row.category_name,
+        parentName: getLocalizedCategoryName({
+          name: row.parent_name,
+          name_en: row.parent_name_en,
+          name_fr: row.parent_name_fr,
+        }, locale) || row.parent_name,
         accountNumber: row.account_number,
       })),
       trend: trendResult.rows.map((row) => ({

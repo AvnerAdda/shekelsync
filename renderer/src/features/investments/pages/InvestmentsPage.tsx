@@ -8,7 +8,6 @@ import {
   Paper,
   Tooltip,
   CircularProgress,
-  useTheme,
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
@@ -17,6 +16,7 @@ import {
   AccountBalance as AccountIcon,
 } from '@mui/icons-material';
 import { apiClient } from '@/lib/api-client';
+import { useTranslation } from 'react-i18next';
 import InvestmentAccountsModal from '../components/InvestmentAccountsModal';
 import {
   InvestmentData,
@@ -33,7 +33,7 @@ import PortfolioHistorySection from '../components/PortfolioHistorySection';
 import PortfolioBreakdownSection from '../components/PortfolioBreakdownSection';
 
 const InvestmentsPageContent: React.FC = () => {
-  const theme = useTheme();
+  const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage' });
   const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
   const accessStatus = getPageAccessStatus('investments');
   const isLocked = accessStatus.isLocked;
@@ -227,14 +227,14 @@ const InvestmentsPageContent: React.FC = () => {
         >
           <Box>
             <Typography variant="h4" fontWeight="bold" gutterBottom>
-              Investments Dashboard
+              {t('header.title')}
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Track your portfolio performance and investment transactions
+              {t('header.subtitle')}
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            <Tooltip title="Refresh all data">
+            <Tooltip title={t('actions.refreshTooltip')}>
               <Button
                 variant="outlined"
                 startIcon={isRefreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
@@ -243,7 +243,7 @@ const InvestmentsPageContent: React.FC = () => {
                 size="small"
                 sx={{ textTransform: 'none', minWidth: 100 }}
               >
-                {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                {isRefreshing ? t('actions.refreshing') : t('actions.refresh')}
               </Button>
             </Tooltip>
             <Button
@@ -256,7 +256,7 @@ const InvestmentsPageContent: React.FC = () => {
               size="small"
               sx={{ textTransform: 'none' }}
             >
-              Portfolio Setup
+              {t('actions.portfolioSetup')}
             </Button>
           </Box>
         </Box>
@@ -285,15 +285,14 @@ const InvestmentsPageContent: React.FC = () => {
           <Paper sx={{ p: 4, textAlign: 'center', mt: 4 }}>
             <AccountIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
             <Typography variant="h5" gutterBottom fontWeight="medium">
-              Get Started with Your Investment Portfolio
+              {t('empty.title')}
             </Typography>
             <Typography
               variant="body1"
               color="text.secondary"
               sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}
             >
-              Track your investment performance across multiple accounts. Connect your
-              brokerage, pension, and savings accounts to see your complete financial picture.
+              {t('empty.description')}
             </Typography>
             <Button
               variant="contained"
@@ -305,7 +304,7 @@ const InvestmentsPageContent: React.FC = () => {
               }}
               sx={{ borderRadius: 2, textTransform: 'none', px: 4 }}
             >
-              Setup Portfolio
+              {t('empty.cta')}
             </Button>
           </Paper>
         )

@@ -1,0 +1,1650 @@
+{
+  "common": {
+    "language": "Language",
+    "languages": {
+      "he": "Hebrew",
+      "en": "English",
+      "fr": "French"
+    },
+    "systemLanguageDetected": "Detected {{language}} from your system locale. You can change it anytime."
+  },
+  "dashboard": {
+    "summary": {
+      "categories": {
+        "essential": "Essential",
+        "growth": "Growth",
+        "stability": "Stability",
+        "reward": "Reward"
+      },
+      "budgets": {
+        "heading": "Budgets ({{count}} total)",
+        "onTrack": "On track",
+        "warning": "Warning",
+        "exceeded": "Exceeded",
+        "none": "No budgets yet"
+      },
+      "allocation": {
+        "actual": "Actual Allocation",
+        "target": "Target: {{targets}}%",
+        "tooltip": "{{label}}: {{actual}}% (target {{target}}%)"
+      },
+      "health": {
+        "subtitle": "Financial Health Score",
+        "savings": "Savings",
+        "diversity": "Diversity",
+        "impulse": "Impulse",
+        "runway": "Runway"
+      },
+      "cards": {
+        "finance": {
+          "title": "Current Month",
+          "subtitle": "Bank: {{amount}}",
+          "income": "Income",
+          "expenses": "Expenses",
+          "investments": "Investments",
+          "capitalReturns": "Capital Returns",
+          "capitalReturnsNote": "Principal returned from investments (pikadon, deposits). Not counted as income but offsets investment outflows.",
+          "pendingLabel": "Pending ({{count}})",
+          "pendingDeficit": "Pending expenses will cause deficit of {{amount}}"
+        },
+        "portfolio": {
+          "title": "Investment Portfolio"
+        },
+        "analysis": {
+          "title": "Financial Health"
+        }
+      }
+    }
+    ,
+    "summarySection": {
+      "fallbackCategory": "Total Expenses",
+      "noIncomeTitle": "No Income Detected",
+      "noIncomeAddAccounts": "To track your income automatically, please add your bank account credentials. This will enable automatic income tracking and provide a complete financial overview.",
+      "noIncomeDetected": "We haven't detected any income transactions in the selected period. If you're expecting income data, please verify your most recent bank scrape was successful or run a new scrape to update your transactions.",
+      "periodLabel": "Current month: {{start}} - {{end}}",
+      "compare": {
+        "on": "Comparing to Last Month",
+        "off": "Compare to Last Month"
+      },
+      "comparison": {
+        "title": "Comparison Mode (Coming Soon)",
+        "description": "Month-over-month comparison view is under development. This will show side-by-side metrics comparing {{current}} with {{previous}}."
+      }
+    }
+  },
+  "dashboardHome": {
+    "empty": {
+      "welcomeTitle": "Welcome to ShekelSync!",
+      "welcomeDescription": "Let's get your finances organized. Follow these steps to start tracking your expenses and income.",
+      "noTransactionsTitle": "No transactions in current month",
+      "noTransactionsDescription": "You have {{count}} transactions total, but none in the current month ({{month}}). Try scraping recent data or view historical analysis in the Analysis page.",
+      "noTransactionsDisclaimer": "No transactions recorded yet for {{month}}. The data shown below reflects your most recent available period.",
+      "showingPreviousMonth": "No transactions yet for {{currentMonth}}. Showing data from {{displayedMonth}}.",
+      "scrapeRecent": "Scrape Recent Transactions",
+      "viewHistory": "View Historical Data"
+    },
+    "anomaly": {
+      "expenseSpike": "Unusual expense spike: {{amount}}"
+    },
+    "trends": {
+      "highSpending": "High spending period",
+      "lowSpending": "Low spending period"
+    },
+    "tooltip": {
+      "income": "Income",
+      "expenses": "Expenses",
+      "net": "Net",
+      "vsAverage": "vs avg",
+      "unusualSpending": "Unusual spending",
+      "clickForDetails": "Click to see details"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "language": {
+      "title": "Language & locale",
+      "description": "Default is Hebrew. On first launch we choose the closest match to your system locale; you can switch at any time.",
+      "detectedLabel": "System language: {{language}}"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "description": "Choose your preferred theme. System will automatically match your device's theme.",
+      "light": "Light",
+      "system": "System",
+      "dark": "Dark",
+      "currentTheme": "Current theme: {{theme}}",
+      "systemFollow": "(following system preference)"
+    },
+    "textSize": {
+      "title": "Text Size",
+      "description": "Adjust the text size throughout the application for better readability.",
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large",
+      "current": "Current text size: {{size}}",
+      "hints": {
+        "small": "(90% of default)",
+        "medium": "(100% - default)",
+        "large": "(110% of default)"
+      }
+    },
+    "diagnostics": {
+      "title": "Diagnostics & Crash Reports",
+      "description": "Share anonymized crash reports to help us resolve stability issues faster. Sensitive data such as account credentials and personal identifiers are never included in crash payloads.",
+      "notSupported": "Crash reporting is only available in the desktop app.",
+      "toggleLabel": "Send crash reports automatically",
+      "toggleOn": "Crash details will be securely uploaded to our monitoring service.",
+      "toggleOff": "Crash details remain on your device until you opt in.",
+      "exportHint": "You can always export logs manually from the Diagnostics panel below."
+    },
+    "chatbot": {
+      "title": "AI Chatbot Settings",
+      "description": "Configure your AI financial assistant and control what data it can access. The chatbot never has access to your bank credentials or passwords.",
+      "enable": "Enable AI Chatbot",
+      "enableHint": "Show the chatbot button and allow AI assistant interactions",
+      "permissionsTitle": "Data Access Permissions",
+      "permissionsDescription": "Grant the chatbot access to specific data to enable personalized insights.",
+      "permissionsEnableFirst": "(Enable chatbot first to configure permissions)",
+      "permissions": {
+        "transaction": "Transaction Data",
+        "transactionHint": "Allow access to transaction history, amounts, dates, and descriptions",
+        "category": "Category Data",
+        "categoryHint": "Allow access to spending categories and categorization rules",
+        "analytics": "Analytics & Insights",
+        "analyticsHint": "Allow access to behavioral analytics, trends, and spending patterns"
+      },
+      "privacyTitle": "Your Privacy is Protected",
+      "privacyBullet1": "• The chatbot NEVER has access to your bank credentials or passwords",
+      "privacyBullet2": "• All permissions can be revoked at any time",
+      "privacyBullet3": "• Data is only used to answer your questions and provide insights",
+      "privacyBullet4": "• No data is shared with third parties",
+      "noPermissions": "The chatbot is enabled but has no data access permissions. Grant at least one permission for the chatbot to provide useful insights."
+    },
+    "privacy": {
+      "title": "Privacy Controls",
+      "description": "Toggle amount masking to obscure all financial figures across the application. Useful when sharing your screen or working in public spaces.",
+      "maskOn": "All currency amounts are currently replaced with asterisks.",
+      "maskOff": "Currency amounts will display their full values until masking is enabled."
+    },
+    "profile": {
+      "loading": "Loading profile...",
+      "sections": {
+        "profile": "Profile Information",
+        "basic": "Basic Information",
+        "professional": "Professional Information",
+        "spouse": "Spouse Information",
+        "children": "Children Information"
+      },
+      "household": "Household of {{size}}",
+      "intro": "Complete your profile for personalized insights and family financial analytics.",
+      "fields": {
+        "username": "Username",
+        "birthDate": "Birth Date",
+        "maritalStatus": "Marital Status",
+        "location": "Location",
+        "occupation": "Occupation",
+        "industry": "Industry",
+        "employmentStatus": "Employment Status",
+        "educationLevel": "Education Level",
+        "monthlyIncome": "Monthly Income",
+        "homeOwnership": "Home Ownership",
+        "spouseName": "Spouse Name",
+        "spouseBirthDate": "Spouse Birth Date",
+        "spouseOccupation": "Spouse Occupation",
+        "spouseIndustry": "Spouse Industry",
+        "spouseIncome": "Spouse Monthly Income",
+        "spouseEmployment": "Spouse Employment Status"
+      },
+      "placeholders": {
+        "occupation": "e.g., Software Engineer",
+        "income": "15000"
+      },
+      "helpers": {
+        "ageProfile": "Age: {{age}} years old",
+        "ageSpouse": "Age: {{age}} years old",
+        "grossIncome": "Gross monthly income",
+        "required": "Required"
+      },
+      "options": {
+        "marital": {
+          "single": "Single",
+          "married": "Married",
+          "divorced": "Divorced",
+          "widowed": "Widowed",
+          "na": "Prefer not to say"
+        },
+        "location": {
+          "unspecified": "Not specified",
+          "telAviv": "Tel Aviv",
+          "jerusalem": "Jerusalem",
+          "haifa": "Haifa",
+          "beerSheva": "Beer Sheva",
+          "netanya": "Netanya",
+          "rishon": "Rishon LeZion",
+          "petahTikva": "Petah Tikva",
+          "ashdod": "Ashdod",
+          "herzliya": "Herzliya",
+          "other": "Other"
+        },
+        "industry": {
+          "unspecified": "Not specified",
+          "tech": "Technology",
+          "finance": "Finance",
+          "healthcare": "Healthcare",
+          "education": "Education",
+          "retail": "Retail",
+          "manufacturing": "Manufacturing",
+          "government": "Government",
+          "selfEmployed": "Self-employed",
+          "other": "Other"
+        },
+        "employment": {
+          "unspecified": "Not specified",
+          "employed": "Employed",
+          "selfEmployed": "Self-employed",
+          "unemployed": "Unemployed",
+          "retired": "Retired",
+          "student": "Student"
+        },
+        "education": {
+          "unspecified": "Not specified",
+          "highSchool": "High School",
+          "vocational": "Vocational Training",
+          "bachelor": "Bachelor's Degree",
+          "master": "Master's Degree",
+          "phd": "PhD",
+          "other": "Other"
+        },
+        "home": {
+          "unspecified": "Not specified",
+          "rent": "Rent",
+          "own": "Own",
+          "family": "Living with Family",
+          "other": "Other"
+        },
+        "gender": {
+          "unspecified": "Prefer not to say",
+          "male": "Male",
+          "female": "Female",
+          "other": "Other"
+        },
+        "childEducation": {
+          "unspecified": "Not specified",
+          "infant": "Infant (0-1 years)",
+          "toddler": "Toddler (1-3 years)",
+          "preschool": "Preschool (3-5 years)",
+          "elementary": "Elementary School",
+          "middleSchool": "Middle School",
+          "highSchool": "High School",
+          "university": "University",
+          "graduated": "Graduated"
+        }
+      },
+      "children": {
+        "count": "{{count}} {{count, plural, one {child} other {children}}}",
+        "empty": "No children added yet. Click the + button to add your first child.",
+        "unnamed": "Child {{index}}",
+        "age": "Age: {{age}} years old",
+        "specialNeeds": "Special Needs",
+        "add": "Add child",
+        "dialog": {
+          "editTitle": "Edit Child Information",
+          "addTitle": "Add Child Information",
+          "name": "Child Name",
+          "namePlaceholder": "Optional - can be left blank",
+          "birthDate": "Birth Date",
+          "age": "Age: {{age}} years old",
+          "required": "Required",
+          "birthRequired": "Birth date is required for children",
+          "gender": "Gender",
+          "educationStage": "Education Stage",
+          "specialNeeds": "Has special needs (affects family expenses)"
+        }
+      },
+      "summary": {
+    "title": "Household Summary:",
+    "members": "{{count}} members",
+    "combinedIncome": "Combined income: ₪{{amount}}/month",
+    "children_one": "{{count}} child",
+    "children_other": "{{count}} children"
+      },
+      "privacyNote": {
+        "title": "Your privacy matters:",
+        "body": "All family data is stored locally and used only for personalized insights. This information enables advanced household analytics and family financial comparisons."
+      },
+      "actions": {
+        "save": "Save Profile",
+        "cancel": "Cancel",
+        "saveChanges": "Save Changes",
+        "addChild": "Add Child",
+        "editChild": "Edit Child",
+        "deleteChild": "Delete Child"
+      },
+      "messages": {
+        "saveSuccess": "Profile updated successfully! Your family insights will now be more comprehensive.",
+        "saveError": "Failed to save profile. Please try again.",
+        "loadError": "Failed to load profile. Please try again.",
+        "sessionExpired": "Session expired. Please sign in again."
+      }
+    },
+    "dataExport": {
+      "title": "Data Export",
+      "description": "Export your financial data for backup, tax preparation, or analysis in external tools. All exports respect your privacy settings and exclude sensitive information by default.",
+      "institutionNote": "Each export includes the institution names/types you see in the UI, so downstream tools can match transactions and vendors to the same institutions.",
+      "bridge": {
+        "desktop": "We will open a native save dialog and write the export directly to your selected folder. Nothing is uploaded to the cloud.",
+        "web": "No desktop bridge detected — once the export is ready, it will download via your browser instead."
+      },
+      "config": {
+        "title": "Export Configuration",
+        "dataTypeLabel": "Data Type",
+        "dataTypes": {
+          "transactions": "Transactions Only",
+          "categories": "Categories Summary",
+          "vendors": "Vendors Summary",
+          "budgets": "Budgets & Goals",
+          "full": "Complete Export"
+        },
+        "formatLabel": "Format",
+        "format": {
+          "csv": "CSV (Excel compatible)",
+          "json": "JSON (for developers)"
+        },
+        "dateRangeLabel": "Date Range",
+        "dateRanges": {
+          "last3months": "Last 3 Months",
+          "last6months": "Last 6 Months",
+          "lastyear": "Last 12 Months",
+          "thisyear": "This Year",
+          "custom": "Custom Range"
+        },
+        "startDate": "Start Date",
+        "endDate": "End Date",
+        "exportPeriod": "Export Period: {{start}} - {{end}}"
+      },
+      "filters": {
+        "title": "Filters & Options",
+        "includeTypes": "Include Transaction Types:",
+        "income": "Income",
+        "expenses": "Expenses",
+        "investments": "Investments",
+        "excludeDuplicates": "Exclude Duplicate Transactions",
+        "includeInstitutions": "Include Institution Details",
+        "categories": {
+          "label": "Filter by Categories",
+          "placeholder": "Select categories..."
+        },
+        "vendors": {
+          "label": "Filter by Vendors",
+          "placeholder": "Select vendors...",
+          "count": "{{count}} txns"
+        }
+      },
+      "summary": {
+        "title": "Export Summary",
+        "estimated": "Estimated records: ~{{count}}",
+        "formatType": "Format: {{format}} • Type: {{type}}",
+        "exporting": "Exporting...",
+        "cta": "Export Data",
+        "success": "Data exported successfully! Check your downloads folder.",
+        "error": "Export failed: {{message}}",
+        "privacyNoteTitle": "Privacy Note:",
+        "privacyNoteBody": "Exported data includes transaction details but excludes sensitive authentication information. Use exported data responsibly and store it securely."
+      }
+    },
+    "diagnosticsPanel": {
+      "title": "Diagnostics & Logs",
+      "description": "Export recent logs and system context when filing a support ticket, or open the log directory to inspect issues locally.",
+      "notSupported": "Diagnostics tooling is only available in the packaged Electron app.",
+      "openLogs": "Open Log Folder",
+      "export": "Export Diagnostics",
+      "logDirectory": "Log directory",
+      "version": "Version: {{version}}",
+      "platform": "Platform: {{platform}}",
+      "errors": {
+        "logUnavailable": "Log directory access is unavailable in this environment.",
+        "openFailed": "Failed to open log directory.",
+        "exportUnsupported": "Diagnostics export is not supported in this environment.",
+        "exportFailed": "Failed to export diagnostics bundle."
+      },
+      "saveDialogLabel": "Diagnostics Bundle",
+      "telemetry": {
+        "status": "Crash reporting status",
+        "optedIn": "Opted in",
+        "optedOut": "Opted out",
+        "noDsn": "SENTRY_DSN is not configured. Crash reports stay local even if you opt in.",
+        "destination": "Destination: {{host}}"
+      },
+      "metrics": {
+        "title": "Recent analytics runs",
+        "runs": "Runs: {{count}}",
+        "avgDuration": "Avg {{value}}ms",
+        "lastRun": "Last run: {{date}}",
+        "breakdown": "Category Breakdown",
+        "dashboard": "Dashboard Overview",
+        "unifiedCategory": "Unified Category",
+        "waterfall": "Cash Flow Waterfall",
+        "categoryOpportunities": "Category Opportunities"
+      }
+    }
+  },
+  "breakdownTabs": {
+    "tabs": {
+      "overall": "Overall",
+      "income": "Income",
+      "expense": "Expenses",
+      "investment": "Investment"
+    },
+    "overall": {
+      "totalIncome": "Total Income: {{amount}}",
+      "period": "Period: {{start}} - {{end}}",
+      "noData": "No financial flow data available for this period",
+      "noDataHint": "Add income and expense transactions to see the flow diagram"
+    },
+    "shared": {
+      "noDataPeriod": "No breakdown data available for this period."
+    },
+    "income": {
+      "noIncomeTitle": "No Income Data",
+      "noAccounts": "Add your bank account credentials to automatically track income transactions and get a complete view of your financial flows.",
+      "noIncomePeriod": "No income transactions found for the selected period. Verify your last bank scrape was successful or run a new scrape to update your data."
+    },
+    "investment": {
+      "comingSoon": "Investment breakdown coming soon.",
+      "liquid": "Liquid Investments",
+      "liquidTotal": "Total Liquid: {{amount}}",
+      "liquidHint": "Accessible investments",
+      "noLiquid": "No liquid investments",
+      "addLiquidHint": "Add brokerage, crypto, or savings accounts",
+      "restricted": "Restricted Investments",
+      "restrictedTotal": "Total Restricted: {{amount}}",
+      "restrictedHint": "Pension, provident & study funds",
+      "noRestricted": "No long-term savings",
+      "addRestrictedHint": "Add pension, provident, or study fund accounts"
+    },
+    "sankey": {
+      "title": "Financial Flow",
+      "empty": "Not enough data to visualize financial flow yet.",
+      "legend": {
+        "income": "Income",
+        "expenses": "Expenses",
+        "investments": "Investments"
+      },
+      "tooltip": "{{source}} → {{target}}: {{amount}}"
+    }
+  },
+  "transactionHistory": {
+    "title": "Transaction History",
+    "scales": {
+      "linear": "Linear scale",
+      "log": "Logarithmic scale",
+      "logRecommendedHint": "Large value differences detected. Consider using logarithmic scale for better visualization."
+    },
+    "periods": {
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly"
+    },
+    "tabs": {
+      "history": "Daily Income vs Expenses",
+      "netPosition": "Net Position",
+      "scenarios": "End of Month Scenarios"
+    },
+    "forecast": {
+      "loading": "Loading forecast...",
+      "error": "Failed to load forecast",
+      "noData": "No forecast data available",
+      "expected": "Expected",
+      "p10": "Optimistic (P10)",
+      "p50": "Median (P50)",
+      "p90": "Conservative (P90)",
+      "income": "Income",
+      "expenses": "Expenses",
+      "netCashFlow": "Net Cash Flow",
+      "cumulative": "Cumulative",
+      "historicalData": "Historical",
+      "forecastData": "Forecast",
+      "scenarioSummary": "End of month projection based on {{simulations}} Monte Carlo simulations",
+      "daysRemaining": "{{count}} days remaining in month",
+      "actualNet": "Actual Net Position",
+      "confidenceBand": "Confidence Band (P10-P90)",
+      "bestCase": "Best Case",
+      "baseCase": "Base Case",
+      "worstCase": "Worst Case"
+    },
+    "avgLabel": "Avg: {{amount}}",
+    "legend": {
+      "income": "Income",
+      "expenses": "Expenses"
+    },
+    "patterns": {
+      "title": "Detected Patterns",
+      "avgByPeriod": "Avg {{period}}",
+      "savingsRate": "Savings Rate",
+      "anomalies": "Anomalies",
+      "spikes": "{{count}} spike{{count, plural, one {} other {s}}}"
+    },
+    "transactionsOn": "Transactions on {{date}} ({{count}} transactions):",
+    "noTransactionsForDate": "No transactions found for this date."
+  }
+  ,
+  "analysisPage": {
+    "actions": {
+      "refresh": "Refresh",
+      "refreshing": "Refreshing...",
+      "retry": "Retry"
+    },
+    "tabs": {
+      "ariaLabel": "analysis tabs",
+      "dashboard": "Dashboard",
+      "actions": "Actions",
+      "spending": "Spending",
+      "budget": "Budget",
+      "scoring": "Scoring"
+    },
+    "errors": {
+      "fetchFailed": "Failed to fetch intelligence data",
+      "generic": "Unknown error occurred"
+    },
+    "states": {
+      "noData": "No data available. Please try again."
+    },
+    "header": {
+      "title": "Financial Analysis",
+      "subtitle": "Smart insights, budget tracking, and financial health metrics"
+    },
+    "dashboard": {
+      "rhythm": {
+        "title": "Your Financial Rhythm",
+        "spendingByHour": "Spending by Hour of Day",
+        "lowPrecision": "Only {{percentage}}% have times",
+        "runway": "Financial Runway",
+        "runwayDays": "{{count}} days",
+        "burnRate": "Daily Burn Rate",
+        "peakHour": "Peak Hour",
+        "peakHourValue": "{{hour}}:00",
+        "na": "N/A",
+        "paydayEffect": "Payday Effect"
+      },
+      "personality": {
+        "title": "Your Money Personality",
+        "spendingStyle": "Spending Style",
+        "impulse": "{{value}}% Impulse",
+        "planned": "{{value}}% Planned",
+        "avgTransaction": "Avg Transaction",
+        "smallPurchases": "Small Purchases",
+        "fomoScore": "FOMO Score",
+        "fomoHint": "Weekend entertainment spending indicator"
+      },
+      "future": {
+        "title": "Your Financial Future",
+        "trajectory": "6-Month Savings Trajectory",
+        "endOfMonth": "End of Month",
+        "monthlySavings": "Monthly Savings",
+        "dailyVelocity": "Daily Velocity",
+        "velocityValue": "{{value}}/day"
+      },
+      "reality": {
+        "title": "Make It Real",
+        "timeValue": "Your Time = Money",
+        "hourlyRate": "{{value}}/hour",
+        "avgPurchase": "Avg purchase = {{hours}} hours of work",
+        "biggestPurchase": "Biggest Purchase This Month",
+        "hoursOfWork": "{{hours}} hours of work",
+        "na": "N/A"
+      }
+    },
+    "health": {
+      "title": "Financial Health Score",
+      "subtitle": "Comprehensive analysis of your financial wellbeing",
+      "actions": {
+        "refresh": "Refresh",
+        "retry": "Retry",
+        "improve": "Improve Score"
+      },
+      "labels": {
+        "healthScore": "Health Score",
+        "score": "Score"
+      },
+      "empty": "No health score data available. Please ensure you have sufficient transaction history.",
+      "errors": {
+        "fetchFailed": "Failed to fetch health score",
+        "generic": "Unknown error"
+      },
+      "scorecard": {
+        "breakdown": "Score Breakdown",
+        "status": {
+          "excellent": {
+            "title": "Excellent",
+            "message": "Your financial health is in great shape! Keep up the good habits."
+          },
+          "good": {
+            "title": "Good",
+            "message": "Your financial health is solid, but there's room for improvement."
+          },
+          "needsAttention": {
+            "title": "Needs Attention",
+            "message": "Your financial health needs some work. Review the recommendations below."
+          }
+        }
+      },
+      "metrics": {
+        "savings": {
+          "label": "Savings",
+          "tooltip": "Measures your savings rate as a percentage of income. Higher scores indicate better financial discipline and future security."
+        },
+        "diversity": {
+          "label": "Diversity",
+          "tooltip": "Evaluates how well-balanced your spending is across different categories. A higher score suggests better financial diversification."
+        },
+        "impulse": {
+          "label": "Impulse Control",
+          "tooltip": "Assesses your ability to control spontaneous purchases. Higher scores indicate better spending discipline and financial planning."
+        },
+        "runway": {
+          "label": "Runway",
+          "tooltip": "Calculates how long your current savings would sustain your lifestyle. Higher scores mean better financial resilience."
+        },
+        "fallbackTooltip": "A key indicator of your financial health and stability"
+      }
+    },
+    "smartActions": {
+      "title": "Smart Action Items",
+      "subtitle": "AI-generated insights based on your spending patterns",
+      "actions": {
+        "generate": "Generate",
+        "generating": "Generating..."
+      },
+      "summary": {
+        "totalActions": "Total Actions",
+        "criticalHigh": "Critical/High",
+        "potentialImpact": "Potential Impact"
+      },
+      "empty": {
+        "title": "All clear!",
+        "description": "No action items detected. Your finances are looking good."
+      },
+      "types": {
+        "anomaly": "Spending Anomaly",
+        "budget_overrun": "Budget Alert",
+        "optimization": "Optimization",
+        "fixed_variation": "Fixed Cost Variation",
+        "unusual_purchase": "Unusual Purchase",
+        "seasonal_alert": "Seasonal Pattern"
+      },
+      "severities": {
+        "critical": "Critical",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "tooltips": {
+        "resolve": "Resolve",
+        "dismiss": "Dismiss",
+        "snooze": "Snooze for {{days}} days"
+      },
+      "labels": {
+        "costIncrease": "Cost increase:",
+        "potentialSavings": "Potential savings:"
+      },
+      "details": {
+        "title": "Detection Details",
+        "detected": "Detected",
+        "confidence": "Confidence",
+        "additionalInfo": "Additional Info"
+      },
+      "dialog": {
+        "resolve": { "title": "Resolve Action" },
+        "dismiss": { "title": "Dismiss Action" },
+        "snooze": { "title": "Snooze Action" },
+        "noteLabel": "Note (optional)",
+        "notePlaceholder": "Add a note about this action...",
+        "cancel": "Cancel",
+        "confirm": "Confirm"
+      }
+    },
+    "spendingChart": {
+      "title": "Spending Categories",
+      "subtitle": "How your spending is allocated across different categories",
+      "targetVsActual": "Target vs Actual Allocation",
+      "empty": {
+        "title": "No spending data available",
+        "description": "Start categorizing your transactions to see spending category insights."
+      },
+      "categories": {
+        "essential": "Essential",
+        "growth": "Growth",
+        "stability": "Stability",
+        "reward": "Reward",
+        "unallocated": "Unallocated",
+        "other": "Other"
+      },
+      "labels": {
+        "target": "Target: {{value}}%",
+        "transactions_one": "{{count}} transaction",
+        "transactions_other": "{{count}} transactions",
+        "totalSpending_one": "Total Spending ({{count}} month)",
+        "totalSpending_other": "Total Spending ({{count}} months)"
+      },
+      "tooltips": {
+        "overTarget": "Over target allocation",
+        "underTarget": "Under target allocation"
+      }
+    },
+    "targets": {
+      "title": "Spending Allocation",
+      "subtitle": {
+        "withIncome": "Based on {{amount}} income this month",
+        "noIncome": "No income this month"
+      },
+      "categories": {
+        "essential": "Essential",
+        "growth": "Growth",
+        "stability": "Stability",
+        "reward": "Reward",
+        "unallocated": "Unallocated"
+      },
+      "descriptions": {
+        "essential": "Fixed costs: rent, utilities, groceries, transport",
+        "growth": "Investments, savings, education, deposits",
+        "stability": "Insurance, emergency funds, debt payments",
+        "reward": "Entertainment, dining, travel, hobbies"
+      },
+      "unallocated": {
+        "count_one": "{{count}} category",
+        "count_other": "{{count}} categories",
+        "needsAssignment": "{{percentage}}% of income needs assignment"
+      },
+      "selected": {
+        "title": "{{category}} Categories",
+        "empty": "No categories assigned",
+        "noSpending": "No spending"
+      },
+      "empty": {
+        "selectPrompt": "Click an allocation type to view and manage its categories"
+      }
+    },
+    "budgetHealth": {
+      "title": "Budget Health Monitor",
+      "subtitle": "Real-time tracking of your budget performance",
+      "empty": {
+        "title": "No Active Budgets Found",
+        "instructions": "To start tracking your budget health, you need to:",
+        "steps": {
+          "step1": "Scroll down to the Budget Suggestions panel below",
+          "step2": "Click Generate to create AI-powered budget recommendations",
+          "step3": "Review the suggestions and click Activate Budget on any category",
+          "step4": "Return here to see real-time budget tracking"
+        }
+      },
+      "labels": {
+        "onTrack": "On Track",
+        "warning": "Warning",
+        "exceeded": "Exceeded",
+        "unknown": "Unknown"
+      },
+      "overall": {
+        "title": "Overall Budget Status: {{status}}",
+        "breakdown": "{{onTrack}} on track, {{warning}} warning, {{exceeded}} exceeded",
+        "status": {
+          "good": "Good",
+          "warning": "Warning",
+          "bad": "At Risk",
+          "error": "At Risk",
+          "unknown": "Unknown"
+        }
+      },
+      "summary": {
+        "totalBudget": "Total Budget",
+        "categoriesTracked": "{{count}} categories tracked",
+        "spentThisMonth": "Total Spent This Month",
+        "statusCounts": "{{onTrack}} on track · {{warning}} warning",
+        "remainingHeadroom": "Remaining Headroom",
+        "exceededCount": "{{count}} exceeded"
+      },
+      "budget": {
+        "spent": "Spent: {{amount}}",
+        "limit": "Budget: {{amount}}",
+        "daysRemaining": "Days Remaining",
+        "daysValue_one": "{{count}} day",
+        "daysValue_other": "{{count}} days",
+        "dailyLimit": "Daily Limit",
+        "dailyAverage": "Daily Average",
+        "dailyValue": "{{amount}}/day",
+        "projected": "Projected End of Month",
+        "overBy": "(Over by {{amount}})",
+        "alerts": {
+          "warning": "You're at {{percent}}% of your budget with {{days}} days left. Stay on track!",
+          "exceeded": "Budget exceeded! Consider adjusting your spending or increasing the limit."
+        }
+      },
+      "errors": {
+        "fetchFailed": "Failed to fetch budget health",
+        "generic": "Unknown error"
+      }
+    },
+    "budgetSuggestions": {
+      "title": "Smart Budget Suggestions",
+      "subtitle": "AI-generated budget recommendations based on your spending history",
+      "actions": {
+        "generate": "Generate",
+        "generating": "Generating...",
+        "activate": "Activate Budget"
+      },
+      "labels": {
+        "active": "Active",
+        "activeHint": "This budget is currently active",
+        "suggestedBudget": "Suggested Monthly Budget",
+        "confidence": "Confidence",
+        "basedOn": "Based on",
+        "months_one": "{{count}} month",
+        "months_other": "{{count}} months",
+        "variability": "Variability",
+        "viewDetails": "View calculation details",
+        "calculationSummary": "Mean: {{mean}}, Median: {{median}}, StdDev: {{stdDev}}, CV: {{cv}}"
+      },
+      "confidence": {
+        "high": "High Confidence",
+        "medium": "Medium Confidence",
+        "low": "Low Confidence"
+      },
+      "empty": "No budget suggestions available. Click \"Generate\" to create smart budget recommendations based on your spending history.",
+      "dialog": {
+        "title": "Activate Budget Suggestion?",
+        "confirmation": "Activate this budget for {{category}}?",
+        "monthlyBudget": "Monthly Budget:",
+        "confidence": "Confidence: {{value}}% based on {{months}} months of data",
+        "cancel": "Cancel",
+        "activate": "Activate"
+      }
+    }
+  },
+  "investmentsPage": {
+    "header": {
+      "title": "Investments Dashboard",
+      "subtitle": "Track your portfolio performance and investment transactions"
+    },
+    "actions": {
+      "refreshTooltip": "Refresh all data",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing...",
+      "portfolioSetup": "Portfolio Setup"
+    },
+    "empty": {
+      "title": "Get Started with Your Investment Portfolio",
+      "description": "Track your investment performance across multiple accounts. Connect your brokerage, pension, and savings accounts to see your complete financial picture.",
+      "cta": "Setup Portfolio"
+    },
+    "summary": {
+      "overall": {
+        "title": "Total Portfolio",
+        "accounts_one": "{{count}} active account",
+        "accounts_other": "{{count}} active accounts",
+        "updated": "Last updated {{date}}",
+        "na": "N/A",
+        "totalValue": "TOTAL VALUE",
+        "totalCost": "TOTAL COST",
+        "unrealized": "UNREALIZED P&L",
+        "roi": "OVERALL ROI"
+      },
+      "liquid": {
+        "title": "Liquid Investments",
+        "subtitle_one": "Accessible investments • {{count}} account",
+        "subtitle_other": "Accessible investments • {{count}} accounts",
+        "currentValue": "CURRENT VALUE",
+        "unrealized": "UNREALIZED P&L"
+      },
+      "restricted": {
+        "title": "Long-term Savings",
+        "subtitle_one": "Pension, provident & study funds • {{count}} account",
+        "subtitle_other": "Pension, provident & study funds • {{count}} accounts",
+        "currentValue": "CURRENT VALUE",
+        "unrealized": "UNREALIZED P&L"
+      }
+    },
+    "history": {
+      "title": "Portfolio Performance",
+      "aria": {
+        "displayMode": "display mode",
+        "chart": "chart view",
+        "table": "table view",
+        "timeRange": "Time Range"
+      },
+      "tabs": {
+        "chart": "Chart",
+        "table": "Transactions"
+      },
+      "ranges": {
+        "1m": "1 Month",
+        "3m": "3 Months",
+        "6m": "6 Months",
+        "1y": "1 Year",
+        "all": "All Time"
+      },
+      "table": {
+        "date": "Date",
+        "description": "Description",
+        "category": "Category",
+        "amount": "Amount",
+        "investment": "Investment",
+        "showing": "Showing 50 of {{count}} transactions"
+      },
+      "empty": {
+        "history": "No historical data available",
+        "transactions": "No investment transactions found for this period"
+      },
+      "series": {
+        "currentValue": "Current Value",
+        "costBasis": "Cost Basis"
+      }
+    },
+    "breakdown": {
+      "title": "Portfolio Breakdown",
+      "group": {
+        "accounts_one": "{{count}} account",
+        "accounts_other": "{{count}} accounts",
+        "percentage": "{{value}}%",
+        "roi": "{{value}}% ROI"
+      },
+      "account": {
+        "updated": "Updated {{date}}",
+        "holdings_one": "{{count}} holding",
+        "holdings_other": "{{count}} holdings",
+        "aria": {
+          "toggleChart": "Toggle performance chart",
+          "closeChart": "Close chart"
+        },
+        "setupPikadon": "Setup Pikadon",
+        "performance": "Performance Over Time ({{range}})"
+      },
+      "chart": {
+        "empty": "No historical data available",
+        "series": {
+          "currentValue": "Current Value",
+          "costBasis": "Cost Basis"
+        }
+      },
+      "pikadon": {
+        "title": "Auto-Setup Pikadon (פיקדונות)",
+        "loading": "Analyzing transactions...",
+        "summary": {
+          "totalInterest": "Total Interest Earned",
+          "taxPaid": "Tax Paid",
+          "matured": "Matured Deposits",
+          "activePrincipal": "Active Principal",
+          "netGain": "Net Gain"
+        },
+        "details": {
+          "title": "Created Entries:",
+          "entry": "{{amount}} - {{type}}",
+          "entryWithInterest": "{{date}} • Interest: {{interest}}"
+        },
+        "detect": {
+          "none": "No pikadon transactions found. Make sure your bank transactions contain pikadon keywords (פיקדון, פקדון, פירעון, רווח, etc.)",
+          "summary": "Found {{chains}} completed maturity chains and {{active}} active deposits."
+        },
+        "chains": {
+          "title": "Maturity Chains:",
+          "amount": "{{start}} → {{end}}",
+          "dates": "{{start}} → {{end}}",
+          "gain": "+{{amount}}",
+          "rolledOver": "Rolled over",
+          "more": "...and {{count}} more"
+        },
+        "actions": {
+          "settingUp": "Setting Up...",
+          "setupAll": "Setup All {{count}} Pikadon Entries",
+          "close": "Close",
+          "redetect": "Re-detect"
+        },
+        "setup": {
+          "success": "Successfully created {{count}} pikadon entries!"
+        }
+      }
+    }
+  },
+  "budgetsPage": {
+    "progress": {
+      "percentUsed": "{{value}}% used"
+    },
+    "alerts": {
+      "exceeded": "Budget exceeded by {{amount}}",
+      "remaining": "{{amount}} remaining"
+    },
+    "dialog": {
+      "titleEdit": "Edit Budget",
+      "titleCreate": "Create New Budget"
+    },
+    "fields": {
+      "category": "Category",
+      "selectCategory": "Select category",
+      "period": "Period",
+      "periodOptions": {
+        "weekly": "Weekly",
+        "monthly": "Monthly",
+        "yearly": "Yearly"
+      },
+      "budgetLimit": "Budget Limit (₪)"
+    },
+    "actions": {
+      "cancel": "Cancel",
+      "update": "Update",
+      "create": "Create"
+    }
+  },
+  "unpairedTransactions": {
+    "title": "Transactions Needing Pairing",
+    "alerts": {
+      "allMatched": "All transactions with category 25 (Credit Card Repayment) or 75 (Refunds) are matched to active pairings. No action needed!",
+      "unmatchedInfo": "These {{count}} bank transactions are in category \"Credit Card Repayment\" (25) or \"Refunds\" (75) but don't match any active account pairing. Consider creating pairings to avoid double-counting expenses."
+    },
+    "labels": {
+      "transactionCount": "{{count}} transactions"
+    },
+    "table": {
+      "date": "Date",
+      "name": "Transaction Name",
+      "account": "Account",
+      "amount": "Amount",
+      "category": "Category",
+      "idLabel": "ID {{id}}",
+      "notAvailable": "N/A"
+    },
+    "errors": {
+      "loadFailed": "Failed to load unpaired transactions",
+      "generic": "Error loading transactions"
+    }
+  },
+  "chatbotWidget": {
+    "header": {
+      "title": "Financial Assistant",
+      "subtitle": "AI-Powered"
+    },
+    "warnings": {
+      "title": "Limited Access",
+      "description": "Enable data permissions in Settings to use the chatbot features."
+    },
+    "suggestions": {
+      "title": "Suggested questions:",
+      "items": [
+        "How much did I spend this month?",
+        "What category did I spend the most on?",
+        "Give me savings recommendations",
+        "Are there any unusual expenses?"
+      ]
+    },
+    "input": {
+      "placeholderEnabled": "Ask me something...",
+      "placeholderDisabled": "Enable permissions in Settings"
+    },
+    "hints": {
+      "enabled": "💡 The assistant analyzes your transactions and income",
+      "disabled": "🔒 Grant data access permissions in Settings to use this feature"
+    }
+  },
+  "scrapeModal": {
+    "title": "Sync Transactions",
+    "notifications": {
+      "syncStarted": "Sync started successfully!"
+    },
+    "status": {
+      "firstSync": "Run your first sync to populate your dashboards.",
+      "lastCompleted": "Last sync completed {{timeAgo}}.",
+      "inProgress": "Sync in progress",
+      "forVendor": "for {{vendor}}",
+      "background": "Sync runs in the background — you can close this window and we'll notify you when it's done.",
+      "startHint": "Start a sync any time after connecting an account.",
+      "progressLabel": "{{progress}}% complete",
+      "transactionsSynced": "{{count}} transactions synced",
+      "primary": {
+        "starting": "Starting sync…",
+        "inProgress": "Sync in progress",
+        "start": "Start sync"
+      }
+    },
+    "errors": {
+      "generic": "An error occurred",
+      "loadInstitutions": "Failed to load institutions",
+      "loadInstitutionsRetry": "Failed to load institutions. Try again in a few moments.",
+      "startFailed": "Failed to start scraping"
+    },
+    "forms": {
+      "selectPrompt": "Select an institution to see the required credentials.",
+      "missingMetadata": "No credential metadata yet. Provide a username and password for this institution.",
+      "institutionLabel": "Institution",
+      "loadingInstitutions": "Loading institutions…",
+      "noInstitutions": "No institutions available",
+      "selectInstitution": "Select an institution",
+      "accountNickname": "Account Nickname"
+    },
+    "fields": {
+      "username": "Username",
+      "password": "Password",
+      "userCode": "User Code",
+      "id": "ID Number",
+      "card6Digits": "Card last 6 digits",
+      "card6Helper": "Last 6 digits printed on the card",
+      "bankAccountNumber": "Bank Account Number",
+      "nationalID": "National ID",
+      "num": "Identification code (num)",
+      "email": "Email Address",
+      "otpCode": "OTP Code",
+      "otpToken": "OTP Token",
+      "identification_code": "Identification Code"
+    },
+    "credentials": {
+      "username": "Username",
+      "password": "Password",
+      "userCode": "User Code",
+      "id": "ID Number",
+      "card6Digits": "Card last 6 digits",
+      "card6DigitsHelper": "Last 6 digits printed on the card",
+      "bankAccountNumber": "Bank Account Number",
+      "nationalID": "National ID",
+      "num": "Identification code (num)",
+      "email": "Email Address",
+      "otpCode": "OTP Code",
+      "otpToken": "OTP Token",
+      "identification_code": "Identification Code"
+    },
+    "actions": {
+      "cancel": "Cancel"
+    }
+  },
+  "investmentAccountsModal": {
+    "title": "Investment Accounts Management",
+    "aria": { "tabs": "investment accounts management tabs" },
+    "tabs": {
+      "links": "Transaction Links",
+      "patterns": "Matching Patterns"
+    },
+    "links": {
+      "title": "Pending Transaction Links",
+      "description": "Automatic suggestions to link investment transactions to accounts.",
+      "empty": "No pending suggestions. All investment transactions are linked!",
+      "notifications": {
+        "approved": "Suggestion approved",
+        "rejected": "Suggestion rejected",
+        "error": "Failed to process suggestion"
+      },
+      "table": {
+        "date": "Date",
+        "transaction": "Transaction",
+        "amount": "Amount",
+        "account": "Suggested Account",
+        "confidence": "Confidence",
+        "actions": "Actions",
+        "approve": "Approve",
+        "reject": "Reject"
+      },
+      "aria": { "refresh": "Refresh suggestions" }
+    },
+    "patterns": {
+      "title": "Pattern Matching Rules",
+      "description": "Patterns define which transactions belong to which accounts. Use <code>%</code> as a wildcard.<br />Example: <code>%deposit%</code> matches any transaction containing \"deposit\".",
+      "empty": "No investment accounts found. Create an account to add patterns.",
+      "chipCount": "{{count}} pattern{{count, plural, one {} other {s}}}",
+      "notifications": {
+        "missingPattern": "Please enter a pattern",
+        "added": "Pattern added successfully",
+        "addError": "Failed to add pattern",
+        "deleted": "Pattern deleted",
+        "deleteError": "Failed to delete pattern"
+      },
+      "confirmDelete": "Delete this pattern?",
+      "actions": {
+        "add": "Add"
+      }
+    }
+  },
+  "categoryHierarchy": {
+    "header": { "title": "Category Hierarchy" },
+    "tabs": {
+      "hierarchy": "Category Hierarchy",
+      "rules": "Pattern Rules"
+    },
+    "actions": {
+      "close": "Close",
+      "applyRules": "Apply Rules Now",
+      "applyingRules": "Applying Rules...",
+      "cancel": "Cancel",
+      "save": "Save",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "tree": {
+      "txnCount": "{{count}} txns"
+    },
+    "summary": {
+      "title": "Transactions to Categorize",
+      "allDone": "🎉 All transactions are properly categorized to leaf categories!",
+      "pendingCount": "{{countDisplay}} transaction{{count, plural, one {} other {s}}} awaiting categorization",
+      "totalPending": "Total pending: {{amount}}",
+      "progress": "Categorization Progress",
+      "incomplete": "{{formattedCount}} incomplete"
+    },
+    "sort": {
+      "label": "Sort By",
+      "date": "Date (Recent First)",
+      "name": "Similar Transactions",
+      "amount": "Amount (High to Low)"
+    },
+    "labels": {
+      "categoryType": "Category Type",
+      "category": "Category",
+      "subcategory": "Subcategory",
+      "subcategoryLevel": "Subcategory {{level}}",
+      "select": "Select...",
+      "targetCategory": "Select Target Category"
+    },
+    "helpers": {
+      "unknownDate": "Unknown date",
+      "progressDetail": "{{assigned}} assigned to terminal, {{missing}} missing ({{percent}}% complete)",
+      "complete": "{{count}} complete"
+    },
+    "confirm": {
+      "deleteCategory": "Are you sure you want to delete this category? This will also affect all its subcategories.",
+      "deleteRule": "Are you sure you want to delete this rule?"
+    },
+    "errors": {
+      "loadRules": "Failed to load rules",
+      "loadCategories": "Failed to load categories",
+      "selectCategory": "Please select at least one category.",
+      "selectCategoryFirst": "Please select at least one category first.",
+      "categoryUnavailable": "Selected category is no longer available.",
+      "categorizeTransaction": "Failed to categorize transaction",
+      "createRule": "Failed to create rule",
+      "createCategory": "Failed to create category",
+      "updateCategory": "Failed to update category",
+      "deleteCategory": "Failed to delete category",
+      "toggleRule": "Failed to toggle rule",
+      "deleteRule": "Failed to delete rule",
+      "applyRules": "Failed to apply rules",
+      "loadCategoryTransactions": "Failed to load transactions for this category",
+      "removeTransaction": "Failed to remove transaction",
+      "noCategorySelected": "No category selected",
+      "targetCategoryNotFound": "Target category not found",
+      "moveTransaction": "Failed to move transaction",
+      "patternAndCategoryRequired": "Please enter a pattern and select a category",
+      "categoryNameRequired": "Please enter a category name",
+      "autoAssignCategoryRequired": "Please select at least one category first."
+    },
+    "notifications": {
+      "assignmentSaved": "Transaction categorized successfully",
+      "ruleExists": "Rule already exists. Applying to all matching transactions...",
+      "ruleExistsForName": "A rule for \"{{name}}\" already exists.",
+      "ruleCreatedForName": "Rule created! All transactions named \"{{name}}\" will now be auto-categorized.",
+      "categoryCreated": "Category created successfully",
+      "categoryUpdated": "Category updated successfully",
+      "categoryDeleted": "Category deleted successfully",
+      "ruleCreated": "Rule created successfully",
+      "ruleStatusUpdated": "Rule {{status, select, activated {activated} deactivated {deactivated} other {updated}}} successfully",
+      "ruleDeleted": "Rule deleted successfully",
+      "rulesApplied": "Successfully applied {{rules}} rule{{rules, plural, one {} other {s}}} to {{transactions}} transaction{{transactions, plural, one {} other {s}}}",
+      "transactionRemoved": "Transaction removed from category",
+      "transactionMoved": "Transaction moved to {{category}}"
+    },
+    "editDialog": {
+      "title": "Edit Category",
+      "fields": {
+        "name": "Category Name",
+        "description": "Description",
+        "active": "Active"
+      }
+    },
+    "transactions": {
+      "title": "{{name}} Transactions",
+      "count": "{{count}} transaction{{count, plural, one {} other {s}}}",
+      "none": "No transactions found for this category.",
+      "unknown": "Unknown transaction",
+      "unknownVendor": "Unknown vendor",
+      "remove": "Remove from Category",
+      "move": "Move to Category",
+      "createRule": "Create Rule"
+    },
+    "rulesForm": {
+      "title": "Add Categorization Rule",
+      "description": "Create rules to automatically categorize transactions based on merchant names",
+      "fields": {
+        "pattern": "Merchant Pattern",
+        "patternPlaceholder": "e.g., 'starbucks' or 'interactive broker'",
+        "patternHelper": "Pattern to match in transaction name (case-insensitive)",
+        "patternPreview": "Will match {{count}} transaction{{count, plural, one {} other {s}}}",
+        "type": "Type",
+        "category": "Category",
+        "selectCategory": "Select category",
+        "subcategory": "Subcategory (Optional)",
+        "none": "None"
+      },
+      "typeOptions": {
+        "expense": "Expense",
+        "investment": "Investment",
+        "income": "Income"
+      },
+      "actions": {
+        "add": "Add",
+        "applyToExisting": "Apply Rules to Existing Transactions"
+      },
+      "preview": {
+        "title": "Preview: {{count}} transaction{{count, plural, one {} other {s}}} will be affected",
+        "more": "...and {{count}} more"
+      }
+    },
+    "rulesList": {
+      "title": "Active Rules ({{count}})",
+      "titleFiltered": "Active Rules ({{visible}} / {{total}})",
+      "searchPlaceholder": "Search rules by pattern or category...",
+      "empty": "No rules created yet. Add your first rule above to automatically categorize transactions.",
+      "ifContains": "IF transaction contains “{{pattern}}”",
+      "then": "THEN categorize as:",
+      "txnCount": "{{count}} txn",
+      "unknownCategory": "Unknown",
+      "status": {
+        "active": "Active",
+        "inactive": "Inactive"
+      },
+      "tooltips": {
+        "viewMatches": "View matching transactions",
+        "noMatches": "No transactions match this pattern",
+        "activate": "Activate rule",
+        "deactivate": "Deactivate rule",
+        "delete": "Delete rule"
+      },
+      "matches": {
+        "title": "Matching Transactions (showing up to 20):",
+        "more": "...and {{count}} more",
+        "none": "No matching transactions found"
+      }
+    },
+    "legend": {
+      "assignedTerminal": "Assigned to terminal category",
+      "notAssignedTerminal": "Not assigned to terminal category"
+    },
+    "sections": {
+      "expense": "Expenses",
+      "investment": "Investments",
+      "income": "Income"
+    },
+    "uncategorized": {
+      "similar": "{{count}} similar transaction{{count, plural, one {} other {s}}}",
+      "needsRefinement": "Needs refinement",
+      "parentAssigned": "Already assigned to a parent category. Select a final subcategory to finish.",
+      "assign": {
+        "cta": "Assign",
+        "saving": "Assigning..."
+      },
+      "createRule": {
+        "cta": "Create rule",
+        "saving": "Creating rule..."
+      },
+      "showingLatest": "Showing latest {{previewCount}} of {{total}} transactions."
+    }
+  },
+  "sidebar": {
+    "menu": {
+      "overview": "Overview",
+      "analysis": "Analysis",
+      "investments": "Investments",
+      "settings": "Settings"
+    },
+    "actions": {
+      "addAccount": "Add Account",
+      "categories": "Categories"
+    },
+    "stats": {
+      "accounts": "{{count}} account{{count, plural, one {} other {s}}}"
+    },
+    "popover": {
+      "title": "Account Sync Status",
+      "noAccounts": "No accounts configured",
+      "refreshStaleAccounts": "Refresh {{count}} stale account{{count, plural, one {} other {s}}}"
+    },
+    "dbStatus": {
+      "connected": "DB Connected",
+      "disconnected": "DB Disconnected",
+      "checking": "Checking..."
+    },
+    "tooltips": {
+      "addAccount": "Add Account",
+      "categories": "Categories"
+    },
+    "sync": {
+      "never": "Never",
+      "justNow": "Just now",
+      "minutesAgo": "{{count}} minute{{count, plural, one {} other {s}}} ago",
+      "hoursAgo": "{{count}} hour{{count, plural, one {} other {s}}} ago",
+      "yesterday": "Yesterday",
+      "daysAgo": "{{count}} days ago"
+    },
+    "accountSync": {
+      "neverSynced": "Never synced"
+    }
+  }
+  ,
+  "titleBar": {
+    "menu": {
+      "back": "← Back",
+      "file": "File",
+      "edit": "Edit",
+      "view": "View",
+      "go": "Go",
+      "help": "Help",
+      "items": {
+        "new": "New",
+        "open": "Open",
+        "save": "Save",
+        "exit": "Exit",
+        "undo": "Undo",
+        "redo": "Redo",
+        "cut": "Cut",
+        "copy": "Copy",
+        "paste": "Paste",
+        "fullscreen": "Toggle Fullscreen",
+        "zoomIn": "Zoom In",
+        "zoomOut": "Zoom Out",
+        "resetZoom": "Reset Zoom",
+        "dashboard": "Dashboard",
+        "analysis": "Analysis",
+        "investments": "Investments",
+        "settings": "Settings",
+        "documentation": "Documentation",
+        "openLogs": "Open Log Folder",
+        "exportDiagnostics": "Export Diagnostics…",
+        "supportTools": "Support Tools",
+        "about": "About"
+      }
+    },
+    "tooltips": {
+      "openMenu": "Open menu",
+      "lightMode": "Switch to Light Mode",
+      "darkMode": "Switch to Dark Mode",
+      "changeLanguage": "Change Language",
+      "minimizeWindow": "Minimize window",
+      "maximizeWindow": "Maximize window",
+      "restoreWindow": "Restore window",
+      "closeWindow": "Close window"
+    },
+    "search": {
+      "placeholder": "Search sections...",
+      "options": {
+        "dashboard": "Dashboard",
+        "analysis": "Analysis",
+        "investments": "Investments",
+        "settings": "Settings",
+        "transactions": "Transactions",
+        "breakdown": "Categories Breakdown",
+        "vendors": "Vendors",
+        "appearance": "Appearance",
+        "language": "Language",
+        "profile": "Profile",
+        "privacy": "Privacy",
+        "portfolio": "Portfolio",
+        "holdings": "Holdings"
+      },
+      "keywords": {
+        "dashboard": ["home", "overview", "main", "summary"],
+        "analysis": ["analytics", "spending", "budget", "reports", "charts"],
+        "investments": ["portfolio", "stocks", "holdings", "wealth", "assets"],
+        "settings": ["preferences", "config", "theme", "language", "profile"],
+        "transactions": ["history", "payments", "purchases", "expenses", "income"],
+        "breakdown": ["categories", "pie", "chart", "spending breakdown"],
+        "vendors": ["merchants", "stores", "shops", "where"],
+        "appearance": ["theme", "dark", "light", "mode", "colors"],
+        "language": ["hebrew", "english", "french", "locale"],
+        "profile": ["account", "user", "name", "email"],
+        "privacy": ["mask", "hide", "amounts", "security"],
+        "portfolio": ["total", "value", "performance"],
+        "holdings": ["positions", "shares", "funds"]
+      }
+    }
+  },
+  "accountsModal": {
+    "title": "Accounts Management",
+    "tabs": {
+      "ariaLabel": "Account types",
+      "banking": "Banking & Transactions",
+      "investments": "Investments & Savings"
+    },
+    "actions": {
+      "pairAccounts": "Pair Accounts",
+      "addAccount": "Add Account",
+      "addCreditCard": "Add Credit Card",
+      "addBankAccount": "Add Bank Account",
+      "addInvestmentAccount": "Add Investment Account"
+    },
+    "sections": {
+      "addCreditCardAccount": "Add Credit Card Account",
+      "addBankAccount": "Add Bank Account",
+      "addInvestmentAccount": "Add Investment Account",
+      "bankAccounts": "Bank Accounts ({{count}})",
+      "creditCardAccounts": "Credit Card Accounts ({{count}})"
+    },
+    "fields": {
+      "accountNickname": "Account Nickname",
+      "creditCardVendor": "Credit Card Vendor",
+      "bank": "Bank",
+      "accountName": "Account Name",
+      "accountType": "Account Type",
+      "institution": "Institution",
+      "knownInstitution": "Known Institution (optional)",
+      "knownInstitutionHelper": "Select from registry or leave blank for a custom institution",
+      "accountNumber": "Account Number",
+      "currency": "Currency",
+      "notes": "Notes",
+      "investmentAccount": "Investment Account",
+      "none": "None",
+      "all": "All"
+    },
+    "placeholders": {
+      "creditCardNickname": "e.g., My Isracard, Work Amex",
+      "bankNickname": "e.g., Main Checking, Salary Account",
+      "accountName": "e.g., Interactive Brokers, Migdal Pension",
+      "institution": "e.g., Migdal, Meitav Dash",
+      "accountNumber": "Optional",
+      "optional": "Optional",
+      "notes": "Any additional information...",
+      "symbol": "e.g., AAPL, Tesla Inc."
+    },
+    "helpers": {
+      "foundInTransactions": "✓ Found in transactions!",
+      "investmentFallback": "Investment",
+      "transactionsCount": "{{count}} transactions",
+      "knownInstitution": "Select from registry or leave blank for a custom institution",
+      "selectInstitution": "Select an institution to see the required credentials.",
+      "noSpecificCredentials": "No specific credential requirements configured. Please provide a username and password."
+    },
+    "valueModal": {
+      "title": "Add Value Update",
+      "currentValue": "Current Value",
+      "asOfDate": "As of Date",
+      "costBasis": "Cost Basis (Optional)",
+      "costBasisHelper": "Total amount invested",
+      "notes": "Notes (Optional)",
+      "notesPlaceholder": "Any additional notes about this update...",
+      "addUpdate": "Add Update"
+    },
+    "assets": {
+      "title": "Individual Assets",
+      "addAsset": "Add Asset",
+      "symbol": "Asset Symbol/Name",
+      "symbolPlaceholder": "e.g., AAPL, Tesla Inc.",
+      "quantity": "Quantity",
+      "avgPrice": "Average Price",
+      "manageTitle": "Manage Assets",
+      "empty": "No individual assets tracked yet",
+      "historyTitle": "Asset History",
+      "historyEmpty": "No asset history available",
+      "table": {
+        "asset": "Asset",
+        "symbol": "Symbol",
+        "quantity": "Quantity",
+        "avgPrice": "Avg Price",
+        "price": "Price",
+        "totalValue": "Total Value",
+        "account": "Account",
+        "lastUpdated": "Last Updated",
+        "date": "Date"
+      }
+    },
+    "emptyInvestments": {
+      "title": "No investment accounts yet",
+      "description": "Add your pension funds, brokerage accounts, and other investments to track your portfolio"
+    },
+    "tooltips": {
+      "addValueUpdate": "Add Value Update",
+      "manageAssets": "Manage Assets",
+      "deleteAccount": "Delete Account",
+      "syncAccount": "Sync Account Data",
+      "syncInProgress": "Sync in progress..."
+    },
+    "tables": {
+      "common": {
+        "actions": "Actions"
+      },
+      "investment": {
+        "account": "Account Name",
+        "type": "Type",
+        "institution": "Institution",
+        "currentValue": "Current Value",
+        "lastUpdate": "Last Update",
+        "empty": "No accounts in this category",
+        "notSet": "Not set",
+        "fromTransactions": "(from transactions)"
+      },
+      "banking": {
+        "nickname": "Nickname",
+        "vendor": "Vendor",
+        "username": "Username",
+        "idNumber": "ID Number",
+        "accountNumber": "Account Number",
+        "cardLastDigits": "Card Last Digits",
+        "balance": "Balance",
+        "lastUpdate": "Last Update",
+        "emptyBank": "No bank accounts found",
+        "emptyCredit": "No credit card accounts found",
+        "notSet": "-",
+        "updated": "Updated: {{date}}"
+      }
+    },
+    "helpers": {
+      "selectInstitution": "Select an institution to see the required credentials."
+    },
+    "lastUpdate": {
+      "never": "Never",
+      "justNow": "Just now",
+      "hoursAgo": "{{count}}h ago",
+      "yesterday": "Yesterday",
+      "daysAgo": "{{count}} days ago"
+    },
+    "confirmDelete": {
+      "title": "Confirm Account Deletion",
+      "message": "Are you sure you want to delete this account?",
+      "accountLabel": "Account: {{name}}",
+      "typeLabel": "Type: {{type}}",
+      "typeBanking": "Banking Account",
+      "typeInvestment": "Investment Account",
+      "warning": "This action cannot be undone. All associated data will be permanently removed.",
+      "cta": "Delete Account"
+    }
+  }
+}

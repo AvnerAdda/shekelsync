@@ -71,6 +71,7 @@ import { useOnboarding } from '@app/contexts/OnboardingContext';
 import { calculateSimilarity } from '@app/utils/account-matcher';
 import { apiClient } from '@/lib/api-client';
 import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from '@renderer/shared/components/InstitutionBadge';
+import { useTranslation } from 'react-i18next';
 
 const CREDIT_CARD_VENDOR_LABELS: Record<string, string> = {
   isracard: 'Isracard',
@@ -411,6 +412,8 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     institution_id: null,
   });
 
+  const { t } = useTranslation('translation', { keyPrefix: 'accountsModal' });
+
   const creditCardInstitutionOptions = useMemo(() => {
     const sorted = institutions
       .filter((institution) => institution.institution_type === 'credit_card')
@@ -486,7 +489,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       if (!institution) {
         return (
           <Grid item xs={12}>
-            <Alert severity="info">Select an institution to see the required credentials.</Alert>
+            <Alert severity="info">{t('helpers.selectInstitution')}</Alert>
           </Grid>
         );
       }
@@ -504,16 +507,20 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
             label: formatFieldLabel(fieldKey),
           } as { key: keyof Account; label: string; type?: string; helperText?: string });
         const value = (newAccount[config.key] as string) ?? '';
+        const label = t(`credentials.${fieldKey}`, { defaultValue: config.label });
+        const helperText = config.helperText
+          ? t(`credentials.${fieldKey}Helper`, { defaultValue: config.helperText })
+          : undefined;
         return (
           <Grid item xs={12} key={`${institution.vendor_code}-${fieldKey}`}>
             <TextField
               fullWidth
-              label={config.label}
+              label={label}
               type={config.type || 'text'}
               value={value}
               onChange={(e) => setNewAccount((prev) => ({ ...prev, [config.key]: e.target.value }))}
               required
-              helperText={config.helperText}
+              helperText={helperText}
             />
           </Grid>
         );
@@ -524,7 +531,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           (
             <Grid item xs={12} key={`${institution.vendor_code}-fallback-info`}>
               <Alert severity="info">
-                No specific credential requirements configured. Please provide a username and password.
+                {t('helpers.noSpecificCredentials')}
               </Alert>
             </Grid>
           ),
@@ -1134,7 +1141,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   };
 
   const formatLastUpdate = (lastUpdate: string, status?: string) => {
-    if (!lastUpdate) return { text: 'Never', color: 'default' as const };
+    if (!lastUpdate) return { text: t('lastUpdate.never'), color: 'default' as const };
 
     const date = new Date(lastUpdate);
     const now = new Date();
@@ -1147,17 +1154,17 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
     if (diffDays === 0) {
       if (diffHours === 0) {
-        text = 'Just now';
+        text = t('lastUpdate.justNow');
         color = 'success';
       } else {
-        text = `${diffHours}h ago`;
+        text = t('lastUpdate.hoursAgo', { count: diffHours });
         color = diffHours < 12 ? 'success' : 'warning';
       }
     } else if (diffDays === 1) {
-      text = 'Yesterday';
+      text = t('lastUpdate.yesterday');
       color = 'warning';
     } else if (diffDays < 7) {
-      text = `${diffDays} days ago`;
+      text = t('lastUpdate.daysAgo', { count: diffDays });
       color = 'warning';
     } else {
       text = formatDate(lastUpdate);
@@ -1190,14 +1197,14 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const renderInvestmentAccountTable = (accounts: InvestmentAccount[]) => {
     if (accounts.length === 0) {
       return (
-        <Box sx={{
-          display: 'flex',
-          justifyContent: 'center',
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
           padding: '32px',
           color: '#666',
           fontStyle: 'italic'
         }}>
-          No accounts in this category
+          {t('tables.investment.empty')}
         </Box>
       );
     }
@@ -1206,12 +1213,12 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       <Table sx={{ bgcolor: 'background.paper', borderRadius: '8px', overflow: 'hidden' }}>
         <TableHead>
           <TableRow sx={{ bgcolor: 'action.hover' }}>
-            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Account Name</TableCell>
-            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Type</TableCell>
-            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Institution</TableCell>
-            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Current Value</TableCell>
-            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Last Update</TableCell>
-            <TableCell align="right" sx={{ fontWeight: 600, color: 'text.primary' }}>Actions</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>{t('tables.investment.account')}</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>{t('tables.investment.type')}</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>{t('tables.investment.institution')}</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>{t('tables.investment.currentValue')}</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>{t('tables.investment.lastUpdate')}</TableCell>
+            <TableCell align="right" sx={{ fontWeight: 600, color: 'text.primary' }}>{t('tables.common.actions')}</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -1257,12 +1264,12 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
                       {account.current_value
                         ? `${account.currency} ${account.current_value.toLocaleString()}`
-                        : 'Not set'
+                        : t('tables.investment.notSet')
                       }
                     </Typography>
                     {account.current_value && !(account as any).current_value_explicit && (
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem', fontStyle: 'italic' }}>
-                        (from transactions)
+                        {t('tables.investment.fromTransactions')}
                       </Typography>
                     )}
                   </Box>
@@ -1271,12 +1278,12 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   <Typography variant="body2" color="text.secondary">
                     {account.last_update_date
                       ? new Date(account.last_update_date).toLocaleDateString()
-                      : 'Never'
+                      : t('lastUpdate.never')
                     }
                   </Typography>
                 </TableCell>
                 <TableCell align="right">
-                  <Tooltip title="Add Value Update">
+                  <Tooltip title={t('tooltips.addValueUpdate')}>
                     <IconButton
                       onClick={async () => {
                         const accountId = account.id?.toString() || '';
@@ -1300,7 +1307,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     </IconButton>
                   </Tooltip>
                   {account.account_type === 'brokerage' && (
-                    <Tooltip title="Manage Assets">
+                    <Tooltip title={t('tooltips.manageAssets')}>
                       <IconButton
                         onClick={() => {
                           fetchAssets(); // Load current assets
@@ -1312,7 +1319,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                       </IconButton>
                     </Tooltip>
                   )}
-                  <Tooltip title="Delete Account">
+                  <Tooltip title={t('tooltips.deleteAccount')}>
                     <IconButton
                       onClick={() => confirmDelete(account, 'investment')}
                       color="error"
@@ -1339,7 +1346,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           color: '#666',
           fontStyle: 'italic'
         }}>
-          No {type === 'bank' ? 'bank' : 'credit card'} accounts found
+          {type === 'bank' ? t('tables.banking.emptyBank') : t('tables.banking.emptyCredit')}
         </Box>
       );
     }
@@ -1348,21 +1355,21 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       <Table sx={{ bgcolor: 'background.paper', borderRadius: '8px', overflow: 'hidden' }}>
         <TableHead>
           <TableRow sx={{ bgcolor: 'action.hover' }}>
-            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Nickname</TableCell>
-            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Vendor</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>{t('tables.banking.nickname')}</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>{t('tables.banking.vendor')}</TableCell>
             <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>
-              {type === 'bank' ? 'Username' : 'ID Number'}
+              {type === 'bank' ? t('tables.banking.username') : t('tables.banking.idNumber')}
             </TableCell>
             {type === 'bank' ? (
-              <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Account Number</TableCell>
+              <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>{t('tables.banking.accountNumber')}</TableCell>
             ) : (
-              <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Card Last Digits</TableCell>
+              <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>{t('tables.banking.cardLastDigits')}</TableCell>
             )}
             {type === 'bank' && (
-              <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Balance</TableCell>
+              <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>{t('tables.banking.balance')}</TableCell>
             )}
-            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Last Update</TableCell>
-            <TableCell align="right" sx={{ fontWeight: 600, color: 'text.primary' }}>Actions</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>{t('tables.banking.lastUpdate')}</TableCell>
+            <TableCell align="right" sx={{ fontWeight: 600, color: 'text.primary' }}>{t('tables.common.actions')}</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -1404,12 +1411,12 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
                       {account.current_balance !== null && account.current_balance !== undefined
                         ? `₪${account.current_balance.toLocaleString()}`
-                        : '-'
+                        : t('tables.banking.notSet')
                       }
                     </Typography>
                     {account.balance_updated_at && (
                       <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                        Updated: {new Date(account.balance_updated_at).toLocaleDateString()}
+                        {t('tables.banking.updated', { date: new Date(account.balance_updated_at).toLocaleDateString() })}
                       </Typography>
                     )}
                   </TableCell>
@@ -1428,7 +1435,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   />
                 </TableCell>
                 <TableCell align="right">
-                  <Tooltip title={isSyncing ? "Sync in progress..." : "Sync Account Data"}>
+                  <Tooltip title={isSyncing ? t('tooltips.syncInProgress') : t('tooltips.syncAccount')}>
                     <span>
                       <IconButton
                         onClick={() => handleSync(account)}
@@ -1439,7 +1446,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                       </IconButton>
                     </span>
                   </Tooltip>
-                  <Tooltip title="Delete Account">
+                  <Tooltip title={t('tooltips.deleteAccount')}>
                     <IconButton
                       onClick={() => confirmDelete(account, 'banking')}
                       color="error"
@@ -1471,7 +1478,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         fullWidth
       >
         <ModalHeader
-          title="Accounts Management"
+          title={t('title')}
           onClose={() => {
             if (isAdding) {
               setIsAdding(false);
@@ -1481,44 +1488,44 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           }}
           actions={
             <Box sx={{ display: 'flex', gap: 1 }}>
-              {activeTab === 0 && canPairAccounts && (
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  startIcon={<LinkIcon />}
-                  onClick={() => setIsPairingModalOpen(true)}
-                >
-                  Pair Accounts
-                </Button>
-              )}
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={<AddIcon />}
-                onClick={() => {
-                  setCurrentAccountType(activeTab === 0 ? 'banking' : 'investment');
-                  setIsAdding(true);
-                }}
-              >
-                Add Account
-              </Button>
-            </Box>
-          }
-        />
+                  {activeTab === 0 && canPairAccounts && (
+                    <Button
+                      variant="outlined"
+                      color="secondary"
+                      startIcon={<LinkIcon />}
+                      onClick={() => setIsPairingModalOpen(true)}
+                    >
+                      {t('actions.pairAccounts')}
+                    </Button>
+                  )}
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<AddIcon />}
+                    onClick={() => {
+                      setCurrentAccountType(activeTab === 0 ? 'banking' : 'investment');
+                      setIsAdding(true);
+                    }}
+                  >
+                    {t('actions.addAccount')}
+                  </Button>
+                </Box>
+              }
+            />
 
         {/* Tabs for different account types */}
         <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}>
-          <Tabs value={activeTab} onChange={handleTabChange} aria-label="account types">
+          <Tabs value={activeTab} onChange={handleTabChange} aria-label={t('tabs.ariaLabel')}>
             <Tab
               icon={<AccountBalanceIcon />}
               iconPosition="start"
-              label="Banking & Transactions"
+              label={t('tabs.banking')}
               sx={{ textTransform: 'none', fontWeight: 500 }}
             />
             <Tab
               icon={<TrendingUpIcon />}
               iconPosition="start"
-              label="Investments & Savings"
+              label={t('tabs.investments')}
               sx={{ textTransform: 'none', fontWeight: 500 }}
             />
           </Tabs>
@@ -1546,20 +1553,20 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                       expandIcon={<ExpandMoreIcon />}
                       sx={{ bgcolor: 'action.hover' }}
                     >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <CreditCardIcon color="secondary" />
-                        <Typography variant="h6">Add Credit Card Account</Typography>
-                      </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <CreditCardIcon color="secondary" />
+                          <Typography variant="h6">{t('sections.addCreditCardAccount')}</Typography>
+                        </Box>
                     </AccordionSummary>
                     <AccordionDetails>
                       <Grid container spacing={2}>
                         <Grid item xs={12}>
                           <TextField
                             fullWidth
-                            label="Account Nickname"
+                            label={t('fields.accountNickname')}
                             value={newAccount.nickname}
                             onChange={(e) => setNewAccount({ ...newAccount, nickname: e.target.value })}
-                            placeholder="e.g., My Isracard, Work Amex"
+                            placeholder={t('placeholders.creditCardNickname')}
                             required
                           />
                         </Grid>
@@ -1567,7 +1574,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           <TextField
                             fullWidth
                             select
-                            label="Credit Card Vendor"
+                            label={t('fields.creditCardVendor')}
                             value={
                               newAccount.vendor &&
                               creditCardInstitutionOptions.some(inst => inst.vendor_code === newAccount.vendor)
@@ -1598,9 +1605,9 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
                         <Grid item xs={12}>
                           <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                            <Button onClick={() => setIsAdding(false)}>Cancel</Button>
+                            <Button onClick={() => setIsAdding(false)}>{t('actions.cancel')}</Button>
                             <Button variant="contained" color="secondary" onClick={handleAdd}>
-                              Add Credit Card
+                              {t('actions.addCreditCard')}
                             </Button>
                           </Box>
                         </Grid>
@@ -1618,20 +1625,20 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                       expandIcon={<ExpandMoreIcon />}
                       sx={{ bgcolor: 'action.hover' }}
                     >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <AccountBalanceIcon color="primary" />
-                        <Typography variant="h6">Add Bank Account</Typography>
-                      </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <AccountBalanceIcon color="primary" />
+                          <Typography variant="h6">{t('sections.addBankAccount')}</Typography>
+                        </Box>
                     </AccordionSummary>
                     <AccordionDetails>
                       <Grid container spacing={2}>
                         <Grid item xs={12}>
                           <TextField
                             fullWidth
-                            label="Account Nickname"
+                            label={t('fields.accountNickname')}
                             value={newAccount.nickname}
                             onChange={(e) => setNewAccount({ ...newAccount, nickname: e.target.value })}
-                            placeholder="e.g., Main Checking, Salary Account"
+                            placeholder={t('placeholders.bankNickname')}
                             required
                           />
                         </Grid>
@@ -1639,7 +1646,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                         <TextField
                           fullWidth
                           select
-                          label="Bank"
+                          label={t('fields.bank')}
                           value={
                             newAccount.vendor &&
                             bankInstitutionOptions.some(inst => inst.vendor_code === newAccount.vendor)
@@ -1671,9 +1678,9 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
                         <Grid item xs={12}>
                           <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                            <Button onClick={() => setIsAdding(false)}>Cancel</Button>
+                            <Button onClick={() => setIsAdding(false)}>{t('actions.cancel')}</Button>
                             <Button variant="contained" color="primary" onClick={handleAdd}>
-                              Add Bank Account
+                              {t('actions.addBankAccount')}
                             </Button>
                           </Box>
                         </Grid>
@@ -1688,7 +1695,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     <SectionHeader>
                       <AccountBalanceIcon color="primary" sx={{ fontSize: '24px' }} />
                       <Typography variant="h6" color="primary">
-                        Bank Accounts ({bankAccounts.length})
+                        {t('sections.bankAccounts', { count: bankAccounts.length })}
                       </Typography>
                     </SectionHeader>
                     {renderAccountTable(bankAccounts, 'bank')}
@@ -1699,7 +1706,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     <SectionHeader>
                       <CreditCardIcon color="secondary" sx={{ fontSize: '24px' }} />
                       <Typography variant="h6" color="secondary">
-                        Credit Card Accounts ({creditAccounts.length})
+                        {t('sections.creditCardAccounts', { count: creditAccounts.length })}
                       </Typography>
                     </SectionHeader>
 
@@ -1730,7 +1737,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
               {isAdding && currentAccountType === 'investment' ? (
                 <Card sx={{ mb: 3 }}>
-                  <CardHeader title="Add Investment Account" />
+                  <CardHeader title={t('sections.addInvestmentAccount')} />
                   <CardContent>
                     <Grid container spacing={2}>
                       <Grid item xs={12}>
@@ -1740,10 +1747,10 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             <Box>
                               <TextField
                                 fullWidth
-                                label="Account Name"
+                                label={t('fields.accountName')}
                                 value={newInvestmentAccount.account_name}
                                 onChange={(e) => setNewInvestmentAccount({ ...newInvestmentAccount, account_name: e.target.value })}
-                                placeholder="e.g., Interactive Brokers, Migdal Pension"
+                                placeholder={t('placeholders.accountName')}
                                 required
                                 sx={{
                                   '& .MuiOutlinedInput-root': {
@@ -1758,17 +1765,17 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                                 <Alert severity="success" sx={{ mt: 1, py: 0.5 }}>
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                      ✓ Found in transactions!
+                                      {t('helpers.foundInTransactions')}
                                     </Typography>
                                     <Chip
-                                      label={investmentMatch.category || 'Investment'}
+                                      label={investmentMatch.category || t('helpers.investmentFallback')}
                                       size="small"
                                       color="success"
                                       sx={{ height: '20px', fontSize: '0.65rem' }}
                                     />
                                     {investmentMatch.count && (
                                       <Typography variant="caption" color="text.secondary">
-                                        {investmentMatch.count} transactions
+                                        {t('helpers.transactionsCount', { count: investmentMatch.count })}
                                       </Typography>
                                     )}
                                   </Box>
@@ -1782,7 +1789,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                         <TextField
                           fullWidth
                           select
-                          label="Account Type"
+                          label={t('fields.accountType')}
                           value={newInvestmentAccount.account_type}
                           onChange={(e) => setNewInvestmentAccount({ ...newInvestmentAccount, account_type: e.target.value })}
                           required
@@ -1797,17 +1804,17 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                       <Grid item xs={12} sm={6}>
                         <TextField
                           fullWidth
-                          label="Institution"
+                          label={t('fields.institution')}
                           value={newInvestmentAccount.institution}
                           onChange={(e) => setNewInvestmentAccount({ ...newInvestmentAccount, institution: e.target.value })}
-                          placeholder="e.g., Migdal, Meitav Dash"
+                          placeholder={t('placeholders.institution')}
                         />
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <TextField
                           fullWidth
                           select
-                          label="Known Institution (optional)"
+                          label={t('fields.knownInstitution')}
                           value={newInvestmentAccount.institution_id ?? ''}
                           onChange={(e) => {
                             const value = e.target.value;
@@ -1833,11 +1840,11 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             });
                           }}
                           SelectProps={{ displayEmpty: true }}
-                          helperText="Select from registry or leave blank for a custom institution"
+                          helperText={t('helpers.knownInstitution')}
                         >
-                          <MenuItem value="">
-                            <em>None</em>
-                          </MenuItem>
+                              <MenuItem value="">
+                                <em>{t('fields.none')}</em>
+                              </MenuItem>
                           {investmentInstitutionOptions.map((institution) => (
                             <MenuItem key={institution.id} value={institution.id}>
                               {getInstitutionLabel(institution)} ({institution.institution_type})
@@ -1848,17 +1855,17 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                       <Grid item xs={12} sm={6}>
                         <TextField
                           fullWidth
-                          label="Account Number"
+                          label={t('fields.accountNumber')}
                           value={newInvestmentAccount.account_number}
                           onChange={(e) => setNewInvestmentAccount({ ...newInvestmentAccount, account_number: e.target.value })}
-                          placeholder="Optional"
+                          placeholder={t('placeholders.optional')}
                         />
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <TextField
                           fullWidth
                           select
-                          label="Currency"
+                          label={t('fields.currency')}
                           value={newInvestmentAccount.currency}
                           onChange={(e) => setNewInvestmentAccount({ ...newInvestmentAccount, currency: e.target.value })}
                         >
@@ -1872,16 +1879,18 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           fullWidth
                           multiline
                           rows={2}
-                          label="Notes"
+                          label={t('fields.notes')}
                           value={newInvestmentAccount.notes}
                           onChange={(e) => setNewInvestmentAccount({ ...newInvestmentAccount, notes: e.target.value })}
-                          placeholder="Any additional information..."
+                          placeholder={t('placeholders.notes')}
                         />
                       </Grid>
                       <Grid item xs={12}>
                         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                           <Button onClick={() => setIsAdding(false)}>Cancel</Button>
-                          <Button variant="contained" onClick={handleAdd}>Add Account</Button>
+                          <Button variant="contained" onClick={handleAdd}>
+                            {t('actions.addInvestmentAccount')}
+                          </Button>
                         </Box>
                       </Grid>
                     </Grid>
@@ -1920,10 +1929,10 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
                       <PortfolioIcon sx={{ fontSize: 48, mb: 2, opacity: 0.5 }} />
                       <Typography variant="h6" gutterBottom>
-                        No investment accounts yet
+                        {t('emptyInvestments.title')}
                       </Typography>
                       <Typography variant="body2">
-                        Add your pension funds, brokerage accounts, and other investments to track your portfolio
+                        {t('emptyInvestments.description')}
                       </Typography>
                     </Box>
                   )}
@@ -1937,7 +1946,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       {/* Value Update Modal */}
       <Dialog open={showValueUpdateModal} onClose={() => setShowValueUpdateModal(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          Add Value Update
+          {t('valueModal.title')}
           <IconButton
             onClick={() => setShowValueUpdateModal(false)}
             sx={{ position: 'absolute', right: 8, top: 8 }}
@@ -1952,7 +1961,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                 <TextField
                   fullWidth
                   select
-                  label="Investment Account"
+                  label={t('fields.investmentAccount')}
                   value={valueUpdate.accountId}
                   onChange={(e) => setValueUpdate({ ...valueUpdate, accountId: e.target.value })}
                   required
@@ -1968,7 +1977,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                 <TextField
                   fullWidth
                   type="number"
-                  label="Current Value"
+                  label={t('valueModal.currentValue')}
                   value={valueUpdate.currentValue}
                   onChange={(e) => setValueUpdate({ ...valueUpdate, currentValue: e.target.value })}
                   InputProps={{
@@ -1981,7 +1990,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                 <TextField
                   fullWidth
                   type="date"
-                  label="As of Date"
+                  label={t('valueModal.asOfDate')}
                   value={valueUpdate.asOfDate}
                   onChange={(e) => setValueUpdate({ ...valueUpdate, asOfDate: e.target.value })}
                   InputLabelProps={{ shrink: true }}
@@ -1992,20 +2001,20 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                 <TextField
                   fullWidth
                   type="number"
-                  label="Cost Basis (Optional)"
+                  label={t('valueModal.costBasis')}
                   value={valueUpdate.costBasis}
                   onChange={(e) => setValueUpdate({ ...valueUpdate, costBasis: e.target.value })}
                   InputProps={{
                     startAdornment: <InputAdornment position="start">₪</InputAdornment>,
                   }}
-                  helperText="Total amount invested"
+                  helperText={t('valueModal.costBasisHelper')}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   select
-                  label="Currency"
+                  label={t('fields.currency')}
                   value={valueUpdate.currency}
                   onChange={(e) => setValueUpdate({ ...valueUpdate, currency: e.target.value })}
                 >
@@ -2019,23 +2028,23 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   fullWidth
                   multiline
                   rows={2}
-                  label="Notes (Optional)"
+                  label={t('valueModal.notes')}
                   value={valueUpdate.notes}
                   onChange={(e) => setValueUpdate({ ...valueUpdate, notes: e.target.value })}
-                  placeholder="Any additional notes about this update..."
+                  placeholder={t('valueModal.notesPlaceholder')}
                 />
               </Grid>
             </Grid>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowValueUpdateModal(false)}>Cancel</Button>
+          <Button onClick={() => setShowValueUpdateModal(false)}>{t('actions.cancel')}</Button>
           <Button
             onClick={handleValueUpdate}
             variant="contained"
             disabled={!valueUpdate.accountId || !valueUpdate.currentValue || !valueUpdate.asOfDate}
           >
-            Add Update
+            {t('valueModal.addUpdate')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2043,7 +2052,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       {/* Asset Management Modal */}
       <Dialog open={showAssetModal} onClose={() => setShowAssetModal(false)} maxWidth="md" fullWidth>
         <DialogTitle>
-          Manage Assets
+          {t('assets.manageTitle')}
           <IconButton
             onClick={() => setShowAssetModal(false)}
             sx={{ position: 'absolute', right: 8, top: 8 }}
@@ -2054,20 +2063,20 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         <DialogContent>
           <Box sx={{ pt: 2 }}>
             <Tabs value={assetTab} onChange={(e, v) => setAssetTab(v)} sx={{ mb: 3 }}>
-              <Tab label="Individual Assets" />
-              <Tab label="Asset History" />
+                  <Tab label={t('tabs.individualAssets')} />
+                  <Tab label={t('tabs.assetHistory')} />
             </Tabs>
 
             {assetTab === 0 && (
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6">Individual Assets</Typography>
+                  <Typography variant="h6">{t('assets.title')}</Typography>
                   <Button
                     startIcon={<AddIcon />}
                     onClick={() => setIsAddingAsset(true)}
                     variant="outlined"
                   >
-                    Add Asset
+                    {t('assets.addAsset')}
                   </Button>
                 </Box>
 
@@ -2079,7 +2088,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           <TextField
                             fullWidth
                             select
-                            label="Investment Account"
+                            label={t('fields.investmentAccount')}
                             value={newAsset.accountId}
                             onChange={(e) => setNewAsset({ ...newAsset, accountId: e.target.value })}
                             required
@@ -2094,10 +2103,10 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                         <Grid item xs={12} sm={6}>
                           <TextField
                             fullWidth
-                            label="Asset Symbol/Name"
+                            label={t('assets.symbol')}
                             value={newAsset.symbol}
                             onChange={(e) => setNewAsset({ ...newAsset, symbol: e.target.value })}
-                            placeholder="e.g., AAPL, Tesla Inc."
+                            placeholder={t('assets.symbolPlaceholder')}
                             required
                           />
                         </Grid>
@@ -2105,7 +2114,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           <TextField
                             fullWidth
                             type="number"
-                            label="Quantity"
+                            label={t('assets.quantity')}
                             value={newAsset.quantity}
                             onChange={(e) => setNewAsset({ ...newAsset, quantity: e.target.value })}
                             required
@@ -2115,7 +2124,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           <TextField
                             fullWidth
                             type="number"
-                            label="Average Price"
+                            label={t('assets.avgPrice')}
                             value={newAsset.avgPrice}
                             onChange={(e) => setNewAsset({ ...newAsset, avgPrice: e.target.value })}
                             InputProps={{
@@ -2127,7 +2136,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           <TextField
                             fullWidth
                             type="date"
-                            label="As of Date"
+                            label={t('valueModal.asOfDate')}
                             value={newAsset.asOfDate}
                             onChange={(e) => setNewAsset({ ...newAsset, asOfDate: e.target.value })}
                             InputLabelProps={{ shrink: true }}
@@ -2137,10 +2146,10 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                         <Grid item xs={12}>
                           <Box sx={{ display: 'flex', gap: 1 }}>
                             <Button onClick={handleAddAsset} variant="contained" size="small">
-                              Add Asset
+                              {t('assets.addAsset')}
                             </Button>
                             <Button onClick={() => setIsAddingAsset(false)} size="small">
-                              Cancel
+                              {t('actions.cancel')}
                             </Button>
                           </Box>
                         </Grid>
@@ -2154,12 +2163,12 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Symbol</TableCell>
-                          <TableCell align="right">Quantity</TableCell>
-                          <TableCell align="right">Avg Price</TableCell>
-                          <TableCell align="right">Total Value</TableCell>
-                          <TableCell>Account</TableCell>
-                          <TableCell>Last Updated</TableCell>
+                          <TableCell>{t('assets.table.symbol')}</TableCell>
+                          <TableCell align="right">{t('assets.table.quantity')}</TableCell>
+                          <TableCell align="right">{t('assets.table.avgPrice')}</TableCell>
+                          <TableCell align="right">{t('assets.table.totalValue')}</TableCell>
+                          <TableCell>{t('assets.table.account')}</TableCell>
+                          <TableCell>{t('assets.table.lastUpdated')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2182,7 +2191,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   </TableContainer>
                 ) : (
                   <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
-                    <Typography>No individual assets tracked yet</Typography>
+                    <Typography>{t('assets.empty')}</Typography>
                   </Box>
                 )}
               </Box>
@@ -2190,18 +2199,18 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
             {assetTab === 1 && (
               <Box>
-                <Typography variant="h6" gutterBottom>Asset History</Typography>
+                <Typography variant="h6" gutterBottom>{t('assets.historyTitle')}</Typography>
                 {assetHistory.length > 0 ? (
                   <TableContainer component={Paper}>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Date</TableCell>
-                          <TableCell>Account</TableCell>
-                          <TableCell>Symbol</TableCell>
-                          <TableCell align="right">Quantity</TableCell>
-                          <TableCell align="right">Price</TableCell>
-                          <TableCell align="right">Total Value</TableCell>
+                          <TableCell>{t('assets.table.date')}</TableCell>
+                          <TableCell>{t('assets.table.account')}</TableCell>
+                          <TableCell>{t('assets.table.symbol')}</TableCell>
+                          <TableCell align="right">{t('assets.table.quantity')}</TableCell>
+                          <TableCell align="right">{t('assets.table.price')}</TableCell>
+                          <TableCell align="right">{t('assets.table.totalValue')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2224,7 +2233,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   </TableContainer>
                 ) : (
                   <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
-                    <Typography>No asset history available</Typography>
+                    <Typography>{t('assets.historyEmpty')}</Typography>
                   </Box>
                 )}
               </Box>
@@ -2232,7 +2241,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowAssetModal(false)}>Close</Button>
+          <Button onClick={() => setShowAssetModal(false)}>{t('actions.close')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -2276,7 +2285,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       {/* Confirmation Dialog for Delete Operations */}
       <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          Confirm Account Deletion
+          {t('confirmDelete.title')}
           <IconButton
             onClick={() => setConfirmDeleteOpen(false)}
             sx={{ position: 'absolute', right: 8, top: 8 }}
@@ -2287,7 +2296,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         <DialogContent>
           <Box sx={{ pt: 2 }}>
             <Typography variant="body1" gutterBottom>
-              Are you sure you want to delete this account?
+              {t('confirmDelete.message')}
             </Typography>
             <Box sx={{
               bgcolor: 'warning.light',
@@ -2298,20 +2307,24 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
               mt: 2
             }}>
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                Account: {accountToDelete?.name}
+                {t('confirmDelete.accountLabel', { name: accountToDelete?.name || '' })}
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-                Type: {accountToDelete?.type === 'banking' ? 'Banking Account' : 'Investment Account'}
+                {t('confirmDelete.typeLabel', {
+                  type: accountToDelete?.type === 'banking'
+                    ? t('confirmDelete.typeBanking')
+                    : t('confirmDelete.typeInvestment'),
+                })}
               </Typography>
             </Box>
             <Typography variant="body2" sx={{ mt: 2, color: 'error.main' }}>
-              ⚠️ This action cannot be undone. All associated data will be permanently removed.
+              ⚠️ {t('confirmDelete.warning')}
             </Typography>
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDeleteOpen(false)} variant="outlined">
-            Cancel
+            {t('actions.cancel')}
           </Button>
           <Button
             onClick={handleConfirmDelete}
@@ -2319,7 +2332,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
             color="error"
             startIcon={<DeleteIcon />}
           >
-            Delete Account
+            {t('confirmDelete.cta')}
           </Button>
         </DialogActions>
       </Dialog>

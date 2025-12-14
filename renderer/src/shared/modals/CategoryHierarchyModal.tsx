@@ -91,6 +91,7 @@ import {
   Sort as SortIcon,
   SwapVert as SwapVertIcon,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
 
@@ -219,6 +220,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   onClose,
   onCategoriesUpdated = () => {},
 }) => {
+  const { t } = useTranslation('translation', { keyPrefix: 'categoryHierarchy' });
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -280,10 +282,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
   const formatDate = (value: string) => {
     if (!value) {
-      return 'Unknown date';
+      return t('helpers.unknownDate');
     }
     const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? 'Unknown date' : parsed.toLocaleDateString('en-IL');
+    return Number.isNaN(parsed.getTime()) ? t('helpers.unknownDate') : parsed.toLocaleDateString('en-IL');
   };
 
   const getCategoryIcon = (category: CategoryDefinition) => {
@@ -406,7 +408,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const fetchRules = useCallback(async () => {
     try {
       const response = await apiClient.get('/api/categorization_rules');
-      if (!response.ok) throw new Error('Failed to fetch rules');
+      if (!response.ok) throw new Error(t('errors.loadRules'));
 
       const rulesData = response.data as any;
       setRules(rulesData);
@@ -415,15 +417,15 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       await fetchAllTransactionCounts(rulesData);
     } catch (error) {
       console.error('Error fetching rules:', error);
-      setError('Failed to load rules');
+      setError(t('errors.loadRules'));
     }
-  }, [fetchAllTransactionCounts]);
+  }, [fetchAllTransactionCounts, t]);
 
   const fetchCategories = useCallback(async () => {
     try {
       setLoading(true);
       const response = await apiClient.get('/api/categories/hierarchy');
-      if (!response.ok) throw new Error('Failed to fetch categories');
+      if (!response.ok) throw new Error(t('errors.loadCategories'));
 
       const payload = response.data as any;
       const categoryList = Array.isArray(payload) ? payload : payload?.categories;
@@ -440,11 +442,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
-      setError('Failed to load categories');
+      setError(t('errors.loadCategories'));
     } finally {
       setLoading(false);
     }
-  }, [buildCategoryTree]);
+  }, [buildCategoryTree, t]);
 
   // Helper function to build category path from a category ID
   const buildCategoryPath = useCallback((categoryId: number | null | undefined): number[] => {
@@ -551,7 +553,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     const draft = assignmentDrafts[key];
 
     if (!draft || draft.categoryPath.length === 0) {
-      setError('Please select at least one category.');
+      setError(t('errors.selectCategory'));
       return;
     }
 
@@ -560,7 +562,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     const categoryDefinition = categoryLookup.get(selectedCategoryId);
 
     if (!categoryDefinition) {
-      setError('Selected category is no longer available.');
+      setError(t('errors.categoryUnavailable'));
       return;
     }
 
@@ -578,10 +580,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorPayload = (response.data as any) || {};
-        throw new Error(errorPayload?.error || 'Failed to categorize transaction');
+        throw new Error(errorPayload?.error || t('errors.categorizeTransaction'));
       }
 
-      setSuccess('Transaction categorized successfully');
+      setSuccess(t('notifications.assignmentSaved'));
       setTimeout(() => setSuccess(null), 3000);
 
       // Dispatch category assignment event for investment notification service
@@ -602,7 +604,9 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       onCategoriesUpdated();
     } catch (assignmentError) {
       console.error('Error categorizing transaction:', assignmentError);
-      setError(assignmentError instanceof Error ? assignmentError.message : 'Failed to categorize transaction');
+      setError(assignmentError instanceof Error && assignmentError.message
+        ? assignmentError.message
+        : t('errors.categorizeTransaction'));
     } finally{
       setSavingAssignments((prev: Record<string, boolean>) => {
         const next = { ...prev };
@@ -618,7 +622,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     const draft = assignmentDrafts[key];
 
     if (!draft || draft.categoryPath.length === 0) {
-      setError('Please select at least one category first.');
+      setError(t('errors.autoAssignCategoryRequired'));
       return;
     }
 
@@ -636,14 +640,14 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const result = response.data as any;
-        throw new Error(result.error || 'Failed to create auto-assignment rule');
+        throw new Error(result.error || t('errors.createRule'));
       }
 
       const result = response.data as any;
 
       // Check if rule already existed (success response with alreadyExists flag)
       if (result.alreadyExists) {
-        setSuccess(`✓ ${result.message} Applying to all matching transactions...`);
+        setSuccess(t('notifications.ruleExists'));
         setTimeout(() => setSuccess(null), 5000);
 
         // Apply existing rule to transactions
@@ -655,7 +659,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       }
 
       // New rule was created
-      setSuccess(`✓ Rule created! All transactions named "${txn.name}" will now be auto-categorized.`);
+      setSuccess(t('notifications.ruleCreatedForName', { name: txn.name }));
       setTimeout(() => setSuccess(null), 5000);
 
       // Apply the newly created rule to existing transactions
@@ -666,7 +670,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       onCategoriesUpdated();
     } catch (ruleError) {
       console.error('Error creating auto-assignment rule:', ruleError);
-      setError(ruleError instanceof Error ? ruleError.message : 'Failed to create rule');
+      setError(ruleError instanceof Error && ruleError.message ? ruleError.message : t('errors.createRule'));
     } finally {
       setCreatingRules((prev: Record<string, boolean>) => {
         const next = { ...prev };
@@ -714,10 +718,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       // Determine label based on depth
       const getLabel = (d: number) => {
-        if (d === 0) return 'Category Type';
-        if (d === 1) return 'Category';
-        if (d === 2) return 'Subcategory';
-        return `Subcategory ${d}`;
+        if (d === 0) return t('labels.categoryType');
+        if (d === 1) return t('labels.category');
+        if (d === 2) return t('labels.subcategory');
+        return t('labels.subcategoryLevel', { level: d });
       };
 
       const label = getLabel(depth);
@@ -746,7 +750,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               }}
               renderValue={(selected) => {
                 const cat = categoryLookup.get(selected as number);
-                if (!cat) return 'Select...';
+                if (!cat) return t('labels.select');
                 return (
                   <Box display="flex" alignItems="center" gap={1}>
                     {getCategoryIcon(cat)}
@@ -756,7 +760,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               }}
             >
               <MenuItem value="">
-                <em>Select...</em>
+                <em>{t('labels.select')}</em>
               </MenuItem>
               {options.map((cat: CategoryDefinition) => (
                 <MenuItem key={cat.id} value={cat.id}>
@@ -832,7 +836,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
   const handleCreateCategory = async () => {
     if (!newCategory.name?.trim()) {
-      setError('Please enter a category name');
+      setError(t('errors.categoryNameRequired'));
       return;
     }
 
@@ -846,10 +850,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
-        throw new Error(errorData.error || 'Failed to create category');
+        throw new Error(errorData.error || t('errors.createCategory'));
       }
 
-      setSuccess('Category created successfully');
+      setSuccess(t('notifications.categoryCreated'));
       setNewCategory({
         name: '',
         parent_id: null,
@@ -862,7 +866,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
       console.error('Error creating category:', error);
-      setError(error instanceof Error ? error.message : 'Failed to create category');
+      setError(error instanceof Error && error.message ? error.message : t('errors.createCategory'));
     } finally {
       setLoading(false);
     }
@@ -879,10 +883,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
-        throw new Error(errorData.error || 'Failed to update category');
+        throw new Error(errorData.error || t('errors.updateCategory'));
       }
 
-      setSuccess('Category updated successfully');
+      setSuccess(t('notifications.categoryUpdated'));
       setEditingCategory(null);
       await fetchCategories();
       onCategoriesUpdated();
@@ -890,14 +894,14 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
       console.error('Error updating category:', error);
-      setError(error instanceof Error ? error.message : 'Failed to update category');
+      setError(error instanceof Error && error.message ? error.message : t('errors.updateCategory'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteCategory = async (categoryId: number) => {
-    if (!confirm('Are you sure you want to delete this category? This will also affect all its subcategories.')) {
+    if (!confirm(t('confirm.deleteCategory'))) {
       return;
     }
 
@@ -910,17 +914,17 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
-        throw new Error(errorData.error || 'Failed to delete category');
+        throw new Error(errorData.error || t('errors.deleteCategory'));
       }
 
-      setSuccess('Category deleted successfully');
+      setSuccess(t('notifications.categoryDeleted'));
       await fetchCategories();
       onCategoriesUpdated();
 
       setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
       console.error('Error deleting category:', error);
-      setError(error instanceof Error ? error.message : 'Failed to delete category');
+      setError(error instanceof Error && error.message ? error.message : t('errors.deleteCategory'));
     } finally {
       setLoading(false);
     }
@@ -928,13 +932,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
   const handleCreateRule = async () => {
     if (!newRule.name_pattern?.trim() || !newRuleParentId) {
-      setError('Please enter a pattern and select a category');
+      setError(t('errors.patternAndCategoryRequired'));
       return;
     }
 
     const parentDefinition = categoryLookup.get(newRuleParentId);
     if (!parentDefinition) {
-      setError('Selected category is no longer available.');
+      setError(t('errors.categoryUnavailable'));
       return;
     }
 
@@ -955,10 +959,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
-        throw new Error(errorData.error || 'Failed to create rule');
+        throw new Error(errorData.error || t('errors.createRule'));
       }
 
-      setSuccess('Rule created successfully');
+      setSuccess(t('notifications.ruleCreated'));
       setNewRule({ name_pattern: '', category_type: 'expense' });
       setNewRuleType('expense');
       setNewRuleParentId(null);
@@ -968,7 +972,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
       console.error('Error creating rule:', error);
-      setError(error instanceof Error ? error.message : 'Failed to create rule');
+      setError(error instanceof Error && error.message ? error.message : t('errors.createRule'));
     } finally {
       setLoading(false);
     }
@@ -988,23 +992,25 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
-        throw new Error(errorData.error || 'Failed to toggle rule');
+        throw new Error(errorData.error || t('errors.toggleRule'));
       }
 
-      setSuccess(`Rule ${!currentStatus ? 'activated' : 'deactivated'} successfully`);
+      setSuccess(t('notifications.ruleStatusUpdated', {
+        status: !currentStatus ? 'activated' : 'deactivated',
+      }));
       await fetchRules();
 
       setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
       console.error('Error toggling rule:', error);
-      setError(error instanceof Error ? error.message : 'Failed to toggle rule');
+      setError(error instanceof Error && error.message ? error.message : t('errors.toggleRule'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteRule = async (ruleId: number) => {
-    if (!confirm('Are you sure you want to delete this rule?')) {
+    if (!confirm(t('confirm.deleteRule'))) {
       return;
     }
 
@@ -1017,16 +1023,16 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
-        throw new Error(errorData.error || 'Failed to delete rule');
+        throw new Error(errorData.error || t('errors.deleteRule'));
       }
 
-      setSuccess('Rule deleted successfully');
+      setSuccess(t('notifications.ruleDeleted'));
       await fetchRules();
 
       setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
       console.error('Error deleting rule:', error);
-      setError(error instanceof Error ? error.message : 'Failed to delete rule');
+      setError(error instanceof Error && error.message ? error.message : t('errors.deleteRule'));
     } finally {
       setLoading(false);
     }
@@ -1055,11 +1061,14 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
-        throw new Error(errorData.error || 'Failed to apply rules');
+        throw new Error(errorData.error || t('errors.applyRules'));
       }
 
       const result = response.data as any;
-      setSuccess(`Successfully applied ${result.rulesApplied} rules to ${result.transactionsUpdated} transactions`);
+      setSuccess(t('notifications.rulesApplied', {
+        rules: result.rulesApplied ?? 0,
+        transactions: result.transactionsUpdated ?? 0,
+      }));
 
       await fetchCategories();
       onCategoriesUpdated();
@@ -1067,7 +1076,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setTimeout(() => setSuccess(null), 5000);
     } catch (error) {
       console.error('Error applying rules:', error);
-      setError(error instanceof Error ? error.message : 'Failed to apply rules');
+      setError(error instanceof Error && error.message ? error.message : t('errors.applyRules'));
     } finally {
       setIsApplyingRules(false);
     }
@@ -1081,7 +1090,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       const response = await apiClient.get(`/api/categories/transactions?categoryId=${category.id}&limit=200`);
 
       if (!response.ok) {
-        throw new Error('Failed to fetch category transactions');
+        throw new Error(t('errors.loadCategoryTransactions'));
       }
 
       const data = response.data as any;
@@ -1095,7 +1104,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       })));
     } catch (error) {
       console.error('Error fetching category transactions:', error);
-      setError('Failed to load transactions for this category');
+      setError(error instanceof Error && error.message ? error.message : t('errors.loadCategoryTransactions'));
     } finally {
       setLoadingCategoryTransactions(false);
     }
@@ -1112,10 +1121,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorPayload = (response.data as any) || {};
-        throw new Error(errorPayload?.error || 'Failed to remove transaction from category');
+        throw new Error(errorPayload?.error || t('errors.removeTransaction'));
       }
 
-      setSuccess('Transaction removed from category');
+      setSuccess(t('notifications.transactionRemoved'));
       setTimeout(() => setSuccess(null), 3000);
 
       // Refresh the transaction list
@@ -1126,7 +1135,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       onCategoriesUpdated();
     } catch (error) {
       console.error('Error removing transaction:', error);
-      setError(error instanceof Error ? error.message : 'Failed to remove transaction');
+      setError(error instanceof Error && error.message ? error.message : t('errors.removeTransaction'));
     }
   };
 
@@ -1135,7 +1144,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setError(null);
 
       if (!selectedCategoryForTransactions) {
-        setError('No category selected');
+        setError(t('errors.noCategorySelected'));
         return;
       }
 
@@ -1149,21 +1158,21 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         if ((response.data as any).status === 409) {
-          setSuccess(`A rule for "${txn.name}" already exists.`);
+          setSuccess(t('notifications.ruleExistsForName', { name: txn.name }));
           setTimeout(() => setSuccess(null), 3000);
           return;
         } else {
-          throw new Error(result.error || 'Failed to create rule');
+          throw new Error(result.error || t('errors.createRule'));
         }
       }
 
-      setSuccess(`Rule created! All transactions named "${txn.name}" will now be auto-categorized.`);
+      setSuccess(t('notifications.ruleCreatedForName', { name: txn.name }));
       setTimeout(() => setSuccess(null), 5000);
 
       await fetchRules();
     } catch (error) {
       console.error('Error creating rule:', error);
-      setError(error instanceof Error ? error.message : 'Failed to create rule');
+      setError(error instanceof Error && error.message ? error.message : t('errors.createRule'));
     }
   };
 
@@ -1173,7 +1182,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       const targetCategory = categoryLookup.get(targetCategoryId);
       if (!targetCategory) {
-        setError('Target category not found');
+        setError(t('errors.targetCategoryNotFound'));
         return;
       }
 
@@ -1187,10 +1196,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorPayload = (response.data as any) || {};
-        throw new Error(errorPayload?.error || 'Failed to move transaction');
+        throw new Error(errorPayload?.error || t('errors.moveTransaction'));
       }
 
-      setSuccess(`Transaction moved to ${targetCategory.name}`);
+      setSuccess(t('notifications.transactionMoved', { category: targetCategory.name }));
       setTimeout(() => setSuccess(null), 3000);
 
       // Close the move menu
@@ -1205,7 +1214,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       onCategoriesUpdated();
     } catch (error) {
       console.error('Error moving transaction:', error);
-      setError(error instanceof Error ? error.message : 'Failed to move transaction');
+      setError(error instanceof Error && error.message ? error.message : t('errors.moveTransaction'));
     }
   };
 
@@ -1282,7 +1291,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   </Typography>
                   {category.transaction_count !== undefined && (
                     <Chip
-                      label={`${category.transaction_count} txns`}
+                      label={t('tree.txnCount', { count: category.transaction_count })}
                       size="small"
                       variant="outlined"
                     />
@@ -1290,7 +1299,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   {level === 0 && (
                     <Chip
                       icon={getCategoryTypeIcon(category.category_type)}
-                      label={category.category_type}
+                      label={t(`rulesForm.typeOptions.${category.category_type}`)}
                       size="small"
                       color={getCategoryTypeColor(category.category_type)}
                     />
@@ -1301,7 +1310,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             />
 
             <ListItemSecondaryAction>
-              <Tooltip title="Edit">
+              <Tooltip title={t('actions.edit')}>
                 <IconButton
                   size="small"
                   onClick={() => setEditingCategory(category)}
@@ -1310,7 +1319,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   <EditIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
-              <Tooltip title="Delete">
+              <Tooltip title={t('actions.delete')}>
                 <IconButton
                   size="small"
                   onClick={() => handleDeleteCategory(category.id)}
@@ -1397,19 +1406,22 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 <CategoryIcon sx={{ fontSize: 40, color: '#c8facf' }} />
                 <Box flex={1}>
                   <Typography variant="h5" fontWeight="bold" gutterBottom sx={{ mb: 0 }}>
-                    Transactions to Categorize
+                    {t('summary.title')}
                   </Typography>
                   {uncategorized.totalCount === 0 ? (
                     <Typography variant="body2" color="text.secondary">
-                      🎉 All transactions are properly categorized to leaf categories!
+                      {t('summary.allDone')}
                     </Typography>
                   ) : (
                     <Box>
                       <Typography variant="body1" color="text.primary">
-                        {`${uncategorized.totalCount.toLocaleString()} transaction${uncategorized.totalCount !== 1 ? 's' : ''} awaiting categorization`}
+                        {t('summary.pendingCount', {
+                          count: uncategorized.totalCount,
+                          countDisplay: uncategorized.totalCount.toLocaleString(),
+                        })}
                       </Typography>
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {`Total pending: ${formatCurrency(uncategorized.totalAmount)}`}
+                        {t('summary.totalPending', { amount: formatCurrency(uncategorized.totalAmount) })}
                       </Typography>
                     </Box>
                   )}
@@ -1419,16 +1431,16 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 {uncategorized.totalCount > 0 && (
                   <>
                     <FormControl size="small" sx={{ minWidth: 150 }}>
-                      <InputLabel>Sort By</InputLabel>
+                      <InputLabel>{t('sort.label')}</InputLabel>
                       <Select
                         value={sortBy}
-                        label="Sort By"
+                        label={t('sort.label')}
                         onChange={(e) => setSortBy(e.target.value as 'name' | 'amount' | 'date')}
                         startAdornment={<SortIcon sx={{ mr: 1, color: 'text.secondary' }} />}
                       >
-                        <MenuItem value="date">Date (Recent First)</MenuItem>
-                        <MenuItem value="name">Similar Transactions</MenuItem>
-                        <MenuItem value="amount">Amount (High to Low)</MenuItem>
+                        <MenuItem value="date">{t('sort.date')}</MenuItem>
+                        <MenuItem value="name">{t('sort.name')}</MenuItem>
+                        <MenuItem value="amount">{t('sort.amount')}</MenuItem>
                       </Select>
                     </FormControl>
                     <Button
@@ -1447,7 +1459,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                         },
                       })}
                     >
-                      {isApplyingRules ? 'Applying Rules...' : 'Apply Rules Now'}
+                      {isApplyingRules ? t('actions.applyingRules') : t('actions.applyRules')}
                     </Button>
                   </>
                 )}
@@ -1460,7 +1472,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 <Box sx={{ mb: 3, mt: 2 }}>
                   <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                     <Typography variant="body2" fontWeight="medium">
-                      Categorization Progress
+                      {t('summary.progress')}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       {(() => {
@@ -1496,7 +1508,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                         const percentage = total > 0
                           ? Math.round((assignedToLeaf / total) * 100)
                           : 0;
-                        return `${assignedToLeaf.toLocaleString()} assigned to terminal, ${notAssignedToLeaf.toLocaleString()} missing (${percentage}% complete)`;
+                        return t('helpers.progressDetail', {
+                          assigned: assignedToLeaf.toLocaleString(),
+                          missing: notAssignedToLeaf.toLocaleString(),
+                          percent: percentage,
+                        });
                       })()}
                     </Typography>
                   </Box>
@@ -1554,7 +1570,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                             >
                               {assignedPercent > 15 && (
                                 <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold' }}>
-                                  {assignedToLeaf.toLocaleString()} complete
+                                  {t('helpers.complete', { count: assignedToLeaf.toLocaleString() })}
                                 </Typography>
                               )}
                             </Box>
@@ -1577,8 +1593,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                             >
                               {missingPercent > 15 && (
                                 <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold' }}>
-                                  {notAssignedToLeaf.toLocaleString()} incomplete
-                                </Typography>
+                                  {t('summary.incomplete', {
+                                    count: notAssignedToLeaf,
+                                    formattedCount: notAssignedToLeaf.toLocaleString(),
+                                  })}
+                            </Typography>
                               )}
                             </Box>
                           )}
@@ -1587,18 +1606,18 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                     })()}
                   </Box>
                   <Box display="flex" gap={2} mt={1} justifyContent="flex-start">
-                    <Box display="flex" alignItems="center" gap={0.5}>
-                      <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#66bb6a' }} />
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#66bb6a' }} />
                       <Typography variant="caption" color="text.secondary">
-                        Assigned to terminal category
+                        {t('legend.assignedTerminal')}
                       </Typography>
-                    </Box>
-                    <Box display="flex" alignItems="center" gap={0.5}>
-                      <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#ef5350' }} />
+                  </Box>
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#ef5350' }} />
                       <Typography variant="caption" color="text.secondary">
-                        Not assigned to terminal category
+                        {t('legend.notAssignedTerminal')}
                       </Typography>
-                    </Box>
+                  </Box>
                   </Box>
                 </Box>
               </>
@@ -1678,11 +1697,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                           <Box flex={1}>
                             <Box display="flex" alignItems="center" gap={1} mb={0.5}>
                               <Typography variant="h6" fontWeight="600" sx={{ fontSize: '1.1rem' }}>
-                                {txn.name || 'Unknown transaction'}
+                                {txn.name || t('transactions.unknown')}
                               </Typography>
                               {similarCount > 1 && (
                                 <Chip
-                                  label={`${similarCount} similar`}
+                                  label={t('uncategorized.similar', { count: similarCount })}
                                   size="small"
                                   color="info"
                                   variant="outlined"
@@ -1710,7 +1729,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                               )}
                               {hasExistingCategory && (
                                 <Chip
-                                  label="Needs Refinement"
+                                  label={t('uncategorized.needsRefinement')}
                                   size="small"
                                   color="warning"
                                   variant="outlined"
@@ -1720,7 +1739,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                             </Box>
                             <Box display="flex" alignItems="center" gap={1} mb={0.5}>
                               <Chip
-                                label={txn.vendor || 'Unknown vendor'}
+                                label={txn.vendor || t('transactions.unknownVendor')}
                                 size="small"
                                 variant="outlined"
                                 sx={{ fontWeight: 500 }}
@@ -1750,13 +1769,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                         </Box>
 
                         {/* Status helper text */}
-                        {hasExistingCategory && (
-                          <Alert severity="info" sx={{ mb: 1, py: 0.5 }}>
-                            <Typography variant="caption">
-                              This transaction is assigned to a parent category. Please refine the categorization by selecting a more specific subcategory.
-                            </Typography>
-                          </Alert>
-                        )}
+                            {hasExistingCategory && (
+                              <Alert severity="info" sx={{ mb: 1, py: 0.5 }}>
+                                <Typography variant="caption">
+                                  {t('uncategorized.parentAssigned')}
+                                </Typography>
+                              </Alert>
+                            )}
 
                         <Grid container spacing={1.5} alignItems="center">
                           {renderCategorySelectors(key, draft, rootOptions)}
@@ -1793,7 +1812,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                                 disabled={!draft?.categoryPath?.length || isSaving}
                                 startIcon={isSaving ? <CircularProgress color="inherit" size={16} /> : undefined}
                               >
-                                {isSaving ? 'Saving...' : 'Assign'}
+                                {isSaving ? t('uncategorized.assign.saving') : t('uncategorized.assign.cta')}
                               </Button>
                               <Button
                                 size="small"
@@ -1818,7 +1837,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                                 <ListItemIcon>
                                   {creatingRules[key] ? <CircularProgress size={20} /> : <AutoAwesomeIcon fontSize="small" />}
                                 </ListItemIcon>
-                                <ListItemText primary={creatingRules[key] ? 'Creating Rule...' : 'Create Rule for Similar'} />
+                                <ListItemText primary={creatingRules[key] ? t('uncategorized.createRule.saving') : t('uncategorized.createRule.cta')} />
                               </MenuItem>
                             </Menu>
                           </Grid>
@@ -1829,7 +1848,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 </List>
                 {uncategorized.totalCount > uncategorizedPreview.length && (
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                    {`Showing the latest ${uncategorizedPreview.length} of ${uncategorized.totalCount.toLocaleString()} transactions.`}
+                    {t('uncategorized.showingLatest', {
+                      previewCount: uncategorizedPreview.length,
+                      total: uncategorized.totalCount.toLocaleString(),
+                    })}
                   </Typography>
                 )}
               </>
@@ -1845,7 +1867,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         ) : (
           <>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <ExpenseIcon /> Expenses
+              <ExpenseIcon /> {t('sections.expense')}
             </Typography>
             <List dense>
               {expenseCategories.map(category => renderCategoryTree(category))}
@@ -1854,7 +1876,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <InvestmentIcon /> Investments
+              <InvestmentIcon /> {t('sections.investment')}
             </Typography>
             <List dense>
               {investmentCategories.map(category => renderCategoryTree(category))}
@@ -1863,7 +1885,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <IncomeIcon /> Income
+              <IncomeIcon /> {t('sections.income')}
             </Typography>
             <List dense>
               {incomeCategories.map(category => renderCategoryTree(category))}
@@ -1874,13 +1896,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         {/* Edit Category Dialog */}
         {editingCategory && (
           <Dialog open={true} onClose={() => setEditingCategory(null)} maxWidth="sm" fullWidth>
-            <DialogTitle>Edit Category</DialogTitle>
+            <DialogTitle>{t('editDialog.title')}</DialogTitle>
             <DialogContent>
               <Grid container spacing={2} sx={{ mt: 1 }}>
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="Category Name"
+                    label={t('editDialog.fields.name')}
                     value={editingCategory.name}
                     onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
                   />
@@ -1888,7 +1910,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="Description"
+                    label={t('editDialog.fields.description')}
                     value={editingCategory.description || ''}
                     onChange={(e) => setEditingCategory({ ...editingCategory, description: e.target.value })}
                     multiline
@@ -1903,15 +1925,15 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                         onChange={(e) => setEditingCategory({ ...editingCategory, is_active: e.target.checked })}
                       />
                     }
-                    label="Active"
+                    label={t('editDialog.fields.active')}
                   />
                 </Grid>
               </Grid>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setEditingCategory(null)}>Cancel</Button>
+              <Button onClick={() => setEditingCategory(null)}>{t('actions.cancel')}</Button>
               <Button variant="contained" onClick={() => handleUpdateCategory(editingCategory)}>
-                Save
+                {t('actions.save')}
               </Button>
             </DialogActions>
           </Dialog>
@@ -1932,10 +1954,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               <Box display="flex" alignItems="center" gap={1}>
                 {getCategoryIcon(selectedCategoryForTransactions)}
                 <Typography variant="h6">
-                  {selectedCategoryForTransactions.name} Transactions
+                  {t('transactions.title', { name: selectedCategoryForTransactions.name })}
                 </Typography>
                 <Chip
-                  label={`${categoryTransactions.length} transaction${categoryTransactions.length !== 1 ? 's' : ''}`}
+                  label={t('transactions.count', { count: categoryTransactions.length })}
                   size="small"
                   color="primary"
                 />
@@ -1947,7 +1969,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   <CircularProgress />
                 </Box>
               ) : categoryTransactions.length === 0 ? (
-                <Alert severity="info">No transactions found for this category.</Alert>
+                <Alert severity="info">{t('transactions.none')}</Alert>
               ) : (
                 <List dense>
                   {categoryTransactions.map((txn, idx) => (
@@ -1965,10 +1987,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                       <Box display="flex" justifyContent="space-between" width="100%" mb={1}>
                         <Box>
                           <Typography variant="subtitle2" fontWeight="600">
-                            {txn.name || 'Unknown transaction'}
+                            {txn.name || t('transactions.unknown')}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {txn.vendor || 'Unknown vendor'}
+                            {txn.vendor || t('transactions.unknownVendor')}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             {formatDate(txn.date)}
@@ -1980,35 +2002,35 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                         </Typography>
                       </Box>
                       <Box display="flex" gap={1}>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="error"
-                          startIcon={<DeleteIcon />}
-                          onClick={() => handleRemoveTransactionFromCategory(txn)}
-                        >
-                          Remove from Category
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          startIcon={<EditIcon />}
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            startIcon={<DeleteIcon />}
+                            onClick={() => handleRemoveTransactionFromCategory(txn)}
+                          >
+                            {t('transactions.remove')}
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                            startIcon={<EditIcon />}
                           onClick={(e) => {
-                            setTransactionToMove(txn);
-                            setTransactionMoveMenuAnchor(e.currentTarget);
-                          }}
-                        >
-                          Move to Category
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<AutoAwesomeIcon />}
-                          onClick={() => handleCreateRuleFromTransaction(txn)}
-                        >
-                          Create Rule
-                        </Button>
+                              setTransactionToMove(txn);
+                              setTransactionMoveMenuAnchor(e.currentTarget);
+                            }}
+                          >
+                            {t('transactions.move')}
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<AutoAwesomeIcon />}
+                            onClick={() => handleCreateRuleFromTransaction(txn)}
+                          >
+                            {t('transactions.createRule')}
+                          </Button>
                       </Box>
                     </ListItem>
                   ))}
@@ -2018,15 +2040,15 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             <DialogActions>
               <Button
                 onClick={() => {
-                  setSelectedCategoryForTransactions(null);
-                  setCategoryTransactions([]);
-                }}
-              >
-                Close
-              </Button>
-            </DialogActions>
-          </Dialog>
-        )}
+              setSelectedCategoryForTransactions(null);
+              setCategoryTransactions([]);
+            }}
+          >
+            {t('actions.close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    )}
 
         {/* Move to Category Menu */}
         {transactionToMove && (
@@ -2046,7 +2068,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
           >
             <MenuItem disabled>
               <Typography variant="caption" fontWeight="bold">
-                Select Target Category
+                {t('labels.targetCategory')}
               </Typography>
             </MenuItem>
             <Divider />
@@ -2098,63 +2120,70 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     const parentDefinition = newRuleParentId ? categoryLookup.get(newRuleParentId) : undefined;
     const childOptions = parentDefinition?.children ?? [];
     const subcategoryValue = newRuleCategoryId ?? '';
+    const filteredRules = rules.filter(rule => {
+      if (!ruleSearchQuery.trim()) return true;
+      const query = ruleSearchQuery.toLowerCase();
+      const patternMatch = rule.name_pattern?.toLowerCase().includes(query);
+      const categoryMatch = (rule.category_name || rule.target_category || rule.parent_category || rule.subcategory || '')?.toLowerCase().includes(query);
+      return patternMatch || categoryMatch;
+    });
 
     return (
       <Box>
         <Paper sx={{ p: 2, mb: 3 }}>
           <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-            Add Categorization Rule
+            {t('rulesForm.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary" gutterBottom>
-            Create rules to automatically categorize transactions based on merchant names
+            {t('rulesForm.description')}
           </Typography>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
-                label="Merchant Pattern"
+                label={t('rulesForm.fields.pattern')}
                 value={newRule.name_pattern || ''}
                 onChange={(e) => setNewRule({ ...newRule, name_pattern: e.target.value })}
-                placeholder="e.g., 'starbucks' or 'interactive broker'"
+                placeholder={t('rulesForm.fields.patternPlaceholder')}
                 size="small"
                 helperText={
                   newRulePreview
-                    ? `Will match ${newRulePreview.totalCount} transaction${newRulePreview.totalCount !== 1 ? 's' : ''}`
-                    : "Pattern to match in transaction name (case-insensitive)"
+                    ? t('rulesForm.fields.patternPreview', { count: newRulePreview.totalCount })
+                    : t('rulesForm.fields.patternHelper')
                 }
               />
             </Grid>
             <Grid item xs={12} md={2}>
               <FormControl fullWidth size="small">
-                <InputLabel>Type</InputLabel>
+                <InputLabel>{t('rulesForm.fields.type')}</InputLabel>
                 <Select
                   value={newRuleType}
-                  label="Type"
+                  label={t('rulesForm.fields.type')}
                   onChange={(e) => {
                     setNewRuleType(e.target.value as CategoryType);
                     setNewRuleParentId(null);
                     setNewRuleCategoryId(null);
                   }}
                 >
-                  <MenuItem value="expense">Expense</MenuItem>
-                  <MenuItem value="investment">Investment</MenuItem>
-                  <MenuItem value="income">Income</MenuItem>
+                  <MenuItem value="expense">{t('rulesForm.typeOptions.expense')}</MenuItem>
+                  <MenuItem value="investment">{t('rulesForm.typeOptions.investment')}</MenuItem>
+                  <MenuItem value="income">{t('rulesForm.typeOptions.income')}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
             <Grid item xs={12} md={3}>
               <FormControl fullWidth size="small">
-                <InputLabel>Category</InputLabel>
+                <InputLabel>{t('rulesForm.fields.category')}</InputLabel>
                 <Select
                   value={newRuleParentId ?? ''}
-                  label="Category"
+                  label={t('rulesForm.fields.category')}
                   onChange={(e) => {
                     const value = e.target.value;
                     setNewRuleParentId(value === '' ? null : Number(value));
                     setNewRuleCategoryId(null);
                   }}
                 >
-                  <MenuItem value="">Select category</MenuItem>
+                  <MenuItem value="">{t('rulesForm.fields.selectCategory')}</MenuItem>
                   {parentOptions.map((parent: CategoryDefinition) => (
                     <MenuItem key={parent.id} value={parent.id}>
                       {parent.name} {parent.name_en ? `(${parent.name_en})` : ''}
@@ -2165,17 +2194,17 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             </Grid>
             <Grid item xs={12} md={2}>
               <FormControl fullWidth size="small" disabled={!newRuleParentId || childOptions.length === 0}>
-                <InputLabel>Subcategory (Optional)</InputLabel>
+                <InputLabel>{t('rulesForm.fields.subcategory')}</InputLabel>
                 <Select
                   value={subcategoryValue}
-                  label="Subcategory (Optional)"
+                  label={t('rulesForm.fields.subcategory')}
                   onChange={(e) => {
                     const value = e.target.value;
                     setNewRuleCategoryId(value === '' ? null : Number(value));
                   }}
                   displayEmpty
                 >
-                  <MenuItem value="">None</MenuItem>
+                  <MenuItem value="">{t('rulesForm.fields.none')}</MenuItem>
                   {childOptions.map((child: CategoryDefinition) => (
                     <MenuItem key={child.id} value={child.id}>
                       {child.name} {child.name_en ? `(${child.name_en})` : ''}
@@ -2193,7 +2222,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 disabled={loading || !newRule.name_pattern || !newRuleParentId}
                 sx={{ height: '40px' }}
               >
-                Add
+                {t('rulesForm.actions.add')}
               </Button>
             </Grid>
           </Grid>
@@ -2203,7 +2232,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             <Box sx={{ mt: 2 }}>
               <Alert severity="info" sx={{ mb: 1 }}>
                 <Typography variant="body2" fontWeight="bold" gutterBottom>
-                  Preview: {newRulePreview.totalCount} transaction{newRulePreview.totalCount !== 1 ? 's' : ''} will be affected
+                  {t('rulesForm.preview.title', { count: newRulePreview.totalCount })}
                 </Typography>
                 <Box sx={{ maxHeight: 200, overflowY: 'auto', mt: 1 }}>
                   {newRulePreview.matchedTransactions.slice(0, 5).map((txn, idx) => (
@@ -2215,18 +2244,18 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                         py: 0.5,
                         borderBottom: idx < 4 ? '1px solid rgba(0,0,0,0.05)' : 'none',
                       }}
-                    >
-                      <Typography variant="caption" sx={{ flex: 1 }}>
-                        {new Date(txn.date).toLocaleDateString()} - {txn.name}
-                      </Typography>
-                      <Typography variant="caption" fontWeight="bold">
+                      >
+                        <Typography variant="caption" sx={{ flex: 1 }}>
+                          {new Date(txn.date).toLocaleDateString()} - {txn.name}
+                        </Typography>
+                        <Typography variant="caption" fontWeight="bold">
                         ₪{Math.abs(txn.price).toFixed(2)}
                       </Typography>
                     </Box>
                   ))}
                   {newRulePreview.totalCount > 5 && (
                     <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                      ...and {newRulePreview.totalCount - 5} more
+                      {t('rulesForm.preview.more', { count: newRulePreview.totalCount - 5 })}
                     </Typography>
                   )}
                 </Box>
@@ -2241,7 +2270,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               onClick={handleApplyRules}
               disabled={isApplyingRules || rules.length === 0}
             >
-              Apply Rules to Existing Transactions
+              {t('rulesForm.actions.applyToExisting')}
             </Button>
           </Box>
         </Paper>
@@ -2250,19 +2279,15 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         <Box sx={{ mb: 2 }}>
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
             <Typography variant="subtitle1" fontWeight="bold">
-              Active Rules ({rules.filter(rule => {
-                if (!ruleSearchQuery.trim()) return true;
-                const query = ruleSearchQuery.toLowerCase();
-                const patternMatch = rule.name_pattern?.toLowerCase().includes(query);
-                const categoryMatch = (rule.category_name || rule.target_category || rule.parent_category || rule.subcategory || '')?.toLowerCase().includes(query);
-                return patternMatch || categoryMatch;
-              }).length} {ruleSearchQuery.trim() ? `/ ${rules.length}` : ''})
+              {ruleSearchQuery.trim()
+                ? t('rulesList.titleFiltered', { visible: filteredRules.length, total: rules.length })
+                : t('rulesList.title', { count: rules.length })}
             </Typography>
           </Box>
           <TextField
             fullWidth
             size="small"
-            placeholder="Search rules by pattern or category..."
+            placeholder={t('rulesList.searchPlaceholder')}
             value={ruleSearchQuery}
             onChange={(e) => setRuleSearchQuery(e.target.value)}
             InputProps={{
@@ -2282,24 +2307,18 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         </Box>
         {rules.length === 0 ? (
           <Alert severity="info">
-            No rules created yet. Add your first rule above to automatically categorize transactions.
+            {t('rulesList.empty')}
           </Alert>
         ) : (
           <Grid container spacing={2}>
-            {rules.filter(rule => {
-              if (!ruleSearchQuery.trim()) return true;
-              const query = ruleSearchQuery.toLowerCase();
-              const patternMatch = rule.name_pattern?.toLowerCase().includes(query);
-              const categoryMatch = (rule.category_name || rule.target_category || rule.parent_category || rule.subcategory || '')?.toLowerCase().includes(query);
-              return patternMatch || categoryMatch;
-            }).map(rule => {
+            {filteredRules.map(rule => {
               const transactionCount = ruleTransactionCounts.get(rule.id) || 0;
               const isExpanded = expandedRuleId === rule.id;
               const previewData = rulePreviewData.get(rule.id);
 
               // Get category details for display
               const ruleCategory = rule.category_definition_id ? categoryLookup.get(rule.category_definition_id) : null;
-              const categoryDisplayName = rule.category_name || rule.target_category || rule.parent_category || 'Unknown';
+              const categoryDisplayName = rule.category_name || rule.target_category || rule.parent_category || t('rulesList.unknownCategory');
               const categoryDisplayIcon = ruleCategory ? getCategoryIcon(ruleCategory) : null;
               const categoryDisplayColor = ruleCategory?.color;
 
@@ -2309,25 +2328,25 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                     <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                       <Box display="flex" alignItems="center" justifyContent="space-between">
                         <Box flex={1}>
-                          <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                            <Typography variant="body2" fontWeight="medium">
-                              IF transaction contains &ldquo;<strong>{rule.name_pattern}</strong>&rdquo;
-                            </Typography>
-                            <Chip
-                              label={`${transactionCount} txn${transactionCount !== 1 ? 's' : ''}`}
-                              size="small"
-                              color={transactionCount > 0 ? 'primary' : 'default'}
-                              variant="outlined"
-                            />
+                      <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                        <Typography variant="body2" fontWeight="medium">
+                          {t('rulesList.ifContains', { pattern: rule.name_pattern })}
+                        </Typography>
+                        <Chip
+                          label={t('rulesList.txnCount', { count: transactionCount })}
+                          size="small"
+                          color={transactionCount > 0 ? 'primary' : 'default'}
+                          variant="outlined"
+                        />
+                      </Box>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <Typography variant="body2" color="text.secondary">
+                          {t('rulesList.then')}
+                        </Typography>
+                        {categoryDisplayIcon && (
+                          <Box display="flex" alignItems="center">
+                            {categoryDisplayIcon}
                           </Box>
-                          <Box display="flex" alignItems="center" gap={0.5}>
-                            <Typography variant="body2" color="text.secondary">
-                              THEN categorize as:
-                            </Typography>
-                            {categoryDisplayIcon && (
-                              <Box display="flex" alignItems="center">
-                                {categoryDisplayIcon}
-                              </Box>
                             )}
                             <Typography
                               variant="body2"
@@ -2346,52 +2365,52 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                             )}
                           </Box>
                         </Box>
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <Chip
-                            label={rule.is_active ? 'Active' : 'Inactive'}
-                            size="small"
-                            color={rule.is_active ? 'success' : 'default'}
-                          />
-                          <Tooltip title={transactionCount > 0 ? 'View matching transactions' : 'No transactions match this pattern'}>
-                            <span>
-                              <IconButton
-                                size="small"
-                                onClick={() => handleToggleRuleExpansion(rule.id)}
-                                disabled={transactionCount === 0}
-                              >
-                                <VisibilityIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Chip
+                        label={rule.is_active ? t('rulesList.status.active') : t('rulesList.status.inactive')}
+                        size="small"
+                        color={rule.is_active ? 'success' : 'default'}
+                      />
+                      <Tooltip title={transactionCount > 0 ? t('rulesList.tooltips.viewMatches') : t('rulesList.tooltips.noMatches')}>
+                        <span>
                           <IconButton
                             size="small"
-                            onClick={() => handleToggleRule(rule.id, rule.is_active)}
-                            title={rule.is_active ? 'Deactivate rule' : 'Activate rule'}
+                            onClick={() => handleToggleRuleExpansion(rule.id)}
+                            disabled={transactionCount === 0}
                           >
-                            {rule.is_active ? <ToggleOnIcon color="success" /> : <ToggleOffIcon />}
+                            <VisibilityIcon fontSize="small" />
                           </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDeleteRule(rule.id)}
-                            title="Delete rule"
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Box>
-                      </Box>
+                        </span>
+                      </Tooltip>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleToggleRule(rule.id, rule.is_active)}
+                        title={rule.is_active ? t('rulesList.tooltips.deactivate') : t('rulesList.tooltips.activate')}
+                      >
+                        {rule.is_active ? <ToggleOnIcon color="success" /> : <ToggleOffIcon />}
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDeleteRule(rule.id)}
+                        title={t('rulesList.tooltips.delete')}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </Box>
 
                       {/* Expandable Transaction List */}
                       <Collapse in={isExpanded}>
                         <Divider sx={{ my: 1.5 }} />
-                        {loadingPreview && !previewData ? (
-                          <Box display="flex" justifyContent="center" py={2}>
-                            <CircularProgress size={24} />
-                          </Box>
-                        ) : previewData && previewData.matchedTransactions.length > 0 ? (
-                          <Box sx={{ mt: 1 }}>
-                            <Typography variant="caption" color="text.secondary" fontWeight="bold" gutterBottom>
-                              Matching Transactions (showing up to 20):
-                            </Typography>
+                      {loadingPreview && !previewData ? (
+                        <Box display="flex" justifyContent="center" py={2}>
+                          <CircularProgress size={24} />
+                        </Box>
+                      ) : previewData && previewData.matchedTransactions.length > 0 ? (
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight="bold" gutterBottom>
+                            {t('rulesList.matches.title')}
+                          </Typography>
                             <Box sx={{ maxHeight: 300, overflowY: 'auto', mt: 1 }}>
                               {previewData.matchedTransactions.map((txn, idx) => (
                                 <Box
@@ -2412,28 +2431,28 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                                     <Typography variant="caption" display="block">
                                       {txn.name}
                                     </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                      {new Date(txn.date).toLocaleDateString()} • {txn.vendor}
-                                      {txn.accountNumber && ` • ****${txn.accountNumber}`}
-                                    </Typography>
-                                  </Box>
+                              <Typography variant="caption" color="text.secondary">
+                                {new Date(txn.date).toLocaleDateString()} • {txn.vendor}
+                                {txn.accountNumber && ` • ****${txn.accountNumber}`}
+                              </Typography>
+                            </Box>
                                   <Typography variant="caption" fontWeight="bold">
                                     ₪{Math.abs(txn.price).toFixed(2)}
                                   </Typography>
                                 </Box>
                               ))}
                             </Box>
-                            {previewData.totalCount > previewData.matchedTransactions.length && (
-                              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                                ...and {previewData.totalCount - previewData.matchedTransactions.length} more
-                              </Typography>
-                            )}
-                          </Box>
-                        ) : (
-                          <Typography variant="caption" color="text.secondary">
-                            No matching transactions found
-                          </Typography>
-                        )}
+                          {previewData.totalCount > previewData.matchedTransactions.length && (
+                            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                              {t('rulesList.matches.more', { count: previewData.totalCount - previewData.matchedTransactions.length })}
+                            </Typography>
+                          )}
+                        </Box>
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">
+                          {t('rulesList.matches.none')}
+                        </Typography>
+                      )}
                       </Collapse>
                     </CardContent>
                   </Card>
@@ -2467,7 +2486,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         },
       }}
     >
-      <ModalHeader title="Category Hierarchy" onClose={handleClose} />
+      <ModalHeader title={t('header.title')} onClose={handleClose} />
 
       <DialogContent style={{ padding: '0 24px 24px 24px' }}>
         {error && (
@@ -2487,8 +2506,8 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
           onChange={(e, newValue) => setActiveTab(newValue)}
           sx={{ mb: 3 }}
         >
-          <Tab label="Category Hierarchy" />
-          <Tab label="Pattern Rules" />
+          <Tab label={t('tabs.hierarchy')} />
+          <Tab label={t('tabs.rules')} />
         </Tabs>
 
         {activeTab === 0 && renderHierarchyTab()}
@@ -2497,7 +2516,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       <DialogActions style={{ padding: '16px 24px 24px 24px' }}>
         <Button onClick={handleClose} variant="outlined">
-          Close
+          {t('actions.close')}
         </Button>
       </DialogActions>
     </Dialog>

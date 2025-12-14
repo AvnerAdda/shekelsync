@@ -50,9 +50,84 @@ import {
 } from '@/lib/profile-normalization';
 import { apiClient } from '@/lib/api-client';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
+import { useTranslation } from 'react-i18next';
 
 const EnhancedProfileSection: React.FC = () => {
+  const { t } = useTranslation('translation', { keyPrefix: 'settings.profile' });
   const { refetch: refetchOnboarding } = useOnboarding();
+  const MARITAL_OPTIONS = [
+    { value: 'Single', label: t('options.marital.single') },
+    { value: 'Married', label: t('options.marital.married') },
+    { value: 'Divorced', label: t('options.marital.divorced') },
+    { value: 'Widowed', label: t('options.marital.widowed') },
+    { value: 'Prefer not to say', label: t('options.marital.na') },
+  ];
+  const LOCATION_OPTIONS = [
+    { value: '', label: t('options.location.unspecified') },
+    { value: 'Tel Aviv', label: t('options.location.telAviv') },
+    { value: 'Jerusalem', label: t('options.location.jerusalem') },
+    { value: 'Haifa', label: t('options.location.haifa') },
+    { value: 'Beer Sheva', label: t('options.location.beerSheva') },
+    { value: 'Netanya', label: t('options.location.netanya') },
+    { value: 'Rishon LeZion', label: t('options.location.rishon') },
+    { value: 'Petah Tikva', label: t('options.location.petahTikva') },
+    { value: 'Ashdod', label: t('options.location.ashdod') },
+    { value: 'Herzliya', label: t('options.location.herzliya') },
+    { value: 'Other', label: t('options.location.other') },
+  ];
+  const INDUSTRY_OPTIONS = [
+    { value: '', label: t('options.industry.unspecified') },
+    { value: 'Tech', label: t('options.industry.tech') },
+    { value: 'Finance', label: t('options.industry.finance') },
+    { value: 'Healthcare', label: t('options.industry.healthcare') },
+    { value: 'Education', label: t('options.industry.education') },
+    { value: 'Retail', label: t('options.industry.retail') },
+    { value: 'Manufacturing', label: t('options.industry.manufacturing') },
+    { value: 'Government', label: t('options.industry.government') },
+    { value: 'Self-employed', label: t('options.industry.selfEmployed') },
+    { value: 'Other', label: t('options.industry.other') },
+  ];
+  const EMPLOYMENT_OPTIONS = [
+    { value: '', label: t('options.employment.unspecified') },
+    { value: 'employed', label: t('options.employment.employed') },
+    { value: 'self_employed', label: t('options.employment.selfEmployed') },
+    { value: 'unemployed', label: t('options.employment.unemployed') },
+    { value: 'retired', label: t('options.employment.retired') },
+    { value: 'student', label: t('options.employment.student') },
+  ];
+  const EDUCATION_OPTIONS = [
+    { value: '', label: t('options.education.unspecified') },
+    { value: 'high_school', label: t('options.education.highSchool') },
+    { value: 'vocational', label: t('options.education.vocational') },
+    { value: 'bachelor', label: t('options.education.bachelor') },
+    { value: 'master', label: t('options.education.master') },
+    { value: 'phd', label: t('options.education.phd') },
+    { value: 'other', label: t('options.education.other') },
+  ];
+  const HOME_OPTIONS = [
+    { value: '', label: t('options.home.unspecified') },
+    { value: 'rent', label: t('options.home.rent') },
+    { value: 'own', label: t('options.home.own') },
+    { value: 'family', label: t('options.home.family') },
+    { value: 'other', label: t('options.home.other') },
+  ];
+  const GENDER_OPTIONS = [
+    { value: '', label: t('options.gender.unspecified') },
+    { value: 'male', label: t('options.gender.male') },
+    { value: 'female', label: t('options.gender.female') },
+    { value: 'other', label: t('options.gender.other') },
+  ];
+  const CHILD_EDUCATION_OPTIONS = [
+    { value: '', label: t('options.childEducation.unspecified') },
+    { value: 'infant', label: t('options.childEducation.infant') },
+    { value: 'toddler', label: t('options.childEducation.toddler') },
+    { value: 'preschool', label: t('options.childEducation.preschool') },
+    { value: 'elementary', label: t('options.childEducation.elementary') },
+    { value: 'middle_school', label: t('options.childEducation.middleSchool') },
+    { value: 'high_school', label: t('options.childEducation.highSchool') },
+    { value: 'university', label: t('options.childEducation.university') },
+    { value: 'graduated', label: t('options.childEducation.graduated') },
+  ];
   const [profileData, setProfileData] = useState<ProfileData>({
     profile: {
       username: '',
@@ -99,9 +174,9 @@ const EnhancedProfileSection: React.FC = () => {
       const response = await apiClient.get('/api/profile');
       if (!response.ok) {
         if (response.status === 401) {
-          setLoadError('Session expired. Please sign in again.');
+          setLoadError(t('messages.sessionExpired'));
         } else {
-          setLoadError('Failed to load profile. Please try again.');
+          setLoadError(t('messages.loadError'));
         }
         return;
       }
@@ -121,7 +196,7 @@ const EnhancedProfileSection: React.FC = () => {
       setProfileData(normalized);
     } catch (error) {
       console.error('Error fetching profile:', error);
-      setLoadError('Failed to load profile. Please try again.');
+      setLoadError(t('messages.loadError'));
     } finally {
       setIsLoading(false);
     }
@@ -150,7 +225,7 @@ const EnhancedProfileSection: React.FC = () => {
       await refetchOnboarding();
     } catch (error) {
       console.error('Error saving profile:', error);
-      setSaveError('Failed to save profile. Please try again.');
+      setSaveError(t('messages.saveError'));
     }
   };
 
@@ -186,7 +261,7 @@ const EnhancedProfileSection: React.FC = () => {
 
   const handleSaveChild = () => {
     if (!tempChild.birth_date) {
-      setSaveError('Birth date is required for children');
+      setSaveError(t('children.dialog.birthRequired'));
       return;
     }
 
@@ -273,7 +348,7 @@ const EnhancedProfileSection: React.FC = () => {
   if (isLoading && !loadError) {
     return (
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="body1">Loading profile...</Typography>
+        <Typography variant="body1">{t('loading')}</Typography>
       </Paper>
     );
   }
@@ -282,9 +357,9 @@ const EnhancedProfileSection: React.FC = () => {
     <Paper sx={{ p: 3, mb: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         <PersonIcon color="primary" />
-        <Typography variant="h6">Profile Information</Typography>
+        <Typography variant="h6">{t('sections.profile')}</Typography>
         <Chip
-          label={`Household of ${profileData.profile.household_size}`}
+          label={t('household', { size: profileData.profile.household_size })}
           color="primary"
           size="small"
           sx={{ ml: 'auto' }}
@@ -292,7 +367,7 @@ const EnhancedProfileSection: React.FC = () => {
       </Box>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Complete your profile for personalized insights and family financial analytics.
+        {t('intro')}
       </Typography>
 
       {loadError && (
@@ -306,14 +381,14 @@ const EnhancedProfileSection: React.FC = () => {
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <PersonIcon fontSize="small" />
-            <Typography variant="h6">Basic Information</Typography>
+            <Typography variant="h6">{t('sections.basic')}</Typography>
           </Box>
         </AccordionSummary>
         <AccordionDetails>
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <TextField
-                label="Username"
+                label={t('fields.username')}
                 fullWidth
                 value={profileData.profile.username}
                 onChange={(e) => handleProfileChange('username', e.target.value)}
@@ -329,7 +404,7 @@ const EnhancedProfileSection: React.FC = () => {
 
             <Grid item xs={12} md={6}>
               <TextField
-                label="Birth Date"
+                label={t('fields.birthDate')}
                 type="date"
                 fullWidth
                 value={profileData.profile.birth_date || ''}
@@ -357,47 +432,37 @@ const EnhancedProfileSection: React.FC = () => {
                     </InputAdornment>
                   ),
                 }}
-                helperText={profileData.profile.birth_date ? `Age: ${calculateAge(profileData.profile.birth_date)}` : 'Used for age-group comparisons'}
+                helperText={profileData.profile.birth_date ? t('helpers.ageProfile', { age: calculateAge(profileData.profile.birth_date) }) : t('helpers.required')}
               />
             </Grid>
 
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel>Marital Status</InputLabel>
+                <InputLabel>{t('fields.maritalStatus')}</InputLabel>
                 <Select
                   data-testid="marital-status-select"
                   value={profileData.profile.marital_status}
-                  label="Marital Status"
+                  label={t('fields.maritalStatus')}
                   onChange={(e) => handleMaritalStatusChange(e.target.value)}
                 >
-                  <MenuItem value="Single">Single</MenuItem>
-                  <MenuItem value="Married">Married</MenuItem>
-                  <MenuItem value="Divorced">Divorced</MenuItem>
-                  <MenuItem value="Widowed">Widowed</MenuItem>
-                  <MenuItem value="Prefer not to say">Prefer not to say</MenuItem>
+                  {MARITAL_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
 
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel>Location</InputLabel>
+                <InputLabel>{t('fields.location')}</InputLabel>
                 <Select
                   value={profileData.profile.location}
-                  label="Location"
+                  label={t('fields.location')}
                   onChange={(e) => handleProfileChange('location', e.target.value)}
                 >
-                  <MenuItem value="">Not specified</MenuItem>
-                  <MenuItem value="Tel Aviv">Tel Aviv</MenuItem>
-                  <MenuItem value="Jerusalem">Jerusalem</MenuItem>
-                  <MenuItem value="Haifa">Haifa</MenuItem>
-                  <MenuItem value="Beer Sheva">Beer Sheva</MenuItem>
-                  <MenuItem value="Netanya">Netanya</MenuItem>
-                  <MenuItem value="Rishon LeZion">Rishon LeZion</MenuItem>
-                  <MenuItem value="Petah Tikva">Petah Tikva</MenuItem>
-                  <MenuItem value="Ashdod">Ashdod</MenuItem>
-                  <MenuItem value="Herzliya">Herzliya</MenuItem>
-                  <MenuItem value="Other">Other</MenuItem>
+                  {LOCATION_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -410,14 +475,14 @@ const EnhancedProfileSection: React.FC = () => {
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <WorkIcon fontSize="small" />
-            <Typography variant="h6">Professional Information</Typography>
+            <Typography variant="h6">{t('sections.professional')}</Typography>
           </Box>
         </AccordionSummary>
         <AccordionDetails>
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <TextField
-                label="Occupation"
+                label={t('fields.occupation')}
                 fullWidth
                 value={profileData.profile.occupation}
                 onChange={(e) => handleProfileChange('occupation', e.target.value)}
@@ -428,72 +493,58 @@ const EnhancedProfileSection: React.FC = () => {
                     </InputAdornment>
                   ),
                 }}
-                placeholder="e.g., Software Engineer"
+                placeholder={t('placeholders.occupation')}
               />
             </Grid>
 
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel>Industry</InputLabel>
+                <InputLabel>{t('fields.industry')}</InputLabel>
                 <Select
                   value={profileData.profile.industry}
-                  label="Industry"
+                  label={t('fields.industry')}
                   onChange={(e) => handleProfileChange('industry', e.target.value)}
                 >
-                  <MenuItem value="">Not specified</MenuItem>
-                  <MenuItem value="Tech">Technology</MenuItem>
-                  <MenuItem value="Finance">Finance</MenuItem>
-                  <MenuItem value="Healthcare">Healthcare</MenuItem>
-                  <MenuItem value="Education">Education</MenuItem>
-                  <MenuItem value="Retail">Retail</MenuItem>
-                  <MenuItem value="Manufacturing">Manufacturing</MenuItem>
-                  <MenuItem value="Government">Government</MenuItem>
-                  <MenuItem value="Self-employed">Self-employed</MenuItem>
-                  <MenuItem value="Other">Other</MenuItem>
+                  {INDUSTRY_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
 
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel>Employment Status</InputLabel>
+                <InputLabel>{t('fields.employmentStatus')}</InputLabel>
                 <Select
                   value={profileData.profile.employment_status}
-                  label="Employment Status"
+                  label={t('fields.employmentStatus')}
                   onChange={(e) => handleProfileChange('employment_status', e.target.value)}
                 >
-                  <MenuItem value="">Not specified</MenuItem>
-                  <MenuItem value="employed">Employed</MenuItem>
-                  <MenuItem value="self_employed">Self-employed</MenuItem>
-                  <MenuItem value="unemployed">Unemployed</MenuItem>
-                  <MenuItem value="retired">Retired</MenuItem>
-                  <MenuItem value="student">Student</MenuItem>
+                  {EMPLOYMENT_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
 
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel>Education Level</InputLabel>
+                <InputLabel>{t('fields.educationLevel')}</InputLabel>
                 <Select
                   value={profileData.profile.education_level}
-                  label="Education Level"
+                  label={t('fields.educationLevel')}
                   onChange={(e) => handleProfileChange('education_level', e.target.value)}
                 >
-                  <MenuItem value="">Not specified</MenuItem>
-                  <MenuItem value="high_school">High School</MenuItem>
-                  <MenuItem value="vocational">Vocational Training</MenuItem>
-                  <MenuItem value="bachelor">Bachelor&apos;s Degree</MenuItem>
-                  <MenuItem value="master">Master&apos;s Degree</MenuItem>
-                  <MenuItem value="phd">PhD</MenuItem>
-                  <MenuItem value="other">Other</MenuItem>
+                  {EDUCATION_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
 
             <Grid item xs={12} md={6}>
               <TextField
-                label="Monthly Income"
+                label={t('fields.monthlyIncome')}
                 type="number"
                 fullWidth
                 value={profileData.profile.monthly_income || ''}
@@ -505,24 +556,22 @@ const EnhancedProfileSection: React.FC = () => {
                     </InputAdornment>
                   ),
                 }}
-                placeholder="15000"
-                helperText="Gross monthly income"
+                placeholder={t('placeholders.income')}
+                helperText={t('helpers.grossIncome')}
               />
             </Grid>
 
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel>Home Ownership</InputLabel>
+                <InputLabel>{t('fields.homeOwnership')}</InputLabel>
                 <Select
                   value={profileData.profile.home_ownership}
-                  label="Home Ownership"
+                  label={t('fields.homeOwnership')}
                   onChange={(e) => handleProfileChange('home_ownership', e.target.value)}
                 >
-                  <MenuItem value="">Not specified</MenuItem>
-                  <MenuItem value="rent">Rent</MenuItem>
-                  <MenuItem value="own">Own</MenuItem>
-                  <MenuItem value="family">Living with Family</MenuItem>
-                  <MenuItem value="other">Other</MenuItem>
+                  {HOME_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -536,7 +585,7 @@ const EnhancedProfileSection: React.FC = () => {
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <SpouseIcon fontSize="small" />
-              <Typography variant="h6">Spouse Information</Typography>
+              <Typography variant="h6">{t('sections.spouse')}</Typography>
               {profileData.spouse?.name && (
                 <Chip label={profileData.spouse.name} size="small" color="secondary" />
               )}
@@ -546,7 +595,7 @@ const EnhancedProfileSection: React.FC = () => {
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <TextField
-                  label="Spouse Name"
+                  label={t('fields.spouseName')}
                   fullWidth
                   value={profileData.spouse?.name || ''}
                   onChange={(e) => handleSpouseChange('name', e.target.value)}
@@ -562,25 +611,25 @@ const EnhancedProfileSection: React.FC = () => {
 
               <Grid item xs={12} md={6}>
                 <TextField
-                  label="Spouse Birth Date"
+                  label={t('fields.spouseBirthDate')}
                   type="date"
                   fullWidth
                   value={profileData.spouse?.birth_date || ''}
                   onChange={(e) => {
                     const newValue = e.target.value;
                     // Use native validity check for proper validation during typing
-                    if (newValue === '' || e.target.validity.valid) {
-                      handleSpouseChange('birth_date', newValue);
-                    }
-                  }}
-                  InputLabelProps={{ shrink: true }}
-                  helperText={profileData.spouse?.birth_date ? `Age: ${calculateAge(profileData.spouse.birth_date)}` : ''}
-                />
-              </Grid>
+                  if (newValue === '' || e.target.validity.valid) {
+                    handleSpouseChange('birth_date', newValue);
+                  }
+                }}
+                InputLabelProps={{ shrink: true }}
+                helperText={profileData.spouse?.birth_date ? t('helpers.ageSpouse', { age: calculateAge(profileData.spouse.birth_date) }) : ''}
+              />
+            </Grid>
 
               <Grid item xs={12} md={6}>
                 <TextField
-                  label="Spouse Occupation"
+                  label={t('fields.spouseOccupation')}
                   fullWidth
                   value={profileData.spouse?.occupation || ''}
                   onChange={(e) => handleSpouseChange('occupation', e.target.value)}
@@ -589,29 +638,22 @@ const EnhancedProfileSection: React.FC = () => {
 
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth>
-                  <InputLabel>Spouse Industry</InputLabel>
+                  <InputLabel>{t('fields.spouseIndustry')}</InputLabel>
                   <Select
                     value={profileData.spouse?.industry || ''}
-                    label="Spouse Industry"
+                    label={t('fields.spouseIndustry')}
                     onChange={(e) => handleSpouseChange('industry', e.target.value)}
                   >
-                    <MenuItem value="">Not specified</MenuItem>
-                    <MenuItem value="Tech">Technology</MenuItem>
-                    <MenuItem value="Finance">Finance</MenuItem>
-                    <MenuItem value="Healthcare">Healthcare</MenuItem>
-                    <MenuItem value="Education">Education</MenuItem>
-                    <MenuItem value="Retail">Retail</MenuItem>
-                    <MenuItem value="Manufacturing">Manufacturing</MenuItem>
-                    <MenuItem value="Government">Government</MenuItem>
-                    <MenuItem value="Self-employed">Self-employed</MenuItem>
-                    <MenuItem value="Other">Other</MenuItem>
+                    {INDUSTRY_OPTIONS.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
 
               <Grid item xs={12} md={6}>
                 <TextField
-                  label="Spouse Monthly Income"
+                  label={t('fields.spouseIncome')}
                   type="number"
                   fullWidth
                   value={profileData.spouse?.monthly_income || ''}
@@ -628,18 +670,15 @@ const EnhancedProfileSection: React.FC = () => {
 
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth>
-                  <InputLabel>Employment Status</InputLabel>
+                  <InputLabel>{t('fields.spouseEmployment')}</InputLabel>
                   <Select
                     value={profileData.spouse?.employment_status || ''}
-                    label="Employment Status"
+                    label={t('fields.spouseEmployment')}
                     onChange={(e) => handleSpouseChange('employment_status', e.target.value)}
                   >
-                    <MenuItem value="">Not specified</MenuItem>
-                    <MenuItem value="employed">Employed</MenuItem>
-                    <MenuItem value="self_employed">Self-employed</MenuItem>
-                    <MenuItem value="unemployed">Unemployed</MenuItem>
-                    <MenuItem value="retired">Retired</MenuItem>
-                    <MenuItem value="student">Student</MenuItem>
+                    {EMPLOYMENT_OPTIONS.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
@@ -653,9 +692,9 @@ const EnhancedProfileSection: React.FC = () => {
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <ChildIcon fontSize="small" />
-            <Typography variant="h6">Children Information</Typography>
+            <Typography variant="h6">{t('sections.children')}</Typography>
             <Chip
-              label={`${profileData.children.length} ${profileData.children.length === 1 ? 'child' : 'children'}`}
+              label={t('children.count', { count: profileData.children.length })}
               size="small"
               color={profileData.children.length > 0 ? 'primary' : 'default'}
             />
@@ -665,49 +704,53 @@ const EnhancedProfileSection: React.FC = () => {
           <Box>
             {profileData.children.length === 0 ? (
               <Alert severity="info" sx={{ mb: 2 }}>
-                No children added yet. Click the + button to add your first child.
+                {t('children.empty')}
               </Alert>
             ) : (
               <Grid container spacing={2} sx={{ mb: 2 }}>
-                {profileData.children.map((child, index) => (
-                  <Grid item xs={12} md={6} key={child.id || index}>
-                    <Card variant="outlined">
-                      <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                          <Typography variant="h6" component="div">
-                            {child.name || `Child ${index + 1}`}
-                          </Typography>
-                          <Box>
-                            <IconButton
-                              size="small"
-                              aria-label="Edit child"
-                              onClick={() => handleEditChild(child)}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              aria-label="Delete child"
-                              onClick={() => handleDeleteChild(child.id)}
-                              color="error"
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
+                {profileData.children.map((child, index) => {
+                  const age = child.birth_date ? calculateAge(child.birth_date) : null;
+                  const educationLabel = CHILD_EDUCATION_OPTIONS.find((option) => option.value === child.education_stage)?.label;
+                  return (
+                    <Grid item xs={12} md={6} key={child.id || index}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                            <Typography variant="h6" component="div">
+                              {child.name || t('children.unnamed', { index: index + 1 })}
+                            </Typography>
+                            <Box>
+                              <IconButton
+                                size="small"
+                                aria-label={t('actions.editChild')}
+                                onClick={() => handleEditChild(child)}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                aria-label={t('actions.deleteChild')}
+                                onClick={() => handleDeleteChild(child.id)}
+                                color="error"
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Box>
                           </Box>
-                        </Box>
-                        <Typography color="text.secondary" gutterBottom>
-                          Age: {calculateAge(child.birth_date)} years old
-                        </Typography>
-                        {child.education_stage && (
-                          <Chip label={child.education_stage.replace('_', ' ')} size="small" sx={{ mr: 1 }} />
-                        )}
-                        {child.special_needs && (
-                          <Chip label="Special Needs" size="small" color="secondary" />
-                        )}
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                ))}
+                          <Typography color="text.secondary" gutterBottom>
+                            {age !== null ? t('children.age', { age }) : ''}
+                          </Typography>
+                          {child.education_stage && (
+                            <Chip label={educationLabel || t('options.childEducation.unspecified')} size="small" sx={{ mr: 1 }} />
+                          )}
+                          {child.special_needs && (
+                            <Chip label={t('children.specialNeeds')} size="small" color="secondary" />
+                          )}
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  );
+                })}
               </Grid>
             )}
 
@@ -715,7 +758,7 @@ const EnhancedProfileSection: React.FC = () => {
               size="small"
               color="primary"
               onClick={handleAddChild}
-              aria-label="Add child"
+              aria-label={t('actions.addChild')}
               sx={{ mt: 2 }}
             >
               <AddIcon />
@@ -728,12 +771,12 @@ const EnhancedProfileSection: React.FC = () => {
       {(profileData.spouse || profileData.children.length > 0) && (
         <Alert severity="info" sx={{ mt: 3, mb: 2 }}>
           <Typography variant="body2">
-            <strong>Household Summary:</strong> {profileData.profile.household_size} members
+            <strong>{t('summary.title')}</strong> {t('summary.members', { count: profileData.profile.household_size })}
             {profileData.spouse && (
-              <> • Combined income: ₪{((profileData.profile.monthly_income || 0) + (profileData.spouse.monthly_income || 0)).toLocaleString()}/month</>
+              <> • {t('summary.combinedIncome', { amount: ((profileData.profile.monthly_income || 0) + (profileData.spouse?.monthly_income || 0)).toLocaleString() })}</>
             )}
             {profileData.children.length > 0 && (
-              <> • {profileData.children.length} {profileData.children.length === 1 ? 'child' : 'children'}</>
+              <> • {t('summary.children', { count: profileData.children.length })}</>
             )}
           </Typography>
         </Alert>
@@ -742,8 +785,7 @@ const EnhancedProfileSection: React.FC = () => {
       {/* Privacy Notice */}
       <Alert severity="info" sx={{ mt: 3, mb: 2 }}>
         <Typography variant="body2">
-          🔒 <strong>Your privacy matters:</strong> All family data is stored locally and used only for personalized
-          insights. This information enables advanced household analytics and family financial comparisons.
+          🔒 <strong>{t('privacyNote.title')}</strong> {t('privacyNote.body')}
         </Typography>
       </Alert>
 
@@ -755,14 +797,14 @@ const EnhancedProfileSection: React.FC = () => {
           startIcon={<SaveIcon />}
           onClick={handleSaveProfile}
         >
-          Save Profile
+          {t('actions.save')}
         </Button>
       </Box>
 
       {/* Success/Error Messages */}
       {saveSuccess && (
         <Alert severity="success" sx={{ mt: 2 }}>
-          Profile updated successfully! Your family insights will now be more comprehensive.
+          {t('messages.saveSuccess')}
         </Alert>
       )}
 
@@ -775,23 +817,23 @@ const EnhancedProfileSection: React.FC = () => {
       {/* Child Dialog */}
       <Dialog open={childDialogOpen} onClose={() => setChildDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {editingChild ? 'Edit Child Information' : 'Add Child Information'}
+          {editingChild ? t('children.dialog.editTitle') : t('children.dialog.addTitle')}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
               <TextField
-                label="Child Name"
+                label={t('children.dialog.name')}
                 fullWidth
                 value={tempChild.name}
                 onChange={(e) => setTempChild({ ...tempChild, name: e.target.value })}
-                placeholder="Optional - can be left blank"
+                placeholder={t('children.dialog.namePlaceholder')}
               />
             </Grid>
 
             <Grid item xs={12} md={6}>
               <TextField
-                label="Birth Date"
+                label={t('children.dialog.birthDate')}
                 type="date"
                 fullWidth
                 required
@@ -804,43 +846,36 @@ const EnhancedProfileSection: React.FC = () => {
                   }
                 }}
                 InputLabelProps={{ shrink: true }}
-                helperText={tempChild.birth_date ? `Age: ${calculateAge(tempChild.birth_date)}` : 'Required'}
+                helperText={tempChild.birth_date ? t('children.dialog.age', { age: calculateAge(tempChild.birth_date) }) : t('children.dialog.required')}
               />
             </Grid>
 
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel>Gender</InputLabel>
+                <InputLabel>{t('children.dialog.gender')}</InputLabel>
                 <Select
                   value={tempChild.gender}
-                  label="Gender"
+                  label={t('children.dialog.gender')}
                   onChange={(e) => setTempChild({ ...tempChild, gender: e.target.value })}
                 >
-                  <MenuItem value="">Prefer not to say</MenuItem>
-                  <MenuItem value="male">Male</MenuItem>
-                  <MenuItem value="female">Female</MenuItem>
-                  <MenuItem value="other">Other</MenuItem>
+                  {GENDER_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
 
             <Grid item xs={12}>
               <FormControl fullWidth>
-                <InputLabel>Education Stage</InputLabel>
+                <InputLabel>{t('children.dialog.educationStage')}</InputLabel>
                 <Select
                   value={tempChild.education_stage}
-                  label="Education Stage"
+                  label={t('children.dialog.educationStage')}
                   onChange={(e) => setTempChild({ ...tempChild, education_stage: e.target.value })}
                 >
-                  <MenuItem value="">Not specified</MenuItem>
-                  <MenuItem value="infant">Infant (0-1 years)</MenuItem>
-                  <MenuItem value="toddler">Toddler (1-3 years)</MenuItem>
-                  <MenuItem value="preschool">Preschool (3-5 years)</MenuItem>
-                  <MenuItem value="elementary">Elementary School</MenuItem>
-                  <MenuItem value="middle_school">Middle School</MenuItem>
-                  <MenuItem value="high_school">High School</MenuItem>
-                  <MenuItem value="university">University</MenuItem>
-                  <MenuItem value="graduated">Graduated</MenuItem>
+                  {CHILD_EDUCATION_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -853,15 +888,15 @@ const EnhancedProfileSection: React.FC = () => {
                     onChange={(e) => setTempChild({ ...tempChild, special_needs: e.target.checked })}
                   />
                 }
-                label="Has special needs (affects family expenses)"
+                label={t('children.dialog.specialNeeds')}
               />
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setChildDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setChildDialogOpen(false)}>{t('actions.cancel')}</Button>
           <Button onClick={handleSaveChild} variant="contained">
-            {editingChild ? 'Update' : 'Add'} Child
+            {editingChild ? t('actions.saveChanges') : t('actions.addChild')}
           </Button>
         </DialogActions>
       </Dialog>

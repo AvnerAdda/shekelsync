@@ -3,6 +3,7 @@ const actualDatabase = require('../database.js');
 const { recordBreakdownMetric } = require('./metrics-store.js');
 let database = actualDatabase;
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
+const { resolveLocale, getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
 
 const VALID_TYPES = new Set(['expense', 'income', 'investment']);
 
@@ -41,7 +42,9 @@ async function getBreakdownAnalytics(query = {}) {
     startDate,
     endDate,
     months = 3,
+    locale: localeInput,
   } = query;
+  const locale = resolveLocale(localeInput);
   const timerStart = performance.now();
 
   validateType(type);
@@ -64,6 +67,8 @@ async function getBreakdownAnalytics(query = {}) {
           id as category_id,
           id as level1_id,
           name as level1_name,
+          name_en as level1_name_en,
+          name_fr as level1_name_fr,
           color as level1_color,
           icon as level1_icon,
           description as level1_description,
@@ -78,6 +83,8 @@ async function getBreakdownAnalytics(query = {}) {
           cd.id as category_id,
           ct.level1_id,
           ct.level1_name,
+          ct.level1_name_en,
+          ct.level1_name_fr,
           ct.level1_color,
           ct.level1_icon,
           ct.level1_description,
@@ -97,6 +104,8 @@ async function getBreakdownAnalytics(query = {}) {
         t.account_number,
         cd.id as subcategory_id,
         cd.name as subcategory_name,
+        cd.name_en as subcategory_name_en,
+        cd.name_fr as subcategory_name_fr,
         cd.color as subcategory_color,
         cd.icon as subcategory_icon,
         cd.description as subcategory_description,
@@ -104,6 +113,8 @@ async function getBreakdownAnalytics(query = {}) {
         cd.depth_level,
         ct.level1_id as parent_id,
         ct.level1_name as parent_name,
+        ct.level1_name_en as parent_name_en,
+        ct.level1_name_fr as parent_name_fr,
         ct.level1_color as parent_color,
         ct.level1_icon as parent_icon,
         ct.level1_description as parent_description,
@@ -241,11 +252,27 @@ async function getBreakdownAnalytics(query = {}) {
     });
   });
 
-  let transactions = transactionsResult.rows.map((row) => ({
-    ...row,
-    price: Number.parseFloat(row.price),
-    date: new Date(row.date),
-  }));
+  let transactions = transactionsResult.rows.map((row) => {
+    const parentName = getLocalizedCategoryName({
+      name: row.parent_name,
+      name_en: row.parent_name_en,
+      name_fr: row.parent_name_fr,
+    }, locale) || row.parent_name || 'Uncategorized';
+
+    const subcategoryName = getLocalizedCategoryName({
+      name: row.subcategory_name,
+      name_en: row.subcategory_name_en,
+      name_fr: row.subcategory_name_fr,
+    }, locale) || row.subcategory_name || null;
+
+    return {
+      ...row,
+      parent_name: parentName,
+      subcategory_name: subcategoryName,
+      price: Number.parseFloat(row.price),
+      date: new Date(row.date),
+    };
+  });
 
   // Deduplicate transactions (recursive CTE can return duplicate rows for multi-level categories)
   const identifiers = transactions.map(tx => tx.identifier);

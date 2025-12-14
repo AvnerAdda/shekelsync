@@ -53,7 +53,10 @@ function createAnalyticsRouter() {
 
   router.get('/breakdown', async (req, res) => {
     try {
-      const result = await breakdownService.getBreakdownAnalytics(req.query);
+      const result = await breakdownService.getBreakdownAnalytics({
+        ...req.query,
+        locale: req.locale,
+      });
       res.json(result);
     } catch (error) {
       console.error('Breakdown analytics error:', error);
@@ -185,7 +188,10 @@ function createAnalyticsRouter() {
 
   router.get('/category-details', async (req, res) => {
     try {
-      const result = await categoryDetailsService.getCategoryDetails(req.query || {});
+      const result = await categoryDetailsService.getCategoryDetails({
+        ...req.query,
+        locale: req.locale,
+      });
       res.json(result);
     } catch (error) {
       console.error('Category details error:', error);

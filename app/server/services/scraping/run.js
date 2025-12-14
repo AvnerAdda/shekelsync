@@ -600,8 +600,23 @@ async function updateVendorBalance(client, options, credentials, account, logger
     const isBank = isBankVendor(options.companyId);
     if (isBank) {
       try {
-        // Pass credential with correct database ID
-        const credentialForSync = { ...credentials, id: dbCredentialId, dbId: dbCredentialId };
+        // Pass credential with correct database ID and institution_id
+        // Fetch institution_id if not present in credentials
+        let institutionId = credentials.institution_id;
+        if (!institutionId) {
+          const instResult = await client.query(
+            `SELECT institution_id FROM vendor_credentials WHERE id = $1`,
+            [dbCredentialId]
+          );
+          institutionId = instResult.rows[0]?.institution_id;
+        }
+        const credentialForSync = {
+          ...credentials,
+          id: dbCredentialId,
+          dbId: dbCredentialId,
+          institution_id: institutionId,
+          vendor: options.companyId,
+        };
         await syncBankBalanceToInvestments(client, credentialForSync, account.balance, account.accountNumber, logger);
       } catch (syncError) {
         logger?.error?.(`[Scrape:${options.companyId}] Failed to sync balance to investment holdings:`, syncError);

@@ -1,0 +1,1601 @@
+{
+  "common": {
+    "language": "Langue",
+    "languages": { "he": "Hébreu", "en": "Anglais", "fr": "Français" },
+    "systemLanguageDetected": "Langue détectée ({{language}}) depuis la configuration système. Vous pouvez changer à tout moment."
+  },
+  "dashboard": {
+    "summary": {
+      "categories": { "essential": "Essentiel", "growth": "Croissance", "stability": "Stabilité", "reward": "Loisirs" },
+      "budgets": { "heading": "Budgets ({{count}} au total)", "onTrack": "Dans l'objectif", "warning": "Alerte", "exceeded": "Dépassé", "none": "Pas encore de budgets" },
+      "allocation": { "actual": "Répartition actuelle", "target": "Cible : {{targets}}%", "tooltip": "{{label}} : {{actual}}% (cible {{target}}%)" },
+      "health": { "subtitle": "Score de santé financière", "savings": "Épargne", "diversity": "Diversification", "impulse": "Impulsivité", "runway": "Autonomie de trésorerie" },
+      "cards": {
+        "finance": {
+          "title": "Mois en cours",
+          "subtitle": "Solde bancaire : {{amount}}",
+          "income": "Revenus",
+          "expenses": "Dépenses",
+          "investments": "Investissements",
+          "capitalReturns": "Remboursements de capital",
+          "capitalReturnsNote": "Capital retourné des placements (pékadon, dépôts). Pas compté comme revenu mais compense les sorties d'investissement.",
+          "pendingLabel": "En attente ({{count}})",
+          "pendingDeficit": "Les dépenses en attente provoqueront un déficit de {{amount}}"
+        },
+        "portfolio": { "title": "Portefeuille d'investissement" },
+        "analysis": { "title": "Santé financière" }
+      }
+    },
+    "summarySection": {
+      "fallbackCategory": "Total des dépenses",
+      "noIncomeTitle": "Aucun revenu détecté",
+      "noIncomeAddAccounts": "Pour suivre vos revenus automatiquement, ajoutez vos identifiants bancaires. Cela activera le suivi automatique des revenus et offrira une vue financière complète.",
+      "noIncomeDetected": "Nous n'avons détecté aucune transaction de revenu sur la période sélectionnée. Si vous attendez des revenus, vérifiez que votre dernière récupération bancaire a réussi ou lancez-en une nouvelle.",
+      "periodLabel": "Mois en cours : {{start}} - {{end}}",
+      "compare": {
+        "on": "Comparaison avec le mois dernier",
+        "off": "Comparer au mois dernier"
+      },
+      "comparison": {
+        "title": "Mode comparaison (bientôt)",
+        "description": "La vue de comparaison mois par mois est en cours de développement. Elle affichera des métriques côte à côte comparant {{current}} à {{previous}}."
+      }
+    }
+  },
+  "investmentAccountsModal": {
+    "title": "Gestion des comptes d'investissement",
+    "aria": { "tabs": "onglets de gestion des comptes d'investissement" },
+    "tabs": {
+      "links": "Liens de transactions",
+      "patterns": "Modèles de correspondance"
+    },
+    "links": {
+      "title": "Suggestions de lien",
+      "description": "Suggestions automatiques pour lier les transactions d'investissement aux comptes.",
+      "empty": "Aucune suggestion en attente. Toutes les transactions sont déjà liées !",
+      "notifications": {
+        "approved": "Suggestion approuvée",
+        "rejected": "Suggestion rejetée",
+        "error": "Échec du traitement de la suggestion"
+      },
+      "table": {
+        "date": "Date",
+        "transaction": "Transaction",
+        "amount": "Montant",
+        "account": "Compte suggéré",
+        "confidence": "Confiance",
+        "actions": "Actions",
+        "approve": "Approuver",
+        "reject": "Rejeter"
+      },
+      "aria": { "refresh": "Rafraîchir les suggestions" }
+    },
+    "patterns": {
+      "title": "Règles de correspondance de motifs",
+      "description": "Les motifs définissent quelles transactions appartiennent à quels comptes. Utilisez <code>%</code> comme caractère générique.<br />Exemple : <code>%dépôt%</code> correspond à toute transaction contenant \"dépôt\".",
+      "empty": "Aucun compte d'investissement trouvé. Créez un compte pour ajouter des motifs.",
+      "chipCount": "{{count}} motif{{count, plural, one {} other {s}}}",
+      "notifications": {
+        "missingPattern": "Veuillez saisir un motif",
+        "added": "Motif ajouté avec succès",
+        "addError": "Échec de l'ajout du motif",
+        "deleted": "Motif supprimé",
+        "deleteError": "Échec de la suppression du motif"
+      },
+      "confirmDelete": "Supprimer ce motif ?",
+      "actions": {
+        "add": "Ajouter"
+      }
+    }
+  },
+  "dashboardHome": {
+    "empty": {
+      "welcomeTitle": "Bienvenue sur ShekelSync !",
+      "welcomeDescription": "Organisons vos finances. Suivez ces étapes pour commencer à suivre vos dépenses et vos revenus.",
+      "noTransactionsTitle": "Aucune transaction ce mois-ci",
+      "noTransactionsDescription": "Vous avez {{count}} transactions au total, mais aucune ce mois-ci ({{month}}). Essayez de récupérer des données récentes ou consultez l'analyse historique dans la page Analyse.",
+      "noTransactionsDisclaimer": "Aucune transaction enregistrée pour {{month}}. Les données affichées ci-dessous correspondent à votre dernière période disponible.",
+      "showingPreviousMonth": "Aucune transaction pour {{currentMonth}}. Affichage des données de {{displayedMonth}}.",
+      "scrapeRecent": "Récupérer les transactions récentes",
+      "viewHistory": "Voir les données historiques"
+    },
+    "anomaly": { "expenseSpike": "Pic de dépense inhabituel : {{amount}}" },
+    "trends": { "highSpending": "Période de dépenses élevées", "lowSpending": "Période de dépenses faibles" },
+    "tooltip": {
+      "income": "Revenus",
+      "expenses": "Dépenses",
+      "net": "Net",
+      "vsAverage": "vs moyenne",
+      "unusualSpending": "Dépense inhabituelle",
+      "clickForDetails": "Cliquez pour voir les détails"
+    }
+  },
+  "settings": {
+    "title": "Paramètres",
+    "language": {
+      "title": "Langue et région",
+      "description": "La langue par défaut est l'hébreu. Au premier lancement nous choisissons la meilleure correspondance avec la langue système ; vous pouvez changer à tout moment.",
+      "detectedLabel": "Langue système : {{language}}"
+    },
+    "appearance": {
+      "title": "Apparence",
+      "description": "Choisissez votre thème préféré. Le mode Système suivra automatiquement celui de votre appareil.",
+      "light": "Clair",
+      "system": "Système",
+      "dark": "Sombre",
+      "currentTheme": "Thème actuel : {{theme}}",
+      "systemFollow": "(suit la préférence système)"
+    },
+    "textSize": {
+      "title": "Taille du texte",
+      "description": "Ajustez la taille du texte dans l'application pour plus de lisibilité.",
+      "small": "Petit",
+      "medium": "Moyen",
+      "large": "Grand",
+      "current": "Taille actuelle : {{size}}",
+      "hints": {
+        "small": "(90 % de la taille par défaut)",
+        "medium": "(100 % - par défaut)",
+        "large": "(110 % de la taille par défaut)"
+      }
+    },
+    "diagnostics": {
+      "title": "Diagnostics et rapports de crash",
+      "description": "Partagez des rapports de crash anonymisés pour nous aider à résoudre les problèmes plus rapidement. Aucun identifiant ou donnée sensible n'est inclus.",
+      "notSupported": "Le rapport de crash est disponible uniquement sur l'application desktop.",
+      "toggleLabel": "Envoyer les rapports de crash automatiquement",
+      "toggleOn": "Les détails de crash seront envoyés de façon sécurisée à notre service de monitoring.",
+      "toggleOff": "Les détails restent sur votre appareil tant que vous n'optez pas pour l'envoi.",
+      "exportHint": "Vous pouvez toujours exporter les logs manuellement depuis le panneau Diagnostic ci-dessous."
+    },
+    "chatbot": {
+      "title": "Paramètres du chatbot IA",
+      "description": "Configurez votre assistant financier et contrôlez l'accès aux données. Le chatbot n'a jamais accès à vos identifiants bancaires.",
+      "enable": "Activer le chatbot IA",
+      "enableHint": "Afficher le bouton chatbot et autoriser les interactions",
+      "permissionsTitle": "Autorisations d'accès aux données",
+      "permissionsDescription": "Accordez l'accès aux données pour des insights personnalisés.",
+      "permissionsEnableFirst": "(Activez le chatbot pour définir les autorisations)",
+      "permissions": {
+        "transaction": "Données de transaction",
+        "transactionHint": "Accès à l'historique, montants, dates et descriptions",
+        "category": "Données de catégories",
+        "categoryHint": "Accès aux catégories de dépenses et règles de catégorisation",
+        "analytics": "Analyses et insights",
+        "analyticsHint": "Accès à l'analyse comportementale, tendances et schémas de dépenses"
+      },
+      "privacyTitle": "Votre vie privée est protégée",
+      "privacyBullet1": "• Le chatbot n'a JAMAIS accès à vos identifiants bancaires",
+      "privacyBullet2": "• Toutes les autorisations peuvent être révoquées à tout moment",
+      "privacyBullet3": "• Les données servent uniquement à répondre et fournir des insights",
+      "privacyBullet4": "• Aucune donnée n'est partagée avec des tiers",
+      "noPermissions": "Le chatbot est activé mais sans autorisations. Accordez au moins une autorisation pour des insights utiles."
+    },
+    "privacy": {
+      "title": "Contrôles de confidentialité",
+      "description": "Activez le masquage des montants pour cacher les chiffres financiers dans toute l'application. Utile en partage d'écran ou en public.",
+      "maskOn": "Tous les montants sont actuellement remplacés par des astérisques.",
+      "maskOff": "Les montants s'afficheront en clair jusqu'à l'activation du masquage."
+    },
+    "dataExport": {
+      "title": "Export de données",
+      "description": "Exportez vos données financières pour sauvegarde, fiscalité ou analyse dans des outils externes. Les exports respectent vos réglages de confidentialité et excluent par défaut les informations sensibles.",
+      "institutionNote": "Chaque export inclut les noms/types d'institutions vus dans l'interface, pour que les outils externes puissent faire correspondre transactions et vendeurs aux mêmes institutions.",
+      "bridge": {
+        "desktop": "Nous ouvrirons une boîte de dialogue native et écrirons l'export directement dans le dossier choisi. Rien n'est envoyé dans le cloud.",
+        "web": "Pas de passerelle desktop détectée — une fois prêt, l'export sera téléchargé via votre navigateur."
+      },
+      "config": {
+        "title": "Configuration de l'export",
+        "dataTypeLabel": "Type de données",
+        "dataTypes": {
+          "transactions": "Transactions uniquement",
+          "categories": "Résumé des catégories",
+          "vendors": "Résumé des vendeurs",
+          "budgets": "Budgets et objectifs",
+          "full": "Export complet"
+        },
+        "formatLabel": "Format",
+        "format": {
+          "csv": "CSV (compatible Excel)",
+          "json": "JSON (pour développeurs)"
+        },
+        "dateRangeLabel": "Plage de dates",
+        "dateRanges": {
+          "last3months": "3 derniers mois",
+          "last6months": "6 derniers mois",
+          "lastyear": "12 derniers mois",
+          "thisyear": "Cette année",
+          "custom": "Plage personnalisée"
+        },
+        "startDate": "Date de début",
+        "endDate": "Date de fin",
+        "exportPeriod": "Période d'export : {{start}} - {{end}}"
+      },
+      "filters": {
+        "title": "Filtres et options",
+        "includeTypes": "Inclure les types de transactions :",
+        "income": "Revenus",
+        "expenses": "Dépenses",
+        "investments": "Investissements",
+        "excludeDuplicates": "Exclure les doublons",
+        "includeInstitutions": "Inclure les détails d'institution",
+        "categories": {
+          "label": "Filtrer par catégories",
+          "placeholder": "Sélectionnez des catégories..."
+        },
+        "vendors": {
+          "label": "Filtrer par vendeurs",
+          "placeholder": "Sélectionnez des vendeurs...",
+          "count": "{{count}} transactions"
+        }
+      },
+      "summary": {
+        "title": "Récapitulatif d'export",
+        "estimated": "Enregistrements estimés : ~{{count}}",
+        "formatType": "Format : {{format}} • Type : {{type}}",
+        "exporting": "Export en cours...",
+        "cta": "Exporter les données",
+        "success": "Export réussi ! Vérifiez votre dossier de téléchargements.",
+        "error": "Échec de l'export : {{message}}",
+        "privacyNoteTitle": "Note de confidentialité :",
+        "privacyNoteBody": "Les données exportées incluent les détails des transactions mais excluent les informations d'authentification sensibles. Utilisez-les de façon responsable et stockez-les en sécurité."
+      }
+    },
+    "profile": {
+      "loading": "Chargement du profil...",
+      "sections": {
+        "profile": "Informations du profil",
+        "basic": "Informations de base",
+        "professional": "Informations professionnelles",
+        "spouse": "Informations conjoint(e)",
+        "children": "Informations enfants"
+      },
+      "household": "Foyer de {{size}}",
+      "intro": "Complétez votre profil pour des insights personnalisés et une analyse financière familiale.",
+      "fields": {
+        "username": "Nom d'utilisateur",
+        "birthDate": "Date de naissance",
+        "maritalStatus": "Statut marital",
+        "location": "Localisation",
+        "occupation": "Profession",
+        "industry": "Secteur",
+        "employmentStatus": "Statut professionnel",
+        "educationLevel": "Niveau d'études",
+        "monthlyIncome": "Revenu mensuel",
+        "homeOwnership": "Logement",
+        "spouseName": "Nom du conjoint",
+        "spouseBirthDate": "Date de naissance du conjoint",
+        "spouseOccupation": "Profession du conjoint",
+        "spouseIndustry": "Secteur du conjoint",
+        "spouseIncome": "Revenu mensuel du conjoint",
+        "spouseEmployment": "Statut professionnel du conjoint"
+      },
+      "placeholders": {
+        "occupation": "ex. Ingénieur logiciel",
+        "income": "15000"
+      },
+      "helpers": {
+        "ageProfile": "Âge : {{age}} ans",
+        "ageSpouse": "Âge : {{age}} ans",
+        "grossIncome": "Revenu mensuel brut",
+        "required": "Requis"
+      },
+      "options": {
+        "marital": {
+          "single": "Célibataire",
+          "married": "Marié(e)",
+          "divorced": "Divorcé(e)",
+          "widowed": "Veuf/Veuve",
+          "na": "Préférence non indiquée"
+        },
+        "location": {
+          "unspecified": "Non spécifié",
+          "telAviv": "Tel Aviv",
+          "jerusalem": "Jérusalem",
+          "haifa": "Haïfa",
+          "beerSheva": "Beer Sheva",
+          "netanya": "Netanya",
+          "rishon": "Rishon LeZion",
+          "petahTikva": "Petah Tikva",
+          "ashdod": "Ashdod",
+          "herzliya": "Herzliya",
+          "other": "Autre"
+        },
+        "industry": {
+          "unspecified": "Non spécifié",
+          "tech": "Technologie",
+          "finance": "Finance",
+          "healthcare": "Santé",
+          "education": "Éducation",
+          "retail": "Commerce de détail",
+          "manufacturing": "Industrie",
+          "government": "Secteur public",
+          "selfEmployed": "Indépendant",
+          "other": "Autre"
+        },
+        "employment": {
+          "unspecified": "Non spécifié",
+          "employed": "Salarié(e)",
+          "selfEmployed": "Indépendant(e)",
+          "unemployed": "Sans emploi",
+          "retired": "Retraité(e)",
+          "student": "Étudiant(e)"
+        },
+        "education": {
+          "unspecified": "Non spécifié",
+          "highSchool": "Lycée",
+          "vocational": "Formation professionnelle",
+          "bachelor": "Licence",
+          "master": "Master",
+          "phd": "Doctorat",
+          "other": "Autre"
+        },
+        "home": {
+          "unspecified": "Non spécifié",
+          "rent": "Location",
+          "own": "Propriétaire",
+          "family": "Chez la famille",
+          "other": "Autre"
+        },
+        "gender": {
+          "unspecified": "Préférence non indiquée",
+          "male": "Homme",
+          "female": "Femme",
+          "other": "Autre"
+        },
+        "childEducation": {
+          "unspecified": "Non spécifié",
+          "infant": "Nourrisson (0-1 an)",
+          "toddler": "Tout-petit (1-3 ans)",
+          "preschool": "Maternelle (3-5 ans)",
+          "elementary": "École primaire",
+          "middleSchool": "Collège",
+          "highSchool": "Lycée",
+          "university": "Université",
+          "graduated": "Diplômé(e)"
+        }
+      },
+      "children": {
+        "count": "{{count}} {{count, plural, one {enfant} other {enfants}}}",
+        "empty": "Aucun enfant ajouté. Cliquez sur + pour ajouter votre premier enfant.",
+        "unnamed": "Enfant {{index}}",
+        "age": "Âge : {{age}} ans",
+        "specialNeeds": "Besoins particuliers",
+        "add": "Ajouter un enfant",
+        "dialog": {
+          "editTitle": "Modifier les informations de l'enfant",
+          "addTitle": "Ajouter un enfant",
+          "name": "Nom de l'enfant",
+          "namePlaceholder": "Optionnel - peut rester vide",
+          "birthDate": "Date de naissance",
+          "age": "Âge : {{age}} ans",
+          "required": "Requis",
+          "birthRequired": "La date de naissance est obligatoire pour les enfants",
+          "gender": "Genre",
+          "educationStage": "Niveau d'étude",
+          "specialNeeds": "Besoins particuliers (impacte les dépenses)"
+        }
+      },
+      "summary": {
+    "title": "Résumé du foyer :",
+    "members": "{{count}} membres",
+    "combinedIncome": "Revenu combiné : ₪{{amount}}/mois",
+    "children_one": "{{count}} enfant",
+    "children_other": "{{count}} enfants"
+      },
+      "privacyNote": {
+        "title": "Votre vie privée compte :",
+        "body": "Toutes les données familiales sont stockées localement et utilisées uniquement pour des insights personnalisés. Ces informations permettent une analyse avancée du foyer et des comparaisons financières familiales."
+      },
+      "actions": {
+        "save": "Enregistrer le profil",
+        "cancel": "Annuler",
+        "saveChanges": "Enregistrer les modifications",
+        "addChild": "Ajouter un enfant",
+        "editChild": "Modifier l'enfant",
+        "deleteChild": "Supprimer l'enfant"
+      },
+      "messages": {
+        "saveSuccess": "Profil mis à jour ! Vos insights familiaux seront plus complets.",
+        "saveError": "Échec de l'enregistrement du profil. Réessayez.",
+        "loadError": "Échec du chargement du profil. Réessayez.",
+        "sessionExpired": "Session expirée. Veuillez vous reconnecter."
+      }
+    },
+    "diagnosticsPanel": {
+      "title": "Diagnostics et logs",
+      "description": "Exportez les logs récents et le contexte système pour un ticket de support, ou ouvrez le dossier des logs pour inspecter les problèmes en local.",
+      "notSupported": "Les outils de diagnostic sont disponibles uniquement dans l'app desktop packagée.",
+      "openLogs": "Ouvrir le dossier des logs",
+      "export": "Exporter les diagnostics",
+      "logDirectory": "Dossier des logs",
+      "version": "Version : {{version}}",
+      "platform": "Plateforme : {{platform}}",
+      "errors": {
+        "logUnavailable": "L'accès au dossier des logs n'est pas disponible dans cet environnement.",
+        "openFailed": "Impossible d'ouvrir le dossier des logs.",
+        "exportUnsupported": "L'export de diagnostics n'est pas supporté dans cet environnement.",
+        "exportFailed": "Échec de l'export du bundle de diagnostics."
+      },
+      "saveDialogLabel": "Bundle de diagnostics",
+      "telemetry": {
+        "status": "Statut du rapport de crash",
+        "optedIn": "Activé",
+        "optedOut": "Désactivé",
+        "noDsn": "SENTRY_DSN n'est pas configuré. Les rapports restent locaux même si vous activez l'envoi.",
+        "destination": "Destination : {{host}}"
+      },
+      "metrics": {
+        "title": "Exécutions d'analytique récentes",
+        "runs": "Exécutions : {{count}}",
+        "avgDuration": "Moy. {{value}}ms",
+        "lastRun": "Dernière exécution : {{date}}",
+        "breakdown": "Répartition par catégorie",
+        "dashboard": "Vue d'ensemble du tableau de bord",
+        "unifiedCategory": "Catégorie unifiée",
+        "waterfall": "Cascade de flux de trésorerie",
+        "categoryOpportunities": "Opportunités par catégorie"
+      }
+    }
+  },
+  "breakdownTabs": {
+    "tabs": { "overall": "Global", "income": "Revenus", "expense": "Dépenses", "investment": "Investissements" },
+    "overall": {
+      "totalIncome": "Revenus totaux : {{amount}}",
+      "period": "Période : {{start}} - {{end}}",
+      "noData": "Aucune donnée de flux financier pour cette période",
+      "noDataHint": "Ajoutez des transactions de revenus et dépenses pour voir le schéma de flux"
+    },
+    "shared": { "noDataPeriod": "Aucune donnée de répartition pour cette période." },
+    "income": {
+      "noIncomeTitle": "Pas de données de revenus",
+      "noAccounts": "Ajoutez vos identifiants bancaires pour suivre automatiquement les revenus et obtenir une vue complète des flux.",
+      "noIncomePeriod": "Aucune transaction de revenu pour la période sélectionnée. Vérifiez votre dernière récupération bancaire ou lancez-en une nouvelle."
+    },
+    "investment": {
+      "comingSoon": "Répartition des investissements à venir.",
+      "liquid": "Investissements liquides",
+      "liquidTotal": "Total liquide : {{amount}}",
+      "liquidHint": "Investissements accessibles",
+      "noLiquid": "Aucun investissement liquide",
+      "addLiquidHint": "Ajoutez des comptes de courtage, crypto ou épargne",
+      "restricted": "Investissements restreints",
+      "restrictedTotal": "Total restreint : {{amount}}",
+      "restrictedHint": "Retraite, prévoyance et fonds d'étude",
+      "noRestricted": "Aucune épargne long terme",
+      "addRestrictedHint": "Ajoutez des comptes retraite/prévoyance/fonds d'étude"
+    },
+    "sankey": {
+      "title": "Flux financier",
+      "empty": "Pas assez de données pour afficher le flux financier pour le moment.",
+      "legend": {
+        "income": "Revenus",
+        "expenses": "Dépenses",
+        "investments": "Investissements"
+      },
+      "tooltip": "{{source}} → {{target}} : {{amount}}"
+    }
+  },
+  "transactionHistory": {
+    "title": "Historique des transactions",
+    "scales": { 
+      "linear": "Échelle linéaire", 
+      "log": "Échelle logarithmique",
+      "logRecommendedHint": "Des différences de valeurs importantes ont été détectées. Envisagez d'utiliser l'échelle logarithmique pour une meilleure visualisation."
+    },
+    "periods": { "daily": "Quotidien", "weekly": "Hebdomadaire", "monthly": "Mensuel" },
+    "tabs": {
+      "history": "Revenus et dépenses quotidiens",
+      "netPosition": "Position nette",
+      "scenarios": "Scénarios de fin de mois"
+    },
+    "forecast": {
+      "loading": "Chargement des prévisions...",
+      "error": "Échec du chargement des prévisions",
+      "noData": "Aucune donnée de prévision disponible",
+      "expected": "Prévu",
+      "p10": "Optimiste (P10)",
+      "p50": "Médiane (P50)",
+      "p90": "Prudent (P90)",
+      "income": "Revenus",
+      "expenses": "Dépenses",
+      "netCashFlow": "Flux de trésorerie net",
+      "cumulative": "Cumulatif",
+      "historicalData": "Historique",
+      "forecastData": "Prévision",
+      "scenarioSummary": "Projection de fin de mois basée sur {{simulations}} simulations Monte Carlo",
+      "daysRemaining": "{{count}} jours restants dans le mois",
+      "actualNet": "Position nette réelle",
+      "confidenceBand": "Bande de confiance (P10-P90)",
+      "bestCase": "Meilleur scénario",
+      "baseCase": "Scénario de base",
+      "worstCase": "Pire scénario"
+    },
+    "avgLabel": "Moy.: {{amount}}",
+    "legend": { "income": "Revenus", "expenses": "Dépenses" },
+    "patterns": {
+      "title": "Schémas détectés",
+      "avgByPeriod": "Moyenne {{period}}",
+      "savingsRate": "Taux d'épargne",
+      "anomalies": "Anomalies",
+      "spikes": "{{count}} pic{{count, plural, one {} other {s}}}"
+    },
+    "transactionsOn": "Transactions du {{date}} ({{count}} transactions) :",
+    "noTransactionsForDate": "Aucune transaction pour cette date."
+  }
+  ,
+  "analysisPage": {
+    "actions": {
+      "refresh": "Actualiser",
+      "refreshing": "Actualisation...",
+      "retry": "Réessayer"
+    },
+    "tabs": {
+      "ariaLabel": "onglets d'analyse",
+      "dashboard": "Tableau de bord",
+      "actions": "Actions",
+      "spending": "Dépenses",
+      "budget": "Budget",
+      "scoring": "Score"
+    },
+    "errors": {
+      "fetchFailed": "Impossible de récupérer les données d'analyse",
+      "generic": "Erreur inconnue"
+    },
+    "states": {
+      "noData": "Aucune donnée disponible. Réessayez."
+    },
+    "header": {
+      "title": "Analyse financière",
+      "subtitle": "Insights intelligents, suivi budgétaire et indicateurs de santé financière"
+    },
+    "dashboard": {
+      "rhythm": {
+        "title": "Votre rythme financier",
+        "spendingByHour": "Dépenses par heure de la journée",
+        "lowPrecision": "Seuls {{percentage}} % comportent une heure",
+        "runway": "Piste financière",
+        "runwayDays": "{{count}} jours",
+        "burnRate": "Burn rate quotidien",
+        "peakHour": "Heure de pointe",
+        "peakHourValue": "{{hour}}:00",
+        "na": "N/D",
+        "paydayEffect": "Effet jour de paie"
+      },
+      "personality": {
+        "title": "Votre personnalité financière",
+        "spendingStyle": "Style de dépense",
+        "impulse": "{{value}} % impulsif",
+        "planned": "{{value}} % planifié",
+        "avgTransaction": "Transaction moyenne",
+        "smallPurchases": "Petits achats",
+        "fomoScore": "Score FOMO",
+        "fomoHint": "Indicateur des dépenses de divertissement du week-end"
+      },
+      "future": {
+        "title": "Votre avenir financier",
+        "trajectory": "Trajectoire d'épargne sur 6 mois",
+        "endOfMonth": "Fin du mois",
+        "monthlySavings": "Épargne mensuelle",
+        "dailyVelocity": "Vélocité quotidienne",
+        "velocityValue": "{{value}}/jour"
+      },
+      "reality": {
+        "title": "Concrétiser",
+        "timeValue": "Votre temps = argent",
+        "hourlyRate": "{{value}}/heure",
+        "avgPurchase": "Achat moyen = {{hours}} heures de travail",
+        "biggestPurchase": "Plus gros achat ce mois-ci",
+        "hoursOfWork": "{{hours}} heures de travail",
+        "na": "N/D"
+      }
+    },
+    "health": {
+      "title": "Score de santé financière",
+      "subtitle": "Analyse complète de votre bien-être financier",
+      "actions": {
+        "refresh": "Actualiser",
+        "retry": "Réessayer",
+        "improve": "Améliorer le score"
+      },
+      "labels": {
+        "healthScore": "Score de santé",
+        "score": "Score"
+      },
+      "empty": "Aucune donnée de score disponible. Vérifiez que vous avez suffisamment d'historique de transactions.",
+      "errors": {
+        "fetchFailed": "Impossible de récupérer le score de santé",
+        "generic": "Erreur inconnue"
+      },
+      "scorecard": {
+        "breakdown": "Répartition du score",
+        "status": {
+          "excellent": {
+            "title": "Excellent",
+            "message": "Votre santé financière est excellente ! Continuez ainsi."
+          },
+          "good": {
+            "title": "Bon",
+            "message": "Votre santé financière est solide, mais peut encore progresser."
+          },
+          "needsAttention": {
+            "title": "À améliorer",
+            "message": "Votre santé financière nécessite des ajustements. Consultez les recommandations ci-dessous."
+          }
+        }
+      },
+      "metrics": {
+        "savings": {
+          "label": "Épargne",
+          "tooltip": "Mesure votre taux d'épargne en pourcentage du revenu. Un score élevé indique une meilleure discipline financière et une sécurité accrue."
+        },
+        "diversity": {
+          "label": "Diversification",
+          "tooltip": "Évalue l'équilibre de vos dépenses entre les catégories. Un score élevé suggère une meilleure diversification."
+        },
+        "impulse": {
+          "label": "Contrôle des dépenses impulsives",
+          "tooltip": "Évalue votre capacité à maîtriser les achats spontanés. Un score élevé indique une meilleure discipline et planification."
+        },
+        "runway": {
+          "label": "Autonomie financière",
+          "tooltip": "Calcule la durée pendant laquelle votre épargne actuelle peut soutenir votre niveau de vie. Un score élevé signifie plus de résilience."
+        },
+        "fallbackTooltip": "Indicateur clé de votre santé et stabilité financières"
+      }
+    },
+    "smartActions": {
+      "title": "Actions intelligentes",
+      "subtitle": "Insights IA basés sur vos habitudes de dépense",
+      "actions": {
+        "generate": "Générer",
+        "generating": "Génération..."
+      },
+      "summary": {
+        "totalActions": "Total des actions",
+        "criticalHigh": "Critique/Élevée",
+        "potentialImpact": "Impact potentiel"
+      },
+      "empty": {
+        "title": "Tout est ok !",
+        "description": "Aucune action détectée. Vos finances sont en bon état."
+      },
+      "types": {
+        "anomaly": "Anomalie de dépense",
+        "budget_overrun": "Alerte budget",
+        "optimization": "Optimisation",
+        "fixed_variation": "Variation de coût fixe",
+        "unusual_purchase": "Achat inhabituel",
+        "seasonal_alert": "Schéma saisonnier"
+      },
+      "severities": {
+        "critical": "Critique",
+        "high": "Élevée",
+        "medium": "Moyenne",
+        "low": "Faible"
+      },
+      "tooltips": {
+        "resolve": "Résoudre",
+        "dismiss": "Ignorer",
+        "snooze": "Reporter de {{days}} jours"
+      },
+      "labels": {
+        "costIncrease": "Hausse de coût :",
+        "potentialSavings": "Économies potentielles :"
+      },
+      "details": {
+        "title": "Détails de détection",
+        "detected": "Détecté",
+        "confidence": "Confiance",
+        "additionalInfo": "Infos supplémentaires"
+      },
+      "dialog": {
+        "resolve": { "title": "Résoudre l'action" },
+        "dismiss": { "title": "Ignorer l'action" },
+        "snooze": { "title": "Reporter l'action" },
+        "noteLabel": "Note (optionnel)",
+        "notePlaceholder": "Ajoutez une note sur cette action...",
+        "cancel": "Annuler",
+        "confirm": "Confirmer"
+      }
+    },
+    "spendingChart": {
+      "title": "Catégories de dépenses",
+      "subtitle": "Répartition de vos dépenses par catégorie",
+      "targetVsActual": "Objectif vs Réel",
+      "empty": {
+        "title": "Aucune donnée de dépense",
+        "description": "Commencez à catégoriser vos transactions pour voir les insights."
+      },
+      "categories": {
+        "essential": "Essentiel",
+        "growth": "Croissance",
+        "stability": "Stabilité",
+        "reward": "Plaisir",
+        "unallocated": "Non attribué",
+        "other": "Autre"
+      },
+      "labels": {
+        "target": "Objectif : {{value}}%",
+        "transactions_one": "1 transaction",
+        "transactions_other": "{{count}} transactions",
+        "totalSpending_one": "Dépenses totales ({{count}} mois)",
+        "totalSpending_other": "Dépenses totales ({{count}} mois)"
+      },
+      "tooltips": {
+        "overTarget": "Au-dessus de l'objectif",
+        "underTarget": "En dessous de l'objectif"
+      }
+    },
+    "targets": {
+      "title": "Répartition des dépenses",
+      "subtitle": {
+        "withIncome": "Basé sur {{amount}} de revenus ce mois-ci",
+        "noIncome": "Aucun revenu ce mois-ci"
+      },
+      "categories": {
+        "essential": "Essentiel",
+        "growth": "Croissance",
+        "stability": "Stabilité",
+        "reward": "Plaisir",
+        "unallocated": "Non attribué"
+      },
+      "descriptions": {
+        "essential": "Coûts fixes : loyer, charges, courses, transport",
+        "growth": "Investissements, épargne, formation, dépôts",
+        "stability": "Assurances, fonds d'urgence, remboursements de dettes",
+        "reward": "Divertissement, restaurants, voyages, loisirs"
+      },
+      "unallocated": {
+        "count_one": "1 catégorie",
+        "count_other": "{{count}} catégories",
+        "needsAssignment": "{{percentage}}% du revenu à attribuer"
+      },
+      "selected": {
+        "title": "{{category}} - catégories",
+        "empty": "Aucune catégorie attribuée",
+        "noSpending": "Aucune dépense"
+      },
+      "empty": {
+        "selectPrompt": "Cliquez sur un type d'allocation pour gérer ses catégories"
+      }
+    },
+    "budgetHealth": {
+      "title": "Moniteur de santé budgétaire",
+      "subtitle": "Suivi en temps réel des performances du budget",
+      "empty": {
+        "title": "Aucun budget actif",
+        "instructions": "Pour commencer le suivi budgétaire, il faut :",
+        "steps": {
+          "step1": "Faire défiler jusqu'au panneau Suggestions de budget",
+          "step2": "Cliquer sur Générer pour créer des recommandations IA",
+          "step3": "Examiner les suggestions et activer un budget",
+          "step4": "Revenir ici pour voir le suivi en temps réel"
+        }
+      },
+      "labels": {
+        "onTrack": "Dans les clous",
+        "warning": "Alerte",
+        "exceeded": "Dépassé",
+        "unknown": "Inconnu"
+      },
+      "overall": {
+        "title": "Statut budgétaire global : {{status}}",
+        "breakdown": "{{onTrack}} dans les clous, {{warning}} alerte, {{exceeded}} dépassé",
+        "status": {
+          "good": "Bon",
+          "warning": "Alerte",
+          "bad": "À risque",
+          "error": "À risque",
+          "unknown": "Inconnu"
+        }
+      },
+      "summary": {
+        "totalBudget": "Budget total",
+        "categoriesTracked": "{{count}} catégories suivies",
+        "spentThisMonth": "Total dépensé ce mois-ci",
+        "statusCounts": "{{onTrack}} dans les clous · {{warning}} en alerte",
+        "remainingHeadroom": "Marge restante",
+        "exceededCount": "{{count}} dépassé(s)"
+      },
+      "budget": {
+        "spent": "Dépensé : {{amount}}",
+        "limit": "Budget : {{amount}}",
+        "daysRemaining": "Jours restants",
+        "daysValue_one": "{{count}} jour",
+        "daysValue_other": "{{count}} jours",
+        "dailyLimit": "Limite quotidienne",
+        "dailyAverage": "Moyenne quotidienne",
+        "dailyValue": "{{amount}}/jour",
+        "projected": "Projection fin de mois",
+        "overBy": "(Dépassement de {{amount}})",
+        "alerts": {
+          "warning": "Vous êtes à {{percent}}% du budget avec {{days}} jours restants. Restez attentif !",
+          "exceeded": "Budget dépassé ! Ajustez vos dépenses ou augmentez la limite."
+        }
+      },
+      "errors": {
+        "fetchFailed": "Impossible de récupérer la santé budgétaire",
+        "generic": "Erreur inconnue"
+      }
+    },
+    "budgetSuggestions": {
+      "title": "Suggestions de budget intelligentes",
+      "subtitle": "Recommandations IA basées sur votre historique de dépenses",
+      "actions": {
+        "generate": "Générer",
+        "generating": "Génération...",
+        "activate": "Activer le budget"
+      },
+      "labels": {
+        "active": "Actif",
+        "activeHint": "Ce budget est actif",
+        "suggestedBudget": "Budget mensuel recommandé",
+        "confidence": "Confiance",
+        "basedOn": "Basé sur",
+        "months_one": "{{count}} mois",
+        "months_other": "{{count}} mois",
+        "variability": "Variabilité",
+        "viewDetails": "Voir les détails de calcul",
+        "calculationSummary": "Moyenne : {{mean}}, Médiane : {{median}}, Écart-type : {{stdDev}}, CV : {{cv}}"
+      },
+      "confidence": {
+        "high": "Confiance élevée",
+        "medium": "Confiance moyenne",
+        "low": "Confiance faible"
+      },
+      "empty": "Aucune suggestion de budget pour l'instant. Cliquez sur \"Générer\" pour créer des recommandations intelligentes basées sur vos dépenses.",
+      "dialog": {
+        "title": "Activer la suggestion de budget ?",
+        "confirmation": "Activer ce budget pour {{category}} ?",
+        "monthlyBudget": "Budget mensuel :",
+        "confidence": "Confiance : {{value}}% basé sur {{months}} mois de données",
+        "cancel": "Annuler",
+        "activate": "Activer"
+      }
+    }
+  },
+  "investmentsPage": {
+    "header": {
+      "title": "Tableau de bord investissements",
+      "subtitle": "Suivez la performance du portefeuille et les transactions"
+    },
+    "actions": {
+      "refreshTooltip": "Rafraîchir toutes les données",
+      "refresh": "Rafraîchir",
+      "refreshing": "Rafraîchissement...",
+      "portfolioSetup": "Configurer le portefeuille"
+    },
+    "empty": {
+      "title": "Commencez votre portefeuille d'investissement",
+      "description": "Suivez la performance de vos investissements sur plusieurs comptes. Connectez votre courtier, votre retraite et vos économies pour une vue complète.",
+      "cta": "Configurer le portefeuille"
+    },
+    "summary": {
+      "overall": {
+        "title": "Portefeuille total",
+        "accounts_one": "{{count}} compte actif",
+        "accounts_other": "{{count}} comptes actifs",
+        "updated": "Dernière mise à jour {{date}}",
+        "na": "N/D",
+        "totalValue": "VALEUR TOTALE",
+        "totalCost": "COÛT TOTAL",
+        "unrealized": "P&L LATENT",
+        "roi": "ROI GLOBAL"
+      },
+      "liquid": {
+        "title": "Investissements liquides",
+        "subtitle_one": "Investissements accessibles • {{count}} compte",
+        "subtitle_other": "Investissements accessibles • {{count}} comptes",
+        "currentValue": "VALEUR ACTUELLE",
+        "unrealized": "P&L LATENT"
+      },
+      "restricted": {
+        "title": "Épargne long terme",
+        "subtitle_one": "Retraite, provident & études • {{count}} compte",
+        "subtitle_other": "Retraite, provident & études • {{count}} comptes",
+        "currentValue": "VALEUR ACTUELLE",
+        "unrealized": "P&L LATENT"
+      }
+    },
+    "history": {
+      "title": "Performance du portefeuille",
+      "aria": {
+        "displayMode": "mode d'affichage",
+        "chart": "vue graphique",
+        "table": "vue tableau",
+        "timeRange": "Plage temporelle"
+      },
+      "tabs": {
+        "chart": "Graphique",
+        "table": "Transactions"
+      },
+      "ranges": {
+        "1m": "1 mois",
+        "3m": "3 mois",
+        "6m": "6 mois",
+        "1y": "1 an",
+        "all": "Tout le temps"
+      },
+      "table": {
+        "date": "Date",
+        "description": "Description",
+        "category": "Catégorie",
+        "amount": "Montant",
+        "investment": "Investissement",
+        "showing": "Affichage de 50 sur {{count}} transactions"
+      },
+      "empty": {
+        "history": "Aucune donnée historique disponible",
+        "transactions": "Aucune transaction d'investissement pour cette période"
+      },
+      "series": {
+        "currentValue": "Valeur actuelle",
+        "costBasis": "Coût de base"
+      }
+    },
+    "breakdown": {
+      "title": "Répartition du portefeuille",
+      "group": {
+        "accounts_one": "{{count}} compte",
+        "accounts_other": "{{count}} comptes",
+        "percentage": "{{value}}%",
+        "roi": "{{value}}% ROI"
+      },
+      "account": {
+        "updated": "Mis à jour {{date}}",
+        "holdings_one": "{{count}} titre",
+        "holdings_other": "{{count}} titres",
+        "aria": {
+          "toggleChart": "Basculer le graphique de performance",
+          "closeChart": "Fermer le graphique"
+        },
+        "setupPikadon": "Configurer Pikadon",
+        "performance": "Performance dans le temps ({{range}})"
+      },
+      "chart": {
+        "empty": "Aucune donnée historique disponible",
+        "series": {
+          "currentValue": "Valeur actuelle",
+          "costBasis": "Coût de base"
+        }
+      },
+      "pikadon": {
+        "title": "Configuration auto Pikadon",
+        "loading": "Analyse des transactions...",
+        "summary": {
+          "totalInterest": "Total des intérêts gagnés",
+          "taxPaid": "Impôt payé",
+          "matured": "Dépôts arrivés à échéance",
+          "activePrincipal": "Principal actif",
+          "netGain": "Gain net"
+        },
+        "details": {
+          "title": "Entrées créées :",
+          "entry": "{{amount}} - {{type}}",
+          "entryWithInterest": "{{date}} • Intérêt : {{interest}}"
+        },
+        "detect": {
+          "none": "Aucune transaction Pikadon trouvée. Vérifiez que vos transactions contiennent des mots-clés de dépôt (פיקדון, פקדון, פירעון, רווח, etc.).",
+          "summary": "{{chains}} chaînes d'échéance et {{active}} dépôts actifs trouvés."
+        },
+        "chains": {
+          "title": "Chaînes d'échéance :",
+          "amount": "{{start}} → {{end}}",
+          "dates": "{{start}} → {{end}}",
+          "gain": "+{{amount}}",
+          "rolledOver": "Renouvelé",
+          "more": "...et {{count}} de plus"
+        },
+        "actions": {
+          "settingUp": "Configuration...",
+          "setupAll": "Configurer {{count}} entrées Pikadon",
+          "close": "Fermer",
+          "redetect": "Relancer la détection"
+        },
+        "setup": {
+          "success": "{{count}} entrées Pikadon créées avec succès !"
+        }
+      }
+    }
+  },
+  "budgetsPage": {
+    "progress": { "percentUsed": "{{value}} % utilisé" },
+    "alerts": {
+      "exceeded": "Budget dépassé de {{amount}}",
+      "remaining": "Il reste {{amount}}"
+    },
+    "dialog": {
+      "titleEdit": "Modifier le budget",
+      "titleCreate": "Créer un nouveau budget"
+    },
+    "fields": {
+      "category": "Catégorie",
+      "selectCategory": "Sélectionnez une catégorie",
+      "period": "Période",
+      "periodOptions": {
+        "weekly": "Hebdomadaire",
+        "monthly": "Mensuel",
+        "yearly": "Annuel"
+      },
+      "budgetLimit": "Plafond du budget (₪)"
+    },
+    "actions": {
+      "cancel": "Annuler",
+      "update": "Mettre à jour",
+      "create": "Créer"
+    }
+  },
+  "unpairedTransactions": {
+    "title": "Transactions à apparier",
+    "alerts": {
+      "allMatched": "Toutes les transactions de catégorie 25 (Remboursement carte) ou 75 (Remboursements) sont déjà associées à des appariements actifs. Aucune action nécessaire !",
+      "unmatchedInfo": "Ces {{count}} transactions bancaires sont en catégorie \"Remboursement carte\" (25) ou \"Remboursements\" (75) mais ne correspondent à aucun appariement actif. Envisagez de créer des appariements pour éviter la double comptabilisation."
+    },
+    "labels": {
+      "transactionCount": "{{count}} transactions"
+    },
+    "table": {
+      "date": "Date",
+      "name": "Nom de transaction",
+      "account": "Compte",
+      "amount": "Montant",
+      "category": "Catégorie",
+      "idLabel": "Identifiant {{id}}",
+      "notAvailable": "N/D"
+    },
+    "errors": {
+      "loadFailed": "Échec du chargement des transactions non appariées",
+      "generic": "Erreur de chargement des transactions"
+    }
+  },
+  "chatbotWidget": {
+    "header": {
+      "title": "Assistant financier",
+      "subtitle": "Propulsé par l'IA"
+    },
+    "warnings": {
+      "title": "Accès limité",
+      "description": "Activez les autorisations de données dans les Paramètres pour utiliser le chatbot."
+    },
+    "suggestions": {
+      "title": "Questions suggérées :",
+      "items": [
+        "Combien ai-je dépensé ce mois-ci ?",
+        "Sur quelle catégorie ai-je le plus dépensé ?",
+        "Donne-moi des recommandations d'épargne",
+        "Y a-t-il des dépenses inhabituelles ?"
+      ]
+    },
+    "input": {
+      "placeholderEnabled": "Posez-moi une question...",
+      "placeholderDisabled": "Activez les autorisations dans Paramètres"
+    },
+    "hints": {
+      "enabled": "💡 L'assistant analyse vos transactions et vos revenus",
+      "disabled": "🔒 Autorisez l'accès aux données dans Paramètres pour utiliser cette fonctionnalité"
+    }
+  },
+  "scrapeModal": {
+    "title": "Synchroniser les transactions",
+    "notifications": {
+      "syncStarted": "Synchronisation démarrée avec succès !"
+    },
+    "status": {
+      "firstSync": "Lancez votre première synchronisation pour alimenter vos tableaux de bord.",
+      "lastCompleted": "Dernière synchro terminée {{timeAgo}}.",
+      "inProgress": "Synchronisation en cours",
+      "forVendor": "pour {{vendor}}",
+      "background": "La synchronisation se fait en arrière-plan — vous pouvez fermer cette fenêtre, nous vous préviendrons une fois terminé.",
+      "startHint": "Lancez une synchronisation à tout moment après avoir connecté un compte.",
+      "progressLabel": "{{progress}} % terminé",
+      "transactionsSynced": "{{count}} transactions synchronisées",
+      "primary": {
+        "starting": "Lancement de la synchro…",
+        "inProgress": "Synchronisation en cours",
+        "start": "Lancer la synchronisation"
+      }
+    },
+    "errors": {
+      "generic": "Une erreur s'est produite",
+      "loadInstitutions": "Échec du chargement des institutions",
+      "loadInstitutionsRetry": "Échec du chargement des institutions. Réessayez dans quelques instants.",
+      "startFailed": "Échec du démarrage de la synchronisation"
+    },
+    "forms": {
+      "selectPrompt": "Sélectionnez une institution pour voir les identifiants requis.",
+      "missingMetadata": "Pas encore de métadonnées d'identifiants. Fournissez un nom d'utilisateur et un mot de passe pour cette institution.",
+      "institutionLabel": "Institution",
+      "loadingInstitutions": "Chargement des institutions…",
+      "noInstitutions": "Aucune institution disponible",
+      "selectInstitution": "Sélectionnez une institution",
+      "accountNickname": "Nom du compte"
+    },
+    "fields": {
+      "username": "Nom d'utilisateur",
+      "password": "Mot de passe",
+      "userCode": "Code utilisateur",
+      "id": "Numéro d'identité",
+      "card6Digits": "6 derniers chiffres de la carte",
+      "card6Helper": "6 derniers chiffres imprimés sur la carte",
+      "bankAccountNumber": "Numéro de compte bancaire",
+      "nationalID": "Identifiant national",
+      "num": "Code d'identification (num)",
+      "email": "Adresse e-mail",
+      "otpCode": "Code OTP",
+      "otpToken": "Jeton OTP",
+      "identification_code": "Code d'identification"
+    },
+    "actions": {
+      "cancel": "Annuler"
+    }
+  },
+  "categoryHierarchy": {
+    "header": { "title": "Hiérarchie des catégories" },
+    "tabs": {
+      "hierarchy": "Hiérarchie des catégories",
+      "rules": "Règles de correspondance"
+    },
+    "actions": {
+      "close": "Fermer",
+      "applyRules": "Appliquer les règles",
+      "applyingRules": "Application des règles...",
+      "cancel": "Annuler",
+      "save": "Enregistrer",
+      "edit": "Modifier",
+      "delete": "Supprimer"
+    },
+    "tree": {
+      "txnCount": "{{count}} txn"
+    },
+    "summary": {
+      "title": "Transactions à catégoriser",
+      "allDone": "🎉 Toutes les transactions sont correctement catégorisées dans des catégories finales !",
+      "pendingCount": "{{countDisplay}} transaction{{count, plural, one {} other {s}}} en attente de catégorisation",
+      "totalPending": "Total en attente : {{amount}}",
+      "progress": "Progression de la catégorisation",
+      "incomplete": "{{count, plural, one {{formattedCount}} incomplète other {{formattedCount}} incomplètes}}"
+    },
+    "sort": {
+      "label": "Trier par",
+      "date": "Date (plus récentes)",
+      "name": "Transactions similaires",
+      "amount": "Montant (du plus élevé)"
+    },
+    "labels": {
+      "categoryType": "Type de catégorie",
+      "category": "Catégorie",
+      "subcategory": "Sous-catégorie",
+      "subcategoryLevel": "Sous-catégorie {{level}}",
+      "select": "Sélectionner...",
+      "targetCategory": "Choisir une catégorie cible"
+    },
+    "helpers": {
+      "unknownDate": "Date inconnue",
+      "progressDetail": "{{assigned}} assignées à une catégorie finale, {{missing}} manquantes ({{percent}} % terminés)",
+      "complete": "{{count}} terminées"
+    },
+    "confirm": {
+      "deleteCategory": "Êtes-vous sûr de vouloir supprimer cette catégorie ? Cela affectera aussi toutes ses sous-catégories.",
+      "deleteRule": "Êtes-vous sûr de vouloir supprimer cette règle ?"
+    },
+    "errors": {
+      "loadRules": "Échec du chargement des règles",
+      "loadCategories": "Échec du chargement des catégories",
+      "selectCategory": "Veuillez choisir au moins une catégorie.",
+      "selectCategoryFirst": "Veuillez choisir d'abord une catégorie.",
+      "categoryUnavailable": "La catégorie sélectionnée n'est plus disponible.",
+      "categorizeTransaction": "Échec de la catégorisation de l'opération",
+      "createRule": "Échec de la création de la règle",
+      "createCategory": "Échec de la création de la catégorie",
+      "updateCategory": "Échec de la mise à jour de la catégorie",
+      "deleteCategory": "Échec de la suppression de la catégorie",
+      "toggleRule": "Échec de l'activation/désactivation de la règle",
+      "deleteRule": "Échec de la suppression de la règle",
+      "applyRules": "Échec de l'application des règles",
+      "loadCategoryTransactions": "Impossible de charger les transactions pour cette catégorie",
+      "removeTransaction": "Échec de la suppression de la transaction",
+      "noCategorySelected": "Aucune catégorie sélectionnée",
+      "targetCategoryNotFound": "Catégorie cible introuvable",
+      "moveTransaction": "Échec du déplacement de la transaction",
+      "patternAndCategoryRequired": "Veuillez saisir un motif et choisir une catégorie",
+      "categoryNameRequired": "Veuillez saisir un nom de catégorie",
+      "autoAssignCategoryRequired": "Veuillez choisir au moins une catégorie d'abord."
+    },
+    "notifications": {
+      "assignmentSaved": "Transaction catégorisée avec succès",
+      "ruleExists": "Une règle existe déjà. Application à toutes les transactions correspondantes...",
+      "ruleExistsForName": "Une règle existe déjà pour « {{name}} ».",
+      "ruleCreatedForName": "Règle créée ! Toutes les transactions nommées « {{name}} » seront catégorisées automatiquement.",
+      "categoryCreated": "Catégorie créée avec succès",
+      "categoryUpdated": "Catégorie mise à jour avec succès",
+      "categoryDeleted": "Catégorie supprimée avec succès",
+      "ruleCreated": "Règle créée avec succès",
+      "ruleStatusUpdated": "Règle {{status, select, activated {activée} deactivated {désactivée} other {mise à jour}}} avec succès",
+      "ruleDeleted": "Règle supprimée avec succès",
+      "rulesApplied": "{{rules}} règle{{rules, plural, one {} other {s}}} appliquée{{rules, plural, one {} other {s}}} avec succès à {{transactions}} transaction{{transactions, plural, one {} other {s}}}",
+      "transactionRemoved": "Transaction retirée de la catégorie",
+      "transactionMoved": "Transaction déplacée vers {{category}}"
+    },
+    "editDialog": {
+      "title": "Modifier la catégorie",
+      "fields": {
+        "name": "Nom de la catégorie",
+        "description": "Description",
+        "active": "Actif"
+      }
+    },
+    "transactions": {
+      "title": "Transactions {{name}}",
+      "count": "{{count}} transaction{{count, plural, one {} other {s}}}",
+      "none": "Aucune transaction trouvée pour cette catégorie.",
+      "unknown": "Transaction inconnue",
+      "unknownVendor": "Vendeur inconnu",
+      "remove": "Retirer de la catégorie",
+      "move": "Déplacer vers une catégorie",
+      "createRule": "Créer une règle"
+    },
+    "rulesForm": {
+      "title": "Ajouter une règle de catégorisation",
+      "description": "Créez des règles pour catégoriser automatiquement les transactions selon le commerçant",
+      "fields": {
+        "pattern": "Motif marchand",
+        "patternPlaceholder": "ex. 'starbucks' ou 'interactive broker'",
+        "patternHelper": "Motif à rechercher dans le nom de transaction (insensible à la casse)",
+        "patternPreview": "Correspondra à {{count}} transaction{{count, plural, one {} other {s}}}",
+        "type": "Type",
+        "category": "Catégorie",
+        "selectCategory": "Sélectionnez une catégorie",
+        "subcategory": "Sous-catégorie (optionnel)",
+        "none": "Aucune"
+      },
+      "typeOptions": {
+        "expense": "Dépense",
+        "investment": "Investissement",
+        "income": "Revenu"
+      },
+      "actions": {
+        "add": "Ajouter",
+        "applyToExisting": "Appliquer les règles aux transactions existantes"
+      },
+      "preview": {
+        "title": "Aperçu : {{count}} transaction{{count, plural, one {} other {s}}} seront affectées",
+        "more": "...et {{count}} de plus"
+      }
+    },
+      "rulesList": {
+        "title": "Règles actives ({{count}})",
+        "titleFiltered": "Règles actives ({{visible}} / {{total}})",
+        "searchPlaceholder": "Recherchez des règles par motif ou catégorie...",
+      "empty": "Aucune règle pour l'instant. Ajoutez votre première règle ci-dessus pour catégoriser automatiquement les transactions.",
+      "ifContains": "SI la transaction contient « {{pattern}} »",
+      "then": "ALORS catégoriser comme :",
+      "txnCount": "{{count}} txn",
+      "unknownCategory": "Inconnue",
+      "status": {
+        "active": "Active",
+        "inactive": "Inactive"
+      },
+      "tooltips": {
+        "viewMatches": "Voir les transactions correspondantes",
+        "noMatches": "Aucune transaction ne correspond à ce motif",
+        "activate": "Activer la règle",
+        "deactivate": "Désactiver la règle",
+        "delete": "Supprimer la règle"
+      },
+      "matches": {
+        "title": "Transactions correspondantes (jusqu'à 20 affichées) :",
+        "more": "...et {{count}} de plus",
+        "none": "Aucune transaction correspondante"
+      }
+    },
+    "legend": {
+      "assignedTerminal": "Attribuée à une catégorie finale",
+      "notAssignedTerminal": "Non attribuée à une catégorie finale"
+    },
+    "sections": {
+      "expense": "Dépenses",
+      "investment": "Investissements",
+      "income": "Revenus"
+    },
+    "uncategorized": {
+      "similar": "{{count}} transaction{{count, plural, one { similaire} other {s similaires}}}",
+      "needsRefinement": "À affiner",
+      "parentAssigned": "Déjà attribuée à une catégorie parente. Choisissez une sous-catégorie finale pour terminer.",
+      "assign": {
+        "cta": "Attribuer",
+        "saving": "Attribution en cours..."
+      },
+      "createRule": {
+        "cta": "Créer une règle",
+        "saving": "Création de la règle..."
+      },
+      "showingLatest": "Affichage des {{previewCount}} dernières transactions sur {{total}}."
+    }
+  },
+  "sidebar": {
+    "menu": {
+      "overview": "Aperçu",
+      "analysis": "Analyse",
+      "investments": "Investissements",
+      "settings": "Paramètres"
+    },
+    "actions": {
+      "addAccount": "Ajouter un compte",
+      "categories": "Catégories"
+    },
+    "stats": {
+      "accounts": "{{count}} compte{{count, plural, one {} other {s}}}"
+    },
+    "popover": {
+      "title": "Statut de synchronisation des comptes",
+      "noAccounts": "Aucun compte configuré",
+      "refreshStaleAccounts": "Actualiser {{count}} compte{{count, plural, one {} other {s}}} en attente"
+    },
+    "dbStatus": {
+      "connected": "BDD connectée",
+      "disconnected": "BDD déconnectée",
+      "checking": "Vérification..."
+    },
+    "tooltips": {
+      "addAccount": "Ajouter un compte",
+      "categories": "Catégories"
+    },
+    "sync": {
+      "never": "Jamais",
+      "justNow": "À l'instant",
+      "minutesAgo": "Il y a {{count}} minute{{count, plural, one {} other {s}}}",
+      "hoursAgo": "Il y a {{count}} heure{{count, plural, one {} other {s}}}",
+      "yesterday": "Hier",
+      "daysAgo": "Il y a {{count}} jours"
+    },
+    "accountSync": {
+      "neverSynced": "Jamais synchronisé"
+    }
+  }
+  ,
+  "titleBar": {
+    "menu": {
+      "back": "← Retour",
+      "file": "Fichier",
+      "edit": "Édition",
+      "view": "Affichage",
+      "go": "Aller",
+      "help": "Aide",
+      "items": {
+        "new": "Nouveau",
+        "open": "Ouvrir",
+        "save": "Enregistrer",
+        "exit": "Quitter",
+        "undo": "Annuler",
+        "redo": "Rétablir",
+        "cut": "Couper",
+        "copy": "Copier",
+        "paste": "Coller",
+        "fullscreen": "Plein écran",
+        "zoomIn": "Zoom avant",
+        "zoomOut": "Zoom arrière",
+        "resetZoom": "Réinitialiser le zoom",
+        "dashboard": "Tableau de bord",
+        "analysis": "Analyse",
+        "investments": "Investissements",
+        "settings": "Paramètres",
+        "documentation": "Documentation",
+        "openLogs": "Ouvrir le dossier des journaux",
+        "exportDiagnostics": "Exporter le diagnostic…",
+        "supportTools": "Outils de support",
+        "about": "À propos"
+      }
+    },
+    "tooltips": {
+      "openMenu": "Ouvrir le menu",
+      "lightMode": "Passer en mode clair",
+      "darkMode": "Passer en mode sombre",
+      "changeLanguage": "Changer de langue",
+      "minimizeWindow": "Minimiser la fenêtre",
+      "maximizeWindow": "Agrandir la fenêtre",
+      "restoreWindow": "Restaurer la fenêtre",
+      "closeWindow": "Fermer la fenêtre"
+    },
+    "search": {
+      "placeholder": "Rechercher des sections...",
+      "options": {
+        "dashboard": "Tableau de bord",
+        "analysis": "Analyse",
+        "investments": "Investissements",
+        "settings": "Paramètres",
+        "transactions": "Transactions",
+        "breakdown": "Répartition par catégories",
+        "vendors": "Fournisseurs",
+        "appearance": "Apparence",
+        "language": "Langue",
+        "profile": "Profil",
+        "privacy": "Confidentialité",
+        "portfolio": "Portefeuille",
+        "holdings": "Positions"
+      },
+      "keywords": {
+        "dashboard": ["accueil", "aperçu", "principal", "résumé"],
+        "analysis": ["analyses", "dépenses", "budget", "rapports", "graphiques"],
+        "investments": ["portefeuille", "actions", "placements", "patrimoine", "actifs"],
+        "settings": ["préférences", "configuration", "thème", "langue", "profil"],
+        "transactions": ["historique", "paiements", "achats", "dépenses", "revenus"],
+        "breakdown": ["catégories", "camembert", "graphe", "répartition dépenses"],
+        "vendors": ["commerçants", "magasins", "boutiques", "où"],
+        "appearance": ["thème", "sombre", "clair", "mode", "couleurs"],
+        "language": ["hébreu", "anglais", "français", "locale"],
+        "profile": ["compte", "utilisateur", "nom", "email"],
+        "privacy": ["masquer", "cacher", "montants", "sécurité"],
+        "portfolio": ["total", "valeur", "performance"],
+        "holdings": ["positions", "titres", "fonds"]
+      }
+    }
+  },
+  "accountsModal": {
+    "title": "Gestion des comptes",
+    "tabs": {
+      "ariaLabel": "Types de comptes",
+      "banking": "Banque & Transactions",
+      "investments": "Investissements & Épargne"
+    },
+    "actions": {
+      "pairAccounts": "Associer les comptes",
+      "addAccount": "Ajouter un compte",
+      "addCreditCard": "Ajouter une carte de crédit",
+      "addBankAccount": "Ajouter un compte bancaire",
+      "addInvestmentAccount": "Ajouter un compte d'investissement"
+    },
+    "sections": {
+      "addCreditCardAccount": "Ajouter un compte carte de crédit",
+      "addBankAccount": "Ajouter un compte bancaire",
+      "addInvestmentAccount": "Ajouter un compte d'investissement",
+      "bankAccounts": "Comptes bancaires ({{count}})",
+      "creditCardAccounts": "Comptes de carte de crédit ({{count}})"
+    },
+    "fields": {
+      "accountNickname": "Nom du compte",
+      "creditCardVendor": "Émetteur de carte",
+      "bank": "Banque",
+      "accountName": "Nom du compte",
+      "accountType": "Type de compte",
+      "institution": "Institution",
+      "knownInstitution": "Institution connue (optionnel)",
+      "knownInstitutionHelper": "Sélectionnez dans le registre ou laissez vide pour une institution personnalisée",
+      "accountNumber": "Numéro de compte",
+      "currency": "Devise",
+      "notes": "Notes",
+      "investmentAccount": "Compte d'investissement",
+      "none": "Aucune",
+      "all": "Tous"
+    },
+    "placeholders": {
+      "creditCardNickname": "ex. Ma Isracard, Amex travail",
+      "bankNickname": "ex. Compte courant principal, Salaire",
+      "accountName": "ex. Interactive Brokers, Pension Migdal",
+      "institution": "ex. Migdal, Meitav Dash",
+      "accountNumber": "Optionnel",
+      "optional": "Optionnel",
+      "notes": "Informations supplémentaires...",
+      "symbol": "ex. AAPL, Tesla Inc."
+    },
+    "helpers": {
+      "foundInTransactions": "✓ Trouvé dans les transactions !",
+      "investmentFallback": "Investissement",
+      "transactionsCount": "{{count}} transaction{{count, plural, one {} other {s}}}",
+      "knownInstitution": "Sélectionnez dans le registre ou laissez vide pour une institution personnalisée",
+      "selectInstitution": "Sélectionnez une institution pour voir les identifiants requis.",
+      "noSpecificCredentials": "Aucune exigence spécifique configurée. Fournissez un nom d'utilisateur et un mot de passe."
+    },
+    "credentials": {
+      "username": "Nom d'utilisateur",
+      "password": "Mot de passe",
+      "userCode": "Code utilisateur",
+      "id": "Numéro d'identité",
+      "card6Digits": "6 derniers chiffres de la carte",
+      "card6DigitsHelper": "Les 6 chiffres imprimés sur la carte",
+      "bankAccountNumber": "Numéro de compte bancaire",
+      "nationalID": "Identifiant national",
+      "num": "Code d'identification (num)",
+      "email": "Adresse e-mail",
+      "otpCode": "Code OTP",
+      "otpToken": "Jeton OTP",
+      "identification_code": "Code d'identification"
+    },
+    "valueModal": {
+      "title": "Ajouter une mise à jour de valeur",
+      "currentValue": "Valeur actuelle",
+      "asOfDate": "À la date du",
+      "costBasis": "Coût de revient (optionnel)",
+      "costBasisHelper": "Montant total investi",
+      "notes": "Notes (optionnel)",
+      "notesPlaceholder": "Toutes notes supplémentaires sur cette mise à jour...",
+      "addUpdate": "Ajouter la mise à jour"
+    },
+    "assets": {
+      "title": "Actifs individuels",
+      "addAsset": "Ajouter un actif",
+      "symbol": "Symbole/Nom de l'actif",
+      "symbolPlaceholder": "ex. AAPL, Tesla Inc.",
+      "quantity": "Quantité",
+      "avgPrice": "Prix moyen",
+      "manageTitle": "Gérer les actifs",
+      "empty": "Aucun actif individuel suivi pour l'instant",
+      "historyTitle": "Historique des actifs",
+      "historyEmpty": "Aucun historique d'actifs disponible",
+      "table": {
+        "asset": "Actif",
+        "symbol": "Symbole",
+        "quantity": "Quantité",
+        "avgPrice": "Prix moyen",
+        "price": "Prix",
+        "totalValue": "Valeur totale",
+        "account": "Compte",
+        "lastUpdated": "Dernière mise à jour",
+        "date": "Date"
+      }
+    },
+    "emptyInvestments": {
+      "title": "Aucun compte d'investissement pour l'instant",
+      "description": "Ajoutez vos fonds de pension, comptes titres et autres investissements pour suivre votre portefeuille"
+    },
+    "tooltips": {
+      "addValueUpdate": "Ajouter une mise à jour de valeur",
+      "manageAssets": "Gérer les actifs",
+      "deleteAccount": "Supprimer le compte",
+      "syncAccount": "Synchroniser les données du compte",
+      "syncInProgress": "Synchronisation en cours..."
+    },
+    "tables": {
+      "common": {
+        "actions": "Actions"
+      },
+      "investment": {
+        "account": "Nom du compte",
+        "type": "Type",
+        "institution": "Institution",
+        "currentValue": "Valeur actuelle",
+        "lastUpdate": "Dernière mise à jour",
+        "empty": "Aucun compte dans cette catégorie",
+        "notSet": "Non défini",
+        "fromTransactions": "(à partir des transactions)"
+      },
+      "banking": {
+        "nickname": "Surnom",
+        "vendor": "Émetteur",
+        "username": "Nom d'utilisateur",
+        "idNumber": "Numéro d'identité",
+        "accountNumber": "Numéro de compte",
+        "cardLastDigits": "Derniers chiffres de carte",
+        "balance": "Solde",
+        "lastUpdate": "Dernière mise à jour",
+        "emptyBank": "Aucun compte bancaire trouvé",
+        "emptyCredit": "Aucun compte carte de crédit trouvé",
+        "notSet": "-",
+        "updated": "Mis à jour : {{date}}"
+      }
+    },
+    "helpers": {
+      "selectInstitution": "Sélectionnez une institution pour voir les identifiants requis.",
+      "knownInstitution": "Sélectionnez dans le registre ou laissez vide pour une institution personnalisée",
+      "noSpecificCredentials": "Aucune exigence spécifique configurée. Fournissez un nom d'utilisateur et un mot de passe."
+    },
+    "lastUpdate": {
+      "never": "Jamais",
+      "justNow": "À l'instant",
+      "hoursAgo": "Il y a {{count}} h",
+      "yesterday": "Hier",
+      "daysAgo": "Il y a {{count}} jours"
+    },
+    "confirmDelete": {
+      "title": "Confirmer la suppression du compte",
+      "message": "Voulez-vous vraiment supprimer ce compte ?",
+      "accountLabel": "Compte : {{name}}",
+      "typeLabel": "Type : {{type}}",
+      "typeBanking": "Compte bancaire",
+      "typeInvestment": "Compte d'investissement",
+      "warning": "Cette action est irréversible. Toutes les données associées seront supprimées définitivement.",
+      "cta": "Supprimer le compte"
+    }
+  }
+}

@@ -12,6 +12,7 @@ import {
 import BugReportIcon from '@mui/icons-material/BugReport';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import { useTranslation } from 'react-i18next';
 
 type AnalyticsMetricSample = {
   durationMs?: number;
@@ -61,11 +62,11 @@ const defaultInfo: DiagnosticsInfo = {
 };
 
 const METRIC_LABELS: Record<string, string> = {
-  breakdown: 'Category Breakdown',
-  dashboard: 'Dashboard Overview',
-  unifiedCategory: 'Unified Category',
-  waterfall: 'Cash Flow Waterfall',
-  categoryOpportunities: 'Category Opportunities',
+  breakdown: 'metrics.breakdown',
+  dashboard: 'metrics.dashboard',
+  unifiedCategory: 'metrics.unifiedCategory',
+  waterfall: 'metrics.waterfall',
+  categoryOpportunities: 'metrics.categoryOpportunities',
 };
 
 function formatMetricKey(key: string) {
@@ -85,6 +86,7 @@ function formatTimestamp(value?: string) {
 }
 
 export const DiagnosticsPanel: React.FC = () => {
+  const { t } = useTranslation('translation', { keyPrefix: 'settings.diagnosticsPanel' });
   const [info, setInfo] = useState<DiagnosticsInfo>(defaultInfo);
   const [loading, setLoading] = useState(false);
   const [exportStatus, setExportStatus] = useState<Status>('idle');
@@ -134,13 +136,13 @@ export const DiagnosticsPanel: React.FC = () => {
   const handleOpenLogs = useCallback(async () => {
     if (!diagnosticsApi?.openLogDirectory) {
       setOpenStatus('error');
-      setErrorMessage('Log directory access is unavailable in this environment.');
+      setErrorMessage(t('errors.logUnavailable'));
       return;
     }
     setOpenStatus('loading');
     const result = await diagnosticsApi.openLogDirectory();
     if (!result.success) {
-      setErrorMessage(result.error ?? 'Failed to open log directory.');
+      setErrorMessage(result.error ?? t('errors.openFailed'));
       setOpenStatus('error');
       return;
     }
@@ -152,7 +154,7 @@ export const DiagnosticsPanel: React.FC = () => {
   const handleExport = useCallback(async () => {
     if (!diagnosticsApi?.exportDiagnostics || !fileApi?.showSaveDialog) {
       setExportStatus('error');
-      setErrorMessage('Diagnostics export is not supported in this environment.');
+      setErrorMessage(t('errors.exportUnsupported'));
       return;
     }
 
@@ -161,7 +163,7 @@ export const DiagnosticsPanel: React.FC = () => {
       .replace(/[:.]/g, '-')}.json`;
     const saveResult = await fileApi.showSaveDialog({
       defaultPath: defaultFilename,
-      filters: [{ name: 'Diagnostics Bundle', extensions: ['json'] }],
+      filters: [{ name: t('saveDialogLabel'), extensions: ['json'] }],
     });
     if (saveResult.canceled || !saveResult.filePath) {
       return;
@@ -171,7 +173,7 @@ export const DiagnosticsPanel: React.FC = () => {
     const exportResult = await diagnosticsApi.exportDiagnostics(saveResult.filePath);
     if (!exportResult.success) {
       setExportStatus('error');
-      setErrorMessage(exportResult.error ?? 'Failed to export diagnostics bundle.');
+      setErrorMessage(exportResult.error ?? t('errors.exportFailed'));
       return;
     }
     setErrorMessage(null);
@@ -200,7 +202,7 @@ export const DiagnosticsPanel: React.FC = () => {
             : null;
         return {
           bucket,
-          label: METRIC_LABELS[bucket] || formatMetricKey(bucket),
+          label: METRIC_LABELS[bucket] ? t(METRIC_LABELS[bucket]) : formatMetricKey(bucket),
           totalRuns: safeSamples.length,
           avgDuration,
           latest,
@@ -213,16 +215,16 @@ export const DiagnosticsPanel: React.FC = () => {
     <Paper sx={{ p: 3 }}>
       <Stack direction="row" spacing={1} alignItems="center" mb={2}>
         <BugReportIcon color="primary" />
-        <Typography variant="h6">Diagnostics & Logs</Typography>
+        <Typography variant="h6">{t('title')}</Typography>
       </Stack>
 
       <Typography variant="body2" color="text.secondary" paragraph>
-        Export recent logs and system context when filing a support ticket, or open the log directory to inspect issues locally.
+        {t('description')}
       </Typography>
 
       {!supportsDiagnostics && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          Diagnostics tooling is only available in the packaged Electron app.
+          {t('notSupported')}
         </Alert>
       )}
 
@@ -239,7 +241,7 @@ export const DiagnosticsPanel: React.FC = () => {
           onClick={handleOpenLogs}
           disabled={actionDisabled}
         >
-          Open Log Folder
+          {t('openLogs')}
         </Button>
 
         <Button
@@ -248,14 +250,14 @@ export const DiagnosticsPanel: React.FC = () => {
           onClick={handleExport}
           disabled={actionDisabled}
         >
-          Export Diagnostics
+          {t('export')}
         </Button>
       </Stack>
 
       {info.logDirectory && (
         <Box>
           <Typography variant="caption" color="text.secondary" display="block">
-            Log directory
+            {t('logDirectory')}
           </Typography>
           <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
             {info.logDirectory}
@@ -266,12 +268,12 @@ export const DiagnosticsPanel: React.FC = () => {
       <Stack direction="row" spacing={2} mt={2}>
         {info.appVersion && (
           <Typography variant="caption" color="text.secondary">
-            Version: {info.appVersion}
+            {t('version', { version: info.appVersion })}
           </Typography>
         )}
         {info.platform && (
           <Typography variant="caption" color="text.secondary">
-            Platform: {info.platform}
+            {t('platform', { platform: info.platform })}
           </Typography>
         )}
       </Stack>
@@ -279,19 +281,19 @@ export const DiagnosticsPanel: React.FC = () => {
       {info.telemetry && (
         <Box mt={3} p={2} borderRadius={2} bgcolor={(theme) => theme.palette.action.hover}>
           <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-            Crash reporting status
+            {t('telemetry.status')}
           </Typography>
           <Typography variant="body2" fontWeight="bold">
-            {info.telemetry.enabled ? 'Opted in' : 'Opted out'}
+            {info.telemetry.enabled ? t('telemetry.optedIn') : t('telemetry.optedOut')}
           </Typography>
           {!info.telemetry.dsnConfigured && (
             <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
-              SENTRY_DSN is not configured. Crash reports stay local even if you opt in.
+              {t('telemetry.noDsn')}
             </Typography>
           )}
           {info.telemetry.dsnConfigured && info.telemetry.dsnHost && (
             <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
-              Destination: {info.telemetry.dsnHost}
+              {t('telemetry.destination', { host: info.telemetry.dsnHost })}
             </Typography>
           )}
         </Box>
@@ -300,7 +302,7 @@ export const DiagnosticsPanel: React.FC = () => {
       {metricsSummary.length > 0 && (
         <Box mt={3}>
           <Typography variant="subtitle2" gutterBottom>
-            Recent analytics runs
+            {t('metrics.title')}
           </Typography>
           <Grid container spacing={2}>
             {metricsSummary.map((summary) => {
@@ -315,12 +317,12 @@ export const DiagnosticsPanel: React.FC = () => {
                       {summary.label}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block">
-                      Runs: {summary.totalRuns}
-                      {summary.avgDuration ? ` · Avg ${summary.avgDuration}ms` : ''}
+                      {t('metrics.runs', { count: summary.totalRuns })}
+                      {summary.avgDuration ? ` · ${t('metrics.avgDuration', { value: summary.avgDuration })}` : ''}
                     </Typography>
                     {lastRun && (
                       <Typography variant="caption" color="text.secondary" display="block">
-                        Last run: {lastRun}
+                        {t('metrics.lastRun', { date: lastRun })}
                       </Typography>
                     )}
                     {rowCountsEntries.length > 0 && (

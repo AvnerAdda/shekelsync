@@ -25,7 +25,12 @@ export interface BudgetSuggestion {
   };
   category_name: string;
   category_name_en?: string;
+  category_name_fr?: string;
+  category_name_he?: string;
   parent_category_name?: string;
+  parent_category_name_en?: string;
+  parent_category_name_fr?: string;
+  parent_category_name_he?: string;
   active_budget_id?: number;
   active_budget_limit?: number;
   has_active_budget: boolean;
@@ -75,6 +80,8 @@ export interface BudgetHealthItem {
   category_id: number;
   category_name: string;
   category_name_en?: string;
+  category_name_fr?: string;
+  category_name_he?: string;
   budget_limit: number;
   current_spent: number;
   percentage_used: number;

@@ -25,6 +25,7 @@ const { createProfileRouter } = require(resolveAppPath('server', 'routes', 'prof
 const { createChatRouter } = require(resolveAppPath('server', 'routes', 'chat.js'));
 const { createInvestmentsRouter } = require(resolveAppPath('server', 'routes', 'investments.js'));
 const { createPatternsRouter } = require(resolveAppPath('server', 'routes', 'patterns.js'));
+const { createForecastRouter } = require(resolveAppPath('server', 'routes', 'forecast.js'));
 const { createAnalyticsActionItemsRouter } = require(resolveAppPath(
   'server',
   'routes',
@@ -39,9 +40,11 @@ const createSpendingCategoriesRouter = require(resolveAppPath('server', 'routes'
 const createSmartActionsRouter = require(resolveAppPath('server', 'routes', 'smart-actions.js'));
 const createBudgetIntelligenceRouter = require(resolveAppPath('server', 'routes', 'budget-intelligence.js'));
 const createCategoryVariabilityRouter = require(resolveAppPath('server', 'routes', 'category-variability.js'));
+const { resolveLocaleFromRequest } = require(resolveAppPath('lib', 'server', 'locale-utils.js'));
 
-async function setupAPIServer(mainWindow) {
+async function setupAPIServer(mainWindow, options = {}) {
   const app = express();
+  const preferredPort = Number(process.env.ELECTRON_API_PORT || options.port || 0) || 0;
 
   // Middleware
   app.use(cors({
@@ -51,6 +54,10 @@ async function setupAPIServer(mainWindow) {
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  app.use((req, _res, next) => {
+    req.locale = resolveLocaleFromRequest(req);
+    next();
+  });
 
   // Environment variables setup for API routes
   process.env.NODE_ENV = process.env.NODE_ENV || 'production';
@@ -93,6 +100,9 @@ async function setupAPIServer(mainWindow) {
 
   // Pattern routes (migrated)
   app.use('/api/patterns', createPatternsRouter());
+
+  // Forecast routes (Monte Carlo simulation)
+  app.use('/api/forecast', createForecastRouter());
 
   // Category hierarchy routes (migrated)
   app.use('/api/categories', createCategoriesRouter());
@@ -178,9 +188,9 @@ async function setupAPIServer(mainWindow) {
     });
   });
 
-  // Start server on random available port
+  // Start server on specified or random available port
   return new Promise((resolve, reject) => {
-    const server = app.listen(0, 'localhost', () => {
+    const server = app.listen(preferredPort, 'localhost', () => {
       const port = server.address().port;
       console.log(`Electron API server running on http://localhost:${port}`);
 

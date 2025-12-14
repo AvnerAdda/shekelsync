@@ -28,6 +28,7 @@ describe('VendorView', () => {
         vendors={[baseVendor]}
         categoryType="expense"
         formatCurrencyValue={formatCurrencyValue}
+        vendorTrendLabel={(vendor) => `Trend for ${vendor}`}
       />,
     );
 
@@ -48,10 +49,10 @@ describe('VendorView', () => {
         vendors={[vendor]}
         categoryType="expense"
         formatCurrencyValue={formatCurrencyValue}
+        vendorTrendLabel={(vendorName) => `Trend for ${vendorName}`}
       />,
     );
 
     expect(screen.queryByText(/\%/)).toBeNull();
   });
 });
-

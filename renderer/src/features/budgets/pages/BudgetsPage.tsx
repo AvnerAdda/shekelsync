@@ -28,6 +28,7 @@ import {
   Warning as WarningIcon,
   CheckCircle as CheckIcon,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
 import LockedPagePlaceholder from '@renderer/shared/empty-state/LockedPagePlaceholder';
@@ -75,6 +76,7 @@ interface CategoryHierarchyResponse {
 const BudgetsPage: React.FC = () => {
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
+  const { t } = useTranslation('translation', { keyPrefix: 'budgetsPage' });
   const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
   const accessStatus = getPageAccessStatus('budgets');
   const isLocked = accessStatus.isLocked;
@@ -350,25 +352,25 @@ const BudgetsPage: React.FC = () => {
                       variant="caption"
                       sx={{ display: 'block', textAlign: 'center', mt: 0.5 }}
                     >
-                      {budget.percentage.toFixed(1)}% used
+                      {t('progress.percentUsed', { value: budget.percentage.toFixed(1) })}
                     </Typography>
                   </Box>
 
                   {budget.status === 'exceeded' && (
                     <Alert severity="error" icon={<WarningIcon />} sx={{ mb: 1 }}>
-                      Budget exceeded by {formatCurrencyValue(Math.abs(budget.remaining))}
+                      {t('alerts.exceeded', { amount: formatCurrencyValue(Math.abs(budget.remaining)) })}
                     </Alert>
                   )}
 
                   {budget.status === 'warning' && (
                     <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 1 }}>
-                      {formatCurrencyValue(budget.remaining)} remaining
+                      {t('alerts.remaining', { amount: formatCurrencyValue(budget.remaining) })}
                     </Alert>
                   )}
 
                   {budget.status === 'good' && (
                     <Alert severity="success" icon={<CheckIcon />} sx={{ mb: 1 }}>
-                      {formatCurrencyValue(budget.remaining)} remaining
+                      {t('alerts.remaining', { amount: formatCurrencyValue(budget.remaining) })}
                     </Alert>
                   )}
                 </CardContent>
@@ -381,21 +383,21 @@ const BudgetsPage: React.FC = () => {
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {editingBudget ? 'Edit Budget' : 'Create New Budget'}
+          {editingBudget ? t('dialog.titleEdit') : t('dialog.titleCreate')}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
             <FormControl fullWidth disabled={!!editingBudget}>
-              <InputLabel>Category</InputLabel>
+              <InputLabel>{t('fields.category')}</InputLabel>
               <Select
                 value={formData.category_definition_id}
-                label="Category"
+                label={t('fields.category')}
                 onChange={(e) =>
                   setFormData({ ...formData, category_definition_id: e.target.value })
                 }
               >
                 <MenuItem value="">
-                  <em>Select category</em>
+                  <em>{t('fields.selectCategory')}</em>
                 </MenuItem>
                 {categories.map((cat) => (
                   <MenuItem key={cat.id} value={cat.id.toString()}>
@@ -406,10 +408,10 @@ const BudgetsPage: React.FC = () => {
             </FormControl>
 
             <FormControl fullWidth disabled={!!editingBudget}>
-              <InputLabel>Period</InputLabel>
+              <InputLabel>{t('fields.period')}</InputLabel>
               <Select
                 value={formData.period_type}
-                label="Period"
+                label={t('fields.period')}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
@@ -417,14 +419,14 @@ const BudgetsPage: React.FC = () => {
                   })
                 }
               >
-                <MenuItem value="weekly">Weekly</MenuItem>
-                <MenuItem value="monthly">Monthly</MenuItem>
-                <MenuItem value="yearly">Yearly</MenuItem>
+                <MenuItem value="weekly">{t('fields.periodOptions.weekly')}</MenuItem>
+                <MenuItem value="monthly">{t('fields.periodOptions.monthly')}</MenuItem>
+                <MenuItem value="yearly">{t('fields.periodOptions.yearly')}</MenuItem>
               </Select>
             </FormControl>
 
             <TextField
-              label="Budget Limit (₪)"
+              label={t('fields.budgetLimit')}
               type="number"
               fullWidth
               value={formData.budget_limit}
@@ -436,13 +438,13 @@ const BudgetsPage: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleCloseDialog}>{t('actions.cancel')}</Button>
           <Button
             onClick={handleSaveBudget}
             variant="contained"
             disabled={!formData.category_definition_id || !formData.budget_limit}
           >
-            {editingBudget ? 'Update' : 'Create'}
+            {editingBudget ? t('actions.update') : t('actions.create')}
           </Button>
         </DialogActions>
       </Dialog>

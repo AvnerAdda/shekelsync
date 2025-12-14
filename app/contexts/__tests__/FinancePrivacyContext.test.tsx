@@ -3,7 +3,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { FinancePrivacyProvider, useFinancePrivacy } from '../FinancePrivacyContext.tsx';
 
 const wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <FinancePrivacyProvider>{children}</FinancePrivacyProvider>
+  <FinancePrivacyProvider locale="en">{children}</FinancePrivacyProvider>
 );
 
 describe('FinancePrivacyContext', () => {

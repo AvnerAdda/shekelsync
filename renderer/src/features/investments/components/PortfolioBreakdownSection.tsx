@@ -54,6 +54,7 @@ import {
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioSummary, PortfolioHistoryPoint, InvestmentAccountSummary } from '@renderer/types/investments';
 import { useInvestmentsFilters } from '../InvestmentsFiltersContext';
+import { useTranslation } from 'react-i18next';
 
 interface PortfolioBreakdownSectionProps {
   portfolioData: PortfolioSummary;
@@ -69,6 +70,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
   const theme = useTheme();
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
   const { historyTimeRange } = useInvestmentsFilters();
+  const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.breakdown' });
   const [expandedAccounts, setExpandedAccounts] = useState<Record<number, boolean>>({});
 
   // Pikadon auto-setup state
@@ -84,7 +86,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    return new Date(dateStr).toLocaleDateString(undefined, {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -215,20 +217,23 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
       return (
         <Box sx={{ p: 3, textAlign: 'center' }}>
           <Typography variant="body2" color="text.secondary">
-            No historical data available
+            {t('chart.empty')}
           </Typography>
         </Box>
       );
     }
 
+    const currentValueLabel = t('chart.series.currentValue');
+    const costBasisLabel = t('chart.series.costBasis');
+
     const data = history.map((h) => ({
-      date: new Date(h.date).toLocaleDateString('en-US', {
+      date: new Date(h.date).toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
         year: history.length > 90 ? '2-digit' : undefined,
       }),
-      'Current Value': h.currentValue,
-      'Cost Basis': h.costBasis,
+      [currentValueLabel]: h.currentValue,
+      [costBasisLabel]: h.costBasis,
       fullDate: h.date,
     }));
 
@@ -267,7 +272,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
             <Legend />
             <Line
               type="monotone"
-              dataKey="Current Value"
+              dataKey={currentValueLabel}
               stroke={theme.palette.primary.main}
               strokeWidth={2}
               dot={{ r: 3 }}
@@ -275,7 +280,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
             />
             <Line
               type="monotone"
-              dataKey="Cost Basis"
+              dataKey={costBasisLabel}
               stroke={theme.palette.success.main}
               strokeWidth={2}
               dot={{ r: 3 }}
@@ -294,7 +299,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
   return (
     <Paper sx={{ p: 2 }}>
       <Typography variant="h6" gutterBottom>
-        Portfolio Breakdown
+        {t('title')}
       </Typography>
 
       {portfolioData.breakdown.map((group, index) => (
@@ -325,7 +330,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                 <Box>
                   <Typography fontWeight="medium">{group.name}</Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {group.count} account{group.count !== 1 ? 's' : ''}
+                    {t('group.accounts', { count: group.count })}
                   </Typography>
                 </Box>
               </Box>
@@ -334,7 +339,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                   {formatCurrencyValue(group.totalValue)}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {group.percentage.toFixed(1)}% •
+                  {t('group.percentage', { value: group.percentage.toFixed(1) })} •
                   {group.totalCost > 0 && (
                     <span
                       style={{
@@ -346,7 +351,9 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                         marginLeft: 4,
                       }}
                     >
-                      {(((group.totalValue - group.totalCost) / group.totalCost) * 100).toFixed(1)}% ROI
+                      {t('group.roi', {
+                        value: (((group.totalValue - group.totalCost) / group.totalCost) * 100).toFixed(1),
+                      })}
                     </span>
                   )}
                 </Typography>
@@ -381,16 +388,18 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                           }
                           secondary={
                             <Box component="span">
-                              {account.institution && `${account.institution} • `}
-                              {account.as_of_date &&
-                                `Updated ${new Date(account.as_of_date).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                })}`}
-                              {account.assets && account.assets.length > 0 && ` • ${account.assets.length} holdings`}
-                            </Box>
-                          }
-                        />
+                          {account.institution && `${account.institution} • `}
+                          {account.as_of_date &&
+                            t('account.updated', {
+                              date: new Date(account.as_of_date).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                              }),
+                            })}
+                          {account.assets && account.assets.length > 0 && ` • ${t('account.holdings', { count: account.assets.length })}`}
+                        </Box>
+                      }
+                    />
 
                         {/* Mini sparkline */}
                         {hasHistory && !isExpanded && (
@@ -435,7 +444,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                             size="small"
                             onClick={() => toggleAccountChart(account.id)}
                             sx={{ ml: 1 }}
-                            aria-label="Toggle performance chart"
+                            aria-label={t('account.aria.toggleChart')}
                           >
                             <TimelineIcon fontSize="small" />
                           </IconButton>
@@ -450,7 +459,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                             onClick={() => openDetectDialog(account.id)}
                             sx={{ ml: 1, textTransform: 'none', fontSize: '0.75rem' }}
                           >
-                            Setup Pikadon
+                            {t('account.setupPikadon')}
                           </Button>
                         )}
                       </Box>
@@ -460,12 +469,12 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                         <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider', width: '100%' }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                             <Typography variant="subtitle2" fontWeight="medium">
-                              Performance Over Time ({historyTimeRange})
+                              {t('account.performance', { range: historyTimeRange })}
                             </Typography>
                             <IconButton
                               size="small"
                               onClick={() => toggleAccountChart(account.id)}
-                              aria-label="Close chart"
+                              aria-label={t('account.aria.closeChart')}
                             >
                               <CloseIcon fontSize="small" />
                             </IconButton>
@@ -498,20 +507,20 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <SearchIcon />
-            Auto-Setup Pikadon (פיקדונות)
+            {t('pikadon.title')}
           </Box>
         </DialogTitle>
         <DialogContent>
           {detecting ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <CircularProgress />
-              <Typography sx={{ ml: 2 }}>Analyzing transactions...</Typography>
+              <Typography sx={{ ml: 2 }}>{t('pikadon.loading')}</Typography>
             </Box>
           ) : setupResult ? (
             // Show setup results
             <Box>
               <Alert severity="success" sx={{ mb: 3 }}>
-                Successfully created {setupResult.created} pikadon entries!
+                {t('pikadon.setup.success', { count: setupResult.created })}
               </Alert>
 
               {setupResult.totals && (
@@ -519,7 +528,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                   <Grid item xs={6}>
                     <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
                       <Typography variant="caption" color="text.secondary">
-                        Total Interest Earned
+                        {t('pikadon.summary.totalInterest')}
                       </Typography>
                       <Typography variant="h6" color="success.main">
                         {formatCurrencyValue(setupResult.totals.total_interest_earned)}
@@ -529,7 +538,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                   <Grid item xs={6}>
                     <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
                       <Typography variant="caption" color="text.secondary">
-                        Tax Paid
+                        {t('pikadon.summary.taxPaid')}
                       </Typography>
                       <Typography variant="h6" color="error.main">
                         {formatCurrencyValue(setupResult.totals.total_tax_paid)}
@@ -539,7 +548,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                   <Grid item xs={6}>
                     <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
                       <Typography variant="caption" color="text.secondary">
-                        Matured Deposits
+                        {t('pikadon.summary.matured')}
                       </Typography>
                       <Typography variant="h6">
                         {setupResult.totals.maturity_count}
@@ -549,7 +558,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                   <Grid item xs={6}>
                     <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
                       <Typography variant="caption" color="text.secondary">
-                        Active Principal
+                        {t('pikadon.summary.activePrincipal')}
                       </Typography>
                       <Typography variant="h6" color="primary.main">
                         {formatCurrencyValue(setupResult.totals.total_active_principal)}
@@ -562,14 +571,24 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
               {setupResult.details && setupResult.details.length > 0 && (
                 <Box sx={{ mt: 3 }}>
                   <Typography variant="subtitle2" gutterBottom>
-                    Created Entries:
+                    {t('pikadon.details.title')}
                   </Typography>
                   <List dense>
                     {setupResult.details.map((item, idx) => (
                       <ListItem key={idx} sx={{ py: 0.5 }}>
                         <ListItemText
-                          primary={`${formatCurrencyValue(item.amount)} - ${item.type.replace('_', ' ')}`}
-                          secondary={`${formatDate(item.date)}${item.interest ? ` • Interest: ${formatCurrencyValue(item.interest)}` : ''}`}
+                          primary={t('pikadon.details.entry', {
+                            amount: formatCurrencyValue(item.amount),
+                            type: item.type.replace('_', ' '),
+                          })}
+                          secondary={
+                            item.interest
+                              ? t('pikadon.details.entryWithInterest', {
+                                  date: formatDate(item.date),
+                                  interest: formatCurrencyValue(item.interest),
+                                })
+                              : formatDate(item.date)
+                          }
                         />
                       </ListItem>
                     ))}
@@ -582,12 +601,15 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
             <Box>
               {detectionResult.chains.length === 0 && detectionResult.active_deposits.length === 0 ? (
                 <Alert severity="info">
-                  No pikadon transactions found. Make sure your bank transactions contain pikadon keywords (פיקדון, פקדון, פירעון, רווח, etc.)
+                  {t('pikadon.detect.none')}
                 </Alert>
               ) : (
                 <>
                   <Alert severity="info" sx={{ mb: 3 }}>
-                    Found {detectionResult.chains.length} completed maturity chains and {detectionResult.active_deposits.length} active deposits.
+                    {t('pikadon.detect.summary', {
+                      chains: detectionResult.chains.length,
+                      active: detectionResult.active_deposits.length,
+                    })}
                   </Alert>
 
                   {/* Summary Stats */}
@@ -595,7 +617,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                     <Grid item xs={6}>
                       <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
                         <Typography variant="caption" color="text.secondary">
-                          Total Interest Earned
+                          {t('pikadon.summary.totalInterest')}
                         </Typography>
                         <Typography variant="h6" color="success.main">
                           {formatCurrencyValue(detectionResult.totals.total_interest_earned)}
@@ -605,7 +627,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                     <Grid item xs={6}>
                       <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
                         <Typography variant="caption" color="text.secondary">
-                          Tax Paid
+                          {t('pikadon.summary.taxPaid')}
                         </Typography>
                         <Typography variant="h6" color="error.main">
                           {formatCurrencyValue(detectionResult.totals.total_tax_paid)}
@@ -615,7 +637,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                     <Grid item xs={6}>
                       <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
                         <Typography variant="caption" color="text.secondary">
-                          Net Gain
+                          {t('pikadon.summary.netGain')}
                         </Typography>
                         <Typography variant="h6" color="primary.main">
                           {formatCurrencyValue(detectionResult.totals.total_interest_earned - detectionResult.totals.total_tax_paid)}
@@ -625,7 +647,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                     <Grid item xs={6}>
                       <Card variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
                         <Typography variant="caption" color="text.secondary">
-                          Active Principal
+                          {t('pikadon.summary.activePrincipal')}
                         </Typography>
                         <Typography variant="h6">
                           {formatCurrencyValue(detectionResult.totals.total_active_principal)}
@@ -645,19 +667,25 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Box>
                               <Typography variant="body2" fontWeight="medium">
-                                {formatCurrencyValue(chain.start_deposit.amount)} → {formatCurrencyValue(chain.start_deposit.amount + chain.interest_earned)}
+                                {t('pikadon.chains.amount', {
+                                  start: formatCurrencyValue(chain.start_deposit.amount),
+                                  end: formatCurrencyValue(chain.start_deposit.amount + chain.interest_earned),
+                                })}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                {formatDate(chain.start_deposit.date)} → {formatDate(chain.maturity_event.date)}
+                                {t('pikadon.chains.dates', {
+                                  start: formatDate(chain.start_deposit.date),
+                                  end: formatDate(chain.maturity_event.date),
+                                })}
                               </Typography>
                             </Box>
                             <Box sx={{ textAlign: 'right' }}>
                               <Typography variant="body2" color="success.main">
-                                +{formatCurrencyValue(chain.net_gain)}
+                                {t('pikadon.chains.gain', { amount: formatCurrencyValue(chain.net_gain) })}
                               </Typography>
                               {chain.rollover_deposit && (
                                 <Typography variant="caption" color="info.main">
-                                  Rolled over
+                                  {t('pikadon.chains.rolledOver')}
                                 </Typography>
                               )}
                             </Box>
@@ -666,7 +694,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                       ))}
                       {detectionResult.chains.length > 3 && (
                         <Typography variant="caption" color="text.secondary">
-                          ...and {detectionResult.chains.length - 3} more
+                          {t('pikadon.chains.more', { count: detectionResult.chains.length - 3 })}
                         </Typography>
                       )}
                     </Box>
@@ -683,19 +711,23 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                     disabled={settingUp}
                     sx={{ py: 1.5 }}
                   >
-                    {settingUp ? 'Setting Up...' : `Setup All ${detectionResult.chains.length + detectionResult.active_deposits.length} Pikadon Entries`}
+                    {settingUp
+                      ? t('pikadon.actions.settingUp')
+                      : t('pikadon.actions.setupAll', {
+                          count: detectionResult.chains.length + detectionResult.active_deposits.length,
+                        })}
                   </Button>
                 </>
               )}
             </Box>
           ) : (
             <Alert severity="info">
-              Detecting pikadon transactions...
+              {t('pikadon.loading')}
             </Alert>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Close</Button>
+          <Button onClick={handleCloseDialog}>{t('pikadon.actions.close')}</Button>
           {!setupResult && (
             <Button
               variant="outlined"
@@ -703,7 +735,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
               disabled={detecting}
               startIcon={detecting ? <CircularProgress size={16} /> : <RefreshIcon />}
             >
-              Re-detect
+              {t('pikadon.actions.redetect')}
             </Button>
           )}
         </DialogActions>

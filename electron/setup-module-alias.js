@@ -11,8 +11,14 @@ if (!global.__electronAliasRegistered) {
       return originalResolveFilename.call(this, resolved, parent, isMain, options);
     }
 
-    if (request === 'electron' && process.versions && process.versions.electron) {
-      return request;
+    if (request === 'electron') {
+      // In Electron runtime, defer to the built-in module
+      if (process.versions && process.versions.electron) {
+        return request;
+      }
+      // In plain Node (e.g., running the dev API server), use a lightweight stub
+      const stubPath = path.join(__dirname, 'electron-stub.js');
+      return originalResolveFilename.call(this, stubPath, parent, isMain, options);
     }
 
     if (request === '@') {

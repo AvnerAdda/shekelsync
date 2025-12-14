@@ -20,7 +20,10 @@ function createSmartActionsRouter() {
    */
   router.post('/generate', async (req, res) => {
     try {
-      const result = await smartActionsService.generateSmartActions(req.query || {});
+      const result = await smartActionsService.generateSmartActions({
+        ...req.query,
+        locale: req.locale,
+      });
       res.json(result);
     } catch (error) {
       console.error('Generate smart actions error:', error);
@@ -35,7 +38,10 @@ function createSmartActionsRouter() {
    */
   router.get('/', async (req, res) => {
     try {
-      const result = await smartActionsService.getSmartActions(req.query || {});
+      const result = await smartActionsService.getSmartActions({
+        ...req.query,
+        locale: req.locale,
+      });
       res.json(result);
     } catch (error) {
       console.error('Get smart actions error:', error);

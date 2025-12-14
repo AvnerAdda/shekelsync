@@ -67,10 +67,12 @@ async function getCategoryInfo(categoryId, client = null) {
          cd.id,
          cd.name,
          cd.name_en,
+         cd.name_fr,
          cd.category_type,
          cd.parent_id,
          parent.name AS parent_name,
-         parent.name_en AS parent_name_en
+         parent.name_en AS parent_name_en,
+         parent.name_fr AS parent_name_fr
        FROM category_definitions cd
        LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
        WHERE cd.id = $1`,

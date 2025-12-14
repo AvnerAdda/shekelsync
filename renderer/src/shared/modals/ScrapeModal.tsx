@@ -15,6 +15,7 @@ import Typography from '@mui/material/Typography';
 import ListSubheader from '@mui/material/ListSubheader';
 import CircularProgress from '@mui/material/CircularProgress';
 import { useTheme } from '@mui/material/styles';
+import { useTranslation } from 'react-i18next';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import { useScrapeProgress } from '@/hooks/useScrapeProgress';
 import ModalHeader from './ModalHeader';
@@ -108,20 +109,20 @@ const formatFieldLabel = (fieldKey: string) =>
 
 const SCRAPER_FIELD_CONFIG: Record<
   string,
-  { label: string; type?: string; helperText?: string }
+  { labelKey: string; type?: string; helperTextKey?: string }
 > = {
-  username: { label: 'Username' },
-  password: { label: 'Password', type: 'password' },
-  userCode: { label: 'User Code' },
-  id: { label: 'ID Number' },
-  card6Digits: { label: 'Card last 6 digits', helperText: 'Last 6 digits printed on the card' },
-  bankAccountNumber: { label: 'Bank Account Number' },
-  nationalID: { label: 'National ID' },
-  num: { label: 'Identification code (num)' },
-  email: { label: 'Email Address', type: 'email' },
-  otpCode: { label: 'OTP Code' },
-  otpToken: { label: 'OTP Token' },
-  identification_code: { label: 'Identification Code' },
+  username: { labelKey: 'fields.username' },
+  password: { labelKey: 'fields.password', type: 'password' },
+  userCode: { labelKey: 'fields.userCode' },
+  id: { labelKey: 'fields.id' },
+  card6Digits: { labelKey: 'fields.card6Digits', helperTextKey: 'fields.card6Helper' },
+  bankAccountNumber: { labelKey: 'fields.bankAccountNumber' },
+  nationalID: { labelKey: 'fields.nationalID' },
+  num: { labelKey: 'fields.num' },
+  email: { labelKey: 'fields.email', type: 'email' },
+  otpCode: { labelKey: 'fields.otpCode' },
+  otpToken: { labelKey: 'fields.otpToken' },
+  identification_code: { labelKey: 'fields.identification_code' },
 };
 
 const createDefaultConfig = (): ScraperConfig => ({
@@ -140,6 +141,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
   const [error, setError] = useState<string | null>(null);
   const { showNotification } = useNotification();
   const theme = useTheme();
+  const { t } = useTranslation('translation', { keyPrefix: 'scrapeModal' });
   const [config, setConfig] = useState<ScraperConfig>(initialConfig || createDefaultConfig());
   const [institutions, setInstitutions] = useState<InstitutionMetadata[]>([]);
   const [institutionsLoading, setInstitutionsLoading] = useState(false);
@@ -148,12 +150,16 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
 
   const lastCompletedLabel = useMemo(() => {
     if (!lastCompletedAt) {
-      return 'Run your first sync to populate your dashboards.';
+      return t('status.firstSync');
     }
-    return `Last sync completed ${formatDistanceToNow(lastCompletedAt, { addSuffix: true })}.`;
-  }, [lastCompletedAt]);
+    return t('status.lastCompleted', { timeAgo: formatDistanceToNow(lastCompletedAt, { addSuffix: true }) });
+  }, [lastCompletedAt, t]);
 
-  const primaryActionLabel = isLoading ? 'Starting sync…' : isRunning ? 'Sync in progress' : 'Start sync';
+  const primaryActionLabel = isLoading
+    ? t('status.primary.starting')
+    : isRunning
+      ? t('status.primary.inProgress')
+      : t('status.primary.start');
   const primaryActionDisabled = isLoading || isRunning;
 
   const resolvedProgress = useMemo(() => {
@@ -165,11 +171,14 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
     return Math.min(100, Math.max(0, Math.round(percentage)));
   }, [latestEvent]);
 
-  const statusMessage = isRunning
-    ? `Sync in progress${latestEvent?.vendor ? ` for ${latestEvent.vendor}` : ''}${
-        latestEvent?.message ? ` – ${latestEvent.message}` : ''
-      }`
-    : lastCompletedLabel;
+  const statusMessage = useMemo(() => {
+    if (!isRunning) {
+      return lastCompletedLabel;
+    }
+    const vendorPart = latestEvent?.vendor ? ` ${t('status.forVendor', { vendor: latestEvent.vendor })}` : '';
+    const messagePart = latestEvent?.message ? ` – ${latestEvent.message}` : '';
+    return `${t('status.inProgress')}${vendorPart}${messagePart}`;
+  }, [isRunning, lastCompletedLabel, latestEvent?.vendor, latestEvent?.message, t]);
 
   useEffect(() => {
     if (initialConfig) {
@@ -185,7 +194,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
       try {
         const response = await apiClient.get('/api/institutions?scrapable=true');
         if (!response.ok) {
-          throw new Error(response.statusText || 'Failed to load institutions');
+          throw new Error(response.statusText || t('errors.loadInstitutions'));
         }
         const payload = response.data as any;
         const list = Array.isArray(payload?.institutions)
@@ -205,7 +214,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         console.error('[SyncModal] Failed to load institutions', fetchError);
         if (isMounted) {
           setInstitutions([]);
-          setInstitutionsError('Failed to load institutions. Try again in a few moments.');
+          setInstitutionsError(t('errors.loadInstitutionsRetry'));
         }
       } finally {
         if (isMounted) {
@@ -219,7 +228,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (initialConfig || config.options.companyId || institutions.length === 0) {
@@ -294,14 +303,14 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
     try {
       const response = await apiClient.post('/api/scrape', config);
       if (!response.ok) {
-        throw new Error(response.statusText || 'Failed to start scraping');
+        throw new Error(response.statusText || t('errors.startFailed'));
       }
 
-      showNotification('Sync started successfully!', 'success');
+      showNotification(t('notifications.syncStarted'), 'success');
       onClose();
       onSuccess?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : t('errors.generic'));
     } finally {
       setIsLoading(false);
       onComplete?.();
@@ -320,7 +329,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
     if (!selectedInstitution) {
       return (
         <Alert severity="info" sx={{ mt: 2 }}>
-          Select an institution to see the required credentials.
+          {t('forms.selectPrompt')}
         </Alert>
       );
     }
@@ -335,25 +344,27 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
         {!hasExplicitFields && (
           <Alert severity="info">
-            No credential metadata yet. Provide a username and password for this institution.
+            {t('forms.missingMetadata')}
           </Alert>
         )}
         {finalFields.map((fieldKey) => {
           const configEntry = SCRAPER_FIELD_CONFIG[fieldKey] || {
-            label: formatFieldLabel(fieldKey),
+            labelKey: '',
           };
+          const label = configEntry.labelKey ? t(configEntry.labelKey) : formatFieldLabel(fieldKey);
+          const helperText = configEntry.helperTextKey ? t(configEntry.helperTextKey) : undefined;
           const value = (config.credentials as Record<string, string | undefined>)[fieldKey] ?? '';
 
           return (
             <TextField
               key={`${selectedInstitution.vendor_code}-${fieldKey}`}
-              label={configEntry.label}
+              label={label}
               type={configEntry.type || 'text'}
               value={value}
               onChange={(e) => handleConfigChange(`credentials.${fieldKey}`, e.target.value)}
               fullWidth
               required
-              helperText={configEntry.helperText}
+              helperText={helperText}
             />
           );
         })}
@@ -369,10 +380,10 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         </Alert>
       )}
       <FormControl fullWidth>
-        <InputLabel>Institution</InputLabel>
+        <InputLabel>{t('forms.institutionLabel')}</InputLabel>
         <Select
           value={config.options.companyId}
-          label="Institution"
+          label={t('forms.institutionLabel')}
           onChange={(e) => {
             const vendor = e.target.value as string;
             setConfig((prev) => ({
@@ -391,13 +402,13 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         >
           {vendorSections.length === 0 ? (
             <MenuItem value="" disabled>
-              {institutionsLoading ? 'Loading institutions…' : 'No institutions available'}
+              {institutionsLoading ? t('forms.loadingInstitutions') : t('forms.noInstitutions')}
             </MenuItem>
           ) : (
             <>
               {!config.options.companyId && (
                 <MenuItem value="" disabled>
-                  Select an institution
+                  {t('forms.selectInstitution')}
                 </MenuItem>
               )}
               {vendorSections.flatMap((section) => [
@@ -444,7 +455,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         )}
         {creds.nickname && (
           <TextField
-            label="Account Nickname"
+            label={t('forms.accountNickname')}
             value={creds.nickname}
             disabled
             fullWidth
@@ -452,7 +463,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         )}
         {creds.username && (
           <TextField
-            label="Username"
+            label={t('fields.username')}
             value={creds.username}
             disabled
             fullWidth
@@ -460,7 +471,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         )}
         {creds.userCode && (
           <TextField
-            label="User Code"
+            label={t('fields.userCode')}
             value={creds.userCode}
             disabled
             fullWidth
@@ -468,7 +479,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         )}
         {creds.id && (
           <TextField
-            label="ID"
+            label={t('fields.id')}
             value={creds.id}
             disabled
             fullWidth
@@ -476,7 +487,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         )}
         {creds.email && (
           <TextField
-            label="Email"
+            label={t('fields.email')}
             value={creds.email}
             disabled
             fullWidth
@@ -484,7 +495,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         )}
         {creds.card6Digits && (
           <TextField
-            label="Card 6 Digits"
+            label={t('fields.card6Digits')}
             value={creds.card6Digits}
             disabled
             fullWidth
@@ -492,7 +503,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         )}
         {creds.nationalID && (
           <TextField
-            label="National ID"
+            label={t('fields.nationalID')}
             value={creds.nationalID}
             disabled
             fullWidth
@@ -500,7 +511,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         )}
         {creds.num && (
           <TextField
-            label="Identification Code (num)"
+            label={t('fields.num')}
             value={creds.num}
             disabled
             fullWidth
@@ -508,7 +519,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         )}
         {creds.identification_code && (
           <TextField
-            label="Identification Code"
+            label={t('fields.identification_code')}
             value={creds.identification_code}
             disabled
             fullWidth
@@ -516,7 +527,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         )}
         {creds.bankAccountNumber && (
           <TextField
-            label="Bank Account Number"
+            label={t('fields.bankAccountNumber')}
             value={creds.bankAccountNumber}
             disabled
             fullWidth
@@ -542,7 +553,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         }
       }}
     >
-      <ModalHeader title="Sync Transactions" onClose={onClose} />
+      <ModalHeader title={t('title')} onClose={onClose} />
       <DialogContent style={{ padding: '0 24px 24px' }}>
         <Alert
           severity={isRunning ? 'info' : 'success'}
@@ -553,18 +564,20 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
           </Typography>
           {isRunning && (resolvedProgress !== null || typeof latestEvent?.transactions === 'number') && (
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-              {resolvedProgress !== null ? `${resolvedProgress}% complete` : null}
+              {resolvedProgress !== null ? t('status.progressLabel', { progress: resolvedProgress }) : null}
               {resolvedProgress !== null && typeof latestEvent?.transactions === 'number' ? ' • ' : ''}
-              {typeof latestEvent?.transactions === 'number' ? `${latestEvent.transactions} transactions synced` : null}
+              {typeof latestEvent?.transactions === 'number'
+                ? t('status.transactionsSynced', { count: latestEvent.transactions })
+                : null}
             </Typography>
           )}
           {isRunning ? (
             <Typography variant="caption" color="text.secondary" display="block">
-              Sync runs in the background — you can close this window and we&apos;ll notify you when it&apos;s done.
+              {t('status.background')}
             </Typography>
           ) : (
             <Typography variant="caption" color="text.secondary" display="block">
-              Start a sync any time after connecting an account.
+              {t('status.startHint')}
             </Typography>
           )}
         </Alert>
@@ -584,7 +597,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
           onClick={onClose}
           sx={{ color: theme.palette.text.secondary }}
         >
-          Cancel
+          {t('actions.cancel')}
         </Button>
         <Button
           onClick={handleSync}

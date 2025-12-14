@@ -17,6 +17,7 @@ import {
   Alert,
   Chip
 } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
 
@@ -40,6 +41,7 @@ export default function UnpairedTransactionsDialog({
   isOpen,
   onClose
 }: UnpairedTransactionsDialogProps) {
+  const { t } = useTranslation('translation', { keyPrefix: 'unpairedTransactions' });
   const [transactions, setTransactions] = useState<UnpairedTransaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export default function UnpairedTransactionsDialog({
     if (isOpen) {
       fetchUnpairedTransactions();
     }
-  }, [isOpen]);
+  }, [isOpen, t]);
 
   const fetchUnpairedTransactions = async () => {
     setLoading(true);
@@ -56,14 +58,14 @@ export default function UnpairedTransactionsDialog({
     try {
       const response = await apiClient.get('/api/accounts/truly-unpaired-transactions?include_details=true');
       if (!response.ok) {
-        setError(response.statusText || 'Failed to load unpaired transactions');
+        setError(response.statusText || t('errors.loadFailed'));
         return;
       }
       const data = response.data as any;
       setTransactions(Array.isArray(data?.transactions) ? data.transactions : []);
     } catch (err) {
       console.error('Error fetching unpaired transactions:', err);
-      setError('Error loading transactions');
+      setError(t('errors.generic'));
     } finally {
       setLoading(false);
     }
@@ -96,7 +98,7 @@ export default function UnpairedTransactionsDialog({
   return (
     <Dialog open={isOpen} onClose={onClose} maxWidth="lg" fullWidth>
       <ModalHeader
-        title="Transactions Needing Pairing"
+        title={t('title')}
         onClose={onClose}
       />
 
@@ -109,16 +111,13 @@ export default function UnpairedTransactionsDialog({
           <Alert severity="error">{error}</Alert>
         ) : transactions.length === 0 ? (
           <Alert severity="success">
-            All transactions with category 25 (Credit Card Repayment) or 75 (Refunds)
-            are matched to active pairings. No action needed!
+            {t('alerts.allMatched')}
           </Alert>
         ) : (
           <>
             <Alert severity="info" sx={{ mb: 3 }}>
               <Typography variant="body2">
-                These {transactions.length} bank transactions have category &ldquo;Credit Card Repayment&rdquo; (25)
-                or &ldquo;Refunds&rdquo; (75) but don&apos;t match any active account pairing.
-                Consider creating pairings for them to avoid double-counting expenses.
+                {t('alerts.unmatchedInfo', { count: transactions.length })}
               </Typography>
             </Alert>
 
@@ -128,18 +127,18 @@ export default function UnpairedTransactionsDialog({
                   <Typography variant="h6">
                     {getVendorDisplayName(vendor)}
                   </Typography>
-                  <Chip label={`${txns.length} transactions`} size="small" color="warning" />
+                  <Chip label={t('labels.transactionCount', { count: txns.length })} size="small" color="warning" />
                 </Box>
 
                 <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
                   <Table stickyHeader size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Date</TableCell>
-                        <TableCell>Transaction Name</TableCell>
-                        <TableCell>Account</TableCell>
-                        <TableCell align="right">Amount</TableCell>
-                        <TableCell>Category</TableCell>
+                        <TableCell>{t('table.date')}</TableCell>
+                        <TableCell>{t('table.name')}</TableCell>
+                        <TableCell>{t('table.account')}</TableCell>
+                        <TableCell align="right">{t('table.amount')}</TableCell>
+                        <TableCell>{t('table.category')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -155,7 +154,7 @@ export default function UnpairedTransactionsDialog({
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                              {txn.accountNumber || 'N/A'}
+                              {txn.accountNumber || t('table.notAvailable')}
                             </Typography>
                           </TableCell>
                           <TableCell align="right">
@@ -172,7 +171,7 @@ export default function UnpairedTransactionsDialog({
                           </TableCell>
                           <TableCell>
                             <Chip
-                              label={txn.categoryName || `ID ${txn.categoryId}`}
+                              label={txn.categoryName || t('table.idLabel', { id: txn.categoryId })}
                               size="small"
                               color={txn.categoryId === 25 ? 'primary' : 'success'}
                               variant="outlined"

@@ -4,6 +4,7 @@ import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import * as d3 from 'd3';
 import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
 import transformToSankeyData from '@/lib/sankey-transform';
+import { useTranslation } from 'react-i18next';
 
 interface SankeyDataPoint {
   name: string;
@@ -22,10 +23,12 @@ interface SankeyChartProps {
 const SankeyChart: React.FC<SankeyChartProps> = ({
   data,
   height = 400,
-  title = 'Financial Flow'
+  title,
 }) => {
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
+  const { t } = useTranslation('translation', { keyPrefix: 'breakdownTabs' });
   const svgRef = useRef<SVGSVGElement>(null);
+  const resolvedTitle = title || t('sankey.title');
 
   const sankeyData = useMemo(() => transformToSankeyData(data), [data]);
   const formatCurrencyValue = useCallback(
@@ -104,7 +107,11 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
       .attr('fill', 'none')
       .style('cursor', 'pointer')
       .append('title')
-      .text((d: any) => `${d.source.name} → ${d.target.name}: ${formatCurrencyValue(d.value)}`);
+      .text((d: any) => t('sankey.tooltip', {
+        source: d.source.name,
+        target: d.target.name,
+        amount: formatCurrencyValue(d.value),
+      }));
 
     // Draw nodes with rounded corners
     const nodeGroups = g.append('g')
@@ -162,14 +169,14 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
         .text((d: any) => formatCurrencyValue(d.value || 0));
     }
 
-  }, [height, formatCurrencyValue, maskAmounts, sankeyData]);
+  }, [height, formatCurrencyValue, maskAmounts, sankeyData, t]);
 
   if (!sankeyData.hasFlow) {
     return (
       <Box>
-        {title && (
+        {resolvedTitle && (
           <Typography variant="h6" gutterBottom>
-            {title}
+            {resolvedTitle}
           </Typography>
         )}
         <Box
@@ -183,7 +190,7 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
           }}
         >
           <Typography variant="body2" color="text.secondary">
-            Not enough data to visualize financial flow yet.
+            {t('sankey.empty')}
           </Typography>
         </Box>
       </Box>
@@ -192,9 +199,9 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
 
   return (
     <Box>
-      {title && (
+      {resolvedTitle && (
         <Typography variant="h6" gutterBottom>
-          {title}
+          {resolvedTitle}
         </Typography>
       )}
       <Box sx={{ width: '100%', overflowX: 'auto' }}>
@@ -210,15 +217,15 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
       <Box sx={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 2, mt: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <Box sx={{ width: 12, height: 12, bgcolor: '#10b981', borderRadius: 0.5 }} />
-          <Typography variant="caption">Income</Typography>
+          <Typography variant="caption">{t('sankey.legend.income')}</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <Box sx={{ width: 12, height: 12, bgcolor: '#ef4444', borderRadius: 0.5 }} />
-          <Typography variant="caption">Expenses</Typography>
+          <Typography variant="caption">{t('sankey.legend.expenses')}</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <Box sx={{ width: 12, height: 12, bgcolor: '#3b82f6', borderRadius: 0.5 }} />
-          <Typography variant="caption">Investments</Typography>
+          <Typography variant="caption">{t('sankey.legend.investments')}</Typography>
         </Box>
       </Box>
     </Box>

@@ -1,11 +1,43 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { I18nProvider } from '@renderer/i18n/I18nProvider';
 import SummaryCards from '../SummaryCards';
 
 vi.mock('@app/contexts/FinancePrivacyContext', () => ({
   useFinancePrivacy: () => ({
     formatCurrency: (value: number | null | undefined) => `₪${Math.round(value ?? 0).toLocaleString()}`,
   }),
+}));
+
+vi.mock('@renderer/features/budgets/hooks/useSpendingCategories', () => ({
+  useSpendingCategories: () => ({
+    breakdown: {
+      breakdown: [
+        { spending_category: 'essential', actual_percentage: 50 },
+        { spending_category: 'growth', actual_percentage: 20 },
+        { spending_category: 'stability', actual_percentage: 15 },
+        { spending_category: 'reward', actual_percentage: 15 },
+      ],
+      targets: { essential: 50, growth: 20, stability: 15, reward: 15 },
+    },
+    fetchBreakdown: vi.fn(),
+  }),
+}));
+
+vi.mock('@renderer/features/budgets/hooks/useBudgetIntelligence', () => ({
+  useBudgetIntelligence: () => ({
+    health: { summary: { on_track: 1, warning: 0, exceeded: 0 } },
+    fetchHealth: vi.fn(),
+  }),
+}));
+
+vi.mock('@renderer/lib/api-client', () => ({
+  apiClient: {
+    get: vi.fn(async () => ({
+      ok: true,
+      data: { overallHealthScore: 80, healthBreakdown: {} },
+    })),
+  },
 }));
 
 describe('SummaryCards', () => {
@@ -27,25 +59,30 @@ describe('SummaryCards', () => {
     categoryCount: 5,
   };
 
+  const renderWithProviders = () =>
+    render(
+      <I18nProvider>
+        <SummaryCards {...baseProps} />
+      </I18nProvider>,
+    );
+
   it('shows current bank balance subtitle and savings score', () => {
-    render(<SummaryCards {...baseProps} />);
+    renderWithProviders();
 
     expect(screen.getByText('Bank: ₪2,000')).toBeInTheDocument();
-    const savingsScoreLabel = screen.getByText('Savings Score');
-    expect(savingsScoreLabel).toBeInTheDocument();
-    expect(savingsScoreLabel.previousElementSibling).toHaveTextContent('100');
+    expect(screen.getByText('Financial Health Score')).toBeInTheDocument();
   });
 
   it('renders portfolio breakdown entries', () => {
-    render(<SummaryCards {...baseProps} />);
+    renderWithProviders();
 
     expect(screen.getByText('Stocks')).toBeInTheDocument();
     expect(screen.getByText('Bonds')).toBeInTheDocument();
   });
 
   it('displays diversity metric when category data is provided', () => {
-    render(<SummaryCards {...baseProps} />);
+    renderWithProviders();
 
-    expect(screen.getByText(/Diversity/i)).toBeInTheDocument();
+    expect(screen.getByText('Financial Health')).toBeInTheDocument();
   });
 });

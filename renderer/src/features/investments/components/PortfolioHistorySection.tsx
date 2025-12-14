@@ -42,6 +42,7 @@ import {
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioHistoryPoint, InvestmentData } from '@renderer/types/investments';
 import { useInvestmentsFilters, HistoryTimeRangeOption } from '../InvestmentsFiltersContext';
+import { useTranslation } from 'react-i18next';
 
 interface PortfolioHistorySectionProps {
   overallHistory: PortfolioHistoryPoint[];
@@ -61,12 +62,15 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
   const { historyTimeRange, setHistoryTimeRange } = useInvestmentsFilters();
   const [displayMode, setDisplayMode] = useState<'chart' | 'table'>('chart');
   const [expanded, setExpanded] = useState(true);
+  const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.history' });
+  const currentValueLabel = t('series.currentValue');
+  const costBasisLabel = t('series.costBasis');
 
   const formatCurrencyValue = (value: number) =>
     formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
 
   const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-US', {
+    return new Date(date).toLocaleDateString(undefined, {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -78,20 +82,20 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
       return (
         <Box sx={{ p: 3, textAlign: 'center' }}>
           <Typography variant="body2" color="text.secondary">
-            No historical data available
+            {t('empty.history')}
           </Typography>
         </Box>
       );
     }
 
     const data = history.map((h) => ({
-      date: new Date(h.date).toLocaleDateString('en-US', {
+      date: new Date(h.date).toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
         year: history.length > 90 ? '2-digit' : undefined,
       }),
-      'Current Value': h.currentValue,
-      'Cost Basis': h.costBasis,
+      [currentValueLabel]: h.currentValue,
+      [costBasisLabel]: h.costBasis,
       fullDate: h.date,
     }));
 
@@ -130,7 +134,7 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
             <Legend />
             <Line
               type="monotone"
-              dataKey="Current Value"
+              dataKey={currentValueLabel}
               stroke={theme.palette.primary.main}
               strokeWidth={2}
               dot={{ r: 3 }}
@@ -138,7 +142,7 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
             />
             <Line
               type="monotone"
-              dataKey="Cost Basis"
+              dataKey={costBasisLabel}
               stroke={theme.palette.success.main}
               strokeWidth={2}
               dot={{ r: 3 }}
@@ -165,7 +169,7 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <TimelineIcon color="action" />
-          <Typography variant="h6">Portfolio Performance</Typography>
+          <Typography variant="h6">{t('title')}</Typography>
         </Box>
 
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
@@ -174,15 +178,15 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
             exclusive
             onChange={(e, newMode) => newMode && setDisplayMode(newMode)}
             size="small"
-            aria-label="display mode"
+            aria-label={t('aria.displayMode')}
           >
-            <ToggleButton value="chart" aria-label="chart view">
+            <ToggleButton value="chart" aria-label={t('aria.chart')}>
               <ChartIcon fontSize="small" sx={{ mr: 1 }} />
-              Chart
+              {t('tabs.chart')}
             </ToggleButton>
-            <ToggleButton value="table" aria-label="table view">
+            <ToggleButton value="table" aria-label={t('aria.table')}>
               <TableIcon fontSize="small" sx={{ mr: 1 }} />
-              Transactions
+              {t('tabs.table')}
             </ToggleButton>
           </ToggleButtonGroup>
 
@@ -192,13 +196,13 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
                 value={historyTimeRange}
                 onChange={(e) => setHistoryTimeRange(e.target.value as HistoryTimeRangeOption)}
                 displayEmpty
-                inputProps={{ 'aria-label': 'Time Range' }}
+                inputProps={{ 'aria-label': t('aria.timeRange') }}
               >
-                <MenuItem value="1m">1 Month</MenuItem>
-                <MenuItem value="3m">3 Months</MenuItem>
-                <MenuItem value="6m">6 Months</MenuItem>
-                <MenuItem value="1y">1 Year</MenuItem>
-                <MenuItem value="all">All Time</MenuItem>
+                <MenuItem value="1m">{t('ranges.1m')}</MenuItem>
+                <MenuItem value="3m">{t('ranges.3m')}</MenuItem>
+                <MenuItem value="6m">{t('ranges.6m')}</MenuItem>
+                <MenuItem value="1y">{t('ranges.1y')}</MenuItem>
+                <MenuItem value="all">{t('ranges.all')}</MenuItem>
               </Select>
             </FormControl>
           )}
@@ -227,10 +231,10 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell>Description</TableCell>
-                      <TableCell>Category</TableCell>
-                      <TableCell align="right">Amount</TableCell>
+                      <TableCell>{t('table.date')}</TableCell>
+                      <TableCell>{t('table.description')}</TableCell>
+                      <TableCell>{t('table.category')}</TableCell>
+                      <TableCell align="right">{t('table.amount')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -244,7 +248,7 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={txn.category_name_en || txn.category_name || 'Investment'}
+                            label={txn.category_name_en || txn.category_name || t('table.investment')}
                             size="small"
                             variant="outlined"
                           />
@@ -269,13 +273,13 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
                   color="text.secondary"
                   sx={{ mt: 2, mb: 2, display: 'block', textAlign: 'center' }}
                 >
-                  Showing 50 of {transactions.length} transactions
+                  {t('table.showing', { count: transactions.length })}
                 </Typography>
               )}
             </>
           ) : (
             <Box sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="text.secondary">No investment transactions found for this period</Typography>
+              <Typography color="text.secondary">{t('empty.transactions')}</Typography>
             </Box>
           )}
         </Box>
@@ -285,4 +289,3 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
 };
 
 export default PortfolioHistorySection;
-

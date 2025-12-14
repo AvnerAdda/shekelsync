@@ -7,6 +7,7 @@ import {
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioSummary } from '@renderer/types/investments';
+import { useTranslation } from 'react-i18next';
 
 interface InvestmentsSummarySectionProps {
   portfolioData: PortfolioSummary | null;
@@ -19,6 +20,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
 }) => {
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
+  const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.summary' });
 
   const formatCurrencyValue = (value: number) =>
     formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
@@ -81,23 +83,25 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
           <AccountIcon sx={{ mr: 2, fontSize: 28, color: 'primary.main' }} />
           <Box>
             <Typography variant="h5" fontWeight="bold">
-              Total Portfolio
+              {t('overall.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {portfolioData.summary.accountsWithValues} active accounts • Last updated{' '}
-              {portfolioData.summary.newestUpdateDate
-                ? new Date(portfolioData.summary.newestUpdateDate).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                  })
-                : 'N/A'}
+              {t('overall.accounts', { count: portfolioData.summary.accountsWithValues })} •{' '}
+              {t('overall.updated', {
+                date: portfolioData.summary.newestUpdateDate
+                  ? new Date(portfolioData.summary.newestUpdateDate).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                    })
+                  : t('overall.na'),
+              })}
             </Typography>
           </Box>
         </Box>
         <Grid container spacing={3}>
           <Grid item xs={6} md={3}>
             <Typography variant="caption" color="text.secondary">
-              TOTAL VALUE
+              {t('overall.totalValue')}
             </Typography>
             <Typography variant="h4" fontWeight="bold" color="primary.main">
               {formatCurrencyValue(portfolioData.summary.totalPortfolioValue)}
@@ -105,7 +109,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
           </Grid>
           <Grid item xs={6} md={3}>
             <Typography variant="caption" color="text.secondary">
-              TOTAL COST
+              {t('overall.totalCost')}
             </Typography>
             <Typography variant="h5" fontWeight="medium">
               {formatCurrencyValue(portfolioData.summary.totalCostBasis)}
@@ -113,7 +117,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
           </Grid>
           <Grid item xs={6} md={3}>
             <Typography variant="caption" color="text.secondary">
-              UNREALIZED P&L
+              {t('overall.unrealized')}
             </Typography>
             <Typography
               variant="h5"
@@ -128,7 +132,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
           </Grid>
           <Grid item xs={6} md={3}>
             <Typography variant="caption" color="text.secondary">
-              OVERALL ROI
+              {t('overall.roi')}
             </Typography>
             <Typography
               variant="h5"
@@ -151,17 +155,17 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
               <StockIcon sx={{ mr: 2, fontSize: 28, color: 'info.main' }} />
               <Box>
                 <Typography variant="h5" fontWeight="bold" color="info.main">
-                  Liquid Investments
+                  {t('liquid.title')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Accessible investments • {portfolioData.summary.liquid.accountsCount} accounts
+                  {t('liquid.subtitle', { count: portfolioData.summary.liquid.accountsCount })}
                 </Typography>
               </Box>
             </Box>
             <Grid container spacing={2}>
               <Grid item xs={6}>
                 <Typography variant="caption" color="text.secondary">
-                  CURRENT VALUE
+                  {t('liquid.currentValue')}
                 </Typography>
                 <Typography variant="h4" fontWeight="bold" color="info.main">
                   {formatCurrencyValue(portfolioData.summary.liquid.totalValue)}
@@ -169,7 +173,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
               </Grid>
               <Grid item xs={6}>
                 <Typography variant="caption" color="text.secondary">
-                  UNREALIZED P&L
+                  {t('liquid.unrealized')}
                 </Typography>
                 <Typography
                   variant="h6"
@@ -195,18 +199,19 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
               <SchoolIcon sx={{ mr: 2, fontSize: 28, color: 'warning.main' }} />
               <Box>
                 <Typography variant="h5" fontWeight="bold" color="warning.main">
-                  Long-term Savings
+                  {t('restricted.title')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Pension, provident & study funds • {portfolioData.summary.restricted.accountsCount}{' '}
-                  accounts
+                  {t('restricted.subtitle', {
+                    count: portfolioData.summary.restricted.accountsCount,
+                  })}
                 </Typography>
               </Box>
             </Box>
             <Grid container spacing={2}>
               <Grid item xs={6}>
                 <Typography variant="caption" color="text.secondary">
-                  CURRENT VALUE
+                  {t('restricted.currentValue')}
                 </Typography>
                 <Typography variant="h4" fontWeight="bold" color="warning.main">
                   {formatCurrencyValue(portfolioData.summary.restricted.totalValue)}
@@ -214,7 +219,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
               </Grid>
               <Grid item xs={6}>
                 <Typography variant="caption" color="text.secondary">
-                  UNREALIZED P&L
+                  {t('restricted.unrealized')}
                 </Typography>
                 <Typography
                   variant="h6"
@@ -238,4 +243,3 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
 };
 
 export default InvestmentsSummarySection;
-

@@ -51,7 +51,12 @@ export interface SmartAction {
   updated_at: string;
   category_name?: string;
   category_name_en?: string;
+  category_name_fr?: string;
+  category_name_he?: string;
   parent_category_name?: string;
+  parent_category_name_en?: string;
+  parent_category_name_fr?: string;
+  parent_category_name_he?: string;
 }
 
 export interface SmartActionsSummary {

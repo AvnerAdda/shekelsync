@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { BreakdownType } from '@renderer/types/analytics';
+import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
 
 interface UseBreakdownDataOptions {
   startDate: Date;
@@ -27,8 +28,8 @@ type CacheEntry = {
 
 const breakdownCache = new Map<string, CacheEntry>();
 
-function makeCacheKey(type: BreakdownType, start: Date, end: Date): string {
-  return `${type}:${start.toISOString()}:${end.toISOString()}`;
+function makeCacheKey(type: BreakdownType, start: Date, end: Date, locale: string): string {
+  return `${type}:${start.toISOString()}:${end.toISOString()}:${locale}`;
 }
 
 function createInitialState<T>(value: T): Record<BreakdownType, T> {
@@ -48,6 +49,7 @@ export function useBreakdownData({
   const [breakdownLoading, setBreakdownLoading] = useState(() => createInitialState(false));
   const [breakdownErrors, setBreakdownErrors] = useState(() => createInitialState<Error | null>(null));
   const requestIdsRef = useRef(createInitialState(0));
+  const { locale } = useLocaleSettings();
 
   const resetState = useCallback(() => {
     setBreakdownData(createInitialState<any>(null));
@@ -56,10 +58,10 @@ export function useBreakdownData({
 
   useEffect(() => {
     resetState();
-  }, [endDate, startDate, resetState]);
+  }, [endDate, startDate, locale, resetState]);
 
   const fetchBreakdown = useCallback(async (type: BreakdownType) => {
-    const cacheKey = makeCacheKey(type, startDate, endDate);
+    const cacheKey = makeCacheKey(type, startDate, endDate, locale);
     const cached = breakdownCache.get(cacheKey);
     const now = Date.now();
 
@@ -74,6 +76,9 @@ export function useBreakdownData({
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
     });
+    if (locale) {
+      params.append('locale', locale);
+    }
 
     const requestId = ++requestIdsRef.current[type];
     setBreakdownLoading((prev) => ({ ...prev, [type]: true }));
@@ -103,7 +108,7 @@ export function useBreakdownData({
         setBreakdownLoading((prev) => ({ ...prev, [type]: false }));
       }
     }
-  }, [endDate, startDate]);
+  }, [endDate, locale, startDate]);
 
   const normalizedInitialTypes = useMemo(() => {
     const sourceInitialTypes = initialTypes ?? DEFAULT_INITIAL_TYPES;

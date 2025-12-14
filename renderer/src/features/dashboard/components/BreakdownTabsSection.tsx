@@ -17,6 +17,7 @@ import SankeyChart from './SankeyChart';
 import BreakdownPanel from '@renderer/features/breakdown/BreakdownPanel';
 import { PortfolioBreakdownItem } from '@renderer/types/investments';
 import { useDashboardFilters } from '../DashboardFiltersContext';
+import { useTranslation } from 'react-i18next';
 
 interface BreakdownTabsSectionProps {
   selectedBreakdownType: 'overall' | 'income' | 'expense' | 'investment';
@@ -48,15 +49,16 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
   chartColors,
 }) => {
   const { startDate, endDate } = useDashboardFilters();
+  const { t } = useTranslation('translation', { keyPrefix: 'breakdownTabs' });
 
   return (
     <Box sx={{ mb: 3 }}>
       <Paper>
         <Tabs value={selectedBreakdownType} onChange={(event, newValue) => newValue && onSelectBreakdown(newValue)} variant="fullWidth">
-          <Tab label="Overall" value="overall" />
-          <Tab label="Income" value="income" />
-          <Tab label="Expenses" value="expense" />
-          <Tab label="Investment" value="investment" />
+          <Tab label={t('tabs.overall')} value="overall" />
+          <Tab label={t('tabs.income')} value="income" />
+          <Tab label={t('tabs.expense')} value="expense" />
+          <Tab label={t('tabs.investment')} value="investment" />
         </Tabs>
         <Box sx={{ p: 3 }}>
           {selectedBreakdownType === 'overall' && (
@@ -72,20 +74,23 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
                       <SankeyChart data={waterfallData.waterfallData} height={600} />
                       <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
                         <Typography variant="body2" fontWeight="bold">
-                          Total Income: {formatCurrencyValue(waterfallData.summary.totalIncome)}
+                          {t('overall.totalIncome', { amount: formatCurrencyValue(waterfallData.summary.totalIncome) })}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          Period: {format(startDate, 'MMM dd, yyyy')} - {format(endDate, 'MMM dd, yyyy')}
+                          {t('overall.period', {
+                            start: format(startDate, 'MMM dd, yyyy'),
+                            end: format(endDate, 'MMM dd, yyyy'),
+                          })}
                         </Typography>
                       </Box>
                     </>
                   ) : (
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300 }}>
                       <Typography variant="body2" color="text.secondary">
-                        No financial flow data available for this period
+                        {t('overall.noData')}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                        Add income and expense transactions to see flow diagram
+                        {t('overall.noDataHint')}
                       </Typography>
                     </Box>
                   )}
@@ -95,7 +100,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
               <Grid item xs={12} md={6}>
                 <Paper sx={{ p: 2, height: '100%' }}>
                   <Typography variant="h6" gutterBottom sx={{ color: 'info.main' }}>
-                    Liquid Investments
+                    {t('investment.liquid')}
                   </Typography>
                   {liquidPortfolio.length > 0 ? (
                     <>
@@ -124,20 +129,22 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
                       </ResponsiveContainer>
                       <Box sx={{ mt: 2, textAlign: 'center' }}>
                         <Typography variant="body2" fontWeight="bold" color="info.main">
-                          Total Liquid: {formatCurrencyValue(liquidPortfolio.reduce((sum, item) => sum + item.value, 0))}
+                          {t('investment.liquidTotal', {
+                            amount: formatCurrencyValue(liquidPortfolio.reduce((sum, item) => sum + item.value, 0)),
+                          })}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Accessible investments
+                          {t('investment.liquidHint')}
                         </Typography>
                       </Box>
                     </>
                   ) : (
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300 }}>
                       <Typography variant="body2" color="text.secondary">
-                        No liquid investments
+                        {t('investment.noLiquid')}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                        Add brokerage, crypto, or savings accounts
+                        {t('investment.addLiquidHint')}
                       </Typography>
                     </Box>
                   )}
@@ -147,7 +154,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
               <Grid item xs={12} md={6}>
                 <Paper sx={{ p: 2, height: '100%' }}>
                   <Typography variant="h6" gutterBottom sx={{ color: 'success.main' }}>
-                    Restricted Investments
+                    {t('investment.restricted')}
                   </Typography>
                   {restrictedPortfolio.length > 0 ? (
                     <>
@@ -176,20 +183,22 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
                       </ResponsiveContainer>
                       <Box sx={{ mt: 2, textAlign: 'center' }}>
                         <Typography variant="body2" fontWeight="bold" color="success.main">
-                          Total Restricted: {formatCurrencyValue(restrictedPortfolio.reduce((sum, item) => sum + item.value, 0))}
+                          {t('investment.restrictedTotal', {
+                            amount: formatCurrencyValue(restrictedPortfolio.reduce((sum, item) => sum + item.value, 0)),
+                          })}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Pension, provident & study funds
+                          {t('investment.restrictedHint')}
                         </Typography>
                       </Box>
                     </>
                   ) : (
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300 }}>
                       <Typography variant="body2" color="text.secondary">
-                        No long-term savings
+                        {t('investment.noRestricted')}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                        Add pension, provident, or study fund accounts
+                        {t('investment.addRestrictedHint')}
                       </Typography>
                     </Box>
                   )}
@@ -202,14 +211,14 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
             <Box key={type} sx={{ display: selectedBreakdownType === type ? 'block' : 'none' }}>
               {type === 'income' && data && data.summary.totalIncome === 0 && hasBankAccounts !== null && (
                 <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ mb: 2 }}>
-                  <AlertTitle>No Income Data</AlertTitle>
+                  <AlertTitle>{t('income.noIncomeTitle')}</AlertTitle>
                   {hasBankAccounts === false ? (
                     <Typography variant="body2">
-                      Add your bank account credentials to automatically track income transactions and get a complete view of your financial flows.
+                      {t('income.noAccounts')}
                     </Typography>
                   ) : (
                     <Typography variant="body2">
-                      No income transactions found for the selected period. Verify your last bank scrape was successful or run a new scrape to update your data.
+                      {t('income.noIncomePeriod')}
                     </Typography>
                   )}
                 </Alert>
@@ -230,7 +239,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
                 />
               ) : (
                 <Typography color="text.secondary">
-                  {type === 'investment' ? 'Investment breakdown coming soon.' : 'No breakdown data available for this period.'}
+                  {type === 'investment' ? t('investment.comingSoon') : t('shared.noDataPeriod')}
                 </Typography>
               )}
             </Box>

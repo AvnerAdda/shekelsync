@@ -1,4 +1,4 @@
-type SupportedLocale = 'en' | 'he';
+type SupportedLocale = 'he' | 'en' | 'fr';
 
 interface TimelineStrings {
   outflow: string;
@@ -28,6 +28,9 @@ interface GeneralBreakdownStrings {
 interface BreakdownStrings {
   timeline: TimelineStrings;
   general: GeneralBreakdownStrings;
+  overview: {
+    pendingBreakdown: (processed: number, pending: number) => string;
+  };
   categoryDetails: {
     processedBreakdown: (processed: number, pending: number) => string;
   };
@@ -37,10 +40,97 @@ interface BreakdownStrings {
     categoryTab: string;
     vendorTab: string;
     timelineTab: string;
+    titles: {
+      expense: string;
+      income: string;
+      investment: string;
+    };
+    chartTitles: {
+      expense: string;
+      income: string;
+      investment: string;
+      parent: (name: string) => string;
+      subcategory: (name: string) => string;
+    };
+    summary: {
+      total: {
+        expense: string;
+        income: string;
+        investment: string;
+      };
+      transactions: string;
+      average: string;
+    };
+    aria: {
+      vendorTrend: (vendor: string) => string;
+    };
   };
 }
 
 const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
+  fr: {
+    timeline: {
+      outflow: 'Sorties',
+      inflow: 'Entrées',
+      income: 'Revenus',
+      fallbackLegend: 'Total',
+      hint: 'Cliquez pour explorer ou voir les détails',
+    },
+    general: {
+      transactions: 'transactions',
+      processed: 'traitées',
+      pending: 'en attente',
+      total: 'Total',
+      average: 'Moyenne',
+      subcategories: 'Sous-catégories',
+      vendors: 'Par fournisseur',
+      spent: 'Dépensé',
+      invested: 'Investi',
+      income: 'Revenus',
+      cards: 'Par carte',
+      recentTransactions: 'Transactions récentes',
+      pendingBadge: 'En attente',
+      processedDatePrefix: 'Traitée',
+    },
+    overview: {
+      pendingBreakdown: (processed, pending) => `${processed} + ${pending} en attente`,
+    },
+    categoryDetails: {
+      processedBreakdown: (processed, pending) =>
+        `${processed} traitées, ${pending} en attente`,
+    },
+    panel: {
+      rootBreadcrumb: 'Toutes les catégories',
+      overviewTab: 'Vue d’ensemble',
+      categoryTab: 'Catégories',
+      vendorTab: 'Fournisseurs',
+      timelineTab: 'Chronologie',
+      titles: {
+        expense: 'Répartition des dépenses',
+        income: 'Répartition des revenus',
+        investment: 'Répartition des investissements',
+      },
+      chartTitles: {
+        expense: 'Dépenses par catégorie',
+        income: 'Revenus par catégorie',
+        investment: 'Investissements par catégorie',
+        parent: (name: string) => `Répartition de ${name}`,
+        subcategory: (name: string) => `Détails ${name}`,
+      },
+      summary: {
+        total: {
+          expense: 'Total dépensé',
+          income: 'Total revenus',
+          investment: 'Total mouvements',
+        },
+        transactions: 'Transactions',
+        average: 'Moyenne',
+      },
+      aria: {
+        vendorTrend: (vendor: string) => `Tendance pour ${vendor}`,
+      },
+    },
+  },
   en: {
     timeline: {
       outflow: 'Outflow',
@@ -65,6 +155,9 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
       pendingBadge: 'Pending',
       processedDatePrefix: 'Processed',
     },
+    overview: {
+      pendingBreakdown: (processed, pending) => `${processed} + ${pending} pending`,
+    },
     categoryDetails: {
       processedBreakdown: (processed, pending) =>
         `${processed} processed, ${pending} pending`,
@@ -75,6 +168,30 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
       categoryTab: 'Category',
       vendorTab: 'Vendor',
       timelineTab: 'Timeline',
+      titles: {
+        expense: 'Expenses Breakdown',
+        income: 'Income Breakdown',
+        investment: 'Investment Breakdown',
+      },
+      chartTitles: {
+        expense: 'Expenses by Category',
+        income: 'Income by Category',
+        investment: 'Investments by Category',
+        parent: (name: string) => `${name} Breakdown`,
+        subcategory: (name: string) => `${name} Details`,
+      },
+      summary: {
+        total: {
+          expense: 'Total Spent',
+          income: 'Total Income',
+          investment: 'Total Movement',
+        },
+        transactions: 'Transactions',
+        average: 'Average',
+      },
+      aria: {
+        vendorTrend: (vendor: string) => `Trend for ${vendor}`,
+      },
     },
   },
   he: {
@@ -101,6 +218,9 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
       pendingBadge: 'ממתינה',
       processedDatePrefix: 'עובד',
     },
+    overview: {
+      pendingBreakdown: (processed, pending) => `${processed} + ${pending} ממתינות`,
+    },
     categoryDetails: {
       processedBreakdown: (processed, pending) =>
         `${processed} מעובדות, ${pending} ממתינות`,
@@ -111,26 +231,57 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
       categoryTab: 'קטגוריות',
       vendorTab: 'ספקים',
       timelineTab: 'ציר זמן',
+      titles: {
+        expense: 'פילוח הוצאות',
+        income: 'פילוח הכנסות',
+        investment: 'פילוח השקעות',
+      },
+      chartTitles: {
+        expense: 'הוצאות לפי קטגוריה',
+        income: 'הכנסות לפי קטגוריה',
+        investment: 'השקעות לפי קטגוריה',
+        parent: (name: string) => `פילוח ${name}`,
+        subcategory: (name: string) => `פרטי ${name}`,
+      },
+      summary: {
+        total: {
+          expense: 'סה״כ הוצאות',
+          income: 'סה״כ הכנסות',
+          investment: 'סה״כ תנועות',
+        },
+        transactions: 'עסקאות',
+        average: 'ממוצע',
+      },
+      aria: {
+        vendorTrend: (vendor: string) => `מגמה עבור ${vendor}`,
+      },
     },
   },
 };
 
 function normalizeLocale(locale?: string): SupportedLocale {
+  if (locale && locale.toLowerCase().startsWith('fr')) {
+    return 'fr';
+  }
+
   if (locale && locale.toLowerCase().startsWith('he')) {
     return 'he';
   }
 
   if (typeof navigator !== 'undefined') {
     const navLocale = navigator.language || navigator.languages?.[0];
+    if (navLocale?.toLowerCase().startsWith('fr')) {
+      return 'fr';
+    }
     if (navLocale?.toLowerCase().startsWith('he')) {
       return 'he';
     }
   }
 
-  return 'en';
+  return 'he';
 }
 
 export function getBreakdownStrings(locale?: string): BreakdownStrings {
   const normalized = normalizeLocale(locale);
-  return STRINGS[normalized] || STRINGS.en;
+  return STRINGS[normalized] || STRINGS.he;
 }

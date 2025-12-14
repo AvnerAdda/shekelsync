@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Drawer,
   List,
@@ -35,6 +35,7 @@ import {
   WarningAmber as WarningAmberIcon,
   Lock as LockIcon,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import AccountsModal from '@renderer/shared/modals/AccountsModal';
 import ScrapeModal from '@renderer/shared/modals/ScrapeModal';
 import CategoryHierarchyModal from '@renderer/shared/modals/CategoryHierarchyModal';
@@ -82,16 +83,20 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const [syncPopoverAnchor, setSyncPopoverAnchor] = useState<HTMLElement | null>(null);
   const { showNotification } = useNotification();
   const { getPageAccessStatus } = useOnboarding();
+  const { t } = useTranslation('translation', { keyPrefix: 'sidebar' });
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { latestEvent: scrapeEvent } = useScrapeProgress();
 
-  const menuItems = [
-    { id: 'home', label: 'Overview', icon: <HomeIcon /> },
-    { id: 'analysis', label: 'Analysis', icon: <AnalysisIcon /> },
-    { id: 'investments', label: 'Investments', icon: <InvestmentIcon /> },
-    { id: 'settings', label: 'Settings', icon: <SettingsIcon /> },
-  ];
+  const menuItems = useMemo(
+    () => [
+      { id: 'home', label: t('menu.overview'), icon: <HomeIcon /> },
+      { id: 'analysis', label: t('menu.analysis'), icon: <AnalysisIcon /> },
+      { id: 'investments', label: t('menu.investments'), icon: <InvestmentIcon /> },
+      { id: 'settings', label: t('menu.settings'), icon: <SettingsIcon /> },
+    ],
+    [t],
+  );
 
   const getAccountSyncStatus = (lastSyncDate: Date | null): 'green' | 'orange' | 'red' | 'never' => {
     if (!lastSyncDate) return 'never';
@@ -332,32 +337,32 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   };
 
   const formatLastSync = () => {
-    if (!stats.lastSync) return 'Never';
+    if (!stats.lastSync) return t('sync.never');
     const now = new Date();
     const diff = now.getTime() - stats.lastSync.getTime();
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
 
-    if (days > 0) return `${days}d ago`;
-    if (hours > 0) return `${hours}h ago`;
-    if (minutes > 0) return `${minutes}m ago`;
-    return 'Just now';
+    if (days > 0) return t('sync.daysAgo', { count: days });
+    if (hours > 0) return t('sync.hoursAgo', { count: hours });
+    if (minutes > 0) return t('sync.minutesAgo', { count: minutes });
+    return t('sync.justNow');
   };
 
   const formatAccountLastSync = (lastSync: Date | null) => {
-    if (!lastSync) return 'Never synced';
+    if (!lastSync) return t('accountSync.neverSynced');
     const now = new Date();
     const diff = now.getTime() - lastSync.getTime();
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
 
-    if (days > 1) return `${days} days ago`;
-    if (days === 1) return 'Yesterday';
-    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-    return 'Just now';
+    if (days > 1) return t('sync.daysAgo', { count: days });
+    if (days === 1) return t('sync.yesterday');
+    if (hours > 0) return t('sync.hoursAgo', { count: hours });
+    if (minutes > 0) return t('sync.minutesAgo', { count: minutes });
+    return t('sync.justNow');
   };
 
   const getStatusColor = (status: 'green' | 'orange' | 'red' | 'never') => {
@@ -507,7 +512,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     onClick={() => setAccountsModalOpen(true)}
                     fullWidth
                   >
-                    Add Account
+                    {t('actions.addAccount')}
                   </Button>
                 </Badge>
                 <Badge
@@ -526,7 +531,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     onClick={() => setCategoryModalOpen(true)}
                     fullWidth
                   >
-                    Categories
+                    {t('actions.categories')}
                   </Button>
                 </Badge>
               </Box>
@@ -536,7 +541,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <AccountIcon fontSize="small" color="action" />
                   <Typography variant="caption" color="text.secondary">
-                    {stats.totalAccounts} Accounts
+                    {t('stats.accounts', { count: stats.totalAccounts })}
                   </Typography>
                 </Box>
                 <Box
@@ -608,12 +613,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                   }}
                 >
                   <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
-                    Account Sync Status
+                    {t('popover.title')}
                   </Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
                     {accountSyncStatuses.length === 0 ? (
                       <Typography variant="caption" color="text.secondary">
-                        No accounts configured
+                        {t('popover.noAccounts')}
                       </Typography>
                     ) : (
                       accountSyncStatuses.map((account) => (
@@ -669,7 +674,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                         onClick={handleRefreshStaleAccounts}
                         disabled={isBulkSyncing}
                       >
-                        Refresh {staleAccounts.length} Stale Account{staleAccounts.length > 1 ? 's' : ''}
+                        {t('popover.refreshStaleAccounts', { count: staleAccounts.length })}
                       </Button>
                     </>
                   )}
@@ -679,21 +684,21 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     <>
                       <CheckIcon fontSize="small" color="success" />
                       <Typography variant="caption" color="success.main">
-                        DB Connected
+                        {t('dbStatus.connected')}
                       </Typography>
                     </>
                   ) : stats.dbStatus === 'disconnected' ? (
                     <>
                       <ErrorIcon fontSize="small" color="error" />
                       <Typography variant="caption" color="error.main">
-                        DB Disconnected
+                        {t('dbStatus.disconnected')}
                       </Typography>
                     </>
                   ) : (
                     <>
                       <StorageIcon fontSize="small" color="action" />
                       <Typography variant="caption" color="text.secondary">
-                        Checking...
+                        {t('dbStatus.checking')}
                       </Typography>
                     </>
                   )}
@@ -707,7 +712,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         {!open && (
           <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
             <Divider sx={{ width: '100%', mb: 1 }} />
-            <Tooltip title="Add Account" placement="right">
+            <Tooltip title={t('tooltips.addAccount')} placement="right">
               <IconButton size="small" onClick={() => setAccountsModalOpen(true)}>
                 <Badge
                   badgeContent={(accountAlerts.noBank || accountAlerts.noCredit || accountAlerts.noPension) ? <WarningAmberIcon sx={{ fontSize: 10 }} /> : null}
@@ -717,7 +722,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                 </Badge>
               </IconButton>
             </Tooltip>
-            <Tooltip title="Categories" placement="right">
+            <Tooltip title={t('tooltips.categories')} placement="right">
               <IconButton size="small" onClick={() => setCategoryModalOpen(true)}>
                 <Badge
                   badgeContent={uncategorizedCount > 0 ? <WarningAmberIcon sx={{ fontSize: 10 }} /> : null}

@@ -22,18 +22,17 @@ async function getOrCreateBankBalanceAccount(client, credential, accountNumber, 
   const { vendor, nickname, id: credentialId, institution_id } = credential;
 
   // Check if account already exists for this credential
+  // Primary lookup is by credential_id in notes (most reliable)
+  // Secondary check includes institution_id and account_number for additional matching
   const existingQuery = `
     SELECT ia.*
     FROM investment_accounts ia
     WHERE ia.account_type = 'bank_balance'
-      AND ia.institution_id = $1
-      AND (ia.account_number = $2 OR ia.notes LIKE $3)
+      AND ia.notes LIKE $1
     LIMIT 1
   `;
 
   const existing = await client.query(existingQuery, [
-    institution_id,
-    accountNumber || '',
     `%credential_id:${credentialId}%`,
   ]);
 

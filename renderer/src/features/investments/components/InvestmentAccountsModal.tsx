@@ -39,6 +39,7 @@ import {
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import { apiClient } from '@/lib/api-client';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
+import { useTranslation } from 'react-i18next';
 
 interface InvestmentAccountsModalProps {
   open: boolean;
@@ -72,6 +73,7 @@ const InvestmentAccountsModal: React.FC<InvestmentAccountsModalProps> = ({
   onComplete,
   defaultTab = 0,
 }) => {
+  const { t } = useTranslation('translation', { keyPrefix: 'investmentAccountsModal' });
   const [activeTab, setActiveTab] = useState(defaultTab);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
@@ -97,7 +99,7 @@ const InvestmentAccountsModal: React.FC<InvestmentAccountsModalProps> = ({
       <DialogTitle>
         <Box display="flex" alignItems="center" justifyContent="space-between">
           <Typography variant="h5" fontWeight="bold">
-            ניהול חשבונות השקעה - מתקדם
+            {t('title')}
           </Typography>
           <IconButton onClick={onClose} size="small">
             <CloseIcon />
@@ -109,17 +111,17 @@ const InvestmentAccountsModal: React.FC<InvestmentAccountsModalProps> = ({
         <Tabs
           value={activeTab}
           onChange={handleTabChange}
-          aria-label="investment accounts management tabs"
+          aria-label={t('aria.tabs')}
         >
           <Tab
             icon={<LinkIcon />}
             iconPosition="start"
-            label="קישורי עסקאות"
+            label={t('tabs.links')}
           />
           <Tab
             icon={<PatternIcon />}
             iconPosition="start"
-            label="תבניות התאמה"
+            label={t('tabs.patterns')}
           />
         </Tabs>
       </Box>
@@ -139,6 +141,7 @@ const InvestmentAccountsModal: React.FC<InvestmentAccountsModalProps> = ({
 
 // Tab 1: Transaction Links
 const TransactionLinksTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
+  const { t } = useTranslation('translation', { keyPrefix: 'investmentAccountsModal.links' });
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<number | null>(null);
@@ -167,12 +170,15 @@ const TransactionLinksTabContent: React.FC<{ onRefresh: () => void }> = ({ onRef
       const res = await apiClient.post('/api/investments/pending-suggestions', { id, action });
       const data = res.data as any;
       if (res.ok && data?.success) {
-        showNotification(`הצעה ${action === 'approve' ? 'אושרה' : 'נדחתה'}`, 'success');
+        showNotification(
+          action === 'approve' ? t('notifications.approved') : t('notifications.rejected'),
+          'success'
+        );
         setSuggestions(prev => prev.filter(s => s.id !== id));
         onRefresh();
       }
     } catch {
-      showNotification('שגיאה בעיבוד ההצעה', 'error');
+      showNotification(t('notifications.error'), 'error');
     } finally {
       setProcessing(null);
     }
@@ -185,35 +191,35 @@ const TransactionLinksTabContent: React.FC<{ onRefresh: () => void }> = ({ onRef
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h6">הצעות לקישור עסקאות</Typography>
-        <IconButton onClick={loadSuggestions}><Refresh /></IconButton>
+        <Typography variant="h6">{t('title')}</Typography>
+        <IconButton onClick={loadSuggestions} aria-label={t('aria.refresh')}><Refresh /></IconButton>
       </Box>
 
       <Alert severity="info" sx={{ mb: 2 }}>
-        כאן תוכל לראות הצעות אוטומטיות לקישור עסקאות לחשבונות השקעה קיימים.
+        {t('description')}
       </Alert>
 
       {suggestions.length === 0 ? (
         <Alert severity="success">
-          אין הצעות ממתינות. כל עסקאות ההשקעה מקושרות!
+          {t('empty')}
         </Alert>
       ) : (
         <TableContainer component={Paper} variant="outlined">
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>תאריך</TableCell>
-                <TableCell>עסקה</TableCell>
-                <TableCell>סכום</TableCell>
-                <TableCell>חשבון מוצע</TableCell>
-                <TableCell>רמת ביטחון</TableCell>
-                <TableCell align="right">פעולות</TableCell>
+                <TableCell>{t('table.date')}</TableCell>
+                <TableCell>{t('table.transaction')}</TableCell>
+                <TableCell>{t('table.amount')}</TableCell>
+                <TableCell>{t('table.account')}</TableCell>
+                <TableCell>{t('table.confidence')}</TableCell>
+                <TableCell align="right">{t('table.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {suggestions.map((s) => (
                 <TableRow key={s.id}>
-                  <TableCell>{new Date(s.transaction_date).toLocaleDateString('he-IL')}</TableCell>
+                  <TableCell>{new Date(s.transaction_date).toLocaleDateString(undefined)}</TableCell>
                   <TableCell>{s.transaction_name}</TableCell>
                   <TableCell>₪{s.transaction_amount?.toLocaleString()}</TableCell>
                   <TableCell>
@@ -228,7 +234,7 @@ const TransactionLinksTabContent: React.FC<{ onRefresh: () => void }> = ({ onRef
                     <Chip label={`${((s.confidence || 0) * 100).toFixed(0)}%`} size="small" color="success" />
                   </TableCell>
                   <TableCell align="right">
-                    <Tooltip title="אשר">
+                    <Tooltip title={t('table.approve')}>
                       <IconButton
                         size="small"
                         color="success"
@@ -238,7 +244,7 @@ const TransactionLinksTabContent: React.FC<{ onRefresh: () => void }> = ({ onRef
                         <CheckCircle fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="דחה">
+                    <Tooltip title={t('table.reject')}>
                       <IconButton
                         size="small"
                         color="error"
@@ -261,6 +267,7 @@ const TransactionLinksTabContent: React.FC<{ onRefresh: () => void }> = ({ onRef
 
 // Tab 2: Pattern Management
 const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
+  const { t } = useTranslation('translation', { keyPrefix: 'investmentAccountsModal.patterns' });
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newPattern, setNewPattern] = useState<{ [key: number]: string }>({});
@@ -299,7 +306,7 @@ const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) 
   const handleAddPattern = async (accountId: number) => {
     const pattern = newPattern[accountId];
     if (!pattern?.trim()) {
-      showNotification('נא להזין תבנית', 'warning');
+      showNotification(t('notifications.missingPattern'), 'warning');
       return;
     }
 
@@ -311,29 +318,29 @@ const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) 
       });
       const data = res.data as any;
       if (res.ok && data?.success) {
-        showNotification('תבנית נוספה בהצלחה', 'success');
+        showNotification(t('notifications.added'), 'success');
         setNewPattern({ ...newPattern, [accountId]: '' });
         loadPatterns();
         onRefresh();
       }
     } catch {
-      showNotification('שגיאה בהוספת תבנית', 'error');
+      showNotification(t('notifications.addError'), 'error');
     }
   };
 
   const handleDeletePattern = async (patternId: number) => {
-    if (!confirm('האם למחוק תבנית זו?')) return;
+    if (!confirm(t('confirmDelete'))) return;
 
     try {
       const res = await apiClient.delete(`/api/investments/patterns?id=${patternId}`);
       const data = res.data as any;
       if (res.ok && data?.success) {
-        showNotification('תבנית נמחקה', 'success');
+        showNotification(t('notifications.deleted'), 'success');
         loadPatterns();
         onRefresh();
       }
     } catch {
-      showNotification('שגיאה במחיקת תבנית', 'error');
+      showNotification(t('notifications.deleteError'), 'error');
     }
   };
 
@@ -343,16 +350,14 @@ const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) 
 
   return (
     <Box>
-      <Typography variant="h6" mb={2}>כללי התאמת תבניות</Typography>
+      <Typography variant="h6" mb={2}>{t('title')}</Typography>
       <Alert severity="info" sx={{ mb: 2 }}>
-        תבניות מגדירות אילו עסקאות שייכות לאילו חשבונות. השתמש ב-<code>%</code> כתו כללי.
-        <br />
-        דוגמה: <code>%פיקדון%</code> תתאים לכל עסקה המכילה את המילה &quot;פיקדון&quot;
+        <span dangerouslySetInnerHTML={{ __html: t('description') }} />
       </Alert>
 
       {accounts.length === 0 ? (
         <Alert severity="warning">
-          לא נמצאו חשבונות השקעה. צור חשבון השקעה ראשון כדי להוסיף תבניות.
+          {t('empty')}
         </Alert>
       ) : (
         accounts.map((account) => (
@@ -361,7 +366,7 @@ const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) 
               <Box display="flex" alignItems="center" gap={2}>
                 <Typography fontWeight="bold">{account.account_name}</Typography>
                 <Chip label={account.account_type} size="small" />
-                <Chip label={`${account.patterns.length} תבניות`} size="small" color="primary" />
+                <Chip label={t('chipCount', { count: account.patterns.length })} size="small" color="primary" />
               </Box>
             </AccordionSummary>
             <AccordionDetails>
@@ -403,7 +408,7 @@ const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) 
                     onClick={() => handleAddPattern(account.id)}
                     size="small"
                   >
-                    הוסף
+                    {t('actions.add')}
                   </Button>
                 </Box>
               </Box>

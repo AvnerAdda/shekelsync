@@ -53,6 +53,7 @@ async function bulkScrape(options = {}) {
           vc.card6_digits,
           vc.bank_account_number,
           vc.identification_code,
+          vc.institution_id,
           COALESCE(last_scrapes.last_successful_scrape, vc.created_at) AS last_update
         FROM vendor_credentials vc
         LEFT JOIN (
@@ -104,6 +105,8 @@ async function bulkScrape(options = {}) {
           bankAccountNumber: account.bank_account_number || null,
           identification_code: account.identification_code ? decrypt(account.identification_code) : null,
           nickname: account.nickname,
+          institution_id: account.institution_id,
+          vendor: account.vendor,
         };
 
         let startDate;
