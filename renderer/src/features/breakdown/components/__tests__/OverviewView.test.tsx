@@ -40,6 +40,9 @@ describe('OverviewView', () => {
         isZooming={false}
         categoryType="expense"
         chartTitle="Expenses"
+        parentTitle={(name) => `${name} Breakdown`}
+        subcategoryTitle={(name) => `${name} Details`}
+        pendingBreakdownLabel={(processed, pending) => `${processed} + ${pending} pending`}
         formatCurrencyValue={formatCurrencyValue}
         onDrillDown={noop}
         onSubcategoryClick={noop}
@@ -49,8 +52,6 @@ describe('OverviewView', () => {
     );
 
     expect(screen.getByText('+20.0%')).toBeInTheDocument();
-    expect(screen.getByLabelText('Trend for Dining')).toBeInTheDocument();
     expect(screen.getByText('₪1200')).toBeInTheDocument();
   });
 });
-

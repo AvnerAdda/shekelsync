@@ -10,6 +10,7 @@
 
 const actualDatabase = require('../database.js');
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
+const { resolveLocale, getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
 
 let database = actualDatabase;
 
@@ -18,14 +19,19 @@ async function fetchBudgetSuggestions(client, params = {}) {
     minConfidence = 0.5,
     periodType = 'monthly',
     includeActive = true,
+    locale,
   } = params;
+  const resolvedLocale = resolveLocale(locale);
 
   let query = `
       SELECT
         bs.*,
         cd.name as category_name,
         cd.name_en as category_name_en,
+        cd.name_fr as category_name_fr,
         parent.name as parent_category_name,
+        parent.name_en as parent_category_name_en,
+        parent.name_fr as parent_category_name_fr,
         cb.id as active_budget_id,
         cb.budget_limit as active_budget_limit
       FROM budget_suggestions bs
@@ -52,6 +58,24 @@ async function fetchBudgetSuggestions(client, params = {}) {
 
   return result.rows.map((row) => ({
     ...row,
+    category_name: getLocalizedCategoryName({
+      name: row.category_name,
+      name_en: row.category_name_en,
+      name_fr: row.category_name_fr,
+    }, resolvedLocale) || row.category_name,
+    category_name_he: row.category_name,
+    category_name_en: row.category_name_en,
+    category_name_fr: row.category_name_fr,
+    parent_category_name: row.parent_category_name
+      ? getLocalizedCategoryName({
+          name: row.parent_category_name,
+          name_en: row.parent_category_name_en,
+          name_fr: row.parent_category_name_fr,
+        }, resolvedLocale) || row.parent_category_name
+      : null,
+    parent_category_name_he: row.parent_category_name,
+    parent_category_name_en: row.parent_category_name_en,
+    parent_category_name_fr: row.parent_category_name_fr,
     historical_data: row.historical_data ? JSON.parse(row.historical_data) : null,
     calculation_metadata: row.calculation_metadata ? JSON.parse(row.calculation_metadata) : null,
     has_active_budget: row.active_budget_id !== null,
@@ -314,12 +338,12 @@ async function generateBudgetSuggestions(params = {}) {
  * Get budget suggestions
  */
 async function getBudgetSuggestions(params = {}) {
-  const { minConfidence = 0.5, periodType = 'monthly', includeActive = true } = params;
+  const { minConfidence = 0.5, periodType = 'monthly', includeActive = true, locale } = params;
 
   const client = await database.getClient();
 
   try {
-    const suggestions = await fetchBudgetSuggestions(client, { minConfidence, periodType, includeActive });
+    const suggestions = await fetchBudgetSuggestions(client, { minConfidence, periodType, includeActive, locale });
     return { suggestions };
   } finally {
     client.release();
@@ -524,7 +548,8 @@ async function getBudgetTrajectory(params = {}) {
 /**
  * Get budget health summary for all active budgets
  */
-async function getBudgetHealth() {
+async function getBudgetHealth(options = {}) {
+  const locale = resolveLocale(options?.locale);
   const client = await database.getClient();
 
   try {
@@ -548,6 +573,7 @@ async function getBudgetHealth() {
         cb.budget_limit,
         cd.name as category_name,
         cd.name_en as category_name_en,
+        cd.name_fr as category_name_fr,
         COALESCE(SUM(ABS(t.price)), 0) as spent_amount
       FROM category_budgets cb
       JOIN category_definitions cd ON cb.category_definition_id = cd.id
@@ -561,6 +587,11 @@ async function getBudgetHealth() {
     `, [periodStart.toISOString().split('T')[0]]);
 
     const budgets = result.rows.map(row => {
+      const localizedCategoryName = getLocalizedCategoryName({
+        name: row.category_name,
+        name_en: row.category_name_en,
+        name_fr: row.category_name_fr,
+      }, locale) || row.category_name;
       const budgetLimit = parseFloat(row.budget_limit);
       const spentAmount = parseFloat(row.spent_amount);
       const remaining = Math.max(0, budgetLimit - spentAmount);
@@ -579,8 +610,10 @@ async function getBudgetHealth() {
       return {
         budget_id: row.budget_id,
         category_id: row.category_definition_id,
-        category_name: row.category_name,
+        category_name: localizedCategoryName,
+        category_name_he: row.category_name,
         category_name_en: row.category_name_en,
+        category_name_fr: row.category_name_fr,
         budget_limit: budgetLimit,
         spent_amount: spentAmount,
         remaining_amount: remaining,
@@ -616,6 +649,9 @@ async function getBudgetHealth() {
       budgets: budgets.map(b => ({
         category_id: b.category_id,
         category_name: b.category_name,
+        category_name_he: b.category_name_he,
+        category_name_en: b.category_name_en,
+        category_name_fr: b.category_name_fr,
         budget_limit: b.budget_limit,
         current_spent: b.spent_amount,
         percentage_used: b.percent_used,

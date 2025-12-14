@@ -21,6 +21,7 @@ import {
   SmartToy as ChatbotIcon,
   Security as SecurityIcon,
   BugReport as BugReportIcon,
+  Translate as LanguageIcon,
 } from '@mui/icons-material';
 import { useThemeMode } from '@app/contexts/ThemeContext';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
@@ -29,8 +30,14 @@ import DataExportPanel from '../components/DataExportPanel';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
 import EnhancedProfileSection from '../components/EnhancedProfileSection';
 import { useTelemetry } from '@app/contexts/TelemetryContext';
+import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
+import type { SupportedLocale } from '@renderer/i18n';
+import { useTranslation } from 'react-i18next';
 
 const SettingsPage: React.FC = () => {
+  const { t: tSettings } = useTranslation('translation', { keyPrefix: 'settings' });
+  const { t: tCommon } = useTranslation('translation', { keyPrefix: 'common' });
+  const { locale, setLocale, detectedLocale } = useLocaleSettings();
   const { mode, setMode, fontSize, setFontSize } = useThemeMode();
   const theme = useTheme();
   const { maskAmounts, setMaskAmounts } = useFinancePrivacy();
@@ -52,24 +59,51 @@ const SettingsPage: React.FC = () => {
     setTelemetryEnabled,
   } = useTelemetry();
 
+  const languageOptions = [
+    { code: 'he', label: tCommon('languages.he') },
+    { code: 'en', label: tCommon('languages.en') },
+    { code: 'fr', label: tCommon('languages.fr') },
+  ] as const;
+
+  const themeLabelMap: Record<'light' | 'dark', string> = {
+    light: tSettings('appearance.light'),
+    dark: tSettings('appearance.dark'),
+  };
+
+  const fontSizeLabelMap: Record<typeof fontSize, string> = {
+    small: tSettings('textSize.small'),
+    medium: tSettings('textSize.medium'),
+    large: tSettings('textSize.large'),
+  };
+
+  const detectedLanguageLabel = languageOptions.find((lang) => lang.code === detectedLocale)?.label ?? tCommon('language');
+
+  const handleLanguageChange = (newLocale: SupportedLocale | null) => {
+    if (newLocale) {
+      setLocale(newLocale);
+    }
+  };
+
   return (
     <Box sx={{ pb: 10, maxWidth: 900, mx: 'auto' }}>
       <Typography variant="h4" fontWeight="bold" gutterBottom>
-        Settings
+        {tSettings('title')}
       </Typography>
 
       {/* Enhanced Profile Settings */}
-      <EnhancedProfileSection />
+      <Box id="profile">
+        <EnhancedProfileSection />
+      </Box>
 
       {/* Theme Settings */}
-      <Paper sx={{ p: 3 }}>
+      <Paper id="appearance" sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
           <ThemeIcon color="primary" />
-          <Typography variant="h6">Appearance</Typography>
+          <Typography variant="h6">{tSettings('appearance.title')}</Typography>
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Choose your preferred theme. System will automatically match your device&apos;s theme.
+          {tSettings('appearance.description')}
         </Typography>
 
         <ToggleButtonGroup
@@ -85,32 +119,32 @@ const SettingsPage: React.FC = () => {
         >
           <ToggleButton value="light">
             <LightIcon sx={{ mr: 1 }} />
-            Light
+            {tSettings('appearance.light')}
           </ToggleButton>
           <ToggleButton value="system">
             <SystemIcon sx={{ mr: 1 }} />
-            System
+            {tSettings('appearance.system')}
           </ToggleButton>
           <ToggleButton value="dark">
             <DarkIcon sx={{ mr: 1 }} />
-            Dark
+            {tSettings('appearance.dark')}
           </ToggleButton>
         </ToggleButtonGroup>
 
         <Alert severity="info">
-          Current theme: <strong>{theme.palette.mode}</strong>
-          {mode === 'system' && ' (following system preference)'}
+          {tSettings('appearance.currentTheme', { theme: themeLabelMap[theme.palette.mode] })}
+          {mode === 'system' && ` ${tSettings('appearance.systemFollow')}`}
         </Alert>
 
-        <Divider sx={{ my: 3 }} />
+      <Divider sx={{ my: 3 }} />
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <TextSizeIcon color="primary" />
-          <Typography variant="h6">Text Size</Typography>
+          <Typography variant="h6">{tSettings('textSize.title')}</Typography>
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Adjust the text size throughout the application for better readability.
+          {tSettings('textSize.description')}
         </Typography>
 
         <ToggleButtonGroup
@@ -125,21 +159,48 @@ const SettingsPage: React.FC = () => {
           sx={{ mb: 2 }}
         >
           <ToggleButton value="small">
-            Small
+            {tSettings('textSize.small')}
           </ToggleButton>
           <ToggleButton value="medium">
-            Medium
+            {tSettings('textSize.medium')}
           </ToggleButton>
           <ToggleButton value="large">
-            Large
+            {tSettings('textSize.large')}
           </ToggleButton>
         </ToggleButtonGroup>
 
         <Alert severity="info">
-          Current text size: <strong>{fontSize.charAt(0).toUpperCase() + fontSize.slice(1)}</strong>
-          {fontSize === 'small' && ' (90% of default)'}
-          {fontSize === 'medium' && ' (100% - default)'}
-          {fontSize === 'large' && ' (110% of default)'}
+          {tSettings('textSize.current', { size: fontSizeLabelMap[fontSize] })}
+          {fontSize === 'small' && ` ${tSettings('textSize.hints.small')}`}
+          {fontSize === 'medium' && ` ${tSettings('textSize.hints.medium')}`}
+          {fontSize === 'large' && ` ${tSettings('textSize.hints.large')}`}
+        </Alert>
+      </Paper>
+
+      {/* Language */}
+      <Paper id="language" sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <LanguageIcon color="primary" />
+          <Typography variant="h6">{tSettings('language.title')}</Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {tSettings('language.description')}
+        </Typography>
+        <ToggleButtonGroup
+          value={locale}
+          exclusive
+          onChange={(e, newLocale) => handleLanguageChange(newLocale as SupportedLocale | null)}
+          fullWidth
+          sx={{ mb: 2 }}
+        >
+          {languageOptions.map((lang) => (
+            <ToggleButton key={lang.code} value={lang.code}>
+              {lang.label}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+        <Alert severity="info">
+          {tSettings('language.detectedLabel', { language: detectedLanguageLabel })}
         </Alert>
       </Paper>
 
@@ -155,17 +216,16 @@ const SettingsPage: React.FC = () => {
       <Paper sx={{ p: 3, mb: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
           <BugReportIcon color="primary" />
-          <Typography variant="h6">Diagnostics & Crash Reports</Typography>
+          <Typography variant="h6">{tSettings('diagnostics.title')}</Typography>
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Share anonymized crash reports to help us resolve stability issues faster. Sensitive data such as account
-          credentials and personal identifiers are never included in crash payloads.
+          {tSettings('diagnostics.description')}
         </Typography>
 
         {!telemetrySupported && (
           <Alert severity="info" sx={{ mb: 2 }}>
-            Crash reporting is only available in the desktop app.
+            {tSettings('diagnostics.notSupported')}
           </Alert>
         )}
 
@@ -191,19 +251,19 @@ const SettingsPage: React.FC = () => {
           label={
             <Box>
               <Typography variant="body2" fontWeight="bold">
-                Send crash reports automatically
+                {tSettings('diagnostics.toggleLabel')}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {telemetryEnabled
-                  ? 'Crash details will be securely uploaded to our monitoring service.'
-                  : 'Crash details remain on your device until you opt in.'}
+                  ? tSettings('diagnostics.toggleOn')
+                  : tSettings('diagnostics.toggleOff')}
               </Typography>
             </Box>
           }
         />
 
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-          You can always export logs manually from the Diagnostics panel below.
+          {tSettings('diagnostics.exportHint')}
         </Typography>
       </Paper>
 
@@ -211,12 +271,11 @@ const SettingsPage: React.FC = () => {
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
           <ChatbotIcon color="primary" />
-          <Typography variant="h6">AI Chatbot Settings</Typography>
+          <Typography variant="h6">{tSettings('chatbot.title')}</Typography>
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Configure your AI financial assistant and control what data it can access.
-          The chatbot never has access to your bank credentials or passwords.
+          {tSettings('chatbot.description')}
         </Typography>
 
         <Box sx={{ mb: 3 }}>
@@ -231,10 +290,10 @@ const SettingsPage: React.FC = () => {
             label={
               <Box>
                 <Typography variant="body2" fontWeight="bold">
-                  Enable AI Chatbot
+                  {tSettings('chatbot.enable')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Show the chatbot button and allow AI assistant interactions
+                  {tSettings('chatbot.enableHint')}
                 </Typography>
               </Box>
             }
@@ -244,12 +303,12 @@ const SettingsPage: React.FC = () => {
         <Divider sx={{ my: 2 }} />
 
         <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2 }}>
-          Data Access Permissions
+          {tSettings('chatbot.permissionsTitle')}
         </Typography>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Grant the chatbot access to specific data to enable personalized insights.
-          {!chatbotEnabled && ' (Enable chatbot first to configure permissions)'}
+          {tSettings('chatbot.permissionsDescription')}
+          {!chatbotEnabled && ` ${tSettings('chatbot.permissionsEnableFirst')}`}
         </Typography>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
@@ -265,10 +324,10 @@ const SettingsPage: React.FC = () => {
             label={
               <Box>
                 <Typography variant="body2" fontWeight="bold">
-                  Transaction Data
+                  {tSettings('chatbot.permissions.transaction')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Allow access to transaction history, amounts, dates, and descriptions
+                  {tSettings('chatbot.permissions.transactionHint')}
                 </Typography>
               </Box>
             }
@@ -286,10 +345,10 @@ const SettingsPage: React.FC = () => {
             label={
               <Box>
                 <Typography variant="body2" fontWeight="bold">
-                  Category Data
+                  {tSettings('chatbot.permissions.category')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Allow access to spending categories and categorization rules
+                  {tSettings('chatbot.permissions.categoryHint')}
                 </Typography>
               </Box>
             }
@@ -307,10 +366,10 @@ const SettingsPage: React.FC = () => {
             label={
               <Box>
                 <Typography variant="body2" fontWeight="bold">
-                  Analytics & Insights
+                  {tSettings('chatbot.permissions.analytics')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Allow access to behavioral analytics, trends, and spending patterns
+                  {tSettings('chatbot.permissions.analyticsHint')}
                 </Typography>
               </Box>
             }
@@ -319,21 +378,20 @@ const SettingsPage: React.FC = () => {
 
         <Alert severity="info" icon={<SecurityIcon />}>
           <Typography variant="body2" fontWeight="bold" gutterBottom>
-            Your Privacy is Protected
+            {tSettings('chatbot.privacyTitle')}
           </Typography>
           <Typography variant="caption">
-            • The chatbot NEVER has access to your bank credentials or passwords<br />
-            • All permissions can be revoked at any time<br />
-            • Data is only used to answer your questions and provide insights<br />
-            • No data is shared with third parties
+            {tSettings('chatbot.privacyBullet1')}<br />
+            {tSettings('chatbot.privacyBullet2')}<br />
+            {tSettings('chatbot.privacyBullet3')}<br />
+            {tSettings('chatbot.privacyBullet4')}
           </Typography>
         </Alert>
 
         {chatbotEnabled && !allowTransactionAccess && !allowCategoryAccess && !allowAnalyticsAccess && (
           <Alert severity="warning" sx={{ mt: 2 }}>
             <Typography variant="body2">
-              The chatbot is enabled but has no data access permissions.
-              Grant at least one permission for the chatbot to provide useful insights.
+              {tSettings('chatbot.noPermissions')}
             </Typography>
           </Alert>
         )}
@@ -342,14 +400,14 @@ const SettingsPage: React.FC = () => {
       <Divider sx={{ my: 4 }} />
 
       {/* Privacy Settings */}
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Paper id="privacy" sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <MaskIcon color="primary" />
-          <Typography variant="h6">Privacy Controls</Typography>
+          <Typography variant="h6">{tSettings('privacy.title')}</Typography>
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Toggle amount masking to obscure all financial figures across the application. Useful when sharing your screen or working in public spaces.
+          {tSettings('privacy.description')}
         </Typography>
 
         <FormControlLabel
@@ -365,8 +423,8 @@ const SettingsPage: React.FC = () => {
 
         <Alert severity="info" sx={{ mt: 2 }}>
           {maskAmounts
-            ? 'All currency amounts are currently replaced with asterisks.'
-            : 'Currency amounts will display their full values until masking is enabled.'}
+            ? tSettings('privacy.maskOn')
+            : tSettings('privacy.maskOff')}
         </Alert>
       </Paper>
 

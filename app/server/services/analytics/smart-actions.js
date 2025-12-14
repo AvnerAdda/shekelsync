@@ -12,6 +12,7 @@
 const actualDatabase = require('../database.js');
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 const { CATEGORY_TYPES } = require('../../../lib/category-constants.js');
+const { resolveLocale, getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
 
 let database = actualDatabase;
 
@@ -58,7 +59,7 @@ async function getCategoryRollingAverage(client, categoryDefinitionId, endDate) 
  * Detect category spending anomalies (>20% from rolling average)
  */
 async function detectCategoryAnomalies(params = {}) {
-  const { months = 1 } = params;
+  const { months = 1, locale } = params;
   const { start, end } = resolveDateRange({ months });
 
   const client = await database.getClient();
@@ -107,12 +108,18 @@ async function detectCategoryAnomalies(params = {}) {
       if (percentIncrease >= ANOMALY_THRESHOLD) {
         const severity = percentIncrease >= 0.5 ? 'high' : percentIncrease >= 0.3 ? 'medium' : 'low';
 
+        const localizedName = getLocalizedCategoryName({
+          name: row.category_name,
+          name_en: row.category_name_en,
+          name_fr: null,
+        }, locale) || row.category_name;
+
         anomalies.push({
           action_type: 'anomaly',
           trigger_category_id: row.category_definition_id,
           severity,
-          title: `Spending increase detected in ${row.category_name}`,
-          description: `Your spending in ${row.category_name} increased by ${Math.round(percentIncrease * 100)}% compared to your 3-month average (₪${Math.round(avgMonthly)} → ₪${Math.round(currentTotal)}).`,
+          title: `Spending increase detected in ${localizedName}`,
+          description: `Your spending in ${localizedName} increased by ${Math.round(percentIncrease * 100)}% compared to your 3-month average (₪${Math.round(avgMonthly)} → ₪${Math.round(currentTotal)}).`,
           metadata: JSON.stringify({
             current_total: currentTotal,
             average_monthly: avgMonthly,
@@ -135,7 +142,7 @@ async function detectCategoryAnomalies(params = {}) {
  * Detect fixed category variations (utilities, rent showing >10% change)
  */
 async function detectFixedCategoryVariations(params = {}) {
-  const { months = 1 } = params;
+  const { months = 1, locale } = params;
   const { start, end } = resolveDateRange({ months });
 
   const client = await database.getClient();
@@ -191,12 +198,18 @@ async function detectFixedCategoryVariations(params = {}) {
       if (variationCoefficient >= FIXED_VARIATION_THRESHOLD) {
         const severity = variationCoefficient >= 0.25 ? 'high' : 'medium';
 
+        const localizedName = getLocalizedCategoryName({
+          name: row.category_name,
+          name_en: row.category_name_en,
+          name_fr: null,
+        }, locale) || row.category_name;
+
         variations.push({
           action_type: 'fixed_variation',
           trigger_category_id: row.category_definition_id,
           severity,
-          title: `Unexpected variation in fixed cost: ${row.category_name}`,
-          description: `${row.category_name} is classified as a fixed cost, but shows ${Math.round(variationCoefficient * 100)}% variation this month (₪${Math.round(currentMin)} - ₪${Math.round(currentMax)}). This might indicate a billing issue or service change.`,
+          title: `Unexpected variation in fixed cost: ${localizedName}`,
+          description: `${localizedName} is classified as a fixed cost, but shows ${Math.round(variationCoefficient * 100)}% variation this month (₪${Math.round(currentMin)} - ₪${Math.round(currentMax)}). This might indicate a billing issue or service change.`,
           metadata: JSON.stringify({
             avg_amount: currentAvg,
             min_amount: currentMin,
@@ -219,7 +232,7 @@ async function detectFixedCategoryVariations(params = {}) {
  * Detect unusual large purchases (>2σ from category mean)
  */
 async function detectUnusualPurchases(params = {}) {
-  const { months = 1 } = params;
+  const { months = 1, locale } = params;
   const { start, end } = resolveDateRange({ months });
 
   const client = await database.getClient();
@@ -285,14 +298,20 @@ async function detectUnusualPurchases(params = {}) {
       const zScore = (parseFloat(txn.amount) - mean) / stdDev;
 
       if (zScore >= UNUSUAL_PURCHASE_SIGMA) {
+        const localizedName = getLocalizedCategoryName({
+          name: txn.category_name,
+          name_en: txn.category_name_en,
+          name_fr: null,
+        }, locale) || txn.category_name;
+
         const severity = zScore >= 3 ? 'high' : 'medium';
 
         unusualPurchases.push({
           action_type: 'unusual_purchase',
           trigger_category_id: txn.category_definition_id,
           severity,
-          title: `Unusually large purchase in ${txn.category_name}`,
-          description: `A purchase of ₪${Math.round(parseFloat(txn.amount))} in ${txn.category_name} is ${Math.round(zScore)}σ above your average (₪${Math.round(mean)}). Transaction: "${txn.name}" on ${txn.date}.`,
+          title: `Unusually large purchase in ${localizedName}`,
+          description: `A purchase of ₪${Math.round(parseFloat(txn.amount))} in ${localizedName} is ${Math.round(zScore)}σ above your average (₪${Math.round(mean)}). Transaction: "${txn.name}" on ${txn.date}.`,
           metadata: JSON.stringify({
             transaction_id: txn.identifier,
             transaction_name: txn.name,
@@ -318,7 +337,7 @@ async function detectUnusualPurchases(params = {}) {
  * Detect budget overruns and projections
  */
 async function detectBudgetOverruns(params = {}) {
-  const { months = 1 } = params;
+  const { months = 1, locale } = params;
   const { start, end } = resolveDateRange({ months });
 
   const client = await database.getClient();
@@ -356,13 +375,19 @@ async function detectBudgetOverruns(params = {}) {
       const percentUsed = (spentAmount / budgetLimit);
 
       // Budget exceeded
+      const localizedName = getLocalizedCategoryName({
+        name: row.category_name,
+        name_en: row.category_name_en,
+        name_fr: null,
+      }, locale) || row.category_name;
+
       if (spentAmount > budgetLimit) {
         budgetAlerts.push({
           action_type: 'budget_overrun',
           trigger_category_id: row.category_definition_id,
           severity: 'critical',
-          title: `Budget exceeded: ${row.category_name}`,
-          description: `You've exceeded your ${row.category_name} budget by ₪${Math.round(spentAmount - budgetLimit)} (${Math.round(percentUsed * 100)}% used). Budget: ₪${Math.round(budgetLimit)}, Spent: ₪${Math.round(spentAmount)}.`,
+          title: `Budget exceeded: ${localizedName}`,
+          description: `You've exceeded your ${localizedName} budget by ₪${Math.round(spentAmount - budgetLimit)} (${Math.round(percentUsed * 100)}% used). Budget: ₪${Math.round(budgetLimit)}, Spent: ₪${Math.round(spentAmount)}.`,
           metadata: JSON.stringify({
             budget_id: row.budget_id,
             budget_limit: budgetLimit,
@@ -384,8 +409,8 @@ async function detectBudgetOverruns(params = {}) {
           action_type: 'budget_overrun',
           trigger_category_id: row.category_definition_id,
           severity: willExceed ? 'high' : 'medium',
-          title: `Budget warning: ${row.category_name}`,
-          description: `You've used ${Math.round(percentUsed * 100)}% of your ${row.category_name} budget (₪${Math.round(spentAmount)}/₪${Math.round(budgetLimit)}). ${daysRemaining} days remaining. ${willExceed ? `At current pace, you'll exceed by ₪${Math.round(projected - budgetLimit)}.` : `Stay under ₪${Math.round((budgetLimit - spentAmount) / daysRemaining)}/day to stay on track.`}`,
+          title: `Budget warning: ${localizedName}`,
+          description: `You've used ${Math.round(percentUsed * 100)}% of your ${localizedName} budget (₪${Math.round(spentAmount)}/₪${Math.round(budgetLimit)}). ${daysRemaining} days remaining. ${willExceed ? `At current pace, you'll exceed by ₪${Math.round(projected - budgetLimit)}.` : `Stay under ₪${Math.round((budgetLimit - spentAmount) / daysRemaining)}/day to stay on track.`}`,
           metadata: JSON.stringify({
             budget_id: row.budget_id,
             budget_limit: budgetLimit,
@@ -414,16 +439,16 @@ async function detectBudgetOverruns(params = {}) {
  * Generate all smart action items
  */
 async function generateSmartActions(params = {}) {
-  const { months = 1, force = false } = params;
+  const { months = 1, force = false, locale } = params;
 
   const allActions = [];
 
   // Run all detection algorithms in parallel
   const [anomalies, fixedVariations, unusualPurchases, budgetOverruns] = await Promise.all([
-    detectCategoryAnomalies({ months }),
-    detectFixedCategoryVariations({ months }),
-    detectUnusualPurchases({ months }),
-    detectBudgetOverruns({ months }),
+    detectCategoryAnomalies({ months, locale }),
+    detectFixedCategoryVariations({ months, locale }),
+    detectUnusualPurchases({ months, locale }),
+    detectBudgetOverruns({ months, locale }),
   ]);
 
   allActions.push(...anomalies, ...fixedVariations, ...unusualPurchases, ...budgetOverruns);
@@ -499,7 +524,8 @@ async function generateSmartActions(params = {}) {
  * Get smart action items
  */
 async function getSmartActions(params = {}) {
-  const { status = 'active', severity, actionType } = params;
+  const { status = 'active', severity, actionType, locale: localeInput } = params;
+  const locale = resolveLocale(localeInput);
 
   const client = await database.getClient();
 
@@ -509,7 +535,10 @@ async function getSmartActions(params = {}) {
         sai.*,
         cd.name as category_name,
         cd.name_en as category_name_en,
-        parent.name as parent_category_name
+        cd.name_fr as category_name_fr,
+        parent.name as parent_category_name,
+        parent.name_en as parent_category_name_en,
+        parent.name_fr as parent_category_name_fr
       FROM smart_action_items sai
       LEFT JOIN category_definitions cd ON sai.trigger_category_id = cd.id
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
@@ -549,10 +578,41 @@ async function getSmartActions(params = {}) {
 
     const result = await client.query(query, values);
 
-    const actions = result.rows.map(row => ({
-      ...row,
-      metadata: row.metadata ? JSON.parse(row.metadata) : null,
-    }));
+    const actions = result.rows.map(row => {
+      const localizedCategoryName = getLocalizedCategoryName({
+        name: row.category_name,
+        name_en: row.category_name_en,
+        name_fr: row.category_name_fr,
+      }, locale) || row.category_name;
+
+      const localizedParentName = getLocalizedCategoryName({
+        name: row.parent_category_name,
+        name_en: row.parent_category_name_en,
+        name_fr: row.parent_category_name_fr,
+      }, locale) || row.parent_category_name;
+
+      let title = row.title;
+      let description = row.description;
+      if (title && row.category_name && localizedCategoryName && localizedCategoryName !== row.category_name) {
+        title = title.replace(row.category_name, localizedCategoryName);
+      }
+      if (description && row.category_name && localizedCategoryName && localizedCategoryName !== row.category_name) {
+        description = description.replace(row.category_name, localizedCategoryName);
+      }
+
+      return {
+        ...row,
+        title,
+        description,
+        category_name: localizedCategoryName,
+        parent_category_name: localizedParentName,
+        category_name_he: row.category_name,
+        category_name_fr: row.category_name_fr,
+        parent_category_name_he: row.parent_category_name,
+        parent_category_name_fr: row.parent_category_name_fr,
+        metadata: row.metadata ? JSON.parse(row.metadata) : null,
+      };
+    });
 
     const summary = {
       total: actions.length,

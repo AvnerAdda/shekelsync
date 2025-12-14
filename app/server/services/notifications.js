@@ -1,5 +1,6 @@
 const database = require('./database.js');
 const { standardizeResponse, standardizeError } = require('../../lib/server/query-utils.js');
+const { STALE_SYNC_THRESHOLD_MS } = require('../../utils/constants.js');
 
 const NOTIFICATION_TYPES = {
   BUDGET_WARNING: 'budget_warning',
@@ -10,6 +11,9 @@ const NOTIFICATION_TYPES = {
   GOAL_MILESTONE: 'goal_milestone',
   CASH_FLOW_ALERT: 'cash_flow_alert',
   NEW_VENDOR: 'new_vendor',
+  STALE_SYNC: 'stale_sync',
+  UNCATEGORIZED_TRANSACTIONS: 'uncategorized_transactions',
+  SYNC_SUCCESS: 'sync_success',
 };
 
 const SEVERITY_LEVELS = {
@@ -546,6 +550,137 @@ async function getNotifications(query = {}) {
             ],
           });
         }
+      }
+    }
+
+    // 6. Stale sync alert - accounts that haven't been synced recently
+    if (type === 'all' || type === NOTIFICATION_TYPES.STALE_SYNC) {
+      const staleThresholdDate = new Date(now.getTime() - STALE_SYNC_THRESHOLD_MS);
+
+      const staleAccountsResult = await client.query(
+        `SELECT 
+          ac.id,
+          ac.name,
+          ac.company_id,
+          ac.last_update,
+          c.name as company_name
+        FROM accounts ac
+        LEFT JOIN companies c ON c.id = ac.company_id
+        WHERE ac.last_update IS NOT NULL 
+          AND ac.last_update < $1
+        ORDER BY ac.last_update ASC
+        LIMIT 10`,
+        [staleThresholdDate.toISOString()],
+      );
+
+      if (staleAccountsResult.rows.length > 0) {
+        const staleCount = staleAccountsResult.rows.length;
+        const oldestAccount = staleAccountsResult.rows[0];
+        const oldestSyncDate = new Date(oldestAccount.last_update);
+        const daysSinceSync = Math.floor((now.getTime() - oldestSyncDate.getTime()) / (24 * 60 * 60 * 1000));
+
+        notifications.push({
+          id: 'stale_sync_alert',
+          type: NOTIFICATION_TYPES.STALE_SYNC,
+          severity: daysSinceSync > 7 ? SEVERITY_LEVELS.CRITICAL : SEVERITY_LEVELS.WARNING,
+          title: 'Accounts Need Sync',
+          message: staleCount === 1
+            ? `${oldestAccount.name || oldestAccount.company_name} hasn't synced in ${daysSinceSync} days`
+            : `${staleCount} accounts haven't synced in over 48 hours`,
+          data: {
+            stale_count: staleCount,
+            oldest_account: oldestAccount.name || oldestAccount.company_name,
+            days_since_sync: daysSinceSync,
+            accounts: staleAccountsResult.rows.map((a) => ({
+              id: a.id,
+              name: a.name || a.company_name,
+              last_update: a.last_update,
+            })),
+          },
+          timestamp: now.toISOString(),
+          actionable: true,
+          actions: [{ label: 'Sync Now', action: 'bulk_refresh' }],
+        });
+      }
+    }
+
+    // 7. Uncategorized transactions alert
+    if (type === 'all' || type === NOTIFICATION_TYPES.UNCATEGORIZED_TRANSACTIONS) {
+      const thirtyDaysAgoStr = toISODate(subDays(now, 30));
+
+      const uncategorizedResult = await client.query(
+        `SELECT COUNT(*) as count, SUM(ABS(price)) as total_amount
+         FROM transactions t
+         WHERE t.date >= $1
+           AND t.price < 0
+           AND (t.category_definition_id IS NULL 
+                OR t.category_definition_id IN (
+                  SELECT id FROM category_definitions WHERE LOWER(name) = 'other' OR LOWER(name_en) = 'other'
+                ))`,
+        [thirtyDaysAgoStr],
+      );
+
+      const uncategorizedCount = Number.parseInt(uncategorizedResult.rows[0]?.count || 0, 10);
+      const uncategorizedAmount = Number.parseFloat(uncategorizedResult.rows[0]?.total_amount || 0);
+
+      if (uncategorizedCount >= 5) {
+        notifications.push({
+          id: 'uncategorized_transactions',
+          type: NOTIFICATION_TYPES.UNCATEGORIZED_TRANSACTIONS,
+          severity: uncategorizedCount >= 20 ? SEVERITY_LEVELS.WARNING : SEVERITY_LEVELS.INFO,
+          title: 'Transactions Need Categorization',
+          message: `${uncategorizedCount} transactions (₪${uncategorizedAmount.toLocaleString()}) need categorization for better insights`,
+          data: {
+            count: uncategorizedCount,
+            total_amount: uncategorizedAmount,
+          },
+          timestamp: now.toISOString(),
+          actionable: true,
+          actions: [{ label: 'Review Transactions', action: 'view_uncategorized' }],
+        });
+      }
+    }
+
+    // 8. Sync success / All accounts healthy (positive feedback)
+    if (type === 'all' || type === NOTIFICATION_TYPES.SYNC_SUCCESS) {
+      const recentSyncThreshold = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 24 hours
+
+      const syncHealthResult = await client.query(
+        `SELECT 
+          COUNT(*) FILTER (WHERE last_update >= $1) as recent_syncs,
+          COUNT(*) as total_accounts,
+          MAX(last_update) as latest_sync
+        FROM accounts
+        WHERE last_update IS NOT NULL`,
+        [recentSyncThreshold.toISOString()],
+      );
+
+      const health = syncHealthResult.rows[0];
+      const recentSyncs = Number.parseInt(health?.recent_syncs || 0, 10);
+      const totalAccounts = Number.parseInt(health?.total_accounts || 0, 10);
+      const latestSync = health?.latest_sync ? new Date(health.latest_sync) : null;
+
+      // Only show success if all accounts synced recently and there's at least one account
+      if (totalAccounts > 0 && recentSyncs === totalAccounts && latestSync) {
+        const minutesSinceSync = Math.floor((now.getTime() - latestSync.getTime()) / (60 * 1000));
+        const timeAgo = minutesSinceSync < 60
+          ? `${minutesSinceSync} minutes ago`
+          : `${Math.floor(minutesSinceSync / 60)} hours ago`;
+
+        notifications.push({
+          id: 'sync_success',
+          type: NOTIFICATION_TYPES.SYNC_SUCCESS,
+          severity: SEVERITY_LEVELS.INFO,
+          title: 'All Accounts Synced',
+          message: `${totalAccounts} account${totalAccounts > 1 ? 's' : ''} up to date • Last sync ${timeAgo}`,
+          data: {
+            total_accounts: totalAccounts,
+            latest_sync: latestSync.toISOString(),
+          },
+          timestamp: latestSync.toISOString(),
+          actionable: false,
+          actions: [],
+        });
       }
     }
 

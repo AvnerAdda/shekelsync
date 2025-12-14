@@ -38,9 +38,13 @@ const getMaskLength = (value: number | null | undefined, override?: number) => {
 
 interface FinancePrivacyProviderProps {
   children: React.ReactNode;
+  locale?: string;
 }
 
-export const FinancePrivacyProvider: React.FC<FinancePrivacyProviderProps> = ({ children }: FinancePrivacyProviderProps) => {
+export const FinancePrivacyProvider: React.FC<FinancePrivacyProviderProps> = ({
+  children,
+  locale = 'he',
+}: FinancePrivacyProviderProps) => {
   const [maskAmounts, setMaskAmountsState] = useState(false);
 
   useEffect(() => {
@@ -123,7 +127,7 @@ export const FinancePrivacyProvider: React.FC<FinancePrivacyProviderProps> = ({ 
       formatterOptions.compactDisplay = 'short';
     }
 
-    const formatted = Math.abs(rawValue).toLocaleString('en-US', formatterOptions);
+    const formatted = Math.abs(rawValue).toLocaleString(locale, formatterOptions);
 
     let signPrefix = '';
     if (showSign && rawValue !== 0) {
@@ -134,7 +138,7 @@ export const FinancePrivacyProvider: React.FC<FinancePrivacyProviderProps> = ({ 
 
     return `${signPrefix}${currencySymbol}${formatted}`;
     },
-    [maskAmounts]
+    [locale, maskAmounts]
   );
 
   const value = useMemo<FinancePrivacyContextValue>(() => ({

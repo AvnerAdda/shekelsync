@@ -79,7 +79,7 @@ describe('Analytics + Budget Intelligence routes', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.budgets).toHaveLength(1);
     expect(res.body.budgets[0].status).toBe('on_track');
-    expect(spy).toHaveBeenCalledWith();
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ locale: undefined }));
   });
 
   it('returns budget suggestions with active marker', async () => {

@@ -35,6 +35,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format as formatDate, subMonths, startOfYear } from 'date-fns';
 import { apiClient } from '@/lib/api-client';
 import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from '@renderer/shared/components/InstitutionBadge';
+import { useTranslation } from 'react-i18next';
 
 interface ExportStatus {
   loading: boolean;
@@ -55,6 +56,7 @@ interface Vendor {
 }
 
 const DataExportPanel: React.FC = () => {
+  const { t } = useTranslation('translation', { keyPrefix: 'settings.dataExport' });
   // Export configuration state
   const [format, setFormat] = useState<'csv' | 'json'>('csv');
   const [dataType, setDataType] = useState<'transactions' | 'categories' | 'vendors' | 'budgets' | 'full'>('transactions');
@@ -263,21 +265,17 @@ const DataExportPanel: React.FC = () => {
     <Paper sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         <ExportIcon color="primary" />
-        <Typography variant="h6">Data Export</Typography>
+        <Typography variant="h6">{t('title')}</Typography>
       </Box>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Export your financial data for backup, tax preparation, or analysis in external tools.
-        All exports respect your privacy settings and exclude sensitive information by default.
+        {t('description')}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Each export now includes the institution names/types you see in the UI, so downstream tools
-        can match transactions and vendors to the same institutions.
+        {t('institutionNote')}
       </Typography>
       <Alert severity="info" sx={{ mb: 3 }}>
-        {hasElectronSaveBridge
-          ? 'We will open a native save dialog and write the export directly to your selected folder. Nothing is uploaded to the cloud.'
-          : 'No desktop bridge detected — once the export is ready, it will download via your browser instead.'}
+        {hasElectronSaveBridge ? t('bridge.desktop') : t('bridge.web')}
       </Alert>
 
       <Grid container spacing={3}>
@@ -287,48 +285,48 @@ const DataExportPanel: React.FC = () => {
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 <FileIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Export Configuration
+                {t('config.title')}
               </Typography>
 
               <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>Data Type</InputLabel>
+                <InputLabel>{t('config.dataTypeLabel')}</InputLabel>
                 <Select
                   value={dataType}
-                  label="Data Type"
+                  label={t('config.dataTypeLabel')}
                   onChange={(e) => setDataType(e.target.value as any)}
                 >
-                  <MenuItem value="transactions">Transactions Only</MenuItem>
-                  <MenuItem value="categories">Categories Summary</MenuItem>
-                  <MenuItem value="vendors">Vendors Summary</MenuItem>
-                  <MenuItem value="budgets">Budgets & Goals</MenuItem>
-                  <MenuItem value="full">Complete Export</MenuItem>
+                  <MenuItem value="transactions">{t('config.dataTypes.transactions')}</MenuItem>
+                  <MenuItem value="categories">{t('config.dataTypes.categories')}</MenuItem>
+                  <MenuItem value="vendors">{t('config.dataTypes.vendors')}</MenuItem>
+                  <MenuItem value="budgets">{t('config.dataTypes.budgets')}</MenuItem>
+                  <MenuItem value="full">{t('config.dataTypes.full')}</MenuItem>
                 </Select>
               </FormControl>
 
               <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>Format</InputLabel>
+                <InputLabel>{t('config.formatLabel')}</InputLabel>
                 <Select
                   value={format}
-                  label="Format"
+                  label={t('config.formatLabel')}
                   onChange={(e) => setFormat(e.target.value as any)}
                 >
-                  <MenuItem value="csv">CSV (Excel compatible)</MenuItem>
-                  <MenuItem value="json">JSON (for developers)</MenuItem>
+                  <MenuItem value="csv">{t('config.format.csv')}</MenuItem>
+                  <MenuItem value="json">{t('config.format.json')}</MenuItem>
                 </Select>
               </FormControl>
 
               <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>Date Range</InputLabel>
+                <InputLabel>{t('config.dateRangeLabel')}</InputLabel>
                 <Select
                   value={dateRange}
-                  label="Date Range"
+                  label={t('config.dateRangeLabel')}
                   onChange={(e) => setDateRange(e.target.value as any)}
                 >
-                  <MenuItem value="last3months">Last 3 Months</MenuItem>
-                  <MenuItem value="last6months">Last 6 Months</MenuItem>
-                  <MenuItem value="lastyear">Last 12 Months</MenuItem>
-                  <MenuItem value="thisyear">This Year</MenuItem>
-                  <MenuItem value="custom">Custom Range</MenuItem>
+                  <MenuItem value="last3months">{t('config.dateRanges.last3months')}</MenuItem>
+                  <MenuItem value="last6months">{t('config.dateRanges.last6months')}</MenuItem>
+                  <MenuItem value="lastyear">{t('config.dateRanges.lastyear')}</MenuItem>
+                  <MenuItem value="thisyear">{t('config.dateRanges.thisyear')}</MenuItem>
+                  <MenuItem value="custom">{t('config.dateRanges.custom')}</MenuItem>
                 </Select>
               </FormControl>
 
@@ -336,7 +334,7 @@ const DataExportPanel: React.FC = () => {
                 <LocalizationProvider dateAdapter={AdapterDateFns}>
                   <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
                     <DatePicker
-                      label="Start Date"
+                      label={t('config.startDate')}
                       value={startDate}
                       onChange={(newValue: Date | null) => {
                         if (newValue) {
@@ -346,7 +344,7 @@ const DataExportPanel: React.FC = () => {
                       slotProps={{ textField: { size: 'small', fullWidth: true } }}
                     />
                     <DatePicker
-                      label="End Date"
+                      label={t('config.endDate')}
                       value={endDate}
                       onChange={(newValue: Date | null) => {
                         if (newValue) {
@@ -361,7 +359,10 @@ const DataExportPanel: React.FC = () => {
 
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                 <DateIcon sx={{ fontSize: 16, mr: 0.5 }} />
-                Export Period: {formatDate(startDate, 'MMM dd, yyyy')} - {formatDate(endDate, 'MMM dd, yyyy')}
+                {t('config.exportPeriod', {
+                  start: formatDate(startDate, 'MMM dd, yyyy'),
+                  end: formatDate(endDate, 'MMM dd, yyyy'),
+                })}
               </Typography>
             </CardContent>
           </Card>
@@ -372,33 +373,33 @@ const DataExportPanel: React.FC = () => {
           <Card variant="outlined">
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                Filters & Options
+                {t('filters.title')}
               </Typography>
 
               <FormGroup sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>Include Transaction Types:</Typography>
+                <Typography variant="subtitle2" gutterBottom>{t('filters.includeTypes')}</Typography>
                 <FormControlLabel
                   control={<Checkbox checked={includeIncome} onChange={(e) => setIncludeIncome(e.target.checked)} />}
-                  label="Income"
+                  label={t('filters.income')}
                 />
                 <FormControlLabel
                   control={<Checkbox checked={includeExpenses} onChange={(e) => setIncludeExpenses(e.target.checked)} />}
-                  label="Expenses"
+                  label={t('filters.expenses')}
                 />
                 <FormControlLabel
                   control={<Checkbox checked={includeInvestments} onChange={(e) => setIncludeInvestments(e.target.checked)} />}
-                  label="Investments"
+                  label={t('filters.investments')}
                 />
               </FormGroup>
 
               <FormControlLabel
                 control={<Checkbox checked={excludeDuplicates} onChange={(e) => setExcludeDuplicates(e.target.checked)} />}
-                label="Exclude Duplicate Transactions"
+                label={t('filters.excludeDuplicates')}
                 sx={{ mb: 2 }}
               />
               <FormControlLabel
                 control={<Checkbox checked={includeInstitutions} onChange={(e) => setIncludeInstitutions(e.target.checked)} />}
-                label="Include Institution Details"
+                label={t('filters.includeInstitutions')}
                 sx={{ mb: 2 }}
               />
 
@@ -410,8 +411,8 @@ const DataExportPanel: React.FC = () => {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Filter by Categories"
-                    placeholder="Select categories..."
+                    label={t('filters.categories.label')}
+                    placeholder={t('filters.categories.placeholder')}
                   />
                 )}
                 renderTags={(value, getTagProps) =>
@@ -442,7 +443,7 @@ const DataExportPanel: React.FC = () => {
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <InstitutionBadge institution={option.institution} fallback={option.name} />
                       <Typography variant="caption" color="text.secondary">
-                        {option.count.toLocaleString()} txns
+                        {t('filters.vendors.count', { count: option.count.toLocaleString() })}
                       </Typography>
                     </Box>
                   </li>
@@ -450,8 +451,8 @@ const DataExportPanel: React.FC = () => {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Filter by Vendors"
-                    placeholder="Select vendors..."
+                    label={t('filters.vendors.label')}
+                    placeholder={t('filters.vendors.placeholder')}
                   />
                 )}
                 renderTags={(value, getTagProps) =>
@@ -478,10 +479,10 @@ const DataExportPanel: React.FC = () => {
                 <Box>
                   <Typography variant="h6">Export Summary</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Estimated records: ~{getEstimatedRecords().toLocaleString()}
+                    {t('summary.estimated', { count: getEstimatedRecords().toLocaleString() })}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Format: {format.toUpperCase()} • Type: {dataType}
+                    {t('summary.formatType', { format: format.toUpperCase(), type: dataType })}
                   </Typography>
                 </Box>
                 <Button
@@ -492,7 +493,7 @@ const DataExportPanel: React.FC = () => {
                   disabled={exportStatus.loading}
                   sx={{ minWidth: 140 }}
                 >
-                  {exportStatus.loading ? 'Exporting...' : 'Export Data'}
+                  {exportStatus.loading ? t('summary.exporting') : t('summary.cta')}
                 </Button>
               </Box>
 
@@ -502,20 +503,19 @@ const DataExportPanel: React.FC = () => {
 
               {exportStatus.success && (
                 <Alert severity="success" icon={<SuccessIcon />} sx={{ mb: 2 }}>
-                  Data exported successfully! Check your downloads folder.
+                  {t('summary.success')}
                 </Alert>
               )}
 
               {exportStatus.error && (
                 <Alert severity="error" icon={<ErrorIcon />} sx={{ mb: 2 }}>
-                  Export failed: {exportStatus.error}
+                  {t('summary.error', { message: exportStatus.error })}
                 </Alert>
               )}
 
               <Alert severity="info">
                 <Typography variant="body2">
-                  <strong>Privacy Note:</strong> Exported data includes transaction details but excludes
-                  sensitive authentication information. Use exported data responsibly and store it securely.
+                  <strong>{t('summary.privacyNoteTitle')}</strong> {t('summary.privacyNoteBody')}
                 </Typography>
               </Alert>
             </CardContent>

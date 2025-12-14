@@ -2,6 +2,7 @@ import { render, screen, waitFor, fireEvent, within } from '@testing-library/rea
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import EnhancedProfileSection from '../EnhancedProfileSection';
+import { I18nProvider } from '@renderer/i18n/I18nProvider';
 
 const getMock = vi.fn();
 const putMock = vi.fn();
@@ -60,9 +61,11 @@ const baseProfileResponse = {
 function renderProfile() {
   const theme = createTheme();
   return render(
-    <ThemeProvider theme={theme}>
-      <EnhancedProfileSection />
-    </ThemeProvider>,
+    <I18nProvider>
+      <ThemeProvider theme={theme}>
+        <EnhancedProfileSection />
+      </ThemeProvider>
+    </I18nProvider>,
   );
 }
 
@@ -248,7 +251,7 @@ describe('EnhancedProfileSection', () => {
       const birthDateInput = screen.getByLabelText('Birth Date');
       fireEvent.change(birthDateInput, { target: { value: '1995-03-15' } });
 
-      expect(await screen.findByText('Age: 29')).toBeInTheDocument();
+      expect(await screen.findByText(/Age: 29/)).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -349,7 +352,7 @@ describe('EnhancedProfileSection', () => {
     const nameField = await screen.findByLabelText(/child name/i);
     fireEvent.change(nameField, { target: { value: 'Updated Kid' } });
 
-    fireEvent.click(screen.getByRole('button', { name: /update child/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
     await waitFor(() => expect(screen.getByText('Updated Kid')).toBeInTheDocument());
 

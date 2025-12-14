@@ -2,6 +2,7 @@
   "scripts": {
     "init:sqlite": "node scripts/init_sqlite_db.js",
     "dev:electron": "npm --prefix app run electron-dev",
+    "dev:api": "ELECTRON_API_PORT=44373 SQLITE_DB_PATH=$(pwd)/dist/clarify.sqlite USE_SQLITE=true node electron/dev-api-server.js",
     "dev:electron:anonymized": "SQLITE_DB_PATH=$(pwd)/dist/clarify-anonymized.sqlite USE_SQLITE=true npm --prefix app run electron-dev",
     "dev:electron:real": "SQLITE_DB_PATH=$(pwd)/dist/clarify.sqlite USE_SQLITE=true npm --prefix app run electron-dev",
     "test": "ALLOW_DEV_NO_ENCRYPTION=true npm --prefix app run test:coverage && npm --prefix renderer run test:unit && npm --prefix renderer run test:e2e",

@@ -52,6 +52,17 @@ function applySchemaUpgrades(db) {
     'alert_threshold',
     'alert_threshold REAL DEFAULT 0.8 CHECK(alert_threshold > 0 AND alert_threshold <= 1)'
   );
+  ensureColumnExists(
+    db,
+    'category_definitions',
+    'name_fr',
+    'name_fr TEXT'
+  );
+  db.exec(`
+    UPDATE category_definitions
+    SET name_fr = name
+    WHERE name_fr IS NULL
+  `);
 }
 
 function parseArgs() {
@@ -126,6 +137,7 @@ const TABLE_DEFINITIONS = [
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       name_en TEXT,
+      name_fr TEXT,
       category_type TEXT NOT NULL CHECK (category_type IN ('expense','income','investment')),
       parent_id INTEGER,
       display_order INTEGER NOT NULL DEFAULT 0,
@@ -782,133 +794,133 @@ const FINANCIAL_INSTITUTIONS = [
 
 const CATEGORY_TREE = [
   // Expenses Root & Main Categories
-  { key: 'expense_root', type: 'expense', name: 'הוצאות', nameEn: 'Expenses', displayOrder: 10, color: '#E57373', icon: 'Category' },
+  { key: 'expense_root', type: 'expense', name: 'הוצאות', nameEn: 'Expenses', nameFr: 'Dépenses', displayOrder: 10, color: '#E57373', icon: 'Category' },
 
   // Food & Dining (Red-Orange tones)
-  { key: 'exp_food', type: 'expense', parent: 'expense_root', name: 'אוכל', nameEn: 'Food & Dining', displayOrder: 20, color: '#FF6B6B', icon: 'Restaurant' },
-  { key: 'exp_food_grocery', type: 'expense', parent: 'exp_food', name: 'סופרמרקט', nameEn: 'Groceries', displayOrder: 21, color: '#FF8A80', icon: 'ShoppingCart' },
-  { key: 'exp_food_restaurants', type: 'expense', parent: 'exp_food', name: 'מסעדות', nameEn: 'Restaurants', displayOrder: 22, color: '#FF5252', icon: 'RestaurantMenu' },
-  { key: 'exp_food_coffee', type: 'expense', parent: 'exp_food', name: 'קפה ומאפה', nameEn: 'Coffee & Pastries', displayOrder: 23, color: '#FFAB91', icon: 'LocalCafe' },
-  { key: 'exp_food_delivery', type: 'expense', parent: 'exp_food', name: 'משלוחים', nameEn: 'Delivery', displayOrder: 24, color: '#FF7043', icon: 'DeliveryDining' },
-  { key: 'exp_food_alcohol', type: 'expense', parent: 'exp_food', name: 'אלכוהול ומשקאות', nameEn: 'Alcohol & Beverages', displayOrder: 25, color: '#F4511E', icon: 'LocalBar' },
-  { key: 'exp_food_bakery', type: 'expense', parent: 'exp_food', name: 'מאפייה וקינוחים', nameEn: 'Bakery & Desserts', displayOrder: 26, color: '#FFCCBC', icon: 'Cake' },
-  { key: 'exp_food_catering', type: 'expense', parent: 'exp_food', name: 'קייטרינג ואירועים', nameEn: 'Catering & Events', displayOrder: 27, color: '#FF6B6B', icon: 'FoodBank' },
+  { key: 'exp_food', type: 'expense', parent: 'expense_root', name: 'אוכל', nameEn: 'Food & Dining', nameFr: 'Nourriture et restauration', displayOrder: 20, color: '#FF6B6B', icon: 'Restaurant' },
+  { key: 'exp_food_grocery', type: 'expense', parent: 'exp_food', name: 'סופרמרקט', nameEn: 'Groceries', nameFr: 'Épicerie', displayOrder: 21, color: '#FF8A80', icon: 'ShoppingCart' },
+  { key: 'exp_food_restaurants', type: 'expense', parent: 'exp_food', name: 'מסעדות', nameEn: 'Restaurants', nameFr: 'Restaurants', displayOrder: 22, color: '#FF5252', icon: 'RestaurantMenu' },
+  { key: 'exp_food_coffee', type: 'expense', parent: 'exp_food', name: 'קפה ומאפה', nameEn: 'Coffee & Pastries', nameFr: 'Café et pâtisseries', displayOrder: 23, color: '#FFAB91', icon: 'LocalCafe' },
+  { key: 'exp_food_delivery', type: 'expense', parent: 'exp_food', name: 'משלוחים', nameEn: 'Delivery', nameFr: 'Livraison', displayOrder: 24, color: '#FF7043', icon: 'DeliveryDining' },
+  { key: 'exp_food_alcohol', type: 'expense', parent: 'exp_food', name: 'אלכוהול ומשקאות', nameEn: 'Alcohol & Beverages', nameFr: 'Alcool et boissons', displayOrder: 25, color: '#F4511E', icon: 'LocalBar' },
+  { key: 'exp_food_bakery', type: 'expense', parent: 'exp_food', name: 'מאפייה וקינוחים', nameEn: 'Bakery & Desserts', nameFr: 'Boulangerie et desserts', displayOrder: 26, color: '#FFCCBC', icon: 'Cake' },
+  { key: 'exp_food_catering', type: 'expense', parent: 'exp_food', name: 'קייטרינג ואירועים', nameEn: 'Catering & Events', nameFr: 'Traiteur et événements', displayOrder: 27, color: '#FF6B6B', icon: 'FoodBank' },
 
   // Transportation (Teal tones)
-  { key: 'exp_transport', type: 'expense', parent: 'expense_root', name: 'תחבורה', nameEn: 'Transportation', displayOrder: 30, color: '#4ECDC4', icon: 'DirectionsCar' },
-  { key: 'exp_transport_fuel', type: 'expense', parent: 'exp_transport', name: 'דלק', nameEn: 'Fuel', displayOrder: 31, color: '#26A69A', icon: 'LocalGasStation' },
-  { key: 'exp_transport_public', type: 'expense', parent: 'exp_transport', name: 'תחבורה ציבורית', nameEn: 'Public Transport', displayOrder: 32, color: '#00897B', icon: 'DirectionsBus' },
-  { key: 'exp_transport_parking', type: 'expense', parent: 'exp_transport', name: 'חניה', nameEn: 'Parking', displayOrder: 33, color: '#00695C', icon: 'LocalParking' },
-  { key: 'exp_transport_taxi', type: 'expense', parent: 'exp_transport', name: 'מוניות', nameEn: 'Taxis', displayOrder: 34, color: '#4DB6AC', icon: 'LocalTaxi' },
-  { key: 'exp_transport_rideshare', type: 'expense', parent: 'exp_transport', name: 'שיתוף רכב', nameEn: 'Ride Sharing', displayOrder: 35, color: '#80CBC4', icon: 'Commute' },
-  { key: 'exp_transport_maintenance', type: 'expense', parent: 'exp_transport', name: 'תחזוקת רכב', nameEn: 'Vehicle Maintenance', displayOrder: 36, color: '#B2DFDB', icon: 'Build' },
-  { key: 'exp_transport_insurance', type: 'expense', parent: 'exp_transport', name: 'ביטוח רכב', nameEn: 'Vehicle Insurance', displayOrder: 37, color: '#E0F2F1', icon: 'Shield' },
-  { key: 'exp_transport_tolls', type: 'expense', parent: 'exp_transport', name: 'כבישי אגרה', nameEn: 'Toll Roads', displayOrder: 38, color: '#009688', icon: 'Toll' },
-  { key: 'exp_transport_rental', type: 'expense', parent: 'exp_transport', name: 'שכירת רכב', nameEn: 'Car Rental', displayOrder: 39, color: '#00BCD4', icon: 'CarRental' },
-  { key: 'exp_transport_leasing', type: 'expense', parent: 'exp_transport', name: 'ליסינג רכב', nameEn: 'Vehicle Leasing', displayOrder: 391, color: '#26C6DA', icon: 'DirectionsCarFilled' },
-  { key: 'exp_transport_micromobility', type: 'expense', parent: 'exp_transport', name: 'קורקינטים ואופניים', nameEn: 'E-Scooters & Bikes', displayOrder: 392, color: '#4DD0E1', icon: 'ElectricScooter' },
+  { key: 'exp_transport', type: 'expense', parent: 'expense_root', name: 'תחבורה', nameEn: 'Transportation', nameFr: 'Transport', displayOrder: 30, color: '#4ECDC4', icon: 'DirectionsCar' },
+  { key: 'exp_transport_fuel', type: 'expense', parent: 'exp_transport', name: 'דלק', nameEn: 'Fuel', nameFr: 'Carburant', displayOrder: 31, color: '#26A69A', icon: 'LocalGasStation' },
+  { key: 'exp_transport_public', type: 'expense', parent: 'exp_transport', name: 'תחבורה ציבורית', nameEn: 'Public Transport', nameFr: 'Transport public', displayOrder: 32, color: '#00897B', icon: 'DirectionsBus' },
+  { key: 'exp_transport_parking', type: 'expense', parent: 'exp_transport', name: 'חניה', nameEn: 'Parking', nameFr: 'Stationnement', displayOrder: 33, color: '#00695C', icon: 'LocalParking' },
+  { key: 'exp_transport_taxi', type: 'expense', parent: 'exp_transport', name: 'מוניות', nameEn: 'Taxis', nameFr: 'Taxis', displayOrder: 34, color: '#4DB6AC', icon: 'LocalTaxi' },
+  { key: 'exp_transport_rideshare', type: 'expense', parent: 'exp_transport', name: 'שיתוף רכב', nameEn: 'Ride Sharing', nameFr: 'Covoiturage', displayOrder: 35, color: '#80CBC4', icon: 'Commute' },
+  { key: 'exp_transport_maintenance', type: 'expense', parent: 'exp_transport', name: 'תחזוקת רכב', nameEn: 'Vehicle Maintenance', nameFr: 'Entretien du véhicule', displayOrder: 36, color: '#B2DFDB', icon: 'Build' },
+  { key: 'exp_transport_insurance', type: 'expense', parent: 'exp_transport', name: 'ביטוח רכב', nameEn: 'Vehicle Insurance', nameFr: 'Assurance véhicule', displayOrder: 37, color: '#E0F2F1', icon: 'Shield' },
+  { key: 'exp_transport_tolls', type: 'expense', parent: 'exp_transport', name: 'כבישי אגרה', nameEn: 'Toll Roads', nameFr: 'Routes à péage', displayOrder: 38, color: '#009688', icon: 'Toll' },
+  { key: 'exp_transport_rental', type: 'expense', parent: 'exp_transport', name: 'שכירת רכב', nameEn: 'Car Rental', nameFr: 'Location de voiture', displayOrder: 39, color: '#00BCD4', icon: 'CarRental' },
+  { key: 'exp_transport_leasing', type: 'expense', parent: 'exp_transport', name: 'ליסינג רכב', nameEn: 'Vehicle Leasing', nameFr: 'Location de véhicule', displayOrder: 391, color: '#26C6DA', icon: 'DirectionsCarFilled' },
+  { key: 'exp_transport_micromobility', type: 'expense', parent: 'exp_transport', name: 'קורקינטים ואופניים', nameEn: 'E-Scooters & Bikes', nameFr: 'Trottinettes électriques et vélos', displayOrder: 392, color: '#4DD0E1', icon: 'ElectricScooter' },
 
   // Bills & Utilities (Amber-Yellow tones)
-  { key: 'exp_bills', type: 'expense', parent: 'expense_root', name: 'חשבונות', nameEn: 'Bills & Utilities', displayOrder: 40, color: '#FFD93D', icon: 'Receipt' },
-  { key: 'exp_bills_rent', type: 'expense', parent: 'exp_bills', name: 'שכירות ומשכנתא', nameEn: 'Rent & Mortgage', displayOrder: 41, color: '#FDD835', icon: 'Home' },
-  { key: 'exp_bills_internet', type: 'expense', parent: 'exp_bills', name: 'אינטרנט וטלוויזיה', nameEn: 'Internet & TV', displayOrder: 42, color: '#FBC02D', icon: 'Wifi' },
-  { key: 'exp_bills_communication', type: 'expense', parent: 'exp_bills', name: 'תקשורת', nameEn: 'Mobile & Communications', displayOrder: 43, color: '#F9A825', icon: 'Phone' },
-  { key: 'exp_bills_electricity', type: 'expense', parent: 'exp_bills', name: 'חשמל', nameEn: 'Electricity', displayOrder: 44, color: '#F57F17', icon: 'Bolt' },
-  { key: 'exp_bills_water', type: 'expense', parent: 'exp_bills', name: 'מים', nameEn: 'Water', displayOrder: 45, color: '#42A5F5', icon: 'Water' },
-  { key: 'exp_bills_bank', type: 'expense', parent: 'exp_bills', name: 'תשלומי בנק', nameEn: 'Bank Settlements', displayOrder: 46, color: '#7E57C2', icon: 'AccountBalance' },
-  { key: 'exp_bills_bank_cc_payment', type: 'expense', parent: 'exp_bills_bank', name: 'פרעון כרטיס אשראי', nameEn: 'Credit Card Repayment', displayOrder: 461, color: '#9575CD', icon: 'CreditCard' },
-  { key: 'exp_bills_bank_digital', type: 'expense', parent: 'exp_bills_bank', name: 'העברות דיגיטליות', nameEn: 'Digital Wallet Transfers (BIT/PayBox)', displayOrder: 462, color: '#B39DDB', icon: 'PhoneAndroid' },
-  { key: 'exp_bills_bank_fees', type: 'expense', parent: 'exp_bills_bank', name: 'עמלות בנק וכרטיס', nameEn: 'Bank & Card Fees', displayOrder: 463, color: '#D1C4E9', icon: 'MonetizationOn' },
-  { key: 'exp_bills_bank_to_investments', type: 'expense', parent: 'exp_bills_bank', name: 'העברות להשקעות', nameEn: 'Transfers to Investments', displayOrder: 464, color: '#673AB7', icon: 'TrendingUp' },
-  { key: 'exp_bills_bank_cash', type: 'expense', parent: 'exp_bills_bank', name: 'משיכת מזומן', nameEn: 'Cash Withdrawal', displayOrder: 465, color: '#4CAF50', icon: 'LocalAtm' },
-  { key: 'exp_bills_bank_inv_tax', type: 'expense', parent: 'exp_bills_bank', name: 'מס על השקעות', nameEn: 'Investment Tax Withholding', displayOrder: 466, color: '#EDE7F6', icon: 'Receipt' },
-  { key: 'exp_bills_insurance', type: 'expense', parent: 'exp_bills', name: 'ביטוח', nameEn: 'Insurance', displayOrder: 47, color: '#64DD17', icon: 'Security' },
-  { key: 'exp_bills_municipal', type: 'expense', parent: 'exp_bills', name: 'מיסים עירוניים', nameEn: 'Municipal Taxes', displayOrder: 48, color: '#558B2F', icon: 'Apartment' },
-  { key: 'exp_bills_gas', type: 'expense', parent: 'exp_bills', name: 'גז', nameEn: 'Gas', displayOrder: 49, color: '#F57C00', icon: 'Fireplace' },
-  { key: 'exp_bills_security', type: 'expense', parent: 'exp_bills', name: 'אבטחה', nameEn: 'Security Services', displayOrder: 50, color: '#616161', icon: 'SecurityOutlined' },
+  { key: 'exp_bills', type: 'expense', parent: 'expense_root', name: 'חשבונות', nameEn: 'Bills & Utilities', nameFr: 'Factures et services publics', displayOrder: 40, color: '#FFD93D', icon: 'Receipt' },
+  { key: 'exp_bills_rent', type: 'expense', parent: 'exp_bills', name: 'שכירות ומשכנתא', nameEn: 'Rent & Mortgage', nameFr: 'Loyer et hypothèque', displayOrder: 41, color: '#FDD835', icon: 'Home' },
+  { key: 'exp_bills_internet', type: 'expense', parent: 'exp_bills', name: 'אינטרנט וטלוויזיה', nameEn: 'Internet & TV', nameFr: 'Internet et TV', displayOrder: 42, color: '#FBC02D', icon: 'Wifi' },
+  { key: 'exp_bills_communication', type: 'expense', parent: 'exp_bills', name: 'תקשורת', nameEn: 'Mobile & Communications', nameFr: 'Mobile et communications', displayOrder: 43, color: '#F9A825', icon: 'Phone' },
+  { key: 'exp_bills_electricity', type: 'expense', parent: 'exp_bills', name: 'חשמל', nameEn: 'Electricity', nameFr: 'Électricité', displayOrder: 44, color: '#F57F17', icon: 'Bolt' },
+  { key: 'exp_bills_water', type: 'expense', parent: 'exp_bills', name: 'מים', nameEn: 'Water', nameFr: 'Eau', displayOrder: 45, color: '#42A5F5', icon: 'Water' },
+  { key: 'exp_bills_bank', type: 'expense', parent: 'exp_bills', name: 'תשלומי בנק', nameEn: 'Bank Settlements', nameFr: 'Règlements bancaires', displayOrder: 46, color: '#7E57C2', icon: 'AccountBalance' },
+  { key: 'exp_bills_bank_cc_payment', type: 'expense', parent: 'exp_bills_bank', name: 'פרעון כרטיס אשראי', nameEn: 'Credit Card Repayment', nameFr: 'Remboursement de carte de crédit', displayOrder: 461, color: '#9575CD', icon: 'CreditCard' },
+  { key: 'exp_bills_bank_digital', type: 'expense', parent: 'exp_bills_bank', name: 'העברות דיגיטליות', nameEn: 'Digital Wallet Transfers (BIT/PayBox)', nameFr: 'Transferts de portefeuille numérique (BIT/PayBox)', displayOrder: 462, color: '#B39DDB', icon: 'PhoneAndroid' },
+  { key: 'exp_bills_bank_fees', type: 'expense', parent: 'exp_bills_bank', name: 'עמלות בנק וכרטיס', nameEn: 'Bank & Card Fees', nameFr: 'Frais bancaires et de carte', displayOrder: 463, color: '#D1C4E9', icon: 'MonetizationOn' },
+  { key: 'exp_bills_bank_to_investments', type: 'expense', parent: 'exp_bills_bank', name: 'העברות להשקעות', nameEn: 'Transfers to Investments', nameFr: 'Transferts vers les investissements', displayOrder: 464, color: '#673AB7', icon: 'TrendingUp' },
+  { key: 'exp_bills_bank_cash', type: 'expense', parent: 'exp_bills_bank', name: 'משיכת מזומן', nameEn: 'Cash Withdrawal', nameFr: 'Retrait d\'espèces', displayOrder: 465, color: '#4CAF50', icon: 'LocalAtm' },
+  { key: 'exp_bills_bank_inv_tax', type: 'expense', parent: 'exp_bills_bank', name: 'מס על השקעות', nameEn: 'Investment Tax Withholding', nameFr: 'Retenue d\'impôt sur les investissements', displayOrder: 466, color: '#EDE7F6', icon: 'Receipt' },
+  { key: 'exp_bills_insurance', type: 'expense', parent: 'exp_bills', name: 'ביטוח', nameEn: 'Insurance', nameFr: 'Assurance', displayOrder: 47, color: '#64DD17', icon: 'Security' },
+  { key: 'exp_bills_municipal', type: 'expense', parent: 'exp_bills', name: 'מיסים עירוניים', nameEn: 'Municipal Taxes', nameFr: 'Taxes municipales', displayOrder: 48, color: '#558B2F', icon: 'Apartment' },
+  { key: 'exp_bills_gas', type: 'expense', parent: 'exp_bills', name: 'גז', nameEn: 'Gas', nameFr: 'Gaz', displayOrder: 49, color: '#F57C00', icon: 'Fireplace' },
+  { key: 'exp_bills_security', type: 'expense', parent: 'exp_bills', name: 'אבטחה', nameEn: 'Security Services', nameFr: 'Services de sécurité', displayOrder: 50, color: '#616161', icon: 'SecurityOutlined' },
 
   // Health & Wellness (Mint-Green tones)
-  { key: 'exp_health', type: 'expense', parent: 'expense_root', name: 'בריאות', nameEn: 'Health & Wellness', displayOrder: 50, color: '#95E1D3', icon: 'LocalHospital' },
-  { key: 'exp_health_medical', type: 'expense', parent: 'exp_health', name: 'בריאות כללית', nameEn: 'Medical Services', displayOrder: 51, color: '#4DB6AC', icon: 'MedicalServices' },
-  { key: 'exp_health_pharmacy', type: 'expense', parent: 'exp_health', name: 'בית מרקחת', nameEn: 'Pharmacy', displayOrder: 52, color: '#26A69A', icon: 'LocalPharmacy' },
-  { key: 'exp_health_dental', type: 'expense', parent: 'exp_health', name: 'שיניים', nameEn: 'Dental Care', displayOrder: 53, color: '#00897B', icon: 'Medication' },
-  { key: 'exp_health_vision', type: 'expense', parent: 'exp_health', name: 'עיניים ואופטיקה', nameEn: 'Vision & Optometry', displayOrder: 54, color: '#00695C', icon: 'Visibility' },
-  { key: 'exp_health_fitness', type: 'expense', parent: 'exp_health', name: 'כושר וספורט', nameEn: 'Gym & Fitness', displayOrder: 55, color: '#80CBC4', icon: 'FitnessCenter' },
-  { key: 'exp_health_mental', type: 'expense', parent: 'exp_health', name: 'בריאות הנפש', nameEn: 'Mental Health & Therapy', displayOrder: 56, color: '#A7FFEB', icon: 'Psychology' },
-  { key: 'exp_health_salon', type: 'expense', parent: 'exp_health', name: 'מספרה וטיפוח', nameEn: 'Salon & Beauty Services', displayOrder: 57, color: '#B2DFDB', icon: 'ContentCut' },
+  { key: 'exp_health', type: 'expense', parent: 'expense_root', name: 'בריאות', nameEn: 'Health & Wellness', nameFr: 'Santé et bien-être', displayOrder: 50, color: '#95E1D3', icon: 'LocalHospital' },
+  { key: 'exp_health_medical', type: 'expense', parent: 'exp_health', name: 'בריאות כללית', nameEn: 'Medical Services', nameFr: 'Services médicaux', displayOrder: 51, color: '#4DB6AC', icon: 'MedicalServices' },
+  { key: 'exp_health_pharmacy', type: 'expense', parent: 'exp_health', name: 'בית מרקחת', nameEn: 'Pharmacy', nameFr: 'Pharmacie', displayOrder: 52, color: '#26A69A', icon: 'LocalPharmacy' },
+  { key: 'exp_health_dental', type: 'expense', parent: 'exp_health', name: 'שיניים', nameEn: 'Dental Care', nameFr: 'Soins dentaires', displayOrder: 53, color: '#00897B', icon: 'Medication' },
+  { key: 'exp_health_vision', type: 'expense', parent: 'exp_health', name: 'עיניים ואופטיקה', nameEn: 'Vision & Optometry', nameFr: 'Vision et optométrie', displayOrder: 54, color: '#00695C', icon: 'Visibility' },
+  { key: 'exp_health_fitness', type: 'expense', parent: 'exp_health', name: 'כושר וספורט', nameEn: 'Gym & Fitness', nameFr: 'Gym et fitness', displayOrder: 55, color: '#80CBC4', icon: 'FitnessCenter' },
+  { key: 'exp_health_mental', type: 'expense', parent: 'exp_health', name: 'בריאות הנפש', nameEn: 'Mental Health & Therapy', nameFr: 'Santé mentale et thérapie', displayOrder: 56, color: '#A7FFEB', icon: 'Psychology' },
+  { key: 'exp_health_salon', type: 'expense', parent: 'exp_health', name: 'מספרה וטיפוח', nameEn: 'Salon & Beauty Services', nameFr: 'Salon et services de beauté', displayOrder: 57, color: '#B2DFDB', icon: 'ContentCut' },
 
   // Leisure & Entertainment (Pink-Red tones)
-  { key: 'exp_leisure', type: 'expense', parent: 'expense_root', name: 'פנאי', nameEn: 'Leisure & Entertainment', displayOrder: 60, color: '#F38181', icon: 'Theaters' },
-  { key: 'exp_leisure_entertainment', type: 'expense', parent: 'exp_leisure', name: 'בילויים', nameEn: 'Outings', displayOrder: 61, color: '#E57373', icon: 'Celebration' },
-  { key: 'exp_leisure_streaming', type: 'expense', parent: 'exp_leisure', name: 'סטרימינג', nameEn: 'Streaming Services', displayOrder: 62, color: '#EF5350', icon: 'Tv' },
-  { key: 'exp_leisure_cinema', type: 'expense', parent: 'exp_leisure', name: 'קולנוע', nameEn: 'Cinema', displayOrder: 63, color: '#F44336', icon: 'Movie' },
-  { key: 'exp_leisure_travel', type: 'expense', parent: 'exp_leisure', name: 'חופשות', nameEn: 'Travel & Holidays', displayOrder: 64, color: '#E91E63', icon: 'Flight' },
-  { key: 'exp_leisure_sports', type: 'expense', parent: 'exp_leisure', name: 'ספורט ותחביבים', nameEn: 'Sports & Hobbies', displayOrder: 65, color: '#C2185B', icon: 'SportsBaseball' },
-  { key: 'exp_leisure_music', type: 'expense', parent: 'exp_leisure', name: 'מוזיקה וקונצרטים', nameEn: 'Music & Concerts', displayOrder: 66, color: '#880E4F', icon: 'MusicNote' },
-  { key: 'exp_leisure_gaming', type: 'expense', parent: 'exp_leisure', name: 'משחקים', nameEn: 'Gaming', displayOrder: 67, color: '#AD1457', icon: 'SportsEsports' },
+  { key: 'exp_leisure', type: 'expense', parent: 'expense_root', name: 'פנאי', nameEn: 'Leisure & Entertainment', nameFr: 'Loisirs et divertissement', displayOrder: 60, color: '#F38181', icon: 'Theaters' },
+  { key: 'exp_leisure_entertainment', type: 'expense', parent: 'exp_leisure', name: 'בילויים', nameEn: 'Outings', nameFr: 'Sorties', displayOrder: 61, color: '#E57373', icon: 'Celebration' },
+  { key: 'exp_leisure_streaming', type: 'expense', parent: 'exp_leisure', name: 'סטרימינג', nameEn: 'Streaming Services', nameFr: 'Services de streaming', displayOrder: 62, color: '#EF5350', icon: 'Tv' },
+  { key: 'exp_leisure_cinema', type: 'expense', parent: 'exp_leisure', name: 'קולנוע', nameEn: 'Cinema', nameFr: 'Cinéma', displayOrder: 63, color: '#F44336', icon: 'Movie' },
+  { key: 'exp_leisure_travel', type: 'expense', parent: 'exp_leisure', name: 'חופשות', nameEn: 'Travel & Holidays', nameFr: 'Voyages et vacances', displayOrder: 64, color: '#E91E63', icon: 'Flight' },
+  { key: 'exp_leisure_sports', type: 'expense', parent: 'exp_leisure', name: 'ספורט ותחביבים', nameEn: 'Sports & Hobbies', nameFr: 'Sports et loisirs', displayOrder: 65, color: '#C2185B', icon: 'SportsBaseball' },
+  { key: 'exp_leisure_music', type: 'expense', parent: 'exp_leisure', name: 'מוזיקה וקונצרטים', nameEn: 'Music & Concerts', nameFr: 'Musique et concerts', displayOrder: 66, color: '#880E4F', icon: 'MusicNote' },
+  { key: 'exp_leisure_gaming', type: 'expense', parent: 'exp_leisure', name: 'משחקים', nameEn: 'Gaming', nameFr: 'Jeux', displayOrder: 67, color: '#AD1457', icon: 'SportsEsports' },
 
   // Shopping (Lavender-Purple tones)
-  { key: 'exp_shopping', type: 'expense', parent: 'expense_root', name: 'קניות', nameEn: 'Shopping', displayOrder: 70, color: '#AA96DA', icon: 'ShoppingBag' },
-  { key: 'exp_shopping_clothing', type: 'expense', parent: 'exp_shopping', name: 'ביגוד', nameEn: 'Clothing', displayOrder: 71, color: '#9575CD', icon: 'Checkroom' },
-  { key: 'exp_shopping_shoes', type: 'expense', parent: 'exp_shopping', name: 'נעליים', nameEn: 'Footwear', displayOrder: 72, color: '#7E57C2', icon: 'Footprint' },
-  { key: 'exp_shopping_housewares', type: 'expense', parent: 'exp_shopping', name: 'כלי בית', nameEn: 'Housewares', displayOrder: 73, color: '#673AB7', icon: 'Kitchen' },
-  { key: 'exp_shopping_furniture', type: 'expense', parent: 'exp_shopping', name: 'רהיטים', nameEn: 'Furniture', displayOrder: 74, color: '#5E35B1', icon: 'Chair' },
-  { key: 'exp_shopping_electronics', type: 'expense', parent: 'exp_shopping', name: 'אלקטרוניקה', nameEn: 'Electronics', displayOrder: 75, color: '#512DA8', icon: 'Devices' },
-  { key: 'exp_shopping_gifts', type: 'expense', parent: 'exp_shopping', name: 'מתנות', nameEn: 'Gifts', displayOrder: 76, color: '#4527A0', icon: 'CardGiftcard' },
-  { key: 'exp_shopping_cosmetics', type: 'expense', parent: 'exp_shopping', name: 'קוסמטיקה וטיפוח', nameEn: 'Cosmetics & Personal Care', displayOrder: 77, color: '#EC407A', icon: 'Face' },
-  { key: 'exp_shopping_books', type: 'expense', parent: 'exp_shopping', name: 'ספרים וכתיבה', nameEn: 'Books & Stationery', displayOrder: 78, color: '#F48FB1', icon: 'MenuBook' },
-  { key: 'exp_shopping_pets', type: 'expense', parent: 'exp_shopping', name: 'חיות מחמד', nameEn: 'Pet Supplies', displayOrder: 79, color: '#F06292', icon: 'Pets' },
-  { key: 'exp_shopping_office', type: 'expense', parent: 'exp_shopping', name: 'ציוד משרדי', nameEn: 'Office Supplies', displayOrder: 80, color: '#E91E63', icon: 'WorkOutline' },
-  { key: 'exp_shopping_jewelry', type: 'expense', parent: 'exp_shopping', name: 'תכשיטים ואקססוריז', nameEn: 'Jewelry & Accessories', displayOrder: 81, color: '#C2185B', icon: 'Diamond' },
-  { key: 'exp_shopping_sports_equipment', type: 'expense', parent: 'exp_shopping', name: 'ציוד ספורט', nameEn: 'Sports Equipment', displayOrder: 82, color: '#AD1457', icon: 'SportsTennis' },
-  { key: 'exp_shopping_religious', type: 'expense', parent: 'exp_shopping', name: 'תשמישי קדושה', nameEn: 'Religious Items & Judaica', displayOrder: 83, color: '#880E4F', icon: 'Synagogue' },
-  { key: 'exp_shopping_digital', type: 'expense', parent: 'exp_shopping', name: 'שירותים דיגיטליים', nameEn: 'Digital Services & Subscriptions', displayOrder: 84, color: '#BA68C8', icon: 'Cloud' },
-  { key: 'exp_shopping_home_improvement', type: 'expense', parent: 'exp_shopping', name: 'שיפוצים ובניה', nameEn: 'Home Improvement & DIY', displayOrder: 85, color: '#9C27B0', icon: 'Handyman' },
-  { key: 'exp_shopping_pet_care', type: 'expense', parent: 'exp_shopping', name: 'וטרינר וטיפוח', nameEn: 'Veterinary & Pet Grooming', displayOrder: 86, color: '#CE93D8', icon: 'MedicalServices' },
+  { key: 'exp_shopping', type: 'expense', parent: 'expense_root', name: 'קניות', nameEn: 'Shopping', nameFr: 'Achats', displayOrder: 70, color: '#AA96DA', icon: 'ShoppingBag' },
+  { key: 'exp_shopping_clothing', type: 'expense', parent: 'exp_shopping', name: 'ביגוד', nameEn: 'Clothing', nameFr: 'Vêtements', displayOrder: 71, color: '#9575CD', icon: 'Checkroom' },
+  { key: 'exp_shopping_shoes', type: 'expense', parent: 'exp_shopping', name: 'נעליים', nameEn: 'Footwear', nameFr: 'Chaussures', displayOrder: 72, color: '#7E57C2', icon: 'Footprint' },
+  { key: 'exp_shopping_housewares', type: 'expense', parent: 'exp_shopping', name: 'כלי בית', nameEn: 'Housewares', nameFr: 'Articles ménagers', displayOrder: 73, color: '#673AB7', icon: 'Kitchen' },
+  { key: 'exp_shopping_furniture', type: 'expense', parent: 'exp_shopping', name: 'רהיטים', nameEn: 'Furniture', nameFr: 'Meubles', displayOrder: 74, color: '#5E35B1', icon: 'Chair' },
+  { key: 'exp_shopping_electronics', type: 'expense', parent: 'exp_shopping', name: 'אלקטרוניקה', nameEn: 'Electronics', nameFr: 'Électronique', displayOrder: 75, color: '#512DA8', icon: 'Devices' },
+  { key: 'exp_shopping_gifts', type: 'expense', parent: 'exp_shopping', name: 'מתנות', nameEn: 'Gifts', nameFr: 'Cadeaux', displayOrder: 76, color: '#4527A0', icon: 'CardGiftcard' },
+  { key: 'exp_shopping_cosmetics', type: 'expense', parent: 'exp_shopping', name: 'קוסמטיקה וטיפוח', nameEn: 'Cosmetics & Personal Care', nameFr: 'Cosmétiques et soins personnels', displayOrder: 77, color: '#EC407A', icon: 'Face' },
+  { key: 'exp_shopping_books', type: 'expense', parent: 'exp_shopping', name: 'ספרים וכתיבה', nameEn: 'Books & Stationery', nameFr: 'Livres et papeterie', displayOrder: 78, color: '#F48FB1', icon: 'MenuBook' },
+  { key: 'exp_shopping_pets', type: 'expense', parent: 'exp_shopping', name: 'חיות מחמד', nameEn: 'Pet Supplies', nameFr: 'Fournitures pour animaux', displayOrder: 79, color: '#F06292', icon: 'Pets' },
+  { key: 'exp_shopping_office', type: 'expense', parent: 'exp_shopping', name: 'ציוד משרדי', nameEn: 'Office Supplies', nameFr: 'Fournitures de bureau', displayOrder: 80, color: '#E91E63', icon: 'WorkOutline' },
+  { key: 'exp_shopping_jewelry', type: 'expense', parent: 'exp_shopping', name: 'תכשיטים ואקססוריז', nameEn: 'Jewelry & Accessories', nameFr: 'Bijoux et accessoires', displayOrder: 81, color: '#C2185B', icon: 'Diamond' },
+  { key: 'exp_shopping_sports_equipment', type: 'expense', parent: 'exp_shopping', name: 'ציוד ספורט', nameEn: 'Sports Equipment', nameFr: 'Équipement sportif', displayOrder: 82, color: '#AD1457', icon: 'SportsTennis' },
+  { key: 'exp_shopping_religious', type: 'expense', parent: 'exp_shopping', name: 'תשמישי קדושה', nameEn: 'Religious Items & Judaica', nameFr: 'Articles religieux et judaïca', displayOrder: 83, color: '#880E4F', icon: 'Synagogue' },
+  { key: 'exp_shopping_digital', type: 'expense', parent: 'exp_shopping', name: 'שירותים דיגיטליים', nameEn: 'Digital Services & Subscriptions', nameFr: 'Services numériques et abonnements', displayOrder: 84, color: '#BA68C8', icon: 'Cloud' },
+  { key: 'exp_shopping_home_improvement', type: 'expense', parent: 'exp_shopping', name: 'שיפוצים ובניה', nameEn: 'Home Improvement & DIY', nameFr: 'Amélioration de la maison et bricolage', displayOrder: 85, color: '#9C27B0', icon: 'Handyman' },
+  { key: 'exp_shopping_pet_care', type: 'expense', parent: 'exp_shopping', name: 'וטרינר וטיפוח', nameEn: 'Veterinary & Pet Grooming', nameFr: 'Soins vétérinaires et toilettage pour animaux', displayOrder: 86, color: '#CE93D8', icon: 'MedicalServices' },
 
   // Education (Light Pink tones)
-  { key: 'exp_education', type: 'expense', parent: 'expense_root', name: 'חינוך', nameEn: 'Education', displayOrder: 80, color: '#FCBAD3', icon: 'School' },
-  { key: 'exp_education_higher', type: 'expense', parent: 'exp_education', name: 'לימודים גבוהים', nameEn: 'Higher Education', displayOrder: 81, color: '#F48FB1', icon: 'AccountBalance' },
-  { key: 'exp_education_online', type: 'expense', parent: 'exp_education', name: 'קורסים מקוונים', nameEn: 'Online Courses', displayOrder: 82, color: '#F06292', icon: 'Computer' },
-  { key: 'exp_education_schools', type: 'expense', parent: 'exp_education', name: 'גני ילדים ובתי ספר', nameEn: 'Kindergarten & Schools', displayOrder: 83, color: '#EC407A', icon: 'ChildCare' },
-  { key: 'exp_education_tutoring', type: 'expense', parent: 'exp_education', name: 'חוגים ושיעורים פרטיים', nameEn: 'Classes & Tutoring', displayOrder: 84, color: '#E91E63', icon: 'Person' },
-  { key: 'exp_education_books', type: 'expense', parent: 'exp_education', name: 'ספרי לימוד', nameEn: 'Educational Books', displayOrder: 85, color: '#C2185B', icon: 'AutoStories' },
-  { key: 'exp_education_childcare', type: 'expense', parent: 'exp_education', name: 'שמרטפות ומטפלות', nameEn: 'Babysitters & Nannies', displayOrder: 86, color: '#F8BBD0', icon: 'FaceRetouchingNatural' },
+  { key: 'exp_education', type: 'expense', parent: 'expense_root', name: 'חינוך', nameEn: 'Education', nameFr: 'Éducation', displayOrder: 80, color: '#FCBAD3', icon: 'School' },
+  { key: 'exp_education_higher', type: 'expense', parent: 'exp_education', name: 'לימודים גבוהים', nameEn: 'Higher Education', nameFr: 'Enseignement supérieur', displayOrder: 81, color: '#F48FB1', icon: 'AccountBalance' },
+  { key: 'exp_education_online', type: 'expense', parent: 'exp_education', name: 'קורסים מקוונים', nameEn: 'Online Courses', nameFr: 'Cours en ligne', displayOrder: 82, color: '#F06292', icon: 'Computer' },
+  { key: 'exp_education_schools', type: 'expense', parent: 'exp_education', name: 'גני ילדים ובתי ספר', nameEn: 'Kindergarten & Schools', nameFr: 'Jardin d\'enfants et écoles', displayOrder: 83, color: '#EC407A', icon: 'ChildCare' },
+  { key: 'exp_education_tutoring', type: 'expense', parent: 'exp_education', name: 'חוגים ושיעורים פרטיים', nameEn: 'Classes & Tutoring', nameFr: 'Cours et tutorat', displayOrder: 84, color: '#E91E63', icon: 'Person' },
+  { key: 'exp_education_books', type: 'expense', parent: 'exp_education', name: 'ספרי לימוד', nameEn: 'Educational Books', nameFr: 'Livres éducatifs', displayOrder: 85, color: '#C2185B', icon: 'AutoStories' },
+  { key: 'exp_education_childcare', type: 'expense', parent: 'exp_education', name: 'שמרטפות ומטפלות', nameEn: 'Babysitters & Nannies', nameFr: 'Garde d’enfants / Nounous', displayOrder: 86, color: '#F8BBD0', icon: 'FaceRetouchingNatural' },
 
   // Home & Maintenance (Brown-Beige tones)
-  { key: 'exp_home', type: 'expense', parent: 'expense_root', name: 'בית ותחזוקה', nameEn: 'Home & Maintenance', displayOrder: 85, color: '#A1887F', icon: 'HomeRepairService' },
-  { key: 'exp_home_repairs', type: 'expense', parent: 'exp_home', name: 'תיקונים', nameEn: 'Repairs & Handyman', displayOrder: 851, color: '#8D6E63', icon: 'Construction' },
-  { key: 'exp_home_cleaning', type: 'expense', parent: 'exp_home', name: 'ניקיון', nameEn: 'Cleaning Services', displayOrder: 852, color: '#BCAAA4', icon: 'CleaningServices' },
+  { key: 'exp_home', type: 'expense', parent: 'expense_root', name: 'בית ותחזוקה', nameEn: 'Home & Maintenance', nameFr: 'Maison et entretien', displayOrder: 85, color: '#A1887F', icon: 'HomeRepairService' },
+  { key: 'exp_home_repairs', type: 'expense', parent: 'exp_home', name: 'תיקונים', nameEn: 'Repairs & Handyman', nameFr: 'Réparations et bricolage', displayOrder: 851, color: '#8D6E63', icon: 'Construction' },
+  { key: 'exp_home_cleaning', type: 'expense', parent: 'exp_home', name: 'ניקיון', nameEn: 'Cleaning Services', nameFr: 'Services de nettoyage', displayOrder: 852, color: '#BCAAA4', icon: 'CleaningServices' },
 
   // Professional Services (Dark Slate tones)
-  { key: 'exp_professional', type: 'expense', parent: 'expense_root', name: 'שירותים מקצועיים', nameEn: 'Professional Services', displayOrder: 87, color: '#546E7A', icon: 'BusinessCenter' },
-  { key: 'exp_professional_legal', type: 'expense', parent: 'exp_professional', name: 'משפטי', nameEn: 'Legal Services', displayOrder: 871, color: '#455A64', icon: 'Gavel' },
-  { key: 'exp_professional_accounting', type: 'expense', parent: 'exp_professional', name: 'הנהלת חשבונות', nameEn: 'Accounting & Tax', displayOrder: 872, color: '#607D8B', icon: 'Calculate' },
-  { key: 'exp_professional_consulting', type: 'expense', parent: 'exp_professional', name: 'ייעוץ', nameEn: 'Consulting Services', displayOrder: 873, color: '#78909C', icon: 'Psychology' },
+  { key: 'exp_professional', type: 'expense', parent: 'expense_root', name: 'שירותים מקצועיים', nameEn: 'Professional Services', nameFr: 'Services professionnels', displayOrder: 87, color: '#546E7A', icon: 'BusinessCenter' },
+  { key: 'exp_professional_legal', type: 'expense', parent: 'exp_professional', name: 'משפטי', nameEn: 'Legal Services', nameFr: 'Services juridiques', displayOrder: 871, color: '#455A64', icon: 'Gavel' },
+  { key: 'exp_professional_accounting', type: 'expense', parent: 'exp_professional', name: 'הנהלת חשבונות', nameEn: 'Accounting & Tax', nameFr: 'Comptabilité et fiscalité', displayOrder: 872, color: '#607D8B', icon: 'Calculate' },
+  { key: 'exp_professional_consulting', type: 'expense', parent: 'exp_professional', name: 'ייעוץ', nameEn: 'Consulting Services', nameFr: 'Services de conseil', displayOrder: 873, color: '#78909C', icon: 'Psychology' },
 
   // Miscellaneous (Gray-Blue tones)
-  { key: 'exp_misc', type: 'expense', parent: 'expense_root', name: 'שונות', nameEn: 'Miscellaneous', displayOrder: 90, color: '#A8DADC', icon: 'MoreHoriz' },
-  { key: 'exp_misc_other', type: 'expense', parent: 'exp_misc', name: 'הוצאות אחרות', nameEn: 'Other Expenses', displayOrder: 91, color: '#90A4AE', icon: 'MoreVert' },
-  { key: 'exp_misc_donations', type: 'expense', parent: 'exp_misc', name: 'תרומות', nameEn: 'Charitable Donations', displayOrder: 92, color: '#78909C', icon: 'VolunteerActivism' },
+  { key: 'exp_misc', type: 'expense', parent: 'expense_root', name: 'שונות', nameEn: 'Miscellaneous', nameFr: 'Divers', displayOrder: 90, color: '#A8DADC', icon: 'MoreHoriz' },
+  { key: 'exp_misc_other', type: 'expense', parent: 'exp_misc', name: 'הוצאות אחרות', nameEn: 'Other Expenses', nameFr: 'Autres dépenses', displayOrder: 91, color: '#90A4AE', icon: 'MoreVert' },
+  { key: 'exp_misc_donations', type: 'expense', parent: 'exp_misc', name: 'תרומות', nameEn: 'Charitable Donations', nameFr: 'Dons caritatifs', displayOrder: 92, color: '#78909C', icon: 'VolunteerActivism' },
 
   // Income (Green tones as requested)
-  { key: 'income_root', type: 'income', name: 'הכנסות', nameEn: 'Income', displayOrder: 100, color: '#4CAF50', icon: 'AccountBalance' },
-  { key: 'income_salary', type: 'income', parent: 'income_root', name: 'משכורת', nameEn: 'Salary', displayOrder: 101, color: '#66BB6A', icon: 'Work' },
-  { key: 'income_freelance', type: 'income', parent: 'income_root', name: 'פרילנס', nameEn: 'Freelance & Side Hustle', displayOrder: 102, color: '#81C784', icon: 'Laptop' },
-  { key: 'income_refunds', type: 'income', parent: 'income_root', name: 'החזרים וזיכויים', nameEn: 'Refunds & Credits', displayOrder: 103, color: '#A5D6A7', icon: 'Replay' },
-  { key: 'income_gifts', type: 'income', parent: 'income_root', name: 'מתנות', nameEn: 'Gifts & Windfalls', displayOrder: 104, color: '#C8E6C9', icon: 'CardGiftcard' },
-  { key: 'income_gov_benefits', type: 'income', parent: 'income_root', name: 'קצבאות ממשלתיות', nameEn: 'Government Benefits', displayOrder: 105, color: '#00C853', icon: 'AccountBalance' },
-  { key: 'income_capital_returns', type: 'income', parent: 'income_root', name: 'החזר קרן', nameEn: 'Capital Returns', displayOrder: 106, color: '#B2DFDB', icon: 'AccountBalanceWallet', isCountedAsIncome: false },
-  { key: 'income_investment_interest', type: 'income', parent: 'income_root', name: 'ריבית מהשקעות', nameEn: 'Investment Interest', displayOrder: 107, color: '#69F0AE', icon: 'TrendingUp' },
+  { key: 'income_root', type: 'income', name: 'הכנסות', nameEn: 'Income', nameFr: 'Revenus', displayOrder: 100, color: '#4CAF50', icon: 'AccountBalance' },
+  { key: 'income_salary', type: 'income', parent: 'income_root', name: 'משכורת', nameEn: 'Salary', nameFr: 'Salaire', displayOrder: 101, color: '#66BB6A', icon: 'Work' },
+  { key: 'income_freelance', type: 'income', parent: 'income_root', name: 'פרילנס', nameEn: 'Freelance & Side Hustle', nameFr: 'Freelance et activités secondaires', displayOrder: 102, color: '#81C784', icon: 'Laptop' },
+  { key: 'income_refunds', type: 'income', parent: 'income_root', name: 'החזרים וזיכויים', nameEn: 'Refunds & Credits', nameFr: 'Remboursements et crédits', displayOrder: 103, color: '#A5D6A7', icon: 'Replay' },
+  { key: 'income_gifts', type: 'income', parent: 'income_root', name: 'מתנות', nameEn: 'Gifts & Windfalls', nameFr: 'Cadeaux et gains inattendus', displayOrder: 104, color: '#C8E6C9', icon: 'CardGiftcard' },
+  { key: 'income_gov_benefits', type: 'income', parent: 'income_root', name: 'קצבאות ממשלתיות', nameEn: 'Government Benefits', nameFr: 'Prestations gouvernementales', displayOrder: 105, color: '#00C853', icon: 'AccountBalance' },
+  { key: 'income_capital_returns', type: 'income', parent: 'income_root', name: 'החזר קרן', nameEn: 'Capital Returns', nameFr: 'Retours de capital', displayOrder: 106, color: '#B2DFDB', icon: 'AccountBalanceWallet', isCountedAsIncome: false },
+  { key: 'income_investment_interest', type: 'income', parent: 'income_root', name: 'ריבית מהשקעות', nameEn: 'Investment Interest', nameFr: 'Intérêts sur investissements', displayOrder: 107, color: '#69F0AE', icon: 'TrendingUp' },
 
   // Investment (Blue/Purple tones as requested)
-  { key: 'investment_root', type: 'investment', name: 'השקעות', nameEn: 'Investments', displayOrder: 200, color: '#5E35B1', icon: 'TrendingUp' },
-  { key: 'investment_stocks', type: 'investment', parent: 'investment_root', name: 'מניות', nameEn: 'Stocks & ETFs', displayOrder: 201, color: '#7E57C2', icon: 'ShowChart' },
-  { key: 'investment_crypto', type: 'investment', parent: 'investment_root', name: 'קריפטו', nameEn: 'Crypto Assets', displayOrder: 202, color: '#9575CD', icon: 'CurrencyBitcoin' },
-  { key: 'investment_retirement', type: 'investment', parent: 'investment_root', name: 'פנסיה וחיסכון', nameEn: 'Retirement & Savings', displayOrder: 203, color: '#1976D2', icon: 'Savings' },
-  { key: 'investment_study_fund', type: 'investment', parent: 'investment_root', name: 'קופות גמל', nameEn: 'Study & Provident Funds', displayOrder: 204, color: '#42A5F5', icon: 'School' },
-  { key: 'investment_real_estate', type: 'investment', parent: 'investment_root', name: 'נדל"ן', nameEn: 'Real Estate', displayOrder: 205, color: '#64B5F6', icon: 'Home' },
-  { key: 'investment_deposits', type: 'investment', parent: 'investment_root', name: 'פיקדונות', nameEn: 'Bank Deposits', displayOrder: 206, color: '#90CAF9', icon: 'AccountBalance' }
+  { key: 'investment_root', type: 'investment', name: 'השקעות', nameEn: 'Investments', nameFr: 'Investissements', displayOrder: 200, color: '#5E35B1', icon: 'TrendingUp' },
+  { key: 'investment_stocks', type: 'investment', parent: 'investment_root', name: 'מניות', nameEn: 'Stocks & ETFs', nameFr: 'Actions et FNB', displayOrder: 201, color: '#7E57C2', icon: 'ShowChart' },
+  { key: 'investment_crypto', type: 'investment', parent: 'investment_root', name: 'קריפטו', nameEn: 'Crypto Assets', nameFr: 'Actifs cryptographiques', displayOrder: 202, color: '#9575CD', icon: 'CurrencyBitcoin' },
+  { key: 'investment_retirement', type: 'investment', parent: 'investment_root', name: 'פנסיה וחיסכון', nameEn: 'Retirement & Savings', nameFr: 'Retraite et épargne', displayOrder: 203, color: '#1976D2', icon: 'Savings' },
+  { key: 'investment_study_fund', type: 'investment', parent: 'investment_root', name: 'קופות גמל', nameEn: 'Study & Provident Funds', nameFr: 'Fonds d\'étude et de prévoyance', displayOrder: 204, color: '#42A5F5', icon: 'School' },
+  { key: 'investment_real_estate', type: 'investment', parent: 'investment_root', name: 'נדל"ן', nameEn: 'Real Estate', nameFr: 'Immobilier', displayOrder: 205, color: '#64B5F6', icon: 'Home' },
+  { key: 'investment_deposits', type: 'investment', parent: 'investment_root', name: 'פיקדונות', nameEn: 'Bank Deposits', nameFr: 'Dépôts bancaires', displayOrder: 206, color: '#90CAF9', icon: 'AccountBalance' }
 ];
 
 // Legacy category mappings: old transaction.category → new category_definitions
@@ -941,9 +953,9 @@ const CATEGORY_MAPPINGS = [
 function seedCategories(db) {
   const insert = db.prepare(`
     INSERT INTO category_definitions
-      (name, name_en, category_type, parent_id, display_order, icon, color, description, is_active, is_counted_as_income)
+      (name, name_en, name_fr, category_type, parent_id, display_order, icon, color, description, is_active, is_counted_as_income)
     VALUES
-      (@name, @nameEn, @type, @parentId, @displayOrder, @icon, @color, @description, 1, @isCountedAsIncome)
+      (@name, @nameEn, @nameFr, @type, @parentId, @displayOrder, @icon, @color, @description, 1, @isCountedAsIncome)
   `);
 
   const categoriesByKey = new Map();
@@ -955,6 +967,7 @@ function seedCategories(db) {
       const info = insert.run({
         name: category.name,
         nameEn: category.nameEn || null,
+        nameFr: category.nameFr || null,
         type: category.type,
         parentId: parent ? parent.id : null,
         displayOrder: category.displayOrder ?? 0,
@@ -968,6 +981,7 @@ function seedCategories(db) {
         id: info.lastInsertRowid,
         name: category.name,
         nameEn: category.nameEn || null,
+        nameFr: category.nameFr || null,
         type: category.type,
         parentKey: category.parent || null
       };
@@ -1233,8 +1247,8 @@ function seedSpendingCategoryTargets(db) {
   return insertedCount;
 }
 
-function detectSpendingCategoryForSeed(name, nameEn, parentName) {
-  const combined = `${(name || '').toLowerCase()} ${(nameEn || '').toLowerCase()} ${(parentName || '').toLowerCase()}`;
+function detectSpendingCategoryForSeed(name, nameEn, parentName, nameFr, parentNameFr) {
+  const combined = `${(name || '').toLowerCase()} ${(nameEn || '').toLowerCase()} ${(nameFr || '').toLowerCase()} ${(parentName || '').toLowerCase()} ${(parentNameFr || '').toLowerCase()}`;
 
   const ignoreKeywords = ['פרעון כרטיס אשראי', 'החזר כרטיס אשראי', 'card repayment'];
   if (ignoreKeywords.some((kw) => combined.includes(kw))) {
@@ -1261,8 +1275,10 @@ function seedSpendingCategoryMappings(db) {
       cd.id,
       cd.name,
       cd.name_en,
+      cd.name_fr,
       cd.category_type,
-      parent.name AS parent_name
+      parent.name AS parent_name,
+      parent.name_fr AS parent_name_fr
     FROM category_definitions cd
     LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
     WHERE cd.category_type IN ('expense', 'investment')
@@ -1290,7 +1306,13 @@ function seedSpendingCategoryMappings(db) {
   let created = 0;
   db.transaction(() => {
     for (const category of categories) {
-      const spendingCategory = detectSpendingCategoryForSeed(category.name, category.name_en, category.parent_name);
+      const spendingCategory = detectSpendingCategoryForSeed(
+        category.name,
+        category.name_en,
+        category.parent_name,
+        category.name_fr,
+        category.parent_name_fr
+      );
       if (!spendingCategory) {
         continue;
       }

@@ -29,6 +29,9 @@ import {
   CheckCircle as GoalIcon,
   Close as CloseIcon,
   Refresh as RefreshIcon,
+  Sync as SyncIcon,
+  Category as CategoryIcon,
+  CloudDone as SyncSuccessIcon,
 } from '@mui/icons-material';
 import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
 import { useNotification } from '../NotificationContext';
@@ -125,6 +128,12 @@ const SmartNotifications: React.FC = () => {
         return <CashFlowIcon {...iconProps} />;
       case 'goal_milestone':
         return <GoalIcon {...iconProps} />;
+      case 'stale_sync':
+        return <SyncIcon {...iconProps} />;
+      case 'uncategorized_transactions':
+        return <CategoryIcon {...iconProps} />;
+      case 'sync_success':
+        return <SyncSuccessIcon sx={{ ...iconProps, color: 'success.main' }} />;
       default:
         return severity === 'critical' ? <CriticalIcon {...iconProps} /> :
                severity === 'warning' ? <WarningIcon {...iconProps} /> :
@@ -205,6 +214,11 @@ const SmartNotifications: React.FC = () => {
       case 'view_analytics':
         // Navigate to analytics
         console.log('Navigate to analytics');
+        break;
+      case 'view_uncategorized':
+        // Navigate to transactions with uncategorized filter
+        window.dispatchEvent(new CustomEvent('navigateToUncategorized'));
+        console.log('Navigate to uncategorized transactions');
         break;
       default:
         console.log('Unknown action:', action, params);

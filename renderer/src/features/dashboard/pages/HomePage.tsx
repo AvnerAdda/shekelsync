@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Paper, Typography, CircularProgress, useTheme } from '@mui/material';
-import { AccountBalance as AccountBalanceIcon, DateRange as DateRangeIcon, Add as AddIcon } from '@mui/icons-material';
-import { format } from 'date-fns';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Box, Paper, Typography, CircularProgress, useTheme, Alert } from '@mui/material';
+import { AccountBalance as AccountBalanceIcon, InfoOutlined as InfoIcon } from '@mui/icons-material';
+import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
+import { useTranslation } from 'react-i18next';
 import { EmptyState, OnboardingChecklist } from '@renderer/shared/empty-state';
 import { useDashboardData } from '@renderer/features/dashboard/hooks/useDashboardData';
 import { usePortfolioSummary } from '@renderer/features/dashboard/hooks/usePortfolioSummary';
@@ -23,6 +24,7 @@ type YAxisScale = 'linear' | 'log';
 const CHART_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF6B9D'];
 
 const DashboardHomeContent: React.FC = () => {
+  const { t } = useTranslation('translation', { keyPrefix: 'dashboardHome' });
   // Helper function to parse date strings from SQLite without timezone conversion
   const parseLocalDate = (dateStr: string): Date => {
     if (!dateStr || typeof dateStr !== 'string') {
@@ -65,6 +67,11 @@ const DashboardHomeContent: React.FC = () => {
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
   const { status: onboardingStatus } = useOnboarding();
+
+  // Calculate fallback dates (previous month) for when current period has no data
+  const fallbackStartDate = useMemo(() => startOfMonth(subMonths(startDate, 1)), [startDate]);
+  const fallbackEndDate = useMemo(() => endOfMonth(subMonths(startDate, 1)), [startDate]);
+
   const {
     data,
     loading: dashboardLoading,
@@ -74,6 +81,17 @@ const DashboardHomeContent: React.FC = () => {
     endDate,
     aggregation: aggregationPeriod,
   });
+
+  // Fallback data from previous month
+  const {
+    data: fallbackDashboardData,
+    loading: fallbackDashboardLoading,
+  } = useDashboardData({
+    startDate: fallbackStartDate,
+    endDate: fallbackEndDate,
+    aggregation: aggregationPeriod,
+  });
+
   const {
     portfolioValue,
     liquidPortfolio,
@@ -85,6 +103,13 @@ const DashboardHomeContent: React.FC = () => {
     loading: waterfallLoading,
     refresh: refreshWaterfall,
   } = useWaterfallData({ startDate, endDate });
+
+  // Fallback waterfall data
+  const {
+    data: fallbackWaterfallData,
+    loading: fallbackWaterfallLoading,
+  } = useWaterfallData({ startDate: fallbackStartDate, endDate: fallbackEndDate });
+
   const {
     breakdownData,
     breakdownLoading,
@@ -95,14 +120,42 @@ const DashboardHomeContent: React.FC = () => {
     endDate,
   });
 
+  // Fallback breakdown data
+  const {
+    breakdownData: fallbackBreakdownData,
+    breakdownLoading: fallbackBreakdownLoading,
+    fetchBreakdown: fetchFallbackBreakdown,
+  } = useBreakdownData({
+    startDate: fallbackStartDate,
+    endDate: fallbackEndDate,
+  });
+
   const handleChartAreaClick = (data: any) => {
     console.log('Chart area click - data:', data);
     // For chart area click, use activeLabel which has the date
     if (data && data.activeLabel) {
       const clickedDate = data.activeLabel;
-      console.log('Fetching transactions for date:', clickedDate);
-      fetchTransactionsByDate(clickedDate);
-      setHoveredDate(clickedDate);
+      console.log('Clicked date:', clickedDate);
+
+      // Check if this is a future date (forecasted) by comparing to today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const clickedDateObj = parseLocalDate(clickedDate);
+      clickedDateObj.setHours(0, 0, 0, 0);
+
+      const isForecastDate = clickedDateObj > today;
+      console.log('Is forecast date:', isForecastDate);
+
+      if (isForecastDate) {
+        // For forecast dates, just set the hovered date
+        // The TransactionHistorySection will handle showing forecast predictions
+        setHoveredDate(clickedDate);
+      } else {
+        // For historical dates, fetch actual transactions
+        console.log('Fetching transactions for date:', clickedDate);
+        fetchTransactionsByDate(clickedDate);
+        setHoveredDate(clickedDate);
+      }
     }
   };
 
@@ -125,9 +178,22 @@ const DashboardHomeContent: React.FC = () => {
         onClick={() => {
           console.log('Custom dot clicked, payload:', payload);
           if (payload && payload.date) {
-            console.log('Fetching transactions for date:', payload.date);
-            fetchTransactionsByDate(payload.date);
-            setHoveredDate(payload.date);
+            // Check if this is a future date (forecasted)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const clickedDateObj = parseLocalDate(payload.date);
+            clickedDateObj.setHours(0, 0, 0, 0);
+            const isForecastDate = clickedDateObj > today;
+
+            if (isForecastDate) {
+              // For forecast dates, just set the hovered date
+              setHoveredDate(payload.date);
+            } else {
+              // For historical dates, fetch actual transactions
+              console.log('Fetching transactions for date:', payload.date);
+              fetchTransactionsByDate(payload.date);
+              setHoveredDate(payload.date);
+            }
           }
         }}
       />
@@ -153,7 +219,7 @@ const DashboardHomeContent: React.FC = () => {
 
     // If average income is 3x or more than average expenses, suggest log scale
     return avgIncome > 0 && avgExpenses > 0 && avgIncome / avgExpenses >= 3;
-  }, []);
+  }, [t]);
 
   // Detect anomalies (unusual spikes)
   const detectAnomalies = useCallback((history: any[]) => {
@@ -174,13 +240,15 @@ const DashboardHomeContent: React.FC = () => {
           date: item.date,
           value: item.expenses,
           type: 'expense_spike',
-          message: `Unusual expense spike: ${formatCurrency(item.expenses, { absolute: true, maximumFractionDigits: 0 })}`,
+          message: t('anomaly.expenseSpike', {
+            amount: formatCurrency(item.expenses, { absolute: true, maximumFractionDigits: 0 }),
+          }),
         });
       }
     });
 
     return anomalies;
-  }, [formatCurrency]);
+  }, [formatCurrency, t]);
 
   // Detect spending trends (consecutive high/low spending periods)
   const detectTrends = useCallback((history: any[]) => {
@@ -209,7 +277,7 @@ const DashboardHomeContent: React.FC = () => {
             type: 'high_spending',
             startDate: history[highStartIdx].date,
             endDate: history[idx - 1].date,
-            label: 'High spending period',
+            label: t('trends.highSpending'),
           });
         }
         if (consecutiveLow >= 3) {
@@ -217,7 +285,7 @@ const DashboardHomeContent: React.FC = () => {
             type: 'low_spending',
             startDate: history[lowStartIdx].date,
             endDate: history[idx - 1].date,
-            label: 'Low spending period',
+            label: t('trends.lowSpending'),
           });
         }
         consecutiveHigh = 0;
@@ -272,7 +340,23 @@ const DashboardHomeContent: React.FC = () => {
     setCompareToLastMonth(!compareToLastMonth);
   };
 
-  if (dashboardLoading || !data || !data.summary) {
+  // Check if current period has no data but fallback period does
+  const currentPeriodEmpty = (data?.history?.length ?? 0) === 0;
+  const fallbackHasData = (fallbackDashboardData?.history?.length ?? 0) > 0;
+  const shouldUseFallback = currentPeriodEmpty && fallbackHasData && (onboardingStatus?.stats?.transactionCount ?? 0) > 0;
+
+  // Determine effective data to display (use fallback when current period is empty)
+  const effectiveData = shouldUseFallback ? fallbackDashboardData : data;
+  const effectiveWaterfallData = shouldUseFallback ? fallbackWaterfallData : waterfallData;
+  const effectiveBreakdownData = shouldUseFallback ? fallbackBreakdownData : breakdownData;
+  const effectiveBreakdownLoading = shouldUseFallback ? fallbackBreakdownLoading : breakdownLoading;
+  const effectiveStartDate = shouldUseFallback ? fallbackStartDate : startDate;
+  const effectiveEndDate = shouldUseFallback ? fallbackEndDate : endDate;
+
+  // Show loading while primary data loads, or while checking fallback
+  const isLoading = dashboardLoading || (currentPeriodEmpty && fallbackDashboardLoading);
+
+  if (isLoading || !effectiveData || !effectiveData.summary) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
         <CircularProgress />
@@ -287,8 +371,8 @@ const DashboardHomeContent: React.FC = () => {
     return (
       <EmptyState
         icon={<AccountBalanceIcon sx={{ fontSize: 96 }} />}
-        title="Welcome to ShekelSync!"
-        description="Let's get your finances organized. Follow these steps to start tracking your expenses and income."
+        title={t('empty.welcomeTitle')}
+        description={t('empty.welcomeDescription')}
         showOnboardingChecklist={true}
       >
         <OnboardingChecklist
@@ -304,36 +388,6 @@ const DashboardHomeContent: React.FC = () => {
           }}
         />
       </EmptyState>
-    );
-  }
-
-  // Check if date range has no data (but transactions exist)
-  const hasTransactionsButNotInRange =
-    data.history.length === 0 &&
-    onboardingStatus &&
-    onboardingStatus.stats.transactionCount > 0;
-
-  if (hasTransactionsButNotInRange) {
-    return (
-      <Box>
-        <EmptyState
-          icon={<DateRangeIcon sx={{ fontSize: 96 }} />}
-          title="No transactions in current month"
-          description={`You have ${onboardingStatus.stats.transactionCount} transactions total, but none in the current month (${format(startDate, 'MMM yyyy')}). Try scraping recent data or view historical analysis in the Analysis page.`}
-          primaryAction={{
-            label: "Scrape Recent Transactions",
-            onClick: () => window.dispatchEvent(new CustomEvent('openScrapeModal')),
-            icon: <AddIcon />
-          }}
-          secondaryActions={[
-            {
-              label: "View Historical Data",
-              onClick: () => window.location.hash = '/analysis'
-            }
-          ]}
-          minHeight={300}
-        />
-      </Box>
     );
   }
 
@@ -384,12 +438,12 @@ const DashboardHomeContent: React.FC = () => {
       const localDate = parseLocalDate(dateStr);
 
       // Check if this is an anomaly
-      const anomalies = detectAnomalies(data?.history || []);
+      const anomalies = detectAnomalies(effectiveData?.history || []);
       const isAnomaly = anomalies.some(a => a.date === dateStr);
 
       // Calculate average for comparison
-      const avgExpenses = data?.history
-        ? data.history.reduce((sum, item) => sum + (item.expenses ?? 0), 0) / data.history.length
+      const avgExpenses = effectiveData?.history
+        ? effectiveData.history.reduce((sum, item) => sum + (item.expenses ?? 0), 0) / effectiveData.history.length
         : 0;
 
       const diffFromAvg = expenses - avgExpenses;
@@ -401,10 +455,10 @@ const DashboardHomeContent: React.FC = () => {
             {format(localDate, 'MMM dd, yyyy')}
           </Typography>
           <Typography variant="body2" color="success.main">
-            ↑ Income: {formatCurrencyValue(income)}
+            ↑ {t('tooltip.income')}: {formatCurrencyValue(income)}
           </Typography>
           <Typography variant="body2" color="error.main">
-            ↓ Expenses: {formatCurrencyValue(expenses)}
+            ↓ {t('tooltip.expenses')}: {formatCurrencyValue(expenses)}
           </Typography>
           <Typography
             variant="body2"
@@ -412,20 +466,20 @@ const DashboardHomeContent: React.FC = () => {
             color={netFlow > 0 ? 'success.main' : 'error.main'}
             sx={{ mt: 0.5, pt: 0.5, borderTop: `1px solid ${theme.palette.divider}` }}
           >
-            Net: {netFlow > 0 ? '+' : ''}{formatCurrencyValue(netFlow)}
+            {t('tooltip.net')}: {netFlow > 0 ? '+' : ''}{formatCurrencyValue(netFlow)}
           </Typography>
           {Math.abs(percentDiff) > 20 && (
             <Typography variant="caption" color={percentDiff > 0 ? 'warning.main' : 'info.main'} sx={{ display: 'block', mt: 0.5 }}>
-              {percentDiff > 0 ? '↑' : '↓'} {Math.abs(percentDiff).toFixed(0)}% vs avg
+              {percentDiff > 0 ? '↑' : '↓'} {Math.abs(percentDiff).toFixed(0)}% {t('tooltip.vsAverage')}
             </Typography>
           )}
           {isAnomaly && (
             <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
-              ⚠ Unusual spending
+              ⚠ {t('tooltip.unusualSpending')}
             </Typography>
           )}
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', fontStyle: 'italic' }}>
-            Click to see details
+            {t('tooltip.clickForDetails')}
           </Typography>
         </Paper>
       );
@@ -435,22 +489,35 @@ const DashboardHomeContent: React.FC = () => {
 
   return (
     <Box>
+      {shouldUseFallback && (
+        <Alert 
+          severity="info" 
+          icon={<InfoIcon />}
+          sx={{ mb: 2 }}
+        >
+          {t('empty.showingPreviousMonth', {
+            currentMonth: format(startDate, 'MMMM yyyy'),
+            displayedMonth: format(effectiveStartDate, 'MMMM yyyy'),
+          })}
+        </Alert>
+      )}
       <DashboardSummarySection
-        data={data}
+        data={effectiveData}
         portfolioValue={portfolioValue}
         liquidPortfolio={liquidPortfolio}
         restrictedPortfolio={restrictedPortfolio}
         budgetUsage={budgetUsage}
-        breakdownData={breakdownData}
+        breakdownData={effectiveBreakdownData}
         hasBankAccounts={hasBankAccounts}
         compareToLastMonth={compareToLastMonth}
         onToggleCompare={toggleCompareLastMonth}
       />
 
-      <TransactionHistorySection
-        data={data}
-        yAxisScale={yAxisScale}
-        setYAxisScale={setYAxisScale}
+      <Box id="transactions">
+        <TransactionHistorySection
+          data={effectiveData}
+          yAxisScale={yAxisScale}
+          setYAxisScale={setYAxisScale}
         shouldUseLogScale={shouldUseLogScale}
         formatCurrencyValue={formatCurrencyValue}
         formatXAxis={formatXAxis}
@@ -465,24 +532,27 @@ const DashboardHomeContent: React.FC = () => {
         fetchTransactionsByDate={fetchTransactionsByDate}
         dateTransactions={dateTransactions}
         loadingTransactions={loadingTransactions}
-        parseLocalDate={parseLocalDate}
-        formatCurrency={formatCurrency}
-      />
+          parseLocalDate={parseLocalDate}
+          formatCurrency={formatCurrency}
+        />
+      </Box>
 
-      <BreakdownTabsSection
+      <Box id="breakdown">
+        <BreakdownTabsSection
         selectedBreakdownType={selectedBreakdownType}
         onSelectBreakdown={(value) => setSelectedBreakdownType(value)}
-        waterfallData={waterfallData}
-        waterfallLoading={waterfallLoading}
+        waterfallData={effectiveWaterfallData}
+        waterfallLoading={shouldUseFallback ? fallbackWaterfallLoading : waterfallLoading}
         liquidPortfolio={liquidPortfolio}
         restrictedPortfolio={restrictedPortfolio}
         formatCurrencyValue={formatCurrencyValue}
-        breakdownData={breakdownData}
-        breakdownLoading={breakdownLoading}
+        breakdownData={effectiveBreakdownData}
+        breakdownLoading={effectiveBreakdownLoading}
         hasBankAccounts={hasBankAccounts}
-        data={data}
-        chartColors={CHART_COLORS}
-      />
+          data={effectiveData}
+          chartColors={CHART_COLORS}
+        />
+      </Box>
     </Box>
   );
 };

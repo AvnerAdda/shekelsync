@@ -5,6 +5,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { format, subMonths } from 'date-fns';
 import SummaryCards from './SummaryCards';
 import { useDashboardFilters } from '../DashboardFiltersContext';
+import { useTranslation } from 'react-i18next';
 
 interface DashboardSummarySectionProps {
   data: any;
@@ -30,6 +31,7 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
   onToggleCompare,
 }) => {
   const { startDate, endDate } = useDashboardFilters();
+  const { t } = useTranslation('translation', { keyPrefix: 'dashboard.summarySection' });
 
   return (
     <>
@@ -60,7 +62,7 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
                   amount: cat.value,
                 }))
               : data.summary.totalExpenses > 0
-              ? [{ name: 'Total Expenses', amount: data.summary.totalExpenses }]
+              ? [{ name: t('fallbackCategory'), amount: data.summary.totalExpenses }]
               : []
           }
           categoryCount={
@@ -73,17 +75,14 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
 
       {data.summary.totalIncome === 0 && hasBankAccounts !== null && (
         <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ mb: 3 }}>
-          <AlertTitle>No Income Detected</AlertTitle>
+          <AlertTitle>{t('noIncomeTitle')}</AlertTitle>
           {hasBankAccounts === false ? (
             <Typography variant="body2">
-              To track your income automatically, please add your bank account credentials.
-              This will enable automatic income tracking and provide a complete financial overview.
+              {t('noIncomeAddAccounts')}
             </Typography>
           ) : (
             <Typography variant="body2">
-              We haven&apos;t detected any income transactions in the selected period.
-              If you&apos;re expecting income data, please verify your most recent bank scrape was successful
-              or run a new scrape to update your transactions.
+              {t('noIncomeDetected')}
             </Typography>
           )}
         </Alert>
@@ -94,7 +93,10 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
           <Box>
             <Typography variant="h6">{format(startDate, 'MMMM yyyy')}</Typography>
             <Typography variant="caption" color="text.secondary">
-              Current month: {format(startDate, 'MMM dd')} - {format(endDate, 'MMM dd, yyyy')}
+              {t('periodLabel', {
+                start: format(startDate, 'MMM dd'),
+                end: format(endDate, 'MMM dd, yyyy'),
+              })}
             </Typography>
           </Box>
           <Button
@@ -103,17 +105,17 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
             onClick={onToggleCompare}
             startIcon={<ShowChartIcon />}
           >
-            {compareToLastMonth ? 'Comparing to Last Month' : 'Compare to Last Month'}
+            {compareToLastMonth ? t('compare.on') : t('compare.off')}
           </Button>
         </Box>
         {compareToLastMonth && (
           <Alert severity="info" sx={{ mt: 2 }}>
-            <AlertTitle>Comparison Mode (Coming Soon)</AlertTitle>
+            <AlertTitle>{t('comparison.title')}</AlertTitle>
             <Typography variant="body2">
-              {`Month-over-month comparison view is under development. This will show side-by-side metrics comparing ${format(
-                startDate,
-                'MMMM'
-              )} with ${format(subMonths(startDate, 1), 'MMMM')}.`}
+              {t('comparison.description', {
+                current: format(startDate, 'MMMM'),
+                previous: format(subMonths(startDate, 1), 'MMMM'),
+              })}
             </Typography>
           </Alert>
         )}

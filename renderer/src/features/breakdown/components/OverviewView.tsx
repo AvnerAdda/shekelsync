@@ -18,7 +18,6 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CategoryIcon from './CategoryIcon';
 import { CategoryType, DrillLevel, FormatCurrencyFn, OverviewDataItem } from '../types';
 import { getBreakdownStrings } from '../strings';
-import TrendSparkline from './TrendSparkline';
 
 interface OverviewViewProps {
   data: OverviewDataItem[];
@@ -26,6 +25,9 @@ interface OverviewViewProps {
   isZooming: boolean;
   categoryType: CategoryType;
   chartTitle: string;
+  parentTitle: (name: string) => string;
+  subcategoryTitle: (name: string) => string;
+  pendingBreakdownLabel: (processed: number, pending: number) => string;
   formatCurrencyValue: FormatCurrencyFn;
   onDrillDown: (parentId: number, parentName: string) => void;
   onSubcategoryClick: (subcategoryId: number, subcategoryName: string) => void;
@@ -43,6 +45,9 @@ const OverviewView: React.FC<OverviewViewProps> = ({
   isZooming,
   categoryType,
   chartTitle,
+  parentTitle,
+  subcategoryTitle,
+  pendingBreakdownLabel,
   formatCurrencyValue,
   onDrillDown,
   onSubcategoryClick,
@@ -61,6 +66,11 @@ const OverviewView: React.FC<OverviewViewProps> = ({
   }, []);
   const isSubcategoryLevel = currentLevel?.type === 'subcategory';
   const totalAmount = React.useMemo(() => data.reduce((sum, item) => sum + item.value, 0), [data]);
+  const headerTitle = !currentLevel
+    ? chartTitle
+    : currentLevel.type === 'parent'
+    ? parentTitle(currentLevel.parentName)
+    : subcategoryTitle(currentLevel.subcategoryName);
 
   const buildLeafParams = (id: number, name: string) => {
     if (!currentLevel) {
@@ -88,11 +98,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
         <Grid item xs={12} md={6}>
           <Box sx={{ position: 'relative' }}>
             <Typography variant="h6" gutterBottom align="center">
-              {!currentLevel
-                ? chartTitle
-                : currentLevel.type === 'parent'
-                ? `${currentLevel.parentName} Breakdown`
-                : `${currentLevel.subcategoryName} Details`}
+              {headerTitle}
             </Typography>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -228,13 +234,13 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                                 variant="outlined"
                               />
                               {counts.pendingCount > 0 && (
-                                <Chip
-                                  label={`${counts.processedCount} + ${counts.pendingCount} pending`}
-                                  size="small"
-                                  color="warning"
-                                  variant="outlined"
-                                  sx={{ fontSize: '0.7rem' }}
-                                />
+                              <Chip
+                                label={pendingBreakdownLabel(counts.processedCount, counts.pendingCount)}
+                                size="small"
+                                color="warning"
+                                variant="outlined"
+                                sx={{ fontSize: '0.7rem' }}
+                              />
                               )}
                             </Box>
                             <Chip
@@ -243,15 +249,6 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                               color={categoryType === 'income' ? 'success' : undefined}
                             />
                           </Box>
-                          {item.history && item.history.length > 1 && (
-                            <Box sx={{ mt: 1 }}>
-                              <TrendSparkline
-                                points={item.history.map(point => point.total)}
-                                color={categoryType === 'income' ? theme.palette.success.main : theme.palette.error.main}
-                                aria-label={`Trend for ${item.name}`}
-                              />
-                            </Box>
-                          )}
                         </Box>
                         {!isSubcategoryLevel && (
                           <>

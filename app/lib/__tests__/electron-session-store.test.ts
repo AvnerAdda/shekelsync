@@ -223,8 +223,8 @@ describe('electron session store', () => {
     expect(fs.writeFile).toHaveBeenCalledTimes(1);
 
     fs.writeFile.mockClear();
-    const merged = await sessionStore.updateSettings({ language: 'en' });
-    expect(merged).toEqual({ theme: 'dark', language: 'en' });
+    const merged = await sessionStore.updateSettings({ language: 'fr' });
+    expect(merged).toEqual({ theme: 'dark', language: 'fr' });
     expect(fs.writeFile).toHaveBeenCalledTimes(1);
 
     warnSpy.mockRestore();

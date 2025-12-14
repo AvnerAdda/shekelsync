@@ -35,7 +35,10 @@ function createBudgetIntelligenceRouter() {
    */
   router.get('/suggestions', async (req, res) => {
     try {
-      const result = await budgetIntelligenceService.getBudgetSuggestions(req.query || {});
+      const result = await budgetIntelligenceService.getBudgetSuggestions({
+        ...(req.query || {}),
+        locale: req.locale,
+      });
       res.json(result);
     } catch (error) {
       console.error('Get budget suggestions error:', error);
@@ -86,7 +89,7 @@ function createBudgetIntelligenceRouter() {
    */
   router.get('/health', async (req, res) => {
     try {
-      const result = await budgetIntelligenceService.getBudgetHealth();
+      const result = await budgetIntelligenceService.getBudgetHealth({ locale: req.locale });
       res.json(result);
     } catch (error) {
       console.error('Get budget health error:', error);

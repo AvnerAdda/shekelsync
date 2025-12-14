@@ -96,24 +96,26 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
   const { formatCurrency } = useFinancePrivacy();
   const strings = getBreakdownStrings();
   const panelStrings = strings.panel;
+  const generalStrings = strings.general;
+  const overviewStrings = strings.overview;
   const categoryBreakdown = breakdowns?.byCategory ?? [];
   const vendorBreakdown = breakdowns?.byVendor ?? [];
   const monthlyBreakdown = breakdowns?.byMonth ?? [];
 
   const config = {
     expense: {
-      title: 'Expenses Breakdown',
-      chartTitle: 'Expenses by Category',
+      title: panelStrings.titles.expense,
+      chartTitle: panelStrings.chartTitles.expense,
       icon: <ShoppingIcon sx={{ mr: 0.5, fontSize: 18 }} />,
     },
     income: {
-      title: 'Income Breakdown',
-      chartTitle: 'Income by Category',
+      title: panelStrings.titles.income,
+      chartTitle: panelStrings.chartTitles.income,
       icon: <IncomeIcon sx={{ mr: 0.5, fontSize: 18 }} />,
     },
     investment: {
-      title: 'Investment Breakdown',
-      chartTitle: 'Investments by Category',
+      title: panelStrings.titles.investment,
+      chartTitle: panelStrings.chartTitles.investment,
       icon: <InvestmentIcon sx={{ mr: 0.5, fontSize: 18 }} />,
     },
   } satisfies Record<CategoryType, { title: string; chartTitle: string; icon: React.ReactNode }>;
@@ -166,7 +168,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
               <Card variant="outlined">
                 <CardContent>
                   <Typography variant="caption" color="text.secondary">
-                    Total {categoryType === 'income' ? 'Income' : categoryType === 'investment' ? 'Movement' : 'Spent'}
+                    {panelStrings.summary.total[categoryType]}
                   </Typography>
                   <Typography variant="h6" fontWeight="bold">
                     {formatCurrencyValue(summary.total)}
@@ -178,7 +180,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
               <Card variant="outlined">
                 <CardContent>
                   <Typography variant="caption" color="text.secondary">
-                    Transactions
+                    {panelStrings.summary.transactions || generalStrings.transactions}
                   </Typography>
                   <Typography variant="h6" fontWeight="bold">
                     {summary.count}
@@ -190,7 +192,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
               <Card variant="outlined">
                 <CardContent>
                   <Typography variant="caption" color="text.secondary">
-                    Average
+                    {panelStrings.summary.average || generalStrings.average}
                   </Typography>
                   <Typography variant="h6" fontWeight="bold">
                     {formatCurrencyValue(summary.average)}
@@ -246,6 +248,9 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
             isZooming={isZooming}
             categoryType={categoryType}
             chartTitle={currentConfig.chartTitle}
+            parentTitle={panelStrings.chartTitles.parent}
+            subcategoryTitle={panelStrings.chartTitles.subcategory}
+            pendingBreakdownLabel={overviewStrings.pendingBreakdown}
             formatCurrencyValue={formatCurrencyValue}
             onDrillDown={handleDrillDown}
             onSubcategoryClick={handleSubcategoryClick}
@@ -257,7 +262,12 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
           <CategoryView data={currentData} categoryType={categoryType} formatCurrencyValue={formatCurrencyValue} />
         )}
         {view === 'vendor' && (
-          <VendorView vendors={vendorBreakdown} categoryType={categoryType} formatCurrencyValue={formatCurrencyValue} />
+          <VendorView
+            vendors={vendorBreakdown}
+            categoryType={categoryType}
+            formatCurrencyValue={formatCurrencyValue}
+            vendorTrendLabel={panelStrings.aria.vendorTrend}
+          />
         )}
         {view === 'timeline' && (
           <TimelineView data={monthlyBreakdown} categoryType={categoryType} title={currentConfig.title} formatCurrencyValue={formatCurrencyValue} />

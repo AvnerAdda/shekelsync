@@ -1,4 +1,34 @@
 /* eslint-env browser */
+const SUPPORTED_LOCALES = ['he', 'en', 'fr'];
+
+function normalizeLocale(value) {
+  if (!value || typeof value !== 'string') return null;
+  const base = value.toLowerCase().split(',')[0].split('-')[0];
+  return SUPPORTED_LOCALES.includes(base) ? base : null;
+}
+
+function detectClientLocale() {
+  if (typeof window === 'undefined') return null;
+
+  const stored = normalizeLocale(window.localStorage?.getItem('app-locale'));
+  if (stored) return stored;
+
+  const docLang = normalizeLocale(document?.documentElement?.lang);
+  if (docLang) return docLang;
+
+  const navigatorLang = normalizeLocale(window.navigator?.language);
+  if (navigatorLang) return navigatorLang;
+
+  if (Array.isArray(window.navigator?.languages)) {
+    for (const lang of window.navigator.languages) {
+      const normalized = normalizeLocale(lang);
+      if (normalized) return normalized;
+    }
+  }
+
+  return null;
+}
+
 function isElectronApiAvailable() {
     return typeof window !== 'undefined' && Boolean(window.electronAPI?.api?.request);
 }
@@ -23,6 +53,10 @@ function deserializeData(payload) {
 async function request(method, endpoint, options = {}) {
     const { body, headers = {}, rawBody } = options;
     const normalizedHeaders = normalizeHeaders(headers);
+    const locale = detectClientLocale();
+    if (locale && !normalizedHeaders['accept-language'] && !normalizedHeaders['Accept-Language']) {
+        normalizedHeaders['Accept-Language'] = locale;
+    }
     if (isElectronApiAvailable()) {
         const electronApi = window.electronAPI;
         if (!electronApi?.api?.request) {

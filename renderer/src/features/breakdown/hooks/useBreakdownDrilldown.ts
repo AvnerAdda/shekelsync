@@ -9,6 +9,7 @@ import {
   BreakdownTransaction,
 } from '../types';
 import { isPendingTransaction } from '../utils';
+import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
 
 export type BreakdownView = 'overview' | 'category' | 'vendor' | 'timeline';
 
@@ -39,6 +40,7 @@ const useBreakdownDrilldown = ({
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [isZooming, setIsZooming] = useState(false);
   const zoomTimeout = useRef<number>();
+  const { locale } = useLocaleSettings();
 
   const startZoomAnimation = useCallback(() => {
     setIsZooming(true);
@@ -120,6 +122,9 @@ const useBreakdownDrilldown = ({
           endDate: endDate.toISOString(),
           type: categoryType,
         });
+        if (locale) {
+          params.append('locale', locale);
+        }
 
         if (subcategoryId) {
           params.append('subcategoryId', subcategoryId.toString());
@@ -141,7 +146,7 @@ const useBreakdownDrilldown = ({
         alert('Failed to load category details. Check console for details.');
       }
     },
-    [categoryType, endDate, startDate, startZoomAnimation]
+    [categoryType, endDate, locale, startDate, startZoomAnimation]
   );
 
   const handleDrillDown = useCallback(

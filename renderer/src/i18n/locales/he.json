@@ -1,0 +1,1599 @@
+{
+  "common": {
+    "language": "שפה",
+    "languages": { "he": "עברית", "en": "אנגלית", "fr": "צרפתית" },
+    "systemLanguageDetected": "זיהינו {{language}} לפי שפת המערכת. אפשר לשנות בכל רגע."
+  },
+  "dashboard": {
+    "summary": {
+      "categories": { "essential": "חיוני", "growth": "צמיחה", "stability": "יציבות", "reward": "פנאי" },
+      "budgets": { "heading": "תקציבים ({{count}} סה\"כ)", "onTrack": "במסלול", "warning": "אזהרה", "exceeded": "חריגה", "none": "אין תקציבים עדיין" },
+      "allocation": { "actual": "חלוקה בפועל", "target": "יעד: {{targets}}%", "tooltip": "{{label}}: {{actual}}% (יעד {{target}}%)" },
+      "health": { "subtitle": "ציון בריאות פיננסית", "savings": "חיסכון", "diversity": "גיוון", "impulse": "שליטה באימפולס", "runway": "מסלול מזומן" },
+      "cards": {
+        "finance": {
+          "title": "חודש נוכחי",
+          "subtitle": "יתרת בנק: {{amount}}",
+          "income": "הכנסות",
+          "expenses": "הוצאות",
+          "investments": "השקעות",
+          "capitalReturns": "החזרי הון",
+          "capitalReturnsNote": "קרן שהוחזרה מהשקעות (פיקדון/הפקדות). לא נספרת כהכנסה אך מקזזת יציאות להשקעה.",
+          "pendingLabel": "בהמתנה ({{count}})",
+          "pendingDeficit": "הוצאות בהמתנה יגרמו לגרעון של {{amount}}"
+        },
+        "portfolio": { "title": "תיק השקעות" },
+        "analysis": { "title": "בריאות פיננסית" }
+      }
+    },
+    "summarySection": {
+      "fallbackCategory": "סה\"כ הוצאות",
+      "noIncomeTitle": "לא זוהו הכנסות",
+      "noIncomeAddAccounts": "כדי לעקוב אוטומטית אחרי ההכנסות, הוסיפו פרטי כניסה לחשבון הבנק. זה יאפשר מעקב הכנסות מלא ותמונה פיננסית שלמה.",
+      "noIncomeDetected": "לא זיהינו עסקאות הכנסה בתקופה שנבחרה. אם ציפיתם להכנסות, ודאו שהסריקה האחרונה הצליחה או הריצו סריקה חדשה לעדכון העסקאות.",
+      "periodLabel": "חודש נוכחי: {{start}} - {{end}}",
+      "compare": {
+        "on": "השוואה לחודש שעבר",
+        "off": "השווה לחודש שעבר"
+      },
+      "comparison": {
+        "title": "מצב השוואה (בקרוב)",
+        "description": "תצוגת השוואה חודשית בפיתוח. כאן יוצגו מדדים זה לצד זה להשוואה בין {{current}} ל-{{previous}}."
+      }
+    }
+  },
+  "investmentAccountsModal": {
+    "title": "ניהול חשבונות השקעה",
+    "aria": { "tabs": "לשוניות ניהול חשבונות השקעה" },
+    "tabs": {
+      "links": "קישורי עסקאות",
+      "patterns": "תבניות התאמה"
+    },
+    "links": {
+      "title": "הצעות לקישור עסקאות",
+      "description": "הצעות אוטומטיות לקישור עסקאות השקעה לחשבונות.",
+      "empty": "אין הצעות ממתינות. כל עסקאות ההשקעה מקושרות!",
+      "notifications": {
+        "approved": "ההצעה אושרה",
+        "rejected": "ההצעה נדחתה",
+        "error": "שגיאה בעיבוד ההצעה"
+      },
+      "table": {
+        "date": "תאריך",
+        "transaction": "עסקה",
+        "amount": "סכום",
+        "account": "חשבון מוצע",
+        "confidence": "רמת ביטחון",
+        "actions": "פעולות",
+        "approve": "אשר",
+        "reject": "דחה"
+      },
+      "aria": { "refresh": "רענון הצעות" }
+    },
+    "patterns": {
+      "title": "כללי התאמת תבניות",
+      "description": "תבניות מגדירות אילו עסקאות שייכות לאילו חשבונות. השתמשו ב-<code>%</code> כתו כללי.<br />דוגמה: <code>%פיקדון%</code> תתאים לכל עסקה שמכילה \"פיקדון\".",
+      "empty": "לא נמצאו חשבונות השקעה. צרו חשבון כדי להוסיף תבניות.",
+      "chipCount": "{{count}} תבניות",
+      "notifications": {
+        "missingPattern": "נא להזין תבנית",
+        "added": "תבנית נוספה בהצלחה",
+        "addError": "שגיאה בהוספת תבנית",
+        "deleted": "תבנית נמחקה",
+        "deleteError": "שגיאה במחיקת תבנית"
+      },
+      "confirmDelete": "האם למחוק תבנית זו?",
+      "actions": {
+        "add": "הוסף"
+      }
+    }
+  },
+  "dashboardHome": {
+    "empty": {
+      "welcomeTitle": "ברוכים הבאים ל-ShekelSync!",
+      "welcomeDescription": "בואו נסדר את הכספים שלכם. עקבו אחרי השלבים כדי להתחיל לעקוב אחרי הוצאות והכנסות.",
+      "noTransactionsTitle": "אין עסקאות בחודש הנוכחי",
+      "noTransactionsDescription": "יש לכם {{count}} עסקאות בסך הכל, אבל אין בחודש הנוכחי ({{month}}). נסו לגרד נתונים עדכניים או לצפות בניתוח היסטורי בעמוד הניתוח.",
+      "scrapeRecent": "סרקו עסקאות עדכניות",
+      "viewHistory": "צפו בנתונים היסטוריים"
+    },
+    "anomaly": { "expenseSpike": "קפיצת הוצאה חריגה: {{amount}}" },
+    "trends": { "highSpending": "תקופת הוצאה גבוהה", "lowSpending": "תקופת הוצאה נמוכה" },
+    "tooltip": {
+      "income": "הכנסות",
+      "expenses": "הוצאות",
+      "net": "נטו",
+      "vsAverage": "לעומת ממוצע",
+      "unusualSpending": "הוצאה חריגה",
+      "clickForDetails": "לחצו לצפייה בפרטים"
+    }
+  },
+  "settings": {
+    "title": "הגדרות",
+    "language": {
+      "title": "שפה ואזור",
+      "description": "ברירת המחדל היא עברית. בהפעלה הראשונה נבחר את שפת המערכת אם היא נתמכת; תמיד תוכלו להחליף.",
+      "detectedLabel": "שפת מערכת: {{language}}"
+    },
+    "appearance": {
+      "title": "מראה",
+      "description": "בחרו את ערכת הנושא המועדפת. מצב מערכת יתאים אוטומטית להעדפת המכשיר.",
+      "light": "בהיר",
+      "system": "מערכת",
+      "dark": "כהה",
+      "currentTheme": "ערכת נושא נוכחית: {{theme}}",
+      "systemFollow": "(עוקב אחרי העדפת המערכת)"
+    },
+    "textSize": {
+      "title": "גודל טקסט",
+      "description": "כוונו את גודל הטקסט בכל האפליקציה לנוחות קריאה.",
+      "small": "קטן",
+      "medium": "בינוני",
+      "large": "גדול",
+      "current": "גודל טקסט נוכחי: {{size}}",
+      "hints": {
+        "small": "(90% מהברירת מחדל)",
+        "medium": "(100% - ברירת מחדל)",
+        "large": "(110% מהברירת מחדל)"
+      }
+    },
+    "diagnostics": {
+      "title": "דיאגנוסטיקה ודיווח קריסות",
+      "description": "שתפו דוחות קריסה אנונימיים כדי לעזור לנו לפתור בעיות יציבות מהר יותר. פרטי חשבון ומזהים אישיים אינם נכללים.",
+      "notSupported": "דיווח קריסות זמין רק באפליקציית הדסקטופ.",
+      "toggleLabel": "שליחת דוחות קריסה אוטומטית",
+      "toggleOn": "פרטי הקריסה יועלו בצורה מאובטחת לשירות המעקב שלנו.",
+      "toggleOff": "פרטי הקריסה נשארים במכשיר עד שתבחרו להצטרף.",
+      "exportHint": "תמיד ניתן לייצא לוגים ידנית מלוח הדיאגנוסטיקה למטה."
+    },
+    "chatbot": {
+      "title": "הגדרות צ'אטבוט",
+      "description": "הגדירו את העוזר הפיננסי ותשליטו על הגישה לנתונים. לצ'אטבוט אין גישה לפרטי התחברות לבנק.",
+      "enable": "הפעלת צ'אטבוט",
+      "enableHint": "הצגת כפתור הצ'אטבוט ואפשרות אינטראקציה",
+      "permissionsTitle": "הרשאות גישה לנתונים",
+      "permissionsDescription": "העניקו גישה לנתונים לצורך תובנות מותאמות אישית.",
+      "permissionsEnableFirst": "(הפעילו צ'אטבוט כדי להגדיר הרשאות)",
+      "permissions": {
+        "transaction": "נתוני עסקאות",
+        "transactionHint": "גישה להיסטוריית עסקאות, סכומים, תאריכים ותיאורים",
+        "category": "נתוני קטגוריות",
+        "categoryHint": "גישה לקטגוריות הוצאה וחוקי קטלוג",
+        "analytics": "אנליטיקות ותובנות",
+        "analyticsHint": "גישה לניתוח התנהגותי, מגמות ודפוסי הוצאות"
+      },
+      "privacyTitle": "הפרטיות שלכם מוגנת",
+      "privacyBullet1": "• לצ'אטבוט אין לעולם גישה לפרטי התחברות לבנק",
+      "privacyBullet2": "• ניתן לבטל הרשאות בכל רגע",
+      "privacyBullet3": "• הנתונים משמשים רק למענה ולתובנות",
+      "privacyBullet4": "• אין שיתוף נתונים עם גורמים שלישיים",
+      "noPermissions": "הצ'אטבוט מופעל אך ללא הרשאות. העניקו לפחות הרשאה אחת כדי לקבל תובנות מועילות."
+    },
+    "privacy": {
+      "title": "בקרות פרטיות",
+      "description": "הדליקו הסתרת סכומים כדי להסתיר נתונים כספיים בכל האפליקציה. שימושי בשיתוף מסך או במקומות ציבוריים.",
+      "maskOn": "כל הסכומים מוצגים ככוכביות.",
+      "maskOff": "סכומים יוצגו במלואם עד שתפעילו הסתרה."
+    },
+    "dataExport": {
+      "title": "ייצוא נתונים",
+      "description": "ייצאו את הנתונים הפיננסיים לגיבוי, למס או לניתוח בכלים חיצוניים. הייצוא מכבד את הגדרות הפרטיות ומסיר פרטים רגישים כברירת מחדל.",
+      "institutionNote": "כל ייצוא כולל את שמות/סוגי המוסדות כפי שמופיעים בממשק, כדי שכלי downstream יתאימו עסקאות וספקים לאותם מוסדות.",
+      "bridge": {
+        "desktop": "נפתח דיאלוג שמירה מקומי ונכתוב ישירות לתיקייה שבחרתם. שום דבר לא מועלה לענן.",
+        "web": "לא זוהתה גישת דסקטופ — לאחר הייצוא, הקובץ יירד דרך הדפדפן."
+      },
+      "config": {
+        "title": "הגדרות ייצוא",
+        "dataTypeLabel": "סוג נתונים",
+        "dataTypes": {
+          "transactions": "עסקאות בלבד",
+          "categories": "סיכום קטגוריות",
+          "vendors": "סיכום ספקים",
+          "budgets": "תקציבים ומטרות",
+          "full": "ייצוא מלא"
+        },
+        "formatLabel": "פורמט",
+        "format": {
+          "csv": "CSV (תואם אקסל)",
+          "json": "JSON (למפתחים)"
+        },
+        "dateRangeLabel": "טווח תאריכים",
+        "dateRanges": {
+          "last3months": "3 חודשים אחרונים",
+          "last6months": "6 חודשים אחרונים",
+          "lastyear": "12 חודשים אחרונים",
+          "thisyear": "השנה",
+          "custom": "טווח מותאם אישית"
+        },
+        "startDate": "תאריך התחלה",
+        "endDate": "תאריך סיום",
+        "exportPeriod": "טווח ייצוא: {{start}} - {{end}}"
+      },
+      "filters": {
+        "title": "מסננים ואפשרויות",
+        "includeTypes": "כלול סוגי עסקאות:",
+        "income": "הכנסות",
+        "expenses": "הוצאות",
+        "investments": "השקעות",
+        "excludeDuplicates": "החרג עסקאות כפולות",
+        "includeInstitutions": "כלול פרטי מוסדות",
+        "categories": {
+          "label": "סינון לפי קטגוריות",
+          "placeholder": "בחרו קטגוריות..."
+        },
+        "vendors": {
+          "label": "סינון לפי ספקים",
+          "placeholder": "בחרו ספקים...",
+          "count": "{{count}} עסקאות"
+        }
+      },
+      "summary": {
+        "title": "סיכום ייצוא",
+        "estimated": "רשומות מוערכות: ~{{count}}",
+        "formatType": "פורמט: {{format}} • סוג: {{type}}",
+        "exporting": "מייצא...",
+        "cta": "ייצא נתונים",
+        "success": "הייצוא הסתיים בהצלחה! בדקו את תיקיית ההורדות.",
+        "error": "הייצוא נכשל: {{message}}",
+        "privacyNoteTitle": "הערת פרטיות:",
+        "privacyNoteBody": "הנתונים המיוצאים כוללים פרטי עסקאות אך לא פרטי אימות רגישים. השתמשו בהם באחריות ושמרו אותם בצורה מאובטחת."
+      }
+    },
+    "profile": {
+      "loading": "טוען פרופיל...",
+      "sections": {
+        "profile": "מידע פרופיל",
+        "basic": "פרטים בסיסיים",
+        "professional": "מידע מקצועי",
+        "spouse": "מידע על בן/בת זוג",
+        "children": "מידע על ילדים"
+      },
+      "household": "בית של {{size}}",
+      "intro": "השלימו את הפרופיל לתובנות מותאמות וניתוח פיננסי משפחתי.",
+      "fields": {
+        "username": "שם משתמש",
+        "birthDate": "תאריך לידה",
+        "maritalStatus": "מצב משפחתי",
+        "location": "מיקום",
+        "occupation": "מקצוע",
+        "industry": "ענף",
+        "employmentStatus": "סטטוס תעסוקה",
+        "educationLevel": "השכלה",
+        "monthlyIncome": "הכנסה חודשית",
+        "homeOwnership": "מגורים",
+        "spouseName": "שם בן/בת זוג",
+        "spouseBirthDate": "תאריך לידה בן/בת זוג",
+        "spouseOccupation": "מקצוע בן/בת זוג",
+        "spouseIndustry": "ענף בן/בת זוג",
+        "spouseIncome": "הכנסה חודשית בן/בת זוג",
+        "spouseEmployment": "סטטוס תעסוקה בן/בת זוג"
+      },
+      "placeholders": {
+        "occupation": "לדוגמה: מהנדס/ת תוכנה",
+        "income": "15000"
+      },
+      "helpers": {
+        "ageProfile": "גיל: {{age}}",
+        "ageSpouse": "גיל: {{age}}",
+        "grossIncome": "הכנסה חודשית ברוטו",
+        "required": "נדרש"
+      },
+      "options": {
+        "marital": {
+          "single": "רווק/ה",
+          "married": "נשוי/אה",
+          "divorced": "גרוש/ה",
+          "widowed": "אלמן/ה",
+          "na": "מעדיף/ה לא לציין"
+        },
+        "location": {
+          "unspecified": "לא צוין",
+          "telAviv": "תל אביב",
+          "jerusalem": "ירושלים",
+          "haifa": "חיפה",
+          "beerSheva": "באר שבע",
+          "netanya": "נתניה",
+          "rishon": "ראשון לציון",
+          "petahTikva": "פתח תקווה",
+          "ashdod": "אשדוד",
+          "herzliya": "הרצליה",
+          "other": "אחר"
+        },
+        "industry": {
+          "unspecified": "לא צוין",
+          "tech": "טכנולוגיה",
+          "finance": "פיננסים",
+          "healthcare": "בריאות",
+          "education": "חינוך",
+          "retail": "קמעונאות",
+          "manufacturing": "תעשייה",
+          "government": "מגזר ציבורי",
+          "selfEmployed": "עצמאי/ת",
+          "other": "אחר"
+        },
+        "employment": {
+          "unspecified": "לא צוין",
+          "employed": "מועסק/ת",
+          "selfEmployed": "עצמאי/ת",
+          "unemployed": "מחוסר/ת עבודה",
+          "retired": "פנסיונר/ית",
+          "student": "סטודנט/ית"
+        },
+        "education": {
+          "unspecified": "לא צוין",
+          "highSchool": "תיכון",
+          "vocational": "הכשרה מקצועית",
+          "bachelor": "תואר ראשון",
+          "master": "תואר שני",
+          "phd": "דוקטורט",
+          "other": "אחר"
+        },
+        "home": {
+          "unspecified": "לא צוין",
+          "rent": "שכירות",
+          "own": "בעלות",
+          "family": "מגורים עם משפחה",
+          "other": "אחר"
+        },
+        "gender": {
+          "unspecified": "מעדיף/ה לא לציין",
+          "male": "זכר",
+          "female": "נקבה",
+          "other": "אחר"
+        },
+        "childEducation": {
+          "unspecified": "לא צוין",
+          "infant": "תינוק (0-1)",
+          "toddler": "פעוט (1-3)",
+          "preschool": "גן (3-5)",
+          "elementary": "בית ספר יסודי",
+          "middleSchool": "חטיבת ביניים",
+          "highSchool": "תיכון",
+          "university": "אוניברסיטה",
+          "graduated": "בוגר/ת"
+        }
+      },
+      "children": {
+        "count": "{{count}} {{count, plural, one {ילד} other {ילדים}}}",
+        "empty": "לא נוספו ילדים. לחצו על + להוספת ילד ראשון.",
+        "unnamed": "ילד {{index}}",
+        "age": "גיל: {{age}}",
+        "specialNeeds": "צרכים מיוחדים",
+        "add": "הוספת ילד",
+        "dialog": {
+          "editTitle": "עריכת פרטי ילד",
+          "addTitle": "הוספת פרטי ילד",
+          "name": "שם ילד",
+          "namePlaceholder": "אופציונלי - ניתן להשאיר ריק",
+          "birthDate": "תאריך לידה",
+          "age": "גיל: {{age}}",
+          "required": "נדרש",
+          "birthRequired": "תאריך לידה נדרש לילד",
+          "gender": "מגדר",
+          "educationStage": "שלב לימודי",
+          "specialNeeds": "יש צרכים מיוחדים (משפיע על הוצאות המשפחה)"
+        }
+      },
+      "summary": {
+    "title": "סיכום משק בית:",
+    "members": "{{count}} חברים",
+    "combinedIncome": "הכנסה משולבת: ₪{{amount}}/חודש",
+    "children_one": "{{count}} ילד",
+    "children_other": "{{count}} ילדים"
+      },
+      "privacyNote": {
+        "title": "הפרטיות שלכם חשובה:",
+        "body": "כל נתוני המשפחה נשמרים מקומית ומשמשים רק לתובנות מותאמות. המידע מאפשר אנליטיקות מתקדמות והשוואות פיננסיות משפחתיות."
+      },
+      "actions": {
+        "save": "שמור פרופיל",
+        "cancel": "בטל",
+        "saveChanges": "שמור שינויים",
+        "addChild": "הוסף ילד",
+        "editChild": "ערוך ילד",
+        "deleteChild": "מחק ילד"
+      },
+      "messages": {
+        "saveSuccess": "הפרופיל עודכן! התובנות המשפחתיות ישתפרו.",
+        "saveError": "שמירת הפרופיל נכשלה. נסו שוב.",
+        "loadError": "טעינת הפרופיל נכשלה. נסו שוב.",
+        "sessionExpired": "החיבור פג. התחברו מחדש."
+      }
+    },
+    "diagnosticsPanel": {
+      "title": "דיאגנוסטיקה ולוגים",
+      "description": "ייצאו לוגים אחרונים והקשר מערכת בעת פתיחת פנייה, או פתחו את תיקיית הלוגים כדי לבדוק תקלות מקומית.",
+      "notSupported": "כלי דיאגנוסטיקה זמינים רק באפליקציית הדסקטופ הארוזה.",
+      "openLogs": "פתח תיקיית לוגים",
+      "export": "ייצוא דיאגנוסטיקה",
+      "logDirectory": "תיקיית לוגים",
+      "version": "גרסה: {{version}}",
+      "platform": "פלטפורמה: {{platform}}",
+      "errors": {
+        "logUnavailable": "גישה לתיקיית הלוגים אינה זמינה בסביבה זו.",
+        "openFailed": "נכשלה פתיחת תיקיית הלוגים.",
+        "exportUnsupported": "ייצוא דיאגנוסטיקה אינו נתמך בסביבה זו.",
+        "exportFailed": "נכשלה יצוא חבילת הדיאגנוסטיקה."
+      },
+      "saveDialogLabel": "חבילת דיאגנוסטיקה",
+      "telemetry": {
+        "status": "מצב דיווח קריסות",
+        "optedIn": "משתתף",
+        "optedOut": "לא משתתף",
+        "noDsn": "SENTRY_DSN לא מוגדר. דוחות הקריסה נשארים מקומית גם אם תבחרו להשתתף.",
+        "destination": "יעד: {{host}}"
+      },
+      "metrics": {
+        "title": "הרצות אנליטיקה אחרונות",
+        "runs": "הרצות: {{count}}",
+        "avgDuration": "ממוצע {{value}}ms",
+        "lastRun": "הרצה אחרונה: {{date}}",
+        "breakdown": "פירוט קטגוריות",
+        "dashboard": "סקירת דשבורד",
+        "unifiedCategory": "קטגוריה מאוחדת",
+        "waterfall": "מפל תזרים מזומנים",
+        "categoryOpportunities": "הזדמנויות קטגוריה"
+      }
+    }
+  },
+  "breakdownTabs": {
+    "tabs": { "overall": "סה\"כ", "income": "הכנסות", "expense": "הוצאות", "investment": "השקעות" },
+    "overall": {
+      "totalIncome": "סה\"כ הכנסות: {{amount}}",
+      "period": "תקופה: {{start}} - {{end}}",
+      "noData": "אין נתוני זרימת כספים לתקופה זו",
+      "noDataHint": "הוסיפו עסקאות הכנסה והוצאה כדי לראות דיאגרמת זרימה"
+    },
+    "shared": { "noDataPeriod": "אין נתוני פירוק לתקופה זו." },
+    "income": {
+      "noIncomeTitle": "אין נתוני הכנסה",
+      "noAccounts": "הוסיפו פרטי בנק כדי לעקוב אוטומטית אחר הכנסות ולקבל תמונה מלאה של הזרימות.",
+      "noIncomePeriod": "לא נמצאו עסקאות הכנסה בתקופה הנבחרת. ודאו שהסריקה האחרונה הצליחה או הריצו סריקה חדשה."
+    },
+    "investment": {
+      "comingSoon": "פירוט השקעות יגיע בקרוב.",
+      "liquid": "השקעות נזילות",
+      "liquidTotal": "סה\"כ נזיל: {{amount}}",
+      "liquidHint": "השקעות נגישות",
+      "noLiquid": "אין השקעות נזילות",
+      "addLiquidHint": "הוסיפו ברוקר, קריפטו או חשבונות חיסכון",
+      "restricted": "השקעות מוגבלות",
+      "restrictedTotal": "סה\"כ מוגבל: {{amount}}",
+      "restrictedHint": "פנסיה, קופות גמל וקרנות השתלמות",
+      "noRestricted": "אין חסכונות ארוכי טווח",
+      "addRestrictedHint": "הוסיפו חשבונות פנסיה/גמל/השתלמות"
+    },
+    "sankey": {
+      "title": "זרימת כספים",
+      "empty": "אין מספיק נתונים להצגת זרימת כספים עדיין.",
+      "legend": {
+        "income": "הכנסות",
+        "expenses": "הוצאות",
+        "investments": "השקעות"
+      },
+      "tooltip": "{{source}} → {{target}}: {{amount}}"
+    }
+  },
+  "transactionHistory": {
+    "title": "היסטוריית עסקאות",
+    "scales": { 
+      "linear": "סולם לינארי", 
+      "log": "סולם לוגריתמי",
+      "logRecommendedHint": "זוהו הבדלי ערכים גדולים. שקול להשתמש בסולם לוגריתמי להצגה טובה יותר."
+    },
+    "periods": { "daily": "יומי", "weekly": "שבועי", "monthly": "חודשי" },
+    "tabs": {
+      "history": "הכנסות והוצאות יומיות",
+      "netPosition": "מצב נטו",
+      "scenarios": "תרחישי סוף חודש"
+    },
+    "forecast": {
+      "loading": "טוען תחזית...",
+      "error": "נכשל בטעינת תחזית",
+      "noData": "אין נתוני תחזית זמינים",
+      "expected": "צפוי",
+      "p10": "אופטימי (P10)",
+      "p50": "ממוצע (P50)",
+      "p90": "שמרני (P90)",
+      "income": "הכנסות",
+      "expenses": "הוצאות",
+      "netCashFlow": "תזרים מזומנים נטו",
+      "cumulative": "מצטבר",
+      "historicalData": "היסטורי",
+      "forecastData": "תחזית",
+      "scenarioSummary": "תחזית לסוף החודש על בסיס {{simulations}} סימולציות מונטה קרלו",
+      "daysRemaining": "{{count}} ימים נותרו בחודש",
+      "actualNet": "מצב נטו בפועל",
+      "confidenceBand": "רצועת ביטחון (P10-P90)",
+      "bestCase": "מקרה טוב ביותר",
+      "baseCase": "מקרה בסיס",
+      "worstCase": "מקרה גרוע ביותר"
+    },
+    "avgLabel": "ממוצע: {{amount}}",
+    "legend": { "income": "הכנסות", "expenses": "הוצאות" },
+    "patterns": {
+      "title": "תבניות שזוהו",
+      "avgByPeriod": "ממוצע {{period}}",
+      "savingsRate": "שיעור חיסכון",
+      "anomalies": "חריגות",
+      "spikes": "{{count}} קפיצה"
+    },
+    "transactionsOn": "עסקאות ב-{{date}} ({{count}} עסקאות):",
+    "noTransactionsForDate": "לא נמצאו עסקאות לתאריך זה."
+  }
+  ,
+  "analysisPage": {
+    "actions": {
+      "refresh": "רענן",
+      "refreshing": "מרענן...",
+      "retry": "נסה שוב"
+    },
+    "tabs": {
+      "ariaLabel": "לשוניות ניתוח",
+      "dashboard": "ראשי",
+      "actions": "פעולות",
+      "spending": "הוצאות",
+      "budget": "תקציב",
+      "scoring": "ציון"
+    },
+    "errors": {
+      "fetchFailed": "טעינת נתוני הניתוח נכשלה",
+      "generic": "שגיאה לא ידועה"
+    },
+    "states": {
+      "noData": "אין נתונים זמינים. נסה שוב."
+    },
+    "header": {
+      "title": "ניתוח פיננסי",
+      "subtitle": "תובנות חכמות, מעקב תקציב ומדדי בריאות פיננסית"
+    },
+    "dashboard": {
+      "rhythm": {
+        "title": "הקצב הפיננסי שלך",
+        "spendingByHour": "הוצאות לפי שעה ביום",
+        "lowPrecision": "רק {{percentage}}% כוללים זמן",
+        "runway": "אורך ריצת מזומן",
+        "runwayDays": "{{count}} ימים",
+        "burnRate": "קצב שריפה יומי",
+        "peakHour": "שעת שיא",
+        "peakHourValue": "{{hour}}:00",
+        "na": "לא זמין",
+        "paydayEffect": "השפעת יום המשכורת"
+      },
+      "personality": {
+        "title": "אישיות הכסף שלך",
+        "spendingStyle": "סגנון הוצאה",
+        "impulse": "{{value}}% אימפולסיבי",
+        "planned": "{{value}}% מתוכנן",
+        "avgTransaction": "עסקה ממוצעת",
+        "smallPurchases": "קניות קטנות",
+        "fomoScore": "מדד FOMO",
+        "fomoHint": "אינדיקטור להוצאות בידור/סופ\"ש"
+      },
+      "future": {
+        "title": "העתיד הפיננסי שלך",
+        "trajectory": "מסלול חיסכון ל-6 חודשים",
+        "endOfMonth": "סוף חודש",
+        "monthlySavings": "חיסכון חודשי",
+        "dailyVelocity": "מהירות יומית",
+        "velocityValue": "{{value}} ליום"
+      },
+      "reality": {
+        "title": "להפוך למציאות",
+        "timeValue": "הזמן שלך = כסף",
+        "hourlyRate": "{{value}} לשעה",
+        "avgPurchase": "קנייה ממוצעת = {{hours}} שעות עבודה",
+        "biggestPurchase": "הקנייה הגדולה החודש",
+        "hoursOfWork": "{{hours}} שעות עבודה",
+        "na": "לא זמין"
+      }
+    },
+    "health": {
+      "title": "ציון בריאות פיננסית",
+      "subtitle": "ניתוח מקיף של מצבך הפיננסי",
+      "actions": {
+        "refresh": "רענן",
+        "retry": "נסה שוב",
+        "improve": "שפר ציון"
+      },
+      "labels": {
+        "healthScore": "ציון בריאות",
+        "score": "ציון"
+      },
+      "empty": "אין נתוני ציון בריאות זמינים. ודא שיש מספיק היסטוריית עסקאות.",
+      "errors": {
+        "fetchFailed": "טעינת ציון הבריאות נכשלה",
+        "generic": "שגיאה לא ידועה"
+      },
+      "scorecard": {
+        "breakdown": "פירוט הציון",
+        "status": {
+          "excellent": {
+            "title": "מעולה",
+            "message": "הבריאות הפיננסית שלך מצוינת! המשך כך."
+          },
+          "good": {
+            "title": "טוב",
+            "message": "המצב הפיננסי טוב, אך יש מקום לשיפור."
+          },
+          "needsAttention": {
+            "title": "דורש תשומת לב",
+            "message": "הבריאות הפיננסית דורשת עבודה. עבור על ההמלצות מטה."
+          }
+        }
+      },
+      "metrics": {
+        "savings": {
+          "label": "חיסכון",
+          "tooltip": "מודד את שיעור החיסכון ביחס להכנסה. ציון גבוה מצביע על משמעת פיננסית וביטחון עתידי טוב יותר."
+        },
+        "diversity": {
+          "label": "גיוון",
+          "tooltip": "מעריך עד כמה ההוצאות מאוזנות בין קטגוריות. ציון גבוה מצביע על גיוון פיננסי טוב יותר."
+        },
+        "impulse": {
+          "label": "שליטה באימפולס",
+          "tooltip": "מודד את היכולת לשלוט ברכישות ספונטניות. ציון גבוה מצביע על משמעת והיערכות טובה יותר."
+        },
+        "runway": {
+          "label": "משך ריצה",
+          "tooltip": "מחשב כמה זמן החיסכון הנוכחי יכסה את סגנון החיים שלך. ציון גבוה מעיד על חוסן פיננסי."
+        },
+        "fallbackTooltip": "מדד מרכזי לבריאות ויציבות פיננסית"
+      }
+    },
+    "smartActions": {
+      "title": "פריטי פעולה חכמים",
+      "subtitle": "תובנות מבוססות AI לפי דפוסי ההוצאה שלך",
+      "actions": {
+        "generate": "צור",
+        "generating": "יוצר..."
+      },
+      "summary": {
+        "totalActions": "סה\"כ פעולות",
+        "criticalHigh": "קריטי/גבוה",
+        "potentialImpact": "השפעה פוטנציאלית"
+      },
+      "empty": {
+        "title": "הכל נקי!",
+        "description": "אין פריטי פעולה. הכספים שלך נראים טוב."
+      },
+      "types": {
+        "anomaly": "חריגה בהוצאות",
+        "budget_overrun": "התראת תקציב",
+        "optimization": "אופטימיזציה",
+        "fixed_variation": "שינוי עלות קבועה",
+        "unusual_purchase": "רכישה חריגה",
+        "seasonal_alert": "דפוס עונתי"
+      },
+      "severities": {
+        "critical": "קריטי",
+        "high": "גבוה",
+        "medium": "בינוני",
+        "low": "נמוך"
+      },
+      "tooltips": {
+        "resolve": "סגירת פעולה",
+        "dismiss": "התעלמות",
+        "snooze": "דחייה ל-{{days}} ימים"
+      },
+      "labels": {
+        "costIncrease": "עלייה בעלות:",
+        "potentialSavings": "חיסכון אפשרי:"
+      },
+      "details": {
+        "title": "פרטי זיהוי",
+        "detected": "תאריך זיהוי",
+        "confidence": "רמת ביטחון",
+        "additionalInfo": "מידע נוסף"
+      },
+      "dialog": {
+        "resolve": { "title": "סגירת פעולה" },
+        "dismiss": { "title": "התעלמות מפעולה" },
+        "snooze": { "title": "דחיית פעולה" },
+        "noteLabel": "הערה (אופציונלי)",
+        "notePlaceholder": "הוסיפו הערה על הפעולה...",
+        "cancel": "ביטול",
+        "confirm": "אישור"
+      }
+    },
+    "spendingChart": {
+      "title": "קטגוריות הוצאה",
+      "subtitle": "איך ההוצאות מחולקות בין קטגוריות",
+      "targetVsActual": "יעד מול ביצוע",
+      "empty": {
+        "title": "אין נתוני הוצאה",
+        "description": "התחילו לשייך עסקאות כדי לראות תובנות לפי קטגוריה."
+      },
+      "categories": {
+        "essential": "חיוני",
+        "growth": "צמיחה",
+        "stability": "יציבות",
+        "reward": "פינוק",
+        "unallocated": "לא משויך",
+        "other": "אחר"
+      },
+      "labels": {
+        "target": "יעד: {{value}}%",
+        "transactions_one": "עסקה אחת",
+        "transactions_other": "{{count}} עסקאות",
+        "totalSpending_one": "סך הוצאות (חודש {{count}})",
+        "totalSpending_other": "סך הוצאות ({{count}} חודשים)"
+      },
+      "tooltips": {
+        "overTarget": "חריגה מהיעד",
+        "underTarget": "מתחת ליעד"
+      }
+    },
+    "targets": {
+      "title": "חלוקת הוצאות",
+      "subtitle": {
+        "withIncome": "מבוסס על הכנסה {{amount}} החודש",
+        "noIncome": "אין הכנסות החודש"
+      },
+      "categories": {
+        "essential": "חיוני",
+        "growth": "צמיחה",
+        "stability": "יציבות",
+        "reward": "פינוק",
+        "unallocated": "לא משויך"
+      },
+      "descriptions": {
+        "essential": "הוצאות קבועות: שכר דירה, חשבונות, מזון, תחבורה",
+        "growth": "השקעות, חיסכון, לימודים, פיקדונות",
+        "stability": "ביטוחים, קרן חירום, החזרי חוב",
+        "reward": "פנאי, בילויים, טיולים, תחביבים"
+      },
+      "unallocated": {
+        "count_one": "קטגוריה אחת",
+        "count_other": "{{count}} קטגוריות",
+        "needsAssignment": "{{percentage}}% מההכנסה ללא שיוך"
+      },
+      "selected": {
+        "title": "{{category}} - קטגוריות",
+        "empty": "אין קטגוריות משויכות",
+        "noSpending": "אין הוצאות"
+      },
+      "empty": {
+        "selectPrompt": "בחרו סוג חלוקה כדי לראות ולנהל את הקטגוריות"
+      }
+    },
+    "budgetHealth": {
+      "title": "מד חוסן תקציבי",
+      "subtitle": "מעקב בזמן אמת אחרי ביצועי התקציב",
+      "empty": {
+        "title": "אין תקציבים פעילים",
+        "instructions": "כדי להתחיל לעקוב אחרי התקציב, צריך:",
+        "steps": {
+          "step1": "לגלול לפאנל המלצות התקציב למטה",
+          "step2": "ללחוץ על \"צור\" כדי ליצור המלצות תקציב חכמות",
+          "step3": "לעבור על ההמלצות ולהפעיל תקציב לקטגוריה",
+          "step4": "לחזור לכאן כדי לראות מעקב בזמן אמת"
+        }
+      },
+      "labels": {
+        "onTrack": "במסלול",
+        "warning": "אזהרה",
+        "exceeded": "חריגה",
+        "unknown": "לא ידוע"
+      },
+      "overall": {
+        "title": "מצב התקציב הכללי: {{status}}",
+        "breakdown": "{{onTrack}} במסלול, {{warning}} באזהרה, {{exceeded}} בחריגה",
+        "status": {
+          "good": "טוב",
+          "warning": "אזהרה",
+          "bad": "בסיכון",
+          "error": "בסיכון",
+          "unknown": "לא ידוע"
+        }
+      },
+      "summary": {
+        "totalBudget": "סך התקציב",
+        "categoriesTracked": "{{count}} קטגוריות במעקב",
+        "spentThisMonth": "סך הוצאות החודש",
+        "statusCounts": "{{onTrack}} במסלול · {{warning}} באזהרה",
+        "remainingHeadroom": "מרווח תקציבי שנותר",
+        "exceededCount": "{{count}} בחריגה"
+      },
+      "budget": {
+        "spent": "הוצאה: {{amount}}",
+        "limit": "תקציב: {{amount}}",
+        "daysRemaining": "ימים שנותרו",
+        "daysValue_one": "{{count}} יום",
+        "daysValue_other": "{{count}} ימים",
+        "dailyLimit": "מגבלת יום",
+        "dailyAverage": "ממוצע יומי",
+        "dailyValue": "{{amount}}/יום",
+        "projected": "חזוי סוף חודש",
+        "overBy": "(חריגה של {{amount}})",
+        "alerts": {
+          "warning": "אתם ב-{{percent}}% מהתקציב עם {{days}} ימים שנותרו. שימרו על המסלול!",
+          "exceeded": "חריגה מהתקציב! שקלו להתאים הוצאות או להעלות את המגבלה."
+        }
+      },
+      "errors": {
+        "fetchFailed": "טעינת בריאות התקציב נכשלה",
+        "generic": "שגיאה לא ידועה"
+      }
+    },
+    "budgetSuggestions": {
+      "title": "המלצות תקציב חכמות",
+      "subtitle": "המלצות תקציב מבוססות AI לפי היסטוריית ההוצאות",
+      "actions": {
+        "generate": "צור",
+        "generating": "יוצר...",
+        "activate": "הפעל תקציב"
+      },
+      "labels": {
+        "active": "פעיל",
+        "activeHint": "תקציב זה פעיל כעת",
+        "suggestedBudget": "תקציב חודשי מומלץ",
+        "confidence": "ביטחון",
+        "basedOn": "מבוסס על",
+        "months_one": "חודש אחד",
+        "months_other": "{{count}} חודשים",
+        "variability": "שונות",
+        "viewDetails": "פרטי חישוב",
+        "calculationSummary": "ממוצע: {{mean}}, חציון: {{median}}, סטיית תקן: {{stdDev}}, CV: {{cv}}"
+      },
+      "confidence": {
+        "high": "ביטחון גבוה",
+        "medium": "ביטחון בינוני",
+        "low": "ביטחון נמוך"
+      },
+      "empty": "אין המלצות תקציב כרגע. לחצו \"צור\" כדי לבנות המלצות חכמות לפי היסטוריית ההוצאות.",
+      "dialog": {
+        "title": "להפעיל את המלצת התקציב?",
+        "confirmation": "להפעיל תקציב עבור {{category}}?",
+        "monthlyBudget": "תקציב חודשי:",
+        "confidence": "ביטחון: {{value}}% על בסיס {{months}} חודשים",
+        "cancel": "ביטול",
+        "activate": "הפעל"
+      }
+    }
+  },
+  "investmentsPage": {
+    "header": {
+      "title": "לוח מחוונים להשקעות",
+      "subtitle": "עקבו אחרי ביצועי התיק והעסקאות"
+    },
+    "actions": {
+      "refreshTooltip": "רענון כל הנתונים",
+      "refresh": "רענן",
+      "refreshing": "מרענן...",
+      "portfolioSetup": "הגדרת תיק"
+    },
+    "empty": {
+      "title": "התחילו עם תיק ההשקעות",
+      "description": "עקבו אחרי ביצועי ההשקעות במספר חשבונות. חברו ברוקר, פנסיה וחסכונות כדי לראות תמונה מלאה.",
+      "cta": "הגדר תיק"
+    },
+    "summary": {
+      "overall": {
+        "title": "שווי תיק כולל",
+        "accounts_one": "חשבון פעיל אחד",
+        "accounts_other": "{{count}} חשבונות פעילים",
+        "updated": "עודכן לאחרונה {{date}}",
+        "na": "לא זמין",
+        "totalValue": "שווי כולל",
+        "totalCost": "עלות כוללת",
+        "unrealized": "רווח/הפסד לא ממומש",
+        "roi": "תשואה כוללת"
+      },
+      "liquid": {
+        "title": "השקעות נזילות",
+        "subtitle_one": "השקעות נגישות • חשבון {{count}}",
+        "subtitle_other": "השקעות נגישות • {{count}} חשבונות",
+        "currentValue": "שווי נוכחי",
+        "unrealized": "רווח/הפסד לא ממומש"
+      },
+      "restricted": {
+        "title": "חסכונות לטווח ארוך",
+        "subtitle_one": "פנסיה, קופות וקרנות • חשבון {{count}}",
+        "subtitle_other": "פנסיה, קופות וקרנות • {{count}} חשבונות",
+        "currentValue": "שווי נוכחי",
+        "unrealized": "רווח/הפסד לא ממומש"
+      }
+    },
+    "history": {
+      "title": "ביצועי התיק",
+      "aria": {
+        "displayMode": "מצב תצוגה",
+        "chart": "תצוגת גרף",
+        "table": "תצוגת טבלה",
+        "timeRange": "טווח זמן"
+      },
+      "tabs": {
+        "chart": "גרף",
+        "table": "עסקאות"
+      },
+      "ranges": {
+        "1m": "חודש",
+        "3m": "3 חודשים",
+        "6m": "6 חודשים",
+        "1y": "שנה",
+        "all": "כל התקופה"
+      },
+      "table": {
+        "date": "תאריך",
+        "description": "תיאור",
+        "category": "קטגוריה",
+        "amount": "סכום",
+        "investment": "השקעה",
+        "showing": "מציג 50 מתוך {{count}} עסקאות"
+      },
+      "empty": {
+        "history": "אין נתוני היסטוריה זמינים",
+        "transactions": "לא נמצאו עסקאות השקעה לתקופה זו"
+      },
+      "series": {
+        "currentValue": "שווי נוכחי",
+        "costBasis": "עלות בסיס"
+      }
+    },
+    "breakdown": {
+      "title": "פירוט תיק",
+      "group": {
+        "accounts_one": "חשבון {{count}}",
+        "accounts_other": "{{count}} חשבונות",
+        "percentage": "{{value}}%",
+        "roi": "{{value}}% תשואה"
+      },
+      "account": {
+        "updated": "עודכן {{date}}",
+        "holdings_one": "נייר ערך אחד",
+        "holdings_other": "{{count}} ניירות ערך",
+        "aria": {
+          "toggleChart": "החלפת תרשים ביצועים",
+          "closeChart": "סגירת תרשים"
+        },
+        "setupPikadon": "הגדרת פיקדון",
+        "performance": "ביצועים לאורך זמן ({{range}})"
+      },
+      "chart": {
+        "empty": "אין נתוני היסטוריה זמינים",
+        "series": {
+          "currentValue": "שווי נוכחי",
+          "costBasis": "עלות בסיס"
+        }
+      },
+      "pikadon": {
+        "title": "הגדרה אוטומטית לפיקדונות",
+        "loading": "מנתח עסקאות...",
+        "summary": {
+          "totalInterest": "סה\"כ ריבית שהתקבלה",
+          "taxPaid": "מס ששולם",
+          "matured": "פיקדונות שנפדו",
+          "activePrincipal": "קרן פעילה",
+          "netGain": "רווח נטו"
+        },
+        "details": {
+          "title": "רשומות שנוצרו:",
+          "entry": "{{amount}} - {{type}}",
+          "entryWithInterest": "{{date}} • ריבית: {{interest}}"
+        },
+        "detect": {
+          "none": "לא נמצאו עסקאות פיקדון. ודאו שהעסקאות כוללות מילות מפתח כמו פיקדון/פקדון/פירעון/רווח.",
+          "summary": "נמצאו {{chains}} שרשראות פירעון ו-{{active}} פיקדונות פעילים."
+        },
+        "chains": {
+          "title": "שרשראות פירעון:",
+          "amount": "{{start}} → {{end}}",
+          "dates": "{{start}} → {{end}}",
+          "gain": "+{{amount}}",
+          "rolledOver": "גולגל הלאה",
+          "more": "...ועוד {{count}}"
+        },
+        "actions": {
+          "settingUp": "מגדיר...",
+          "setupAll": "הגדר את כל {{count}} הפיקדונות",
+          "close": "סגור",
+          "redetect": "זיהוי מחדש"
+        },
+        "setup": {
+          "success": "נוצרו {{count}} רשומות פיקדון בהצלחה!"
+        }
+      }
+    }
+  },
+  "budgetsPage": {
+    "progress": { "percentUsed": "{{value}}% נוצל" },
+    "alerts": {
+      "exceeded": "חריגה של {{amount}}",
+      "remaining": "{{amount}} נותר"
+    },
+    "dialog": {
+      "titleEdit": "עריכת תקציב",
+      "titleCreate": "יצירת תקציב חדש"
+    },
+    "fields": {
+      "category": "קטגוריה",
+      "selectCategory": "בחרו קטגוריה",
+      "period": "תקופה",
+      "periodOptions": {
+        "weekly": "שבועי",
+        "monthly": "חודשי",
+        "yearly": "שנתי"
+      },
+      "budgetLimit": "תקרת תקציב (₪)"
+    },
+    "actions": {
+      "cancel": "ביטול",
+      "update": "עדכון",
+      "create": "יצירה"
+    }
+  },
+  "unpairedTransactions": {
+    "title": "עסקאות שמחכות לשיוך",
+    "alerts": {
+      "allMatched": "כל העסקאות בקטגוריה 25 (החזר כרטיס אשראי) או 75 (החזרים) כבר משויכות לזיווגים פעילים. אין צורך בפעולה!",
+      "unmatchedInfo": "יש {{count}} עסקאות בנקאיות בקטגוריה \"החזר כרטיס אשראי\" (25) או \"החזרים\" (75) שלא משויכות לזיווגי חשבונות פעילים. שקלו ליצור זיווגים כדי להימנע מספירה כפולה של הוצאות."
+    },
+    "labels": {
+      "transactionCount": "{{count}} עסקאות"
+    },
+    "table": {
+      "date": "תאריך",
+      "name": "שם העסקה",
+      "account": "חשבון",
+      "amount": "סכום",
+      "category": "קטגוריה",
+      "idLabel": "מזהה {{id}}",
+      "notAvailable": "לא זמין"
+    },
+    "errors": {
+      "loadFailed": "הטענת עסקאות לא משויכות נכשלה",
+      "generic": "שגיאה בטעינת עסקאות"
+    }
+  },
+  "chatbotWidget": {
+    "header": {
+      "title": "עוזר פיננסי",
+      "subtitle": "מופעל ב-AI"
+    },
+    "warnings": {
+      "title": "גישה מוגבלת",
+      "description": "הפעילו הרשאות נתונים בהגדרות כדי להשתמש בצ'אטבוט."
+    },
+    "suggestions": {
+      "title": "שאלות מוצעות:",
+      "items": [
+        "כמה הוצאתי החודש?",
+        "על איזו קטגוריה הוצאתי הכי הרבה?",
+        "תן לי המלצות לחיסכון",
+        "יש הוצאות חריגות?"
+      ]
+    },
+    "input": {
+      "placeholderEnabled": "שאלו אותי משהו...",
+      "placeholderDisabled": "הפעילו הרשאות בהגדרות"
+    },
+    "hints": {
+      "enabled": "💡 העוזר מנתח את העסקאות וההכנסות שלכם",
+      "disabled": "🔒 העניקו הרשאות גישה לנתונים בהגדרות כדי להשתמש בפיצ'ר"
+    }
+  },
+  "scrapeModal": {
+    "title": "סנכרון עסקאות",
+    "notifications": {
+      "syncStarted": "הסנכרון התחיל בהצלחה!"
+    },
+    "status": {
+      "firstSync": "הפעילו סנכרון ראשון כדי לאכלס את הדשבורדים.",
+      "lastCompleted": "הסנכרון האחרון הסתיים {{timeAgo}}.",
+      "inProgress": "סנכרון בתהליך",
+      "forVendor": "עבור {{vendor}}",
+      "background": "הסנכרון ממשיך ברקע — אפשר לסגור את החלון ונודיע כשהוא יסתיים.",
+      "startHint": "התחילו סנכרון בכל רגע אחרי חיבור חשבון.",
+      "progressLabel": "{{progress}}% הושלם",
+      "transactionsSynced": "{{count}} עסקאות סונכרנו",
+      "primary": {
+        "starting": "מתחיל סנכרון…",
+        "inProgress": "סנכרון בתהליך",
+        "start": "התחל סנכרון"
+      }
+    },
+    "errors": {
+      "generic": "אירעה שגיאה",
+      "loadInstitutions": "טעינת מוסדות נכשלה",
+      "loadInstitutionsRetry": "טעינת מוסדות נכשלה. נסו שוב בעוד רגע.",
+      "startFailed": "התחלת הסנכרון נכשלה"
+    },
+    "forms": {
+      "selectPrompt": "בחרו מוסד כדי לראות אילו פרטי התחברות נדרשים.",
+      "missingMetadata": "אין מטאדטה על פרטי התחברות עדיין. הזינו שם משתמש וסיסמה למוסד הזה.",
+      "institutionLabel": "מוסד פיננסי",
+      "loadingInstitutions": "טוען מוסדות…",
+      "noInstitutions": "אין מוסדות זמינים",
+      "selectInstitution": "בחרו מוסד",
+      "accountNickname": "שם חשבון"
+    },
+    "fields": {
+      "username": "שם משתמש",
+      "password": "סיסמה",
+      "userCode": "קוד משתמש",
+      "id": "מספר זהות",
+      "card6Digits": "6 ספרות אחרונות של הכרטיס",
+      "card6Helper": "6 הספרות כפי שמופיעות על הכרטיס",
+      "bankAccountNumber": "מספר חשבון בנק",
+      "nationalID": "תעודת זהות",
+      "num": "קוד זיהוי (num)",
+      "email": "כתובת אימייל",
+      "otpCode": "קוד חד-פעמי",
+      "otpToken": "טוקן חד-פעמי",
+      "identification_code": "קוד זיהוי"
+    },
+    "actions": {
+      "cancel": "ביטול"
+    }
+  },
+  "categoryHierarchy": {
+    "header": { "title": "היררכיית קטגוריות" },
+    "tabs": {
+      "hierarchy": "היררכיית קטגוריות",
+      "rules": "כללי התאמה"
+    },
+    "actions": {
+      "close": "סגור",
+      "applyRules": "החילו כללים עכשיו",
+      "applyingRules": "מיישם כללים...",
+      "cancel": "ביטול",
+      "save": "שמירה",
+      "edit": "עריכה",
+      "delete": "מחיקה"
+    },
+    "tree": {
+      "txnCount": "{{count}} {{count, plural, one {עסקה} other {עסקאות}}}"
+    },
+    "summary": {
+      "title": "עסקאות לשיוך קטגוריה",
+      "allDone": "🎉 כל העסקאות משויכות לקטגוריות סופיות!",
+      "pendingCount": "{{countDisplay}} {{count, plural, one {עסקה} other {עסקאות}}} ממתינות לשיוך",
+      "totalPending": "סה\"כ בהמתנה: {{amount}}",
+      "progress": "התקדמות שיוך קטגוריות",
+      "incomplete": "{{formattedCount}} לא הושלמו"
+    },
+    "sort": {
+      "label": "מיין לפי",
+      "date": "תאריך (חדשות קודם)",
+      "name": "עסקאות דומות",
+      "amount": "סכום (גבוה לנמוך)"
+    },
+    "labels": {
+      "categoryType": "סוג קטגוריה",
+      "category": "קטגוריה",
+      "subcategory": "תת-קטגוריה",
+      "subcategoryLevel": "תת-קטגוריה {{level}}",
+      "select": "בחרו...",
+      "targetCategory": "בחרו קטגוריית יעד"
+    },
+    "helpers": {
+      "unknownDate": "תאריך לא ידוע",
+      "progressDetail": "{{assigned}} משויכות לקטגוריה סופית, {{missing}} חסרות ({{percent}}% הושלמו)",
+      "complete": "{{count}} הושלמו"
+    },
+    "confirm": {
+      "deleteCategory": "האם אתם בטוחים שברצונכם למחוק קטגוריה זו? פעולה זו תשפיע גם על כל תת-הקטגוריות.",
+      "deleteRule": "האם אתם בטוחים שברצונכם למחוק כלל זה?"
+    },
+    "errors": {
+      "loadRules": "טעינת הכללים נכשלה",
+      "loadCategories": "טעינת הקטגוריות נכשלה",
+      "selectCategory": "נא לבחור לפחות קטגוריה אחת.",
+      "selectCategoryFirst": "נא לבחור קודם קטגוריה אחת.",
+      "categoryUnavailable": "הקטגוריה שנבחרה אינה זמינה יותר.",
+      "categorizeTransaction": "שיוך העסקה נכשל",
+      "createRule": "יצירת כלל נכשלה",
+      "createCategory": "יצירת קטגוריה נכשלה",
+      "updateCategory": "עדכון קטגוריה נכשל",
+      "deleteCategory": "מחיקת קטגוריה נכשלה",
+      "toggleRule": "שינוי מצב הכלל נכשל",
+      "deleteRule": "מחיקת כלל נכשלה",
+      "applyRules": "החלת הכללים נכשלה",
+      "loadCategoryTransactions": "טעינת העסקאות לקטגוריה זו נכשלה",
+      "removeTransaction": "הסרת העסקה נכשלה",
+      "noCategorySelected": "לא נבחרה קטגוריה",
+      "targetCategoryNotFound": "קטגוריית יעד לא נמצאה",
+      "moveTransaction": "העברת העסקה נכשלה",
+      "patternAndCategoryRequired": "נא להזין תבנית ולבחור קטגוריה",
+      "categoryNameRequired": "נא להזין שם קטגוריה",
+      "autoAssignCategoryRequired": "נא לבחור קודם קטגוריה אחת."
+    },
+    "notifications": {
+      "assignmentSaved": "העסקה שויכה בהצלחה",
+      "ruleExists": "כלל כבר קיים. מחילים על כל העסקאות המתאימות...",
+      "ruleExistsForName": "קיים כבר כלל עבור \"{{name}}\".",
+      "ruleCreatedForName": "נוצר כלל! כל העסקאות בשם \"{{name}}\" יסווגו אוטומטית.",
+      "categoryCreated": "הקטגוריה נוצרה בהצלחה",
+      "categoryUpdated": "הקטגוריה עודכנה בהצלחה",
+      "categoryDeleted": "הקטגוריה נמחקה בהצלחה",
+      "ruleCreated": "הכלל נוצר בהצלחה",
+      "ruleStatusUpdated": "הכלל {{status, select, activated {הופעל} deactivated {הושבת} other {עודכן}}} בהצלחה",
+      "ruleDeleted": "הכלל נמחק בהצלחה",
+      "rulesApplied": "הוחלו בהצלחה {{rules}} כלל{{rules, plural, one {} other {ים}}} על {{transactions}} עסקה{{transactions, plural, one {} other {ות}}}",
+      "transactionRemoved": "העסקה הוסרה מהקטגוריה",
+      "transactionMoved": "העסקה הועברה ל{{category}}"
+    },
+    "editDialog": {
+      "title": "עריכת קטגוריה",
+      "fields": {
+        "name": "שם קטגוריה",
+        "description": "תיאור",
+        "active": "פעילה"
+      }
+    },
+    "transactions": {
+      "title": "עסקאות {{name}}",
+      "count": "{{count}} {{count, plural, one {עסקה} other {עסקאות}}}",
+      "none": "לא נמצאו עסקאות עבור קטגוריה זו.",
+      "unknown": "עסקה לא ידועה",
+      "unknownVendor": "ספק לא ידוע",
+      "remove": "הסרה מהקטגוריה",
+      "move": "העבר לקטגוריה",
+      "createRule": "יצירת כלל"
+    },
+    "rulesForm": {
+      "title": "הוספת כלל קטגוריזציה",
+      "description": "צרו כללים לשיוך עסקאות אוטומטי לפי שם בית עסק",
+      "fields": {
+        "pattern": "תבנית בית עסק",
+        "patternPlaceholder": "לדוגמה: 'starbucks' או 'interactive broker'",
+        "patternHelper": "תבנית לחיפוש בשם העסקה (לא תלוי רישיות)",
+        "patternPreview": "יתאים ל-{{count}} {{count, plural, one {עסקה} other {עסקאות}}}",
+        "type": "סוג",
+        "category": "קטגוריה",
+        "selectCategory": "בחרו קטגוריה",
+        "subcategory": "תת-קטגוריה (אופציונלי)",
+        "none": "ללא"
+      },
+      "typeOptions": {
+        "expense": "הוצאה",
+        "investment": "השקעה",
+        "income": "הכנסה"
+      },
+      "actions": {
+        "add": "הוספה",
+        "applyToExisting": "החילו כללים על עסקאות קיימות"
+      },
+      "preview": {
+        "title": "תצוגה מקדימה: {{count}} {{count, plural, one {עסקה} other {עסקאות}}} יושפעו",
+        "more": "...ועוד {{count}}"
+      }
+    },
+    "rulesList": {
+      "title": "כללים פעילים ({{count}})",
+      "titleFiltered": "כללים פעילים ({{visible}} / {{total}})",
+      "searchPlaceholder": "חיפוש כללים לפי תבנית או קטגוריה...",
+      "empty": "אין כללים עדיין. הוסיפו כלל ראשון למעלה כדי לשייך עסקאות אוטומטית.",
+      "ifContains": "אם העסקה מכילה \"{{pattern}}\"",
+      "then": "אז שייכו לקטגוריה:",
+      "txnCount": "{{count}} {{count, plural, one {עסקה} other {עסקאות}}}",
+      "unknownCategory": "לא ידועה",
+      "status": {
+        "active": "פעיל",
+        "inactive": "לא פעיל"
+      },
+      "tooltips": {
+        "viewMatches": "צפו בעסקאות מתאימות",
+        "noMatches": "אין עסקאות שמתאימות לתבנית",
+        "activate": "הפעל כלל",
+        "deactivate": "השבת כלל",
+        "delete": "מחק כלל"
+      },
+      "matches": {
+        "title": "עסקאות תואמות (מציג עד 20):",
+        "more": "...ועוד {{count}}",
+        "none": "לא נמצאו עסקאות תואמות"
+      }
+    },
+    "legend": {
+      "assignedTerminal": "משויכת לקטגוריה סופית",
+      "notAssignedTerminal": "לא משויכת לקטגוריה סופית"
+    },
+    "sections": {
+      "expense": "הוצאות",
+      "investment": "השקעות",
+      "income": "הכנסות"
+    },
+    "uncategorized": {
+      "similar": "{{count}} {{count, plural, one {עסקה דומה} other {עסקאות דומות}}}",
+      "needsRefinement": "דורש פירוט נוסף",
+      "parentAssigned": "העסקה כבר משויכת לקטגוריה-אב. בחרו תת-קטגוריה סופית כדי להשלים.",
+      "assign": {
+        "cta": "שייך",
+        "saving": "משייך..."
+      },
+      "createRule": {
+        "cta": "צור כלל",
+        "saving": "יוצר כלל..."
+      },
+      "showingLatest": "מציג {{previewCount}} אחרונות מתוך {{total}} עסקאות."
+    }
+  },
+  "sidebar": {
+    "menu": {
+      "overview": "סקירה כללית",
+      "analysis": "ניתוח",
+      "investments": "השקעות",
+      "settings": "הגדרות"
+    },
+    "actions": {
+      "addAccount": "הוסף חשבון",
+      "categories": "קטגוריות"
+    },
+    "stats": {
+      "accounts": "{{count}} חשבון{{count, plural, one {} other {ים}}}"
+    },
+    "popover": {
+      "title": "סטטוס סנכרון חשבונות",
+      "noAccounts": "אין חשבונות מוגדרים",
+      "refreshStaleAccounts": "רענן {{count}} חשבון{{count, plural, one {} other {ים}}} מיושן"
+    },
+    "dbStatus": {
+      "connected": "בסיס הנתונים מחובר",
+      "disconnected": "בסיס הנתונים מנותק",
+      "checking": "בודק..."
+    },
+    "tooltips": {
+      "addAccount": "הוסף חשבון",
+      "categories": "קטגוריות"
+    },
+    "sync": {
+      "never": "מעולם לא",
+      "justNow": "זה עתה",
+      "minutesAgo": "לפני {{count}} דקות",
+      "hoursAgo": "לפני {{count}} שעות",
+      "yesterday": "אתמול",
+      "daysAgo": "לפני {{count}} ימים"
+    },
+    "accountSync": {
+      "neverSynced": "טרם סונכרן"
+    }
+  }
+  ,
+  "titleBar": {
+    "menu": {
+      "back": "← חזרה",
+      "file": "קובץ",
+      "edit": "עריכה",
+      "view": "תצוגה",
+      "go": "ניווט",
+      "help": "עזרה",
+      "items": {
+        "new": "חדש",
+        "open": "פתח",
+        "save": "שמור",
+        "exit": "יציאה",
+        "undo": "בטל",
+        "redo": "בצע שוב",
+        "cut": "גזור",
+        "copy": "העתק",
+        "paste": "הדבק",
+        "fullscreen": "מסך מלא",
+        "zoomIn": "הגדל תצוגה",
+        "zoomOut": "הקטן תצוגה",
+        "resetZoom": "איפוס תקריב",
+        "dashboard": "לוח בקרה",
+        "analysis": "ניתוח",
+        "investments": "השקעות",
+        "settings": "הגדרות",
+        "documentation": "תיעוד",
+        "openLogs": "פתח תיקיית לוגים",
+        "exportDiagnostics": "ייצוא דיאגנוסטיקה…",
+        "supportTools": "כלי תמיכה",
+        "about": "אודות"
+      }
+    },
+    "tooltips": {
+      "openMenu": "פתח תפריט",
+      "lightMode": "העבר למצב בהיר",
+      "darkMode": "העבר למצב כהה",
+      "changeLanguage": "שנה שפה",
+      "minimizeWindow": "מזער חלון",
+      "maximizeWindow": "הגדל חלון",
+      "restoreWindow": "שחזר חלון",
+      "closeWindow": "סגור חלון"
+    },
+    "search": {
+      "placeholder": "חפש אזורים...",
+      "options": {
+        "dashboard": "לוח מחוונים",
+        "analysis": "ניתוח",
+        "investments": "השקעות",
+        "settings": "הגדרות",
+        "transactions": "עסקאות",
+        "breakdown": "פילוח קטגוריות",
+        "vendors": "ספקים",
+        "appearance": "מראה",
+        "language": "שפה",
+        "profile": "פרופיל",
+        "privacy": "פרטיות",
+        "portfolio": "תיק השקעות",
+        "holdings": "אחזקות"
+      },
+      "keywords": {
+        "dashboard": ["בית", "סקירה", "ראשי", "סיכום"],
+        "analysis": ["ניתוחים", "הוצאות", "תקציב", "דוחות", "גרפים"],
+        "investments": ["תיק", "מניות", "השקעות", "עושר", "נכסים"],
+        "settings": ["העדפות", "הגדרות", "תצורה", "שפה", "פרופיל"],
+        "transactions": ["היסטוריה", "תשלומים", "רכישות", "הוצאות", "הכנסות"],
+        "breakdown": ["קטגוריות", "פאי", "גרף", "פילוח הוצאות"],
+        "vendors": ["ספקים", "חנויות", "עסקים", "איפה"],
+        "appearance": ["עיצוב", "כהה", "בהיר", "מצב", "צבעים"],
+        "language": ["עברית", "אנגלית", "צרפתית", "שפה"],
+        "profile": ["חשבון", "משתמש", "שם", "אימייל"],
+        "privacy": ["הסתרה", "הצפנה", "סכומים", "אבטחה"],
+        "portfolio": ["סה\"כ", "שווי", "ביצועים"],
+        "holdings": ["פוזיציות", "מניות", "קרנות"]
+      }
+    }
+  },
+  "accountsModal": {
+    "title": "ניהול חשבונות",
+    "tabs": {
+      "ariaLabel": "סוגי חשבונות",
+      "banking": "בנקים ועסקאות",
+      "investments": "השקעות וחיסכון"
+    },
+    "actions": {
+      "pairAccounts": "זיווג חשבונות",
+      "addAccount": "הוסף חשבון",
+      "addCreditCard": "הוסף כרטיס אשראי",
+      "addBankAccount": "הוסף חשבון בנק",
+      "addInvestmentAccount": "הוסף חשבון השקעה"
+    },
+    "sections": {
+      "addCreditCardAccount": "הוסף חשבון כרטיס אשראי",
+      "addBankAccount": "הוסף חשבון בנק",
+      "addInvestmentAccount": "הוסף חשבון השקעה",
+      "bankAccounts": "חשבונות בנק ({{count}})",
+      "creditCardAccounts": "חשבונות כרטיס אשראי ({{count}})"
+    },
+    "fields": {
+      "accountNickname": "כינוי חשבון",
+      "creditCardVendor": "ספק כרטיס אשראי",
+      "bank": "בנק",
+      "accountName": "שם חשבון",
+      "accountType": "סוג חשבון",
+      "institution": "מוסד",
+      "knownInstitution": "מוסד מוכר (אופציונלי)",
+      "knownInstitutionHelper": "בחרו מרשימה או השאירו ריק כדי להזין מוסד מותאם",
+      "accountNumber": "מספר חשבון",
+      "currency": "מטבע",
+      "notes": "הערות",
+      "investmentAccount": "חשבון השקעה",
+      "none": "ללא",
+      "all": "הכול"
+    },
+    "placeholders": {
+      "creditCardNickname": "לדוגמה: ישראכרט, אמקס עבודה",
+      "bankNickname": "לדוגמה: עו\"ש ראשי, חשבון משכורת",
+      "accountName": "לדוגמה: Interactive Brokers, פנסיה מגדל",
+      "institution": "לדוגמה: מגדל, מיטב דש",
+      "accountNumber": "אופציונלי",
+      "optional": "אופציונלי",
+      "notes": "מידע נוסף...",
+      "symbol": "לדוגמה: AAPL, Tesla Inc."
+    },
+    "helpers": {
+      "foundInTransactions": "✓ נמצא בעסקאות!",
+      "investmentFallback": "השקעה",
+      "transactionsCount": "{{count}} {{count, plural, one {עסקה} other {עסקאות}}}",
+      "knownInstitution": "בחרו מרשימה או השאירו ריק להזנת מוסד מותאם",
+      "selectInstitution": "בחרו מוסד כדי לראות אילו פרטי התחברות נדרשים.",
+      "noSpecificCredentials": "אין דרישות התחברות ספציפיות. הזינו שם משתמש וסיסמה."
+    },
+    "credentials": {
+      "username": "שם משתמש",
+      "password": "סיסמה",
+      "userCode": "קוד משתמש",
+      "id": "תעודת זהות",
+      "card6Digits": "6 ספרות אחרונות בכרטיס",
+      "card6DigitsHelper": "6 הספרות המודפסות על הכרטיס",
+      "bankAccountNumber": "מספר חשבון בנק",
+      "nationalID": "מספר זהות",
+      "num": "קוד זיהוי (num)",
+      "email": "דוא\"ל",
+      "otpCode": "קוד חד-פעמי",
+      "otpToken": "טוקן OTP",
+      "identification_code": "קוד זיהוי"
+    },
+    "valueModal": {
+      "title": "הוספת עדכון שווי",
+      "currentValue": "שווי נוכחי",
+      "asOfDate": "נכון ל",
+      "costBasis": "עלות בסיס (אופציונלי)",
+      "costBasisHelper": "סך ההשקעה המצטבר",
+      "notes": "הערות (אופציונלי)",
+      "notesPlaceholder": "הוסיפו הערות נוספות לעדכון זה...",
+      "addUpdate": "הוסף עדכון"
+    },
+    "assets": {
+      "title": "נכסים בודדים",
+      "addAsset": "הוסף נכס",
+      "symbol": "סימול/שם נכס",
+      "symbolPlaceholder": "לדוגמה: AAPL, Tesla Inc.",
+      "quantity": "כמות",
+      "avgPrice": "מחיר ממוצע",
+      "manageTitle": "ניהול נכסים",
+      "empty": "אין נכסים בודדים במעקב",
+      "historyTitle": "היסטוריית נכסים",
+      "historyEmpty": "אין היסטוריית נכסים זמינה",
+      "table": {
+        "asset": "נכס",
+        "symbol": "סימול",
+        "quantity": "כמות",
+        "avgPrice": "מחיר ממוצע",
+        "price": "מחיר",
+        "totalValue": "שווי כולל",
+        "account": "חשבון",
+        "lastUpdated": "עודכן לאחרונה",
+        "date": "תאריך"
+      }
+    },
+    "emptyInvestments": {
+      "title": "אין עדיין חשבונות השקעה",
+      "description": "הוסיפו קרנות פנסיה, חשבונות ברוקר והשקעות נוספות כדי לעקוב אחרי התיק"
+    },
+    "tooltips": {
+      "addValueUpdate": "הוסף עדכון שווי",
+      "manageAssets": "ניהול נכסים",
+      "deleteAccount": "מחק חשבון",
+      "syncAccount": "סנכרן נתוני חשבון",
+      "syncInProgress": "סנכרון בתהליך..."
+    },
+    "tables": {
+      "common": {
+        "actions": "פעולות"
+      },
+      "investment": {
+        "account": "שם חשבון",
+        "type": "סוג",
+        "institution": "מוסד",
+        "currentValue": "שווי נוכחי",
+        "lastUpdate": "עדכון אחרון",
+        "empty": "אין חשבונות בקטגוריה זו",
+        "notSet": "לא הוגדר",
+        "fromTransactions": "(על בסיס עסקאות)"
+      },
+      "banking": {
+        "nickname": "כינוי",
+        "vendor": "ספק",
+        "username": "שם משתמש",
+        "idNumber": "מספר זהות",
+        "accountNumber": "מספר חשבון",
+        "cardLastDigits": "ספרות אחרונות של הכרטיס",
+        "balance": "יתרה",
+        "lastUpdate": "עדכון אחרון",
+        "emptyBank": "לא נמצאו חשבונות בנק",
+        "emptyCredit": "לא נמצאו חשבונות כרטיס אשראי",
+        "notSet": "-",
+        "updated": "עודכן: {{date}}"
+      }
+    },
+    "helpers": {
+      "selectInstitution": "בחרו מוסד כדי לראות אילו פרטי התחברות נדרשים.",
+      "knownInstitution": "בחרו מרשימה או השאירו ריק להזנת מוסד מותאם",
+      "noSpecificCredentials": "אין דרישות התחברות ספציפיות. הזינו שם משתמש וסיסמה."
+    },
+    "lastUpdate": {
+      "never": "מעולם לא",
+      "justNow": "זה עתה",
+      "hoursAgo": "לפני {{count}} שעות",
+      "yesterday": "אתמול",
+      "daysAgo": "לפני {{count}} ימים"
+    },
+    "confirmDelete": {
+      "title": "אישור מחיקת חשבון",
+      "message": "בטוחים שברצונכם למחוק חשבון זה?",
+      "accountLabel": "חשבון: {{name}}",
+      "typeLabel": "סוג: {{type}}",
+      "typeBanking": "חשבון בנק",
+      "typeInvestment": "חשבון השקעה",
+      "warning": "לא ניתן לבטל פעולה זו. כל הנתונים המשויכים יימחקו לצמיתות.",
+      "cta": "מחק חשבון"
+    }
+  }
+}

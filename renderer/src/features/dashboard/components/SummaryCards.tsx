@@ -27,6 +27,7 @@ import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpend
 import { useBudgetIntelligence } from '@renderer/features/budgets/hooks/useBudgetIntelligence';
 import type { SpendingCategory } from '@renderer/types/spending-categories';
 import { apiClient } from '@renderer/lib/api-client';
+import { useTranslation } from 'react-i18next';
 
 interface FinancialHealthSnapshot {
   overallHealthScore: number;
@@ -79,6 +80,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   categoryCount = 0,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation('translation', { keyPrefix: 'dashboard' });
   const { formatCurrency } = useFinancePrivacy();
 
   // Capital Returns offset investment outflows (it's money coming back from previous investments)
@@ -149,10 +151,10 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   };
 
   const SPENDING_CATEGORY_LABELS: Record<SpendingCategory, string> = {
-    essential: 'Essential',
-    growth: 'Growth',
-    stability: 'Stability',
-    reward: 'Reward',
+    essential: t('summary.categories.essential'),
+    growth: t('summary.categories.growth'),
+    stability: t('summary.categories.stability'),
+    reward: t('summary.categories.reward'),
   };
 
   const DEFAULT_TARGETS: Record<SpendingCategory, number> = {
@@ -224,19 +226,19 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   const budgetSegments = [
     {
       id: 'on_track',
-      label: 'On track',
+      label: t('summary.budgets.onTrack'),
       value: budgetSummary?.on_track ?? 0,
       color: theme.palette.success.main,
     },
     {
       id: 'warning',
-      label: 'Warning',
+      label: t('summary.budgets.warning'),
       value: budgetSummary?.warning ?? 0,
       color: theme.palette.warning.main,
     },
     {
       id: 'exceeded',
-      label: 'Exceeded',
+      label: t('summary.budgets.exceeded'),
       value: budgetSummary?.exceeded ?? 0,
       color: theme.palette.error.main,
     },
@@ -250,7 +252,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
       }))
     : [{
         id: 'none',
-        label: 'No budgets yet',
+        label: t('summary.budgets.none'),
         value: 0,
         width: 100,
         color: theme.palette.divider,
@@ -272,25 +274,25 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   const healthMetrics: Array<{ id: string; label: string; value: number; icon: React.ReactNode }> = [
     {
       id: 'savings',
-      label: 'Savings',
+      label: t('summary.health.savings'),
       value: normalizedHealth.savings,
       icon: <SavingsIcon sx={{ fontSize: 16, color: 'text.secondary' }} />,
     },
     {
       id: 'diversity',
-      label: 'Diversity',
+      label: t('summary.health.diversity'),
       value: normalizedHealth.diversity,
       icon: <DiversityIcon sx={{ fontSize: 16, color: 'text.secondary' }} />,
     },
     {
       id: 'impulse',
-      label: 'Impulse',
+      label: t('summary.health.impulse'),
       value: normalizedHealth.impulse,
       icon: <ImpulseIcon sx={{ fontSize: 16, color: 'text.secondary' }} />,
     },
     {
       id: 'runway',
-      label: 'Runway',
+      label: t('summary.health.runway'),
       value: normalizedHealth.runway,
       icon: <RunwayIcon sx={{ fontSize: 16, color: 'text.secondary' }} />,
     },
@@ -302,33 +304,43 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   const cards = [
     {
       id: 'finance',
-      title: 'Current Month',
+      title: t('summary.cards.finance.title'),
       icon: <AccountBalanceIcon />,
       mainValue: formatCurrencyValue(netSavings),
-      subtitle: currentBankBalance !== undefined ? `Bank: ${formatCurrencyValue(currentBankBalance)}` : undefined,
+      subtitle: currentBankBalance !== undefined
+        ? t('summary.cards.finance.subtitle', { amount: formatCurrencyValue(currentBankBalance) })
+        : undefined,
       color: netSavings >= 0 ? theme.palette.success.main : theme.palette.error.main,
       details: (
         <>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, mt: 2 }}>
-            <Typography variant="body2" color="text.secondary">Income</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t('summary.cards.finance.income')}
+            </Typography>
             <Typography variant="body2" color="success.main">+{formatCurrencyValue(totalIncome)}</Typography>
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-            <Typography variant="body2" color="text.secondary">Expenses</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t('summary.cards.finance.expenses')}
+            </Typography>
             <Typography variant="body2" color="error.main">-{formatCurrencyValue(totalExpenses)}</Typography>
           </Box>
           {netInvestments > 0 && (
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="body2" color="text.secondary">Investments</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {t('summary.cards.finance.investments')}
+              </Typography>
               <Typography variant="body2" color="info.main">-{formatCurrencyValue(netInvestments)}</Typography>
             </Box>
           )}
           {totalCapitalReturns > 0 && (
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography variant="body2" color="text.secondary">Capital Returns</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('summary.cards.finance.capitalReturns')}
+                </Typography>
                 <Tooltip
-                  title="Principal returned from investments (pikadon, deposits). Not counted as income but offsets investment outflows."
+                  title={t('summary.cards.finance.capitalReturnsNote')}
                   arrow
                   placement="top"
                 >
@@ -345,7 +357,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <PendingIcon sx={{ fontSize: 16, color: 'warning.main' }} />
                   <Typography variant="body2" color="text.secondary">
-                    Pending ({pendingCount})
+                    {t('summary.cards.finance.pendingLabel', { count: pendingCount })}
                   </Typography>
                 </Box>
                 <Typography variant="body2" color="warning.main">
@@ -367,7 +379,9 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                 >
                   <WarningIcon sx={{ fontSize: 16, color: 'error.main' }} />
                   <Typography variant="caption" color="error.main" fontWeight="medium">
-                    Pending expenses will cause deficit of {formatCurrencyValue(Math.abs(netSavingsAfterPending))}
+                    {t('summary.cards.finance.pendingDeficit', {
+                      amount: formatCurrencyValue(Math.abs(netSavingsAfterPending)),
+                    })}
                   </Typography>
                 </Box>
               )}
@@ -378,7 +392,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     },
     {
       id: 'portfolio',
-      title: 'Investment Portfolio',
+      title: t('summary.cards.portfolio.title'),
       icon: <TrendingUpIcon />,
       mainValue: portfolioValue !== undefined && portfolioValue !== null ? formatCurrencyValue(portfolioValue) : '—',
       subtitle: portfolioGains !== undefined ? `${portfolioGains >= 0 ? '+' : ''}${formatCurrencyValue(portfolioGains)}` : undefined,
@@ -404,10 +418,10 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     },
     {
       id: 'analysis',
-      title: 'Financial Health',
+      title: t('summary.cards.analysis.title'),
       icon: <SavingsIcon />,
       mainValue: `${overallHealthScore}`,
-      subtitle: 'Financial Health Score',
+      subtitle: t('summary.health.subtitle'),
       color: overallHealthScore >= 70 ? theme.palette.success.main
         : overallHealthScore >= 40 ? theme.palette.warning.main
         : theme.palette.error.main,
@@ -425,7 +439,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             }}
           >
             <Typography variant="caption" color="text.secondary">
-              Budgets ({budgetsTotal} total)
+              {t('summary.budgets.heading', { count: budgetsTotal })}
             </Typography>
             <Box sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: theme.palette.divider }}>
               {normalizedBudgets.map((segment) => (
@@ -456,19 +470,25 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.6 }}>
               <Typography variant="body2" color="text.secondary">
-                Actual Allocation
+                {t('summary.allocation.actual')}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Target: {(['essential', 'growth', 'stability', 'reward'] as SpendingCategory[])
+                {t('summary.allocation.target', {
+                  targets: (['essential', 'growth', 'stability', 'reward'] as SpendingCategory[])
                   .map((key) => Math.round(allocationTargets[key]))
-                  .join(' / ')}%
+                  .join(' / '),
+                })}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: theme.palette.divider }}>
               {normalizedAllocation.map((item) => (
                 <Tooltip
                   key={item.key}
-                  title={`${item.label}: ${Math.round(item.actual)}% (target ${Math.round(item.target)}%)`}
+                  title={t('summary.allocation.tooltip', {
+                    label: item.label,
+                    actual: Math.round(item.actual),
+                    target: Math.round(item.target),
+                  })}
                   placement="top"
                 >
                   <Box

@@ -8,9 +8,10 @@ interface VendorViewProps {
   vendors: VendorBreakdownItem[];
   categoryType: CategoryType;
   formatCurrencyValue: FormatCurrencyFn;
+  vendorTrendLabel: (vendor: string) => string;
 }
 
-const VendorView: React.FC<VendorViewProps> = ({ vendors, categoryType, formatCurrencyValue }) => {
+const VendorView: React.FC<VendorViewProps> = ({ vendors, categoryType, formatCurrencyValue, vendorTrendLabel }) => {
   const strings = getBreakdownStrings();
   const generalStrings = strings.general;
 
@@ -66,7 +67,7 @@ const VendorView: React.FC<VendorViewProps> = ({ vendors, categoryType, formatCu
                   <TrendSparkline
                     points={vendor.history.map(point => point.total)}
                     color={categoryType === 'income' ? '#2e7d32' : '#c62828'}
-                    aria-label={`Trend for ${vendor.vendor}`}
+                    aria-label={vendorTrendLabel(vendor.vendor)}
                   />
                 </Box>
               )}

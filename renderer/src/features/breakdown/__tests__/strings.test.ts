@@ -8,16 +8,22 @@ describe('breakdown strings helper', () => {
     delete (globalThis as any).navigator;
   });
 
-  it('returns English strings by default', () => {
+  it('returns Hebrew strings by default', () => {
     const strings = getBreakdownStrings();
-    expect(strings.panel.overviewTab).toBe('Overview');
-    expect(strings.timeline.outflow).toBe('Outflow');
+    expect(strings.panel.overviewTab).toBe('סקירה');
+    expect(strings.timeline.outflow).toBe('הוצאות');
   });
 
   it('resolves Hebrew strings when an explicit locale is provided', () => {
     const strings = getBreakdownStrings('he-IL');
     expect(strings.panel.overviewTab).toBe('סקירה');
     expect(strings.panel.rootBreadcrumb).toBe('כל הקטגוריות');
+  });
+
+  it('resolves French strings when an explicit locale is provided', () => {
+    const strings = getBreakdownStrings('fr-FR');
+    expect(strings.panel.overviewTab).toBe('Vue d’ensemble');
+    expect(strings.panel.vendorTab).toBe('Fournisseurs');
   });
 
   it('falls back to navigator language when no locale argument is supplied', () => {

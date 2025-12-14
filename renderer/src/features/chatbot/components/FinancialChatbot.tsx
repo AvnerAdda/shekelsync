@@ -22,6 +22,7 @@ import {
   Person as PersonIcon,
   Lock as LockIcon,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';
 import { useChatbotPermissions } from '@app/contexts/ChatbotPermissionsContext';
 
@@ -34,6 +35,7 @@ interface Message {
 
 const FinancialChatbot: React.FC = () => {
   const theme = useTheme();
+  const { t } = useTranslation('translation', { keyPrefix: 'chatbotWidget' });
   const {
     chatbotEnabled,
     allowTransactionAccess,
@@ -124,10 +126,7 @@ const FinancialChatbot: React.FC = () => {
   };
 
   const suggestedQuestions = [
-    'How much did I spend this month?',
-    'What category did I spend the most on?',
-    'Give me savings recommendations',
-    'Are there any unusual expenses?',
+    ...(t('suggestions.items', { returnObjects: true }) as string[]),
   ];
 
   // Don't render if chatbot is disabled
@@ -187,9 +186,9 @@ const FinancialChatbot: React.FC = () => {
             <BotIcon />
             <Box>
               <Typography variant="h6" fontWeight="bold">
-                Financial Assistant
+                {t('header.title')}
               </Typography>
-              <Typography variant="caption">AI-Powered</Typography>
+              <Typography variant="caption">{t('header.subtitle')}</Typography>
             </Box>
           </Box>
           <IconButton
@@ -296,32 +295,32 @@ const FinancialChatbot: React.FC = () => {
         </Box>
 
         {/* No Permissions Warning */}
-        {!hasAnyPermission && (
-          <Alert severity="warning" icon={<LockIcon />} sx={{ mx: 2 }}>
-            <Typography variant="body2" fontWeight="bold">
-              Limited Access
-            </Typography>
-            <Typography variant="caption">
-              Enable data permissions in Settings to use the chatbot features.
-            </Typography>
-          </Alert>
-        )}
+          {!hasAnyPermission && (
+            <Alert severity="warning" icon={<LockIcon />} sx={{ mx: 2 }}>
+              <Typography variant="body2" fontWeight="bold">
+                {t('warnings.title')}
+              </Typography>
+              <Typography variant="caption">
+                {t('warnings.description')}
+              </Typography>
+            </Alert>
+          )}
 
         {/* Suggested Questions */}
         {messages.length === 1 && hasAnyPermission && (
-          <Box
-            sx={{
-              p: 2,
-              bgcolor: theme.palette.mode === 'dark' ? theme.palette.background.default : '#f5f5f5',
-            }}
-          >
-            <Typography variant="caption" color="text.secondary" gutterBottom>
-              Suggested questions:
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-              {suggestedQuestions.map((question, idx) => (
-                <Chip
-                  key={idx}
+            <Box
+              sx={{
+                p: 2,
+                bgcolor: theme.palette.mode === 'dark' ? theme.palette.background.default : '#f5f5f5',
+              }}
+            >
+              <Typography variant="caption" color="text.secondary" gutterBottom>
+                {t('suggestions.title')}
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                {suggestedQuestions.map((question, idx) => (
+                  <Chip
+                    key={idx}
                   label={question}
                   size="small"
                   onClick={() => setInputValue(question)}
@@ -346,7 +345,7 @@ const FinancialChatbot: React.FC = () => {
               fullWidth
               multiline
               maxRows={3}
-              placeholder={hasAnyPermission ? 'Ask me something...' : 'Enable permissions in Settings'}
+              placeholder={hasAnyPermission ? t('input.placeholderEnabled') : t('input.placeholderDisabled')}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
@@ -374,12 +373,12 @@ const FinancialChatbot: React.FC = () => {
           </Box>
           {hasAnyPermission && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-              💡 The assistant analyzes your transactions and income
+              {t('hints.enabled')}
             </Typography>
           )}
           {!hasAnyPermission && (
             <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 1 }}>
-              🔒 Grant data access permissions in Settings to use this feature
+              {t('hints.disabled')}
             </Typography>
           )}
         </Box>

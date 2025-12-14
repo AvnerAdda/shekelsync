@@ -59,10 +59,10 @@ async function listCredentials(params = {}) {
       SELECT vc.*,
              ${INSTITUTION_SELECT_FIELDS},
              (SELECT current_value FROM investment_holdings ih
-              WHERE ih.account_id = ia.id
+              WHERE ih.account_id = bank_acc.id
               ORDER BY ih.as_of_date DESC LIMIT 1) as holding_balance,
              (SELECT as_of_date FROM investment_holdings ih
-              WHERE ih.account_id = ia.id
+              WHERE ih.account_id = bank_acc.id
               ORDER BY ih.as_of_date DESC LIMIT 1) as holding_as_of_date,
              CASE
                WHEN EXISTS (SELECT 1 FROM scrape_events se WHERE se.credential_id = vc.id AND se.status = 'success') THEN 'success'
@@ -76,8 +76,12 @@ async function listCredentials(params = {}) {
              ) as lastUpdate
       FROM vendor_credentials vc
       ${INSTITUTION_JOIN_VENDOR_CRED}
-      LEFT JOIN investment_accounts ia ON ia.account_type = 'bank_balance'
-        AND ia.notes LIKE '%credential_id:' || vc.id || '%'
+      LEFT JOIN (
+        SELECT MIN(id) as id, notes
+        FROM investment_accounts
+        WHERE account_type = 'bank_balance'
+        GROUP BY notes
+      ) bank_acc ON bank_acc.notes LIKE '%credential_id:' || vc.id || '%'
       WHERE vc.vendor = $1
       ORDER BY vc.created_at DESC
     `;
@@ -87,10 +91,10 @@ async function listCredentials(params = {}) {
       SELECT vc.*,
              ${INSTITUTION_SELECT_FIELDS},
              (SELECT current_value FROM investment_holdings ih
-              WHERE ih.account_id = ia.id
+              WHERE ih.account_id = bank_acc.id
               ORDER BY ih.as_of_date DESC LIMIT 1) as holding_balance,
              (SELECT as_of_date FROM investment_holdings ih
-              WHERE ih.account_id = ia.id
+              WHERE ih.account_id = bank_acc.id
               ORDER BY ih.as_of_date DESC LIMIT 1) as holding_as_of_date,
              CASE
                WHEN EXISTS (SELECT 1 FROM scrape_events se WHERE se.credential_id = vc.id AND se.status = 'success') THEN 'success'
@@ -104,8 +108,12 @@ async function listCredentials(params = {}) {
              ) as lastUpdate
       FROM vendor_credentials vc
       ${INSTITUTION_JOIN_VENDOR_CRED}
-      LEFT JOIN investment_accounts ia ON ia.account_type = 'bank_balance'
-        AND ia.notes LIKE '%credential_id:' || vc.id || '%'
+      LEFT JOIN (
+        SELECT MIN(id) as id, notes
+        FROM investment_accounts
+        WHERE account_type = 'bank_balance'
+        GROUP BY notes
+      ) bank_acc ON bank_acc.notes LIKE '%credential_id:' || vc.id || '%'
       ORDER BY vc.vendor
     `;
   }
