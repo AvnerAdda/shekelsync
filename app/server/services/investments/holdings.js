@@ -5,6 +5,9 @@ const {
   getInstitutionByVendorCode,
 } = require('../institutions.js');
 
+// Import forward-fill utility for portfolio history continuity
+const { forwardFillMissingDates } = require('./balance-sync.js');
+
 function serviceError(status, message) {
   const error = new Error(message);
   error.status = status;
@@ -19,28 +22,40 @@ async function listHoldings(params = {}) {
     const query = accountId
       ? `
         SELECT
-          ihh.*,
+          ih.id,
+          ih.account_id,
+          ih.current_value as total_value,
+          ih.cost_basis,
+          ih.as_of_date as snapshot_date,
+          ih.notes,
+          ih.created_at,
           ia.account_name,
           ia.account_type,
           ia.institution,
           ${INSTITUTION_SELECT_FIELDS}
-        FROM investment_holdings_history ihh
-        JOIN investment_accounts ia ON ihh.account_id = ia.id
+        FROM investment_holdings ih
+        JOIN investment_accounts ia ON ih.account_id = ia.id
         LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
-        WHERE ihh.account_id = $1
-        ORDER BY ihh.snapshot_date DESC
+        WHERE ih.account_id = $1
+        ORDER BY ih.as_of_date DESC
       `
       : `
         SELECT
-          ihh.*,
+          ih.id,
+          ih.account_id,
+          ih.current_value as total_value,
+          ih.cost_basis,
+          ih.as_of_date as snapshot_date,
+          ih.notes,
+          ih.created_at,
           ia.account_name,
           ia.account_type,
           ia.institution,
           ${INSTITUTION_SELECT_FIELDS}
-        FROM investment_holdings_history ihh
-        JOIN investment_accounts ia ON ihh.account_id = ia.id
+        FROM investment_holdings ih
+        JOIN investment_accounts ia ON ih.account_id = ia.id
         LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
-        ORDER BY ihh.snapshot_date DESC, ia.account_name
+        ORDER BY ih.as_of_date DESC, ia.account_name
       `;
 
     const result = accountId
@@ -186,19 +201,11 @@ async function upsertHolding(payload = {}) {
     );
 
     if (save_history) {
-      await client.query(
-        `
-          INSERT INTO investment_holdings_history (
-            account_id, total_value, cost_basis, snapshot_date, notes
-          ) VALUES ($1, $2, $3, $4, $5)
-          ON CONFLICT (account_id, snapshot_date)
-          DO UPDATE SET
-            total_value = EXCLUDED.total_value,
-            cost_basis = EXCLUDED.cost_basis,
-            notes = EXCLUDED.notes
-        `,
-        [account_id, current_value, cost_basis || null, as_of_date, notes || null],
-      );
+      // Forward-fill any missing dates between the last snapshot and this one
+      // This ensures portfolio history shows consistent values without gaps
+      await forwardFillMissingDates(client, account_id, as_of_date, console);
+      // Note: No separate history table - investment_holdings now serves as both
+      // current state and history (with as_of_date for time-series queries)
     }
 
     await client.query('COMMIT');

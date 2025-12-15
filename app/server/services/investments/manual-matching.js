@@ -1,6 +1,9 @@
 const actualDatabase = require('../database.js');
 let database = actualDatabase;
 
+// Repayment category (use name for compatibility across environments)
+const REPAYMENT_CATEGORY_NAME = 'פרעון כרטיס אשראי';
+
 /**
  * Manual Credit Card Transaction Matching Service
  *
@@ -25,7 +28,7 @@ async function getUnmatchedRepayments({ creditCardAccountNumber, creditCardVendo
   const dbClient = client || await database.getClient();
 
   try {
-    // Get all bank repayments (category 25) for this pairing
+    // Get all bank repayments (by repayment category name) for this pairing
     // that are NOT fully matched yet
     // Filter by match_patterns if provided (transaction name must contain at least one pattern)
     // FILTER OUT old/incomplete repayments: older than 30 days AND from first 10 days of month
@@ -48,11 +51,12 @@ async function getUnmatchedRepayments({ creditCardAccountNumber, creditCardVendo
         COALESCE(rm.matched_amount, 0) as matched_amount,
         ABS(t.price) - COALESCE(rm.matched_amount, 0) as remaining_amount
       FROM transactions t
+      JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN repayment_matches rm
         ON t.identifier = rm.repayment_txn_id
         AND t.vendor = rm.repayment_vendor
       WHERE t.vendor = $1
-        AND t.category_definition_id = 25
+        AND cd.name = $3
         AND t.price < 0
         AND (t.account_number = $2 OR $2 IS NULL OR $2 = '')
         AND (t.processed_date IS NULL OR DATE(t.processed_date) <= DATE('now'))
@@ -67,12 +71,12 @@ async function getUnmatchedRepayments({ creditCardAccountNumber, creditCardVendo
           OR CAST(strftime('%d', t.date) AS INTEGER) > 10
         )
         ${matchPatterns && matchPatterns.length > 0 ?
-          `AND (${matchPatterns.map((_, i) => `t.name LIKE $${i + 3}`).join(' OR ')})` :
+          `AND (${matchPatterns.map((_, i) => `t.name LIKE $${i + 4}`).join(' OR ')})` :
           ''}
       ORDER BY t.date DESC
     `;
 
-    const params = [bankVendor, bankAccountNumber || null];
+    const params = [bankVendor, bankAccountNumber || null, REPAYMENT_CATEGORY_NAME];
     if (matchPatterns && matchPatterns.length > 0) {
       matchPatterns.forEach(pattern => {
         params.push(`%${pattern}%`);
@@ -118,6 +122,11 @@ async function getAvailableProcessedDates({ creditCardAccountNumber, creditCardV
   try {
     // Default date range: last 12 months
     const end = endDate ? new Date(endDate) : new Date();
+    // Include upcoming billing cycles (e.g., next month's processed_date)
+    if (!endDate) {
+      end.setDate(end.getDate() + 60);
+    }
+
     const start = startDate ? new Date(startDate) : new Date(end);
     if (!startDate) {
       start.setFullYear(start.getFullYear() - 1); // 12 months ago
@@ -132,7 +141,7 @@ async function getAvailableProcessedDates({ creditCardAccountNumber, creditCardV
         MAX(date) as latest_expense_date
       FROM transactions
       WHERE vendor = $1
-        AND account_number = $2
+        AND (account_number = $2 OR $2 IS NULL OR $2 = '')
         AND price < 0
         AND processed_date IS NOT NULL
         AND processed_date >= $3
@@ -143,7 +152,7 @@ async function getAvailableProcessedDates({ creditCardAccountNumber, creditCardV
 
     const result = await dbClient.query(query, [
       creditCardVendor,
-      creditCardAccountNumber,
+      creditCardAccountNumber || null,
       start.toISOString(),
       end.toISOString()
     ]);
@@ -190,14 +199,14 @@ async function getAvailableExpenses({ repaymentDate, creditCardAccountNumber, cr
     if (processedDate) {
       // SMART MODE: Filter by exact processed_date (billing cycle matching)
       dateFilter = 't.processed_date = $3';
-      params = [creditCardVendor, creditCardAccountNumber, processedDate];
+      params = [creditCardVendor, creditCardAccountNumber || null, processedDate];
     } else {
       // LEGACY MODE: 60-day lookback window
       const endDate = new Date(repaymentDate);
       const startDate = new Date(endDate);
       startDate.setDate(startDate.getDate() - 60);
       dateFilter = 't.date >= $3 AND t.date <= $4';
-      params = [creditCardVendor, creditCardAccountNumber, startDate.toISOString(), endDate.toISOString()];
+      params = [creditCardVendor, creditCardAccountNumber || null, startDate.toISOString(), endDate.toISOString()];
     }
 
     // Build query with optional matched exclusion
@@ -226,10 +235,10 @@ async function getAvailableExpenses({ repaymentDate, creditCardAccountNumber, cr
       LEFT JOIN credit_card_expense_matches m
         ON t.identifier = m.expense_txn_id AND t.vendor = m.expense_vendor
       WHERE t.vendor = $1
-        AND t.account_number = $2
+        AND (t.account_number = $2 OR $2 IS NULL OR $2 = '')
         AND t.price < 0
         AND ${dateFilter}
-        AND (t.processed_date IS NULL OR DATE(t.processed_date) <= DATE('now'))
+        AND (t.processed_date IS NULL OR DATE(t.processed_date) <= DATE('now', '+60 days'))
         ${matchedFilter}
       ORDER BY t.date DESC, t.name ASC
     `;
@@ -274,16 +283,16 @@ async function getBankRepaymentsForProcessedDate({ processedDate, bankVendor, ba
   try {
     // Build pattern filter if provided
     let patternFilter = '';
-    const params = [bankVendor, bankAccountNumber || null, processedDate];
+    const params = [bankVendor, bankAccountNumber || null, processedDate, REPAYMENT_CATEGORY_NAME];
     if (matchPatterns && matchPatterns.length > 0) {
-      patternFilter = `AND (${matchPatterns.map((_, i) => `t.name LIKE $${i + 4}`).join(' OR ')})`;
+      patternFilter = `AND (${matchPatterns.map((_, i) => `t.name LIKE $${i + 5}`).join(' OR ')})`;
       matchPatterns.forEach(pattern => {
         params.push(`%${pattern}%`);
       });
     }
 
     // Find bank transactions on the same date as processed_date
-    // with category_definition_id = 25 (credit card repayments)
+    // in the repayment category (credit card repayments)
     const query = `
       SELECT
         t.identifier,
@@ -293,10 +302,11 @@ async function getBankRepaymentsForProcessedDate({ processedDate, bankVendor, ba
         t.price,
         t.account_number
       FROM transactions t
+      JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE t.vendor = $1
         AND (t.account_number = $2 OR $2 IS NULL OR $2 = '')
         AND t.date = $3
-        AND t.category_definition_id = 25
+        AND cd.name = $4
         AND t.price < 0
         ${patternFilter}
       ORDER BY ABS(t.price) DESC
@@ -451,9 +461,9 @@ async function getMatchingStats({ bankVendor, bankAccountNumber, matchPatterns }
   try {
     // Build pattern filter if provided
     let patternFilter = '';
-    const params = [bankVendor, bankAccountNumber || null];
+    const params = [bankVendor, bankAccountNumber || null, REPAYMENT_CATEGORY_NAME];
     if (matchPatterns && matchPatterns.length > 0) {
-      patternFilter = `AND (${matchPatterns.map((_, i) => `t.name LIKE $${i + 3}`).join(' OR ')})`;
+      patternFilter = `AND (${matchPatterns.map((_, i) => `t.name LIKE $${i + 4}`).join(' OR ')})`;
       matchPatterns.forEach(pattern => {
         params.push(`%${pattern}%`);
       });
@@ -480,11 +490,12 @@ async function getMatchingStats({ bankVendor, bankAccountNumber, matchPatterns }
             ELSE 'partial'
           END as match_status
         FROM transactions t
+        JOIN category_definitions cd ON t.category_definition_id = cd.id
         LEFT JOIN repayment_matches rm
           ON t.identifier = rm.repayment_txn_id
           AND t.vendor = rm.repayment_vendor
         WHERE t.vendor = $1
-          AND t.category_definition_id = 25
+          AND cd.name = $3
           AND t.price < 0
           AND (t.account_number = $2 OR $2 IS NULL OR $2 = '')
           AND (
@@ -782,18 +793,19 @@ async function getWeeklyMatchingStats({
         COALESCE(rm.matched_amount, 0) as matched_amount,
         ABS(t.price) - COALESCE(rm.matched_amount, 0) as remaining_amount
       FROM transactions t
+      JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN repayment_matches rm
         ON t.identifier = rm.repayment_txn_id
         AND t.vendor = rm.repayment_vendor
       WHERE t.vendor = $1
-        AND t.category_definition_id = 25
+        AND cd.name = $3
         AND t.price < 0
         AND (t.account_number = $2 OR $2 IS NULL OR $2 = '')
-        AND t.date >= $3
-        AND t.date <= $4
+        AND t.date >= $4
+        AND t.date <= $5
         AND (t.processed_date IS NULL OR DATE(t.processed_date) <= DATE('now'))
         ${matchPatternsArray.length > 0 ?
-          `AND (${matchPatternsArray.map((_, i) => `t.name LIKE $${i + 5}`).join(' OR ')})` :
+          `AND (${matchPatternsArray.map((_, i) => `t.name LIKE $${i + 6}`).join(' OR ')})` :
           ''}
       ORDER BY t.date DESC
     `;
@@ -801,6 +813,7 @@ async function getWeeklyMatchingStats({
     const params = [
       bankVendor,
       bankAccountNumber || null,
+      REPAYMENT_CATEGORY_NAME,
       start.toISOString(),
       end.toISOString()
     ];

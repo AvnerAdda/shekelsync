@@ -21,25 +21,77 @@ const {
 async function getOrCreateBankBalanceAccount(client, credential, accountNumber, logger = console) {
   const { vendor, nickname, id: credentialId, institution_id } = credential;
 
-  // Check if account already exists for this credential
-  // Primary lookup is by credential_id in notes (most reliable)
-  // Secondary check includes institution_id and account_number for additional matching
-  const existingQuery = `
-    SELECT ia.*
-    FROM investment_accounts ia
-    WHERE ia.account_type = 'bank_balance'
-      AND ia.notes LIKE $1
-    LIMIT 1
-  `;
+  logger?.debug?.(`[Balance Sync] Looking for existing account: vendor=${vendor}, credentialId=${credentialId}, accountNumber=${accountNumber}`);
 
-  const existing = await client.query(existingQuery, [
-    `%credential_id:${credentialId}%`,
-  ]);
+  // Check if account already exists for this credential
+  // Try multiple matching strategies to avoid duplicates
+  
+  // Strategy 1: Match by credential_id in notes (most reliable for existing accounts)
+  let existing = await client.query(
+    `SELECT ia.*
+     FROM investment_accounts ia
+     WHERE ia.account_type = 'bank_balance'
+       AND ia.notes LIKE $1
+     LIMIT 1`,
+    [`%credential_id:${credentialId}%`]
+  );
 
   if (existing.rows.length > 0) {
-    logger?.debug?.(`Found existing investment account ${existing.rows[0].id} for credential ${credentialId}`);
+    logger?.debug?.(`[Balance Sync] Found existing account by credential_id: ${existing.rows[0].id}`);
     return existing.rows[0];
   }
+
+  // Strategy 2: Match by institution_id and account_number
+  if (institution_id && accountNumber) {
+    existing = await client.query(
+      `SELECT ia.*
+       FROM investment_accounts ia
+       WHERE ia.account_type = 'bank_balance'
+         AND ia.institution_id = $1
+         AND ia.account_number = $2
+       LIMIT 1`,
+      [institution_id, accountNumber]
+    );
+
+    if (existing.rows.length > 0) {
+      logger?.debug?.(`[Balance Sync] Found existing account by institution+account_number: ${existing.rows[0].id}`);
+      // Update notes to include credential_id for future lookups
+      await client.query(
+        `UPDATE investment_accounts 
+         SET notes = COALESCE(notes, '') || ' credential_id:' || $1
+         WHERE id = $2`,
+        [credentialId, existing.rows[0].id]
+      );
+      return existing.rows[0];
+    }
+  }
+
+  // Strategy 3: Match by institution_id only (if single bank account per institution)
+  if (institution_id) {
+    existing = await client.query(
+      `SELECT ia.*, COUNT(*) OVER() as total_count
+       FROM investment_accounts ia
+       WHERE ia.account_type = 'bank_balance'
+         AND ia.institution_id = $1
+       LIMIT 1`,
+      [institution_id]
+    );
+
+    // Only use this match if there's exactly one account for this institution
+    if (existing.rows.length > 0 && existing.rows[0].total_count === '1') {
+      logger?.debug?.(`[Balance Sync] Found single existing account by institution: ${existing.rows[0].id}`);
+      // Update notes to include credential_id for future lookups
+      await client.query(
+        `UPDATE investment_accounts 
+         SET notes = COALESCE(notes, '') || ' credential_id:' || $1
+         WHERE id = $2`,
+        [credentialId, existing.rows[0].id]
+      );
+      return existing.rows[0];
+    }
+  }
+
+  logger?.info?.(`[Balance Sync] No existing account found, creating new one for ${vendor}`);
 
   // Get institution details for naming
   const institution = await getInstitutionByVendorCode(client, vendor);
@@ -188,13 +240,95 @@ async function calculateMonthStartBalance(client, vendor, accountNumber, current
  */
 async function snapshotExists(client, accountId, snapshotDate) {
   const query = `
-    SELECT 1 FROM investment_holdings_history
-    WHERE account_id = $1 AND snapshot_date = $2
+    SELECT 1 FROM investment_holdings
+    WHERE account_id = $1 AND as_of_date = $2
     LIMIT 1
   `;
 
   const result = await client.query(query, [accountId, snapshotDate]);
   return result.rows.length > 0;
+}
+
+/**
+ * Get the last snapshot for an account
+ * @param {object} client - Database client
+ * @param {number} accountId - Investment account ID
+ * @returns {Promise<object|null>} Last snapshot or null
+ */
+async function getLastSnapshot(client, accountId) {
+  const query = `
+    SELECT as_of_date as snapshot_date, current_value as total_value, cost_basis
+    FROM investment_holdings
+    WHERE account_id = $1
+    ORDER BY as_of_date DESC
+    LIMIT 1
+  `;
+
+  const result = await client.query(query, [accountId]);
+  return result.rows.length > 0 ? result.rows[0] : null;
+}
+
+/**
+ * Forward-fill missing dates between last snapshot and today
+ * This ensures portfolio history is continuous and doesn't show gaps/drops
+ * @param {object} client - Database client
+ * @param {number} accountId - Investment account ID
+ * @param {string} today - Today's date (YYYY-MM-DD)
+ * @param {object} logger - Logger instance
+ * @returns {Promise<number>} Number of dates filled
+ */
+async function forwardFillMissingDates(client, accountId, today, logger = console) {
+  const lastSnapshot = await getLastSnapshot(client, accountId);
+
+  if (!lastSnapshot) {
+    logger?.debug?.(`[Forward Fill] No previous snapshot found for account ${accountId}`);
+    return 0;
+  }
+
+  const lastDate = new Date(lastSnapshot.snapshot_date);
+  const todayDate = new Date(today);
+
+  // Calculate days difference
+  const daysDiff = Math.floor((todayDate - lastDate) / (1000 * 60 * 60 * 24));
+
+  if (daysDiff <= 1) {
+    // No gap to fill (same day or consecutive day)
+    return 0;
+  }
+
+  const { total_value, cost_basis } = lastSnapshot;
+  let filledCount = 0;
+
+  // Fill each missing date with the last known values
+  for (let i = 1; i < daysDiff; i++) {
+    const fillDate = new Date(lastDate);
+    fillDate.setDate(fillDate.getDate() + i);
+    const fillDateStr = fillDate.toISOString().split('T')[0];
+
+    // Insert into investment_holdings (use ON CONFLICT to avoid duplicates)
+    await client.query(
+      `INSERT INTO investment_holdings (
+        account_id, current_value, cost_basis, as_of_date, asset_type, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (account_id, as_of_date) DO NOTHING`,
+      [
+        accountId,
+        total_value,
+        cost_basis,
+        fillDateStr,
+        'cash',
+        'Forward-filled from previous snapshot',
+      ]
+    );
+
+    filledCount++;
+  }
+
+  if (filledCount > 0) {
+    logger?.info?.(`[Forward Fill] Filled ${filledCount} missing dates for account ${accountId} (${lastSnapshot.snapshot_date} to ${today})`);
+  }
+
+  return filledCount;
 }
 
 /**
@@ -210,17 +344,29 @@ async function snapshotExists(client, accountId, snapshotDate) {
  */
 async function syncBankBalanceToInvestments(client, credential, currentBalance, accountNumber, logger = console) {
   try {
-    logger?.info?.(`[Balance Sync] Starting for ${credential.vendor} (balance: ₪${currentBalance})`);
+    logger?.info?.(`[Balance Sync] Starting for ${credential.vendor} (balance: ₪${currentBalance}, account: ${accountNumber || 'N/A'})`);
+    logger?.debug?.(`[Balance Sync] Credential details: id=${credential.id}, dbId=${credential.dbId}, institution_id=${credential.institution_id}`);
+
+    // Validate inputs
+    if (currentBalance === undefined || currentBalance === null) {
+      logger?.warn?.(`[Balance Sync] Skipping sync - no balance provided for ${credential.vendor}`);
+      return { success: true, skipped: true, reason: 'No balance provided' };
+    }
 
     // Step 1: Get or create investment account
+    logger?.debug?.(`[Balance Sync] Step 1: Getting or creating investment account...`);
     const investmentAccount = await getOrCreateBankBalanceAccount(client, credential, accountNumber, logger);
+    logger?.debug?.(`[Balance Sync] Investment account: id=${investmentAccount.id}, name=${investmentAccount.account_name}`);
 
     // Step 2: Get or create investment asset
+    logger?.debug?.(`[Balance Sync] Step 2: Getting or creating investment asset...`);
     const institution = await getInstitutionByVendorCode(client, credential.vendor);
     const assetName = `Bank Balance - ${institution?.display_name_en || credential.vendor}`;
     const investmentAsset = await getOrCreateBankBalanceAsset(client, investmentAccount.id, assetName, logger);
+    logger?.debug?.(`[Balance Sync] Investment asset: id=${investmentAsset.id}, name=${assetName}`);
 
     // Step 3: Update asset units to current balance
+    logger?.debug?.(`[Balance Sync] Step 3: Updating asset units to ${currentBalance}...`);
     await client.query(
       `UPDATE investment_assets
        SET units = $1, updated_at = CURRENT_TIMESTAMP
@@ -233,7 +379,9 @@ async function syncBankBalanceToInvestments(client, credential, currentBalance, 
     const monthStartDate = `${currentMonth}-01`;
 
     // Step 4: Check if we need to create a month-start snapshot
+    logger?.debug?.(`[Balance Sync] Step 4: Checking month-start snapshot for ${monthStartDate}...`);
     const monthStartExists = await snapshotExists(client, investmentAccount.id, monthStartDate);
+    logger?.debug?.(`[Balance Sync] Month-start snapshot exists: ${monthStartExists}`);
 
     let monthStartSnapshot = null;
     if (!monthStartExists && monthStartDate !== today) {
@@ -247,20 +395,7 @@ async function syncBankBalanceToInvestments(client, credential, currentBalance, 
         logger
       );
 
-      // Insert month-start snapshot
-      await client.query(
-        `INSERT INTO investment_holdings_history (
-          account_id, total_value, cost_basis, snapshot_date, notes
-        ) VALUES ($1, $2, $2, $3, $4)
-        ON CONFLICT (account_id, snapshot_date) DO NOTHING`,
-        [
-          investmentAccount.id,
-          monthStartBalance,
-          monthStartDate,
-          'Auto-calculated month-start balance',
-        ]
-      );
-
+      // Insert month-start snapshot into investment_holdings
       await client.query(
         `INSERT INTO investment_holdings (
           account_id, current_value, cost_basis, as_of_date, asset_type, notes
@@ -274,7 +409,7 @@ async function syncBankBalanceToInvestments(client, credential, currentBalance, 
           monthStartBalance,
           monthStartDate,
           'cash',
-          'Month-start snapshot',
+          'Auto-calculated month-start balance',
         ]
       );
 
@@ -282,23 +417,14 @@ async function syncBankBalanceToInvestments(client, credential, currentBalance, 
       logger?.info?.(`✓ Created month-start snapshot: ${monthStartDate} = ₪${monthStartBalance}`);
     }
 
-    // Step 5: Upsert current balance snapshot
-    await client.query(
-      `INSERT INTO investment_holdings_history (
-        account_id, total_value, cost_basis, snapshot_date, notes
-      ) VALUES ($1, $2, $2, $3, $4)
-      ON CONFLICT (account_id, snapshot_date)
-      DO UPDATE SET
-        total_value = EXCLUDED.total_value,
-        cost_basis = EXCLUDED.cost_basis`,
-      [
-        investmentAccount.id,
-        currentBalance,
-        today,
-        'Current balance from scraper',
-      ]
-    );
+    // Step 5: Forward-fill any missing dates between last snapshot and today
+    // This ensures the portfolio graph shows consistent values and doesn't appear to "lose" money
+    logger?.debug?.(`[Balance Sync] Step 5: Forward-filling missing dates...`);
+    const filledDates = await forwardFillMissingDates(client, investmentAccount.id, today, logger);
+    logger?.debug?.(`[Balance Sync] Forward-filled ${filledDates} dates`);
 
+    // Step 6: Upsert current balance snapshot
+    logger?.debug?.(`[Balance Sync] Step 6: Upserting current balance snapshot for ${today}...`);
     await client.query(
       `INSERT INTO investment_holdings (
         account_id, current_value, cost_basis, as_of_date, asset_type, notes
@@ -313,7 +439,7 @@ async function syncBankBalanceToInvestments(client, credential, currentBalance, 
         currentBalance,
         today,
         'cash',
-        'Current balance',
+        'Current balance from scraper',
       ]
     );
 
@@ -325,17 +451,108 @@ async function syncBankBalanceToInvestments(client, credential, currentBalance, 
       currentBalance,
       monthStartSnapshot,
       snapshotDate: today,
+      filledDates,
     };
   } catch (error) {
-    logger?.error?.(`[Balance Sync] Error:`, error);
-    throw error;
+    logger?.error?.(`[Balance Sync] Error during sync for ${credential.vendor}:`, error.message);
+    logger?.error?.(`[Balance Sync] Error stack:`, error.stack);
+    // Don't throw - return error info so scraping can continue
+    return {
+      success: false,
+      error: error.message,
+      vendor: credential.vendor,
+      accountNumber,
+    };
   }
+}
+
+/**
+ * Forward-fill today's date for all bank balance accounts associated with a credential
+ * Called when scrape returns no account data but we want to maintain portfolio continuity
+ *
+ * @param {object} client - Database client
+ * @param {object} credential - Credential object with id and vendor
+ * @param {object} logger - Logger instance
+ * @returns {Promise<object>} Result with counts
+ */
+async function forwardFillForCredential(client, credential, logger = console) {
+  const today = new Date().toISOString().split('T')[0];
+  const credentialId = credential.dbId || credential.id;
+
+  logger?.info?.(`[Forward Fill] Forward-filling bank balance accounts for credential ${credentialId} (${credential.vendor})`);
+
+  // Find all bank balance investment accounts for this credential
+  const accountsResult = await client.query(
+    `SELECT id, account_name
+     FROM investment_accounts
+     WHERE account_type = 'bank_balance'
+       AND is_active = 1
+       AND (
+         notes LIKE $1
+         OR (institution_id IN (
+           SELECT institution_id FROM vendor_credentials WHERE id = $2
+         ))
+       )`,
+    [`%credential_id:${credentialId}%`, credentialId]
+  );
+
+  if (accountsResult.rows.length === 0) {
+    logger?.debug?.(`[Forward Fill] No bank balance accounts found for credential ${credentialId}`);
+    return { success: true, accountsUpdated: 0, datesForwardFilled: 0 };
+  }
+
+  let totalFilled = 0;
+  let accountsUpdated = 0;
+
+  for (const account of accountsResult.rows) {
+    // Fill gaps in history
+    const filled = await forwardFillMissingDates(client, account.id, today, logger);
+    
+    // Also ensure today has a record with the last known value
+    // This is important for the "last update date" to show correctly
+    const lastSnapshot = await getLastSnapshot(client, account.id);
+    if (lastSnapshot) {
+      // Insert today's snapshot with the last known value (if not already present)
+      await client.query(
+        `INSERT INTO investment_holdings (
+          account_id, current_value, cost_basis, as_of_date, asset_type, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (account_id, as_of_date) DO NOTHING`,
+        [
+          account.id,
+          lastSnapshot.total_value,
+          lastSnapshot.cost_basis,
+          today,
+          'cash',
+          'Forward-filled (no new data from bank)',
+        ]
+      );
+
+      logger?.debug?.(`[Forward Fill] Ensured today's snapshot for account ${account.id} (value: ${lastSnapshot.total_value})`);
+      accountsUpdated++;
+      totalFilled += filled + 1; // +1 for today's entry
+    } else if (filled > 0) {
+      accountsUpdated++;
+      totalFilled += filled;
+    }
+  }
+
+  logger?.info?.(`[Forward Fill] Updated ${accountsUpdated} accounts, filled ${totalFilled} dates`);
+
+  return {
+    success: true,
+    accountsUpdated,
+    datesForwardFilled: totalFilled,
+  };
 }
 
 module.exports = {
   syncBankBalanceToInvestments,
   getOrCreateBankBalanceAccount,
   calculateMonthStartBalance,
+  forwardFillMissingDates,
+  forwardFillForCredential,
+  getLastSnapshot,
 };
 
 module.exports.default = module.exports;

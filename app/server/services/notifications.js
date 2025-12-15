@@ -40,6 +40,12 @@ function subDays(date, days) {
   return result;
 }
 
+function toDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function formatShortMonthDay(date) {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -154,6 +160,64 @@ function computeCategoryStatsForNotifications(transactions, minCount) {
   return result;
 }
 
+async function fetchCredentialSyncStates(client) {
+  const result = await client.query(
+    `SELECT
+       vc.id,
+       vc.vendor,
+       vc.nickname,
+       vc.last_scrape_success,
+       vc.last_scrape_attempt,
+       vc.last_scrape_status,
+       fi.display_name_en,
+       fi.display_name_he,
+       fi.vendor_code,
+       (
+         SELECT MAX(se.created_at)
+         FROM scrape_events se
+         WHERE (se.credential_id = vc.id OR (se.credential_id IS NULL AND se.vendor = vc.vendor))
+           AND se.status = 'success'
+       ) AS last_success_event,
+       (
+         SELECT MAX(se.created_at)
+         FROM scrape_events se
+         WHERE (se.credential_id = vc.id OR (se.credential_id IS NULL AND se.vendor = vc.vendor))
+       ) AS last_event_time,
+       (
+         SELECT se.status
+         FROM scrape_events se
+         WHERE (se.credential_id = vc.id OR (se.credential_id IS NULL AND se.vendor = vc.vendor))
+         ORDER BY se.created_at DESC
+         LIMIT 1
+       ) AS last_event_status
+     FROM vendor_credentials vc
+     LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id OR fi.vendor_code = vc.vendor`,
+  );
+
+  return result.rows.map((row) => {
+    const lastSuccess = toDate(row.last_success_event || row.last_scrape_success);
+    const lastAttempt = toDate(row.last_event_time || row.last_scrape_attempt || row.last_scrape_success);
+    const lastUpdate = lastSuccess || lastAttempt;
+    const displayName =
+      row.nickname ||
+      row.display_name_en ||
+      row.display_name_he ||
+      row.vendor_code ||
+      row.vendor;
+
+    return {
+      id: row.id,
+      vendor: row.vendor,
+      nickname: row.nickname,
+      displayName,
+      lastSuccess,
+      lastAttempt,
+      lastUpdate,
+      status: row.last_event_status || row.last_scrape_status || 'never',
+    };
+  });
+}
+
 async function getNotifications(query = {}) {
   const {
     type = 'all',
@@ -173,6 +237,13 @@ async function getNotifications(query = {}) {
   const currentMonthEndStr = toISODate(currentMonth.end);
 
   const client = await database.getClient();
+  let credentialSyncsCache = null;
+  const loadCredentialSyncs = async () => {
+    if (!credentialSyncsCache) {
+      credentialSyncsCache = await fetchCredentialSyncStates(client);
+    }
+    return credentialSyncsCache;
+  };
 
   try {
     // 1. Budget warnings/exceeded alerts
@@ -557,26 +628,16 @@ async function getNotifications(query = {}) {
     if (type === 'all' || type === NOTIFICATION_TYPES.STALE_SYNC) {
       const staleThresholdDate = new Date(now.getTime() - STALE_SYNC_THRESHOLD_MS);
 
-      const staleAccountsResult = await client.query(
-        `SELECT 
-          ac.id,
-          ac.name,
-          ac.company_id,
-          ac.last_update,
-          c.name as company_name
-        FROM accounts ac
-        LEFT JOIN companies c ON c.id = ac.company_id
-        WHERE ac.last_update IS NOT NULL 
-          AND ac.last_update < $1
-        ORDER BY ac.last_update ASC
-        LIMIT 10`,
-        [staleThresholdDate.toISOString()],
-      );
+      const credentialSyncs = await loadCredentialSyncs();
+      const staleAccounts = credentialSyncs
+        .filter((cred) => cred.lastUpdate && cred.lastUpdate < staleThresholdDate)
+        .sort((a, b) => a.lastUpdate - b.lastUpdate);
+      const limitedStale = staleAccounts.slice(0, 10);
 
-      if (staleAccountsResult.rows.length > 0) {
-        const staleCount = staleAccountsResult.rows.length;
-        const oldestAccount = staleAccountsResult.rows[0];
-        const oldestSyncDate = new Date(oldestAccount.last_update);
+      if (limitedStale.length > 0) {
+        const staleCount = staleAccounts.length;
+        const oldestAccount = limitedStale[0];
+        const oldestSyncDate = oldestAccount.lastUpdate;
         const daysSinceSync = Math.floor((now.getTime() - oldestSyncDate.getTime()) / (24 * 60 * 60 * 1000));
 
         notifications.push({
@@ -585,19 +646,20 @@ async function getNotifications(query = {}) {
           severity: daysSinceSync > 7 ? SEVERITY_LEVELS.CRITICAL : SEVERITY_LEVELS.WARNING,
           title: 'Accounts Need Sync',
           message: staleCount === 1
-            ? `${oldestAccount.name || oldestAccount.company_name} hasn't synced in ${daysSinceSync} days`
+            ? `${oldestAccount.displayName} hasn't synced in ${daysSinceSync} days`
             : `${staleCount} accounts haven't synced in over 48 hours`,
           data: {
             stale_count: staleCount,
-            oldest_account: oldestAccount.name || oldestAccount.company_name,
+            oldest_account: oldestAccount.displayName,
             days_since_sync: daysSinceSync,
-            accounts: staleAccountsResult.rows.map((a) => ({
+            accounts: limitedStale.map((a) => ({
               id: a.id,
-              name: a.name || a.company_name,
-              last_update: a.last_update,
+              name: a.displayName,
+              last_update: a.lastUpdate?.toISOString(),
+              last_status: a.status,
             })),
           },
-          timestamp: now.toISOString(),
+          timestamp: oldestSyncDate.toISOString(),
           actionable: true,
           actions: [{ label: 'Sync Now', action: 'bulk_refresh' }],
         });
@@ -645,23 +707,18 @@ async function getNotifications(query = {}) {
     if (type === 'all' || type === NOTIFICATION_TYPES.SYNC_SUCCESS) {
       const recentSyncThreshold = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 24 hours
 
-      const syncHealthResult = await client.query(
-        `SELECT 
-          COUNT(*) FILTER (WHERE last_update >= $1) as recent_syncs,
-          COUNT(*) as total_accounts,
-          MAX(last_update) as latest_sync
-        FROM accounts
-        WHERE last_update IS NOT NULL`,
-        [recentSyncThreshold.toISOString()],
+      const credentialSyncs = await loadCredentialSyncs();
+      const totalAccounts = credentialSyncs.length;
+      const recentSyncs = credentialSyncs.filter(
+        (cred) => cred.lastSuccess && cred.lastSuccess >= recentSyncThreshold,
+      );
+      const latestSync = recentSyncs.reduce(
+        (latest, cred) => (!latest || cred.lastSuccess > latest ? cred.lastSuccess : latest),
+        null,
       );
 
-      const health = syncHealthResult.rows[0];
-      const recentSyncs = Number.parseInt(health?.recent_syncs || 0, 10);
-      const totalAccounts = Number.parseInt(health?.total_accounts || 0, 10);
-      const latestSync = health?.latest_sync ? new Date(health.latest_sync) : null;
-
       // Only show success if all accounts synced recently and there's at least one account
-      if (totalAccounts > 0 && recentSyncs === totalAccounts && latestSync) {
+      if (totalAccounts > 0 && recentSyncs.length === totalAccounts && latestSync) {
         const minutesSinceSync = Math.floor((now.getTime() - latestSync.getTime()) / (60 * 1000));
         const timeAgo = minutesSinceSync < 60
           ? `${minutesSinceSync} minutes ago`

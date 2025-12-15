@@ -25,7 +25,7 @@ const createMockClient = () => {
       if (sql.includes('INSERT INTO investment_assets')) {
         return { rows: [{ id: 1 }] };
       }
-      if (sql.includes('investment_holdings_history') && sql.includes('SELECT')) {
+      if (sql.includes('investment_holdings') && sql.includes('SELECT') && sql.includes('as_of_date')) {
         return { rows: [] }; // No existing snapshot
       }
       if (sql.includes('COALESCE(SUM(price)')) {
@@ -193,7 +193,7 @@ describe('Balance Sync Service', () => {
       expect(mockClient.queries.some(q => q.sql.includes('investment_accounts'))).toBe(true);
       expect(mockClient.queries.some(q => q.sql.includes('investment_assets'))).toBe(true);
       expect(mockClient.queries.some(q => q.sql.includes('investment_holdings'))).toBe(true);
-      expect(mockClient.queries.some(q => q.sql.includes('investment_holdings_history'))).toBe(true);
+      // Note: investment_holdings_history table has been removed - investment_holdings now serves as both
     });
 
     it('should handle errors gracefully', async () => {
@@ -209,9 +209,12 @@ describe('Balance Sync Service', () => {
         institution_id: 1,
       };
 
-      await expect(
-        syncBankBalanceToInvestments(badClient, credential, 10000, null, mockLogger)
-      ).rejects.toThrow('Database error');
+      // Now returns error object instead of throwing (to allow scraping to continue)
+      const result = await syncBankBalanceToInvestments(badClient, credential, 10000, null, mockLogger);
+      
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Database error');
+      expect(result.vendor).toBe('hapoalim');
     });
 
     it('should update asset units to current balance', async () => {

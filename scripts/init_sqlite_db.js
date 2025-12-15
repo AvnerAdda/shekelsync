@@ -374,17 +374,6 @@ const TABLE_DEFINITIONS = [
       FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE,
       FOREIGN KEY (parent_pikadon_id) REFERENCES investment_holdings(id) ON DELETE SET NULL
     );`,
-  `CREATE TABLE IF NOT EXISTS investment_holdings_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      account_id INTEGER NOT NULL,
-      total_value REAL NOT NULL,
-      cost_basis REAL,
-      snapshot_date TEXT NOT NULL,
-      notes TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(account_id, snapshot_date),
-      FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE
-    );`,
   `CREATE TABLE IF NOT EXISTS account_transaction_patterns (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       account_id INTEGER NOT NULL,
@@ -646,8 +635,6 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_children_birth_date ON children_profile (birth_date);',
   'CREATE INDEX IF NOT EXISTS idx_children_education_stage ON children_profile (education_stage);',
   'CREATE INDEX IF NOT EXISTS idx_children_profile_user_id ON children_profile (user_profile_id);',
-  'CREATE INDEX IF NOT EXISTS idx_holdings_history_account ON investment_holdings_history (account_id);',
-  'CREATE INDEX IF NOT EXISTS idx_holdings_history_date ON investment_holdings_history (snapshot_date DESC);',
   'CREATE INDEX IF NOT EXISTS idx_investment_accounts_active ON investment_accounts (is_active);',
   'CREATE INDEX IF NOT EXISTS idx_investment_accounts_category ON investment_accounts (investment_category) WHERE investment_category IS NOT NULL;',
   'CREATE INDEX IF NOT EXISTS idx_investment_accounts_is_liquid ON investment_accounts (is_liquid) WHERE is_liquid IS NOT NULL;',

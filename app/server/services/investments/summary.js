@@ -246,17 +246,17 @@ async function fetchInvestmentPerformance(client, months) {
   const startDate = subMonths(new Date(), months);
 
   const monthExpression = dialect.useSqlite
-    ? "strftime('%Y-%m-01T00:00:00.000Z', snapshot_date)"
-    : "DATE_TRUNC('month', snapshot_date)";
+    ? "strftime('%Y-%m-01T00:00:00.000Z', as_of_date)"
+    : "DATE_TRUNC('month', as_of_date)";
 
   const result = await client.query(
     `
       SELECT
         ${monthExpression} AS month,
-        SUM(total_value) AS total_value,
+        SUM(current_value) AS total_value,
         SUM(cost_basis) AS total_cost_basis
-      FROM investment_holdings_history
-      WHERE snapshot_date >= $1
+      FROM investment_holdings
+      WHERE as_of_date >= $1
       GROUP BY ${monthExpression}
       ORDER BY month ASC
     `,

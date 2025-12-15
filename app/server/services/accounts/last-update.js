@@ -7,16 +7,24 @@ async function listAccountLastUpdates() {
         vc.id,
         vc.vendor,
         vc.nickname,
+        -- Use GREATEST to get the most recent of scrape_events or vendor_credentials
         COALESCE(
           (
-            SELECT MAX(se.created_at)
+            SELECT MAX(
+              CASE 
+                WHEN se.status = 'success' THEN se.created_at
+                ELSE NULL
+              END
+            )
             FROM scrape_events se
             WHERE (se.credential_id = vc.id OR (se.credential_id IS NULL AND se.vendor = vc.vendor))
-              AND se.status = 'success'
           ),
+          vc.last_scrape_success,
           vc.created_at
         ) AS last_update,
+        -- Get the most recent scrape status
         COALESCE(
+          vc.last_scrape_status,
           (
             SELECT se.status
             FROM scrape_events se

@@ -14,7 +14,7 @@ const {
 } = require('../../../lib/category-helpers.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const { getInstitutionById, mapInstitutionToVendorCode } = require('../institutions.js');
-const { syncBankBalanceToInvestments } = require('../investments/balance-sync.js');
+const { syncBankBalanceToInvestments, forwardFillForCredential } = require('../investments/balance-sync.js');
 
 const DEFAULT_TIMEOUT = 120000; // 2 minutes
 const MAX_TIMEOUT = 300000; // 5 minutes for problematic scrapers
@@ -617,9 +617,20 @@ async function updateVendorBalance(client, options, credentials, account, logger
           institution_id: institutionId,
           vendor: options.companyId,
         };
-        await syncBankBalanceToInvestments(client, credentialForSync, account.balance, account.accountNumber, logger);
+        logger?.info?.(`[Scrape:${options.companyId}] Starting balance sync to investments...`);
+        const syncResult = await syncBankBalanceToInvestments(client, credentialForSync, account.balance, account.accountNumber, logger);
+        
+        if (syncResult.success) {
+          if (syncResult.skipped) {
+            logger?.info?.(`[Scrape:${options.companyId}] Balance sync skipped: ${syncResult.reason}`);
+          } else {
+            logger?.info?.(`[Scrape:${options.companyId}] ✓ Balance synced to investments (filled ${syncResult.filledDates || 0} dates)`);
+          }
+        } else {
+          logger?.warn?.(`[Scrape:${options.companyId}] Balance sync completed with error: ${syncResult.error}`);
+        }
       } catch (syncError) {
-        logger?.error?.(`[Scrape:${options.companyId}] Failed to sync balance to investment holdings:`, syncError);
+        logger?.error?.(`[Scrape:${options.companyId}] Failed to sync balance to investment holdings:`, syncError.message);
         // Don't fail the whole scrape if balance sync fails
       }
     }
@@ -632,20 +643,38 @@ async function processScrapeResult(client, { options, credentials, result, isBan
   let bankTransactions = 0;
   const discoveredAccountNumbers = new Set();
 
-  logger?.info?.(`[Scrape:${options.companyId}] Processing ${result.accounts?.length || 0} accounts for credential: ${credentials.nickname || credentials.id}`);
+  const accountCount = result.accounts?.length || 0;
+  logger?.info?.(`[Scrape:${options.companyId}] Processing ${accountCount} accounts for credential: ${credentials.nickname || credentials.id}`);
+
+  // Handle case where there are no accounts or no transactions
+  if (!result.accounts || result.accounts.length === 0) {
+    logger?.info?.(`[Scrape:${options.companyId}] No accounts returned from scraper - this may be normal if no new data since last sync`);
+    return { bankTransactions: 0 };
+  }
+
+  // Count total transactions across all accounts
+  const totalTxns = result.accounts.reduce((sum, acc) => sum + (acc.txns?.length || 0), 0);
+  logger?.info?.(`[Scrape:${options.companyId}] Total transactions across all accounts: ${totalTxns}`);
+
+  if (totalTxns === 0) {
+    logger?.info?.(`[Scrape:${options.companyId}] No new transactions found - updating balances only`);
+  }
 
   for (const account of result.accounts || []) {
     const txnCount = account.txns?.length || 0;
-    logger?.info?.(`[Scrape:${options.companyId}] Account ${account.accountNumber || 'N/A'}: ${txnCount} transactions, balance: ${account.balance || 'N/A'}`);
+    const hasBalance = account.balance !== undefined && account.balance !== null;
+    logger?.info?.(`[Scrape:${options.companyId}] Account ${account.accountNumber || 'N/A'}: ${txnCount} transactions, balance: ${hasBalance ? `₪${account.balance}` : 'N/A'}`);
 
     if (account.accountNumber) {
       discoveredAccountNumbers.add(account.accountNumber);
     }
 
+    // Always try to update balance even if no transactions
     try {
       await updateVendorBalance(client, options, credentials, account, logger);
     } catch (balanceError) {
-      logger?.error?.(`Failed to update balance for ${account.accountNumber}:`, balanceError);
+      logger?.error?.(`[Scrape:${options.companyId}] Failed to update balance for ${account.accountNumber}:`, balanceError.message);
+      // Don't fail the entire scrape for balance update errors
     }
 
     for (const txn of account.txns || []) {
@@ -721,7 +750,81 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
       });
     }
 
+    // Check for "no transactions found" messages which should be treated as success
+    // Common Hebrew messages from Israeli banks meaning "no transactions found in date range"
+    const noTransactionsPatterns = [
+      'לא מצאנו תנועות',  // "We didn't find transactions"
+      'לא נמצאו תנועות',  // "No transactions found"
+      'אין תנועות',       // "No transactions"
+      'no transactions',
+      'no results',
+    ];
+
+    const isNoTransactionsError = result?.errorMessage && noTransactionsPatterns.some(
+      pattern => result.errorMessage.toLowerCase().includes(pattern.toLowerCase())
+    );
+
     if (!result?.success) {
+      // Handle "no transactions" as a soft success - just means nothing new since last scrape
+      if (isNoTransactionsError) {
+        logger?.info?.(`[Scrape:${options.companyId}] No new transactions found since last scrape - this is normal`);
+        logger?.info?.(`[Scrape:${options.companyId}] Bank message: ${result?.errorMessage}`);
+        
+        // Try to update balance even without transactions (if accounts have balance info)
+        // Some scrapers may still return account info with balance even if no new transactions
+        if (result?.accounts?.length > 0) {
+          const summary = await processScrapeResult(client, {
+            options,
+            credentials,
+            result: { ...result, success: true }, // Treat as success for processing
+            isBank,
+            logger,
+          });
+          
+          await updateScrapeEventStatus(client, auditId, 'success', 'No new transactions (balance updated)');
+          if (credentials.dbId) {
+            await markCredentialScrapeStatus(client, credentials.dbId, 'success');
+          }
+          
+          await client.query('COMMIT');
+          
+          return {
+            success: true,
+            message: 'No new transactions found - balance sync completed',
+            accounts: result.accounts,
+            bankTransactions: summary.bankTransactions,
+            noNewTransactions: true,
+          };
+        }
+        
+        // No accounts returned, but still mark as success (nothing to sync)
+        // However, we should still forward-fill the portfolio history for this credential
+        // so the "last update date" on the portfolio graph reflects this sync
+        logger?.info?.(`[Scrape:${options.companyId}] No account data returned - forward-filling portfolio history with last known values`);
+        
+        try {
+          const forwardFillResult = await forwardFillForCredential(client, credentials, logger);
+          logger?.info?.(`[Scrape:${options.companyId}] Forward-fill completed: ${forwardFillResult.accountsUpdated} accounts updated, ${forwardFillResult.datesForwardFilled} date entries added`);
+        } catch (forwardFillError) {
+          logger?.warn?.(`[Scrape:${options.companyId}] Forward-fill failed (non-critical): ${forwardFillError.message}`);
+        }
+        
+        await updateScrapeEventStatus(client, auditId, 'success', 'No new transactions (portfolio history updated)');
+        if (credentials.dbId) {
+          await markCredentialScrapeStatus(client, credentials.dbId, 'success');
+        }
+        
+        await client.query('COMMIT');
+        
+        return {
+          success: true,
+          message: 'No new transactions found since last scrape (portfolio history updated)',
+          accounts: [],
+          bankTransactions: 0,
+          noNewTransactions: true,
+        };
+      }
+
       // Log detailed error information for debugging
       logger?.error?.(`[Scrape:${options.companyId}] Scrape failed with errorType: ${result?.errorType || 'unknown'}`);
       logger?.error?.(`[Scrape:${options.companyId}] Error message: ${result?.errorMessage || 'No error message provided'}`);
