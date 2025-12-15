@@ -29,17 +29,17 @@ async function getBankBalanceSummary(query = {}) {
   let dateSelect;
   switch (aggregation) {
     case 'weekly':
-      dateGroupBy = dialect.dateTrunc('week', 'ihh.snapshot_date');
-      dateSelect = `${dialect.dateTrunc('week', 'ihh.snapshot_date')} as date`;
+      dateGroupBy = dialect.dateTrunc('week', 'ih.as_of_date');
+      dateSelect = `${dialect.dateTrunc('week', 'ih.as_of_date')} as date`;
       break;
     case 'monthly':
-      dateGroupBy = dialect.dateTrunc('month', 'ihh.snapshot_date');
-      dateSelect = `${dialect.dateTrunc('month', 'ihh.snapshot_date')} as date`;
+      dateGroupBy = dialect.dateTrunc('month', 'ih.as_of_date');
+      dateSelect = `${dialect.dateTrunc('month', 'ih.as_of_date')} as date`;
       break;
     case 'daily':
     default:
-      dateGroupBy = dialect.dateTrunc('day', 'ihh.snapshot_date');
-      dateSelect = `${dialect.dateTrunc('day', 'ihh.snapshot_date')} as date`;
+      dateGroupBy = dialect.dateTrunc('day', 'ih.as_of_date');
+      dateSelect = `${dialect.dateTrunc('day', 'ih.as_of_date')} as date`;
   }
 
   // Query 1: Current bank balances per account
@@ -79,13 +79,14 @@ async function getBankBalanceSummary(query = {}) {
     `SELECT
       ia.id as account_id,
       ia.account_name,
-      ihh.total_value as month_start_balance,
-      ihh.snapshot_date
-    FROM investment_holdings_history ihh
-    JOIN investment_accounts ia ON ihh.account_id = ia.id
+      SUM(ih.current_value) as month_start_balance,
+      ih.as_of_date as snapshot_date
+    FROM investment_holdings ih
+    JOIN investment_accounts ia ON ih.account_id = ia.id
     WHERE ia.account_type = 'bank_balance'
       AND ia.is_active = 1
-      AND ihh.snapshot_date = $1
+      AND ih.as_of_date = $1
+    GROUP BY ia.id, ia.account_name, ih.as_of_date
     ORDER BY ia.account_name`,
     [monthStartDate]
   );
@@ -96,17 +97,17 @@ async function getBankBalanceSummary(query = {}) {
       ${dateSelect},
       ia.id as account_id,
       ia.account_name,
-      SUM(ihh.total_value) as total_balance,
-      AVG(ihh.total_value) as avg_balance,
-      MIN(ihh.total_value) as min_balance,
-      MAX(ihh.total_value) as max_balance,
+      SUM(ih.current_value) as total_balance,
+      AVG(ih.current_value) as avg_balance,
+      MIN(ih.current_value) as min_balance,
+      MAX(ih.current_value) as max_balance,
       COUNT(*) as snapshot_count
-    FROM investment_holdings_history ihh
-    JOIN investment_accounts ia ON ihh.account_id = ia.id
+    FROM investment_holdings ih
+    JOIN investment_accounts ia ON ih.account_id = ia.id
     WHERE ia.account_type = 'bank_balance'
       AND ia.is_active = 1
-      AND ihh.snapshot_date >= $1
-      AND ihh.snapshot_date <= $2
+      AND ih.as_of_date >= $1
+      AND ih.as_of_date <= $2
     GROUP BY ${dateGroupBy}, ia.id, ia.account_name
     ORDER BY date ASC, ia.account_name`,
     [start, end]
@@ -116,13 +117,13 @@ async function getBankBalanceSummary(query = {}) {
   const totalBalanceHistoryResult = await database.query(
     `SELECT
       ${dateSelect},
-      SUM(ihh.total_value) as total_balance
-    FROM investment_holdings_history ihh
-    JOIN investment_accounts ia ON ihh.account_id = ia.id
+      SUM(ih.current_value) as total_balance
+    FROM investment_holdings ih
+    JOIN investment_accounts ia ON ih.account_id = ia.id
     WHERE ia.account_type = 'bank_balance'
       AND ia.is_active = 1
-      AND ihh.snapshot_date >= $1
-      AND ihh.snapshot_date <= $2
+      AND ih.as_of_date >= $1
+      AND ih.as_of_date <= $2
     GROUP BY ${dateGroupBy}
     ORDER BY date ASC`,
     [start, end]
@@ -131,17 +132,17 @@ async function getBankBalanceSummary(query = {}) {
   // Query 5: All month-start snapshots in the date range
   const allMonthStartsResult = await database.query(
     `SELECT
-      ihh.snapshot_date,
-      SUM(ihh.total_value) as total_balance
-    FROM investment_holdings_history ihh
-    JOIN investment_accounts ia ON ihh.account_id = ia.id
+      ih.as_of_date as snapshot_date,
+      SUM(ih.current_value) as total_balance
+    FROM investment_holdings ih
+    JOIN investment_accounts ia ON ih.account_id = ia.id
     WHERE ia.account_type = 'bank_balance'
       AND ia.is_active = 1
-      AND ihh.snapshot_date >= $1
-      AND ihh.snapshot_date <= $2
-      AND strftime('%d', ihh.snapshot_date) = '01'
-    GROUP BY ihh.snapshot_date
-    ORDER BY ihh.snapshot_date ASC`,
+      AND ih.as_of_date >= $1
+      AND ih.as_of_date <= $2
+      AND strftime('%d', ih.as_of_date) = '01'
+    GROUP BY ih.as_of_date
+    ORDER BY ih.as_of_date ASC`,
     [start, end]
   );
 

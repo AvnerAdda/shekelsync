@@ -913,10 +913,20 @@ export default function ManualMatchingModal({
                   secondary={
                     <Box sx={{ mt: 1 }}>
                       {combo.expenses.map((exp, i) => (
-                        <Typography key={i} variant="caption" display="block" color="text.secondary">
-                          • {new Date(exp.date).toLocaleDateString()} - {exp.name} - ₪{Math.abs(exp.price).toLocaleString()}
-                          {exp.isMatched && <Chip label="Already Matched" size="small" color="warning" sx={{ ml: 1, height: 16, fontSize: '0.65rem' }} />}
-                        </Typography>
+                        <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            • {new Date(exp.date).toLocaleDateString()} - {exp.name} - ₪{Math.abs(exp.price).toLocaleString()}
+                          </Typography>
+                          {exp.isMatched && (
+                            <Chip
+                              component="span"
+                              label="Already Matched"
+                              size="small"
+                              color="warning"
+                              sx={{ ml: 1, height: 16, fontSize: '0.65rem' }}
+                            />
+                          )}
+                        </Box>
                       ))}
                     </Box>
                   }

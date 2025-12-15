@@ -334,12 +334,12 @@ async function getDashboardAnalytics(query = {}) {
   const monthStartDate = startDateStr.substring(0, 7) + '-01'; // YYYY-MM-01
   const monthStartBalancesResult = await database.query(
     `SELECT
-      COALESCE(SUM(ihh.total_value), 0) as total_balance
-    FROM investment_holdings_history ihh
-    JOIN investment_accounts ia ON ihh.account_id = ia.id
+      COALESCE(SUM(ih.current_value), 0) as total_balance
+    FROM investment_holdings ih
+    JOIN investment_accounts ia ON ih.account_id = ia.id
     WHERE ia.account_type = 'bank_balance'
       AND ia.is_active = 1
-      AND ihh.snapshot_date = $1`,
+      AND ih.as_of_date = $1`,
     [monthStartDate]
   );
 
@@ -348,29 +348,29 @@ async function getDashboardAnalytics(query = {}) {
   let balanceHistorySelect;
   switch (aggregation) {
     case 'weekly':
-      balanceHistoryGroupBy = dialect.dateTrunc('week', 'ihh.snapshot_date');
-      balanceHistorySelect = `${dialect.dateTrunc('week', 'ihh.snapshot_date')} as date`;
+      balanceHistoryGroupBy = dialect.dateTrunc('week', 'ih.as_of_date');
+      balanceHistorySelect = `${dialect.dateTrunc('week', 'ih.as_of_date')} as date`;
       break;
     case 'monthly':
-      balanceHistoryGroupBy = dialect.dateTrunc('month', 'ihh.snapshot_date');
-      balanceHistorySelect = `${dialect.dateTrunc('month', 'ihh.snapshot_date')} as date`;
+      balanceHistoryGroupBy = dialect.dateTrunc('month', 'ih.as_of_date');
+      balanceHistorySelect = `${dialect.dateTrunc('month', 'ih.as_of_date')} as date`;
       break;
     case 'daily':
     default:
-      balanceHistoryGroupBy = dialect.dateTrunc('day', 'ihh.snapshot_date');
-      balanceHistorySelect = `${dialect.dateTrunc('day', 'ihh.snapshot_date')} as date`;
+      balanceHistoryGroupBy = dialect.dateTrunc('day', 'ih.as_of_date');
+      balanceHistorySelect = `${dialect.dateTrunc('day', 'ih.as_of_date')} as date`;
   }
 
   const balanceHistoryResult = await database.query(
     `SELECT
       ${balanceHistorySelect},
-      SUM(ihh.total_value) as total_balance
-    FROM investment_holdings_history ihh
-    JOIN investment_accounts ia ON ihh.account_id = ia.id
+      SUM(ih.current_value) as total_balance
+    FROM investment_holdings ih
+    JOIN investment_accounts ia ON ih.account_id = ia.id
     WHERE ia.account_type = 'bank_balance'
       AND ia.is_active = 1
-      AND ihh.snapshot_date >= $1
-      AND ihh.snapshot_date <= $2
+      AND ih.as_of_date >= $1
+      AND ih.as_of_date <= $2
     GROUP BY ${balanceHistoryGroupBy}
     ORDER BY date ASC`,
     [start, end]

@@ -37,19 +37,23 @@ async function getInvestmentHistory(params = {}) {
   if (accountId) {
     query = `
       SELECT 
-        ihh.snapshot_date,
-        ihh.total_value as current_value,
-        ihh.cost_basis,
-        ihh.account_id,
+        ih.as_of_date as snapshot_date,
+        SUM(ih.current_value) as current_value,
+        SUM(ih.cost_basis) as cost_basis,
+        ih.account_id,
         ia.account_name,
         ia.account_type,
         ${INSTITUTION_SELECT_FIELDS}
-      FROM investment_holdings_history ihh
-      JOIN investment_accounts ia ON ihh.account_id = ia.id
+      FROM investment_holdings ih
+      JOIN investment_accounts ia ON ih.account_id = ia.id
       LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
-      WHERE ihh.account_id = $1
-      ${startDate ? 'AND ihh.snapshot_date >= $2' : ''}
-      ORDER BY ihh.snapshot_date ASC
+      WHERE ih.account_id = $1
+      ${startDate ? 'AND ih.as_of_date >= $2' : ''}
+      GROUP BY ih.as_of_date, ih.account_id, ia.account_name, ia.account_type,
+               fi.id, fi.vendor_code, fi.display_name_he, fi.display_name_en,
+               fi.institution_type, fi.category, fi.subcategory, fi.logo_url,
+               fi.is_scrapable, fi.scraper_company_id
+      ORDER BY ih.as_of_date ASC
     `;
     queryParams = startDate
       ? [accountId, startDate.toISOString().split('T')[0]]
@@ -60,19 +64,23 @@ async function getInvestmentHistory(params = {}) {
     const placeholders = ids.map((_, index) => `$${index + 1}`).join(',');
     query = `
       SELECT 
-        ihh.snapshot_date,
-        ihh.total_value as current_value,
-        ihh.cost_basis,
-        ihh.account_id,
+        ih.as_of_date as snapshot_date,
+        SUM(ih.current_value) as current_value,
+        SUM(ih.cost_basis) as cost_basis,
+        ih.account_id,
         ia.account_name,
         ia.account_type,
         ${INSTITUTION_SELECT_FIELDS}
-      FROM investment_holdings_history ihh
-      JOIN investment_accounts ia ON ihh.account_id = ia.id
+      FROM investment_holdings ih
+      JOIN investment_accounts ia ON ih.account_id = ia.id
       LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
-      WHERE ihh.account_id IN (${placeholders})
-      ${startDate ? `AND ihh.snapshot_date >= $${ids.length + 1}` : ''}
-      ORDER BY ihh.snapshot_date ASC, ihh.account_id
+      WHERE ih.account_id IN (${placeholders})
+      ${startDate ? `AND ih.as_of_date >= $${ids.length + 1}` : ''}
+      GROUP BY ih.as_of_date, ih.account_id, ia.account_name, ia.account_type,
+               fi.id, fi.vendor_code, fi.display_name_he, fi.display_name_en,
+               fi.institution_type, fi.category, fi.subcategory, fi.logo_url,
+               fi.is_scrapable, fi.scraper_company_id
+      ORDER BY ih.as_of_date ASC, ih.account_id
     `;
     queryParams = startDate
       ? [...baseParams, startDate.toISOString().split('T')[0]]
@@ -80,18 +88,22 @@ async function getInvestmentHistory(params = {}) {
   } else {
     query = `
       SELECT 
-        ihh.snapshot_date,
-        ihh.total_value as current_value,
-        ihh.cost_basis,
-        ihh.account_id,
+        ih.as_of_date as snapshot_date,
+        SUM(ih.current_value) as current_value,
+        SUM(ih.cost_basis) as cost_basis,
+        ih.account_id,
         ia.account_name,
         ia.account_type,
         ${INSTITUTION_SELECT_FIELDS}
-      FROM investment_holdings_history ihh
-      JOIN investment_accounts ia ON ihh.account_id = ia.id
+      FROM investment_holdings ih
+      JOIN investment_accounts ia ON ih.account_id = ia.id
       LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
-      ${startDate ? 'WHERE ihh.snapshot_date >= $1' : ''}
-      ORDER BY ihh.snapshot_date ASC, ihh.account_id
+      ${startDate ? 'WHERE ih.as_of_date >= $1' : ''}
+      GROUP BY ih.as_of_date, ih.account_id, ia.account_name, ia.account_type,
+               fi.id, fi.vendor_code, fi.display_name_he, fi.display_name_en,
+               fi.institution_type, fi.category, fi.subcategory, fi.logo_url,
+               fi.is_scrapable, fi.scraper_company_id
+      ORDER BY ih.as_of_date ASC, ih.account_id
     `;
     queryParams = startDate ? [startDate.toISOString().split('T')[0]] : [];
   }

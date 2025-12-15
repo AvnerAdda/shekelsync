@@ -722,9 +722,9 @@ function createInvestmentsRouter() {
         matchPatterns
       } = req.query;
 
-      if (!creditCardAccountNumber || !creditCardVendor || !bankVendor) {
+      if (!creditCardVendor || !bankVendor) {
         return res.status(400).json({
-          error: 'Missing required parameters: creditCardAccountNumber, creditCardVendor, bankVendor'
+          error: 'Missing required parameters: creditCardVendor, bankVendor'
         });
       }
 
@@ -741,7 +741,7 @@ function createInvestmentsRouter() {
       }
 
       const repayments = await manualMatchingService.getUnmatchedRepayments({
-        creditCardAccountNumber,
+        creditCardAccountNumber: creditCardAccountNumber || null,
         creditCardVendor,
         bankVendor,
         bankAccountNumber: bankAccountNumber || null,
@@ -770,15 +770,15 @@ function createInvestmentsRouter() {
         processedDate  // NEW: Smart date filtering
       } = req.query;
 
-      if (!repaymentDate || !creditCardAccountNumber || !creditCardVendor) {
+      if (!repaymentDate || !creditCardVendor) {
         return res.status(400).json({
-          error: 'Missing required parameters: repaymentDate, creditCardAccountNumber, creditCardVendor'
+          error: 'Missing required parameters: repaymentDate, creditCardVendor'
         });
       }
 
       const expenses = await manualMatchingService.getAvailableExpenses({
         repaymentDate,
-        creditCardAccountNumber,
+        creditCardAccountNumber: creditCardAccountNumber || null,
         creditCardVendor,
         processedDate: processedDate || null  // NEW: Optional smart date filter
       });
@@ -807,14 +807,14 @@ function createInvestmentsRouter() {
         endDate
       } = req.query;
 
-      if (!creditCardAccountNumber || !creditCardVendor) {
+      if (!creditCardVendor) {
         return res.status(400).json({
-          error: 'Missing required parameters: creditCardAccountNumber, creditCardVendor'
+          error: 'Missing required parameter: creditCardVendor'
         });
       }
 
       const processedDates = await manualMatchingService.getAvailableProcessedDates({
-        creditCardAccountNumber,
+        creditCardAccountNumber: creditCardAccountNumber || null,
         creditCardVendor,
         startDate: startDate || null,
         endDate: endDate || null
@@ -895,9 +895,9 @@ function createInvestmentsRouter() {
         tolerance  // NEW: Optional tolerance parameter (default: 2, max: 50)
       } = req.body;
 
-      if (!repaymentTxnId || !repaymentVendor || !repaymentDate || !repaymentAmount || !cardNumber || !ccVendor || !expenses || !Array.isArray(expenses)) {
+      if (!repaymentTxnId || !repaymentVendor || !repaymentDate || repaymentAmount === undefined || repaymentAmount === null || !ccVendor || !expenses || !Array.isArray(expenses)) {
         return res.status(400).json({
-          error: 'Missing required parameters: repaymentTxnId, repaymentVendor, repaymentDate, repaymentAmount, cardNumber, ccVendor, expenses (array)'
+          error: 'Missing required parameters: repaymentTxnId, repaymentVendor, repaymentDate, repaymentAmount, ccVendor, expenses (array)'
         });
       }
 
@@ -906,7 +906,7 @@ function createInvestmentsRouter() {
         repaymentVendor,
         repaymentDate,
         repaymentAmount,
-        cardNumber,
+        cardNumber: cardNumber || null,
         ccVendor,
         expenses,
         tolerance: tolerance ? parseFloat(tolerance) : 2  // NEW: Pass tolerance (default: 2)
