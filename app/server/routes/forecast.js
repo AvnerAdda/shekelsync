@@ -1,30 +1,62 @@
 const express = require('express');
 const { generateDailyForecast } = require('../services/forecast.js');
 
+// Simple in-memory cache for forecast results
+const forecastCache = {
+  data: null,
+  timestamp: null,
+  cacheDuration: 5 * 60 * 1000, // 5 minutes
+};
+
+function isCacheValid() {
+  if (!forecastCache.data || !forecastCache.timestamp) return false;
+  return Date.now() - forecastCache.timestamp < forecastCache.cacheDuration;
+}
+
 function createForecastRouter() {
   const router = express.Router();
 
   router.get('/daily', async (req, res) => {
     try {
-      const { months, days, includeToday, verbose } = req.query;
-      // Default to trimmed responses unless explicitly disabled
-      const trimParam = req.query.trim;
-      const trim = trimParam === undefined ? true : (trimParam === 'true' || trimParam === '1');
+      const { months, days, includeToday, verbose, noCache } = req.query;
+      const skipCache = noCache === 'true' || noCache === '1';
+
+      // Check cache first (unless explicitly skipped)
+      if (!skipCache && isCacheValid()) {
+        console.log('[Forecast] Returning cached forecast result');
+        return res.json(forecastCache.data);
+      }
+
+      // Default to forecast until end of current month (not 6 months)
+      const now = new Date();
+      const daysUntilEndOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
+
+      let forecastDaysValue;
+      let forecastMonthsValue;
+
+      if (days) {
+        forecastDaysValue = Number.parseInt(days, 10);
+      } else {
+        forecastDaysValue = daysUntilEndOfMonth;
+      }
+
+      if (months) {
+        forecastMonthsValue = Number.parseInt(months, 10);
+      } else if (!days) {
+        forecastMonthsValue = undefined; // Use forecastDays instead
+      }
+
       const opts = {
-        forecastMonths: months ? parseInt(months, 10) : undefined,
-        forecastDays: days ? parseInt(days, 10) : undefined,
+        forecastMonths: forecastMonthsValue,
+        forecastDays: forecastDaysValue,
         includeToday: includeToday === 'true' || includeToday === '1',
         verbose: verbose === 'true' || verbose === '1',
       };
-      console.log('[Forecast] Generating daily forecast...');
+      console.log('[Forecast] Generating daily forecast with options:', opts);
       const result = await generateDailyForecast(opts);
       console.log('[Forecast] Successfully generated forecast with', result.dailyForecasts?.length || 0, 'days');
 
-      if (!trim) {
-        return res.json(result);
-      }
-
-      // Trimmed payload for frontend: minimal daily fields + scenarios + summaries
+      // Format minimal daily fields for response
       const dailyMinimal = (result.dailyForecasts || []).map(d => ({
         date: d.date,
         income: d.expectedIncome,
@@ -71,7 +103,37 @@ function createForecastRouter() {
       forecastStart.setDate(forecastStart.getDate() - 1);
       const actualEndDate = forecastStart.toISOString().split('T')[0];
 
-      return res.json({
+      // Generate budget outlook from forecast and category patterns
+      const budgetOutlook = (result.categoryPatterns || [])
+        .filter(p => p.categoryType === 'expense')
+        .map(pattern => ({
+          budgetId: null,
+          categoryDefinitionId: null,
+          categoryName: pattern.category,
+          categoryNameEn: pattern.category,
+          categoryIcon: null,
+          categoryColor: null,
+          parentCategoryId: null,
+          limit: 0, // No limit set
+          actualSpent: 0,
+          forecasted: Math.round(pattern.avgAmount * pattern.avgOccurrencesPerMonth),
+          projectedTotal: Math.round(pattern.avgAmount * pattern.avgOccurrencesPerMonth),
+          utilization: 0,
+          status: 'on_track',
+          risk: 0,
+          alertThreshold: 0.8,
+          nextLikelyHitDate: null,
+          actions: []
+        }));
+
+      const budgetSummary = {
+        totalBudgets: budgetOutlook.length,
+        highRisk: 0,
+        exceeded: 0,
+        totalProjectedOverrun: 0
+      };
+
+      const response = {
         forecastPeriod: result.forecastPeriod,
         dailyForecasts: dailyMinimal,
         scenarios: {
@@ -82,8 +144,16 @@ function createForecastRouter() {
         summaries,
         actual: {
           endDate: actualEndDate
-        }
-      });
+        },
+        budgetOutlook,
+        budgetSummary
+      };
+
+      // Cache the response
+      forecastCache.data = response;
+      forecastCache.timestamp = Date.now();
+
+      return res.json(response);
     } catch (error) {
       console.error('[Forecast] Generation error:', error);
       res.status(error?.status || 500).json({
