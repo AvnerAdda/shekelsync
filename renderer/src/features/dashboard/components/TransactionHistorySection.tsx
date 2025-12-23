@@ -359,32 +359,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     return [...historicalData, ...forecastEntries];
   }, [getNetPositionData, forecastData, aggregationPeriod]);
 
-  // Prepare scenarios data for bar chart
-  const getScenariosData = useCallback(() => {
-    if (!forecastData?.scenarios) return [];
-    const { p10, p50, p90 } = forecastData.scenarios;
-    return [
-      { 
-        name: t('forecast.income'), 
-        p10: p10.income, 
-        p50: p50.income, 
-        p90: p90.income 
-      },
-      { 
-        name: t('forecast.expenses'), 
-        p10: Math.abs(p10.expenses), 
-        p50: Math.abs(p50.expenses), 
-        p90: Math.abs(p90.expenses) 
-      },
-      { 
-        name: t('forecast.netCashFlow'), 
-        p10: p10.netCashFlow, 
-        p50: p50.netCashFlow, 
-        p90: p90.netCashFlow 
-      },
-    ];
-  }, [forecastData, t]);
-
   // Calculate days remaining in current month
   const getDaysRemaining = () => {
     const now = new Date();
@@ -428,21 +402,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 }}
               >
                 <AccountBalanceIcon fontSize="small" />
-              </IconButton>
-            </MuiTooltip>
-            <MuiTooltip title={t('tabs.scenarios')}>
-              <IconButton
-                size="small"
-                onClick={() => setActiveTab(2)}
-                sx={{
-                  bgcolor: activeTab === 2 ? 'primary.main' : 'transparent',
-                  color: activeTab === 2 ? 'primary.contrastText' : 'text.secondary',
-                  '&:hover': {
-                    bgcolor: activeTab === 2 ? 'primary.dark' : 'action.hover',
-                  },
-                }}
-              >
-                <TrendingUpIcon fontSize="small" />
               </IconButton>
             </MuiTooltip>
           </Box>
@@ -837,71 +796,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 </ComposedChart>
               </ResponsiveContainer>
             </>
-          )}
-        </Box>
-      )}
-
-      {/* Tab 2: End of Month Scenarios */}
-      {activeTab === 2 && (
-        <Box>
-          {forecastLoading && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 350 }}>
-              <CircularProgress />
-              <Typography sx={{ ml: 2 }}>{t('forecast.loading')}</Typography>
-            </Box>
-          )}
-          {forecastError && (
-            <Alert 
-              severity="error" 
-              sx={{ mb: 2 }}
-              action={
-                <Button color="inherit" size="small" onClick={() => fetchForecast()}>
-                  Retry
-                </Button>
-              }
-            >
-              {t('forecast.error')}: {forecastError}
-            </Alert>
-          )}
-          {!forecastLoading && !forecastError && forecastData && (
-            <>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
-                {t('forecast.scenarioSummary', { simulations: 1000 })} • {t('forecast.daysRemaining', { count: getDaysRemaining() })}
-              </Typography>
-              <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={getScenariosData()} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" tickFormatter={formatCurrencyValue} />
-                  <YAxis type="category" dataKey="name" width={120} />
-                  <Tooltip formatter={(value: number) => formatCurrencyValue(value)} />
-                  <Legend />
-                  <Bar dataKey="p10" fill={theme.palette.success.main} name={t('forecast.p10')} />
-                  <Bar dataKey="p50" fill={theme.palette.warning.main} name={t('forecast.p50')} />
-                  <Bar dataKey="p90" fill={theme.palette.error.main} name={t('forecast.p90')} />
-                </BarChart>
-              </ResponsiveContainer>
-              
-              {/* Summary cards */}
-              <Box sx={{ display: 'flex', gap: 2, mt: 3, flexWrap: 'wrap', justifyContent: 'center' }}>
-                <Paper sx={{ p: 2, minWidth: 150, textAlign: 'center', bgcolor: 'success.main', color: 'success.contrastText' }}>
-                  <Typography variant="caption">{t('forecast.p10')}</Typography>
-                  <Typography variant="h6">{formatCurrencyValue(forecastData.scenarios.p10.netCashFlow)}</Typography>
-                </Paper>
-                <Paper sx={{ p: 2, minWidth: 150, textAlign: 'center', bgcolor: 'warning.main', color: 'warning.contrastText' }}>
-                  <Typography variant="caption">{t('forecast.p50')}</Typography>
-                  <Typography variant="h6">{formatCurrencyValue(forecastData.scenarios.p50.netCashFlow)}</Typography>
-                </Paper>
-                <Paper sx={{ p: 2, minWidth: 150, textAlign: 'center', bgcolor: 'error.main', color: 'error.contrastText' }}>
-                  <Typography variant="caption">{t('forecast.p90')}</Typography>
-                  <Typography variant="h6">{formatCurrencyValue(forecastData.scenarios.p90.netCashFlow)}</Typography>
-                </Paper>
-              </Box>
-            </>
-          )}
-          {!forecastLoading && !forecastError && !forecastData && (
-            <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-              {t('forecast.noData')}
-            </Typography>
           )}
         </Box>
       )}

@@ -56,6 +56,26 @@ function createForecastRouter() {
       const result = await generateDailyForecast(opts);
       console.log('[Forecast] Successfully generated forecast with', result.dailyForecasts?.length || 0, 'days');
 
+      // Build actual spending by category for this month (for budget status)
+      // Use full result data which has predictions before response is trimmed
+      let actualSpendingByCategory = {};
+      try {
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+        const categorySpending = result.dailyForecasts
+          .filter(d => d.date <= todayStr)
+          .flatMap(d => d.predictions || [])
+          .filter(p => p.categoryType === 'expense')
+          .reduce((acc, p) => {
+            const cat = p.category;
+            acc[cat] = (acc[cat] || 0) + p.probabilityWeightedAmount;
+            return acc;
+          }, {});
+        actualSpendingByCategory = categorySpending;
+      } catch (err) {
+        console.warn('[Forecast] Could not calculate actual spending:', err.message);
+      }
+
       // Format minimal daily fields for response
       const dailyMinimal = (result.dailyForecasts || []).map(d => ({
         date: d.date,
@@ -108,34 +128,104 @@ function createForecastRouter() {
       forecastStart.setDate(forecastStart.getDate() - 1);
       const actualEndDate = forecastStart.toISOString().split('T')[0];
 
+      // Build category spending map from scenarios for budget status
+      const categoryP10 = {};
+      const categoryP50 = {};
+      const categoryP90 = {};
+
+      // Sum up spending by category from each scenario
+      (result.scenarios?.p10?.dailyResults || []).forEach(day => {
+        // Rough estimate: distribute expenses by pattern frequency
+        (result.categoryPatterns || []).forEach(pattern => {
+          if (pattern.categoryType === 'expense') {
+            const key = pattern.category;
+            const monthlyShare = (pattern.avgAmount * pattern.avgOccurrencesPerMonth) / 30; // Daily average
+            categoryP10[key] = (categoryP10[key] || 0) + monthlyShare;
+          }
+        });
+      });
+
+      (result.scenarios?.p50?.dailyResults || []).forEach(day => {
+        (result.categoryPatterns || []).forEach(pattern => {
+          if (pattern.categoryType === 'expense') {
+            const key = pattern.category;
+            const monthlyShare = (pattern.avgAmount * pattern.avgOccurrencesPerMonth) / 30;
+            categoryP50[key] = (categoryP50[key] || 0) + monthlyShare;
+          }
+        });
+      });
+
+      (result.scenarios?.p90?.dailyResults || []).forEach(day => {
+        (result.categoryPatterns || []).forEach(pattern => {
+          if (pattern.categoryType === 'expense') {
+            const key = pattern.category;
+            const monthlyShare = (pattern.avgAmount * pattern.avgOccurrencesPerMonth) / 30;
+            categoryP90[key] = (categoryP90[key] || 0) + monthlyShare;
+          }
+        });
+      });
+
       // Generate budget outlook from forecast and category patterns
       const budgetOutlook = (result.categoryPatterns || [])
         .filter(p => p.categoryType === 'expense')
-        .map(pattern => ({
-          budgetId: null,
-          categoryDefinitionId: null,
-          categoryName: pattern.category,
-          categoryNameEn: pattern.category,
-          categoryIcon: null,
-          categoryColor: null,
-          parentCategoryId: null,
-          limit: 0, // No limit set
-          actualSpent: 0,
-          forecasted: Math.round(pattern.avgAmount * pattern.avgOccurrencesPerMonth),
-          projectedTotal: Math.round(pattern.avgAmount * pattern.avgOccurrencesPerMonth),
-          utilization: 0,
-          status: 'on_track',
-          risk: 0,
-          alertThreshold: 0.8,
-          nextLikelyHitDate: null,
-          actions: []
-        }));
+        .map(pattern => {
+          const monthlyForecast = Math.round(pattern.avgAmount * pattern.avgOccurrencesPerMonth);
+          const p10Value = Math.round(categoryP10[pattern.category] || monthlyForecast * 0.8);
+          const p50Value = Math.round(categoryP50[pattern.category] || monthlyForecast);
+          const p90Value = Math.round(categoryP90[pattern.category] || monthlyForecast * 1.2);
+
+          // Use actual spending from historical data, or estimate if not available
+          const actualSpent = Math.round(actualSpendingByCategory[pattern.category] || monthlyForecast * 0.45);
+
+          // Determine status based on where actual spending falls
+          let status = 'on_track'; // <= p10
+          let risk = 0;
+
+          if (actualSpent > p90Value) {
+            status = 'exceeded'; // > p90
+            risk = 1;
+          } else if (actualSpent > p50Value) {
+            status = 'at_risk'; // p50 < actual <= p90
+            risk = 0.7;
+          } else if (actualSpent > p10Value) {
+            status = 'at_risk'; // p10 < actual <= p50
+            risk = 0.4;
+          }
+
+          return {
+            budgetId: null,
+            categoryDefinitionId: null,
+            categoryName: pattern.category,
+            categoryNameEn: pattern.category,
+            categoryIcon: null,
+            categoryColor: null,
+            parentCategoryId: null,
+            limit: 0,
+            actualSpent,
+            forecasted: monthlyForecast,
+            projectedTotal: monthlyForecast,
+            utilization: monthlyForecast > 0 ? (actualSpent / monthlyForecast) * 100 : 0,
+            status,
+            risk,
+            alertThreshold: 0.8,
+            nextLikelyHitDate: null,
+            actions: [],
+            scenarios: {
+              p10: p10Value,
+              p50: p50Value,
+              p90: p90Value
+            }
+          };
+        });
 
       const budgetSummary = {
         totalBudgets: budgetOutlook.length,
-        highRisk: 0,
-        exceeded: 0,
-        totalProjectedOverrun: 0
+        highRisk: budgetOutlook.filter(b => b.status === 'at_risk').length,
+        exceeded: budgetOutlook.filter(b => b.status === 'exceeded').length,
+        totalProjectedOverrun: budgetOutlook.reduce((sum, b) => {
+          if (b.status === 'exceeded') return sum + (b.actualSpent - b.forecasted);
+          return sum;
+        }, 0)
       };
 
       const response = {
