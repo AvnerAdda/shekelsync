@@ -14,6 +14,10 @@ const categorySpendingService = require('../services/analytics/category-spending
 const recurringManagementService = require('../services/analytics/recurring-management.js');
 const transactionsByDateService = require('../services/analytics/transactions-by-date.js');
 const investmentsAnalyticsService = require('../services/analytics/investments.js');
+const temporalService = require('../services/analytics/temporal.js');
+const behavioralService = require('../services/analytics/behavioral.js');
+const extendedForecastService = require('../services/analytics/extended-forecast.js');
+const timeValueService = require('../services/analytics/time-value.js');
 
 function createAnalyticsRouter() {
   const router = express.Router();
@@ -246,6 +250,58 @@ function createAnalyticsRouter() {
       console.error('Analytics investments error:', error);
       res.status(500).json({
         error: 'Failed to fetch investment analytics',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  router.get('/temporal', async (req, res) => {
+    try {
+      const result = await temporalService.getTemporalAnalytics(req.query);
+      res.json(result);
+    } catch (error) {
+      console.error('Temporal analytics error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch temporal analytics',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  router.get('/behavioral-patterns', async (req, res) => {
+    try {
+      const result = await behavioralService.getBehavioralPatterns();
+      res.json(result);
+    } catch (error) {
+      console.error('Behavioral patterns error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch behavioral patterns',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  router.get('/forecast-extended', async (req, res) => {
+    try {
+      const result = await extendedForecastService.getExtendedForecast();
+      res.json(result);
+    } catch (error) {
+      console.error('Extended forecast error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch extended forecast',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  router.get('/time-value', async (req, res) => {
+    try {
+      const result = await timeValueService.getTimeValueAnalytics();
+      res.json(result);
+    } catch (error) {
+      console.error('Time value analytics error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch time value analytics',
         message: error?.message || 'Internal server error',
       });
     }

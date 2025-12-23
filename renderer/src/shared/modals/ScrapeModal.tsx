@@ -249,6 +249,16 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
     [institutions, config.options.companyId],
   );
 
+  // Compute the select value - only use companyId if it's in the institutions list
+  // This prevents MUI warnings about out-of-range values while institutions are loading
+  const selectValue = useMemo(() => {
+    if (!config.options.companyId) return '';
+    if (institutions.length === 0) return ''; // Still loading
+    return institutions.some((inst) => inst.vendor_code === config.options.companyId)
+      ? config.options.companyId
+      : '';
+  }, [config.options.companyId, institutions]);
+
   const vendorSections = useMemo(() => {
     const sections = [
       { key: 'credit_card', label: 'כרטיסי אשראי - Credit Cards' },
@@ -382,7 +392,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
       <FormControl fullWidth>
         <InputLabel>{t('forms.institutionLabel')}</InputLabel>
         <Select
-          value={config.options.companyId}
+          value={selectValue}
           label={t('forms.institutionLabel')}
           onChange={(e) => {
             const vendor = e.target.value as string;
@@ -406,7 +416,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
             </MenuItem>
           ) : (
             <>
-              {!config.options.companyId && (
+              {!selectValue && (
                 <MenuItem value="" disabled>
                   {t('forms.selectInstitution')}
                 </MenuItem>

@@ -1,10 +1,12 @@
 const database = require('./database.js');
 const { standardizeResponse, standardizeError } = require('../../lib/server/query-utils.js');
 const { STALE_SYNC_THRESHOLD_MS } = require('../../utils/constants.js');
+const { generateDailyForecast } = require('./forecast.js');
 
 const NOTIFICATION_TYPES = {
   BUDGET_WARNING: 'budget_warning',
   BUDGET_EXCEEDED: 'budget_exceeded',
+  BUDGET_PROJECTED: 'budget_projected',
   UNUSUAL_SPENDING: 'unusual_spending',
   HIGH_TRANSACTION: 'high_transaction',
   RECURRING_DUE: 'recurring_due',
@@ -509,6 +511,53 @@ async function getNotifications(query = {}) {
               actions: [{ label: 'View Details', action: 'view_transaction', params: { id: txn.identifier } }],
             });
           });
+      }
+    }
+
+    // 5. Projected budget overruns (forecast-driven)
+    if (
+      type === 'all' ||
+      type === NOTIFICATION_TYPES.BUDGET_WARNING ||
+      type === NOTIFICATION_TYPES.BUDGET_EXCEEDED ||
+      type === NOTIFICATION_TYPES.BUDGET_PROJECTED
+    ) {
+      try {
+        const forecast = await generateDailyForecast();
+        const outlook = forecast?.budgetOutlook || [];
+
+        outlook.forEach((item) => {
+          if (!item || !item.categoryDefinitionId) return;
+          const utilizationNow = item.limit > 0 ? item.actualSpent / item.limit : 0;
+          const projectedOver = item.projectedTotal > item.limit;
+          const alreadyCovered = utilizationNow >= 0.8; // existing budget warning logic
+
+          if (!projectedOver || alreadyCovered) return;
+
+          const overrunAmount = item.projectedTotal - item.limit;
+          notifications.push({
+            id: `budget_projected_${item.categoryDefinitionId}`,
+            type: NOTIFICATION_TYPES.BUDGET_PROJECTED,
+            severity: SEVERITY_LEVELS.WARNING,
+            title: 'Projected Budget Overrun',
+            message: `${item.categoryName}: expected to exceed by ₪${Math.round(overrunAmount).toLocaleString()} this month`,
+            data: {
+              category_definition_id: item.categoryDefinitionId,
+              category_name: item.categoryName,
+              projected_total: item.projectedTotal,
+              limit: item.limit,
+              next_hit_date: item.nextLikelyHitDate || null,
+              risk: item.risk,
+            },
+            timestamp: forecast?.generated || new Date().toISOString(),
+            actionable: true,
+            actions: [
+              { label: 'Adjust Budget', action: 'edit_budget', params: { category_definition_id: item.categoryDefinitionId } },
+              { label: 'View Details', action: 'view_category', params: { category_definition_id: item.categoryDefinitionId } },
+            ],
+          });
+        });
+      } catch (forecastError) {
+        console.error('Budget forecast notification generation failed:', forecastError);
       }
     }
 

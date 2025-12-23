@@ -589,6 +589,142 @@
         "biggestPurchase": "Plus gros achat ce mois-ci",
         "hoursOfWork": "{{hours}} heures de travail",
         "na": "N/D"
+      },
+      "expandView": "Agrandir la vue"
+    },
+    "modals": {
+      "rhythm": {
+        "title": "Votre rythme financier - Analyse détaillée",
+        "timeRange": {
+          "3months": "3 mois",
+          "6months": "6 mois",
+          "all": "Tout le temps"
+        },
+        "viewMode": {
+          "amount": "Montant",
+          "count": "Nombre de transactions"
+        },
+        "hourOfDay": {
+          "title": "Dépenses par heure de la journée",
+          "subtitle": "Quand dépensez-vous le plus ?",
+          "spending": "Dépenses",
+          "transactions": "Transactions"
+        },
+        "dayOfWeek": {
+          "title": "Dépenses par jour de la semaine",
+          "spending": "Dépenses",
+          "transactions": "Transactions"
+        },
+        "weekendVsWeekday": {
+          "title": "Week-end vs Semaine",
+          "weekday": "Dépenses en semaine",
+          "weekend": "Dépenses week-end",
+          "ofTotal": "du total"
+        },
+        "weeklyTrend": {
+          "title": "Tendance des dépenses hebdomadaires",
+          "subtitle": "Comment vos dépenses évoluent dans le temps",
+          "spending": "Dépenses hebdomadaires"
+        },
+        "evolution": {
+          "title": "Évolution des dépenses",
+          "subtitle": "Suivez vos tendances de dépenses dans le temps",
+          "daily": "Quotidien",
+          "weekly": "Hebdomadaire",
+          "monthly": "Mensuel",
+          "spending": "Dépenses",
+          "transactions": "Transactions",
+          "oldest": "Le plus ancien",
+          "recent": "Récent",
+          "latest": "Le plus récent"
+        },
+        "days": {
+          "sun": "Dim",
+          "mon": "Lun",
+          "tue": "Mar",
+          "wed": "Mer",
+          "thu": "Jeu",
+          "fri": "Ven",
+          "sat": "Sam"
+        },
+        "noData": "Aucune donnée disponible"
+      },
+      "personality": {
+        "title": "Votre personnalité financière - Analyse approfondie",
+        "spendingBehavior": {
+          "title": "Comportement de dépense",
+          "programmed": "Programmé",
+          "impulse": "Impulsif"
+        },
+        "recurring": {
+          "title": "Modèles récurrents",
+          "subtitle": "Abonnements et dépenses fixes",
+          "times": "fois",
+          "noData": "Aucun modèle récurrent détecté"
+        },
+        "categoryAverages": {
+          "title": "Dépenses moyennes par catégorie",
+          "subtitle": "Moyennes hebdomadaires et mensuelles par catégorie",
+          "category": "Catégorie",
+          "perWeek": "Par semaine",
+          "perMonth": "Par mois",
+          "transactions": "Transactions/semaine",
+          "pattern": "Modèle",
+          "recurring": "Récurrent",
+          "variable": "Variable",
+          "recurringBadge": "R",
+          "variableBadge": "V",
+          "noData": "Aucune donnée de catégorie disponible"
+        },
+        "noData": "Aucune donnée disponible"
+      },
+      "future": {
+        "title": "Votre avenir personnalisé",
+        "scenarios": {
+          "bad": "Pessimiste",
+          "normal": "Base",
+          "good": "Optimiste",
+          "endOfPeriod": "Fin de la période de prévision"
+        },
+        "netPosition": {
+          "title": "Position nette avec prévision",
+          "subtitle": "Données historiques + prévision sur 6 mois",
+          "historical": "Historique",
+          "forecast": "Prévision"
+        },
+        "noData": "Aucune donnée disponible"
+      },
+      "makeItReal": {
+        "title": "Concrétiser - Le temps c'est de l'argent",
+        "hourlyWage": {
+          "title": "Votre valeur horaire",
+          "subtitle": "Basé sur votre revenu moyen"
+        },
+        "incomeVsExpense": {
+          "title": "Revenus vs Dépenses",
+          "income": "Revenus",
+          "expenses": "Dépenses",
+          "ratio": "Ratio de dépenses",
+          "ofIncome": "du revenu"
+        },
+        "hoursRequired": {
+          "title": "Heures requises (Principales catégories)",
+          "subtitle": "Combien d'heures vous travaillez pour chaque catégorie"
+        },
+        "categoryHours": {
+          "title": "Toutes les catégories - Coût en heures de travail",
+          "subtitle": "Répartition visuelle de vos dépenses en temps",
+          "hours": "Heures",
+          "yAxisLabel": "Heures de travail"
+        },
+        "biggestPurchase": {
+          "title": "Analyse du plus gros achat",
+          "hoursOfWork": "Heures de travail",
+          "daysOfWork": "Jours de travail",
+          "days": "jours",
+          "noData": "Aucun achat trouvé"
+        },
+        "noData": "Aucune donnée disponible"
       }
     },
     "health": {

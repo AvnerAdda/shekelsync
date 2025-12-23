@@ -1,16 +1,32 @@
-export type SmartActionType = 'anomaly' | 'budget_overrun' | 'optimization' | 'fixed_variation' | 'unusual_purchase' | 'seasonal_alert';
+export type SmartActionType = 
+  | 'anomaly' 
+  | 'budget_overrun' 
+  | 'optimization' 
+  | 'fixed_variation' 
+  | 'unusual_purchase' 
+  | 'seasonal_alert'
+  | 'fixed_recurring_change'
+  | 'fixed_recurring_missing'
+  | 'fixed_recurring_duplicate'
+  | 'optimization_reallocate'
+  | 'optimization_add_budget'
+  | 'optimization_low_confidence';
 export type SmartActionSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type SmartActionStatus = 'active' | 'dismissed' | 'resolved' | 'snoozed';
 
 export interface SmartActionMetadata {
   current_total?: number;
   average_monthly?: number;
+  expected_monthly?: number;
   percent_increase?: number;
+  percent_deviation?: number;
   historical_period_months?: number;
   budget_id?: number;
   budget_limit?: number;
   spent_amount?: number;
+  forecasted?: number;
   overage?: number;
+  projected_overage?: number;
   percent_used?: number;
   days_remaining?: number;
   daily_avg?: number;
@@ -21,13 +37,37 @@ export interface SmartActionMetadata {
   min_amount?: number;
   max_amount?: number;
   variation_coefficient?: number;
+  coefficient_of_variation?: number;
   transaction_id?: string;
   transaction_name?: string;
   transaction_date?: string;
   amount?: number;
+  expected_amount?: number;
+  actual_amount?: number;
+  deviation_pct?: number;
   category_mean?: number;
   category_std_dev?: number;
   z_score?: number;
+  pattern_confidence?: number;
+  pattern_type?: string;
+  months_of_history?: number;
+  is_fixed_recurring?: boolean;
+  status?: string;
+  risk?: number;
+  alert_threshold?: number;
+  next_hit_date?: string;
+  actions?: string[];
+  expected_count?: number;
+  actual_count?: number;
+  total_amount?: number;
+  transactions?: Array<{ date: string; amount: number; name: string }>;
+  expected_day?: number;
+  current_day?: number;
+  change_type?: string;
+  surplus?: number;
+  utilization_pct?: number;
+  suggested_budget?: number;
+  confidence?: number;
 }
 
 export interface SmartAction {
@@ -91,5 +131,7 @@ export interface GenerateSmartActionsResponse {
     fixed_variations: number;
     unusual_purchases: number;
     budget_overruns: number;
+    fixed_recurring_anomalies?: number;
+    optimization_opportunities?: number;
   };
 }

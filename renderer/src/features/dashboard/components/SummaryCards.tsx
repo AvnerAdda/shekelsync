@@ -24,7 +24,6 @@ import {
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpendingCategories';
-import { useBudgetIntelligence } from '@renderer/features/budgets/hooks/useBudgetIntelligence';
 import type { SpendingCategory } from '@renderer/types/spending-categories';
 import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
@@ -169,14 +168,37 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     fetchBreakdown: fetchSpendingBreakdown,
   } = useSpendingCategories({ autoLoad: false, currentMonthOnly: true });
 
-  const { health: budgetHealth, fetchHealth: fetchBudgetHealth } = useBudgetIntelligence({ autoLoad: false });
-
   const [healthSnapshot, setHealthSnapshot] = useState<FinancialHealthSnapshot | null>(null);
+  const [forecastSummary, setForecastSummary] = useState<{ totalSpent: number; totalForecasted: number; onTrack: number; atRisk: number; exceeded: number } | null>(null);
 
   useEffect(() => {
     void fetchSpendingBreakdown();
-    void fetchBudgetHealth();
-  }, [fetchSpendingBreakdown, fetchBudgetHealth]);
+  }, [fetchSpendingBreakdown]);
+
+  // Fetch forecast data for budget outlook
+  useEffect(() => {
+    let isMounted = true;
+    const fetchForecastData = async () => {
+      try {
+        const response = await apiClient.get<{ budgetOutlook?: Array<{ actualSpent: number; forecasted: number; status: string }> }>('/api/forecast/daily');
+        if (response.ok && isMounted) {
+          const outlook = response.data?.budgetOutlook || [];
+          // Filter to only categories with activity
+          const activeCategories = outlook.filter(item => item.forecasted > 0 || item.actualSpent > 0);
+          const totalSpent = activeCategories.reduce((sum, item) => sum + item.actualSpent, 0);
+          const totalForecasted = activeCategories.reduce((sum, item) => sum + item.forecasted, 0);
+          const onTrack = activeCategories.filter(item => item.status === 'on_track').length;
+          const atRisk = activeCategories.filter(item => item.status === 'at_risk').length;
+          const exceeded = activeCategories.filter(item => item.status === 'exceeded').length;
+          setForecastSummary({ totalSpent, totalForecasted, onTrack, atRisk, exceeded });
+        }
+      } catch (error) {
+        console.error('Failed to fetch forecast data for dashboard:', error);
+      }
+    };
+    fetchForecastData();
+    return () => { isMounted = false; };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -222,41 +244,8 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     width: allocationTotal > 0 ? (item.actual / allocationTotal) * 100 : 0,
   }));
 
-  const budgetSummary = budgetHealth?.summary;
-  const budgetSegments = [
-    {
-      id: 'on_track',
-      label: t('summary.budgets.onTrack'),
-      value: budgetSummary?.on_track ?? 0,
-      color: theme.palette.success.main,
-    },
-    {
-      id: 'warning',
-      label: t('summary.budgets.warning'),
-      value: budgetSummary?.warning ?? 0,
-      color: theme.palette.warning.main,
-    },
-    {
-      id: 'exceeded',
-      label: t('summary.budgets.exceeded'),
-      value: budgetSummary?.exceeded ?? 0,
-      color: theme.palette.error.main,
-    },
-  ];
-
-  const budgetsTotal = budgetSegments.reduce((sum, s) => sum + s.value, 0);
-  const normalizedBudgets = budgetsTotal > 0
-    ? budgetSegments.map((s) => ({
-        ...s,
-        width: (s.value / budgetsTotal) * 100,
-      }))
-    : [{
-        id: 'none',
-        label: t('summary.budgets.none'),
-        value: 0,
-        width: 100,
-        color: theme.palette.divider,
-      }];
+  // Forecast-based budget status counts
+  const budgetCategoriesCount = (forecastSummary?.onTrack ?? 0) + (forecastSummary?.atRisk ?? 0) + (forecastSummary?.exceeded ?? 0);
 
   const overallHealthScore = clampPercent(healthSnapshot?.overallHealthScore ?? savingsScore);
 
@@ -438,25 +427,54 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
               bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
             }}
           >
-            <Typography variant="caption" color="text.secondary">
-              {t('summary.budgets.heading', { count: budgetsTotal })}
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="caption" color="text.secondary">
+                {t('summary.budgets.utilization', { count: budgetCategoriesCount })}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {forecastSummary ? `${forecastSummary.onTrack} / ${forecastSummary.atRisk} / ${forecastSummary.exceeded}` : '—'}
+              </Typography>
+            </Box>
             <Box sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: theme.palette.divider }}>
-              {normalizedBudgets.map((segment) => (
-                <Tooltip
-                  key={segment.id}
-                  title={`${segment.label}${segment.value ? `: ${segment.value}` : ''}`}
-                  placement="top"
-                >
-                  <Box
-                    sx={{
-                      width: `${segment.width}%`,
-                      bgcolor: segment.color,
-                      transition: 'width 0.2s ease',
-                    }}
-                  />
-                </Tooltip>
-              ))}
+              {budgetCategoriesCount > 0 ? (
+                <>
+                  {forecastSummary && forecastSummary.onTrack > 0 && (
+                    <Tooltip title={`${t('summary.budgets.onTrack')}: ${forecastSummary.onTrack}`} placement="top">
+                      <Box
+                        sx={{
+                          width: `${(forecastSummary.onTrack / budgetCategoriesCount) * 100}%`,
+                          bgcolor: theme.palette.success.main,
+                          transition: 'width 0.3s ease',
+                        }}
+                      />
+                    </Tooltip>
+                  )}
+                  {forecastSummary && forecastSummary.atRisk > 0 && (
+                    <Tooltip title={`${t('summary.budgets.warning')}: ${forecastSummary.atRisk}`} placement="top">
+                      <Box
+                        sx={{
+                          width: `${(forecastSummary.atRisk / budgetCategoriesCount) * 100}%`,
+                          bgcolor: theme.palette.warning.main,
+                          transition: 'width 0.3s ease',
+                        }}
+                      />
+                    </Tooltip>
+                  )}
+                  {forecastSummary && forecastSummary.exceeded > 0 && (
+                    <Tooltip title={`${t('summary.budgets.exceeded')}: ${forecastSummary.exceeded}`} placement="top">
+                      <Box
+                        sx={{
+                          width: `${(forecastSummary.exceeded / budgetCategoriesCount) * 100}%`,
+                          bgcolor: theme.palette.error.main,
+                          transition: 'width 0.3s ease',
+                        }}
+                      />
+                    </Tooltip>
+                  )}
+                </>
+              ) : (
+                <Box sx={{ width: '100%', bgcolor: theme.palette.divider }} />
+              )}
             </Box>
           </Box>
 
