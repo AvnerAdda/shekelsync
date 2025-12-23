@@ -7,7 +7,7 @@
   "dashboard": {
     "summary": {
       "categories": { "essential": "חיוני", "growth": "צמיחה", "stability": "יציבות", "reward": "פנאי" },
-      "budgets": { "heading": "תקציבים ({{count}} סה\"כ)", "onTrack": "במסלול", "warning": "אזהרה", "exceeded": "חריגה", "none": "אין תקציבים עדיין" },
+      "budgets": { "heading": "תקציבים ({{count}} סה\"כ)", "utilization": "ניצול תקציב ({{count}} קטגוריות)", "onTrack": "במסלול", "warning": "אזהרה", "exceeded": "חריגה", "none": "אין תקציבים עדיין" },
       "allocation": { "actual": "חלוקה בפועל", "target": "יעד: {{targets}}%", "tooltip": "{{label}}: {{actual}}% (יעד {{target}}%)" },
       "health": { "subtitle": "ציון בריאות פיננסית", "savings": "חיסכון", "diversity": "גיוון", "impulse": "שליטה באימפולס", "runway": "מסלול מזומן" },
       "cards": {
@@ -544,6 +544,44 @@
     "states": {
       "noData": "אין נתונים זמינים. נסה שוב."
     },
+    "budgetForecast": {
+      "title": "תחזית תקציב וסיכונים",
+      "subtitle": "חיבור הוצאות בפועל + תחזית מול תקציבי החודש והמלצות פעולה",
+      "chips": {
+        "highRisk": "בסיכון גבוה",
+        "exceeded": "חריגות",
+        "overrun": "חריגה חזויה"
+      },
+      "subtitleUnified": "רשימה מינימלית אחת: מצב נוכחי, תחזית, בריאות והמלצות, ממוינת לפי סיכון.",
+      "status": {
+        "onTrack": "במסלול",
+        "atRisk": "בסיכון",
+        "exceeded": "חרג"
+      },
+      "sourceLabel": "תקציב חודשי (הגדרות → תקציבים)",
+      "projectedLabel": "חזוי {{projected}} / תקציב {{limit}}",
+      "projectedTotal": "חזוי: {{value}}",
+      "projectedTotalLabel": "סה\"כ חזוי",
+      "limitLabel": "תקציב: {{value}}",
+      "limitLabelShort": "תקציב",
+      "actualLabel": "בפועל",
+      "forecastedLabel": "חזוי",
+      "setLimit": "קבע תקציב",
+      "spentOf": "מתוך",
+      "projected": "חזוי",
+      "spent": "הוצאו",
+      "noForecastedCategories": "אין קטגוריות עם נתוני תחזית זמינים.",
+      "nextHit": "עשוי לחרוג ב-{{date}}",
+      "actionsTitle": "המלצות פעולה",
+      "empty": "אין תקציבי חודש פעילים לחיזוי.",
+      "riskLabel": "סיכון {{value}}%",
+      "overUnder": {
+        "over": "חריגה של {{amount}}",
+        "under": "חיסכון של {{amount}}",
+        "breakEven": "במסגרת התקציב",
+        "noBudget": "אין תקציב מוגדר"
+      }
+    },
     "header": {
       "title": "ניתוח פיננסי",
       "subtitle": "תובנות חכמות, מעקב תקציב ומדדי בריאות פיננסית"
@@ -587,6 +625,142 @@
         "biggestPurchase": "הקנייה הגדולה החודש",
         "hoursOfWork": "{{hours}} שעות עבודה",
         "na": "לא זמין"
+      },
+      "expandView": "הרחב תצוגה"
+    },
+    "modals": {
+      "rhythm": {
+        "title": "הקצב הפיננסי שלך - ניתוח מפורט",
+        "timeRange": {
+          "3months": "3 חודשים",
+          "6months": "6 חודשים",
+          "all": "כל הזמן"
+        },
+        "viewMode": {
+          "amount": "סכום",
+          "count": "מספר עסקאות"
+        },
+        "hourOfDay": {
+          "title": "הוצאות לפי שעה ביום",
+          "subtitle": "מתי אתה מוציא הכי הרבה כסף?",
+          "spending": "הוצאות",
+          "transactions": "עסקאות"
+        },
+        "dayOfWeek": {
+          "title": "הוצאות לפי יום בשבוע",
+          "spending": "הוצאות",
+          "transactions": "עסקאות"
+        },
+        "weekendVsWeekday": {
+          "title": "סוף שבוע מול ימי חול",
+          "weekday": "הוצאות בימי חול",
+          "weekend": "הוצאות בסופ״ש",
+          "ofTotal": "מהסה״כ"
+        },
+        "weeklyTrend": {
+          "title": "מגמת הוצאות שבועית",
+          "subtitle": "איך ההוצאות שלך משתנות לאורך זמן",
+          "spending": "הוצאות שבועיות"
+        },
+        "evolution": {
+          "title": "התפתחות ההוצאות",
+          "subtitle": "עקוב אחר מגמות ההוצאות שלך לאורך זמן",
+          "daily": "יומי",
+          "weekly": "שבועי",
+          "monthly": "חודשי",
+          "spending": "הוצאות",
+          "transactions": "עסקאות",
+          "oldest": "ישן ביותר",
+          "recent": "אחרון",
+          "latest": "עדכני ביותר"
+        },
+        "days": {
+          "sun": "א׳",
+          "mon": "ב׳",
+          "tue": "ג׳",
+          "wed": "ד׳",
+          "thu": "ה׳",
+          "fri": "ו׳",
+          "sat": "ש׳"
+        },
+        "noData": "אין נתונים זמינים"
+      },
+      "personality": {
+        "title": "אישיות הכסף שלך - צלילה עמוקה",
+        "spendingBehavior": {
+          "title": "התנהגות הוצאה",
+          "programmed": "מתוכנן",
+          "impulse": "אימפולסיבי"
+        },
+        "recurring": {
+          "title": "תבניות חוזרות",
+          "subtitle": "מנויים והוצאות קבועות",
+          "times": "פעמים",
+          "noData": "לא נמצאו תבניות חוזרות"
+        },
+        "categoryAverages": {
+          "title": "ממוצע הוצאות לפי קטגוריה",
+          "subtitle": "ממוצעים שבועיים וחודשיים לפי קטגוריה",
+          "category": "קטגוריה",
+          "perWeek": "לשבוע",
+          "perMonth": "לחודש",
+          "transactions": "עסקאות/שבוע",
+          "pattern": "תבנית",
+          "recurring": "קבוע",
+          "variable": "משתנה",
+          "recurringBadge": "ק",
+          "variableBadge": "מ",
+          "noData": "אין נתוני קטגוריות זמינים"
+        },
+        "noData": "אין נתונים זמינים"
+      },
+      "future": {
+        "title": "העתיד המותאם שלך",
+        "scenarios": {
+          "bad": "פסימי",
+          "normal": "בסיס",
+          "good": "אופטימי",
+          "endOfPeriod": "סוף תקופת התחזית"
+        },
+        "netPosition": {
+          "title": "מצב נטו עם תחזית",
+          "subtitle": "נתונים היסטוריים + תחזית ל-6 חודשים",
+          "historical": "היסטורי",
+          "forecast": "תחזית"
+        },
+        "noData": "אין נתונים זמינים"
+      },
+      "makeItReal": {
+        "title": "להפוך למציאות - זמן זה כסף",
+        "hourlyWage": {
+          "title": "השווי השעתי שלך",
+          "subtitle": "מבוסס על ההכנסה הממוצעת שלך"
+        },
+        "incomeVsExpense": {
+          "title": "הכנסות מול הוצאות",
+          "income": "הכנסות",
+          "expenses": "הוצאות",
+          "ratio": "יחס הוצאה",
+          "ofIncome": "מההכנסה"
+        },
+        "hoursRequired": {
+          "title": "שעות נדרשות (קטגוריות מובילות)",
+          "subtitle": "כמה שעות אתה עובד עבור כל קטגוריה"
+        },
+        "categoryHours": {
+          "title": "כל הקטגוריות - עלות בשעות עבודה",
+          "subtitle": "פירוט חזותי של ההוצאות שלך בזמן",
+          "hours": "שעות",
+          "yAxisLabel": "שעות עבודה"
+        },
+        "biggestPurchase": {
+          "title": "ניתוח הקנייה הגדולה ביותר",
+          "hoursOfWork": "שעות עבודה",
+          "daysOfWork": "ימי עבודה",
+          "days": "ימים",
+          "noData": "לא נמצאו קניות"
+        },
+        "noData": "אין נתונים זמינים"
       }
     },
     "health": {
@@ -665,7 +839,13 @@
         "optimization": "אופטימיזציה",
         "fixed_variation": "שינוי עלות קבועה",
         "unusual_purchase": "רכישה חריגה",
-        "seasonal_alert": "דפוס עונתי"
+        "seasonal_alert": "דפוס עונתי",
+        "fixed_recurring_change": "שינוי בסכום תשלום",
+        "fixed_recurring_missing": "תשלום צפוי חסר",
+        "fixed_recurring_duplicate": "תשלום כפול זוהה",
+        "optimization_reallocate": "הזדמנות לחיסכון",
+        "optimization_add_budget": "המלצה לתקציב",
+        "optimization_low_confidence": "דפוס הוצאה לא סדיר"
       },
       "severities": {
         "critical": "קריטי",

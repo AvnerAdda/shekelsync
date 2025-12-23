@@ -412,6 +412,12 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     institution_id: null,
   });
 
+  const [initialValue, setInitialValue] = useState({
+    currentValue: '',
+    costBasis: '',
+    asOfDate: new Date().toISOString().split('T')[0],
+  });
+
   const { t } = useTranslation('translation', { keyPrefix: 'accountsModal' });
 
   const creditCardInstitutionOptions = useMemo(() => {
@@ -820,6 +826,24 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         const data = response.data as any;
         const newAccountId = data.id;
 
+        // Create initial holding if initial value is provided
+        if (newAccountId && initialValue.currentValue) {
+          try {
+            const holdingResponse = await apiClient.post('/api/investments/holdings', {
+              account_id: newAccountId,
+              current_value: parseFloat(initialValue.currentValue),
+              cost_basis: initialValue.costBasis ? parseFloat(initialValue.costBasis) : null,
+              as_of_date: initialValue.asOfDate,
+              currency: newInvestmentAccount.currency,
+            });
+            if (!holdingResponse.ok) {
+              console.error('Failed to create initial holding:', holdingResponse);
+            }
+          } catch (holdingError) {
+            console.error('Error creating initial holding:', holdingError);
+          }
+        }
+
         // Auto-link transactions if this came from a suggestion
         if (pendingSuggestionTransactions.length > 0 && newAccountId) {
           try {
@@ -853,6 +877,11 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           account_number: '',
           notes: '',
           institution_id: null,
+        });
+        setInitialValue({
+          currentValue: '',
+          costBasis: '',
+          asOfDate: new Date().toISOString().split('T')[0],
         });
         setIsAdding(false);
         window.dispatchEvent(new CustomEvent('dataRefresh'));
@@ -1883,6 +1912,47 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           value={newInvestmentAccount.notes}
                           onChange={(e) => setNewInvestmentAccount({ ...newInvestmentAccount, notes: e.target.value })}
                           placeholder={t('placeholders.notes')}
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                          {t('sections.initialValue')} ({t('helpers.optional')})
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          type="number"
+                          label={t('fields.currentValue')}
+                          value={initialValue.currentValue}
+                          onChange={(e) => setInitialValue({ ...initialValue, currentValue: e.target.value })}
+                          placeholder={t('placeholders.optional')}
+                          InputProps={{
+                            startAdornment: newInvestmentAccount.currency === 'ILS' ? '₪' : newInvestmentAccount.currency === 'USD' ? '$' : '€',
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          type="number"
+                          label={t('fields.costBasis')}
+                          value={initialValue.costBasis}
+                          onChange={(e) => setInitialValue({ ...initialValue, costBasis: e.target.value })}
+                          placeholder={t('placeholders.optional')}
+                          InputProps={{
+                            startAdornment: newInvestmentAccount.currency === 'ILS' ? '₪' : newInvestmentAccount.currency === 'USD' ? '$' : '€',
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          fullWidth
+                          type="date"
+                          label={t('fields.asOfDate')}
+                          value={initialValue.asOfDate}
+                          onChange={(e) => setInitialValue({ ...initialValue, asOfDate: e.target.value })}
+                          InputLabelProps={{ shrink: true }}
                         />
                       </Grid>
                       <Grid item xs={12}>

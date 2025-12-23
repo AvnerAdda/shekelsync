@@ -5,6 +5,128 @@ const {
   getInstitutionByVendorCode,
 } = require('../institutions.js');
 
+/**
+ * Forward-fill missing dates in history data
+ * Takes sparse history data and fills in gaps using last known values
+ * @param {Array} history - Array of history points with date, currentValue, costBasis
+ * @param {Date|null} startDate - Start date for the range (null = use first data point)
+ * @param {Date|null} endDate - End date for the range (null = today)
+ * @returns {Array} History with all dates filled in
+ */
+function forwardFillHistory(history, startDate = null, endDate = null) {
+  if (!history || history.length === 0) {
+    return [];
+  }
+
+  // Sort by date ascending
+  const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
+  
+  // Determine date range
+  const firstDate = startDate || new Date(sorted[0].date);
+  const lastDate = endDate || new Date();
+  
+  // Build a map of existing dates
+  const dateMap = new Map();
+  sorted.forEach((point) => {
+    const dateKey = new Date(point.date).toISOString().split('T')[0];
+    dateMap.set(dateKey, point);
+  });
+  
+  const filled = [];
+  let lastKnownPoint = null;
+  
+  // Iterate through each day in the range
+  const currentDate = new Date(firstDate);
+  currentDate.setHours(0, 0, 0, 0);
+  
+  while (currentDate <= lastDate) {
+    const dateKey = currentDate.toISOString().split('T')[0];
+    
+    if (dateMap.has(dateKey)) {
+      // We have actual data for this date
+      lastKnownPoint = dateMap.get(dateKey);
+      filled.push(lastKnownPoint);
+    } else if (lastKnownPoint) {
+      // No data for this date, forward-fill from last known point
+      filled.push({
+        ...lastKnownPoint,
+        date: dateKey,
+        // Keep all other properties from last known point
+      });
+    }
+    // If no lastKnownPoint yet, skip this date (before first data point)
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+  
+  return filled;
+}
+
+/**
+ * Forward-fill history for aggregated (overall) portfolio data
+ * Handles the case where we have multiple accounts with different dates
+ * @param {Array} history - Aggregated history points
+ * @param {Date|null} startDate - Start date for the range
+ * @param {Date|null} endDate - End date for the range
+ * @returns {Array} History with all dates filled in
+ */
+function forwardFillAggregatedHistory(history, startDate = null, endDate = null) {
+  if (!history || history.length === 0) {
+    return [];
+  }
+
+  // Sort by date ascending
+  const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
+  
+  // Determine date range
+  const firstDate = startDate || new Date(sorted[0].date);
+  const lastDate = endDate || new Date();
+  
+  // Build a map of existing dates
+  const dateMap = new Map();
+  sorted.forEach((point) => {
+    const dateKey = new Date(point.date).toISOString().split('T')[0];
+    dateMap.set(dateKey, point);
+  });
+  
+  const filled = [];
+  let lastKnownPoint = null;
+  
+  // Iterate through each day in the range
+  const currentDate = new Date(firstDate);
+  currentDate.setHours(0, 0, 0, 0);
+  
+  while (currentDate <= lastDate) {
+    const dateKey = currentDate.toISOString().split('T')[0];
+    
+    if (dateMap.has(dateKey)) {
+      // We have actual data for this date
+      lastKnownPoint = dateMap.get(dateKey);
+      filled.push(lastKnownPoint);
+    } else if (lastKnownPoint) {
+      // No data for this date, forward-fill from last known point
+      const gainLoss = lastKnownPoint.currentValue - lastKnownPoint.costBasis;
+      filled.push({
+        date: dateKey,
+        currentValue: lastKnownPoint.currentValue,
+        costBasis: lastKnownPoint.costBasis,
+        gainLoss,
+        roi: lastKnownPoint.costBasis > 0 ? (gainLoss / lastKnownPoint.costBasis) * 100 : 0,
+        accountId: lastKnownPoint.accountId,
+        accountName: lastKnownPoint.accountName,
+        accountType: lastKnownPoint.accountType,
+        accountCount: lastKnownPoint.accountCount,
+        accounts: lastKnownPoint.accounts,
+        institution: lastKnownPoint.institution,
+      });
+    }
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+  
+  return filled;
+}
+
 function calculateStartDate(timeRange) {
   const date = new Date();
   switch (timeRange) {
@@ -190,12 +312,20 @@ async function getInvestmentHistory(params = {}) {
       }));
   }
 
+  // Apply forward-fill to ensure continuous history data
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const filledHistory = accountId || accountIds
+    ? forwardFillHistory(history, startDate, today)
+    : forwardFillAggregatedHistory(history, startDate, today);
+
   return {
     success: true,
     timeRange,
     startDate: startDate ? startDate.toISOString().split('T')[0] : null,
-    dataPoints: history.length,
-    history,
+    dataPoints: filledHistory.length,
+    history: filledHistory,
   };
 }
 

@@ -2,17 +2,18 @@
  * Smart Actions Service
  *
  * Auto-generates actionable insights based on:
- * - Category spending anomalies (>20% from rolling average)
- * - Fixed category variations (rent, utilities changes)
+ * - Category spending anomalies (forecast vs actual variance)
+ * - Fixed recurring payment changes (insurance, subscriptions)
  * - Unusual large purchases (>2σ from mean)
- * - Budget overrun projections
- * - Optimization opportunities
+ * - Budget overrun projections (using ML forecasts)
+ * - Optimization opportunities (under-budget, high variance)
  */
 
 const actualDatabase = require('../database.js');
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 const { CATEGORY_TYPES } = require('../../../lib/category-constants.js');
 const { resolveLocale, getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
+const forecastService = require('../forecast.js');
 
 let database = actualDatabase;
 
@@ -56,28 +57,30 @@ async function getCategoryRollingAverage(client, categoryDefinitionId, endDate) 
 }
 
 /**
- * Detect category spending anomalies (>20% from rolling average)
+ * Detect category spending anomalies using forecast predictions
  */
 async function detectCategoryAnomalies(params = {}) {
   const { months = 1, locale } = params;
   const { start, end } = resolveDateRange({ months });
-
-  const client = await database.getClient();
   const anomalies = [];
 
   try {
-    // Get all expense categories with spending in current period
+    // Get forecast data with pattern predictions
+    const forecastData = await forecastService.getForecast({ months: 6 });
+    const patterns = forecastData?.patterns || [];
+    const forecastByCategory = forecastData?.forecastByCategory || new Map();
+    
+    const client = await database.getClient();
+
+    // Get current month spending
     const currentResult = await client.query(`
       SELECT
         t.category_definition_id,
         cd.name as category_name,
         cd.name_en as category_name_en,
-        parent.name as parent_category_name,
-        COUNT(t.identifier) as current_count,
         SUM(ABS(t.price)) as current_total
       FROM transactions t
       JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
       LEFT JOIN account_pairings ap ON (
         t.vendor = ap.bank_vendor
         AND ap.is_active = 1
@@ -93,20 +96,22 @@ async function detectCategoryAnomalies(params = {}) {
         AND t.price < 0
         AND cd.category_type = 'expense'
         AND ap.id IS NULL
-      GROUP BY t.category_definition_id, cd.name, cd.name_en, parent.name
+      GROUP BY t.category_definition_id, cd.name, cd.name_en
     `, [start, end]);
 
     for (const row of currentResult.rows) {
       const currentTotal = parseFloat(row.current_total || 0);
-      const avgData = await getCategoryRollingAverage(client, row.category_definition_id, end);
-      const avgMonthly = parseFloat(avgData.total_amount || 0) / 3; // 3-month average
+      const pattern = patterns.find(p => p.categoryDefinitionId === row.category_definition_id);
 
-      if (avgMonthly === 0) continue; // Skip categories with no historical data
+      // Check pattern exists and has valid data (confidence may be undefined)
+      if (!pattern || pattern.avgAmount === 0 || (pattern.confidence !== undefined && pattern.confidence < 0.3)) continue;
 
-      const percentIncrease = ((currentTotal - avgMonthly) / avgMonthly);
+      const expectedMonthly = pattern.avgAmount;
+      const percentDeviation = ((currentTotal - expectedMonthly) / expectedMonthly);
 
-      if (percentIncrease >= ANOMALY_THRESHOLD) {
-        const severity = percentIncrease >= 0.5 ? 'high' : percentIncrease >= 0.3 ? 'medium' : 'low';
+      // Anomaly threshold: actual spending deviates significantly from pattern prediction
+      if (Math.abs(percentDeviation) >= ANOMALY_THRESHOLD && currentTotal > expectedMonthly) {
+        const severity = percentDeviation >= 0.5 ? 'high' : percentDeviation >= 0.3 ? 'medium' : 'low';
 
         const localizedName = getLocalizedCategoryName({
           name: row.category_name,
@@ -118,23 +123,28 @@ async function detectCategoryAnomalies(params = {}) {
           action_type: 'anomaly',
           trigger_category_id: row.category_definition_id,
           severity,
-          title: `Spending increase detected in ${localizedName}`,
-          description: `Your spending in ${localizedName} increased by ${Math.round(percentIncrease * 100)}% compared to your 3-month average (₪${Math.round(avgMonthly)} → ₪${Math.round(currentTotal)}).`,
+          title: `Unexpected spending spike: ${localizedName}`,
+          description: `Your ${localizedName} spending is ${Math.round(percentDeviation * 100)}% above predicted levels. Current: ₪${Math.round(currentTotal)}, Expected: ₪${Math.round(expectedMonthly)} (based on ${pattern.monthsOfHistory} months of data, ${Math.round(pattern.confidence * 100)}% confidence).`,
           metadata: JSON.stringify({
             current_total: currentTotal,
-            average_monthly: avgMonthly,
-            percent_increase: Math.round(percentIncrease * 100),
-            historical_period_months: 3,
+            expected_monthly: expectedMonthly,
+            percent_deviation: Math.round(percentDeviation * 100),
+            pattern_confidence: pattern.confidence,
+            pattern_type: pattern.patternType,
+            months_of_history: pattern.monthsOfHistory,
+            is_fixed_recurring: pattern.isFixedRecurring || false,
           }),
-          potential_impact: -(currentTotal - avgMonthly), // Negative = cost increase
-          detection_confidence: 0.85,
+          potential_impact: -(currentTotal - expectedMonthly),
+          detection_confidence: pattern.confidence,
         });
       }
     }
 
-    return anomalies;
-  } finally {
     client.release();
+    return anomalies;
+  } catch (error) {
+    console.error('Failed to detect category anomalies:', error);
+    return [];
   }
 }
 
@@ -161,7 +171,9 @@ async function detectFixedCategoryVariations(params = {}) {
         SUM(ABS(t.price)) as current_total,
         AVG(ABS(t.price)) as current_avg,
         MIN(ABS(t.price)) as current_min,
-        MAX(ABS(t.price)) as current_max
+        MAX(ABS(t.price)) as current_max,
+        -- Calculate standard deviation manually (SQLite doesn't have STDDEV)
+        SQRT(AVG(ABS(t.price) * ABS(t.price)) - AVG(ABS(t.price)) * AVG(ABS(t.price))) as current_stddev_pop
       FROM transactions t
       JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
@@ -187,13 +199,17 @@ async function detectFixedCategoryVariations(params = {}) {
 
     for (const row of result.rows) {
       const currentAvg = parseFloat(row.current_avg || 0);
-      const currentMin = parseFloat(row.current_min || 0);
-      const currentMax = parseFloat(row.current_max || 0);
+      const currentCount = parseInt(row.current_count || 0);
+      const stdDevPop = parseFloat(row.current_stddev_pop || 0);
 
-      // Check if there's variation (difference between min and max)
-      if (currentAvg === 0) continue;
+      // Skip if no average or only one transaction
+      if (currentAvg === 0 || currentCount < 2) continue;
 
-      const variationCoefficient = (currentMax - currentMin) / currentAvg;
+      // Convert population stddev to sample stddev
+      const stdDev = stdDevPop * Math.sqrt(currentCount / (currentCount - 1));
+
+      // Calculate proper coefficient of variation (CV = stdDev / mean)
+      const variationCoefficient = stdDev / currentAvg;
 
       if (variationCoefficient >= FIXED_VARIATION_THRESHOLD) {
         const severity = variationCoefficient >= 0.25 ? 'high' : 'medium';
@@ -334,104 +350,330 @@ async function detectUnusualPurchases(params = {}) {
 }
 
 /**
- * Detect budget overruns and projections
+ * Detect fixed recurring payment anomalies
+ * - Amount changes (insurance increase, subscription price change)
+ * - Missing expected payments
+ * - Unexpected occurrences
+ */
+async function detectFixedRecurringAnomalies(params = {}) {
+  const { locale } = params;
+  const anomalies = [];
+
+  try {
+    // Get forecast data with pattern information
+    const forecastData = await forecastService.getForecast({ months: 6 });
+    const patterns = forecastData?.patterns || [];
+    
+    const now = new Date();
+    const currentMonth = now.toISOString().substring(0, 7); // YYYY-MM
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const client = await database.getClient();
+
+    for (const pattern of patterns) {
+      if (!pattern.isFixedRecurring || !pattern.fixedAmount) continue;
+
+      const localizedName = getLocalizedCategoryName({
+        name: pattern.categoryName,
+        name_en: pattern.categoryNameEn,
+        name_fr: null,
+      }, locale) || pattern.categoryName;
+
+      // Check for this month's occurrences
+      const occurrencesResult = await client.query(`
+        SELECT
+          date,
+          ABS(price) as amount,
+          name
+        FROM transactions
+        WHERE category_definition_id = $1
+          AND date >= $2
+          AND date <= $3
+          AND price < 0
+        ORDER BY date DESC
+      `, [pattern.categoryDefinitionId, startOfMonth.toISOString().split('T')[0], now.toISOString().split('T')[0]]);
+
+      const occurrences = occurrencesResult.rows;
+      const expectedAmount = pattern.fixedAmount;
+      const tolerancePct = 0.05; // 5% tolerance for "fixed" amounts
+
+      // Anomaly 1: Amount changed significantly
+      for (const txn of occurrences) {
+        const amount = parseFloat(txn.amount);
+        const deviation = Math.abs(amount - expectedAmount) / expectedAmount;
+
+        if (deviation > tolerancePct) {
+          const changeType = amount > expectedAmount ? 'increase' : 'decrease';
+          const severity = deviation > 0.2 ? 'high' : 'medium';
+
+          anomalies.push({
+            action_type: 'fixed_recurring_change',
+            trigger_category_id: pattern.categoryDefinitionId,
+            severity,
+            title: `Fixed payment ${changeType}: ${localizedName}`,
+            description: `Your ${localizedName} payment changed from ₪${Math.round(expectedAmount)} to ₪${Math.round(amount)} (${Math.round(deviation * 100)}% ${changeType}). This may indicate a price change, billing adjustment, or service modification.`,
+            metadata: JSON.stringify({
+              expected_amount: expectedAmount,
+              actual_amount: amount,
+              deviation_pct: Math.round(deviation * 100),
+              transaction_name: txn.name,
+              transaction_date: txn.date,
+              change_type: changeType,
+              coefficient_of_variation: pattern.coefficientOfVariation,
+            }),
+            potential_impact: amount > expectedAmount ? -(amount - expectedAmount) : 0,
+            detection_confidence: 0.9,
+          });
+        }
+      }
+
+      // Anomaly 2: Missing expected payment
+      if (occurrences.length === 0 && pattern.fixedDayOfMonth && now.getDate() > pattern.fixedDayOfMonth + 3) {
+        anomalies.push({
+          action_type: 'fixed_recurring_missing',
+          trigger_category_id: pattern.categoryDefinitionId,
+          severity: 'medium',
+          title: `Expected payment missing: ${localizedName}`,
+          description: `Your usual ${localizedName} payment (typically ₪${Math.round(expectedAmount)} around day ${pattern.fixedDayOfMonth}) hasn't occurred this month yet. This might be a billing delay or account change.`,
+          metadata: JSON.stringify({
+            expected_amount: expectedAmount,
+            expected_day: pattern.fixedDayOfMonth,
+            current_day: now.getDate(),
+            pattern_confidence: pattern.confidence,
+            months_of_history: pattern.monthsOfHistory,
+          }),
+          potential_impact: 0,
+          detection_confidence: 0.75,
+        });
+      }
+
+      // Anomaly 3: Unexpected multiple occurrences (should be once per month)
+      if (occurrences.length > 1 && pattern.avgOccurrencesPerMonth < 1.2) {
+        anomalies.push({
+          action_type: 'fixed_recurring_duplicate',
+          trigger_category_id: pattern.categoryDefinitionId,
+          severity: 'medium',
+          title: `Duplicate fixed payment: ${localizedName}`,
+          description: `Found ${occurrences.length} ${localizedName} charges this month (expected 1). Total: ₪${Math.round(occurrences.reduce((sum, t) => sum + parseFloat(t.amount), 0))}. This may indicate duplicate billing.`,
+          metadata: JSON.stringify({
+            expected_count: 1,
+            actual_count: occurrences.length,
+            total_amount: occurrences.reduce((sum, t) => sum + parseFloat(t.amount), 0),
+            transactions: occurrences.map(t => ({ date: t.date, amount: parseFloat(t.amount), name: t.name })),
+          }),
+          potential_impact: -(occurrences.reduce((sum, t) => sum + parseFloat(t.amount), 0) - expectedAmount),
+          detection_confidence: 0.85,
+        });
+      }
+    }
+
+    client.release();
+    return anomalies;
+  } catch (error) {
+    console.error('Failed to detect fixed recurring anomalies:', error);
+    return [];
+  }
+}
+
+/**
+ * Generate forecast-based optimization opportunities
+ */
+async function detectOptimizationOpportunities(params = {}) {
+  const { locale } = params;
+  const opportunities = [];
+
+  try {
+    const forecastData = await forecastService.getForecast({ months: 6 });
+    const budgetOutlook = forecastData?.budgetOutlook || [];
+    const patterns = forecastData?.patterns || [];
+
+    // Opportunity 1: Under-budget categories (reallocate to savings)
+    const underBudget = budgetOutlook.filter(item => 
+      item.budgetId && 
+      item.status === 'on_track' && 
+      item.limit > 0 &&
+      item.projectedTotal < item.limit * 0.7 // Using less than 70% of budget
+    );
+
+    for (const item of underBudget) {
+      const surplus = item.limit - item.projectedTotal;
+      const localizedName = getLocalizedCategoryName({
+        name: item.categoryName,
+        name_en: item.categoryNameEn,
+        name_fr: null,
+      }, locale) || item.categoryName;
+
+      opportunities.push({
+        action_type: 'optimization_reallocate',
+        trigger_category_id: item.categoryDefinitionId,
+        severity: 'low',
+        title: `Savings opportunity: ${localizedName}`,
+        description: `You're projected to spend ₪${Math.round(item.projectedTotal)} in ${localizedName}, well under your ₪${Math.round(item.limit)} budget. Consider reallocating ₪${Math.round(surplus)} to savings or other goals.`,
+        metadata: JSON.stringify({
+          budget_limit: item.limit,
+          projected_total: item.projectedTotal,
+          surplus: surplus,
+          utilization_pct: Math.round((item.projectedTotal / item.limit) * 100),
+        }),
+        potential_impact: surplus,
+        detection_confidence: 0.8,
+      });
+    }
+
+    // Opportunity 2: High variance categories (suggest budgets)
+    const highVariance = patterns.filter(p => 
+      p.monthsOfHistory >= 3 && 
+      p.coefficientOfVariation > 0.4 && 
+      p.avgAmount > 50 && // Meaningful amounts only
+      !budgetOutlook.find(b => b.categoryDefinitionId === p.categoryDefinitionId && b.budgetId)
+    );
+
+    for (const pattern of highVariance.slice(0, 3)) {
+      const localizedName = getLocalizedCategoryName({
+        name: pattern.categoryName,
+        name_en: pattern.categoryNameEn,
+        name_fr: null,
+      }, locale) || pattern.categoryName;
+
+      opportunities.push({
+        action_type: 'optimization_add_budget',
+        trigger_category_id: pattern.categoryDefinitionId,
+        severity: 'low',
+        title: `Consider budgeting: ${localizedName}`,
+        description: `${localizedName} shows high spending variability (₪${Math.round(pattern.minAmount)}-₪${Math.round(pattern.maxAmount)}). Setting a budget of ₪${Math.round(pattern.avgAmount * 1.2)} could help control costs.`,
+        metadata: JSON.stringify({
+          avg_monthly: pattern.avgAmount,
+          min_amount: pattern.minAmount,
+          max_amount: pattern.maxAmount,
+          coefficient_of_variation: pattern.coefficientOfVariation,
+          suggested_budget: Math.round(pattern.avgAmount * 1.2),
+        }),
+        potential_impact: 0,
+        detection_confidence: 0.7,
+      });
+    }
+
+    // Opportunity 3: Forecast confidence warnings
+    const lowConfidence = budgetOutlook.filter(item => 
+      item.forecasted > 0 && 
+      patterns.find(p => p.categoryDefinitionId === item.categoryDefinitionId && p.confidence < 0.5)
+    );
+
+    for (const item of lowConfidence) {
+      const pattern = patterns.find(p => p.categoryDefinitionId === item.categoryDefinitionId);
+      const localizedName = getLocalizedCategoryName({
+        name: item.categoryName,
+        name_en: item.categoryNameEn,
+        name_fr: null,
+      }, locale) || item.categoryName;
+
+      opportunities.push({
+        action_type: 'optimization_low_confidence',
+        trigger_category_id: item.categoryDefinitionId,
+        severity: 'low',
+        title: `Unpredictable spending: ${localizedName}`,
+        description: `${localizedName} spending is highly irregular (confidence: ${Math.round(pattern.confidence * 100)}%). Forecasts may be unreliable. Consider reviewing your spending patterns.`,
+        metadata: JSON.stringify({
+          confidence: pattern.confidence,
+          pattern_type: pattern.patternType,
+          months_of_history: pattern.monthsOfHistory,
+          coefficient_of_variation: pattern.coefficientOfVariation,
+        }),
+        potential_impact: 0,
+        detection_confidence: 0.6,
+      });
+    }
+
+    return opportunities;
+  } catch (error) {
+    console.error('Failed to detect optimization opportunities:', error);
+    return [];
+  }
+}
+
+
+/**
+ * Detect budget overruns using ML forecast projections
  */
 async function detectBudgetOverruns(params = {}) {
-  const { months = 1, locale } = params;
-  const { start, end } = resolveDateRange({ months });
-
-  const client = await database.getClient();
+  const { locale } = params;
   const budgetAlerts = [];
 
   try {
-    // Get active budgets with spending
-    const result = await client.query(`
-      SELECT
-        cb.id as budget_id,
-        cb.category_definition_id,
-        cb.budget_limit,
-        cd.name as category_name,
-        cd.name_en as category_name_en,
-        COALESCE(SUM(ABS(t.price)), 0) as spent_amount
-      FROM category_budgets cb
-      JOIN category_definitions cd ON cb.category_definition_id = cd.id
-      LEFT JOIN transactions t ON (
-        t.category_definition_id = cb.category_definition_id
-        AND t.date >= $1 AND t.date <= $2
-        AND t.price < 0
-      )
-      WHERE cb.is_active = 1
-        AND cb.period_type = 'monthly'
-      GROUP BY cb.id, cb.category_definition_id, cb.budget_limit, cd.name, cd.name_en
-    `, [start, end]);
+    // Get forecast data which includes budget outlook
+    const forecastData = await forecastService.getForecast({ months: 6 });
+    const budgetOutlook = forecastData?.budgetOutlook || [];
 
-    const now = new Date();
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const daysRemaining = daysInMonth - now.getDate();
+    for (const item of budgetOutlook) {
+      // Skip categories without budgets
+      if (!item.budgetId || item.limit <= 0) continue;
 
-    for (const row of result.rows) {
-      const budgetLimit = parseFloat(row.budget_limit);
-      const spentAmount = parseFloat(row.spent_amount);
-      const percentUsed = (spentAmount / budgetLimit);
-
-      // Budget exceeded
       const localizedName = getLocalizedCategoryName({
-        name: row.category_name,
-        name_en: row.category_name_en,
+        name: item.categoryName,
+        name_en: item.categoryNameEn,
         name_fr: null,
-      }, locale) || row.category_name;
+      }, locale) || item.categoryName;
 
-      if (spentAmount > budgetLimit) {
+      const percentUsed = item.utilization * 100;
+      const projectedTotal = item.projectedTotal || (item.actualSpent + item.forecasted);
+      const overage = projectedTotal - item.limit;
+
+      // Budget already exceeded
+      if (item.status === 'exceeded') {
         budgetAlerts.push({
           action_type: 'budget_overrun',
-          trigger_category_id: row.category_definition_id,
+          trigger_category_id: item.categoryDefinitionId,
           severity: 'critical',
           title: `Budget exceeded: ${localizedName}`,
-          description: `You've exceeded your ${localizedName} budget by ₪${Math.round(spentAmount - budgetLimit)} (${Math.round(percentUsed * 100)}% used). Budget: ₪${Math.round(budgetLimit)}, Spent: ₪${Math.round(spentAmount)}.`,
+          description: `Your ${localizedName} budget is ${Math.round(percentUsed)}% used (₪${Math.round(item.actualSpent)}/₪${Math.round(item.limit)}). Projected month-end: ₪${Math.round(projectedTotal)} - exceeding by ₪${Math.round(overage)}.${item.nextLikelyHitDate ? ` Next expense expected: ${item.nextLikelyHitDate.split('T')[0]}.` : ''}`,
           metadata: JSON.stringify({
-            budget_id: row.budget_id,
-            budget_limit: budgetLimit,
-            spent_amount: spentAmount,
-            overage: spentAmount - budgetLimit,
-            percent_used: Math.round(percentUsed * 100),
+            budget_id: item.budgetId,
+            budget_limit: item.limit,
+            spent_amount: item.actualSpent,
+            forecasted: item.forecasted,
+            projected_total: projectedTotal,
+            overage: Math.max(0, overage),
+            percent_used: Math.round(percentUsed),
+            status: item.status,
+            risk: item.risk,
+            next_hit_date: item.nextLikelyHitDate,
+            actions: item.actions || [],
           }),
-          potential_impact: -(spentAmount - budgetLimit),
+          potential_impact: -Math.max(0, overage),
           detection_confidence: 1.0,
         });
       }
-      // Approaching limit (80%)
-      else if (percentUsed >= BUDGET_WARNING_THRESHOLD) {
-        const dailyAvg = spentAmount / (daysInMonth - daysRemaining);
-        const projected = dailyAvg * daysInMonth;
-        const willExceed = projected > budgetLimit;
-
+      // At risk of exceeding (based on forecast)
+      else if (item.status === 'at_risk' || overage > 0) {
         budgetAlerts.push({
           action_type: 'budget_overrun',
-          trigger_category_id: row.category_definition_id,
-          severity: willExceed ? 'high' : 'medium',
+          trigger_category_id: item.categoryDefinitionId,
+          severity: item.risk >= 0.7 ? 'high' : 'medium',
           title: `Budget warning: ${localizedName}`,
-          description: `You've used ${Math.round(percentUsed * 100)}% of your ${localizedName} budget (₪${Math.round(spentAmount)}/₪${Math.round(budgetLimit)}). ${daysRemaining} days remaining. ${willExceed ? `At current pace, you'll exceed by ₪${Math.round(projected - budgetLimit)}.` : `Stay under ₪${Math.round((budgetLimit - spentAmount) / daysRemaining)}/day to stay on track.`}`,
+          description: `Your ${localizedName} spending is at ${Math.round(percentUsed)}% (₪${Math.round(item.actualSpent)}/₪${Math.round(item.limit)}). Based on spending patterns, you're projected to reach ₪${Math.round(projectedTotal)} by month-end${overage > 0 ? `, exceeding budget by ₪${Math.round(overage)}` : ''}.${item.nextLikelyHitDate ? ` Next charge expected: ${item.nextLikelyHitDate.split('T')[0]}.` : ''}`,
           metadata: JSON.stringify({
-            budget_id: row.budget_id,
-            budget_limit: budgetLimit,
-            spent_amount: spentAmount,
-            remaining: budgetLimit - spentAmount,
-            percent_used: Math.round(percentUsed * 100),
-            days_remaining: daysRemaining,
-            daily_avg: dailyAvg,
-            projected_total: projected,
-            will_exceed: willExceed,
-            recommended_daily_limit: (budgetLimit - spentAmount) / daysRemaining,
+            budget_id: item.budgetId,
+            budget_limit: item.limit,
+            spent_amount: item.actualSpent,
+            forecasted: item.forecasted,
+            projected_total: projectedTotal,
+            projected_overage: Math.max(0, overage),
+            percent_used: Math.round(percentUsed),
+            status: item.status,
+            risk: item.risk,
+            alert_threshold: item.alertThreshold,
+            next_hit_date: item.nextLikelyHitDate,
+            actions: item.actions || [],
           }),
-          potential_impact: willExceed ? -(projected - budgetLimit) : 0,
-          detection_confidence: 0.8,
+          potential_impact: -Math.max(0, overage),
+          detection_confidence: 0.85,
         });
       }
     }
 
     return budgetAlerts;
-  } finally {
-    client.release();
+  } catch (error) {
+    console.error('Failed to detect budget overruns:', error);
+    return [];
   }
 }
 
@@ -443,15 +685,35 @@ async function generateSmartActions(params = {}) {
 
   const allActions = [];
 
-  // Run all detection algorithms in parallel
-  const [anomalies, fixedVariations, unusualPurchases, budgetOverruns] = await Promise.all([
+  // Run all detection algorithms in parallel (mix of legacy and forecast-based)
+  // Use allSettled to prevent one failure from breaking all detections
+  const results = await Promise.allSettled([
     detectCategoryAnomalies({ months, locale }),
     detectFixedCategoryVariations({ months, locale }),
     detectUnusualPurchases({ months, locale }),
-    detectBudgetOverruns({ months, locale }),
+    detectBudgetOverruns({ locale }), // Now uses forecast data
+    detectFixedRecurringAnomalies({ locale }), // New: forecast-based
+    detectOptimizationOpportunities({ locale }), // New: forecast-based
   ]);
 
-  allActions.push(...anomalies, ...fixedVariations, ...unusualPurchases, ...budgetOverruns);
+  // Extract fulfilled results, use empty array for rejected
+  const [
+    anomalies,
+    fixedVariations,
+    unusualPurchases,
+    budgetOverruns,
+    fixedRecurringAnomalies,
+    optimizationOpportunities
+  ] = results.map(r => r.status === 'fulfilled' ? r.value : []);
+
+  allActions.push(
+    ...anomalies, 
+    ...fixedVariations, 
+    ...unusualPurchases, 
+    ...budgetOverruns,
+    ...fixedRecurringAnomalies,
+    ...optimizationOpportunities
+  );
 
   // Save to database (avoid duplicates using recurrence_key)
   const client = await database.getClient();
@@ -460,8 +722,9 @@ async function generateSmartActions(params = {}) {
 
   try {
     for (const action of allActions) {
-      // Generate recurrence key
-      const recurrenceKey = `${action.action_type}_${action.trigger_category_id}_${new Date().toISOString().substring(0, 7)}`; // YYYY-MM
+      // Generate recurrence key with year and month to prevent year-over-year conflicts
+      const currentDate = new Date();
+      const recurrenceKey = `${action.action_type}_${action.trigger_category_id}_${currentDate.getFullYear()}_${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
 
       // Check if action already exists this month
       const existingResult = await client.query(`
@@ -513,6 +776,8 @@ async function generateSmartActions(params = {}) {
         fixed_variations: fixedVariations.length,
         unusual_purchases: unusualPurchases.length,
         budget_overruns: budgetOverruns.length,
+        fixed_recurring_anomalies: fixedRecurringAnomalies.length,
+        optimization_opportunities: optimizationOpportunities.length,
       },
     };
   } finally {

@@ -147,7 +147,10 @@ function calculateBudgetStats(monthlyAmounts) {
 
   if (mean === 0) return null;
 
-  const variance = monthlyAmounts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / n;
+  // Use sample variance (n-1) instead of population variance (n)
+  const variance = n > 1
+    ? monthlyAmounts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (n - 1)
+    : 0;
   const stdDev = Math.sqrt(variance);
   const coefficientOfVariation = stdDev / mean;
 
@@ -228,6 +231,7 @@ async function generateBudgetSuggestions(params = {}) {
         )
         WHERE t.category_definition_id = $1
           AND t.date >= $2
+          AND t.date <= DATE('now')
           AND t.price < 0
           AND ap.id IS NULL
         GROUP BY month
@@ -553,11 +557,7 @@ async function getBudgetHealth(options = {}) {
   const client = await database.getClient();
 
   try {
-    try {
-      await ensureBaselineBudgets();
-    } catch (error) {
-      console.warn('Auto budget provisioning failed:', error);
-    }
+    // Auto budget provisioning disabled - budgets are user-created only
 
     const now = new Date();
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -580,6 +580,7 @@ async function getBudgetHealth(options = {}) {
       LEFT JOIN transactions t ON (
         t.category_definition_id = cb.category_definition_id
         AND t.date >= $1
+        AND t.date <= DATE('now')
         AND t.price < 0
       )
       WHERE cb.is_active = 1 AND cb.period_type = 'monthly'

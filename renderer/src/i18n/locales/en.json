@@ -18,6 +18,7 @@
       },
       "budgets": {
         "heading": "Budgets ({{count}} total)",
+        "utilization": "Budget Utilization ({{count}} categories)",
         "onTrack": "On track",
         "warning": "Warning",
         "exceeded": "Exceeded",
@@ -549,6 +550,44 @@
     "states": {
       "noData": "No data available. Please try again."
     },
+    "budgetForecast": {
+      "title": "Budget risk outlook",
+      "subtitle": "Actual + forecasted spend vs monthly budgets with suggested actions",
+      "chips": {
+        "highRisk": "High risk",
+        "exceeded": "Exceeded",
+        "overrun": "Projected overrun"
+      },
+      "subtitleUnified": "One minimalist list: current spend, forecast risk, health, and next steps sorted by risk.",
+      "status": {
+        "onTrack": "On track",
+        "atRisk": "At risk",
+        "exceeded": "Exceeded"
+      },
+      "sourceLabel": "Monthly budget (Settings → Budgets)",
+      "projectedLabel": "Projected {{projected}} / Limit {{limit}}",
+      "projectedTotal": "Projected: {{value}}",
+      "projectedTotalLabel": "Projected total",
+      "limitLabel": "Limit: {{value}}",
+      "limitLabelShort": "Limit",
+      "actualLabel": "Actual",
+      "forecastedLabel": "Forecasted",
+      "setLimit": "Set a limit",
+      "spentOf": "of",
+      "projected": "projected",
+      "spent": "spent",
+      "noForecastedCategories": "No categories with active forecast data available.",
+      "nextHit": "Likely exceeds on {{date}}",
+      "actionsTitle": "Suggested actions",
+      "empty": "No active monthly budgets to forecast yet.",
+      "riskLabel": "Risk {{value}}%",
+      "overUnder": {
+        "over": "Over by {{amount}}",
+        "under": "Under by {{amount}}",
+        "breakEven": "On budget",
+        "noBudget": "No budget set"
+      }
+    },
     "header": {
       "title": "Financial Analysis",
       "subtitle": "Smart insights, budget tracking, and financial health metrics"
@@ -592,6 +631,142 @@
         "biggestPurchase": "Biggest Purchase This Month",
         "hoursOfWork": "{{hours}} hours of work",
         "na": "N/A"
+      },
+      "expandView": "Expand view"
+    },
+    "modals": {
+      "rhythm": {
+        "title": "Your Financial Rhythm - Detailed Analysis",
+        "timeRange": {
+          "3months": "3 Months",
+          "6months": "6 Months",
+          "all": "All Time"
+        },
+        "viewMode": {
+          "amount": "Amount",
+          "count": "Transaction Count"
+        },
+        "hourOfDay": {
+          "title": "Spending by Hour of Day",
+          "subtitle": "When do you spend the most money?",
+          "spending": "Spending",
+          "transactions": "Transactions"
+        },
+        "dayOfWeek": {
+          "title": "Spending by Day of Week",
+          "spending": "Spending",
+          "transactions": "Transactions"
+        },
+        "weekendVsWeekday": {
+          "title": "Weekend vs Weekday",
+          "weekday": "Weekday Spending",
+          "weekend": "Weekend Spending",
+          "ofTotal": "of total"
+        },
+        "weeklyTrend": {
+          "title": "Week-by-Week Spending Trend",
+          "subtitle": "How your spending evolves over time",
+          "spending": "Weekly Spending"
+        },
+        "evolution": {
+          "title": "Spending Evolution",
+          "subtitle": "Track your spending trends over time",
+          "daily": "Daily",
+          "weekly": "Weekly",
+          "monthly": "Monthly",
+          "spending": "Spending",
+          "transactions": "Transactions",
+          "oldest": "Oldest",
+          "recent": "Recent",
+          "latest": "Latest"
+        },
+        "days": {
+          "sun": "Sun",
+          "mon": "Mon",
+          "tue": "Tue",
+          "wed": "Wed",
+          "thu": "Thu",
+          "fri": "Fri",
+          "sat": "Sat"
+        },
+        "noData": "No data available"
+      },
+      "personality": {
+        "title": "Your Money Personality - Deep Dive",
+        "spendingBehavior": {
+          "title": "Spending Behavior",
+          "programmed": "Programmed",
+          "impulse": "Impulse"
+        },
+        "recurring": {
+          "title": "Recurring Patterns",
+          "subtitle": "Subscriptions and fixed expenses",
+          "times": "times",
+          "noData": "No recurring patterns detected"
+        },
+        "categoryAverages": {
+          "title": "Average Spending per Category",
+          "subtitle": "Weekly and monthly averages by category",
+          "category": "Category",
+          "perWeek": "Per Week",
+          "perMonth": "Per Month",
+          "transactions": "Transactions/Week",
+          "pattern": "Pattern",
+          "recurring": "Recurring",
+          "variable": "Variable",
+          "recurringBadge": "R",
+          "variableBadge": "V",
+          "noData": "No category data available"
+        },
+        "noData": "No data available"
+      },
+      "future": {
+        "title": "Your Personalized Future",
+        "scenarios": {
+          "bad": "Pessimistic",
+          "normal": "Base",
+          "good": "Optimistic",
+          "endOfPeriod": "End of forecast period"
+        },
+        "netPosition": {
+          "title": "Net Position with Forecast",
+          "subtitle": "Historical data + 6-month forecast",
+          "historical": "Historical",
+          "forecast": "Forecast"
+        },
+        "noData": "No data available"
+      },
+      "makeItReal": {
+        "title": "Make It Real - Time is Money",
+        "hourlyWage": {
+          "title": "Your Hourly Worth",
+          "subtitle": "Based on your average income"
+        },
+        "incomeVsExpense": {
+          "title": "Income vs Expenses",
+          "income": "Income",
+          "expenses": "Expenses",
+          "ratio": "Expense Ratio",
+          "ofIncome": "of income"
+        },
+        "hoursRequired": {
+          "title": "Hours Required (Top Categories)",
+          "subtitle": "How many hours you work for each category"
+        },
+        "categoryHours": {
+          "title": "All Categories - Cost in Work Hours",
+          "subtitle": "Visual breakdown of your spending in time",
+          "hours": "Hours",
+          "yAxisLabel": "Hours of Work"
+        },
+        "biggestPurchase": {
+          "title": "Biggest Purchase Analysis",
+          "hoursOfWork": "Hours of Work",
+          "daysOfWork": "Days of Work",
+          "days": "days",
+          "noData": "No purchases found"
+        },
+        "noData": "No data available"
       }
     },
     "health": {
@@ -670,7 +845,13 @@
         "optimization": "Optimization",
         "fixed_variation": "Fixed Cost Variation",
         "unusual_purchase": "Unusual Purchase",
-        "seasonal_alert": "Seasonal Pattern"
+        "seasonal_alert": "Seasonal Pattern",
+        "fixed_recurring_change": "Payment Amount Changed",
+        "fixed_recurring_missing": "Expected Payment Missing",
+        "fixed_recurring_duplicate": "Duplicate Payment Detected",
+        "optimization_reallocate": "Savings Opportunity",
+        "optimization_add_budget": "Budget Recommendation",
+        "optimization_low_confidence": "Irregular Spending Pattern"
       },
       "severities": {
         "critical": "Critical",

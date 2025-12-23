@@ -44,7 +44,10 @@ function classifyVariability(monthlyAmounts) {
     };
   }
 
-  const variance = monthlyAmounts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / n;
+  // Use sample variance (n-1) instead of population variance (n)
+  const variance = n > 1
+    ? monthlyAmounts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (n - 1)
+    : 0;
   const stdDev = Math.sqrt(variance);
   const coefficientOfVariation = stdDev / mean;
 
@@ -86,8 +89,9 @@ function detectSeasonalPeaks(monthlyAmounts) {
   // Count values that are > 2σ above mean (potential seasonal peaks)
   const peaks = monthlyAmounts.filter(val => val > mean + (2 * stdDev)).length;
 
-  // If > 20% of months are peaks, likely seasonal
-  return peaks >= Math.ceil(monthlyAmounts.length * 0.2);
+  // Require minimum 2 peaks and at least 25% of months to be classified as seasonal
+  // This prevents single outliers from being classified as seasonal patterns
+  return peaks >= Math.max(2, Math.ceil(monthlyAmounts.length * 0.25));
 }
 
 /**
