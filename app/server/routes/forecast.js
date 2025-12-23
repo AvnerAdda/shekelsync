@@ -1,5 +1,18 @@
 const express = require('express');
+const path = require('path');
+const Database = require('better-sqlite3');
 const { generateDailyForecast } = require('../services/forecast.js');
+
+// Initialize database for category lookups
+const dbPath = path.join(__dirname, '../../dist/clarify.sqlite');
+let dbInstance = null;
+
+function getDatabase() {
+  if (!dbInstance) {
+    dbInstance = new Database(dbPath);
+  }
+  return dbInstance;
+}
 
 // Simple in-memory cache for forecast results
 const forecastCache = {
@@ -165,6 +178,24 @@ function createForecastRouter() {
         });
       });
 
+      // Get category definitions for icons, colors, and translations
+      const categoryDefinitions = {};
+      try {
+        const db = getDatabase();
+        const categoryQuery = `
+          SELECT id, name, name_en, name_fr, icon, color
+          FROM category_definitions
+          WHERE category_type = 'expense'
+        `;
+        const categories = db.prepare(categoryQuery).all();
+        categories.forEach(cat => {
+          categoryDefinitions[cat.name] = cat;
+          if (cat.name_en) categoryDefinitions[cat.name_en] = cat;
+        });
+      } catch (err) {
+        console.warn('[Forecast] Could not load category definitions:', err.message);
+      }
+
       // Generate budget outlook from forecast and category patterns
       const budgetOutlook = (result.categoryPatterns || [])
         .filter(p => p.categoryType === 'expense')
@@ -192,13 +223,17 @@ function createForecastRouter() {
             risk = 0.4;
           }
 
+          // Look up category definition for icon, color, and translations
+          const categoryDef = categoryDefinitions[pattern.category];
+
           return {
             budgetId: null,
-            categoryDefinitionId: null,
-            categoryName: pattern.category,
-            categoryNameEn: pattern.category,
-            categoryIcon: null,
-            categoryColor: null,
+            categoryDefinitionId: categoryDef?.id || null,
+            categoryName: categoryDef?.name || pattern.category,
+            categoryNameEn: categoryDef?.name_en || pattern.category,
+            categoryNameFr: categoryDef?.name_fr || pattern.category,
+            categoryIcon: categoryDef?.icon || null,
+            categoryColor: categoryDef?.color || null,
             parentCategoryId: null,
             limit: 0,
             actualSpent,

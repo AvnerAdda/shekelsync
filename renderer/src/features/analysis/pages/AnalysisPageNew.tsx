@@ -880,23 +880,42 @@ const AnalysisPageNew: React.FC = () => {
                     const categoryName = isHebrew ? item.categoryName : item.categoryNameEn || item.categoryName;
                     const statusColor = isExceeded ? '#dc2626' : isAtRisk ? '#d97706' : '#059669';
                     
+                    const tooltipContent = item.scenarios ? (
+                      <Box sx={{ fontSize: '0.75rem', p: 1 }}>
+                        <Box sx={{ mb: 0.5 }}>
+                          <strong>Current:</strong> {formatCurrencyValue(item.actualSpent)}
+                        </Box>
+                        <Box sx={{ mb: 0.5, color: '#22c55e' }}>
+                          <strong>Best (P10):</strong> {formatCurrencyValue(item.scenarios.p10)}
+                        </Box>
+                        <Box sx={{ mb: 0.5, color: '#f59e0b' }}>
+                          <strong>Medium (P50):</strong> {formatCurrencyValue(item.scenarios.p50)}
+                        </Box>
+                        <Box sx={{ color: '#ef4444' }}>
+                          <strong>Bad (P90):</strong> {formatCurrencyValue(item.scenarios.p90)}
+                        </Box>
+                      </Box>
+                    ) : null;
+
                     return (
                       <Grid item xs={12} sm={6} md={4} lg={3} key={`${item.categoryDefinitionId ?? 'cat'}-${idx}`}>
-                        <Box
-                          sx={{
-                            p: 2,
-                            borderRadius: 2,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            textAlign: 'center',
-                            bgcolor: 'background.paper',
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            transition: 'border-color 0.2s',
-                            '&:hover': { borderColor: statusColor },
-                          }}
-                        >
+                        <Tooltip title={tooltipContent} enterDelay={200}>
+                          <Box
+                            sx={{
+                              p: 2,
+                              borderRadius: 2,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              textAlign: 'center',
+                              bgcolor: 'background.paper',
+                              border: '1px solid',
+                              borderColor: 'divider',
+                              transition: 'border-color 0.2s',
+                              '&:hover': { borderColor: statusColor },
+                              cursor: 'help'
+                            }}
+                          >
                           {/* Circular Progress */}
                           <Box sx={{ position: 'relative', mb: 1.5 }}>
                             <CircularProgress
@@ -982,6 +1001,7 @@ const AnalysisPageNew: React.FC = () => {
                             </Typography>
                           )}
                         </Box>
+                        </Tooltip>
                       </Grid>
                     );
                   })}
