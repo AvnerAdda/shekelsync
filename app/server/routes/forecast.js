@@ -64,7 +64,12 @@ function createForecastRouter() {
         cashFlow: d.expectedCashFlow,
         cumulativeCashFlow: d.cumulativeCashFlow,
         topCategory: d.topPredictions?.[0]?.category || null,
-        topProbability: d.topPredictions?.[0]?.probability || null
+        topProbability: d.topPredictions?.[0]?.probability || null,
+        topPredictions: (d.topPredictions || []).map(p => ({
+          category: p.category,
+          amount: p.expectedAmount,
+          probability: p.probability
+        }))
       }));
 
       const mapScenario = s => ({
