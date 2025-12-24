@@ -283,6 +283,7 @@ function createAnalyticsRouter() {
 
   router.get('/forecast-extended', async (req, res) => {
     try {
+      // Extended forecast always uses 6 months, regardless of other settings
       const result = await extendedForecastService.getExtendedForecast();
       res.json(result);
     } catch (error) {

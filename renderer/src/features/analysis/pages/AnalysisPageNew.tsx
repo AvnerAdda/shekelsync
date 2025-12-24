@@ -9,12 +9,11 @@ import {
   Grid,
   Card,
   CardContent,
-  LinearProgress,
   CircularProgress,
   Alert,
   Button,
   Skeleton,
-  Chip,
+  alpha,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -167,6 +166,18 @@ const AnalysisPageNew: React.FC = () => {
   const [budgetSummary, setBudgetSummary] = useState<BudgetForecastSummary | null>(null);
   const [budgetForecastLoading, setBudgetForecastLoading] = useState(false);
   const [budgetForecastError, setBudgetForecastError] = useState<string | null>(null);
+  const [temporalData, setTemporalData] = useState<any | null>(null);
+  const [behavioralData, setBehavioralData] = useState<any | null>(null);
+  const [futureData, setFutureData] = useState<any | null>(null);
+  const [timeValueData, setTimeValueData] = useState<any | null>(null);
+  const [temporalLoading, setTemporalLoading] = useState(false);
+  const [behavioralLoading, setBehavioralLoading] = useState(false);
+  const [futureLoading, setFutureLoading] = useState(false);
+  const [timeValueLoading, setTimeValueLoading] = useState(false);
+  const [temporalError, setTemporalError] = useState<string | null>(null);
+  const [behavioralError, setBehavioralError] = useState<string | null>(null);
+  const [futureError, setFutureError] = useState<string | null>(null);
+  const [timeValueError, setTimeValueError] = useState<string | null>(null);
   
   // Modal states
   const [rhythmModalOpen, setRhythmModalOpen] = useState(false);
@@ -188,6 +199,78 @@ const AnalysisPageNew: React.FC = () => {
       hour12: i18n.language !== 'he'
     });
   };
+
+  const fetchTemporalData = useCallback(async () => {
+    if (isLocked) return;
+    setTemporalLoading(true);
+    setTemporalError(null);
+    try {
+      const response = await apiClient.get('/api/analytics/temporal?timeRange=6months');
+      if (!response.ok) {
+        throw new Error(t('errors.fetchFailed'));
+      }
+      setTemporalData(response.data);
+    } catch (err) {
+      setTemporalError(err instanceof Error ? err.message : t('errors.generic'));
+      console.error('Error fetching temporal analytics:', err);
+    } finally {
+      setTemporalLoading(false);
+    }
+  }, [isLocked, t]);
+
+  const fetchBehavioralData = useCallback(async () => {
+    if (isLocked) return;
+    setBehavioralLoading(true);
+    setBehavioralError(null);
+    try {
+      const response = await apiClient.get('/api/analytics/behavioral-patterns');
+      if (!response.ok) {
+        throw new Error(t('errors.fetchFailed'));
+      }
+      setBehavioralData(response.data);
+    } catch (err) {
+      setBehavioralError(err instanceof Error ? err.message : t('errors.generic'));
+      console.error('Error fetching behavioral analytics:', err);
+    } finally {
+      setBehavioralLoading(false);
+    }
+  }, [isLocked, t]);
+
+  const fetchFutureData = useCallback(async () => {
+    if (isLocked) return;
+    setFutureLoading(true);
+    setFutureError(null);
+    try {
+      const response = await apiClient.get('/api/analytics/forecast-extended');
+      if (!response.ok) {
+        throw new Error(t('errors.fetchFailed'));
+      }
+      setFutureData(response.data);
+    } catch (err) {
+      setFutureError(err instanceof Error ? err.message : t('errors.generic'));
+      console.error('Error fetching extended forecast analytics:', err);
+    } finally {
+      setFutureLoading(false);
+    }
+  }, [isLocked, t]);
+
+  const fetchTimeValueData = useCallback(async () => {
+    if (isLocked) return;
+    setTimeValueLoading(true);
+    setTimeValueError(null);
+    try {
+      const response = await apiClient.get('/api/analytics/time-value');
+      if (!response.ok) {
+        throw new Error(t('errors.fetchFailed'));
+      }
+      setTimeValueData(response.data);
+    } catch (err) {
+      setTimeValueError(err instanceof Error ? err.message : t('errors.generic'));
+      console.error('Error fetching time value analytics:', err);
+    } finally {
+      setTimeValueLoading(false);
+    }
+  }, [isLocked, t]);
 
   const fetchIntelligence = useCallback(async () => {
     if (isLocked) {
@@ -251,7 +334,11 @@ const AnalysisPageNew: React.FC = () => {
   const handleRefreshAll = useCallback(() => {
     fetchIntelligence();
     fetchBudgetForecast();
-  }, [fetchBudgetForecast, fetchIntelligence]);
+    fetchTemporalData();
+    fetchBehavioralData();
+    fetchFutureData();
+    fetchTimeValueData();
+  }, [fetchBehavioralData, fetchBudgetForecast, fetchFutureData, fetchIntelligence, fetchTemporalData, fetchTimeValueData]);
 
   useEffect(() => {
     if (isLocked) {
@@ -259,7 +346,11 @@ const AnalysisPageNew: React.FC = () => {
     }
     fetchIntelligence();
     fetchBudgetForecast();
-  }, [fetchBudgetForecast, fetchIntelligence, isLocked]);
+    fetchTemporalData();
+    fetchBehavioralData();
+    fetchFutureData();
+    fetchTimeValueData();
+  }, [fetchBehavioralData, fetchBudgetForecast, fetchFutureData, fetchIntelligence, fetchTemporalData, fetchTimeValueData, isLocked]);
 
   const formatCurrencyValue = (
     value: number,
@@ -324,15 +415,117 @@ const AnalysisPageNew: React.FC = () => {
     );
   }
 
+  const isRefreshing = loading || budgetForecastLoading || temporalLoading || behavioralLoading || futureLoading || timeValueLoading;
+
+  const hourlySeries = useMemo(() => {
+    const series = temporalData?.hourlySpending ?? intelligence?.temporalIntelligence?.hourlyHeatmap;
+    if (!Array.isArray(series)) return [];
+    return series.map((value) => (typeof value === 'number' ? value : Number(value) || 0));
+  }, [intelligence?.temporalIntelligence?.hourlyHeatmap, temporalData?.hourlySpending]);
+
+  const rhythmBuckets = useMemo(() => {
+    if (hourlySeries.length === 0) return [];
+    return Array.from({ length: 8 }, (_, idx) => {
+      const startHour = idx * 3;
+      const amount = hourlySeries.slice(startHour, startHour + 3).reduce((sum, val) => sum + val, 0);
+      return {
+        time: formatHour(startHour),
+        amount,
+      };
+    });
+  }, [hourlySeries, i18n.language]);
+
+  const rhythmStats = useMemo(() => {
+    if (hourlySeries.length === 0 && !temporalData && !intelligence?.temporalIntelligence) {
+      return null;
+    }
+
+    const peakHour = hourlySeries.reduce(
+      (best, value, idx) => (value > best.value ? { value, idx } : best),
+      { value: -Infinity, idx: 0 }
+    ).idx;
+
+    const dailyEvolution = temporalData?.dailyEvolution;
+    const avgDailySpend = dailyEvolution?.length
+      ? dailyEvolution.reduce((sum: number, day: any) => sum + (day.amount || 0), 0) / dailyEvolution.length
+      : intelligence?.temporalIntelligence?.dailyBurnRate ?? null;
+
+    return {
+      peakHour,
+      avgDailySpend,
+      weekendPercentage: temporalData?.weekendPercentage ?? intelligence?.temporalIntelligence?.weekendVsWeekday?.weekendPercentage ?? null,
+      preciseTimePercentage: temporalData?.preciseTimePercentage ?? intelligence?.temporalIntelligence?.preciseTimePercentage ?? null,
+    };
+  }, [hourlySeries, intelligence?.temporalIntelligence, temporalData]);
+
+  const personalityMetrics = useMemo(() => {
+    const impulsePercentage = behavioralData?.impulsePercentage ?? intelligence?.behavioralIntelligence?.impulseSpendingScore ?? 0;
+    const programmedPercentage = behavioralData?.programmedPercentage ?? (100 - impulsePercentage);
+
+    return {
+      impulsePercentage,
+      programmedPercentage,
+      programmedAmount: behavioralData?.programmedAmount ?? null,
+      impulseAmount: behavioralData?.impulseAmount ?? null,
+      recurringCount: behavioralData?.recurringPatterns?.length ?? null,
+      topCategoryWeekly: behavioralData?.categoryAverages?.[0]?.avgPerWeek ?? null,
+      topCategoryName: behavioralData?.categoryAverages?.[0]?.category ?? null,
+    };
+  }, [behavioralData, intelligence?.behavioralIntelligence?.impulseSpendingScore]);
+
+  const scenarioEndBalances = useMemo(() => {
+    const combined = futureData?.combinedData;
+    if (!combined) {
+      return { p10: null, p50: null, p90: null };
+    }
+    const reversed = [...combined].reverse();
+    const findEnd = (key: 'p10Cumulative' | 'p50Cumulative' | 'p90Cumulative') => {
+      const entry = reversed.find((item) => item[key] !== null && item[key] !== undefined);
+      return entry ? entry[key] : null;
+    };
+
+    return {
+      p10: findEnd('p10Cumulative'),
+      p50: findEnd('p50Cumulative'),
+      p90: findEnd('p90Cumulative'),
+    };
+  }, [futureData]);
+
+  const scenarioNetCash = useMemo(() => ({
+    base: futureData?.summaries?.base?.netCashFlow ?? intelligence?.predictiveAnalytics?.savingsTrajectory6m ?? 0,
+    optimistic: futureData?.summaries?.optimistic?.netCashFlow ?? intelligence?.predictiveAnalytics?.savingsTrajectory6m ?? 0,
+    pessimistic: futureData?.summaries?.pessimistic?.netCashFlow ?? intelligence?.predictiveAnalytics?.savingsTrajectory6m ?? 0,
+  }), [futureData?.summaries, intelligence?.predictiveAnalytics?.savingsTrajectory6m]);
+
+  const futureSparklineData = useMemo(() => {
+    if (!futureData?.combinedData) return [];
+    return futureData.combinedData
+      .filter((item: any) => item.p50Cumulative !== null && item.p50Cumulative !== undefined)
+      .map((item: any, idx: number) => ({
+        month: idx + 1,
+        value: item.p50Cumulative,
+      }));
+  }, [futureData]);
+
+  const primaryHourlyWage = timeValueData?.hourlyWage ?? intelligence?.psychologicalInsights?.hourlyWage ?? 0;
+  const expenseRatio = useMemo(() => {
+    if (timeValueData?.totalIncome) {
+      return (timeValueData.totalExpenses / Math.max(timeValueData.totalIncome, 1)) * 100;
+    }
+    return null;
+  }, [timeValueData]);
+  const biggestPurchaseHoursValue = timeValueData?.biggestPurchase?.hours ?? intelligence?.psychologicalInsights?.biggestPurchaseHours ?? null;
+  const topCategoryHours = timeValueData?.topCategories?.[0]?.hours ?? null;
+
   const formatAveragePurchaseHours = () => {
-    const value = intelligence?.psychologicalInsights?.avgTransactionInHours;
+    const value = topCategoryHours ?? intelligence?.psychologicalInsights?.avgTransactionInHours;
     if (value === undefined || value === null) return t('dashboard.reality.na');
     if (typeof value === 'number') return value.toFixed(1);
     return value;
   };
 
   const formatBiggestPurchaseHours = () => {
-    const value = intelligence?.psychologicalInsights?.biggestPurchaseHours;
+    const value = biggestPurchaseHoursValue;
     if (value === undefined || value === null) return t('dashboard.reality.na');
     if (typeof value === 'number') return Math.round(value).toString();
     return value;
@@ -343,7 +536,12 @@ const AnalysisPageNew: React.FC = () => {
       {/* Header */}
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-          <Typography variant="h4" fontWeight="bold" gutterBottom>
+          <Typography variant="h4" fontWeight="bold" gutterBottom sx={{ 
+            background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            mb: 1
+          }}>
             {t('header.title')}
           </Typography>
           <Typography variant="body1" color="text.secondary">
@@ -352,29 +550,57 @@ const AnalysisPageNew: React.FC = () => {
         </Box>
         <Button
           variant="outlined"
-          startIcon={loading ? <CircularProgress size={16} aria-label={t('states.loading')} /> : <RefreshIcon />}
+          startIcon={isRefreshing ? <CircularProgress size={16} aria-label={t('states.loading')} /> : <RefreshIcon />}
           onClick={handleRefreshAll}
-          disabled={loading || budgetForecastLoading}
+          disabled={isRefreshing}
           size="small"
+          sx={{
+            borderRadius: 2,
+            borderColor: (theme) => alpha(theme.palette.divider, 0.2),
+            backdropFilter: 'blur(10px)',
+            '&:hover': {
+              borderColor: 'primary.main',
+              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05)
+            }
+          }}
         >
-          {loading || budgetForecastLoading ? t('actions.refreshing') : t('actions.refresh')}
+          {isRefreshing ? t('actions.refreshing') : t('actions.refresh')}
         </Button>
       </Box>
 
       {/* Tabs */}
-      <Paper sx={{ mb: 3 }}>
+      <Paper sx={{ 
+        mb: 3,
+        borderRadius: 3,
+        bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+        backdropFilter: 'blur(20px)',
+        border: '1px solid',
+        borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+        boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+        overflow: 'hidden'
+      }}>
         <Tabs
           value={currentTab}
           onChange={handleTabChange}
           aria-label={t('tabs.ariaLabel')}
           sx={{
-            borderBottom: 1,
-            borderColor: 'divider',
+            '& .MuiTabs-indicator': {
+              height: 3,
+              borderRadius: '3px 3px 0 0',
+              background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+            },
             '& .MuiTab-root': {
               minHeight: 64,
               textTransform: 'none',
               fontSize: '1rem',
-              fontWeight: 500,
+              fontWeight: 600,
+              transition: 'all 0.2s',
+              '&.Mui-selected': {
+                color: theme.palette.primary.main,
+              },
+              '&:hover': {
+                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
+              }
             },
           }}
         >
@@ -419,11 +645,18 @@ const AnalysisPageNew: React.FC = () => {
       {/* Tab Content */}
       <TabPanel value={currentTab} index={0}>
         {/* Dashboard Tab */}
-        {loading && !intelligence ? (
+        {isRefreshing && !intelligence && !temporalData && !behavioralData && !futureData && !timeValueData ? (
           <Grid container spacing={2}>
             {[1, 2, 3, 4].map((i) => (
               <Grid item xs={12} md={6} key={i}>
-                <Card variant="outlined">
+                <Card elevation={0} sx={{
+                  height: '100%',
+                  borderRadius: 4,
+                  bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+                  backdropFilter: 'blur(20px)',
+                  border: '1px solid',
+                  borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+                }}>
                   <CardContent>
                     <Skeleton variant="text" width={200} height={32} />
                     <Skeleton variant="rectangular" width="100%" height={100} sx={{ mt: 2 }} />
@@ -432,14 +665,14 @@ const AnalysisPageNew: React.FC = () => {
               </Grid>
             ))}
           </Grid>
-        ) : error ? (
+        ) : (error && !temporalData && !behavioralData && !futureData && !timeValueData) ? (
           <Alert severity="error" sx={{ mb: 3 }}>
             {error}
             <Button variant="contained" onClick={fetchIntelligence} sx={{ mt: 2 }}>
               {t('actions.retry')}
             </Button>
           </Alert>
-        ) : !intelligence ? (
+        ) : (!intelligence && !temporalData && !behavioralData && !futureData && !timeValueData) ? (
           <Alert severity="info" sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Typography variant="body2" fontWeight="bold">
               {t('states.noDataTitle', { defaultValue: 'No Analysis Data Available' })}
@@ -452,7 +685,21 @@ const AnalysisPageNew: React.FC = () => {
           <Grid container spacing={2}>
             {/* Your Financial Rhythm */}
             <Grid item xs={12} md={6}>
-              <Card variant="outlined">
+              <Card elevation={0} sx={{
+                height: '100%',
+                borderRadius: 4,
+                bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+                backdropFilter: 'blur(20px)',
+                border: '1px solid',
+                borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+                boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+                transition: 'all 0.3s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: (theme) => `0 12px 40px 0 ${alpha(theme.palette.primary.main, 0.1)}`,
+                  borderColor: (theme) => alpha(theme.palette.primary.main, 0.3),
+                }
+              }}>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -474,35 +721,26 @@ const AnalysisPageNew: React.FC = () => {
                   </Box>
 
                   {/* Hourly Spending Heatmap */}
-                  {loading ? (
+                  {(temporalLoading && rhythmBuckets.length === 0) ? (
                     <Box sx={{ mb: 2 }}>
                       <Skeleton variant="text" width="60%" height={20} sx={{ mb: 1 }} />
                       <Skeleton variant="rectangular" width="100%" height={100} sx={{ borderRadius: 2 }} />
                     </Box>
-                  ) : intelligence.temporalIntelligence?.hourlyHeatmap && intelligence.temporalIntelligence.hourlyHeatmap.length > 0 ? (
+                  ) : rhythmBuckets.length > 0 ? (
                     <Box sx={{ mb: 2 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                         <Typography variant="caption" color="text.secondary">
                           {t('dashboard.rhythm.spendingByHour')}
                         </Typography>
-                        {intelligence.temporalIntelligence.preciseTimePercentage !== undefined && intelligence.temporalIntelligence.preciseTimePercentage < 50 && (
+                        {rhythmStats?.preciseTimePercentage !== undefined && rhythmStats.preciseTimePercentage < 50 && (
                           <Typography variant="caption" color="warning.main" sx={{ fontSize: '0.75rem' }}>
-                            {t('dashboard.rhythm.lowPrecision', { percentage: intelligence.temporalIntelligence.preciseTimePercentage })}
+                            {t('dashboard.rhythm.lowPrecision', { percentage: Math.round(rhythmStats.preciseTimePercentage) })}
                           </Typography>
                         )}
                       </Box>
                       <ResponsiveContainer width="100%" height={100}>
                         <RechartsBarChart
-                          data={[
-                            { time: formatHour(0), amount: intelligence.temporalIntelligence.hourlyHeatmap.slice(0, 3).reduce((a: number, b: number) => a + b, 0) },
-                            { time: formatHour(3), amount: intelligence.temporalIntelligence.hourlyHeatmap.slice(3, 6).reduce((a: number, b: number) => a + b, 0) },
-                            { time: formatHour(6), amount: intelligence.temporalIntelligence.hourlyHeatmap.slice(6, 9).reduce((a: number, b: number) => a + b, 0) },
-                            { time: formatHour(9), amount: intelligence.temporalIntelligence.hourlyHeatmap.slice(9, 12).reduce((a: number, b: number) => a + b, 0) },
-                            { time: formatHour(12), amount: intelligence.temporalIntelligence.hourlyHeatmap.slice(12, 15).reduce((a: number, b: number) => a + b, 0) },
-                            { time: formatHour(15), amount: intelligence.temporalIntelligence.hourlyHeatmap.slice(15, 18).reduce((a: number, b: number) => a + b, 0) },
-                            { time: formatHour(18), amount: intelligence.temporalIntelligence.hourlyHeatmap.slice(18, 21).reduce((a: number, b: number) => a + b, 0) },
-                            { time: formatHour(21), amount: intelligence.temporalIntelligence.hourlyHeatmap.slice(21, 24).reduce((a: number, b: number) => a + b, 0) },
-                          ]}
+                          data={rhythmBuckets}
                           margin={{ top: 10, bottom: 30, left: 40, right: 10 }}
                         >
                           <XAxis
@@ -525,29 +763,47 @@ const AnalysisPageNew: React.FC = () => {
                         </RechartsBarChart>
                       </ResponsiveContainer>
                     </Box>
-                  ) : null}
+                  ) : temporalError ? (
+                    <Alert severity="warning" sx={{ mb: 1 }}>
+                      {temporalError}
+                    </Alert>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      {t('states.noData')}
+                    </Typography>
+                  )}
 
                   <Grid container spacing={1}>
                     <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.runway')}</Typography>
-                      <Typography variant="h6">{t('dashboard.rhythm.runwayDays', { count: intelligence.temporalIntelligence?.financialRunwayDays || 0 })}</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.burnRate')}</Typography>
-                      <Typography variant="h6">{formatCurrencyValue(intelligence.temporalIntelligence?.dailyBurnRate || 0)}</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.peakHour')}</Typography>
-                      <Typography variant="body2">
-                        {intelligence.temporalIntelligence?.peakSpendingHour !== undefined
-                          ? formatHour(intelligence.temporalIntelligence.peakSpendingHour)
+                      <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.avgDaily')}</Typography>
+                      <Typography variant="h6">
+                        {rhythmStats?.avgDailySpend !== null && rhythmStats?.avgDailySpend !== undefined
+                          ? formatCurrencyValue(rhythmStats.avgDailySpend || 0)
                           : t('dashboard.rhythm.na')}
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.paydayEffect')}</Typography>
+                      <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.weekendShare')}</Typography>
+                      <Typography variant="h6">
+                        {rhythmStats?.weekendPercentage !== null && rhythmStats?.weekendPercentage !== undefined
+                          ? `${Math.round(rhythmStats.weekendPercentage)}%`
+                          : t('dashboard.rhythm.na')}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.peakHour')}</Typography>
                       <Typography variant="body2">
-                        {Math.round(intelligence.temporalIntelligence?.paydayEffect || 0)}%
+                        {rhythmStats?.peakHour !== undefined && rhythmStats?.peakHour !== null
+                          ? formatHour(rhythmStats.peakHour)
+                          : t('dashboard.rhythm.na')}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.preciseTime')}</Typography>
+                      <Typography variant="body2">
+                        {rhythmStats?.preciseTimePercentage !== null && rhythmStats?.preciseTimePercentage !== undefined
+                          ? `${Math.round(rhythmStats.preciseTimePercentage)}%`
+                          : t('dashboard.rhythm.na')}
                       </Typography>
                     </Grid>
                   </Grid>
@@ -557,7 +813,21 @@ const AnalysisPageNew: React.FC = () => {
 
             {/* Your Money Personality */}
             <Grid item xs={12} md={6}>
-              <Card variant="outlined">
+              <Card elevation={0} sx={{
+                height: '100%',
+                borderRadius: 4,
+                bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+                backdropFilter: 'blur(20px)',
+                border: '1px solid',
+                borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+                boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+                transition: 'all 0.3s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: (theme) => `0 12px 40px 0 ${alpha(theme.palette.primary.main, 0.1)}`,
+                  borderColor: (theme) => alpha(theme.palette.primary.main, 0.3),
+                }
+              }}>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -578,73 +848,107 @@ const AnalysisPageNew: React.FC = () => {
                     </Tooltip>
                   </Box>
 
-                  {/* Impulse vs Planned Visual */}
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="caption" color="text.secondary">{t('dashboard.personality.spendingStyle')}</Typography>
-                    <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, mb: 1 }}>
-                      <Box
-                        sx={{
-                          flex: intelligence.behavioralIntelligence?.impulseSpendingScore || 0,
-                          height: 8,
-                          bgcolor: 'warning.main',
-                          borderRadius: 1,
-                          transition: 'all 0.3s'
-                        }}
-                      />
-                      <Box
-                        sx={{
-                          flex: 100 - (intelligence.behavioralIntelligence?.impulseSpendingScore || 0),
-                          height: 8,
-                          bgcolor: 'success.main',
-                          borderRadius: 1,
-                          transition: 'all 0.3s'
-                        }}
-                      />
+                  {behavioralLoading && !behavioralData ? (
+                    <Box>
+                      <Skeleton variant="text" width="50%" height={20} sx={{ mb: 1 }} />
+                      <Skeleton variant="rectangular" width="100%" height={80} sx={{ borderRadius: 2 }} />
                     </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" color="warning.main">
-                        {t('dashboard.personality.impulse', { value: Math.round(intelligence.behavioralIntelligence?.impulseSpendingScore || 0) })}
-                      </Typography>
-                      <Typography variant="caption" color="success.main">
-                        {t('dashboard.personality.planned', { value: Math.round(100 - (intelligence.behavioralIntelligence?.impulseSpendingScore || 0)) })}
-                      </Typography>
-                    </Box>
-                  </Box>
-
-                  <Grid container spacing={1}>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.personality.avgTransaction')}</Typography>
-                      <Typography variant="h6">{formatCurrencyValue(intelligence.behavioralIntelligence?.averageTransactionSize || 0)}</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.personality.smallPurchases')}</Typography>
-                      <Typography variant="h6">{intelligence.behavioralIntelligence?.smallTransactionCount || 0}</Typography>
-                    </Grid>
-                    <Grid item xs={12}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.personality.fomoScore')}</Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <LinearProgress
-                          variant="determinate"
-                          value={intelligence.behavioralIntelligence?.fomoScore ?? 0}
-                          sx={{ flex: 1, height: 6, borderRadius: 3 }}
-                          color={(intelligence.behavioralIntelligence?.fomoScore ?? 0) > 70 ? 'error' : (intelligence.behavioralIntelligence?.fomoScore ?? 0) > 40 ? 'warning' : 'success'}
-                        />
-                        <Typography variant="body2" fontWeight="bold">
-                          {intelligence.behavioralIntelligence?.fomoScore ?? 0}/100
-                        </Typography>
+                  ) : behavioralError ? (
+                    <Alert severity="warning" sx={{ mb: 1 }}>
+                      {behavioralError}
+                    </Alert>
+                  ) : (
+                    <>
+                      {/* Impulse vs Planned Visual */}
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="caption" color="text.secondary">{t('dashboard.personality.spendingStyle')}</Typography>
+                        <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, mb: 1 }}>
+                          <Box
+                            sx={{
+                              flex: personalityMetrics.impulsePercentage,
+                              height: 8,
+                              bgcolor: 'warning.main',
+                              borderRadius: 1,
+                              transition: 'all 0.3s'
+                            }}
+                          />
+                          <Box
+                            sx={{
+                              flex: Math.max(0, 100 - personalityMetrics.impulsePercentage),
+                              height: 8,
+                              bgcolor: 'success.main',
+                              borderRadius: 1,
+                              transition: 'all 0.3s'
+                            }}
+                          />
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <Typography variant="caption" color="warning.main">
+                            {t('dashboard.personality.impulse', { value: Math.round(personalityMetrics.impulsePercentage) })}
+                          </Typography>
+                          <Typography variant="caption" color="success.main">
+                            {t('dashboard.personality.planned', { value: Math.round(Math.max(0, 100 - personalityMetrics.impulsePercentage)) })}
+                          </Typography>
+                        </Box>
                       </Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-                        {t('dashboard.personality.fomoHint')}
-                      </Typography>
-                    </Grid>
-                  </Grid>
+
+                      <Grid container spacing={1}>
+                        <Grid item xs={6}>
+                          <Typography variant="caption" color="text.secondary">{t('dashboard.personality.programmedSpend')}</Typography>
+                          <Typography variant="h6" color="success.main">
+                            {personalityMetrics.programmedAmount !== null
+                              ? `+${formatCurrencyValue(personalityMetrics.programmedAmount || 0)}`
+                              : t('dashboard.personality.na')}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Typography variant="caption" color="text.secondary">{t('dashboard.personality.impulseSpend')}</Typography>
+                          <Typography variant="h6" color="warning.main">
+                            {personalityMetrics.impulseAmount !== null
+                              ? `+${formatCurrencyValue(personalityMetrics.impulseAmount || 0)}`
+                              : t('dashboard.personality.na')}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="text.secondary">{t('dashboard.personality.recurringPatterns')}</Typography>
+                          <Typography variant="h6">
+                            {personalityMetrics.recurringCount ?? 0}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="text.secondary">
+                            {t('dashboard.personality.topCategoryWeekly', { category: personalityMetrics.topCategoryName || t('dashboard.personality.na') })}
+                          </Typography>
+                          <Typography variant="body2" fontWeight="bold" color="text.primary">
+                            {personalityMetrics.topCategoryWeekly !== null
+                              ? formatCurrencyValue(personalityMetrics.topCategoryWeekly || 0)
+                              : t('dashboard.personality.na')}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </Grid>
 
             {/* Your Financial Future */}
             <Grid item xs={12} md={6}>
-              <Card variant="outlined">
+              <Card elevation={0} sx={{
+                height: '100%',
+                borderRadius: 4,
+                bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+                backdropFilter: 'blur(20px)',
+                border: '1px solid',
+                borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+                boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+                transition: 'all 0.3s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: (theme) => `0 12px 40px 0 ${alpha(theme.palette.primary.main, 0.1)}`,
+                  borderColor: (theme) => alpha(theme.palette.primary.main, 0.3),
+                }
+              }}>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -665,70 +969,95 @@ const AnalysisPageNew: React.FC = () => {
                     </Tooltip>
                   </Box>
 
-                  {/* 6-Month Trajectory Sparkline */}
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="caption" color="text.secondary">{t('dashboard.future.trajectory')}</Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography
-                        variant="h6"
-                        color={(intelligence.predictiveAnalytics?.savingsTrajectory6m ?? 0) > 0 ? 'success.main' : 'error.main'}
-                      >
-                        {formatCurrencyValue(intelligence.predictiveAnalytics?.savingsTrajectory6m ?? 0, { showSign: true })}
-                      </Typography>
-                      <Box sx={{ flex: 1, height: 30 }}>
-                        <ResponsiveContainer width="100%" height={30}>
-                          <LineChart
-                            data={Array.from({ length: 6 }, (_, i) => ({
-                              month: i + 1,
-                              value: (intelligence.predictiveAnalytics?.monthlySavings ?? 0) * (i + 1)
-                            }))}
-                            margin={{ top: 2, bottom: 2, left: 2, right: 2 }}
-                          >
-                            <Line
-                              type="monotone"
-                              dataKey="value"
-                              stroke={(intelligence.predictiveAnalytics?.savingsTrajectory6m ?? 0) > 0 ? '#4caf50' : '#f44336'}
-                              strokeWidth={2}
-                              dot={false}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </Box>
+                  {futureLoading && !futureData ? (
+                    <Box>
+                      <Skeleton variant="text" width="50%" height={20} sx={{ mb: 1 }} />
+                      <Skeleton variant="rectangular" width="100%" height={90} sx={{ borderRadius: 2 }} />
                     </Box>
-                  </Box>
+                  ) : futureError ? (
+                    <Alert severity="warning" sx={{ mb: 1 }}>
+                      {futureError}
+                    </Alert>
+                  ) : (
+                    <>
+                      {/* 6-Month Trajectory Sparkline */}
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="caption" color="text.secondary">{t('dashboard.future.trajectory')}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography
+                            variant="h6"
+                            color={scenarioNetCash.base >= 0 ? 'success.main' : 'error.main'}
+                          >
+                            {formatCurrencyValue(scenarioNetCash.base, { showSign: true })}
+                          </Typography>
+                          <Box sx={{ flex: 1, height: 30 }}>
+                            <ResponsiveContainer width="100%" height={30}>
+                              <LineChart data={futureSparklineData.length > 0 ? futureSparklineData : [{ month: 0, value: 0 }]} margin={{ top: 2, bottom: 2, left: 2, right: 2 }}>
+                                <Line
+                                  type="monotone"
+                                  dataKey="value"
+                                  stroke={scenarioNetCash.base >= 0 ? '#4caf50' : '#f44336'}
+                                  strokeWidth={2}
+                                  dot={false}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </Box>
+                        </Box>
+                      </Box>
 
-                  <Grid container spacing={1}>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.future.endOfMonth')}</Typography>
-                      <Typography variant="h6" color="primary.main">
-                        {formatCurrencyValue(intelligence.predictiveAnalytics?.forecastEndMonth ?? 0)}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.future.monthlySavings')}</Typography>
-                      <Typography
-                        variant="h6"
-                        color={(intelligence.predictiveAnalytics?.monthlySavings ?? 0) > 0 ? 'success.main' : 'error.main'}
-                      >
-                        {formatCurrencyValue(intelligence.predictiveAnalytics?.monthlySavings ?? 0, { showSign: true })}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.future.dailyVelocity')}</Typography>
-                      <Typography variant="body2">
-                        {t('dashboard.future.velocityValue', {
-                          value: formatCurrencyValue(intelligence.predictiveAnalytics?.spendingVelocity ?? 0),
-                        })}
-                      </Typography>
-                    </Grid>
-                  </Grid>
+                      <Grid container spacing={1}>
+                        <Grid item xs={6}>
+                          <Typography variant="caption" color="text.secondary">{t('dashboard.future.baseCase')}</Typography>
+                          <Typography variant="h6" color="primary.main">
+                            {scenarioEndBalances.p50 !== null && scenarioEndBalances.p50 !== undefined
+                              ? formatCurrencyValue(scenarioEndBalances.p50 || 0)
+                              : t('dashboard.future.na')}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Typography variant="caption" color="text.secondary">{t('dashboard.future.bestCase')}</Typography>
+                          <Typography
+                            variant="h6"
+                            color="success.main"
+                          >
+                            {scenarioEndBalances.p90 !== null && scenarioEndBalances.p90 !== undefined
+                              ? formatCurrencyValue(scenarioEndBalances.p90 || 0)
+                              : t('dashboard.future.na')}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="text.secondary">{t('dashboard.future.worstCase')}</Typography>
+                          <Typography variant="body2" color="error.main" fontWeight="bold">
+                            {scenarioEndBalances.p10 !== null && scenarioEndBalances.p10 !== undefined
+                              ? formatCurrencyValue(scenarioEndBalances.p10 || 0)
+                              : t('dashboard.future.na')}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </Grid>
 
             {/* Make It Real */}
             <Grid item xs={12} md={6}>
-              <Card variant="outlined">
+              <Card elevation={0} sx={{
+                height: '100%',
+                borderRadius: 4,
+                bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+                backdropFilter: 'blur(20px)',
+                border: '1px solid',
+                borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+                boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+                transition: 'all 0.3s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: (theme) => `0 12px 40px 0 ${alpha(theme.palette.primary.main, 0.1)}`,
+                  borderColor: (theme) => alpha(theme.palette.primary.main, 0.3),
+                }
+              }}>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -749,22 +1078,40 @@ const AnalysisPageNew: React.FC = () => {
                     </Tooltip>
                   </Box>
 
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="caption" color="text.secondary">{t('dashboard.reality.timeValue')}</Typography>
-                    <Typography variant="h6">
-                      {t('dashboard.reality.hourlyRate', { value: formatCurrencyValue(intelligence.psychologicalInsights?.hourlyWage || 0) })}
-                    </Typography>
-                    <Typography variant="caption">
-                      {t('dashboard.reality.avgPurchase', { hours: formatAveragePurchaseHours() })}
-                    </Typography>
-                  </Box>
+                  {timeValueLoading && !timeValueData ? (
+                    <Box>
+                      <Skeleton variant="text" width="60%" height={20} sx={{ mb: 1 }} />
+                      <Skeleton variant="rectangular" width="100%" height={60} sx={{ borderRadius: 2 }} />
+                    </Box>
+                  ) : timeValueError ? (
+                    <Alert severity="warning" sx={{ mb: 1 }}>
+                      {timeValueError}
+                    </Alert>
+                  ) : (
+                    <>
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="caption" color="text.secondary">{t('dashboard.reality.timeValue')}</Typography>
+                        <Typography variant="h6">
+                          {t('dashboard.reality.hourlyRate', { value: formatCurrencyValue(primaryHourlyWage) })}
+                        </Typography>
+                        <Typography variant="caption">
+                          {expenseRatio !== null
+                            ? t('dashboard.reality.expenseRatio', { ratio: expenseRatio.toFixed(1) })
+                            : t('dashboard.reality.na')}
+                        </Typography>
+                      </Box>
 
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">{t('dashboard.reality.biggestPurchase')}</Typography>
-                    <Typography variant="body2">
-                      {t('dashboard.reality.hoursOfWork', { hours: formatBiggestPurchaseHours() })}
-                    </Typography>
-                  </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">{t('dashboard.reality.biggestPurchase')}</Typography>
+                        <Typography variant="body2">
+                          {t('dashboard.reality.hoursOfWork', { hours: formatBiggestPurchaseHours() })}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                          {t('dashboard.reality.topCategoryHours', { hours: formatAveragePurchaseHours() })}
+                        </Typography>
+                      </Box>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </Grid>
@@ -774,14 +1121,30 @@ const AnalysisPageNew: React.FC = () => {
 
       <TabPanel value={currentTab} index={1}>
         {/* Actions Tab */}
-        <Paper sx={{ p: 3 }}>
+        <Paper sx={{ 
+          p: 3,
+          borderRadius: 4,
+          bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+          backdropFilter: 'blur(20px)',
+          border: '1px solid',
+          borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+          boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+        }}>
           <SmartActionItemsPanel />
         </Paper>
       </TabPanel>
 
       <TabPanel value={currentTab} index={2}>
         {/* Spending Tab */}
-        <Paper sx={{ p: 3 }}>
+        <Paper sx={{ 
+          p: 3,
+          borderRadius: 4,
+          bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+          backdropFilter: 'blur(20px)',
+          border: '1px solid',
+          borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+          boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+        }}>
           <SpendingCategoriesChart months={3} />
           <Box sx={{ mt: 3, pt: 3, borderTop: 1, borderColor: 'divider' }}>
             <SpendingCategoryTargetsMinimal />
@@ -793,7 +1156,15 @@ const AnalysisPageNew: React.FC = () => {
         {/* Budget Tab */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {/* Unified budget view: forecast risk + health + suggestions */}
-          <Paper sx={{ p: 3 }}>
+          <Paper sx={{ 
+            p: 3,
+            borderRadius: 4,
+            bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+            backdropFilter: 'blur(20px)',
+            border: '1px solid',
+            borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+            boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+          }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
               <Box>
                 <Typography variant="h6">{t('budgetForecast.title')}</Typography>
@@ -902,105 +1273,82 @@ const AnalysisPageNew: React.FC = () => {
                         <Tooltip title={tooltipContent} enterDelay={200}>
                           <Box
                             sx={{
+                              position: 'relative',
                               p: 2,
-                              borderRadius: 2,
+                              height: '100%',
+                              minHeight: 110,
+                              borderRadius: 4,
                               display: 'flex',
                               flexDirection: 'column',
-                              alignItems: 'center',
-                              textAlign: 'center',
-                              bgcolor: 'background.paper',
+                              justifyContent: 'space-between',
+                              overflow: 'hidden',
+                              bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+                              backdropFilter: 'blur(12px)',
+                              background: (theme) => `linear-gradient(90deg, 
+                                ${alpha(statusColor, 0.15)} ${Math.min(actualPct, 100)}%, 
+                                ${alpha(theme.palette.background.paper, 0.4)} ${Math.min(actualPct, 100)}%)`,
                               border: '1px solid',
-                              borderColor: 'divider',
-                              transition: 'border-color 0.2s',
-                              '&:hover': { borderColor: statusColor },
+                              borderColor: alpha(statusColor, 0.3),
+                              transition: 'all 0.3s ease-in-out',
+                              '&:hover': { 
+                                transform: 'translateY(-4px)',
+                                boxShadow: (theme) => `0 8px 24px 0 ${alpha(statusColor, 0.2)}`,
+                                borderColor: statusColor,
+                              },
                               cursor: 'help'
                             }}
                           >
-                          {/* Circular Progress */}
-                          <Box sx={{ position: 'relative', mb: 1.5 }}>
-                            <CircularProgress
-                              variant="determinate"
-                              value={100}
-                              size={56}
-                              thickness={2.5}
-                              sx={{ color: 'divider', position: 'absolute' }}
-                            />
-                            <CircularProgress
-                              variant="determinate"
-                              value={displayProgress}
-                              size={56}
-                              thickness={2.5}
-                              sx={{
-                                color: statusColor,
-                                '& .MuiCircularProgress-circle': { strokeLinecap: 'round' },
-                              }}
-                            />
+                            {/* Background Icon (Watermark) */}
                             <Box
                               sx={{
                                 position: 'absolute',
-                                inset: 0,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
+                                right: -10,
+                                bottom: -15,
+                                opacity: 0.1,
+                                transform: 'rotate(-15deg)',
+                                pointerEvents: 'none',
+                                zIndex: 0
                               }}
                             >
                               {item.categoryIcon ? (
-                                <CategoryIcon iconName={item.categoryIcon} color={item.categoryColor || '#1a1a1a'} size={20} />
+                                <CategoryIcon iconName={item.categoryIcon} color={statusColor} size={100} />
                               ) : (
-                                <Typography sx={{ color: item.categoryColor || '#1a1a1a', fontWeight: 600, fontSize: 11 }}>
-                                  {categoryName?.slice(0, 2) || '?'}
+                                <Typography sx={{ fontSize: 80, fontWeight: 900, color: statusColor, opacity: 0.5 }}>
+                                  {categoryName?.slice(0, 1)}
                                 </Typography>
                               )}
                             </Box>
-                            {isExceeded && exceededLoops >= 1 && (
-                              <Box
-                                sx={{
-                                  position: 'absolute',
-                                  top: -4,
-                                  right: -4,
-                                  bgcolor: statusColor,
-                                  color: 'white',
-                                  borderRadius: 1,
-                                  px: 0.5,
-                                  fontSize: 9,
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {exceededLoops}×
+
+                            {/* Content - Top Row */}
+                            <Box sx={{ position: 'relative', zIndex: 1, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ maxWidth: '70%' }}>
+                                {categoryName}
+                              </Typography>
+                              <Typography variant="h6" fontWeight={800} sx={{ color: statusColor }}>
+                                {Math.round(actualPct)}%
+                              </Typography>
+                            </Box>
+
+                            {/* Content - Bottom Row */}
+                            <Box sx={{ position: 'relative', zIndex: 1, width: '100%' }}>
+                              <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                                {formatCurrencyValue(item.actualSpent, { maximumFractionDigits: 0 })} / {formatCurrencyValue(displayAmount, { maximumFractionDigits: 0 })}
+                              </Typography>
+                              
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: statusColor }} />
+                                <Typography variant="caption" sx={{ fontWeight: 600, color: statusColor }}>
+                                  {isExceeded ? t('budgetForecast.exceeded', { defaultValue: 'Over Budget' }) : isAtRisk ? t('budgetForecast.atRisk', { defaultValue: 'At Risk' }) : t('budgetForecast.onTrack', { defaultValue: 'On Track' })}
+                                </Typography>
                               </Box>
-                            )}
+
+                              {!hasLimit && (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, fontStyle: 'italic' }}>
+                                  {t('budgetForecast.setLimit')}
+                                </Typography>
+                              )}
+                            </Box>
                           </Box>
-                          
-                          {/* Category Name */}
-                          <Typography variant="caption" fontWeight={600} noWrap sx={{ maxWidth: '100%', mb: 0.25 }}>
-                            {categoryName}
-                          </Typography>
-                          
-                          {/* Amount */}
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem' }}>
-                            {formatCurrencyValue(item.actualSpent, { maximumFractionDigits: 0 })} / {formatCurrencyValue(displayAmount, { maximumFractionDigits: 0 })}
-                          </Typography>
-
-                          {/* Percentage */}
-                          <Typography variant="caption" sx={{ fontWeight: 600, color: statusColor, fontSize: '0.75rem', mt: 0.25 }}>
-                            {Math.round(actualPct)}% {isExceeded ? t('budgetForecast.exceeded', { defaultValue: '(Over Budget)' }) : isAtRisk ? t('budgetForecast.atRisk', { defaultValue: '(At Risk)' }) : t('budgetForecast.onTrack', { defaultValue: '(On Track)' })}
-                          </Typography>
-
-                          {!hasLimit && (
-                            <Typography
-                              component="span"
-                              sx={{
-                                mt: 0.5,
-                                color: 'text.secondary',
-                                fontSize: '0.6875rem',
-                                cursor: 'pointer',
-                                '&:hover': { textDecoration: 'underline' },
-                              }}
-                            >
-                              {t('budgetForecast.setLimit')}
-                            </Typography>
-                          )}
-                        </Box>
                         </Tooltip>
                       </Grid>
                     );
@@ -1013,7 +1361,15 @@ const AnalysisPageNew: React.FC = () => {
 
       <TabPanel value={currentTab} index={4}>
         {/* Scoring Tab */}
-        <Paper sx={{ p: 3 }}>
+        <Paper sx={{ 
+          p: 3,
+          borderRadius: 4,
+          bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+          backdropFilter: 'blur(20px)',
+          border: '1px solid',
+          borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+          boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+        }}>
           <FinancialHealthScore
             data={intelligence}
             loading={loading && !intelligence}

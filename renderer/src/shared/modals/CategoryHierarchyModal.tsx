@@ -13,6 +13,7 @@ import {
   IconButton,
   List,
   ListItem,
+  ListItemButton,
   ListItemText,
   ListItemSecondaryAction,
   Chip,
@@ -99,6 +100,8 @@ interface CategoryDefinition {
   id: number;
   name: string;
   name_en?: string;
+  name_fr?: string;
+  name_he?: string;
   parent_id: number | null;
   category_type: 'expense' | 'investment' | 'income';
   icon?: string;
@@ -121,6 +124,8 @@ interface PatternRule {
   category_type?: 'expense' | 'investment' | 'income';
   category_name?: string;
   category_name_en?: string;
+  category_name_fr?: string;
+  category_name_he?: string;
   is_active: boolean;
   priority: number;
 }
@@ -150,6 +155,8 @@ interface UncategorizedTransaction {
   categoryDefinitionId?: number | null;
   categoryType?: 'expense' | 'investment' | 'income' | null;
   categoryName?: string | null;
+  categoryNameEn?: string | null;
+  categoryNameFr?: string | null;
   categoryColor?: string | null;
   categoryIcon?: string | null;
 }
@@ -172,6 +179,17 @@ interface CategoryHierarchyModalProps {
   onClose: () => void;
   onCategoriesUpdated?: () => void;
 }
+
+type LocalizedCategoryInfo = {
+  name?: string | null;
+  name_en?: string | null;
+  name_fr?: string | null;
+  name_he?: string | null;
+  category_name?: string | null;
+  category_name_en?: string | null;
+  category_name_fr?: string | null;
+  category_name_he?: string | null;
+};
 
 // Icon mapping for dynamic icon rendering
 const ICON_MAP: Record<string, React.ComponentType<any>> = {
@@ -220,7 +238,8 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   onClose,
   onCategoriesUpdated = () => {},
 }) => {
-  const { t } = useTranslation('translation', { keyPrefix: 'categoryHierarchy' });
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'categoryHierarchy' });
+  const locale = useMemo(() => (i18n.language?.split('-')[0] || 'he') as 'he' | 'en' | 'fr', [i18n.language]);
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -230,6 +249,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [categories, setCategories] = useState<CategoryDefinition[]>([]);
   const [uncategorized, setUncategorized] = useState<UncategorizedSummary | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    expense: true,
+    investment: false,
+    income: false,
+  });
   const [editingCategory, setEditingCategory] = useState<CategoryDefinition | null>(null);
   const [newCategory, setNewCategory] = useState<Partial<CategoryDefinition>>({
     name: '',
@@ -270,6 +294,18 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
   // Sorting State for Uncategorized Transactions
   const [sortBy, setSortBy] = useState<'name' | 'amount' | 'date'>('date');
+
+  const getLocalizedCategoryName = useCallback((category?: LocalizedCategoryInfo | null) => {
+    if (!category) return '';
+
+    const heName = category.name || category.name_he || category.category_name || category.category_name_he || '';
+    const enName = category.name_en || category.category_name_en || '';
+    const frName = category.name_fr || category.category_name_fr || '';
+
+    if (locale === 'fr') return frName || enName || heName;
+    if (locale === 'en') return enName || frName || heName;
+    return heName || frName || enName;
+  }, [locale]);
 
   const formatCurrency = (value: number) => {
     const amount = Number.isFinite(value) ? Math.abs(value) : 0;
@@ -593,7 +629,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             transactionId: txn.identifier,
             transactionVendor: txn.vendor,
             transactionDescription: txn.name,
-            categoryName: categoryDefinition.name,
+            categoryName: getLocalizedCategoryName(categoryDefinition) || categoryDefinition.name,
             categoryType: draft.type
           }
         });
@@ -751,10 +787,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               renderValue={(selected) => {
                 const cat = categoryLookup.get(selected as number);
                 if (!cat) return t('labels.select');
+                const displayName = getLocalizedCategoryName(cat);
                 return (
                   <Box display="flex" alignItems="center" gap={1}>
                     {getCategoryIcon(cat)}
-                    <span>{cat.name}</span>
+                    <span>{displayName || cat.name}</span>
                   </Box>
                 );
               }}
@@ -766,7 +803,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 <MenuItem key={cat.id} value={cat.id}>
                   <Box display="flex" alignItems="center" gap={1}>
                     {getCategoryIcon(cat)}
-                    <span>{cat.name} {cat.name_en ? `(${cat.name_en})` : ''}</span>
+                    <span>{getLocalizedCategoryName(cat) || cat.name}</span>
                   </Box>
                 </MenuItem>
               ))}
@@ -1254,14 +1291,23 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     return (
       <React.Fragment key={category.id}>
         <ListItem
-          sx={{
+          sx={(theme) => ({
             pl: level * 4 + 2,
-            borderLeft: level > 0 ? '2px solid #e0e0e0' : 'none',
-            '&:hover': { bgcolor: 'action.hover' },
-            cursor: isLeafCategory ? 'pointer' : 'default',
-          }}
-          onClick={() => {
-            if (isLeafCategory && category.transaction_count && category.transaction_count > 0) {
+            borderLeft: level > 0 ? `2px solid ${theme.palette.divider}` : 'none',
+            transition: 'all 0.2s ease',
+            '&:hover': {
+              bgcolor: theme.palette.action.hover,
+              pl: level * 4 + 2.5, // Slight indent on hover
+            },
+            cursor: (hasChildren || isLeafCategory) ? 'pointer' : 'default',
+            my: 0.5,
+            borderRadius: '0 8px 8px 0',
+          })}
+          onClick={(e) => {
+            // If clicking the row, toggle expansion if it has children
+            if (hasChildren) {
+              toggleCategory(category.id);
+            } else if (isLeafCategory && category.transaction_count && category.transaction_count > 0) {
               fetchCategoryTransactions(category);
             }
           }}
@@ -1274,9 +1320,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   e.stopPropagation();
                   toggleCategory(category.id);
                 }}
-                sx={{ mr: 1 }}
+                sx={{
+                  mr: 1,
+                  transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                  transition: 'transform 0.2s ease',
+                }}
               >
-                {isExpanded ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+                <ExpandMoreIcon />
               </IconButton>
             )}
             {!hasChildren && <Box sx={{ width: 40 }} />}
@@ -1286,35 +1336,35 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             <ListItemText
               primary={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body1" fontWeight={level === 0 ? 'bold' : 'normal'}>
-                    {category.name}
+                  <Typography variant="body1" fontWeight={level === 0 ? 'bold' : 'medium'}>
+                    {getLocalizedCategoryName(category) || category.name}
                   </Typography>
-                  {category.transaction_count !== undefined && (
+                  {category.transaction_count !== undefined && category.transaction_count > 0 && (
                     <Chip
-                      label={t('tree.txnCount', { count: category.transaction_count })}
+                      label={category.transaction_count}
                       size="small"
                       variant="outlined"
-                    />
-                  )}
-                  {level === 0 && (
-                    <Chip
-                      icon={getCategoryTypeIcon(category.category_type)}
-                      label={t(`rulesForm.typeOptions.${category.category_type}`)}
-                      size="small"
-                      color={getCategoryTypeColor(category.category_type)}
+                      sx={{ height: 20, minWidth: 20, '& .MuiChip-label': { px: 1 } }}
                     />
                   )}
                 </Box>
               }
               secondary={category.description}
+              secondaryTypographyProps={{
+                noWrap: true,
+                sx: { maxWidth: 300, fontSize: '0.75rem' }
+              }}
             />
 
             <ListItemSecondaryAction>
               <Tooltip title={t('actions.edit')}>
                 <IconButton
                   size="small"
-                  onClick={() => setEditingCategory(category)}
-                  sx={{ color: 'primary.main' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingCategory(category);
+                  }}
+                  sx={{ color: 'primary.main', opacity: 0.7, '&:hover': { opacity: 1 } }}
                 >
                   <EditIcon fontSize="small" />
                 </IconButton>
@@ -1322,8 +1372,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               <Tooltip title={t('actions.delete')}>
                 <IconButton
                   size="small"
-                  onClick={() => handleDeleteCategory(category.id)}
-                  sx={{ color: 'error.main' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteCategory(category.id);
+                  }}
+                  sx={{ color: 'error.main', opacity: 0.7, '&:hover': { opacity: 1 } }}
                 >
                   <DeleteIcon fontSize="small" />
                 </IconButton>
@@ -1644,6 +1697,16 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
                     // Determine card styling based on category type and status
                     const hasExistingCategory = Boolean(txn.categoryDefinitionId);
+                    const existingCategory = txn.categoryDefinitionId
+                      ? categoryLookup.get(txn.categoryDefinitionId)
+                      : null;
+                    const existingCategoryName = hasExistingCategory
+                      ? getLocalizedCategoryName(existingCategory || {
+                        name: txn.categoryName,
+                        name_en: txn.categoryNameEn || undefined,
+                        name_fr: txn.categoryNameFr || undefined,
+                      })
+                      : '';
 
                     // Get the selected category's color (use the deepest selected category)
                     const selectedCategoryId = draft?.categoryPath?.[draft.categoryPath.length - 1];
@@ -1714,10 +1777,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                                   }}
                                 />
                               )}
-                              {hasExistingCategory && txn.categoryName && (
+                              {hasExistingCategory && (existingCategoryName || txn.categoryName) && (
                                 <Chip
                                   icon={getCategoryIcon({ icon: txn.categoryIcon, color: txn.categoryColor } as any)}
-                                  label={txn.categoryName}
+                                  label={existingCategoryName || txn.categoryName || t('rulesList.unknownCategory')}
                                   size="small"
                                   sx={{
                                     backgroundColor: txn.categoryColor ? `${txn.categoryColor}20` : 'rgba(0,0,0,0.08)',
@@ -1865,32 +1928,145 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             <CircularProgress />
           </Box>
         ) : (
-          <>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <ExpenseIcon /> {t('sections.expense')}
-            </Typography>
-            <List dense>
-              {expenseCategories.map(category => renderCategoryTree(category))}
-            </List>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* Expense Section */}
+            <Paper
+              elevation={0}
+              sx={(theme) => ({
+                overflow: 'hidden',
+                borderRadius: 3,
+                border: `1px solid ${theme.palette.divider}`,
+                background: theme.palette.mode === 'dark'
+                  ? 'rgba(30, 30, 30, 0.6)'
+                  : 'rgba(255, 255, 255, 0.6)',
+                backdropFilter: 'blur(10px)',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  boxShadow: theme.palette.mode === 'dark'
+                    ? '0 8px 24px rgba(0,0,0,0.4)'
+                    : '0 8px 24px rgba(0,0,0,0.1)',
+                  transform: 'translateY(-2px)',
+                }
+              })}
+            >
+              <ListItemButton
+                onClick={() => setExpandedSections(prev => ({ ...prev, expense: !prev.expense }))}
+                sx={{
+                  py: 2,
+                  background: (theme) => theme.palette.mode === 'dark'
+                    ? 'linear-gradient(to right, rgba(239, 83, 80, 0.15), transparent)'
+                    : 'linear-gradient(to right, rgba(239, 83, 80, 0.08), transparent)',
+                }}
+              >
+                <ListItemIcon>
+                  <ExpenseIcon sx={{ color: '#ef5350', fontSize: 28 }} />
+                </ListItemIcon>
+                <ListItemText
+                  primary={t('sections.expense')}
+                  primaryTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  secondary={t('sections.expenseSubtitle', { count: expenseCategories.length })}
+                />
+                {expandedSections.expense ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+              </ListItemButton>
+              <Collapse in={expandedSections.expense} timeout="auto" unmountOnExit>
+                <List dense sx={{ px: 2, pb: 2 }}>
+                  {expenseCategories.map(category => renderCategoryTree(category))}
+                </List>
+              </Collapse>
+            </Paper>
 
-            <Divider sx={{ my: 2 }} />
+            {/* Investment Section */}
+            <Paper
+              elevation={0}
+              sx={(theme) => ({
+                overflow: 'hidden',
+                borderRadius: 3,
+                border: `1px solid ${theme.palette.divider}`,
+                background: theme.palette.mode === 'dark'
+                  ? 'rgba(30, 30, 30, 0.6)'
+                  : 'rgba(255, 255, 255, 0.6)',
+                backdropFilter: 'blur(10px)',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  boxShadow: theme.palette.mode === 'dark'
+                    ? '0 8px 24px rgba(0,0,0,0.4)'
+                    : '0 8px 24px rgba(0,0,0,0.1)',
+                  transform: 'translateY(-2px)',
+                }
+              })}
+            >
+              <ListItemButton
+                onClick={() => setExpandedSections(prev => ({ ...prev, investment: !prev.investment }))}
+                sx={{
+                  py: 2,
+                  background: (theme) => theme.palette.mode === 'dark'
+                    ? 'linear-gradient(to right, rgba(102, 187, 106, 0.15), transparent)'
+                    : 'linear-gradient(to right, rgba(102, 187, 106, 0.08), transparent)',
+                }}
+              >
+                <ListItemIcon>
+                  <InvestmentIcon sx={{ color: '#66bb6a', fontSize: 28 }} />
+                </ListItemIcon>
+                <ListItemText
+                  primary={t('sections.investment')}
+                  primaryTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  secondary={t('sections.investmentSubtitle', { count: investmentCategories.length })}
+                />
+                {expandedSections.investment ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+              </ListItemButton>
+              <Collapse in={expandedSections.investment} timeout="auto" unmountOnExit>
+                <List dense sx={{ px: 2, pb: 2 }}>
+                  {investmentCategories.map(category => renderCategoryTree(category))}
+                </List>
+              </Collapse>
+            </Paper>
 
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <InvestmentIcon /> {t('sections.investment')}
-            </Typography>
-            <List dense>
-              {investmentCategories.map(category => renderCategoryTree(category))}
-            </List>
-
-            <Divider sx={{ my: 2 }} />
-
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <IncomeIcon /> {t('sections.income')}
-            </Typography>
-            <List dense>
-              {incomeCategories.map(category => renderCategoryTree(category))}
-            </List>
-          </>
+            {/* Income Section */}
+            <Paper
+              elevation={0}
+              sx={(theme) => ({
+                overflow: 'hidden',
+                borderRadius: 3,
+                border: `1px solid ${theme.palette.divider}`,
+                background: theme.palette.mode === 'dark'
+                  ? 'rgba(30, 30, 30, 0.6)'
+                  : 'rgba(255, 255, 255, 0.6)',
+                backdropFilter: 'blur(10px)',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  boxShadow: theme.palette.mode === 'dark'
+                    ? '0 8px 24px rgba(0,0,0,0.4)'
+                    : '0 8px 24px rgba(0,0,0,0.1)',
+                  transform: 'translateY(-2px)',
+                }
+              })}
+            >
+              <ListItemButton
+                onClick={() => setExpandedSections(prev => ({ ...prev, income: !prev.income }))}
+                sx={{
+                  py: 2,
+                  background: (theme) => theme.palette.mode === 'dark'
+                    ? 'linear-gradient(to right, rgba(66, 165, 245, 0.15), transparent)'
+                    : 'linear-gradient(to right, rgba(66, 165, 245, 0.08), transparent)',
+                }}
+              >
+                <ListItemIcon>
+                  <IncomeIcon sx={{ color: '#42a5f5', fontSize: 28 }} />
+                </ListItemIcon>
+                <ListItemText
+                  primary={t('sections.income')}
+                  primaryTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  secondary={t('sections.incomeSubtitle', { count: incomeCategories.length })}
+                />
+                {expandedSections.income ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+              </ListItemButton>
+              <Collapse in={expandedSections.income} timeout="auto" unmountOnExit>
+                <List dense sx={{ px: 2, pb: 2 }}>
+                  {incomeCategories.map(category => renderCategoryTree(category))}
+                </List>
+              </Collapse>
+            </Paper>
+          </Box>
         )}
 
         {/* Edit Category Dialog */}
@@ -1954,7 +2130,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               <Box display="flex" alignItems="center" gap={1}>
                 {getCategoryIcon(selectedCategoryForTransactions)}
                 <Typography variant="h6">
-                  {t('transactions.title', { name: selectedCategoryForTransactions.name })}
+                  {t('transactions.title', { name: getLocalizedCategoryName(selectedCategoryForTransactions) || selectedCategoryForTransactions.name })}
                 </Typography>
                 <Chip
                   label={t('transactions.count', { count: categoryTransactions.length })}
@@ -2079,6 +2255,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 // Only show leaf categories (those without children) as options
                 if (!cat.children || cat.children.length === 0) {
                   if (depth > 0) { // Don't show root categories as targets
+                    const primaryName = getLocalizedCategoryName(cat) || cat.name;
+                    const secondaryName = [cat.name_fr, cat.name_en, cat.name].find(
+                      name => name && name !== primaryName
+                    );
                     items.push(
                       <MenuItem
                         key={cat.id}
@@ -2089,8 +2269,8 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                           {getCategoryIcon(cat)}
                         </ListItemIcon>
                         <ListItemText
-                          primary={cat.name}
-                          secondary={cat.name_en}
+                          primary={primaryName}
+                          secondary={secondaryName}
                         />
                       </MenuItem>
                     );
@@ -2186,7 +2366,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   <MenuItem value="">{t('rulesForm.fields.selectCategory')}</MenuItem>
                   {parentOptions.map((parent: CategoryDefinition) => (
                     <MenuItem key={parent.id} value={parent.id}>
-                      {parent.name} {parent.name_en ? `(${parent.name_en})` : ''}
+                      {getLocalizedCategoryName(parent) || parent.name}
                     </MenuItem>
                   ))}
                 </Select>
@@ -2207,7 +2387,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   <MenuItem value="">{t('rulesForm.fields.none')}</MenuItem>
                   {childOptions.map((child: CategoryDefinition) => (
                     <MenuItem key={child.id} value={child.id}>
-                      {child.name} {child.name_en ? `(${child.name_en})` : ''}
+                      {getLocalizedCategoryName(child) || child.name}
                     </MenuItem>
                   ))}
                 </Select>
@@ -2318,7 +2498,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
               // Get category details for display
               const ruleCategory = rule.category_definition_id ? categoryLookup.get(rule.category_definition_id) : null;
-              const categoryDisplayName = rule.category_name || rule.target_category || rule.parent_category || t('rulesList.unknownCategory');
+              const categoryDisplayName = getLocalizedCategoryName(ruleCategory || {
+                name: rule.category_name || rule.target_category || rule.parent_category || '',
+                name_en: rule.category_name_en,
+                name_fr: rule.category_name_fr,
+                name_he: rule.category_name_he,
+              }) || t('rulesList.unknownCategory');
+              const subcategoryDisplay = rule.subcategory ? getLocalizedCategoryName({ name: rule.subcategory }) : '';
               const categoryDisplayIcon = ruleCategory ? getCategoryIcon(ruleCategory) : null;
               const categoryDisplayColor = ruleCategory?.color;
 
@@ -2356,11 +2542,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                               }}
                             >
                               {categoryDisplayName}
-                              {rule.category_name_en && ` (${rule.category_name_en})`}
                             </Typography>
-                            {rule.subcategory && (
+                            {subcategoryDisplay && (
                               <Typography variant="body2" color="text.secondary">
-                                › {rule.subcategory}
+                                › {subcategoryDisplay}
                               </Typography>
                             )}
                           </Box>

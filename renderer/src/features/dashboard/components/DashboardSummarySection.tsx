@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Paper, Typography, Button, Alert, AlertTitle } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { format, subMonths } from 'date-fns';
@@ -32,6 +33,7 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
 }) => {
   const { startDate, endDate } = useDashboardFilters();
   const { t } = useTranslation('translation', { keyPrefix: 'dashboard.summarySection' });
+  const theme = useTheme();
 
   return (
     <>
@@ -74,8 +76,21 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
       </Box>
 
       {data.summary.totalIncome === 0 && hasBankAccounts !== null && (
-        <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ mb: 3 }}>
-          <AlertTitle>{t('noIncomeTitle')}</AlertTitle>
+        <Alert 
+          severity="info" 
+          icon={<InfoOutlinedIcon />} 
+          sx={{ 
+            mb: 3,
+            borderRadius: 3,
+            backgroundColor: alpha(theme.palette.info.main, 0.1),
+            border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
+            backdropFilter: 'blur(12px)',
+            '& .MuiAlert-icon': {
+              color: theme.palette.info.main
+            }
+          }}
+        >
+          <AlertTitle sx={{ fontWeight: 600 }}>{t('noIncomeTitle')}</AlertTitle>
           {hasBankAccounts === false ? (
             <Typography variant="body2">
               {t('noIncomeAddAccounts')}
@@ -88,11 +103,25 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
         </Alert>
       )}
 
-      <Paper sx={{ p: 2, mb: 3 }}>
+      <Paper sx={{ 
+        p: 3, 
+        mb: 3,
+        borderRadius: 4,
+        backgroundColor: theme.palette.mode === 'dark' ? 'rgba(30, 30, 30, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+        backdropFilter: 'blur(20px)',
+        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+        boxShadow: `0 8px 32px ${alpha(theme.palette.common.black, 0.05)}`,
+      }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
           <Box>
-            <Typography variant="h6">{format(startDate, 'MMMM yyyy')}</Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="h6" fontWeight={700} sx={{ 
+              background: `linear-gradient(135deg, ${theme.palette.text.primary} 0%, ${alpha(theme.palette.text.primary, 0.7)} 100%)`,
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}>
+              {format(startDate, 'MMMM yyyy')}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.85rem', mt: 0.5, display: 'block' }}>
               {t('periodLabel', {
                 start: format(startDate, 'MMM dd'),
                 end: format(endDate, 'MMM dd, yyyy'),
@@ -104,14 +133,40 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
             size="small"
             onClick={onToggleCompare}
             startIcon={<ShowChartIcon />}
+            sx={{
+              borderRadius: 2,
+              px: 2,
+              py: 1,
+              textTransform: 'none',
+              fontWeight: 600,
+              ...(compareToLastMonth ? {
+                background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+                boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
+              } : {
+                borderColor: alpha(theme.palette.divider, 0.2),
+                color: theme.palette.text.primary,
+                '&:hover': {
+                  borderColor: theme.palette.primary.main,
+                  backgroundColor: alpha(theme.palette.primary.main, 0.05),
+                }
+              })
+            }}
           >
             {compareToLastMonth ? t('compare.on') : t('compare.off')}
           </Button>
         </Box>
         {compareToLastMonth && (
-          <Alert severity="info" sx={{ mt: 2 }}>
-            <AlertTitle>{t('comparison.title')}</AlertTitle>
-            <Typography variant="body2">
+          <Alert 
+            severity="info" 
+            sx={{ 
+              mt: 2,
+              borderRadius: 2,
+              backgroundColor: alpha(theme.palette.info.main, 0.05),
+              border: `1px solid ${alpha(theme.palette.info.main, 0.1)}`,
+            }}
+          >
+            <AlertTitle sx={{ fontWeight: 600, fontSize: '0.9rem' }}>{t('comparison.title')}</AlertTitle>
+            <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
               {t('comparison.description', {
                 current: format(startDate, 'MMMM'),
                 previous: format(subMonths(startDate, 1), 'MMMM'),

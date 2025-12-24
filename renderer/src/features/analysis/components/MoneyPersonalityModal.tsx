@@ -11,10 +11,10 @@ import {
   Paper,
   Chip,
   useTheme,
-  Badge,
   Avatar,
   Alert,
   Button,
+  alpha,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { PieChart } from '@mui/x-charts';
@@ -83,14 +83,17 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
       fullWidth
       PaperProps={{
         sx: {
-          bgcolor: 'background.default',
+          bgcolor: alpha(theme.palette.background.paper, 0.8),
+          backdropFilter: 'blur(20px)',
           backgroundImage: 'none',
+          boxShadow: theme.shadows[24],
+          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
         }
       }}
     >
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="h5" fontWeight="bold">
+          <Typography variant="h5" fontWeight="bold" sx={{ background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`, backgroundClip: 'text', textFillColor: 'transparent', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             {t('title')}
           </Typography>
           <IconButton onClick={onClose} size="small">
@@ -112,10 +115,10 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
             </Button>
           </Alert>
         ) : data ? (
-          <Grid container spacing={2}>
+          <Grid container spacing={3}>
             {/* Programmed vs Impulse */}
             <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 2 }}>
+              <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('spendingBehavior.title')}
                 </Typography>
@@ -150,6 +153,9 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                         { id: 0, value: data.programmedAmount || 0, label: t('spendingBehavior.programmed'), color: theme.palette.success.main },
                         { id: 1, value: data.impulseAmount || 0, label: t('spendingBehavior.impulse'), color: theme.palette.warning.main },
                       ],
+                      innerRadius: 30,
+                      paddingAngle: 2,
+                      cornerRadius: 4,
                     },
                   ]}
                   height={180}
@@ -160,7 +166,7 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
 
             {/* Recurring Patterns */}
             <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 2 }}>
+              <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('recurring.title')}
                 </Typography>
@@ -170,7 +176,7 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                 {data.recurringPatterns && data.recurringPatterns.length > 0 ? (
                   <Box sx={{ maxHeight: 250, overflow: 'auto' }}>
                     {data.recurringPatterns.slice(0, 6).map((pattern: any, index: number) => (
-                      <Box key={index} sx={{ mb: 1.5, pb: 1.5, borderBottom: index < 5 ? 1 : 0, borderColor: 'divider' }}>
+                      <Box key={index} sx={{ mb: 1.5, pb: 1.5, borderBottom: index < 5 ? 1 : 0, borderColor: alpha(theme.palette.divider, 0.1) }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Typography variant="body2" fontWeight="medium">
                             {pattern.name}
@@ -179,6 +185,7 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                             label={pattern.frequency}
                             size="small"
                             color={pattern.frequency === 'monthly' ? 'primary' : 'default'}
+                            variant="outlined"
                           />
                         </Box>
                         <Typography variant="caption" color="text.secondary">
@@ -197,7 +204,7 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
 
             {/* Average Spending per Category - Enhanced Design */}
             <Grid item xs={12}>
-              <Paper sx={{ p: 2 }}>
+              <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('categoryAverages.title')}
                 </Typography>
@@ -219,7 +226,7 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                           return (
                             <Grid item xs={12} sm={6} md={4} key={index}>
                               <Paper
-                                elevation={2}
+                                elevation={0}
                                 sx={{
                                   p: 2,
                                   display: 'flex',
@@ -227,14 +234,19 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                                   gap: 2,
                                   borderLeft: 4,
                                   borderColor: categoryColor,
+                                  bgcolor: alpha(theme.palette.background.paper, 0.6),
+                                  backdropFilter: 'blur(5px)',
+                                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                                  borderLeftWidth: 4,
                                   transition: 'all 0.2s',
                                   '&:hover': {
                                     transform: 'translateY(-2px)',
-                                    boxShadow: theme.shadows[4]
+                                    boxShadow: theme.shadows[4],
+                                    bgcolor: alpha(theme.palette.background.paper, 0.8),
                                   }
                                 }}
                               >
-                                <Avatar sx={{ width: 48, height: 48, bgcolor: `${categoryColor}20`, color: categoryColor }}>
+                                <Avatar sx={{ width: 48, height: 48, bgcolor: alpha(categoryColor, 0.1), color: categoryColor }}>
                                   <CategoryIcon iconName={cat.iconName || null} color={categoryColor} size={24} />
                                 </Avatar>
 
@@ -264,7 +276,7 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                                       <Chip
                                         label={`${cat.recurringPercentage?.toFixed(0)}%`}
                                         size="small"
-                                        sx={{ height: 20, fontSize: '0.6875rem', bgcolor: `${categoryColor}15`, color: categoryColor }}
+                                        sx={{ height: 20, fontSize: '0.6875rem', bgcolor: alpha(categoryColor, 0.1), color: categoryColor }}
                                       />
                                     )}
                                   </Box>

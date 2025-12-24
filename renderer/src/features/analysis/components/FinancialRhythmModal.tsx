@@ -14,11 +14,11 @@ import {
   useTheme,
   Alert,
   Button,
+  alpha,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import {
   BarChart as RechartsBarChart,
-  LineChart as RechartsLineChart,
   Bar,
   Line,
   XAxis,
@@ -138,14 +138,17 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
       fullWidth
       PaperProps={{
         sx: {
-          bgcolor: 'background.default',
+          bgcolor: alpha(theme.palette.background.paper, 0.8),
+          backdropFilter: 'blur(20px)',
           backgroundImage: 'none',
+          boxShadow: theme.shadows[24],
+          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
         }
       }}
     >
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="h5" fontWeight="bold">
+          <Typography variant="h5" fontWeight="bold" sx={{ background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`, backgroundClip: 'text', textFillColor: 'transparent', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             {t('title')}
           </Typography>
           <IconButton onClick={onClose} size="small">
@@ -155,12 +158,13 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
       </DialogTitle>
 
       <DialogContent dividers sx={{ minHeight: { xs: '60vh', sm: '70vh', md: '80vh' }, maxHeight: { xs: '85vh', sm: '85vh', md: '80vh' }, overflow: 'auto', p: { xs: 2, sm: 3 } }}>
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
           <ToggleButtonGroup
             value={timeRange}
             exclusive
             onChange={(_, value) => value && setTimeRange(value)}
             size="small"
+            sx={{ bgcolor: alpha(theme.palette.background.paper, 0.5) }}
           >
             <ToggleButton value="3months">{t('timeRange.3months')}</ToggleButton>
             <ToggleButton value="6months">{t('timeRange.6months')}</ToggleButton>
@@ -172,6 +176,7 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
             exclusive
             onChange={(_, value) => value && setViewMode(value)}
             size="small"
+            sx={{ bgcolor: alpha(theme.palette.background.paper, 0.5) }}
           >
             <ToggleButton value="amount">{t('viewMode.amount')}</ToggleButton>
             <ToggleButton value="count">{t('viewMode.count')}</ToggleButton>
@@ -190,10 +195,10 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
             </Button>
           </Alert>
         ) : data ? (
-          <Grid container spacing={2}>
+          <Grid container spacing={3}>
             {/* Spending by Hour of Day */}
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 2 }}>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('hourOfDay.title')}
                 </Typography>
@@ -210,17 +215,26 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                     }))}
                     margin={{ top: 5, right: 5, bottom: 5, left: 5 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
-                    <XAxis dataKey="hour" stroke={theme.palette.text.secondary} style={{ fontSize: '0.75rem' }} />
+                    <defs>
+                      <linearGradient id="hourGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0.2}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.1)} vertical={false} />
+                    <XAxis dataKey="hour" stroke={theme.palette.text.secondary} style={{ fontSize: '0.75rem' }} tickLine={false} axisLine={false} />
                     <YAxis
                       stroke={theme.palette.text.secondary}
                       tickFormatter={viewMode === 'amount' ? formatCurrencyValue : (v) => v.toString()}
                       style={{ fontSize: '0.75rem' }}
+                      tickLine={false}
+                      axisLine={false}
                     />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: alpha(theme.palette.primary.main, 0.1) }} />
                     <Bar
                       dataKey="value"
-                      fill={theme.palette.primary.main}
+                      fill="url(#hourGradient)"
+                      radius={[4, 4, 0, 0]}
                       name={viewMode === 'amount' ? t('hourOfDay.spending') : t('hourOfDay.transactions')}
                     />
                   </RechartsBarChart>
@@ -229,8 +243,8 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
             </Grid>
 
             {/* Spending by Day of Week */}
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 2 }}>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('dayOfWeek.title')}
                 </Typography>
@@ -247,17 +261,26 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                     }))}
                     margin={{ top: 5, right: 5, bottom: 5, left: 5 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
-                    <XAxis dataKey="day" stroke={theme.palette.text.secondary} style={{ fontSize: '0.75rem' }} />
+                    <defs>
+                      <linearGradient id="dayGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={theme.palette.secondary.main} stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor={theme.palette.secondary.main} stopOpacity={0.2}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.1)} vertical={false} />
+                    <XAxis dataKey="day" stroke={theme.palette.text.secondary} style={{ fontSize: '0.75rem' }} tickLine={false} axisLine={false} />
                     <YAxis
                       stroke={theme.palette.text.secondary}
                       tickFormatter={viewMode === 'amount' ? formatCurrencyValue : (v) => v.toString()}
                       style={{ fontSize: '0.75rem' }}
+                      tickLine={false}
+                      axisLine={false}
                     />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: alpha(theme.palette.secondary.main, 0.1) }} />
                     <Bar
                       dataKey="value"
-                      fill={theme.palette.secondary.main}
+                      fill="url(#dayGradient)"
+                      radius={[4, 4, 0, 0]}
                       name={viewMode === 'amount' ? t('dayOfWeek.spending') : t('dayOfWeek.transactions')}
                     />
                   </RechartsBarChart>
@@ -266,28 +289,28 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
             </Grid>
 
             {/* Weekend vs Weekday */}
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 2 }}>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('weekendVsWeekday.title')}
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary">
+                <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                  <Box sx={{ flex: 1, p: 2, bgcolor: alpha(theme.palette.primary.main, 0.1), borderRadius: 2, textAlign: 'center' }}>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
                       {t('weekendVsWeekday.weekday')}
                     </Typography>
-                    <Typography variant="h6" color="primary.main">
+                    <Typography variant="h6" color="primary.main" fontWeight="bold">
                       {formatCurrencyValue(data.weekdayTotal || 0)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       {data.weekdayPercentage?.toFixed(0)}%
                     </Typography>
                   </Box>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary">
+                  <Box sx={{ flex: 1, p: 2, bgcolor: alpha(theme.palette.secondary.main, 0.1), borderRadius: 2, textAlign: 'center' }}>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
                       {t('weekendVsWeekday.weekend')}
                     </Typography>
-                    <Typography variant="h6" color="secondary.main">
+                    <Typography variant="h6" color="secondary.main" fontWeight="bold">
                       {formatCurrencyValue(data.weekendTotal || 0)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
@@ -300,46 +323,54 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
 
             {/* Week-by-Week Trend */}
             <Grid item xs={12}>
-              <Paper sx={{ p: 2 }}>
+              <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('weeklyTrend.title')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
                   {t('weeklyTrend.subtitle')}
                 </Typography>
-                <ResponsiveContainer width="100%" height={200}>
-                  <RechartsLineChart
+                <ResponsiveContainer width="100%" height={250}>
+                  <ComposedChart
                     data={(data.weeklyTrend || []).map((w: any) => ({
                       week: w.week,
                       value: w.total
                     }))}
                     margin={{ top: 5, right: 5, bottom: 5, left: 5 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
-                    <XAxis dataKey="week" stroke={theme.palette.text.secondary} style={{ fontSize: '0.75rem' }} />
+                    <defs>
+                      <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={theme.palette.success.main} stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor={theme.palette.success.main} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.1)} vertical={false} />
+                    <XAxis dataKey="week" stroke={theme.palette.text.secondary} style={{ fontSize: '0.75rem' }} tickLine={false} axisLine={false} />
                     <YAxis
                       stroke={theme.palette.text.secondary}
                       tickFormatter={formatCurrencyValue}
                       style={{ fontSize: '0.75rem' }}
+                      tickLine={false}
+                      axisLine={false}
                     />
                     <Tooltip content={<CustomTooltip />} />
-                    <Line
-                      type="natural"
+                    <Area
+                      type="monotone"
                       dataKey="value"
                       stroke={theme.palette.success.main}
-                      strokeWidth={2}
-                      dot={{ fill: theme.palette.background.paper, strokeWidth: 2, r: 4 }}
+                      fill="url(#trendGradient)"
+                      strokeWidth={3}
                       name={t('weeklyTrend.spending')}
                     />
-                  </RechartsLineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </Paper>
             </Grid>
 
             {/* Evolution Curve */}
             <Grid item xs={12}>
-              <Paper sx={{ p: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Box>
                     <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                       {t('evolution.title')}
@@ -353,6 +384,7 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                     exclusive
                     onChange={(_, value) => value && setEvolutionGranularity(value)}
                     size="small"
+                    sx={{ bgcolor: alpha(theme.palette.background.paper, 0.5) }}
                   >
                     <ToggleButton value="daily">{t('evolution.daily')}</ToggleButton>
                     <ToggleButton value="weekly">{t('evolution.weekly')}</ToggleButton>
@@ -360,7 +392,7 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                   </ToggleButtonGroup>
                 </Box>
 
-                <ResponsiveContainer width="100%" height={250}>
+                <ResponsiveContainer width="100%" height={300}>
                   <ComposedChart data={getEvolutionData()} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                     <defs>
                       <linearGradient id="evolutionGradient" x1="0" y1="0" x2="1" y2="0">
@@ -368,46 +400,44 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                         <stop offset="50%" stopColor={theme.palette.warning.main} stopOpacity={0.8} />
                         <stop offset="100%" stopColor={theme.palette.success.main} stopOpacity={0.8} />
                       </linearGradient>
+                      <linearGradient id="evolutionFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={theme.palette.warning.main} stopOpacity={0.2} />
+                        <stop offset="100%" stopColor={theme.palette.warning.main} stopOpacity={0} />
+                      </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
-                    <XAxis dataKey="label" stroke={theme.palette.text.secondary} style={{ fontSize: '0.75rem' }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.1)} vertical={false} />
+                    <XAxis dataKey="label" stroke={theme.palette.text.secondary} style={{ fontSize: '0.75rem' }} tickLine={false} axisLine={false} />
                     <YAxis
                       stroke={theme.palette.text.secondary}
                       tickFormatter={viewMode === 'amount' ? formatCurrencyValue : (v) => v.toString()}
                       style={{ fontSize: '0.75rem' }}
+                      tickLine={false}
+                      axisLine={false}
                     />
                     <Tooltip content={<CustomTooltip />} />
                     <Area
                       type="monotone"
                       dataKey="value"
                       stroke="url(#evolutionGradient)"
-                      fill="url(#evolutionGradient)"
-                      fillOpacity={0.3}
-                      strokeWidth={2}
+                      fill="url(#evolutionFill)"
+                      strokeWidth={3}
                       name={viewMode === 'amount' ? t('evolution.spending') : t('evolution.transactions')}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="value"
-                      stroke="url(#evolutionGradient)"
-                      strokeWidth={2}
-                      dot={{ fill: theme.palette.background.paper, strokeWidth: 2, r: 4 }}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
 
                 {/* Color Legend */}
-                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mt: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Box sx={{ width: 16, height: 16, bgcolor: theme.palette.error.main, borderRadius: 1 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mt: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: alpha(theme.palette.background.paper, 0.5), px: 1.5, py: 0.5, borderRadius: 4 }}>
+                    <Box sx={{ width: 12, height: 12, bgcolor: theme.palette.error.main, borderRadius: '50%' }} />
                     <Typography variant="caption" color="text.secondary">{t('evolution.oldest')}</Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Box sx={{ width: 16, height: 16, bgcolor: theme.palette.warning.main, borderRadius: 1 }} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: alpha(theme.palette.background.paper, 0.5), px: 1.5, py: 0.5, borderRadius: 4 }}>
+                    <Box sx={{ width: 12, height: 12, bgcolor: theme.palette.warning.main, borderRadius: '50%' }} />
                     <Typography variant="caption" color="text.secondary">{t('evolution.recent')}</Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Box sx={{ width: 16, height: 16, bgcolor: theme.palette.success.main, borderRadius: 1 }} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: alpha(theme.palette.background.paper, 0.5), px: 1.5, py: 0.5, borderRadius: 4 }}>
+                    <Box sx={{ width: 12, height: 12, bgcolor: theme.palette.success.main, borderRadius: '50%' }} />
                     <Typography variant="caption" color="text.secondary">{t('evolution.latest')}</Typography>
                   </Box>
                 </Box>

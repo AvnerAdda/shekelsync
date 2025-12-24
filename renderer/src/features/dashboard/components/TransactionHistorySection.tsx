@@ -15,8 +15,6 @@ import MuiTooltip from '@mui/material/Tooltip';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, BarChart, Bar, ComposedChart, Area } from 'recharts';
 import { useTheme } from '@mui/material/styles';
 import { format, endOfMonth, differenceInDays } from 'date-fns';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
@@ -367,13 +365,41 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   };
 
   return (
-    <Paper sx={{ p: 3, mb: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+    <Paper
+      sx={(theme) => ({
+        p: 3,
+        mb: 3,
+        background: theme.palette.mode === 'dark'
+          ? 'linear-gradient(135deg, rgba(30, 30, 30, 0.6) 0%, rgba(20, 20, 20, 0.4) 100%)'
+          : 'linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.6) 100%)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: '24px',
+        border: `1px solid ${theme.palette.divider}`,
+        boxShadow: theme.palette.mode === 'dark'
+          ? '0 8px 32px 0 rgba(0, 0, 0, 0.3)'
+          : '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
+        transition: 'transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out',
+        '&:hover': {
+          transform: 'translateY(-4px)',
+          boxShadow: theme.palette.mode === 'dark'
+            ? '0 12px 40px 0 rgba(0, 0, 0, 0.4)'
+            : '0 12px 40px 0 rgba(31, 38, 135, 0.2)',
+        },
+      })}
+    >
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {/* <Typography variant="h6">{t('title')}</Typography> */}
 
           {/* View switcher icons */}
-          <Box sx={{ display: 'flex', gap: 0.5, ml: 1 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 1, 
+            ml: 1,
+            p: 0.5,
+            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+            borderRadius: '12px',
+          }}>
             <MuiTooltip title={t('tabs.history')}>
               <IconButton
                 size="small"
@@ -381,6 +407,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 sx={{
                   bgcolor: activeTab === 0 ? 'primary.main' : 'transparent',
                   color: activeTab === 0 ? 'primary.contrastText' : 'text.secondary',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s',
                   '&:hover': {
                     bgcolor: activeTab === 0 ? 'primary.dark' : 'action.hover',
                   },
@@ -396,6 +424,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 sx={{
                   bgcolor: activeTab === 1 ? 'primary.main' : 'transparent',
                   color: activeTab === 1 ? 'primary.contrastText' : 'text.secondary',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s',
                   '&:hover': {
                     bgcolor: activeTab === 1 ? 'primary.dark' : 'action.hover',
                   },
@@ -408,16 +438,47 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
           {forecastData && (
             <Chip
-              label={`${forecastData.dailyForecasts?.length || 0}d`}
+              label={`${forecastData.dailyForecasts?.length || 0}d forecast`}
               size="small"
               color="success"
               variant="outlined"
+              sx={{ 
+                fontWeight: 600,
+                borderRadius: '8px',
+                borderWidth: 2,
+              }}
             />
           )}
         </Box>
         {activeTab === 0 && (
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-            <ToggleButtonGroup value={yAxisScale} exclusive onChange={(_, newScale) => newScale && setYAxisScale(newScale)} size="small">
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+            <ToggleButtonGroup 
+              value={yAxisScale} 
+              exclusive 
+              onChange={(_, newScale) => newScale && setYAxisScale(newScale)} 
+              size="small"
+              sx={{
+                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                borderRadius: '12px',
+                p: 0.5,
+                '& .MuiToggleButton-root': {
+                  border: 'none',
+                  borderRadius: '8px !important',
+                  px: 2,
+                  py: 0.5,
+                  color: 'text.secondary',
+                  '&.Mui-selected': {
+                    bgcolor: 'background.paper',
+                    color: 'primary.main',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    fontWeight: 600,
+                  },
+                  '&:hover': {
+                    bgcolor: 'rgba(0,0,0,0.05)',
+                  }
+                }
+              }}
+            >
               <MuiTooltip title={shouldUseLogScale(data.history) && yAxisScale === 'linear' ? t('scales.logRecommendedHint') : t('scales.linear')}>
                 <ToggleButton 
                   value="linear"
@@ -427,18 +488,12 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                       '&::after': {
                         content: '"!"',
                         position: 'absolute',
-                        top: -4,
-                        right: -4,
-                        width: 14,
-                        height: 14,
+                        top: 2,
+                        right: 2,
+                        width: 6,
+                        height: 6,
                         borderRadius: '50%',
                         backgroundColor: 'info.main',
-                        color: 'white',
-                        fontSize: '10px',
-                        fontWeight: 'bold',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
                       },
                     }),
                   }}
@@ -461,6 +516,27 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 }
               }}
               size="small"
+              sx={{
+                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                borderRadius: '12px',
+                p: 0.5,
+                '& .MuiToggleButton-root': {
+                  border: 'none',
+                  borderRadius: '8px !important',
+                  px: 2,
+                  py: 0.5,
+                  color: 'text.secondary',
+                  '&.Mui-selected': {
+                    bgcolor: 'background.paper',
+                    color: 'primary.main',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    fontWeight: 600,
+                  },
+                  '&:hover': {
+                    bgcolor: 'rgba(0,0,0,0.05)',
+                  }
+                }
+              }}
             >
               <ToggleButton value="daily">{t('periods.daily')}</ToggleButton>
               <ToggleButton value="weekly">{t('periods.weekly')}</ToggleButton>
@@ -484,26 +560,40 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             </Typography>
           )}
           <ResponsiveContainer width="100%" height={350}>
-            <LineChart
+            <ComposedChart
               data={getDailyIncomeExpenseData()}
               onClick={handleChartAreaClick}
               style={{ cursor: 'pointer' }}
+              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
             >
           <defs>
-            <linearGradient id="savingsGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={theme.palette.success.main} stopOpacity={0.1} />
-              <stop offset="95%" stopColor={theme.palette.success.main} stopOpacity={0.05} />
+            <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={theme.palette.success.main} stopOpacity={0.3} />
+              <stop offset="95%" stopColor={theme.palette.success.main} stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="expenseGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={theme.palette.error.main} stopOpacity={0.3} />
+              <stop offset="95%" stopColor={theme.palette.error.main} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="date" tickFormatter={formatXAxis} tick={{ fill: theme.palette.text.secondary }} />
+          <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} vertical={false} opacity={0.5} />
+          <XAxis 
+            dataKey="date" 
+            tickFormatter={formatXAxis} 
+            tick={{ fill: theme.palette.text.secondary, fontSize: 12 }} 
+            axisLine={false}
+            tickLine={false}
+            dy={10}
+          />
           <YAxis
-            tick={{ fill: theme.palette.text.secondary }}
+            tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
             tickFormatter={yAxisScale === 'log' ? formatYAxisLog : formatCurrencyValue}
             domain={yAxisScale === 'log' ? [0, 'dataMax'] : ['auto', 'auto']}
             allowDataOverflow={false}
             scale="linear"
             allowDecimals={yAxisScale === 'log'}
+            axisLine={false}
+            tickLine={false}
           />
           <Tooltip
             content={({ active, payload }) => {
@@ -516,7 +606,14 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               const expenses = data.originalForecastExpenses || data.originalExpenses || data.forecastExpenses || data.expenses || 0;
 
               return (
-                <Paper sx={{ p: 2, border: `1px solid ${theme.palette.divider}` }}>
+                <Paper sx={(theme) => ({ 
+                  p: 2, 
+                  background: theme.palette.mode === 'dark' ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                  backdropFilter: 'blur(8px)',
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: '12px',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+                })}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <Typography variant="body2" fontWeight="bold">
                       {format(parseLocalDate(data.date), 'MMM dd, yyyy')}
@@ -575,16 +672,26 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             );
           })()}
 
-          <Line
+          <Area
             type="monotone"
             dataKey="income"
             stroke={theme.palette.success.main}
-            strokeWidth={2}
+            strokeWidth={3}
+            fill="url(#incomeGradient)"
             dot={<CustomDot />}
+            activeDot={{ r: 6, strokeWidth: 0 }}
             name={t('legend.income')}
-            fill="url(#savingsGradient)"
           />
-          <Line type="monotone" dataKey="expenses" stroke={theme.palette.error.main} strokeWidth={2} dot={<CustomDot />} name={t('legend.expenses')} />
+          <Area 
+            type="monotone" 
+            dataKey="expenses" 
+            stroke={theme.palette.error.main} 
+            strokeWidth={3} 
+            fill="url(#expenseGradient)"
+            dot={<CustomDot />} 
+            activeDot={{ r: 6, strokeWidth: 0 }}
+            name={t('legend.expenses')} 
+          />
           {/* Forecast lines (dashed) - connect through nulls to draw continuous line from bridge point */}
           <Line 
             type="monotone" 
@@ -606,7 +713,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             name={`${t('forecast.expenses')} (${t('forecast.expected')})`}
             connectNulls={true}
           />
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
 
       {anomalies.length > 0 && (
@@ -710,20 +817,35 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 </Typography>
               )}
               <ResponsiveContainer width="100%" height={350}>
-                <ComposedChart data={getCombinedNetPositionData()}>
+                <ComposedChart 
+                  data={getCombinedNetPositionData()}
+                  margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                >
                   <defs>
                     <linearGradient id="netFlowGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.3} />
+                      <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.4} />
                       <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0.05} />
                     </linearGradient>
                     <linearGradient id="confidenceBandGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={theme.palette.success.main} stopOpacity={0.15} />
+                      <stop offset="5%" stopColor={theme.palette.success.main} stopOpacity={0.2} />
                       <stop offset="95%" stopColor={theme.palette.success.main} stopOpacity={0.05} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" tickFormatter={formatXAxis} tick={{ fill: theme.palette.text.secondary }} />
-                  <YAxis tick={{ fill: theme.palette.text.secondary }} tickFormatter={formatCurrencyValue} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} vertical={false} opacity={0.5} />
+                  <XAxis 
+                    dataKey="date" 
+                    tickFormatter={formatXAxis} 
+                    tick={{ fill: theme.palette.text.secondary, fontSize: 12 }} 
+                    axisLine={false}
+                    tickLine={false}
+                    dy={10}
+                  />
+                  <YAxis 
+                    tick={{ fill: theme.palette.text.secondary, fontSize: 12 }} 
+                    tickFormatter={formatCurrencyValue} 
+                    axisLine={false}
+                    tickLine={false}
+                  />
                   <Tooltip 
                     formatter={(value: number, name: string) => [formatCurrencyValue(value), name]}
                     labelFormatter={(label: string) => format(parseLocalDate(label), 'MMM dd, yyyy')}
@@ -819,7 +941,13 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         const predictions = forecastDayData?.topPredictions || [];
 
         return (
-          <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+          <Box sx={(theme) => ({ 
+            mt: 3, 
+            p: 3, 
+            background: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.4)',
+            borderRadius: '16px',
+            border: `1px solid ${theme.palette.divider}`,
+          })}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Typography variant="subtitle2">
@@ -896,18 +1024,20 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   {dateTransactions.map((txn, idx) => (
                     <Box
                       key={`${txn.identifier}-${txn.vendor}-${idx}`}
-                      sx={{
+                      sx={(theme) => ({
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         py: 1.5,
-                        px: 1,
+                        px: 2,
                         borderBottom: idx < dateTransactions.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
+                        transition: 'all 0.2s',
                         '&:hover': {
                           bgcolor: 'action.hover',
-                          borderRadius: 1,
+                          borderRadius: '12px',
+                          transform: 'translateX(4px)',
                         },
-                      }}
+                      })}
                     >
                       <Box sx={{ flex: 1 }}>
                         <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>

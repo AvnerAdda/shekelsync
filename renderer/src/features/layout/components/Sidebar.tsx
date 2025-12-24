@@ -18,6 +18,7 @@ import {
   CircularProgress,
   Popover,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   Home as HomeIcon,
   TrendingUp as AnalysisIcon,
@@ -416,6 +417,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             overflowX: 'hidden',
             display: 'flex',
             flexDirection: 'column',
+            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(10, 10, 10, 0.95)' : '#ffffff',
+            borderRight: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            backdropFilter: 'blur(12px)',
           },
         }}
       >
@@ -425,47 +429,91 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             display: 'flex',
             alignItems: 'center',
             justifyContent: open ? 'space-between' : 'center',
-            padding: 2,
-            minHeight: 64,
+            padding: '24px 20px',
+            minHeight: 80,
           }}
         >
-          <IconButton onClick={handleDrawerToggle}>
+          {open && (
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 800,
+                background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+                backgroundClip: 'text',
+                textFillColor: 'transparent',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                letterSpacing: '-0.5px',
+                fontSize: '1.5rem',
+              }}
+            >
+              {/* ShekelSync */}
+            </Typography>
+          )}
+          <IconButton 
+            onClick={handleDrawerToggle}
+            sx={{
+              color: theme.palette.text.secondary,
+              transition: 'all 0.2s',
+              '&:hover': {
+                color: theme.palette.primary.main,
+                backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                transform: 'scale(1.1)',
+              }
+            }}
+          >
             {open ? <ChevronLeftIcon /> : <MenuIcon />}
           </IconButton>
         </Box>
 
         {/* Menu Items */}
-        <List sx={{ flexGrow: 1 }}>
+        <List sx={{ flexGrow: 1, px: 1.5 }}>
           {menuItems.map((item) => {
             const accessStatus = getPageAccessStatus(item.id);
             const isLocked = accessStatus.isLocked;
+            const isActive = currentPage === item.id;
 
             return (
-              <ListItem key={item.id} disablePadding>
+              <ListItem key={item.id} disablePadding sx={{ mb: 1 }}>
                 <Tooltip
-                  title={isLocked ? accessStatus.reason : ''}
+                  title={isLocked ? accessStatus.reason : (!open ? item.label : '')}
                   placement="right"
                   arrow
                 >
                   <ListItemButton
-                    selected={currentPage === item.id}
+                    selected={isActive}
                     onClick={() => onPageChange(item.id)}
                     sx={{
                       minHeight: 48,
                       justifyContent: open ? 'initial' : 'center',
                       px: 2.5,
+                      borderRadius: 3,
                       opacity: isLocked ? 0.5 : 1,
+                      transition: 'all 0.2s ease-in-out',
+                      backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                      color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
                       '&:hover': {
+                        backgroundColor: isActive 
+                          ? alpha(theme.palette.primary.main, 0.20) 
+                          : alpha(theme.palette.text.primary, 0.04),
+                        transform: 'translateX(4px)',
                         opacity: isLocked ? 0.6 : 1,
                       },
+                      '&.Mui-selected': {
+                        backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                        '&:hover': {
+                          backgroundColor: alpha(theme.palette.primary.main, 0.20),
+                        },
+                      }
                     }}
                   >
                     <ListItemIcon
                       sx={{
                         minWidth: 0,
-                        mr: open ? 3 : 'auto',
+                        mr: open ? 2 : 'auto',
                         justifyContent: 'center',
-                        position: 'relative',
+                        color: isActive ? theme.palette.primary.main : 'inherit',
+                        transition: 'color 0.2s',
                       }}
                     >
                       {item.icon}
@@ -481,7 +529,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                         />
                       )}
                     </ListItemIcon>
-                    {open && <ListItemText primary={item.label} />}
+                    {open && (
+                      <ListItemText 
+                        primary={item.label} 
+                        primaryTypographyProps={{
+                          fontWeight: isActive ? 600 : 500,
+                          fontSize: '0.95rem',
+                        }}
+                      />
+                    )}
                   </ListItemButton>
                 </Tooltip>
               </ListItem>
@@ -492,25 +548,34 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         {/* Bottom Section */}
         {open && (
           <>
-            <Divider />
-            <Box sx={{ p: 2 }}>
+            <Box sx={{ p: 2.5 }}>
               {/* Action Buttons */}
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
                 <Badge
                   badgeContent={(accountAlerts.noBank || accountAlerts.noCredit || accountAlerts.noPension) ? <WarningAmberIcon sx={{ fontSize: 14 }} /> : null}
                   color="warning"
                   overlap="circular"
-                  anchorOrigin={{
-                    vertical: 'top',
-                    horizontal: 'right',
-                  }}
+                  anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                  sx={{ width: '100%' }}
                 >
                   <Button
                     variant="contained"
-                    size="small"
                     startIcon={<AddIcon />}
                     onClick={() => setAccountsModalOpen(true)}
                     fullWidth
+                    sx={{
+                      borderRadius: 3,
+                      py: 1,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
+                      background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+                      color: theme.palette.primary.contrastText,
+                      '&:hover': {
+                        background: `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
+                        boxShadow: `0 6px 16px ${alpha(theme.palette.primary.main, 0.4)}`,
+                      }
+                    }}
                   >
                     {t('actions.addAccount')}
                   </Button>
@@ -519,72 +584,117 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                   badgeContent={uncategorizedCount > 0 ? <WarningAmberIcon sx={{ fontSize: 14 }} /> : null}
                   color="warning"
                   overlap="circular"
-                  anchorOrigin={{
-                    vertical: 'top',
-                    horizontal: 'right',
-                  }}
+                  anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                  sx={{ width: '100%' }}
                 >
                   <Button
                     variant="outlined"
-                    size="small"
                     startIcon={<CategoryIcon />}
                     onClick={() => setCategoryModalOpen(true)}
                     fullWidth
+                    sx={{
+                      borderRadius: 3,
+                      py: 1,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      borderColor: alpha(theme.palette.divider, 0.2),
+                      color: theme.palette.text.primary,
+                      '&:hover': {
+                        borderColor: theme.palette.primary.main,
+                        backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                      }
+                    }}
                   >
                     {t('actions.categories')}
                   </Button>
                 </Badge>
               </Box>
 
-              {/* Stats */}
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <AccountIcon fontSize="small" color="action" />
-                  <Typography variant="caption" color="text.secondary">
-                    {t('stats.accounts', { count: stats.totalAccounts })}
-                  </Typography>
+              {/* Stats Card */}
+              <Box sx={{ 
+                p: 2, 
+                borderRadius: 4, 
+                backgroundColor: alpha(theme.palette.background.paper, 0.4),
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: 1.5 
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Box sx={{ 
+                    p: 0.8, 
+                    borderRadius: 2, 
+                    backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                    display: 'flex'
+                  }}>
+                    <AccountIcon fontSize="small" color="action" />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1 }}>
+                      Accounts
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600}>
+                      {stats.totalAccounts} Connected
+                    </Typography>
+                  </Box>
                 </Box>
+
+                <Divider sx={{ borderColor: alpha(theme.palette.divider, 0.1) }} />
+
                 <Box
                   sx={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 1,
+                    gap: 1.5,
                     cursor: isBulkSyncing ? 'wait' : 'pointer',
                     '&:hover': {
-                      backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                      borderRadius: 1,
+                      '& .sync-icon-bg': {
+                        backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                      }
                     },
-                    padding: '4px',
-                    borderRadius: 1,
-                    transition: 'background-color 0.2s',
                   }}
                   onClick={handleSyncIconClick}
                   onMouseEnter={handleSyncPopoverOpen}
                   onMouseLeave={handleSyncPopoverClose}
                 >
-                  {isBulkSyncing ? (
-                    <CircularProgress size={16} />
-                  ) : (
-                    <SyncIcon
-                      fontSize="small"
+                  <Box className="sync-icon-bg" sx={{ 
+                    p: 0.8, 
+                    borderRadius: 2, 
+                    backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                    display: 'flex',
+                    transition: 'background-color 0.2s'
+                  }}>
+                    {isBulkSyncing ? (
+                      <CircularProgress size={16} />
+                    ) : (
+                      <SyncIcon
+                        fontSize="small"
+                        color={
+                          stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS
+                            ? 'warning'
+                            : 'action'
+                        }
+                      />
+                    )}
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1 }}>
+                      Last Sync
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      fontWeight={600}
                       color={
                         stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS
-                          ? 'warning'
-                          : 'action'
+                          ? 'warning.main'
+                          : 'text.primary'
                       }
-                    />
-                  )}
-                  <Typography
-                    variant="caption"
-                    color={
-                      stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS
-                        ? 'warning.main'
-                        : 'text.secondary'
-                    }
-                  >
-                    {formatLastSync()}
-                  </Typography>
+                    >
+                      {formatLastSync()}
+                    </Typography>
+                  </Box>
                 </Box>
+
                 <Popover
                   open={Boolean(syncPopoverAnchor)}
                   anchorEl={syncPopoverAnchor}
@@ -608,11 +718,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                         pointerEvents: 'auto',
                         maxWidth: 320,
                         p: 2,
+                        borderRadius: 3,
+                        boxShadow: theme.shadows[8],
+                        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
                       },
                     },
                   }}
                 >
-                  <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700 }}>
                     {t('popover.title')}
                   </Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
@@ -639,6 +752,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                                 borderRadius: '50%',
                                 backgroundColor: getStatusColor(account.status),
                                 flexShrink: 0,
+                                boxShadow: `0 0 8px ${alpha(getStatusColor(account.status), 0.5)}`
                               }}
                             />
                             <Typography
@@ -647,6 +761,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
+                                fontWeight: 500
                               }}
                             >
                               {account.nickname || account.vendor}
@@ -673,35 +788,41 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                         startIcon={<SyncIcon />}
                         onClick={handleRefreshStaleAccounts}
                         disabled={isBulkSyncing}
+                        sx={{ borderRadius: 2 }}
                       >
                         {t('popover.refreshStaleAccounts', { count: staleAccounts.length })}
                       </Button>
                     </>
                   )}
                 </Popover>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  {stats.dbStatus === 'connected' ? (
-                    <>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Box sx={{ 
+                    p: 0.8, 
+                    borderRadius: 2, 
+                    backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                    display: 'flex'
+                  }}>
+                    {stats.dbStatus === 'connected' ? (
                       <CheckIcon fontSize="small" color="success" />
-                      <Typography variant="caption" color="success.main">
-                        {t('dbStatus.connected')}
-                      </Typography>
-                    </>
-                  ) : stats.dbStatus === 'disconnected' ? (
-                    <>
+                    ) : stats.dbStatus === 'disconnected' ? (
                       <ErrorIcon fontSize="small" color="error" />
-                      <Typography variant="caption" color="error.main">
-                        {t('dbStatus.disconnected')}
-                      </Typography>
-                    </>
-                  ) : (
-                    <>
+                    ) : (
                       <StorageIcon fontSize="small" color="action" />
-                      <Typography variant="caption" color="text.secondary">
-                        {t('dbStatus.checking')}
-                      </Typography>
-                    </>
-                  )}
+                    )}
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1 }}>
+                      Database
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600} color={
+                      stats.dbStatus === 'connected' ? 'success.main' : 
+                      stats.dbStatus === 'disconnected' ? 'error.main' : 'text.secondary'
+                    }>
+                      {stats.dbStatus === 'connected' ? t('dbStatus.connected') : 
+                       stats.dbStatus === 'disconnected' ? t('dbStatus.disconnected') : t('dbStatus.checking')}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
             </Box>
@@ -710,10 +831,18 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
 
         {/* Collapsed view icons */}
         {!open && (
-          <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
+          <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
             <Divider sx={{ width: '100%', mb: 1 }} />
             <Tooltip title={t('tooltips.addAccount')} placement="right">
-              <IconButton size="small" onClick={() => setAccountsModalOpen(true)}>
+              <IconButton 
+                size="small" 
+                onClick={() => setAccountsModalOpen(true)}
+                sx={{ 
+                  backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                  color: theme.palette.primary.main,
+                  '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.2) }
+                }}
+              >
                 <Badge
                   badgeContent={(accountAlerts.noBank || accountAlerts.noCredit || accountAlerts.noPension) ? <WarningAmberIcon sx={{ fontSize: 10 }} /> : null}
                   color="warning"
@@ -732,9 +861,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                 </Badge>
               </IconButton>
             </Tooltip>
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%',
-                      backgroundColor: stats.dbStatus === 'connected' ? 'success.main' : 'error.main',
-                      mt: 1
+            <Box sx={{ 
+              width: 10, 
+              height: 10, 
+              borderRadius: '50%',
+              backgroundColor: stats.dbStatus === 'connected' ? 'success.main' : 'error.main',
+              mt: 1,
+              boxShadow: `0 0 8px ${alpha(stats.dbStatus === 'connected' ? theme.palette.success.main : theme.palette.error.main, 0.5)}`
             }} />
           </Box>
         )}
