@@ -109,7 +109,7 @@ const SmartActionItemsPanel: React.FC = () => {
 
   const handleGenerate = async () => {
     try {
-      await generateActions(1, false);
+      await generateActions(1, true); // force to refresh/replace stale monthly actions
     } catch (err) {
       console.error('Failed to generate actions:', err);
     }

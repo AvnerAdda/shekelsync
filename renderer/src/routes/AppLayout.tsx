@@ -72,13 +72,13 @@ const AppLayout: React.FC = () => {
         position: 'relative',
         background: theme.palette.mode === 'dark'
           ? `
-            radial-gradient(ellipse at 20% 20%, rgba(62,165,77,0.12) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 80%, rgba(165,77,62,0.12) 0%, transparent 50%),
+            radial-gradient(ellipse at 20% 20%, rgba(62,165,77,0.15) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 80%, rgba(165,77,62,0.15) 0%, transparent 50%),
             #0a0a0a
           `
           : `
-            radial-gradient(ellipse at 20% 20%, rgba(200,250,207,0.25) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 80%, rgba(250,207,200,0.25) 0%, transparent 50%),
+            radial-gradient(ellipse at 20% 20%, rgba(200,250,207,0.4) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 80%, rgba(250,207,200,0.4) 0%, transparent 50%),
             #f8fef9
           `,
         backgroundAttachment: 'fixed',
@@ -88,8 +88,8 @@ const AppLayout: React.FC = () => {
           inset: 0,
           pointerEvents: 'none',
           background: theme.palette.mode === 'dark'
-            ? 'radial-gradient(circle at 50% 50%, rgba(62,165,77,0.05) 0%, transparent 70%)'
-            : 'radial-gradient(circle at 50% 50%, rgba(200,250,207,0.15) 0%, transparent 70%)',
+            ? 'radial-gradient(circle at 50% 50%, rgba(62,165,77,0.08) 0%, transparent 70%)'
+            : 'radial-gradient(circle at 50% 50%, rgba(200,250,207,0.2) 0%, transparent 70%)',
           animation: 'pulse 8s ease-in-out infinite',
         },
         '@keyframes pulse': {

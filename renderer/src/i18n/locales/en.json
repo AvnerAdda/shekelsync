@@ -597,39 +597,44 @@
         "title": "Your Financial Rhythm",
         "spendingByHour": "Spending by Hour of Day",
         "lowPrecision": "Only {{percentage}}% have times",
-        "runway": "Financial Runway",
-        "runwayDays": "{{count}} days",
-        "burnRate": "Daily Burn Rate",
+        "avgDaily": "Avg daily spend",
+        "weekendShare": "Weekend share",
         "peakHour": "Peak Hour",
         "peakHourValue": "{{hour}}:00",
-        "na": "N/A",
-        "paydayEffect": "Payday Effect"
+        "preciseTime": "Precise timestamps",
+        "na": "N/A"
       },
       "personality": {
         "title": "Your Money Personality",
         "spendingStyle": "Spending Style",
         "impulse": "{{value}}% Impulse",
         "planned": "{{value}}% Planned",
+        "programmedSpend": "Programmed spend",
+        "impulseSpend": "Impulse spend",
+        "recurringPatterns": "Recurring patterns",
+        "topCategoryWeekly": "{{category}} per week",
         "avgTransaction": "Avg Transaction",
         "smallPurchases": "Small Purchases",
         "fomoScore": "FOMO Score",
-        "fomoHint": "Weekend entertainment spending indicator"
+        "fomoHint": "Weekend entertainment spending indicator",
+        "na": "N/A"
       },
       "future": {
         "title": "Your Financial Future",
         "trajectory": "6-Month Savings Trajectory",
-        "endOfMonth": "End of Month",
-        "monthlySavings": "Monthly Savings",
-        "dailyVelocity": "Daily Velocity",
-        "velocityValue": "{{value}}/day"
+        "baseCase": "Base case",
+        "bestCase": "Optimistic balance",
+        "worstCase": "Pessimistic balance",
+        "na": "N/A"
       },
       "reality": {
         "title": "Make It Real",
         "timeValue": "Your Time = Money",
         "hourlyRate": "{{value}}/hour",
-        "avgPurchase": "Avg purchase = {{hours}} hours of work",
         "biggestPurchase": "Biggest Purchase This Month",
         "hoursOfWork": "{{hours}} hours of work",
+        "expenseRatio": "Expenses are {{ratio}}% of income",
+        "topCategoryHours": "Top category ≈ {{hours}} hours",
         "na": "N/A"
       },
       "expandView": "Expand view"
@@ -888,6 +893,13 @@
       "title": "Spending Categories",
       "subtitle": "How your spending is allocated across different categories",
       "targetVsActual": "Target vs Actual Allocation",
+      "viewToggle": {
+        "current": "Current spend",
+        "incomeIndexed": "Indexed to income",
+        "currentHint": "Shows allocation as a share of total spending",
+        "incomeHint": "Indexes targets to income ({{amount}} this period)",
+        "noIncome": "No income recorded for this period"
+      },
       "empty": {
         "title": "No spending data available",
         "description": "Start categorizing your transactions to see spending category insights."
@@ -902,10 +914,13 @@
       },
       "labels": {
         "target": "Target: {{value}}%",
+        "incomeTarget": "Income target: {{value}}%",
         "transactions_one": "{{count}} transaction",
         "transactions_other": "{{count}} transactions",
         "totalSpending_one": "Total Spending ({{count}} month)",
-        "totalSpending_other": "Total Spending ({{count}} months)"
+        "totalSpending_other": "Total Spending ({{count}} months)",
+        "currentSpend": "Current spend: {{amount}}",
+        "ofIncome": "of income"
       },
       "tooltips": {
         "overTarget": "Over target allocation",

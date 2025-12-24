@@ -3,12 +3,15 @@ const forecastService = require('../forecast.js');
 
 /**
  * Generate extended forecast with net position history + future scenarios
+ * IMPORTANT: Always generates 6 months, regardless of other forecast settings
  */
 async function getExtendedForecast() {
   // Get daily forecast data (6 months, include today)
+  // Explicitly set forecastDays to 0 to ensure forecastMonths is used (not end-of-month)
   const forecastData = await forecastService.generateDailyForecast({
     includeToday: true,
     forecastMonths: 6,
+    forecastDays: 0,  // Force use of forecastMonths, not the route's end-of-month default
     verbose: false
   });
 

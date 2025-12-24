@@ -57,6 +57,122 @@ async function getCategoryRollingAverage(client, categoryDefinitionId, endDate) 
 }
 
 /**
+ * Calculate average monthly spend over a longer window (default 6 months)
+ */
+async function getCategoryMonthlyAverage(client, categoryDefinitionId, endDate, monthsBack = 6) {
+  const startDate = new Date(endDate);
+  startDate.setMonth(startDate.getMonth() - monthsBack);
+
+  const result = await client.query(`
+    SELECT
+      SUM(ABS(t.price)) as total_amount
+    FROM transactions t
+    LEFT JOIN account_pairings ap ON (
+      t.vendor = ap.bank_vendor
+      AND ap.is_active = 1
+      AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+      AND ap.match_patterns IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM json_each(ap.match_patterns)
+        WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+      )
+    )
+    WHERE t.category_definition_id = $1
+      AND t.date >= $2 AND t.date <= $3
+      AND t.price < 0
+      AND ap.id IS NULL
+  `, [categoryDefinitionId, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
+
+  const total = parseFloat(result.rows[0]?.total_amount || 0);
+  return monthsBack > 0 ? total / monthsBack : total;
+}
+
+/**
+ * Calculate average monthly spend including category descendants (6 months)
+ */
+async function getCategoryTreeMonthlyAverage(client, categoryDefinitionId, endDate, monthsBack = 6) {
+  const startDate = new Date(endDate);
+  startDate.setMonth(startDate.getMonth() - monthsBack);
+
+  const result = await client.query(`
+    WITH RECURSIVE category_tree(id) AS (
+      SELECT id FROM category_definitions WHERE id = $1
+      UNION ALL
+      SELECT cd.id
+      FROM category_definitions cd
+      JOIN category_tree ct ON cd.parent_id = ct.id
+    )
+    SELECT SUM(ABS(t.price)) as total_amount
+    FROM transactions t
+    LEFT JOIN account_pairings ap ON (
+      t.vendor = ap.bank_vendor
+      AND ap.is_active = 1
+      AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+      AND ap.match_patterns IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM json_each(ap.match_patterns)
+        WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+      )
+    )
+    WHERE t.category_definition_id IN (SELECT id FROM category_tree)
+      AND t.date >= $2 AND t.date <= $3
+      AND t.price < 0
+      AND ap.id IS NULL
+  `, [categoryDefinitionId, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
+
+  const total = parseFloat(result.rows[0]?.total_amount || 0);
+  return monthsBack > 0 ? total / monthsBack : total;
+}
+
+/**
+ * Get trailing monthly stats (avg/max) for a category tree over N months
+ */
+async function getCategoryTreeMonthlyStats(client, categoryDefinitionId, endDate, monthsBack = 6) {
+  const startDate = new Date(endDate);
+  startDate.setMonth(startDate.getMonth() - monthsBack);
+
+  const result = await client.query(`
+    WITH RECURSIVE category_tree(id) AS (
+      SELECT id FROM category_definitions WHERE id = $1
+      UNION ALL
+      SELECT cd.id
+      FROM category_definitions cd
+      JOIN category_tree ct ON cd.parent_id = ct.id
+    ),
+    monthly_totals AS (
+      SELECT
+        strftime('%Y-%m', t.date) AS month,
+        SUM(ABS(t.price)) AS total_amount
+      FROM transactions t
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
+      WHERE t.category_definition_id IN (SELECT id FROM category_tree)
+        AND t.date >= $2 AND t.date <= $3
+        AND t.price < 0
+        AND ap.id IS NULL
+      GROUP BY strftime('%Y-%m', t.date)
+    )
+    SELECT AVG(total_amount) AS avg_amount, MAX(total_amount) AS max_amount
+    FROM monthly_totals
+  `, [categoryDefinitionId, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
+
+  const avg = parseFloat(result.rows[0]?.avg_amount || 0);
+  const max = parseFloat(result.rows[0]?.max_amount || 0);
+  return { avg, max };
+}
+
+/**
  * Detect category spending anomalies using forecast predictions
  */
 async function detectCategoryAnomalies(params = {}) {
@@ -69,8 +185,18 @@ async function detectCategoryAnomalies(params = {}) {
     const forecastData = await forecastService.getForecast({ months: 6 });
     const patterns = forecastData?.patterns || [];
     const forecastByCategory = forecastData?.forecastByCategory || new Map();
-    
+    const outlookMap = new Map();
+    (forecastData?.budgetOutlook || []).forEach(item => {
+      if (item.categoryDefinitionId) {
+        outlookMap.set(item.categoryDefinitionId, item);
+      }
+    });
+
     const client = await database.getClient();
+    const rollingCache = new Map();
+    const longAvgCache = new Map();
+    const treeAvgCache = new Map();
+    const treeStatsCache = new Map();
 
     // Get current month spending
     const currentResult = await client.query(`
@@ -103,15 +229,64 @@ async function detectCategoryAnomalies(params = {}) {
       const currentTotal = parseFloat(row.current_total || 0);
       const pattern = patterns.find(p => p.categoryDefinitionId === row.category_definition_id);
 
-      // Check pattern exists and has valid data (confidence may be undefined)
-      if (!pattern || pattern.avgAmount === 0 || (pattern.confidence !== undefined && pattern.confidence < 0.3)) continue;
+      if (!pattern) continue;
 
-      const expectedMonthly = pattern.avgAmount;
+      // Rolling 3-month fallback to avoid tiny baselines
+      if (!rollingCache.has(row.category_definition_id)) {
+        const stats = await getCategoryRollingAverage(client, row.category_definition_id, end);
+        rollingCache.set(row.category_definition_id, stats || {});
+      }
+      const rollingStats = rollingCache.get(row.category_definition_id) || {};
+      const rollingMonthly = rollingStats.total_amount ? parseFloat(rollingStats.total_amount || 0) / 3 : 0;
+
+      // Longer window average (6 months) to stabilize expectation
+      if (!longAvgCache.has(row.category_definition_id)) {
+        const avg = await getCategoryMonthlyAverage(client, row.category_definition_id, end, 6);
+        longAvgCache.set(row.category_definition_id, avg || 0);
+      }
+      const longMonthlyAvg = longAvgCache.get(row.category_definition_id) || 0;
+
+      // Include descendants (if category has children)
+      if (!treeAvgCache.has(row.category_definition_id)) {
+        const avg = await getCategoryTreeMonthlyAverage(client, row.category_definition_id, end, 6);
+        treeAvgCache.set(row.category_definition_id, avg || 0);
+      }
+      const treeMonthlyAvg = treeAvgCache.get(row.category_definition_id) || 0;
+
+      // Trailing max month to avoid tiny baselines from sparse patterns
+      if (!treeStatsCache.has(row.category_definition_id)) {
+        const stats = await getCategoryTreeMonthlyStats(client, row.category_definition_id, end, 6);
+        treeStatsCache.set(row.category_definition_id, stats || { avg: 0, max: 0 });
+      }
+      const treeStats = treeStatsCache.get(row.category_definition_id) || { avg: 0, max: 0 };
+
+      const confidence = Number.isFinite(pattern.confidence) ? pattern.confidence : 0.6;
+      if (confidence < 0.3) continue;
+
+      // Use monthly expectation (avg amount * avg occurrences) to avoid tiny baselines
+      const avgOccurrences = Number.isFinite(pattern.avgOccurrencesPerMonth) ? pattern.avgOccurrencesPerMonth : 1;
+      const patternExpected = (pattern.avgAmount || 0) * avgOccurrences;
+      const outlookExpected = outlookMap.get(row.category_definition_id)?.projectedTotal || 0;
+      const expectedMonthly = Math.max(
+        patternExpected,
+        rollingMonthly,
+        longMonthlyAvg,
+        treeMonthlyAvg,
+        treeStats.max || 0,
+        outlookExpected
+      );
+      if (expectedMonthly <= 0) continue;
+
       const percentDeviation = ((currentTotal - expectedMonthly) / expectedMonthly);
 
-      // Anomaly threshold: actual spending deviates significantly from pattern prediction
+      // Avoid noisy alerts when expected baseline is very small
+      if (expectedMonthly < 100 && currentTotal < 300) continue;
+
       if (Math.abs(percentDeviation) >= ANOMALY_THRESHOLD && currentTotal > expectedMonthly) {
         const severity = percentDeviation >= 0.5 ? 'high' : percentDeviation >= 0.3 ? 'medium' : 'low';
+
+        const monthsOfHistory = Number.isFinite(pattern.monthsOfHistory) ? pattern.monthsOfHistory : rollingStats?.transaction_count ? Math.max(1, Math.round(rollingStats.transaction_count / 3)) : 1;
+        const displayConfidence = Math.round((confidence || 0) * 100);
 
         const localizedName = getLocalizedCategoryName({
           name: row.category_name,
@@ -124,18 +299,19 @@ async function detectCategoryAnomalies(params = {}) {
           trigger_category_id: row.category_definition_id,
           severity,
           title: `Unexpected spending spike: ${localizedName}`,
-          description: `Your ${localizedName} spending is ${Math.round(percentDeviation * 100)}% above predicted levels. Current: ₪${Math.round(currentTotal)}, Expected: ₪${Math.round(expectedMonthly)} (based on ${pattern.monthsOfHistory} months of data, ${Math.round(pattern.confidence * 100)}% confidence).`,
+          description: `Your ${localizedName} spending is ${Math.round(percentDeviation * 100)}% above predicted levels. Current: ₪${Math.round(currentTotal)}, Expected: ₪${Math.round(expectedMonthly)} (based on ${monthsOfHistory} month${monthsOfHistory === 1 ? '' : 's'} of data, ${displayConfidence}% confidence).`,
           metadata: JSON.stringify({
             current_total: currentTotal,
             expected_monthly: expectedMonthly,
             percent_deviation: Math.round(percentDeviation * 100),
-            pattern_confidence: pattern.confidence,
+            pattern_confidence: confidence,
             pattern_type: pattern.patternType,
-            months_of_history: pattern.monthsOfHistory,
+            months_of_history: monthsOfHistory,
             is_fixed_recurring: pattern.isFixedRecurring || false,
+            rolling_monthly: rollingMonthly,
           }),
           potential_impact: -(currentTotal - expectedMonthly),
-          detection_confidence: pattern.confidence,
+          detection_confidence: confidence,
         });
       }
     }
@@ -721,6 +897,18 @@ async function generateSmartActions(params = {}) {
   let skipped = 0;
 
   try {
+    // If force is true, clear stale active items for this month before inserting new ones
+    if (force) {
+      const now = new Date();
+      const recurrencePrefix = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, '0')}`;
+      await client.query(
+        `DELETE FROM smart_action_items
+         WHERE user_status NOT IN ('resolved', 'dismissed')
+           AND recurrence_key LIKE '%' || $1` ,
+        [recurrencePrefix]
+      );
+    }
+
     for (const action of allActions) {
       // Generate recurrence key with year and month to prevent year-over-year conflicts
       const currentDate = new Date();

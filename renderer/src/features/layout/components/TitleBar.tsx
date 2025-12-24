@@ -16,6 +16,7 @@ import {
   InputAdornment,
   Paper,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   Menu as MenuIcon,
   Close as CloseIcon,
@@ -491,36 +492,38 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         top: 0,
         left: 0,
         right: 0,
-        height: 48,
+        height: 64,
         zIndex: (muiTheme) => muiTheme.zIndex.drawer + 1,
         backgroundColor: theme.palette.mode === 'dark'
-          ? 'rgba(10, 10, 10, 0.7)'
-          : 'rgba(255, 255, 255, 0.85)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.06)',
-        borderBottom: 1,
-        borderColor: 'divider',
+          ? 'rgba(10, 10, 10, 0.8)'
+          : 'rgba(255, 255, 255, 0.8)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        boxShadow: `0 4px 30px ${alpha(theme.palette.common.black, 0.1)}`,
+        borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        pl: isMacOS ? 10 : 2, // Add padding for macOS traffic lights
-        pr: 2,
+        pl: isMacOS ? 10 : 3, // Add padding for macOS traffic lights
+        pr: 3,
         WebkitAppRegion: 'drag',
         transition: 'all 0.2s ease',
       }}
     >
       {/* Left section: Menu + Logo */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, WebkitAppRegion: 'no-drag' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, WebkitAppRegion: 'no-drag' }}>
         <IconButton
           aria-label={t('titleBar.tooltips.openMenu')}
           onClick={handleMenuClick}
           size="small"
           sx={{
-            color: 'text.primary',
-            padding: '4px',
+            color: theme.palette.text.secondary,
+            padding: '8px',
+            transition: 'all 0.2s',
             '&:hover': {
-              backgroundColor: 'action.hover',
+              backgroundColor: alpha(theme.palette.primary.main, 0.1),
+              color: theme.palette.primary.main,
+              transform: 'scale(1.1)',
             },
           }}
         >
@@ -536,40 +539,43 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
               elevation: 8,
               sx: {
                 minWidth: 220,
-                mt: 1,
-                borderRadius: 2,
+                mt: 1.5,
+                borderRadius: 3,
                 overflow: 'hidden',
+                backgroundColor: theme.palette.mode === 'dark' ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(12px)',
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
               },
             },
           }}
         >
           {activeSubmenu ? (
             <>
-              <MenuItem onClick={() => setActiveSubmenu(null)} sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
+              <MenuItem onClick={() => setActiveSubmenu(null)} sx={{ fontWeight: 600, fontSize: '0.9rem', py: 1.5 }}>
                 {t('titleBar.menu.back')}
               </MenuItem>
-              <Divider />
+              <Divider sx={{ borderColor: alpha(theme.palette.divider, 0.1) }} />
               {renderSubmenu(activeSubmenu)}
             </>
           ) : (
             <>
-              <MenuItem onClick={() => setActiveSubmenu('file')} dense>
+              <MenuItem onClick={() => setActiveSubmenu('file')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
                 <ListItemIcon><FileIcon fontSize="small" /></ListItemIcon>
                 <ListItemText primary={t('titleBar.menu.file')} />
               </MenuItem>
-              <MenuItem onClick={() => setActiveSubmenu('edit')} dense>
+              <MenuItem onClick={() => setActiveSubmenu('edit')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
                 <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
                 <ListItemText primary={t('titleBar.menu.edit')} />
               </MenuItem>
-              <MenuItem onClick={() => setActiveSubmenu('view')} dense>
+              <MenuItem onClick={() => setActiveSubmenu('view')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
                 <ListItemIcon><ViewIcon fontSize="small" /></ListItemIcon>
                 <ListItemText primary={t('titleBar.menu.view')} />
               </MenuItem>
-              <MenuItem onClick={() => setActiveSubmenu('go')} dense>
+              <MenuItem onClick={() => setActiveSubmenu('go')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
                 <ListItemIcon><GoIcon fontSize="small" /></ListItemIcon>
                 <ListItemText primary={t('titleBar.menu.go')} />
               </MenuItem>
-              <MenuItem onClick={() => setActiveSubmenu('help')} dense>
+              <MenuItem onClick={() => setActiveSubmenu('help')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
                 <ListItemIcon><HelpIcon fontSize="small" /></ListItemIcon>
                 <ListItemText primary={t('titleBar.menu.help')} />
               </MenuItem>
@@ -582,37 +588,39 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 32,
-            height: 32,
-            borderRadius: '8px',
-            background: 'linear-gradient(135deg, #3ea54d 0%, #a54d3e 100%)',
-            backgroundSize: '200% 200%',
-            animation: 'logo-gradient 6s ease infinite',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-            padding: '6px',
-            '@keyframes logo-gradient': {
-              '0%': { backgroundPosition: '0% 50%' },
-              '50%': { backgroundPosition: '100% 50%' },
-              '100%': { backgroundPosition: '0% 50%' },
-            },
+            width: 36,
+            height: 36,
+            borderRadius: '10px',
+            background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+            boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
+            padding: '7px',
+            transition: 'transform 0.2s',
+            '&:hover': {
+              transform: 'scale(1.05)',
+            }
           }}
         >
           <img
             src={logoUrl}
             alt="ShekelSync"
-            width={20}
-            height={20}
+            width={22}
+            height={22}
             style={{ filter: 'brightness(0) invert(1)' }}
           />
         </Box>
 
         <Typography
-          variant="subtitle2"
+          variant="h6"
           component="div"
           sx={{
-            fontWeight: 600,
-            fontSize: '0.95rem',
-            color: 'text.primary',
+            fontWeight: 800,
+            fontSize: '1.1rem',
+            background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+            backgroundClip: 'text',
+            textFillColor: 'transparent',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            letterSpacing: '-0.5px',
             userSelect: 'none',
           }}
         >
@@ -621,7 +629,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
       </Box>
 
       {/* Center section: Search Bar */}
-      <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', maxWidth: 400, mx: 2, WebkitAppRegion: 'no-drag' }}>
+      <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', maxWidth: 480, mx: 4, WebkitAppRegion: 'no-drag' }}>
         <Autocomplete
           size="small"
           options={searchOptions}
@@ -635,15 +643,15 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
             );
           }}
           renderOption={(props, option) => (
-            <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <Box sx={{ color: 'primary.main', display: 'flex', alignItems: 'center' }}>
+            <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.5, px: 2, borderRadius: 2, mx: 1, my: 0.5, '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.1) } }}>
+              <Box sx={{ color: theme.palette.primary.main, display: 'flex', alignItems: 'center', p: 0.5, borderRadius: 1, backgroundColor: alpha(theme.palette.primary.main, 0.1) }}>
                 {option.icon}
               </Box>
-              <Typography variant="body2">{option.label}</Typography>
+              <Typography variant="body2" fontWeight={500}>{option.label}</Typography>
             </Box>
           )}
           PaperComponent={(props) => (
-            <Paper {...props} sx={{ mt: 0.5, borderRadius: 2, boxShadow: 3 }} />
+            <Paper {...props} sx={{ mt: 1, borderRadius: 3, boxShadow: theme.shadows[10], border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, backdropFilter: 'blur(12px)', backgroundColor: alpha(theme.palette.background.paper, 0.9) }} />
           )}
           sx={{ width: '100%' }}
           renderInput={(params) => (
@@ -655,27 +663,26 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
                 ...params.InputProps,
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                    <SearchIcon sx={{ fontSize: 20, color: theme.palette.text.secondary }} />
                   </InputAdornment>
                 ),
                 sx: {
-                  height: 32,
-                  fontSize: '0.85rem',
-                  borderRadius: 2,
-                  backgroundColor: theme.palette.mode === 'dark' 
-                    ? 'rgba(255, 255, 255, 0.05)' 
-                    : 'rgba(0, 0, 0, 0.04)',
+                  height: 40,
+                  fontSize: '0.9rem',
+                  borderRadius: 3,
+                  backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                  transition: 'all 0.2s ease-in-out',
                   '& fieldset': { border: 'none' },
                   '&:hover': {
-                    backgroundColor: theme.palette.mode === 'dark' 
-                      ? 'rgba(255, 255, 255, 0.08)' 
-                      : 'rgba(0, 0, 0, 0.06)',
+                    backgroundColor: alpha(theme.palette.text.primary, 0.08),
+                    transform: 'translateY(-1px)',
                   },
                   '&.Mui-focused': {
-                    backgroundColor: theme.palette.mode === 'dark' 
-                      ? 'rgba(255, 255, 255, 0.1)' 
-                      : 'rgba(0, 0, 0, 0.08)',
-                    boxShadow: `0 0 0 2px ${theme.palette.primary.main}40`,
+                    backgroundColor: alpha(theme.palette.background.paper, 0.8),
+                    boxShadow: `0 4px 12px ${alpha(theme.palette.common.black, 0.1)}`,
+                    '& .MuiInputAdornment-root': {
+                      color: theme.palette.primary.main,
+                    }
                   },
                 },
               }}
@@ -695,12 +702,14 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
             size="small"
             label={sessionDisplayName}
             variant="outlined"
-            color="default"
             sx={{
-              height: 24,
-              fontSize: '0.75rem',
-              backgroundColor: 'action.hover',
-              border: 'none',
+              height: 32,
+              fontSize: '0.8rem',
+              fontWeight: 500,
+              backgroundColor: alpha(theme.palette.primary.main, 0.1),
+              borderColor: alpha(theme.palette.primary.main, 0.2),
+              color: theme.palette.primary.main,
+              borderRadius: 2,
             }}
           />
         )}
@@ -711,12 +720,15 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
             size="small"
             onClick={() => setMode(actualTheme === 'dark' ? 'light' : 'dark')}
             sx={{
-              width: 32,
-              height: 32,
-              color: 'text.secondary',
+              width: 36,
+              height: 36,
+              color: theme.palette.text.secondary,
+              borderRadius: 2,
+              transition: 'all 0.2s',
               '&:hover': {
-                backgroundColor: 'action.hover',
-                color: 'text.primary',
+                backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                color: theme.palette.text.primary,
+                transform: 'translateY(-2px)',
               },
             }}
           >
@@ -734,12 +746,15 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
             size="small"
             onClick={(e) => setLangMenuAnchor(e.currentTarget)}
             sx={{
-              width: 32,
-              height: 32,
-              color: 'text.secondary',
+              width: 36,
+              height: 36,
+              color: theme.palette.text.secondary,
+              borderRadius: 2,
+              transition: 'all 0.2s',
               '&:hover': {
-                backgroundColor: 'action.hover',
-                color: 'text.primary',
+                backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                color: theme.palette.text.primary,
+                transform: 'translateY(-2px)',
               },
             }}
           >
@@ -752,22 +767,38 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
           onClose={() => setLangMenuAnchor(null)}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          slotProps={{
+            paper: {
+              elevation: 8,
+              sx: {
+                mt: 1.5,
+                borderRadius: 3,
+                minWidth: 150,
+                backgroundColor: theme.palette.mode === 'dark' ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(12px)',
+                border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              },
+            },
+          }}
         >
           <MenuItem
             selected={locale === 'he'}
             onClick={() => { setLocale('he' as SupportedLocale); setLangMenuAnchor(null); }}
+            sx={{ borderRadius: 1, mx: 0.5, my: 0.5 }}
           >
             {languageLabels.he}
           </MenuItem>
           <MenuItem
             selected={locale === 'en'}
             onClick={() => { setLocale('en' as SupportedLocale); setLangMenuAnchor(null); }}
+            sx={{ borderRadius: 1, mx: 0.5, my: 0.5 }}
           >
             {languageLabels.en}
           </MenuItem>
           <MenuItem
             selected={locale === 'fr'}
             onClick={() => { setLocale('fr' as SupportedLocale); setLangMenuAnchor(null); }}
+            sx={{ borderRadius: 1, mx: 0.5, my: 0.5 }}
           >
             {languageLabels.fr}
           </MenuItem>
@@ -777,18 +808,19 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
 
         {/* Window Controls - Hide on macOS as we use native traffic lights */}
         {!isMacOS && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1, borderLeft: 1, borderColor: 'divider', pl: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 2, borderLeft: `1px solid ${alpha(theme.palette.divider, 0.1)}`, pl: 2 }}>
             <IconButton
               aria-label={t('titleBar.tooltips.minimizeWindow')}
               onClick={handleMinimize}
               size="small"
               sx={{
-                width: 28,
-                height: 28,
-                color: 'text.secondary',
+                width: 32,
+                height: 32,
+                color: theme.palette.text.secondary,
+                borderRadius: 2,
                 '&:hover': {
-                  backgroundColor: 'action.hover',
-                  color: 'text.primary',
+                  backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                  color: theme.palette.text.primary,
                 },
               }}
             >
@@ -800,12 +832,13 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
               onClick={handleMaximize}
               size="small"
               sx={{
-                width: 28,
-                height: 28,
-                color: 'text.secondary',
+                width: 32,
+                height: 32,
+                color: theme.palette.text.secondary,
+                borderRadius: 2,
                 '&:hover': {
-                  backgroundColor: 'action.hover',
-                  color: 'text.primary',
+                  backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                  color: theme.palette.text.primary,
                 },
               }}
             >
@@ -817,11 +850,12 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
               onClick={handleClose}
               size="small"
               sx={{
-                width: 28,
-                height: 28,
-                color: 'text.secondary',
+                width: 32,
+                height: 32,
+                color: theme.palette.text.secondary,
+                borderRadius: 2,
                 '&:hover': {
-                  backgroundColor: '#d32f2f',
+                  backgroundColor: theme.palette.error.main,
                   color: 'white',
                 },
               }}

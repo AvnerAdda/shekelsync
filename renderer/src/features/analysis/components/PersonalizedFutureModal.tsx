@@ -9,14 +9,13 @@ import {
   CircularProgress,
   Grid,
   Paper,
-  ToggleButtonGroup,
-  ToggleButton,
   useTheme,
   Alert,
   Button,
+  alpha,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { LineChart, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@renderer/lib/api-client';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
@@ -39,6 +38,63 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
 
   const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+  const formatDateString = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const applySixMonthHorizon = (rawData: any) => {
+    if (!rawData) return rawData;
+
+    const horizonDate = new Date();
+    horizonDate.setHours(0, 0, 0, 0);
+    horizonDate.setMonth(horizonDate.getMonth() + 6);
+    const horizon = formatDateString(horizonDate);
+
+    const filterByHorizon = (list: any[] = []) =>
+      list.filter(item => item?.date && item.date <= horizon);
+
+    const summarizeScenario = (entries: any[] = []) => {
+      const totals = entries.reduce(
+        (acc, day) => {
+          const income = day?.income || 0;
+          const expenses = day?.expenses || 0;
+          const netFlow = day?.netFlow ?? (income - expenses);
+          acc.income += income;
+          acc.expenses += expenses;
+          acc.netCashFlow += netFlow;
+          return acc;
+        },
+        { income: 0, expenses: 0, netCashFlow: 0 }
+      );
+
+      return {
+        netCashFlow: Math.round(totals.netCashFlow),
+        income: Math.round(totals.income),
+        expenses: Math.round(totals.expenses)
+      };
+    };
+
+    const scenarios = {
+      p10: filterByHorizon(rawData.scenarios?.p10),
+      p50: filterByHorizon(rawData.scenarios?.p50),
+      p90: filterByHorizon(rawData.scenarios?.p90)
+    };
+
+    return {
+      ...rawData,
+      combinedData: filterByHorizon(rawData.combinedData || []),
+      scenarios,
+      summaries: {
+        pessimistic: summarizeScenario(scenarios.p10),
+        base: summarizeScenario(scenarios.p50),
+        optimistic: summarizeScenario(scenarios.p90)
+      }
+    };
+  };
+
   useEffect(() => {
     if (open && (!data || (Date.now() - lastFetch) > CACHE_DURATION)) {
       fetchData();
@@ -53,7 +109,7 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
       if (!response.ok) {
         throw new Error(t('../../errors.fetchFailed', { defaultValue: 'Failed to fetch data' }));
       }
-      setData(response.data);
+      setData(applySixMonthHorizon(response.data));
       setLastFetch(Date.now());
     } catch (err) {
       console.error('Failed to fetch forecast data:', err);
@@ -94,15 +150,18 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
       fullWidth
       PaperProps={{
         sx: {
-          bgcolor: 'background.default',
+          bgcolor: alpha(theme.palette.background.paper, 0.8),
+          backdropFilter: 'blur(20px)',
           backgroundImage: 'none',
+          boxShadow: theme.shadows[24],
+          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
         }
       }}
     >
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
-            <Typography variant="h5" fontWeight="bold">
+            <Typography variant="h5" fontWeight="bold" sx={{ background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`, backgroundClip: 'text', textFillColor: 'transparent', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               {t('title')}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
@@ -128,10 +187,10 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
             </Button>
           </Alert>
         ) : data ? (
-          <Grid container spacing={2}>
+          <Grid container spacing={3}>
             {/* Net Position with Three Scenario Curves */}
             <Grid item xs={12}>
-              <Paper sx={{ p: 2 }}>
+              <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('netPosition.title')}
                 </Typography>
@@ -150,16 +209,20 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                         <stop offset="95%" stopColor={theme.palette.warning.main} stopOpacity={0.05} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.1)} vertical={false} />
                     <XAxis
                       dataKey="date"
                       stroke={theme.palette.text.secondary}
                       style={{ fontSize: '0.75rem' }}
+                      tickLine={false}
+                      axisLine={false}
                     />
                     <YAxis
                       stroke={theme.palette.text.secondary}
                       tickFormatter={formatCurrencyValue}
                       style={{ fontSize: '0.75rem' }}
+                      tickLine={false}
+                      axisLine={false}
                     />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend

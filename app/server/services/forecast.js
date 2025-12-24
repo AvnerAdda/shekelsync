@@ -780,7 +780,8 @@ async function generateDailyForecast(options = {}) {
   CONFIG.verbose = !!options.verbose;
   CONFIG.includeToday = options.includeToday ?? CONFIG.includeToday;
   CONFIG.forecastMonths = options.forecastMonths ?? CONFIG.forecastMonths;
-  CONFIG.forecastDays = options.forecastDays ?? CONFIG.forecastDays;
+  // If forecastDays is explicitly 0, don't use previous value - use forecastMonths instead
+  CONFIG.forecastDays = options.forecastDays !== undefined ? options.forecastDays : CONFIG.forecastDays;
 
   const allTransactions = getAllTransactions(db);
   if (allTransactions.length === 0) throw new Error('No transactions found in database');
@@ -852,23 +853,357 @@ async function generateDailyForecast(options = {}) {
   };
 
   // Derive scenarios with cumulative cash flow (p10/p50/p90) for frontend consumers
-  function withCumulative(scenario) {
-    let cum = 0;
-    const dailyWithCum = (scenario.dailyResults || []).map(d => {
-      cum += (d.cashFlow || 0);
-      return { ...d, cumulativeCashFlow: cum };
-    });
-    return { ...scenario, dailyResults: dailyWithCum };
-  }
+function withCumulative(scenario) {
+  let cum = 0;
+  const dailyWithCum = (scenario.dailyResults || []).map(d => {
+    cum += (d.cashFlow || 0);
+    return { ...d, cumulativeCashFlow: cum };
+  });
+  return { ...scenario, dailyResults: dailyWithCum };
+}
 
-  results.scenarios = {
-    p10: withCumulative(monteCarloResults.worst),
-    p50: withCumulative(monteCarloResults.base),
-    p90: withCumulative(monteCarloResults.best),
-  };
+results.scenarios = {
+  p10: withCumulative(monteCarloResults.worst),
+  p50: withCumulative(monteCarloResults.base),
+  p90: withCumulative(monteCarloResults.best),
+};
 
   db.close();
   return results;
 }
 
-module.exports = { generateDailyForecast };
+/**
+ * Helper: load category definitions once (expense only)
+ */
+function loadCategoryDefinitions(db) {
+  const categoryDefinitionsByName = {};
+  const categoryDefinitionsById = {};
+
+  try {
+    const categoryQuery = `
+      SELECT id, name, name_en, name_fr, icon, color, parent_id
+      FROM category_definitions
+      WHERE category_type = 'expense'
+    `;
+    const categories = db.prepare(categoryQuery).all();
+    categories.forEach(cat => {
+      categoryDefinitionsByName[cat.name] = cat;
+      if (cat.name_en) categoryDefinitionsByName[cat.name_en] = cat;
+      categoryDefinitionsById[cat.id] = cat;
+    });
+  } catch (err) {
+    console.warn('[Forecast] Could not load category definitions for forecast service:', err.message);
+  }
+
+  return { categoryDefinitionsByName, categoryDefinitionsById };
+}
+
+/**
+ * Build budget outlook using the same logic as the forecast route,
+ * so downstream consumers (e.g., smart actions) get consistent data.
+ */
+function buildBudgetOutlook(result) {
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const monthEndStr = monthEnd.toISOString().split('T')[0];
+
+  const db = new Database(CONFIG.dbPath, { readonly: true });
+  const { categoryDefinitionsByName, categoryDefinitionsById } = loadCategoryDefinitions(db);
+
+  // Actual spend this month by category
+  let actualSpendingRows = [];
+  try {
+    const actualSpendingQuery = `
+      SELECT
+        cd.id AS category_definition_id,
+        cd.name AS category_name,
+        cd.name_en AS category_name_en,
+        cd.name_fr AS category_name_fr,
+        cd.icon AS category_icon,
+        cd.color AS category_color,
+        cd.parent_id AS parent_category_id,
+        SUM(ABS(t.price)) AS spent
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN account_pairings ap ON (
+        t.vendor = ap.bank_vendor
+        AND ap.is_active = 1
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(ap.match_patterns)
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+      )
+      WHERE t.status = 'completed'
+        AND t.category_type = 'expense'
+        AND ap.id IS NULL
+        AND strftime('%Y-%m', t.date) = ?
+      GROUP BY cd.id, cd.name, cd.name_en, cd.name_fr, cd.icon, cd.color, cd.parent_id
+    `;
+    actualSpendingRows = db.prepare(actualSpendingQuery).all(monthKey);
+  } catch (err) {
+    console.warn('[Forecast] Could not load actual spending for smart actions:', err.message);
+  }
+
+  // Budgets
+  let budgetRows = [];
+  try {
+    const budgetsQuery = `
+      SELECT
+        cb.id AS budget_id,
+        cb.category_definition_id,
+        cb.period_type,
+        cb.budget_limit,
+        cb.is_active,
+        cd.name AS category_name,
+        cd.name_en AS category_name_en,
+        cd.name_fr AS category_name_fr,
+        cd.icon AS category_icon,
+        cd.color AS category_color,
+        cd.parent_id AS parent_category_id
+      FROM category_budgets cb
+      JOIN category_definitions cd ON cd.id = cb.category_definition_id
+      WHERE cb.is_active = 1
+        AND cb.period_type = 'monthly'
+    `;
+    budgetRows = db.prepare(budgetsQuery).all();
+  } catch (err) {
+    if (err?.message && err.message.includes('category_definition_id')) {
+      try {
+        const legacyBudgetQuery = `
+          SELECT id AS budget_id, category AS category_name, period_type, budget_limit, is_active
+          FROM category_budgets
+          WHERE is_active = 1 AND period_type = 'monthly'
+        `;
+        budgetRows = db.prepare(legacyBudgetQuery).all();
+      } catch (legacyErr) {
+        console.warn('[Forecast] Could not load budgets (legacy) for smart actions:', legacyErr.message);
+      }
+    } else {
+      console.warn('[Forecast] Could not load budgets for smart actions:', err.message);
+    }
+  }
+
+  // Forecasted remaining spend by category (p50 baseline) for the rest of this month
+  const forecastRemainingByCategory = new Map();
+  const makeCategoryKey = (categoryDefinitionId, categoryName) =>
+    categoryDefinitionId ? `id:${categoryDefinitionId}` : `name:${categoryName || 'unknown'}`;
+
+  (result.dailyForecasts || [])
+    .filter(d => d.date >= todayStr && d.date <= monthEndStr)
+    .forEach(day => {
+      (day.predictions || [])
+        .filter(p => p.categoryType === 'expense')
+        .forEach(p => {
+          const catDef = categoryDefinitionsByName[p.category] || categoryDefinitionsByName[p.transactionName];
+          const catId = catDef?.id || null;
+          const catName = catDef?.name || p.category;
+          const key = makeCategoryKey(catId, catName);
+          const current = forecastRemainingByCategory.get(key) || { amount: 0, categoryDefinitionId: catId, categoryName: catName };
+          current.amount += p.probabilityWeightedAmount || 0;
+          current.categoryDefinitionId = catId || current.categoryDefinitionId;
+          current.categoryName = catName || current.categoryName;
+          forecastRemainingByCategory.set(key, current);
+        });
+    });
+
+  // Scenario ratios to scale p10/p90 relative to p50 totals
+  const monthEndExpenses = { p10: 0, p50: 0, p90: 0 };
+  (result.scenarios?.p10?.dailyResults || []).filter(d => d.date >= todayStr && d.date <= monthEndStr).forEach(day => { monthEndExpenses.p10 += day.expenses || 0; });
+  (result.scenarios?.p50?.dailyResults || []).filter(d => d.date >= todayStr && d.date <= monthEndStr).forEach(day => { monthEndExpenses.p50 += day.expenses || 0; });
+  (result.scenarios?.p90?.dailyResults || []).filter(d => d.date >= todayStr && d.date <= monthEndStr).forEach(day => { monthEndExpenses.p90 += day.expenses || 0; });
+  const p50ScenarioExpenses = monthEndExpenses.p50 || 0;
+  const p10Ratio = p50ScenarioExpenses > 0 ? monthEndExpenses.p10 / p50ScenarioExpenses : 1;
+  const p90Ratio = p50ScenarioExpenses > 0 ? monthEndExpenses.p90 / p50ScenarioExpenses : 1;
+
+  // Build per-category aggregates
+  const categoryData = new Map();
+  const getCategoryEntry = (categoryDefinitionId, categoryName) => {
+    const key = makeCategoryKey(categoryDefinitionId, categoryName);
+    if (!categoryData.has(key)) {
+      const catDef = categoryDefinitionId ? categoryDefinitionsById[categoryDefinitionId] : categoryDefinitionsByName[categoryName];
+      categoryData.set(key, {
+        key,
+        budgetId: null,
+        categoryDefinitionId: catDef?.id || categoryDefinitionId || null,
+        categoryName: catDef?.name || categoryName || 'Unknown',
+        categoryNameEn: catDef?.name_en || categoryName || 'Unknown',
+        categoryNameFr: catDef?.name_fr || categoryName || 'Unknown',
+        categoryIcon: catDef?.icon || null,
+        categoryColor: catDef?.color || null,
+        parentCategoryId: catDef?.parent_id ?? null,
+        limit: 0,
+        actualSpent: 0,
+        forecasted: 0,
+        projectedTotal: 0,
+        utilization: 0,
+        status: 'on_track',
+        risk: 0,
+        alertThreshold: 0.8,
+        nextLikelyHitDate: null,
+        actions: [],
+        scenarios: { p10: 0, p50: 0, p90: 0 }
+      });
+    }
+    return categoryData.get(key);
+  };
+
+  // Apply actual spending
+  actualSpendingRows.forEach(row => {
+    const spent = Math.round(row.spent || 0);
+    if (!spent) return;
+    const entry = getCategoryEntry(row.category_definition_id, row.category_name);
+    entry.actualSpent += spent;
+    if (row.parent_category_id && !entry.parentCategoryId) {
+      entry.parentCategoryId = row.parent_category_id;
+    }
+    entry.categoryNameEn = entry.categoryNameEn || row.category_name_en || entry.categoryName;
+    entry.categoryNameFr = entry.categoryNameFr || row.category_name_fr || entry.categoryName;
+    entry.categoryIcon = entry.categoryIcon || row.category_icon || null;
+    entry.categoryColor = entry.categoryColor || row.category_color || null;
+  });
+
+  // Apply budgets
+  budgetRows.forEach(row => {
+    const limit = Number.parseFloat(row.budget_limit);
+    if (!Number.isFinite(limit) || limit <= 0) return;
+    const entry = getCategoryEntry(row.category_definition_id, row.category_name);
+    entry.limit = limit;
+    entry.budgetId = row.budget_id || null;
+    if (row.parent_category_id && !entry.parentCategoryId) {
+      entry.parentCategoryId = row.parent_category_id;
+    }
+    entry.categoryNameEn = entry.categoryNameEn || row.category_name_en || entry.categoryName;
+    entry.categoryNameFr = entry.categoryNameFr || row.category_name_fr || entry.categoryName;
+    entry.categoryIcon = entry.categoryIcon || row.category_icon || null;
+    entry.categoryColor = entry.categoryColor || row.category_color || null;
+  });
+
+  // Apply forecasted remaining spend
+  forecastRemainingByCategory.forEach(forecast => {
+    const entry = getCategoryEntry(forecast.categoryDefinitionId, forecast.categoryName);
+    entry.forecasted += Math.round(forecast.amount || 0);
+  });
+
+  // Derive scenarios and status
+  categoryData.forEach(entry => {
+    const p50Remaining = entry.forecasted;
+    const p10Remaining = Math.round(p50Remaining * p10Ratio);
+    const p90Remaining = Math.round(p50Remaining * p90Ratio);
+
+    entry.scenarios = {
+      p10: entry.actualSpent + p10Remaining,
+      p50: entry.actualSpent + p50Remaining,
+      p90: entry.actualSpent + p90Remaining
+    };
+
+    entry.projectedTotal = entry.scenarios.p50;
+    if (entry.limit > 0) {
+      const projectedUtilization = entry.projectedTotal / entry.limit;
+      const actualUtilization = entry.actualSpent / entry.limit;
+
+      if (entry.actualSpent >= entry.limit) {
+        entry.status = 'exceeded';
+        entry.risk = 1;
+      } else if (projectedUtilization >= 1 || projectedUtilization >= 0.9 || actualUtilization >= 0.9) {
+        entry.status = 'at_risk';
+        entry.risk = Math.min(1, projectedUtilization);
+      } else if (projectedUtilization >= 0.75) {
+        entry.status = 'at_risk';
+        entry.risk = Math.max(entry.risk, projectedUtilization);
+      } else {
+        entry.status = 'on_track';
+        entry.risk = Math.max(entry.risk, projectedUtilization * 0.5);
+      }
+
+      entry.utilization = projectedUtilization * 100;
+    } else {
+      const p50Total = entry.scenarios.p50;
+      const p90Total = entry.scenarios.p90;
+      const p10Total = entry.scenarios.p10;
+
+      if (entry.actualSpent > p90Total && p90Total > 0) {
+        entry.status = 'exceeded';
+        entry.risk = 1;
+      } else if (entry.actualSpent > p50Total) {
+        entry.status = 'at_risk';
+        entry.risk = 0.7;
+      } else if (entry.actualSpent > p10Total) {
+        entry.status = 'at_risk';
+        entry.risk = 0.4;
+      } else {
+        entry.status = 'on_track';
+        entry.risk = 0.2;
+      }
+
+      entry.utilization = p50Total > 0 ? (entry.actualSpent / p50Total) * 100 : 0;
+    }
+  });
+
+  const budgetOutlook = Array.from(categoryData.values()).filter(entry =>
+    entry.limit > 0 || entry.actualSpent > 0 || entry.forecasted > 0
+  );
+
+  const budgetSummary = {
+    totalBudgets: budgetOutlook.length,
+    highRisk: budgetOutlook.filter(b => b.status === 'at_risk').length,
+    exceeded: budgetOutlook.filter(b => b.status === 'exceeded').length,
+    totalProjectedOverrun: budgetOutlook.reduce((sum, b) => {
+      if (b.limit > 0) {
+        return sum + Math.max(0, b.projectedTotal - b.limit);
+      }
+      return sum;
+    }, 0)
+  };
+
+  db.close();
+  return { budgetOutlook, budgetSummary, categoryDefinitionsByName, categoryDefinitionsById };
+}
+
+/**
+ * Provide a richer forecast bundle for analytics/smart-actions consumers
+ */
+async function getForecast(options = {}) {
+  const result = await generateDailyForecast(options);
+  const { budgetOutlook, budgetSummary, categoryDefinitionsByName } = buildBudgetOutlook(result);
+
+  // Enrich patterns with category IDs and names
+  const patterns = (result.categoryPatterns || []).map(p => {
+    const catDef = categoryDefinitionsByName[p.category];
+    const confidence = Number.isFinite(p.confidence) ? p.confidence : 0.6;
+    const monthsOfHistory = Number.isFinite(p.monthsOfHistory) ? p.monthsOfHistory : 1;
+    return {
+      category: p.category,
+      categoryDefinitionId: catDef?.id || null,
+      categoryName: catDef?.name || p.category,
+      categoryNameEn: catDef?.name_en || p.category,
+      categoryNameFr: catDef?.name_fr || p.category,
+      patternType: p.patternType,
+      avgAmount: p.avgAmount,
+      stdDev: p.stdDev,
+      avgOccurrencesPerMonth: p.avgOccurrencesPerMonth,
+      mostLikelyDaysOfWeek: p.mostLikelyDaysOfWeek,
+      mostLikelyDaysOfMonth: p.mostLikelyDaysOfMonth,
+      lastOccurrence: p.lastOccurrence,
+      daysSinceLastOccurrence: p.daysSinceLastOccurrence,
+      confidence,
+      monthsOfHistory,
+      isFixedRecurring: false,
+      fixedAmount: null,
+    };
+  });
+
+  return {
+    ...result,
+    budgetOutlook,
+    budgetSummary,
+    patterns,
+    forecastByCategory: new Map(),
+  };
+}
+
+module.exports = { generateDailyForecast, getForecast };

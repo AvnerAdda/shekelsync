@@ -4,12 +4,12 @@ import {
   CardContent,
   Typography,
   Box,
-  useTheme,
   Divider,
   LinearProgress,
   CircularProgress,
   Tooltip,
 } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import Grid2 from '@mui/material/Grid2';
 import {
   AccountBalance as AccountBalanceIcon,
@@ -22,6 +22,13 @@ import {
   HourglassEmpty as PendingIcon,
   Info as InfoIcon,
 } from '@mui/icons-material';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+} from 'recharts';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpendingCategories';
 import type { SpendingCategory } from '@renderer/types/spending-categories';
@@ -290,6 +297,8 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   const formatCurrencyValue = (amount: number) =>
     formatCurrency(amount, { absolute: true, maximumFractionDigits: 0 });
 
+  const PIE_COLORS = ['#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0', '#00BCD4'];
+
   const cards = [
     {
       id: 'finance',
@@ -387,22 +396,58 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
       subtitle: portfolioGains !== undefined ? `${portfolioGains >= 0 ? '+' : ''}${formatCurrencyValue(portfolioGains)}` : undefined,
       color: portfolioGains !== undefined && portfolioGains >= 0 ? theme.palette.success.main : theme.palette.error.main,
       details: assetBreakdown.length > 0 ? (
-        <>
-          <Divider sx={{ my: 2 }} />
-          {assetBreakdown.slice(0, 3).map((asset, index) => (
-            <Box key={index} sx={{ mb: 1 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography variant="body2">{asset.name}</Typography>
-                <Typography variant="body2">{formatCurrencyValue(asset.value)}</Typography>
-              </Box>
-              <LinearProgress
-                variant="determinate"
-                value={asset.percentage}
-                sx={{ height: 4, borderRadius: 2 }}
+        <Box sx={{ height: 200, width: '100%', mt: 1, position: 'relative' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={assetBreakdown}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={80}
+                paddingAngle={5}
+                dataKey="value"
+                stroke="none"
+              >
+                {assetBreakdown.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                ))}
+              </Pie>
+              <RechartsTooltip
+                formatter={(value: number) => formatCurrencyValue(value)}
+                contentStyle={{
+                  backgroundColor: alpha(theme.palette.background.paper, 0.8),
+                  backdropFilter: 'blur(10px)',
+                  borderRadius: 12,
+                  border: `1px solid ${alpha(theme.palette.common.white, 0.1)}`,
+                  color: theme.palette.text.primary,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                  padding: '8px 12px',
+                }}
+                itemStyle={{ color: theme.palette.text.primary, fontSize: '0.875rem', fontWeight: 600 }}
+                labelStyle={{ color: theme.palette.text.secondary, fontSize: '0.75rem', marginBottom: '4px' }}
               />
-            </Box>
-          ))}
-        </>
+            </PieChart>
+          </ResponsiveContainer>
+          {/* Center Text Overlay */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              textAlign: 'center',
+              pointerEvents: 'none',
+            }}
+          >
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
+              {t('summary.cards.portfolio.total', { defaultValue: 'Total' })}
+            </Typography>
+            <Typography variant="body2" fontWeight={700} sx={{ color: theme.palette.text.primary }}>
+              {assetBreakdown.length} {t('summary.cards.portfolio.assets', { defaultValue: 'Assets' })}
+            </Typography>
+          </Box>
+        </Box>
       ) : null,
     },
     {
@@ -421,10 +466,10 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
               display: 'flex',
               flexDirection: 'column',
               gap: 0.75,
-              px: 1,
-              py: 0.75,
-              borderRadius: 1,
-              bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
+              px: 1.5,
+              py: 1,
+              borderRadius: 2,
+              bgcolor: alpha(theme.palette.text.primary, 0.04),
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -480,10 +525,10 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
 
           <Box
             sx={{
-              px: 1,
-              py: 0.75,
-              borderRadius: 1,
-              bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)',
+              px: 1.5,
+              py: 1,
+              borderRadius: 2,
+              bgcolor: alpha(theme.palette.text.primary, 0.02),
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.6 }}>
@@ -568,24 +613,50 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   ];
 
   return (
-    <Grid2 container spacing={2}>
+    <Grid2 container spacing={3}>
       {cards.map((card) => (
         <Grid2 size={{ xs: 12, md: 4 }} key={card.id}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <Box sx={{ color: card.color, mr: 1 }}>{card.icon}</Box>
-                <Typography variant="overline" color="text.secondary">
+          <Card sx={{ 
+            height: '100%',
+            borderRadius: 4,
+            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(30, 30, 30, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+            backdropFilter: 'blur(20px)',
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            boxShadow: `0 8px 32px ${alpha(theme.palette.common.black, 0.05)}`,
+            transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+            '&:hover': {
+              transform: 'translateY(-4px)',
+              boxShadow: `0 12px 40px ${alpha(theme.palette.common.black, 0.1)}`,
+            }
+          }}>
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2.5 }}>
+                <Box sx={{ 
+                  color: card.color, 
+                  mr: 1.5,
+                  p: 1,
+                  borderRadius: 2,
+                  backgroundColor: alpha(card.color, 0.1),
+                  display: 'flex'
+                }}>
+                  {card.icon}
+                </Box>
+                <Typography variant="overline" color="text.secondary" fontWeight={600} letterSpacing={1}>
                   {card.title}
                 </Typography>
               </Box>
 
-              <Typography variant="h4" sx={{ fontWeight: 600, color: card.color, mb: 0.5 }}>
+              <Typography variant="h4" sx={{ 
+                fontWeight: 700, 
+                color: card.color, 
+                mb: 0.5,
+                textShadow: `0 0 20px ${alpha(card.color, 0.3)}`
+              }}>
                 {card.mainValue}
               </Typography>
 
               {card.subtitle && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
                   {card.subtitle}
                 </Typography>
               )}

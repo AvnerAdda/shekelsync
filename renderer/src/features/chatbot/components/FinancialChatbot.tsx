@@ -13,6 +13,7 @@ import {
   Divider,
   useTheme,
   Alert,
+  alpha,
 } from '@mui/material';
 import {
   Chat as ChatIcon,
@@ -145,7 +146,13 @@ const FinancialChatbot: React.FC = () => {
           bottom: 24,
           right: 24,
           zIndex: (muiTheme) => muiTheme.zIndex.drawer + 2,
-          boxShadow: 3,
+          background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+          boxShadow: `0 8px 32px 0 ${alpha(theme.palette.primary.main, 0.4)}`,
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          '&:hover': {
+            transform: 'scale(1.1) rotate(5deg)',
+            boxShadow: `0 12px 40px 0 ${alpha(theme.palette.primary.main, 0.6)}`,
+          }
         }}
         onClick={() => setIsOpen(true)}
       >
@@ -163,6 +170,10 @@ const FinancialChatbot: React.FC = () => {
             display: 'flex',
             flexDirection: 'column',
             zIndex: (muiTheme) => muiTheme.zIndex.drawer + 2,
+            bgcolor: (theme) => alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(20px)',
+            borderLeft: '1px solid',
+            borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
           },
         }}
         sx={{
@@ -173,28 +184,45 @@ const FinancialChatbot: React.FC = () => {
         <Box
           sx={{
             p: 2,
-            background: theme.palette.mode === 'dark'
-              ? 'linear-gradient(135deg, rgba(62,165,77,0.3) 0%, rgba(200,250,207,0.2) 100%)'
-              : 'linear-gradient(135deg, #c8facf 0%, #78e88b 100%)',
-            color: theme.palette.mode === 'dark' ? theme.palette.text.primary : '#000000',
+            background: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.secondary.main, 0.1)} 100%)`,
+            backdropFilter: 'blur(10px)',
+            borderBottom: '1px solid',
+            borderColor: (theme) => alpha(theme.palette.divider, 0.1),
+            color: theme.palette.text.primary,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <BotIcon />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Avatar sx={{ 
+              bgcolor: 'transparent', 
+              background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+              width: 40, 
+              height: 40 
+            }}>
+              <BotIcon />
+            </Avatar>
             <Box>
-              <Typography variant="h6" fontWeight="bold">
+              <Typography variant="h6" fontWeight="bold" sx={{ lineHeight: 1.2 }}>
                 {t('header.title')}
               </Typography>
-              <Typography variant="caption">{t('header.subtitle')}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'success.main' }} />
+                {t('header.subtitle')}
+              </Typography>
             </Box>
           </Box>
           <IconButton
             onClick={() => setIsOpen(false)}
             sx={{
-              color: theme.palette.mode === 'dark' ? theme.palette.text.primary : '#000000',
+              color: 'text.secondary',
+              transition: 'all 0.2s',
+              '&:hover': {
+                color: 'error.main',
+                bgcolor: (theme) => alpha(theme.palette.error.main, 0.1),
+                transform: 'rotate(90deg)'
+              }
             }}
           >
             <CloseIcon />
@@ -207,7 +235,7 @@ const FinancialChatbot: React.FC = () => {
             flex: 1,
             overflowY: 'auto',
             p: 2,
-            bgcolor: theme.palette.mode === 'dark' ? theme.palette.background.default : '#f5f5f5',
+            bgcolor: 'transparent',
             display: 'flex',
             flexDirection: 'column',
             gap: 2,
@@ -219,34 +247,43 @@ const FinancialChatbot: React.FC = () => {
               sx={{
                 display: 'flex',
                 justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start',
-                alignItems: 'flex-start',
+                alignItems: 'flex-end',
                 gap: 1,
               }}
             >
               {message.role === 'assistant' && (
-                <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
-                  <BotIcon fontSize="small" />
+                <Avatar sx={{ 
+                  bgcolor: 'transparent',
+                  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+                  width: 28, 
+                  height: 28,
+                  mb: 0.5
+                }}>
+                  <BotIcon sx={{ fontSize: 16 }} />
                 </Avatar>
               )}
               <Paper
+                elevation={0}
                 sx={{
                   p: 2,
                   maxWidth: '75%',
                   bgcolor: message.role === 'user'
-                    ? 'primary.main'
-                    : theme.palette.mode === 'dark'
-                      ? theme.palette.background.paper
-                      : 'white',
+                    ? 'transparent'
+                    : (theme) => alpha(theme.palette.background.paper, 0.6),
+                  background: message.role === 'user' 
+                    ? `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`
+                    : undefined,
+                  backdropFilter: 'blur(10px)',
                   color: message.role === 'user'
-                    ? theme.palette.mode === 'dark'
-                      ? theme.palette.text.primary
-                      : '#000000'
+                    ? theme.palette.common.white
                     : theme.palette.text.primary,
-                  borderRadius: 2,
-                  boxShadow: 1,
+                  borderRadius: message.role === 'user' ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
+                  boxShadow: (theme) => `0 4px 12px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+                  border: '1px solid',
+                  borderColor: (theme) => message.role === 'user' ? 'transparent' : alpha(theme.palette.divider, 0.1),
                 }}
               >
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
                   {message.content}
                 </Typography>
                 <Typography
@@ -255,7 +292,9 @@ const FinancialChatbot: React.FC = () => {
                     display: 'block',
                     mt: 0.5,
                     opacity: 0.7,
-                    fontSize: '0.7rem',
+                    fontSize: '0.65rem',
+                    textAlign: message.role === 'user' ? 'right' : 'left',
+                    color: 'inherit'
                   }}
                 >
                   {message.timestamp.toLocaleTimeString('he-IL', {
@@ -265,8 +304,14 @@ const FinancialChatbot: React.FC = () => {
                 </Typography>
               </Paper>
               {message.role === 'user' && (
-                <Avatar sx={{ bgcolor: 'secondary.main', width: 32, height: 32 }}>
-                  <PersonIcon fontSize="small" />
+                <Avatar sx={{ 
+                  bgcolor: (theme) => alpha(theme.palette.secondary.main, 0.1),
+                  color: 'secondary.main',
+                  width: 28, 
+                  height: 28,
+                  mb: 0.5
+                }}>
+                  <PersonIcon sx={{ fontSize: 16 }} />
                 </Avatar>
               )}
             </Box>
@@ -274,19 +319,26 @@ const FinancialChatbot: React.FC = () => {
 
           {isLoading && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
-                <BotIcon fontSize="small" />
+              <Avatar sx={{ 
+                bgcolor: 'transparent',
+                background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+                width: 28, 
+                height: 28 
+              }}>
+                <BotIcon sx={{ fontSize: 16 }} />
               </Avatar>
               <Paper
+                elevation={0}
                 sx={{
                   p: 2,
-                  borderRadius: 2,
-                  bgcolor: theme.palette.mode === 'dark'
-                    ? theme.palette.background.paper
-                    : 'white',
+                  borderRadius: '20px 20px 20px 4px',
+                  bgcolor: (theme) => alpha(theme.palette.background.paper, 0.6),
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid',
+                  borderColor: (theme) => alpha(theme.palette.divider, 0.1),
                 }}
               >
-                <CircularProgress size={20} />
+                <CircularProgress size={16} thickness={5} />
               </Paper>
             </Box>
           )}
@@ -311,10 +363,10 @@ const FinancialChatbot: React.FC = () => {
             <Box
               sx={{
                 p: 2,
-                bgcolor: theme.palette.mode === 'dark' ? theme.palette.background.default : '#f5f5f5',
+                bgcolor: 'transparent',
               }}
             >
-              <Typography variant="caption" color="text.secondary" gutterBottom>
+              <Typography variant="caption" color="text.secondary" gutterBottom sx={{ fontWeight: 600, ml: 1 }}>
                 {t('suggestions.title')}
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
@@ -324,20 +376,34 @@ const FinancialChatbot: React.FC = () => {
                   label={question}
                   size="small"
                   onClick={() => setInputValue(question)}
-                  sx={{ cursor: 'pointer' }}
+                  sx={{ 
+                    cursor: 'pointer',
+                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
+                    color: 'primary.main',
+                    fontWeight: 500,
+                    border: '1px solid',
+                    borderColor: 'transparent',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      bgcolor: (theme) => alpha(theme.palette.primary.main, 0.2),
+                      borderColor: 'primary.main',
+                      transform: 'translateY(-1px)'
+                    }
+                  }}
                 />
               ))}
             </Box>
           </Box>
         )}
 
-        <Divider />
+        <Divider sx={{ borderColor: (theme) => alpha(theme.palette.divider, 0.1) }} />
 
         {/* Input Area */}
         <Box
           sx={{
             p: 2,
-            bgcolor: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'white',
+            bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+            backdropFilter: 'blur(10px)',
           }}
         >
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
@@ -354,6 +420,19 @@ const FinancialChatbot: React.FC = () => {
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 3,
+                  bgcolor: (theme) => alpha(theme.palette.background.paper, 0.5),
+                  backdropFilter: 'blur(5px)',
+                  transition: 'all 0.2s',
+                  '& fieldset': {
+                    borderColor: (theme) => alpha(theme.palette.divider, 0.2),
+                  },
+                  '&:hover fieldset': {
+                    borderColor: 'primary.main',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: 'primary.main',
+                    borderWidth: 2,
+                  },
                 },
               }}
             />
@@ -362,22 +441,32 @@ const FinancialChatbot: React.FC = () => {
               onClick={handleSendMessage}
               disabled={!inputValue.trim() || isLoading || !hasAnyPermission}
               sx={{
-                bgcolor: 'primary.main',
-                color: theme.palette.mode === 'dark' ? theme.palette.text.primary : '#000000',
-                '&:hover': { bgcolor: 'primary.dark' },
-                '&.Mui-disabled': { bgcolor: 'action.disabledBackground' },
+                bgcolor: 'transparent',
+                background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+                color: theme.palette.common.white,
+                width: 40,
+                height: 40,
+                transition: 'all 0.2s',
+                '&:hover': { 
+                  transform: 'scale(1.05)',
+                  boxShadow: `0 4px 12px 0 ${alpha(theme.palette.primary.main, 0.4)}`
+                },
+                '&.Mui-disabled': { 
+                  background: (theme) => alpha(theme.palette.action.disabledBackground, 0.5),
+                  color: (theme) => theme.palette.action.disabled 
+                },
               }}
             >
-              <SendIcon />
+              <SendIcon fontSize="small" />
             </IconButton>
           </Box>
           {hasAnyPermission && (
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, ml: 1, fontSize: '0.7rem' }}>
               {t('hints.enabled')}
             </Typography>
           )}
           {!hasAnyPermission && (
-            <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 1 }}>
+            <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 1, ml: 1, fontSize: '0.7rem' }}>
               {t('hints.disabled')}
             </Typography>
           )}
