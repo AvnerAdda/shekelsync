@@ -584,6 +584,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
         cd.id as category_definition_id,
         cd.name as category_name,
         cd.name_en as category_name_en,
+        cd.icon,
         scm.spending_category,
         COALESCE(SUM(ABS(t.price)), 0) as total_amount,
         COUNT(t.identifier) as transaction_count
@@ -594,7 +595,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
         AND t.price < 0
       WHERE cd.category_type IN ('expense', 'investment') AND cd.is_active = 1
         AND cd.id NOT IN (${capitalReturnSubquery})
-      GROUP BY cd.id, cd.name, cd.name_en, scm.spending_category
+      GROUP BY cd.id, cd.name, cd.name_en, cd.icon, scm.spending_category
       ORDER BY scm.spending_category, total_amount DESC
     `, [start, end]);
 
@@ -614,6 +615,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
         category_definition_id: row.category_definition_id,
         category_name: row.category_name,
         category_name_en: row.category_name_en,
+        icon: row.icon,
         spending_category: mappedCategory,
         total_amount: parseFloat(row.total_amount || 0),
         percentage_of_income: totalIncome > 0

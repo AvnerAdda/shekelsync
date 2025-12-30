@@ -1,6 +1,7 @@
 const database = require('./database.js');
 const { encrypt, decrypt } = require('../../lib/server/encryption.js');
 const { buildInstitutionFromRow } = require('./institutions.js');
+const { toUTCISOString } = require('../../lib/server/time-utils.js');
 
 function safeDecrypt(value) {
   if (!value) {
@@ -29,13 +30,13 @@ function mapCredentialRow(row) {
     identification_code: safeDecrypt(row.identification_code),
     nickname: row.nickname,
     bank_account_number: row.bank_account_number,
-    created_at: row.created_at,
+    created_at: toUTCISOString(row.created_at),
     // Balance now comes from investment_holdings
     current_balance: row.current_balance !== undefined ? row.current_balance : (row.holding_balance || null),
-    balance_updated_at: row.balance_updated_at || row.holding_as_of_date || null,
-    lastUpdate: row.lastscrapesuccess || row.lastupdate || row.last_scrape_success,
+    balance_updated_at: toUTCISOString(row.balance_updated_at || row.holding_as_of_date),
+    lastUpdate: toUTCISOString(row.lastscrapesuccess || row.lastupdate || row.last_scrape_success),
     lastScrapeStatus: row.lastscrapestatus || row.last_scrape_status,
-    last_scrape_attempt: row.last_scrape_attempt,
+    last_scrape_attempt: toUTCISOString(row.last_scrape_attempt),
   };
 
   // Add institution object if available

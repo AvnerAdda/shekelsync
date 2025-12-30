@@ -15,6 +15,7 @@ import {
   ListItemText,
   Divider,
   useTheme,
+  alpha,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -47,6 +48,12 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
   const strings = getBreakdownStrings();
   const generalStrings = strings.general;
 
+  const getTotalLabel = () => {
+    if (categoryType === 'income') return generalStrings.income;
+    if (categoryType === 'investment') return generalStrings.invested;
+    return generalStrings.spent;
+  };
+
   if (!details) {
     return (
       <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -65,7 +72,23 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
   const transactions = details.transactions ?? [];
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog 
+      open={open} 
+      onClose={onClose} 
+      maxWidth="md" 
+      fullWidth
+      slotProps={{
+        paper: {
+          sx: {
+            background: alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(12px)',
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            borderRadius: 3,
+            boxShadow: theme.shadows[8],
+          }
+        }
+      }}
+    >
       <DialogTitle>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Box>{breadcrumbs}</Box>
@@ -78,15 +101,18 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
         <Box>
           <Grid container spacing={2} sx={{ mb: 3 }}>
             <Grid item xs={4}>
-              <Card variant="outlined">
+              <Card 
+                variant="outlined"
+                sx={{ 
+                  background: alpha(theme.palette.background.paper, 0.6),
+                  backdropFilter: 'blur(10px)',
+                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                  borderRadius: 2,
+                }}
+              >
                 <CardContent>
                   <Typography variant="caption" color="text.secondary">
-                    {generalStrings.total}{' '}
-                    {categoryType === 'income'
-                      ? generalStrings.income
-                      : categoryType === 'investment'
-                      ? generalStrings.invested
-                      : generalStrings.spent}
+                    {generalStrings.total} {getTotalLabel()}
                   </Typography>
                   <Typography
                     variant="h6"
@@ -99,7 +125,15 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
               </Card>
             </Grid>
             <Grid item xs={4}>
-              <Card variant="outlined">
+              <Card 
+                variant="outlined"
+                sx={{ 
+                  background: alpha(theme.palette.background.paper, 0.6),
+                  backdropFilter: 'blur(10px)',
+                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                  borderRadius: 2,
+                }}
+              >
                 <CardContent>
                   <Typography variant="caption" color="text.secondary">
                     {generalStrings.transactions}
@@ -123,7 +157,15 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
               </Card>
             </Grid>
             <Grid item xs={4}>
-              <Card variant="outlined">
+              <Card 
+                variant="outlined"
+                sx={{ 
+                  background: alpha(theme.palette.background.paper, 0.6),
+                  backdropFilter: 'blur(10px)',
+                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                  borderRadius: 2,
+                }}
+              >
                 <CardContent>
                   <Typography variant="caption" color="text.secondary">
                     {generalStrings.average}
@@ -147,16 +189,18 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                     <Box
                       sx={{
                         p: 2,
-                        border: `1px solid ${theme.palette.divider}`,
-                        borderRadius: 1,
+                        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                        borderRadius: 2,
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         cursor: 'pointer',
                         transition: 'all 0.2s',
+                        background: alpha(theme.palette.background.paper, 0.4),
                         '&:hover': {
-                          backgroundColor: theme.palette.action.hover,
+                          backgroundColor: alpha(theme.palette.action.hover, 0.1),
                           transform: 'translateX(4px)',
+                          boxShadow: theme.shadows[2],
                         },
                       }}
                       onClick={() => onSubcategoryClick(sub.id, sub.name)}
@@ -169,6 +213,12 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                           label={`${sub.count} ${generalStrings.transactions}`}
                           size="small"
                           variant="outlined"
+                          sx={{
+                            borderRadius: 1,
+                            height: 20,
+                            fontSize: '0.7rem',
+                            borderColor: alpha(theme.palette.divider, 0.2),
+                          }}
                         />
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -194,11 +244,17 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                   <Grid item xs={6} key={`${vendor.vendor}-${index}`}>
                     <Box
                       sx={{
-                        p: 1,
-                        border: `1px solid ${theme.palette.divider}`,
-                        borderRadius: 1,
+                        p: 1.5,
+                        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                        borderRadius: 2,
                         display: 'flex',
                         justifyContent: 'space-between',
+                        background: alpha(theme.palette.background.paper, 0.4),
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          background: alpha(theme.palette.background.paper, 0.6),
+                          boxShadow: theme.shadows[2],
+                        }
                       }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -224,12 +280,18 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                   <Grid item xs={6} key={`${card.accountNumber}-${index}`}>
                     <Box
                       sx={{
-                        p: 1,
-                        border: `1px solid ${theme.palette.divider}`,
-                        borderRadius: 1,
+                        p: 1.5,
+                        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                        borderRadius: 2,
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
+                        background: alpha(theme.palette.background.paper, 0.4),
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          background: alpha(theme.palette.background.paper, 0.6),
+                          boxShadow: theme.shadows[2],
+                        }
                       }}
                     >
                       <Box>
@@ -278,6 +340,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                               sx={{
                                 fontSize: '0.7rem',
                                 height: 20,
+                                borderRadius: 1,
                               }}
                             />
                           )}
@@ -290,7 +353,9 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                                 fontSize: '0.7rem',
                                 height: 20,
                                 fontFamily: 'monospace',
-                                backgroundColor: 'rgba(156, 163, 175, 0.1)',
+                                backgroundColor: alpha(theme.palette.grey[500], 0.1),
+                                borderRadius: 1,
+                                borderColor: alpha(theme.palette.divider, 0.2),
                               }}
                             />
                           )}

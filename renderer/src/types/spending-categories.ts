@@ -15,6 +15,7 @@ export interface CategoryWithSpending {
   category_definition_id: number;
   category_name: string;
   category_name_en?: string;
+  icon?: string | null;
   spending_category: SpendingCategory | null;
   total_amount: number;
   percentage_of_income: number;

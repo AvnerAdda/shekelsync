@@ -27,7 +27,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
 
   if (loading) {
     return (
-      <Grid container spacing={2} sx={{ mb: 3 }}>
+      <Grid container spacing={2}>
         <Grid item xs={12} md={5}>
           <Card sx={{ height: 180, p: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -76,7 +76,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
   }
 
   return (
-    <Box sx={{ mb: 3 }}>
+    <Box>
       {/* Overall Portfolio Summary */}
       <Card sx={{ p: 3, mb: 3, bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>

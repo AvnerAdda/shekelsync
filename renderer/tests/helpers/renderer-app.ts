@@ -552,141 +552,6 @@ const personalIntelligence = {
   },
 };
 
-const recurringPatterns = [
-  {
-    merchant_pattern: 'NETFLIX',
-    merchant_display_name: 'Netflix',
-    category: 'Entertainment',
-    parent_category: 'Leisure',
-    frequency: 'monthly',
-    transaction_count: 6,
-    average_amount: 52,
-    amount_variance: 0,
-    monthly_equivalent: 52,
-    confidence: 0.98,
-    is_subscription: true,
-    first_transaction: '2025-04-01',
-    last_transaction: '2025-09-01',
-    next_expected_date: '2025-10-01',
-    average_interval_days: 30,
-    user_status: 'active',
-    optimization_suggestions: [
-      {
-        type: 'subscription_review',
-        title: 'Streaming bundle',
-        description: 'Bundle with cellphone provider to save ₪10/month.',
-        potential_savings: 10,
-        action: 'bundle_offer',
-      },
-    ],
-  },
-];
-
-const actionItems = {
-  items: [
-    {
-      id: 1,
-      action_type: 'subscription_review',
-      title: 'Cancel unused subscriptions',
-      description: 'Review entertainment services and cancel the ones rarely used.',
-      potential_savings: 60,
-      status: 'pending',
-      category_name: 'Entertainment',
-      target_amount: 60,
-      current_progress: 20,
-      priority: 'high',
-      created_at: '2025-09-10T00:00:00.000Z',
-      progress_percentage: 20,
-      progress_history: [],
-    },
-  ],
-  summary: {
-    total: 1,
-    pending: 1,
-    in_progress: 0,
-    completed: 0,
-    total_potential_savings: 60,
-    total_achieved_savings: 0,
-    avg_progress: 20,
-  },
-};
-
-const budgetHealth = {
-  success: true,
-  budgets: [
-    {
-      category_id: 1,
-      category_name: 'Groceries',
-      budget_limit: 2000,
-      current_spent: 1200,
-      percentage_used: 60,
-      days_remaining: 10,
-      projected_total: 1800,
-      daily_limit: 80,
-      status: 'on_track',
-      daily_avg: 40,
-      overrun_risk: 'none',
-    },
-    {
-      category_id: 2,
-      category_name: 'Transport',
-      budget_limit: 800,
-      current_spent: 700,
-      percentage_used: 88,
-      days_remaining: 10,
-      projected_total: 950,
-      daily_limit: 10,
-      status: 'warning',
-      daily_avg: 23,
-      overrun_risk: 'high',
-    },
-  ],
-  overall_status: 'warning',
-  summary: {
-    total_budgets: 2,
-    on_track: 1,
-    warning: 1,
-    exceeded: 0,
-    total_budget: 2800,
-    total_spent: 1900,
-  },
-};
-
-export const setBudgetHealthMock = (next: typeof budgetHealth) => {
-  budgetHealth.budgets = next.budgets;
-  budgetHealth.overall_status = next.overall_status;
-  budgetHealth.summary = next.summary;
-};
-
-const budgetSuggestionsData = {
-  suggestions: [
-    {
-      id: 1,
-      category_definition_id: 1,
-      category_name: 'Groceries',
-      suggested_limit: 2100,
-      confidence_score: 0.82,
-      based_on_months: 6,
-      is_active: false,
-      has_active_budget: false,
-    },
-    {
-      id: 2,
-      category_definition_id: 2,
-      category_name: 'Transport',
-      suggested_limit: 900,
-      confidence_score: 0.7,
-      based_on_months: 6,
-      is_active: false,
-      has_active_budget: false,
-    },
-  ],
-};
-
-const budgetSuggestionsHandler: Handler = async ({ route }) => {
-  await route.fulfill(jsonResponse(budgetSuggestionsData));
-};
-
 const spendingBreakdown = {
   period: { start: '2025-01-01', end: '2025-01-31' },
   breakdown: [
@@ -856,36 +721,10 @@ const defaultHandlers: Record<string, Handler> = {
   'GET /api/analytics/unified-category': respondWith({ categories: [] }),
   'GET /api/analytics/investments': respondWith(analyticsInvestments),
   'GET /api/analytics/personal-intelligence': respondWith(personalIntelligence),
-  'GET /api/analytics/category-opportunities': respondWith({
-    opportunities: [],
-    summary: {
-      total_opportunities: 0,
-      total_potential_savings: 0,
-      high_priority_count: 0,
-      medium_priority_count: 0,
-    },
+  'GET /api/forecast/daily': respondWith({
+    budgetOutlook: [],
+    budgetSummary: { totalBudgets: 0, highRisk: 0, exceeded: 0, totalProjectedOverrun: 0 },
   }),
-  'GET /api/analytics/recurring-analysis': respondWith({ recurring_patterns: recurringPatterns }),
-  'POST /api/analytics/recurring-management': respondOK,
-  'GET /api/analytics/action-items': respondWith(actionItems),
-  'POST /api/analytics/action-items': respondOK,
-  'PUT /api/analytics/action-items': respondOK,
-  'DELETE /api/analytics/action-items': respondOK,
-  'GET /api/budget-intelligence/health': respondWith(budgetHealth),
-  'GET /api/budget-intelligence/suggestions': budgetSuggestionsHandler,
-  'POST /api/budget-intelligence/generate': respondWith({ success: true }),
-  'POST /api/budget-intelligence/suggestions/1/activate': async ({ route }) => {
-    budgetSuggestionsData.suggestions = budgetSuggestionsData.suggestions.map((s) =>
-      s.id === 1 ? { ...s, is_active: true, has_active_budget: true } : s,
-    );
-    await route.fulfill(jsonResponse({ success: true }));
-  },
-  'POST /api/budget-intelligence/suggestions/2/activate': async ({ route }) => {
-    budgetSuggestionsData.suggestions = budgetSuggestionsData.suggestions.map((s) =>
-      s.id === 2 ? { ...s, is_active: true, has_active_budget: true } : s,
-    );
-    await route.fulfill(jsonResponse({ success: true }));
-  },
   'GET /api/spending-categories/breakdown': respondWith(spendingBreakdown),
   'POST /api/spending-categories/initialize': respondWith({ success: true, created: 4, skipped: 0, total: 4 }),
   'GET /api/spending-categories/mappings': respondWith({ mappings: [] }),
@@ -893,40 +732,6 @@ const defaultHandlers: Record<string, Handler> = {
   'POST /api/smart-actions/generate': respondWith({ success: true, generated: 2 }),
   'GET /api/smart-actions': respondWith(smartActions),
   'PUT /api/smart-actions/1/status': respondWith({ success: true, id: 1, status: 'resolved' }),
-'GET /api/analytics/category-spending-summary': respondWith({
-  categories: [
-    {
-      category_definition_id: 100,
-      subcategory: 'Groceries',
-      subcategory_en: 'Groceries',
-      parent_category: 'Food',
-      parent_category_en: 'Food',
-      transaction_count: 6,
-      total_amount: 1800,
-      monthly_average: 300,
-      actionability_level: 'high',
-      is_default: true,
-    },
-    {
-      category_definition_id: 101,
-      subcategory: 'Internet',
-      subcategory_en: 'Internet',
-      parent_category: 'Utilities',
-      parent_category_en: 'Utilities',
-      transaction_count: 2,
-      total_amount: 400,
-      monthly_average: 200,
-      actionability_level: 'medium',
-      is_default: true,
-    },
-  ],
-}),
-  'GET /api/analytics/actionability-settings': respondWith({
-    defaultStrategy: 'balanced',
-    automaticTuning: true,
-  }),
-  'POST /api/analytics/actionability-settings': respondOK,
-  'DELETE /api/analytics/actionability-settings': respondOK,
   'GET /api/analytics/category-details': respondWith({
     summary: {},
     transactions: [],
@@ -962,34 +767,6 @@ const defaultHandlers: Record<string, Handler> = {
   },
   'GET /api/patterns/index': respondWith({ patterns: [] }),
   'GET /api/patterns': respondWith({ patterns: [] }),
-'GET /api/analytics/category-spending-summary?months=3': respondWith({
-  categories: [
-    {
-      category_definition_id: 100,
-      subcategory: 'Groceries',
-      subcategory_en: 'Groceries',
-      parent_category: 'Food',
-      parent_category_en: 'Food',
-      transaction_count: 6,
-      total_amount: 1800,
-      monthly_average: 300,
-      actionability_level: 'high',
-      is_default: true,
-    },
-    {
-      category_definition_id: 101,
-      subcategory: 'Internet',
-      subcategory_en: 'Internet',
-      parent_category: 'Utilities',
-      parent_category_en: 'Utilities',
-      transaction_count: 2,
-      total_amount: 400,
-      monthly_average: 200,
-      actionability_level: 'medium',
-      is_default: true,
-    },
-  ],
-}),
 };
 
 export async function setupRendererTest(

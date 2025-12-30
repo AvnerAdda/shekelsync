@@ -5,6 +5,7 @@ import { WaterfallFlowData } from '@renderer/types/analytics';
 interface UseWaterfallDataOptions {
   startDate: Date;
   endDate: Date;
+  enabled?: boolean;
 }
 
 interface UseWaterfallDataResult {
@@ -14,14 +15,20 @@ interface UseWaterfallDataResult {
   refresh: () => void;
 }
 
-export function useWaterfallData({ startDate, endDate }: UseWaterfallDataOptions): UseWaterfallDataResult {
+export function useWaterfallData({ startDate, endDate, enabled = true }: UseWaterfallDataOptions): UseWaterfallDataResult {
   const [data, setData] = useState<WaterfallFlowData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(Boolean(enabled));
   const [error, setError] = useState<Error | null>(null);
   const requestIdRef = useRef(0);
 
   const fetchWaterfall = useCallback(async () => {
     const requestId = ++requestIdRef.current;
+    if (!enabled) {
+      setLoading(false);
+      setError(null);
+      setData(null);
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -50,7 +57,7 @@ export function useWaterfallData({ startDate, endDate }: UseWaterfallDataOptions
         setLoading(false);
       }
     }
-  }, [endDate, startDate]);
+  }, [enabled, endDate, startDate]);
 
   useEffect(() => {
     fetchWaterfall();

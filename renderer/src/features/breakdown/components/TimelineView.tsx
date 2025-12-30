@@ -1,6 +1,6 @@
 import React from 'react';
 import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line } from 'recharts';
-import { useTheme } from '@mui/material';
+import { useTheme, alpha } from '@mui/material';
 import { CategoryType, FormatCurrencyFn, MonthlyBreakdownItem } from '../types';
 import { getBreakdownStrings } from '../strings';
 
@@ -40,8 +40,11 @@ const TimelineView: React.FC<TimelineViewProps> = ({ data, categoryType, title, 
         <Tooltip
           formatter={(value: number) => formatCurrencyValue(value)}
           contentStyle={{
-            backgroundColor: theme.palette.background.paper,
-            border: `1px solid ${theme.palette.divider}`,
+            backgroundColor: alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(8px)',
+            borderRadius: 8,
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            boxShadow: theme.shadows[4],
           }}
         />
         <Legend />

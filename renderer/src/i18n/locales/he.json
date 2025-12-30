@@ -882,6 +882,13 @@
       "title": "קטגוריות הוצאה",
       "subtitle": "איך ההוצאות מחולקות בין קטגוריות",
       "targetVsActual": "יעד מול ביצוע",
+      "targetVsActualRange": "יעד מול ביצוע ({{range}})",
+      "timeRanges": {
+        "label": "טווח זמן",
+        "currentMonth": "חודש נוכחי",
+        "last3Months": "{{count}} חודשים אחרונים",
+        "history": "כל ההיסטוריה"
+      },
       "empty": {
         "title": "אין נתוני הוצאה",
         "description": "התחילו לשייך עסקאות כדי לראות תובנות לפי קטגוריה."
@@ -899,7 +906,8 @@
         "transactions_one": "עסקה אחת",
         "transactions_other": "{{count}} עסקאות",
         "totalSpending_one": "סך הוצאות (חודש {{count}})",
-        "totalSpending_other": "סך הוצאות ({{count}} חודשים)"
+        "totalSpending_other": "סך הוצאות ({{count}} חודשים)",
+        "totalSpendingRange": "סך הוצאות ({{range}})"
       },
       "tooltips": {
         "overTarget": "חריגה מהיעד",
@@ -1044,6 +1052,14 @@
       "refresh": "רענן",
       "refreshing": "מרענן...",
       "portfolioSetup": "הגדרת תיק"
+    },
+    "filters": {
+      "rangeLabel": "טווח עסקאות",
+      "viewLabel": "תצוגה",
+      "view": {
+        "summary": "ביצועים",
+        "detailed": "עסקאות"
+      }
     },
     "empty": {
       "title": "התחילו עם תיק ההשקעות",

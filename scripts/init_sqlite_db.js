@@ -27,31 +27,6 @@ function ensureColumnExists(db, tableName, columnName, definitionSql) {
 }
 
 function applySchemaUpgrades(db) {
-  // Budget intelligence columns (safe no-ops if already present)
-  ensureColumnExists(
-    db,
-    'category_budgets',
-    'is_auto_suggested',
-    "is_auto_suggested INTEGER NOT NULL DEFAULT 0 CHECK(is_auto_suggested IN (0, 1))"
-  );
-  ensureColumnExists(
-    db,
-    'category_budgets',
-    'suggestion_id',
-    'suggestion_id INTEGER REFERENCES budget_suggestions(id) ON DELETE SET NULL'
-  );
-  ensureColumnExists(
-    db,
-    'category_budgets',
-    'auto_adjust',
-    "auto_adjust INTEGER NOT NULL DEFAULT 0 CHECK(auto_adjust IN (0, 1))"
-  );
-  ensureColumnExists(
-    db,
-    'category_budgets',
-    'alert_threshold',
-    'alert_threshold REAL DEFAULT 0.8 CHECK(alert_threshold > 0 AND alert_threshold <= 1)'
-  );
   ensureColumnExists(
     db,
     'category_definitions',
@@ -157,18 +132,6 @@ const TABLE_DEFINITIONS = [
       old_category_name TEXT PRIMARY KEY,
       category_definition_id INTEGER NOT NULL,
       notes TEXT,
-      FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE CASCADE
-    );`,
-  `CREATE TABLE IF NOT EXISTS category_actionability_settings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      category_definition_id INTEGER NOT NULL UNIQUE,
-      actionability_level TEXT NOT NULL DEFAULT 'medium' CHECK (actionability_level IN ('low','medium','high')),
-      monthly_average REAL NOT NULL DEFAULT 0,
-      transaction_count INTEGER NOT NULL DEFAULT 0,
-      is_default INTEGER NOT NULL DEFAULT 1 CHECK (is_default IN (0,1)),
-      user_notes TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE CASCADE
     );`,
   `CREATE TABLE IF NOT EXISTS user_profile (
@@ -291,33 +254,6 @@ const TABLE_DEFINITIONS = [
       UNIQUE(category_definition_id, period_type),
       FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE CASCADE
     );`,
-  `CREATE TABLE IF NOT EXISTS user_action_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      action_type TEXT NOT NULL,
-      title TEXT NOT NULL,
-      description TEXT,
-      potential_savings REAL,
-      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','in_progress','completed','dismissed')),
-      category_name TEXT,
-      target_amount REAL,
-      current_progress REAL NOT NULL DEFAULT 0,
-      priority TEXT NOT NULL DEFAULT 'medium',
-      metadata TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      completed_at TEXT,
-      dismissed_at TEXT
-    );`,
-  `CREATE TABLE IF NOT EXISTS action_item_progress (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      action_item_id INTEGER NOT NULL,
-      month TEXT NOT NULL,
-      actual_amount REAL,
-      target_amount REAL,
-      achieved_savings REAL,
-      progress_percentage REAL,
-      recorded_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (action_item_id) REFERENCES user_action_items(id) ON DELETE CASCADE
-    );`,
   `CREATE TABLE IF NOT EXISTS investment_accounts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       account_name TEXT NOT NULL,
@@ -425,25 +361,6 @@ const TABLE_DEFINITIONS = [
         ON DELETE CASCADE,
       FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE
     );`,
-  `CREATE TABLE IF NOT EXISTS recurring_transaction_analysis (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      merchant_pattern TEXT NOT NULL,
-      category_name TEXT,
-      parent_category TEXT,
-      frequency TEXT,
-      average_amount REAL,
-      amount_variance REAL,
-      last_transaction_date TEXT,
-      next_expected_date TEXT,
-      transaction_count INTEGER NOT NULL DEFAULT 0,
-      confidence_score REAL,
-      is_subscription INTEGER NOT NULL DEFAULT 0 CHECK (is_subscription IN (0,1)),
-      user_status TEXT NOT NULL DEFAULT 'active',
-      optimization_note TEXT,
-      potential_savings REAL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );`,
   `CREATE TABLE IF NOT EXISTS account_pairings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       credit_card_vendor TEXT NOT NULL,
@@ -549,61 +466,6 @@ const TABLE_DEFINITIONS = [
       metadata TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (smart_action_item_id) REFERENCES smart_action_items(id) ON DELETE CASCADE
-    );`,
-  // Budget Intelligence Tables
-  `CREATE TABLE IF NOT EXISTS budget_suggestions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      category_definition_id INTEGER NOT NULL,
-      period_type TEXT NOT NULL CHECK(period_type IN ('weekly', 'monthly', 'yearly')),
-      suggested_limit REAL NOT NULL CHECK(suggested_limit > 0),
-      confidence_score REAL DEFAULT 0.5 CHECK(confidence_score >= 0 AND confidence_score <= 1),
-      variability_coefficient REAL,
-      based_on_months INTEGER NOT NULL DEFAULT 3 CHECK(based_on_months > 0),
-      is_active INTEGER NOT NULL DEFAULT 0 CHECK(is_active IN (0, 1)),
-      activated_at TEXT,
-      deactivated_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      historical_data TEXT,
-      calculation_metadata TEXT,
-      FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE CASCADE,
-      UNIQUE(category_definition_id, period_type)
-    );`,
-  `CREATE TABLE IF NOT EXISTS budget_trajectory (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      budget_id INTEGER NOT NULL,
-      period_start TEXT NOT NULL,
-      period_end TEXT NOT NULL,
-      budget_limit REAL NOT NULL,
-      spent_amount REAL NOT NULL DEFAULT 0,
-      remaining_amount REAL NOT NULL,
-      days_remaining INTEGER NOT NULL,
-      days_total INTEGER NOT NULL,
-      daily_limit REAL NOT NULL,
-      projected_total REAL,
-      is_on_track INTEGER NOT NULL DEFAULT 1 CHECK(is_on_track IN (0, 1)),
-      overrun_risk TEXT CHECK(overrun_risk IN ('none', 'low', 'medium', 'high', 'critical')),
-      snapshot_date TEXT NOT NULL DEFAULT (datetime('now')),
-      metadata TEXT,
-      FOREIGN KEY (budget_id) REFERENCES category_budgets(id) ON DELETE CASCADE
-    );`,
-  `CREATE TABLE IF NOT EXISTS budget_alerts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      budget_id INTEGER NOT NULL,
-      alert_type TEXT NOT NULL CHECK(alert_type IN (
-        'approaching_limit', 'exceeded', 'projected_overrun', 'unusual_spike'
-      )),
-      severity TEXT NOT NULL DEFAULT 'medium' CHECK(severity IN ('low', 'medium', 'high', 'critical')),
-      message TEXT NOT NULL,
-      threshold_percentage REAL,
-      current_amount REAL NOT NULL,
-      budget_limit REAL NOT NULL,
-      triggered_at TEXT NOT NULL DEFAULT (datetime('now')),
-      acknowledged_at TEXT,
-      resolved_at TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
-      metadata TEXT,
-      FOREIGN KEY (budget_id) REFERENCES category_budgets(id) ON DELETE CASCADE
     );`
 ];
 
@@ -613,14 +475,6 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_financial_institutions_category ON financial_institutions (category);',
   'CREATE INDEX IF NOT EXISTS idx_financial_institutions_active ON financial_institutions (is_active);',
   'CREATE INDEX IF NOT EXISTS idx_financial_institutions_scrapable ON financial_institutions (is_scrapable);',
-  'CREATE INDEX IF NOT EXISTS idx_action_items_created ON user_action_items (created_at DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_action_items_priority ON user_action_items (priority);',
-  'CREATE INDEX IF NOT EXISTS idx_action_items_status ON user_action_items (status);',
-  'CREATE INDEX IF NOT EXISTS idx_action_progress_item ON action_item_progress (action_item_id);',
-  'CREATE INDEX IF NOT EXISTS idx_action_progress_month ON action_item_progress (month DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_actionability_amount ON category_actionability_settings (monthly_average DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_actionability_category ON category_actionability_settings (category_definition_id);',
-  'CREATE INDEX IF NOT EXISTS idx_actionability_level ON category_actionability_settings (actionability_level);',
   'CREATE INDEX IF NOT EXISTS idx_categorization_rules_active ON categorization_rules (is_active);',
   'CREATE INDEX IF NOT EXISTS idx_categorization_rules_active_priority ON categorization_rules (is_active, priority DESC) WHERE (is_active = 1);',
   'CREATE INDEX IF NOT EXISTS idx_categorization_rules_pattern ON categorization_rules (name_pattern);',
@@ -654,8 +508,6 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_transaction_suggestions (status);',
   'CREATE INDEX IF NOT EXISTS idx_pending_account_type ON pending_transaction_suggestions (suggested_account_type);',
   'CREATE INDEX IF NOT EXISTS idx_pending_dismissed ON pending_transaction_suggestions (dismiss_count, last_dismissed_at);',
-  'CREATE INDEX IF NOT EXISTS idx_recurring_confidence ON recurring_transaction_analysis (confidence_score DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_recurring_status ON recurring_transaction_analysis (user_status);',
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_created_at ON scrape_events (created_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_vendor ON scrape_events (vendor);',
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_credential_id ON scrape_events (credential_id);',
@@ -699,15 +551,7 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_smart_action_items_category ON smart_action_items(trigger_category_id);',
   'CREATE INDEX IF NOT EXISTS idx_smart_action_items_detected_at ON smart_action_items(detected_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_smart_action_items_recurrence ON smart_action_items(recurrence_key, user_status);',
-  'CREATE INDEX IF NOT EXISTS idx_action_item_history_item_id ON action_item_history(smart_action_item_id, created_at DESC);',
-  // Budget Intelligence Indexes
-  'CREATE INDEX IF NOT EXISTS idx_budget_suggestions_category ON budget_suggestions(category_definition_id);',
-  'CREATE INDEX IF NOT EXISTS idx_budget_suggestions_active ON budget_suggestions(is_active, category_definition_id);',
-  'CREATE INDEX IF NOT EXISTS idx_budget_suggestions_confidence ON budget_suggestions(confidence_score DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_budget_trajectory_budget_id ON budget_trajectory(budget_id, snapshot_date DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_budget_trajectory_risk ON budget_trajectory(overrun_risk, snapshot_date DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_budget_alerts_budget_id ON budget_alerts(budget_id, triggered_at DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_budget_alerts_active ON budget_alerts(is_active, severity);'
+  'CREATE INDEX IF NOT EXISTS idx_action_item_history_item_id ON action_item_history(smart_action_item_id, created_at DESC);'
 ];
 
 const FINANCIAL_INSTITUTIONS = [
@@ -736,21 +580,31 @@ const FINANCIAL_INSTITUTIONS = [
   { code: 'isracard', type: 'credit_card', nameHe: 'ישראכרט', nameEn: 'Isracard', category: 'banking', scrapable: 1, scraperCompanyId: 'isracard', credentialFields: '["id","card6Digits","password"]', displayOrder: 220 },
   { code: 'amex', type: 'credit_card', nameHe: 'אמריקן אקספרס', nameEn: 'American Express', category: 'banking', scrapable: 1, scraperCompanyId: 'amex', credentialFields: '["id","card6Digits","password"]', displayOrder: 230 },
 
-  // ========== INVESTMENT TYPES (Manual Entry) ==========
-  { code: 'pension', type: 'investment', nameHe: 'קרן פנסיה', nameEn: 'Pension Fund', category: 'investments', subcategory: 'restricted', scrapable: 0, displayOrder: 300 },
-  { code: 'provident', type: 'investment', nameHe: 'קרן השתלמות', nameEn: 'Provident Fund', category: 'investments', subcategory: 'restricted', scrapable: 0, displayOrder: 310 },
-  { code: 'study_fund', type: 'investment', nameHe: 'קופת גמל', nameEn: 'Study Fund', category: 'investments', subcategory: 'restricted', scrapable: 0, displayOrder: 320 },
-  { code: 'savings', type: 'investment', nameHe: 'פיקדון', nameEn: 'Savings', category: 'investments', subcategory: 'liquid', scrapable: 0, displayOrder: 330 },
-  { code: 'brokerage', type: 'investment', nameHe: 'ברוקר', nameEn: 'Brokerage', category: 'investments', subcategory: 'liquid', scrapable: 0, displayOrder: 340 },
-  { code: 'crypto', type: 'investment', nameHe: 'קריפטו', nameEn: 'Crypto', category: 'investments', subcategory: 'liquid', scrapable: 0, displayOrder: 350 },
-  { code: 'mutual_fund', type: 'investment', nameHe: 'קרנות נאמנות', nameEn: 'Mutual Funds', category: 'investments', subcategory: 'liquid', scrapable: 0, displayOrder: 360 },
-  { code: 'bonds', type: 'investment', nameHe: 'אג"ח', nameEn: 'Bonds', category: 'investments', subcategory: 'alternative', scrapable: 0, displayOrder: 370 },
-  { code: 'real_estate', type: 'investment', nameHe: 'נדל"ן', nameEn: 'Real Estate', category: 'investments', subcategory: 'alternative', scrapable: 0, displayOrder: 380 },
-  { code: 'bank_balance', type: 'investment', nameHe: 'יתרת בנק', nameEn: 'Bank Balance', category: 'investments', subcategory: 'cash', scrapable: 0, displayOrder: 385, notes: 'Auto-tracked bank account balance from scraped data' },
-  { code: 'cash', type: 'investment', nameHe: 'מזומן', nameEn: 'Cash', category: 'investments', subcategory: 'cash', scrapable: 0, displayOrder: 390 },
-  { code: 'foreign_bank', type: 'investment', nameHe: 'בנק חוץ', nameEn: 'Foreign Bank', category: 'investments', subcategory: 'cash', scrapable: 0, displayOrder: 400 },
-  { code: 'foreign_investment', type: 'investment', nameHe: 'השקעה חוץ', nameEn: 'Foreign Investment', category: 'investments', subcategory: 'alternative', scrapable: 0, displayOrder: 410 },
-  { code: 'other_investment', type: 'investment', nameHe: 'אחר', nameEn: 'Other', category: 'investments', subcategory: 'alternative', scrapable: 0, displayOrder: 420 },
+  // ========== INVESTMENTS (Manual Entry) ==========
+  { code: 'clal_pension', type: 'investment', nameHe: 'כלל פנסיה', nameEn: 'Clal Pension', category: 'investments', subcategory: 'pension', scrapable: 0, displayOrder: 300 },
+  { code: 'migdal_pension', type: 'investment', nameHe: 'מגדל פנסיה', nameEn: 'Migdal Pension', category: 'investments', subcategory: 'pension', scrapable: 0, displayOrder: 310 },
+  { code: 'menora_pension', type: 'investment', nameHe: 'מנורה פנסיה', nameEn: 'Menora Pension', category: 'investments', subcategory: 'pension', scrapable: 0, displayOrder: 320 },
+  { code: 'harel_pension', type: 'investment', nameHe: 'הראל פנסיה', nameEn: 'Harel Pension', category: 'investments', subcategory: 'pension', scrapable: 0, displayOrder: 330 },
+  { code: 'phoenix_pension', type: 'investment', nameHe: 'פניקס פנסיה', nameEn: 'Phoenix Pension', category: 'investments', subcategory: 'pension', scrapable: 0, displayOrder: 340 },
+  { code: 'ayalon_pension', type: 'investment', nameHe: 'איילון פנסיה', nameEn: 'Ayalon Pension', category: 'investments', subcategory: 'pension', scrapable: 0, displayOrder: 350 },
+  { code: 'meitav_pension', type: 'investment', nameHe: 'מיטב פנסיה', nameEn: 'Meitav Pension', category: 'investments', subcategory: 'pension', scrapable: 0, displayOrder: 360 },
+  { code: 'altshuler_pension', type: 'investment', nameHe: 'אלטשולר שחם פנסיה', nameEn: 'Altshuler Pension', category: 'investments', subcategory: 'pension', scrapable: 0, displayOrder: 370 },
+  { code: 'psagot_pension', type: 'investment', nameHe: 'פסגות פנסיה', nameEn: 'Psagot Pension', category: 'investments', subcategory: 'pension', scrapable: 0, displayOrder: 380 },
+  { code: 'more_pension', type: 'investment', nameHe: 'מור פנסיה', nameEn: 'More Pension', category: 'investments', subcategory: 'pension', scrapable: 0, displayOrder: 390 },
+
+  { code: 'clal_provident', type: 'investment', nameHe: 'כלל קופת גמל / השתלמות', nameEn: 'Clal Provident / Study Fund', category: 'investments', subcategory: 'provident', scrapable: 0, displayOrder: 400 },
+  { code: 'migdal_provident', type: 'investment', nameHe: 'מגדל קופת גמל / השתלמות', nameEn: 'Migdal Provident / Study Fund', category: 'investments', subcategory: 'provident', scrapable: 0, displayOrder: 410 },
+  { code: 'menora_provident', type: 'investment', nameHe: 'מנורה קופת גמל / השתלמות', nameEn: 'Menora Provident / Study Fund', category: 'investments', subcategory: 'provident', scrapable: 0, displayOrder: 420 },
+  { code: 'harel_provident', type: 'investment', nameHe: 'הראל קופת גמל / השתלמות', nameEn: 'Harel Provident / Study Fund', category: 'investments', subcategory: 'provident', scrapable: 0, displayOrder: 430 },
+  { code: 'phoenix_provident', type: 'investment', nameHe: 'פניקס קופת גמל / השתלמות', nameEn: 'Phoenix Provident / Study Fund', category: 'investments', subcategory: 'provident', scrapable: 0, displayOrder: 440 },
+  { code: 'ayalon_provident', type: 'investment', nameHe: 'איילון קופת גמל / השתלמות', nameEn: 'Ayalon Provident / Study Fund', category: 'investments', subcategory: 'provident', scrapable: 0, displayOrder: 450 },
+  { code: 'meitav_provident', type: 'investment', nameHe: 'מיטב קופת גמל / השתלמות', nameEn: 'Meitav Provident / Study Fund', category: 'investments', subcategory: 'provident', scrapable: 0, displayOrder: 460 },
+  { code: 'altshuler_provident', type: 'investment', nameHe: 'אלטשולר שחם קופת גמל / השתלמות', nameEn: 'Altshuler Provident / Study Fund', category: 'investments', subcategory: 'provident', scrapable: 0, displayOrder: 470 },
+  { code: 'psagot_provident', type: 'investment', nameHe: 'פסגות קופת גמל / השתלמות', nameEn: 'Psagot Provident / Study Fund', category: 'investments', subcategory: 'provident', scrapable: 0, displayOrder: 480 },
+  { code: 'more_provident', type: 'investment', nameHe: 'מור קופת גמל / השתלמות', nameEn: 'More Provident / Study Fund', category: 'investments', subcategory: 'provident', scrapable: 0, displayOrder: 490 },
+
+  { code: 'bank_deposit', type: 'investment', nameHe: 'פיקדון בנקאי', nameEn: 'Bank Deposit', category: 'investments', subcategory: 'cash', scrapable: 0, displayOrder: 500 },
+  { code: 'investment_unknown', type: 'investment', nameHe: 'השקעה לא מזוהה', nameEn: 'Unknown Investment', category: 'investments', subcategory: 'other', scrapable: 0, displayOrder: 510, notes: 'Fallback for legacy mappings' },
 
   // ========== INSURANCE COMPANIES ==========
   { code: 'harel', type: 'insurance', nameHe: 'הראל', nameEn: 'Harel Insurance', category: 'insurance', scrapable: 0, displayOrder: 500 },
@@ -770,6 +624,9 @@ const FINANCIAL_INSTITUTIONS = [
   { code: 'leader', type: 'broker', nameHe: 'לידר', nameEn: 'Leader Capital Markets', category: 'brokerage', scrapable: 0, displayOrder: 640 },
   { code: 'altshuler', type: 'broker', nameHe: 'אלטשולר שחם', nameEn: 'Altshuler Shaham', category: 'brokerage', scrapable: 0, displayOrder: 650 },
   { code: 'more', type: 'broker', nameHe: 'מור', nameEn: 'More Investment House', category: 'brokerage', scrapable: 0, displayOrder: 660 },
+  { code: 'interactive_brokers', type: 'broker', nameHe: 'אינטראקטיב ברוקרס', nameEn: 'Interactive Brokers', category: 'brokerage', scrapable: 0, displayOrder: 670 },
+  { code: 'etoro', type: 'broker', nameHe: 'eToro', nameEn: 'eToro', category: 'brokerage', scrapable: 0, displayOrder: 680 },
+  { code: 'plus500', type: 'broker', nameHe: 'Plus500', nameEn: 'Plus500', category: 'brokerage', scrapable: 0, displayOrder: 690 },
 
   // ========== CRYPTO EXCHANGES ==========
   { code: 'bit2c', type: 'crypto', nameHe: 'Bit2C', nameEn: 'Bit2C', category: 'crypto', scrapable: 0, displayOrder: 700, notes: 'Israeli cryptocurrency exchange regulated by ISA' },
@@ -1019,29 +876,6 @@ function seedCategories(db) {
   })();
 
   return { categoriesByKey, leafTracker };
-}
-
-function seedCategoryActionability(db, helpers) {
-  const { categoriesByKey, leafTracker } = helpers;
-  const insert = db.prepare(`
-    INSERT INTO category_actionability_settings (
-      category_definition_id,
-      actionability_level,
-      monthly_average,
-      transaction_count,
-      is_default,
-      user_notes
-    ) VALUES (?, 'medium', 0, 0, 1, NULL)
-  `);
-
-  const expenseLeaves = Array.from(categoriesByKey.entries())
-    .filter(([key, info]) => info.type === 'expense' && leafTracker.get(key));
-
-  db.transaction(() => {
-    for (const [, info] of expenseLeaves) {
-      insert.run(info.id);
-    }
-  })();
 }
 
 function seedCategoryMapping(db, helpers) {
@@ -1449,7 +1283,6 @@ function main() {
 
     const institutionCount = seedFinancialInstitutions(db);
     const helpers = seedCategories(db);
-    seedCategoryActionability(db, helpers);
     seedCategoryMapping(db, helpers);
     seedCategorizationRules(db, helpers);
     const spendingTargetCount = seedSpendingCategoryTargets(db);
@@ -1461,17 +1294,12 @@ function main() {
     db.exec('COMMIT');
     transactionStarted = false;
 
-    const expenseLeafCount = Array.from(helpers.categoriesByKey.entries())
-      .filter(([key]) => helpers.leafTracker.get(key) && helpers.categoriesByKey.get(key).type === 'expense')
-      .length;
-
     // Count income rules
     const incomeRulesCount = db.prepare('SELECT COUNT(*) as count FROM categorization_rules WHERE category_type = ?').get('income').count;
 
     console.log('✅ Schema created with foreign keys and indexes');
     console.log(`✅ Seeded ${institutionCount} financial institutions`);
     console.log(`✅ Seeded ${helpers.categoriesByKey.size} category definitions`);
-    console.log(`✅ Seeded ${expenseLeafCount} default actionability entries`);
     console.log(`✅ Seeded ${CATEGORY_MAPPINGS.length} category mappings`);
     console.log(`✅ Seeded ${incomeRulesCount} income categorization rules`);
     console.log(`✅ Seeded ${spendingTargetCount} spending category targets`);

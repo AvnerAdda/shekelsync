@@ -1176,6 +1176,13 @@ async function getForecast(options = {}) {
     const catDef = categoryDefinitionsByName[p.category];
     const confidence = Number.isFinite(p.confidence) ? p.confidence : 0.6;
     const monthsOfHistory = Number.isFinite(p.monthsOfHistory) ? p.monthsOfHistory : 1;
+    const isLikelyFixedRecurring =
+      (p.patternType === 'monthly' || p.patternType === 'bi-monthly') &&
+      p.isFixedAmount &&
+      (p.avgOccurrencesPerMonth || 0) >= 0.8;
+    const fixedDayOfMonth = Array.isArray(p.mostLikelyDaysOfMonth) && p.mostLikelyDaysOfMonth.length > 0
+      ? p.mostLikelyDaysOfMonth[0].day
+      : null;
     return {
       category: p.category,
       categoryDefinitionId: catDef?.id || null,
@@ -1186,14 +1193,20 @@ async function getForecast(options = {}) {
       avgAmount: p.avgAmount,
       stdDev: p.stdDev,
       avgOccurrencesPerMonth: p.avgOccurrencesPerMonth,
+      avgOccurrencesPerWeek: p.avgOccurrencesPerWeek,
+      minAmount: p.minAmount,
+      maxAmount: p.maxAmount,
+      coefficientOfVariation: p.coefficientOfVariation,
+      isFixedAmount: p.isFixedAmount,
       mostLikelyDaysOfWeek: p.mostLikelyDaysOfWeek,
       mostLikelyDaysOfMonth: p.mostLikelyDaysOfMonth,
       lastOccurrence: p.lastOccurrence,
       daysSinceLastOccurrence: p.daysSinceLastOccurrence,
       confidence,
       monthsOfHistory,
-      isFixedRecurring: false,
-      fixedAmount: null,
+      isFixedRecurring: isLikelyFixedRecurring,
+      fixedAmount: isLikelyFixedRecurring ? p.avgAmount : null,
+      fixedDayOfMonth,
     };
   });
 

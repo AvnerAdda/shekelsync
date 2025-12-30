@@ -1,6 +1,7 @@
 const database = require('../database.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const { validateDataQuality } = require('./data-quality-validation.js');
+const { computeEnhancedHealthScore } = require('./health-score-enhanced.js');
 
 let dateFnsPromise = null;
 
@@ -432,11 +433,13 @@ async function getPersonalIntelligence(params = {}) {
       });
     }
 
-    const savingsScore = Math.max(0, Math.min(100, savingsRate * 200));
-    const diversityScore = financialDiversityScore;
-    const impulseHealthScore = Math.max(0, 100 - impulseScore);
-    const runwayScore = Math.max(0, Math.min(100, financialRunwayDays / 60 * 100));
-    const overallHealthScore = Math.round((savingsScore + diversityScore + impulseHealthScore + runwayScore) / 4);
+    const enhancedScore = await computeEnhancedHealthScore({
+      months: monthsInt,
+      startDate,
+      endDate,
+      currentBalance,
+      client,
+    });
 
     // Validate data quality and generate warnings
     const dataQuality = await validateDataQuality();
@@ -453,12 +456,13 @@ async function getPersonalIntelligence(params = {}) {
       predictiveAnalytics,
       psychologicalInsights,
       recommendations,
-      overallHealthScore,
-      healthBreakdown: {
-        savingsScore: Math.round(savingsScore),
-        diversityScore: Math.round(diversityScore),
-        impulseScore: Math.round(impulseHealthScore),
-        runwayScore: Math.round(runwayScore),
+      overallHealthScore: enhancedScore.overallScore,
+      healthBreakdown: enhancedScore.breakdown,
+      healthScoreMeta: {
+        adjustedBreakdown: enhancedScore.adjustedBreakdown,
+        confidence: enhancedScore.confidence,
+        notes: enhancedScore.notes,
+        meta: enhancedScore.meta,
       },
       dataQuality,
     };

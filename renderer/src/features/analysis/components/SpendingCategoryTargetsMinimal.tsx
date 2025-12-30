@@ -2,25 +2,20 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  IconButton,
   Paper,
-  LinearProgress,
-  Select,
-  MenuItem,
-  FormControl,
+  Slider,
   Tooltip,
-  Chip,
   CircularProgress,
   Alert,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
-import {
-  Settings as SettingsIcon,
-} from '@mui/icons-material';
 import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpendingCategories';
-import type { SpendingCategory } from '@renderer/types/spending-categories';
-import { ALLOCATION_DESCRIPTIONS } from '@renderer/types/spending-categories';
-import AllocationSettingsModal from './AllocationSettingsModal';
+import type { SpendingCategory, CategoryWithSpending } from '@renderer/types/spending-categories';
 import { useTranslation } from 'react-i18next';
+import CategoryIcon from '../../breakdown/components/CategoryIcon';
 
 const DEFAULT_TARGETS: Record<SpendingCategory, number> = {
   essential: 50,
@@ -45,49 +40,103 @@ const CATEGORY_LABELS: Record<string, string> = {
   unallocated: 'Unallocated',
 };
 
+const TARGET_KEYS: SpendingCategory[] = ['essential', 'growth', 'stability', 'reward'];
+
 const SpendingCategoryTargetsMinimal: React.FC = () => {
-  const { t } = useTranslation('translation', { keyPrefix: 'analysisPage.targets' });
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'analysisPage.targets' });
   const {
     breakdown,
-    selectedAllocation,
-    setSelectedAllocation,
     loading,
     error,
     fetchBreakdown,
     updateMapping,
     updateTargets,
-    bulkAssign,
     getCategoriesForAllocation,
   } = useSpendingCategories({ currentMonthOnly: true });
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [localTargets, setLocalTargets] = useState<Record<SpendingCategory, number>>(DEFAULT_TARGETS);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedCategoryForMenu, setSelectedCategoryForMenu] = useState<CategoryWithSpending | null>(null);
 
   // Fetch breakdown on mount
   useEffect(() => {
     fetchBreakdown();
   }, [fetchBreakdown]);
 
-  const targets = breakdown?.targets || DEFAULT_TARGETS;
+  useEffect(() => {
+    if (breakdown?.targets) {
+      setLocalTargets(breakdown.targets);
+    }
+  }, [breakdown]);
+
   const totalIncome = breakdown?.total_income || 0;
 
-  // Get actual percentages for each allocation type
-  const getActualPercentage = (allocationType: SpendingCategory | 'unallocated'): number => {
-    if (allocationType === 'unallocated') {
-      const unallocatedCategories = getCategoriesForAllocation('unallocated');
-      const unallocatedTotal = unallocatedCategories.reduce((sum, c) => sum + c.total_amount, 0);
-      return totalIncome > 0 ? (unallocatedTotal / totalIncome) * 100 : 0;
+  const getCategoryName = (category: CategoryWithSpending) => {
+    const language = i18n.language || 'en';
+    const isHebrew = language.startsWith('he');
+    if (isHebrew) {
+      return category.category_name;
+    }
+    return category.category_name_en || category.category_name;
+  };
+
+  const renderCategoryTooltip = (category: CategoryWithSpending, color: string) => (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <CategoryIcon iconName={category.icon} color={color} size={18} />
+      <Typography variant="caption" sx={{ color: 'inherit' }}>
+        {getCategoryName(category)}
+      </Typography>
+    </Box>
+  );
+
+  const rebalanceTargets = (targets: Record<SpendingCategory, number>, changedKey: SpendingCategory) => {
+    const normalized = { ...targets };
+    const total = TARGET_KEYS.reduce((sum, key) => sum + (normalized[key] || 0), 0);
+    const diff = 100 - total;
+
+    if (Math.abs(diff) < 0.01) {
+      return normalized;
     }
 
-    const item = breakdown?.breakdown.find(b => b.spending_category === allocationType);
-    return item?.actual_percentage || 0;
+    const otherKeys = TARGET_KEYS.filter((key) => key !== changedKey);
+    const otherSum = otherKeys.reduce((sum, key) => sum + (normalized[key] || 0), 0);
+
+    if (otherSum <= 0) {
+      if (diff > 0) {
+        const per = diff / otherKeys.length;
+        otherKeys.forEach((key) => {
+          normalized[key] = Math.min(100, Math.max(0, per));
+        });
+      } else {
+        normalized[changedKey] = Math.min(100, Math.max(0, (normalized[changedKey] || 0) + diff));
+      }
+      return normalized;
+    }
+
+    otherKeys.forEach((key) => {
+      const share = (normalized[key] || 0) / otherSum;
+      normalized[key] = Math.min(100, Math.max(0, (normalized[key] || 0) + diff * share));
+    });
+
+    const finalTotal = TARGET_KEYS.reduce((sum, key) => sum + (normalized[key] || 0), 0);
+    const roundingDiff = 100 - finalTotal;
+    if (Math.abs(roundingDiff) > 0.01) {
+      normalized[changedKey] = Math.min(100, Math.max(0, (normalized[changedKey] || 0) + roundingDiff));
+    }
+
+    return normalized;
   };
 
-  // Handle allocation type click
-  const handleAllocationClick = (allocationType: SpendingCategory | 'unallocated') => {
-    setSelectedAllocation(allocationType === selectedAllocation ? null : allocationType);
+  const handleCategoryClick = (event: React.MouseEvent<HTMLElement>, category: CategoryWithSpending) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedCategoryForMenu(category);
   };
 
-  // Handle category allocation change
+  const handleCloseMenu = () => {
+    setAnchorEl(null);
+    setSelectedCategoryForMenu(null);
+  };
+
   const handleCategoryAllocationChange = async (categoryId: number, newAllocation: SpendingCategory) => {
     try {
       await updateMapping(categoryId, { spendingCategory: newAllocation });
@@ -97,10 +146,31 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
     }
   };
 
-  // Get selected categories
-  const selectedCategories = selectedAllocation
-    ? getCategoriesForAllocation(selectedAllocation)
-    : [];
+  const handleChangeAllocation = async (newAllocation: SpendingCategory) => {
+    if (selectedCategoryForMenu) {
+      await handleCategoryAllocationChange(selectedCategoryForMenu.category_definition_id, newAllocation);
+    }
+    handleCloseMenu();
+  };
+
+  const handleSliderChange = (key: SpendingCategory, newValue: number | number[]) => {
+    setLocalTargets(prev => ({ ...prev, [key]: newValue as number }));
+  };
+
+  const handleSliderCommit = async (key: SpendingCategory, newValue: number | number[]) => {
+    const updatedTargets = { ...localTargets, [key]: newValue as number };
+    const balancedTargets = rebalanceTargets(updatedTargets, key);
+    setLocalTargets(balancedTargets);
+    try {
+      await updateTargets(balancedTargets);
+    } catch (err) {
+      console.error('Failed to update targets:', err);
+      // Revert on error
+      if (breakdown?.targets) {
+        setLocalTargets(breakdown.targets);
+      }
+    }
+  };
 
   if (loading && !breakdown) {
     return (
@@ -121,220 +191,179 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Box>
-          <Typography variant="subtitle2" fontWeight="bold">
-            {t('title')}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {totalIncome > 0
-              ? t('subtitle.withIncome', { amount: totalIncome.toFixed(0) })
-              : t('subtitle.noIncome')}
-          </Typography>
-        </Box>
-        <IconButton size="small" onClick={() => setSettingsOpen(true)}>
-          <SettingsIcon fontSize="small" />
-        </IconButton>
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="subtitle2" fontWeight="bold">
+          {t('title')}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {totalIncome > 0
+            ? t('subtitle.withIncome', { amount: totalIncome.toFixed(0) })
+            : t('subtitle.noIncome')}
+        </Typography>
       </Box>
 
-      {/* Main Content - Side by Side */}
-      <Box sx={{ display: 'flex', gap: 2 }}>
-        {/* Left Panel - Allocation Types */}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          {/* Allocation Bars */}
-          {(['essential', 'growth', 'stability', 'reward'] as SpendingCategory[]).map((key) => {
-            const target = targets[key] || 0;
-            const actual = getActualPercentage(key);
-            const isSelected = selectedAllocation === key;
-            const isOver = actual > target;
-            const label = t(`categories.${key}`, { defaultValue: CATEGORY_LABELS[key] });
-            const description = t(`descriptions.${key}`, { defaultValue: ALLOCATION_DESCRIPTIONS[key] });
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {TARGET_KEYS.map((key) => {
+          const target = localTargets[key] || 0;
+          const categories = getCategoriesForAllocation(key);
+          const label = t(`categories.${key}`, { defaultValue: CATEGORY_LABELS[key] });
+          const color = CATEGORY_COLORS[key];
 
-            return (
-              <Paper
-                key={key}
-                elevation={isSelected ? 3 : 0}
-                sx={{
-                  p: 1.5,
-                  mb: 1,
-                  cursor: 'pointer',
-                  bgcolor: isSelected ? `${CATEGORY_COLORS[key]}10` : 'background.default',
-                  border: isSelected ? `2px solid ${CATEGORY_COLORS[key]}` : '1px solid transparent',
-                  borderRadius: 1,
-                  transition: 'all 0.2s',
-                  '&:hover': {
-                    bgcolor: `${CATEGORY_COLORS[key]}08`,
-                  },
-                }}
-                onClick={() => handleAllocationClick(key)}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                  <Typography variant="caption" fontWeight="bold" sx={{ color: CATEGORY_COLORS[key] }}>
-                    {label}
-                  </Typography>
-                  <Typography variant="caption" fontWeight="bold">
-                    {actual.toFixed(1)}% / {target}%
-                  </Typography>
-                </Box>
-
-                <Tooltip title={description} placement="top">
-                  <Box>
-                    <LinearProgress
-                      variant="determinate"
-                      value={Math.min((actual / Math.max(target, 1)) * 100, 100)}
-                      sx={{
-                        height: 8,
-                        borderRadius: 1,
-                        bgcolor: `${CATEGORY_COLORS[key]}20`,
-                        '& .MuiLinearProgress-bar': {
-                          bgcolor: isOver ? '#f44336' : CATEGORY_COLORS[key],
-                        },
-                      }}
-                    />
-                  </Box>
-                </Tooltip>
-
-                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-                  {description}
+          return (
+            <Paper
+              key={key}
+              elevation={0}
+              sx={{
+                p: 2,
+                bgcolor: 'background.default',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 2,
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                <Typography variant="body2" fontWeight="bold" sx={{ color, minWidth: 80 }}>
+                  {label}
                 </Typography>
-              </Paper>
-            );
-          })}
-
-          {/* Unallocated Section */}
-          {(() => {
-            const unallocatedCategories = getCategoriesForAllocation('unallocated');
-            if (unallocatedCategories.length === 0) return null;
-
-            const actual = getActualPercentage('unallocated');
-            const isSelected = selectedAllocation === 'unallocated';
-            const label = t('categories.unallocated', { defaultValue: CATEGORY_LABELS.unallocated });
-
-            return (
-              <Paper
-                elevation={isSelected ? 3 : 0}
-                sx={{
-                  p: 1.5,
-                  cursor: 'pointer',
-                  bgcolor: isSelected ? `${CATEGORY_COLORS.unallocated}10` : 'background.default',
-                  border: isSelected ? `2px solid ${CATEGORY_COLORS.unallocated}` : '1px solid transparent',
-                  borderRadius: 1,
-                  transition: 'all 0.2s',
-                  '&:hover': {
-                    bgcolor: `${CATEGORY_COLORS.unallocated}08`,
-                  },
-                }}
-                onClick={() => handleAllocationClick('unallocated')}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                  <Typography variant="caption" fontWeight="bold" sx={{ color: CATEGORY_COLORS.unallocated }}>
-                    {label}
-                  </Typography>
-                  <Chip
-                    label={t('unallocated.count', { count: unallocatedCategories.length })}
-                    size="small"
-                    sx={{ height: 18, fontSize: '0.65rem' }}
+                <Box sx={{ flex: 1, mx: 2 }}>
+                  <Slider
+                    value={target}
+                    onChange={(_, val) => handleSliderChange(key, val)}
+                    onChangeCommitted={(_, val) => handleSliderCommit(key, val)}
+                    min={0}
+                    max={100}
+                    step={5}
+                    sx={{
+                      color,
+                      height: 6,
+                      '& .MuiSlider-thumb': {
+                        width: 16,
+                        height: 16,
+                      },
+                    }}
                   />
                 </Box>
-                <Typography variant="caption" color="text.secondary">
-                  {t('unallocated.needsAssignment', { percentage: actual.toFixed(1) })}
+                <Typography variant="body2" fontWeight="bold" sx={{ minWidth: 40, textAlign: 'right' }}>
+                  {target}%
                 </Typography>
-              </Paper>
-            );
-          })()}
-        </Box>
+              </Box>
 
-        {/* Right Panel - Categories in Selected Allocation */}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          {selectedAllocation ? (
-            <Paper sx={{ p: 1.5, bgcolor: 'background.default', borderRadius: 1, height: '100%' }}>
-              <Typography variant="caption" fontWeight="bold" sx={{ color: CATEGORY_COLORS[selectedAllocation], mb: 1, display: 'block' }}>
-                {t('selected.title', {
-                  category: t(`categories.${selectedAllocation}`, { defaultValue: CATEGORY_LABELS[selectedAllocation] }),
-                })}
+              <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 1, minHeight: 40, alignItems: 'center' }}>
+                {categories.length > 0 ? (
+                  categories.map((category) => (
+                    <Tooltip key={category.category_definition_id} title={renderCategoryTooltip(category, color)} arrow>
+                      <Box
+                        onClick={(e) => handleCategoryClick(e, category)}
+                        sx={{
+                          cursor: 'pointer',
+                          p: 1,
+                          borderRadius: '50%',
+                          bgcolor: `${color}15`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s',
+                          '&:hover': {
+                            bgcolor: `${color}25`,
+                            transform: 'scale(1.1)',
+                          },
+                        }}
+                      >
+                        <CategoryIcon
+                          iconName={category.icon}
+                          color={color}
+                          size={20}
+                        />
+                      </Box>
+                    </Tooltip>
+                  ))
+                ) : (
+                  <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                    {t('selected.empty')}
+                  </Typography>
+                )}
+              </Box>
+            </Paper>
+          );
+        })}
+
+        {/* Unallocated Section */}
+        {(() => {
+          const unallocatedCategories = getCategoriesForAllocation('unallocated');
+          if (unallocatedCategories.length === 0) return null;
+          const color = CATEGORY_COLORS.unallocated;
+
+          return (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                bgcolor: 'background.default',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 2,
+              }}
+            >
+              <Typography variant="body2" fontWeight="bold" sx={{ color, mb: 1 }}>
+                {t('categories.unallocated', { defaultValue: CATEGORY_LABELS.unallocated })}
               </Typography>
-
-              {selectedCategories.length === 0 ? (
-                <Typography variant="caption" color="text.secondary">
-                  {t('selected.empty')}
-                </Typography>
-              ) : (
-                <Box sx={{ maxHeight: 280, overflow: 'auto' }}>
-                  {selectedCategories.map((category) => (
+              <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 1 }}>
+                {unallocatedCategories.map((category) => (
+                  <Tooltip key={category.category_definition_id} title={renderCategoryTooltip(category, color)} arrow>
                     <Box
-                      key={category.category_definition_id}
+                      onClick={(e) => handleCategoryClick(e, category)}
                       sx={{
+                        cursor: 'pointer',
+                        p: 1,
+                        borderRadius: '50%',
+                        bgcolor: `${color}15`,
                         display: 'flex',
-                        justifyContent: 'space-between',
                         alignItems: 'center',
-                        py: 0.75,
-                        borderBottom: '1px solid',
-                        borderColor: 'divider',
-                        '&:last-child': { borderBottom: 'none' },
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          bgcolor: `${color}25`,
+                          transform: 'scale(1.1)',
+                        },
                       }}
                     >
-                      <Box sx={{ flex: 1, minWidth: 0, mr: 1 }}>
-                        <Typography variant="caption" noWrap title={category.category_name}>
-                          {category.category_name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          {category.total_amount > 0
-                            ? `${category.total_amount.toFixed(0)} (${category.percentage_of_income.toFixed(1)}%)`
-                            : t('selected.noSpending')}
-                        </Typography>
-                      </Box>
-
-                      {/* Allocation Type Dropdown */}
-                      <FormControl size="small" sx={{ minWidth: 80 }}>
-                        <Select
-                          value={category.spending_category || ''}
-                          onChange={(e) => handleCategoryAllocationChange(
-                            category.category_definition_id,
-                            e.target.value as SpendingCategory
-                          )}
-                          sx={{ fontSize: '0.75rem', height: 28 }}
-                        >
-                          {(['essential', 'growth', 'stability', 'reward'] as SpendingCategory[]).map((key) => (
-                            <MenuItem key={key} value={key} sx={{ fontSize: '0.75rem' }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <Box
-                                  sx={{
-                                    width: 8,
-                                    height: 8,
-                                    borderRadius: '50%',
-                                    bgcolor: CATEGORY_COLORS[key],
-                                  }}
-                                />
-                                {t(`categories.${key}`, { defaultValue: CATEGORY_LABELS[key] })}
-                              </Box>
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
+                      <CategoryIcon
+                        iconName={category.icon}
+                        color={color}
+                        size={20}
+                      />
                     </Box>
-                  ))}
-                </Box>
-              )}
+                  </Tooltip>
+                ))}
+              </Box>
             </Paper>
-          ) : (
-            <Paper sx={{ p: 2, bgcolor: 'background.default', borderRadius: 1, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Typography variant="caption" color="text.secondary" textAlign="center">
-                {t('empty.selectPrompt')}
-              </Typography>
-            </Paper>
-          )}
-        </Box>
+          );
+        })()}
       </Box>
 
-      {/* Settings Modal */}
-      <AllocationSettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        targets={targets as Record<SpendingCategory, number>}
-        unallocatedCategories={getCategoriesForAllocation('unallocated')}
-        onUpdateTargets={updateTargets}
-        onBulkAssign={bulkAssign}
-      />
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleCloseMenu}
+      >
+        {TARGET_KEYS.map((key) => (
+          <MenuItem key={key} onClick={() => handleChangeAllocation(key)}>
+            <ListItemIcon>
+              <Box
+                sx={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  bgcolor: CATEGORY_COLORS[key],
+                }}
+              />
+            </ListItemIcon>
+            <ListItemText>
+              {t(`categories.${key}`, { defaultValue: CATEGORY_LABELS[key] })}
+            </ListItemText>
+          </MenuItem>
+        ))}
+      </Menu>
     </Box>
   );
 };

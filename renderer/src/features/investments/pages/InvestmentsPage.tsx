@@ -8,6 +8,9 @@ import {
   Paper,
   Tooltip,
   CircularProgress,
+  ToggleButtonGroup,
+  ToggleButton,
+  Grid,
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
@@ -28,7 +31,6 @@ import {
   InvestmentsFiltersProvider,
   useInvestmentsFilters,
 } from '../InvestmentsFiltersContext';
-import InvestmentsSummarySection from '../components/InvestmentsSummarySection';
 import PortfolioHistorySection from '../components/PortfolioHistorySection';
 import PortfolioBreakdownSection from '../components/PortfolioBreakdownSection';
 
@@ -45,6 +47,9 @@ const InvestmentsPageContent: React.FC = () => {
     triggerRefresh,
     isRefreshing,
     setIsRefreshing,
+    setDateRange,
+    viewMode,
+    setViewMode,
   } = useInvestmentsFilters();
 
   const [data, setData] = useState<InvestmentData | null>(null);
@@ -64,9 +69,38 @@ const InvestmentsPageContent: React.FC = () => {
     if (isLocked) return;
     setHistoryLoading(true);
     try {
-      const overallResponse = await apiClient.get(
-        `/api/investments/history?timeRange=${historyTimeRange}`
-      );
+      const overallPromise = apiClient.get(`/api/investments/history?timeRange=${historyTimeRange}`);
+
+      const accountIds =
+        portfolioData?.breakdown
+          ?.flatMap((group) => group.accounts?.map((account) => account.id).filter(Boolean) || [])
+          .filter((id): id is number => typeof id === 'number') || [];
+
+      const uniqueAccountIds = Array.from(new Set(accountIds));
+
+      const accountHistoryPromises = uniqueAccountIds.map(async (accountId) => {
+        try {
+          const accountResponse = await apiClient.get(
+            `/api/investments/history?accountId=${accountId}&timeRange=${historyTimeRange}`
+          );
+          if (accountResponse.ok) {
+            const accountResult = (accountResponse.data as PortfolioHistoryResponse) || {};
+            return {
+              accountId,
+              history: Array.isArray(accountResult.history) ? accountResult.history : [],
+            };
+          }
+        } catch (innerError) {
+          console.error(`Error fetching history for account ${accountId}:`, innerError);
+        }
+        return { accountId, history: [] as PortfolioHistoryPoint[] };
+      });
+
+      const [overallResponse, accountResults] = await Promise.all([
+        overallPromise,
+        Promise.all(accountHistoryPromises),
+      ]);
+
       if (overallResponse.ok) {
         const overallResult = (overallResponse.data as PortfolioHistoryResponse) || {};
         setOverallHistory(Array.isArray(overallResult.history) ? overallResult.history : []);
@@ -74,39 +108,15 @@ const InvestmentsPageContent: React.FC = () => {
         setOverallHistory([]);
       }
 
-      if (portfolioData?.breakdown) {
-        const histories: Record<number, PortfolioHistoryPoint[]> = {};
-
-        for (const group of portfolioData.breakdown) {
-          for (const account of group.accounts) {
-            if (account.id) {
-              try {
-                const accountResponse = await apiClient.get(
-                  `/api/investments/history?accountId=${account.id}&timeRange=${historyTimeRange}`
-                );
-                if (accountResponse.ok) {
-                  const accountResult =
-                    (accountResponse.data as PortfolioHistoryResponse) || {};
-                  histories[account.id] = Array.isArray(accountResult.history)
-                    ? accountResult.history
-                    : [];
-                } else {
-                  histories[account.id] = [];
-                }
-              } catch (innerError) {
-                console.error(
-                  `Error fetching history for account ${account.id}:`,
-                  innerError
-                );
-              }
-            }
-          }
-        }
-
-        setAccountHistories(histories);
-      }
+      const histories: Record<number, PortfolioHistoryPoint[]> = {};
+      accountResults.forEach(({ accountId, history }) => {
+        histories[accountId] = history;
+      });
+      setAccountHistories(histories);
     } catch (error) {
       console.error('Error fetching history data:', error);
+      setOverallHistory([]);
+      setAccountHistories({});
     } finally {
       setHistoryLoading(false);
     }
@@ -207,7 +217,7 @@ const InvestmentsPageContent: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3, height: { xs: 'auto', lg: 'calc(100vh - 64px)' }, display: 'flex', flexDirection: 'column', overflow: { xs: 'auto', lg: 'hidden' } }}>
       <InvestmentAccountsModal
         open={portfolioModalOpen}
         onClose={() => setPortfolioModalOpen(false)}
@@ -216,7 +226,7 @@ const InvestmentsPageContent: React.FC = () => {
       />
 
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: 2, flexShrink: 0 }}>
         <Box
           sx={{
             display: 'flex',
@@ -260,55 +270,108 @@ const InvestmentsPageContent: React.FC = () => {
             </Button>
           </Box>
         </Box>
+
+        <Box
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 2,
+            alignItems: 'center',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              {t('filters.rangeLabel')}
+            </Typography>
+            <ToggleButtonGroup
+              value={dateRange}
+              exclusive
+              onChange={(_, value: typeof dateRange | null) => value && setDateRange(value)}
+              size="small"
+            >
+              <ToggleButton value="3m">{t('history.ranges.3m')}</ToggleButton>
+              <ToggleButton value="6m">{t('history.ranges.6m')}</ToggleButton>
+              <ToggleButton value="1y">{t('history.ranges.1y')}</ToggleButton>
+              <ToggleButton value="all">{t('history.ranges.all')}</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              {t('filters.viewLabel')}
+            </Typography>
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              onChange={(_, value: typeof viewMode | null) => value && setViewMode(value)}
+              size="small"
+            >
+              <ToggleButton value="summary">{t('filters.view.summary')}</ToggleButton>
+              <ToggleButton value="detailed">{t('filters.view.detailed')}</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        </Box>
       </Box>
 
       {/* Sections */}
-      <InvestmentsSummarySection portfolioData={portfolioData} loading={portfolioLoading} />
+      <Box sx={{ flexGrow: 1, minHeight: 0, overflow: { xs: 'visible', lg: 'hidden' } }}>
+        <Grid container spacing={2} sx={{ height: { xs: 'auto', lg: '100%' } }}>
+          <Grid item xs={12} lg={9} sx={{ height: { xs: 'auto', lg: '100%' }, display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+              {portfolioData && portfolioData.summary.totalAccounts > 0 ? (
+                <PortfolioHistorySection
+                  overallHistory={overallHistory}
+                  accountHistories={accountHistories}
+                  portfolioData={portfolioData}
+                  transactions={data?.transactions || []}
+                  loadingHistory={historyLoading}
+                  loadingTransactions={loading}
+                />
+              ) : (
+                !portfolioLoading && (
+                  <Paper sx={{ p: 4, textAlign: 'center', mt: 4 }}>
+                    <AccountIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+                    <Typography variant="h5" gutterBottom fontWeight="medium">
+                      {t('empty.title')}
+                    </Typography>
+                    <Typography
+                      variant="body1"
+                      color="text.secondary"
+                      sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}
+                    >
+                      {t('empty.description')}
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      size="large"
+                      startIcon={<AddIcon />}
+                      onClick={() => {
+                        setPortfolioModalTab(0);
+                        setPortfolioModalOpen(true);
+                      }}
+                      sx={{ borderRadius: 2, textTransform: 'none', px: 4 }}
+                    >
+                      {t('empty.cta')}
+                    </Button>
+                  </Paper>
+                )
+              )}
+            </Box>
+          </Grid>
 
-      {portfolioData && portfolioData.summary.totalAccounts > 0 ? (
-        <>
-          <PortfolioHistorySection
-            overallHistory={overallHistory}
-            transactions={data?.transactions || []}
-            loadingHistory={historyLoading}
-            loadingTransactions={loading}
-          />
-
-          <PortfolioBreakdownSection
-            portfolioData={portfolioData}
-            accountHistories={accountHistories}
-            historyLoading={historyLoading}
-          />
-        </>
-      ) : (
-        !portfolioLoading && (
-          <Paper sx={{ p: 4, textAlign: 'center', mt: 4 }}>
-            <AccountIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-            <Typography variant="h5" gutterBottom fontWeight="medium">
-              {t('empty.title')}
-            </Typography>
-            <Typography
-              variant="body1"
-              color="text.secondary"
-              sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}
-            >
-              {t('empty.description')}
-            </Typography>
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={<AddIcon />}
-              onClick={() => {
-                setPortfolioModalTab(0);
-                setPortfolioModalOpen(true);
-              }}
-              sx={{ borderRadius: 2, textTransform: 'none', px: 4 }}
-            >
-              {t('empty.cta')}
-            </Button>
-          </Paper>
-        )
-      )}
+          <Grid item xs={12} lg={3} sx={{ height: { xs: 'auto', lg: '100%' } }}>
+            <Box sx={{ height: '100%', overflowY: 'auto', pr: 1 }}>
+              {portfolioData && portfolioData.summary.totalAccounts > 0 && (
+                <PortfolioBreakdownSection
+                  portfolioData={portfolioData}
+                  accountHistories={accountHistories}
+                  historyLoading={historyLoading}
+                />
+              )}
+            </Box>
+          </Grid>
+        </Grid>
+      </Box>
     </Box>
   );
 };

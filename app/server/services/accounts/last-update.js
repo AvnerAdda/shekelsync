@@ -1,4 +1,5 @@
 const database = require('../database.js');
+const { toUTCISOString } = require('../../../lib/server/time-utils.js');
 
 async function listAccountLastUpdates() {
   const result = await database.query(
@@ -61,7 +62,7 @@ async function listAccountLastUpdates() {
     id: row.id,
     vendor: row.vendor,
     nickname: row.nickname,
-    lastUpdate: row.last_update,
+    lastUpdate: toUTCISOString(row.last_update),
     lastScrapeStatus: row.last_scrape_status || 'never',
     accountNumbers: row.account_numbers ? row.account_numbers.split(',') : [],
     institution: row.institution_id ? {

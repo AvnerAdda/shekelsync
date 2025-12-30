@@ -39,10 +39,10 @@ async function getTemporalAnalytics(params = {}) {
       t.date,
       t.price,
       t.category_type,
-      strftime('%H', t.date) as hour,
-      strftime('%M', t.date) as minute,
-      strftime('%w', t.date) as day_of_week,
-      strftime('%Y-%W', t.date) as year_week,
+      strftime('%H', datetime(t.date, 'localtime')) as hour,
+      strftime('%M', datetime(t.date, 'localtime')) as minute,
+      strftime('%w', datetime(t.date, 'localtime')) as day_of_week,
+      strftime('%Y-%W', datetime(t.date, 'localtime')) as year_week,
       cd.name as category_name
     FROM transactions t
     LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
@@ -51,7 +51,7 @@ async function getTemporalAnalytics(params = {}) {
       AND t.date >= $1
       AND t.date <= $2
       AND t.price < 0
-      AND strftime('%M', t.date) != '00'
+      AND strftime('%M', datetime(t.date, 'localtime')) != '00'
     ORDER BY t.date`,
     [startDate.toISOString(), endDate.toISOString()]
   );
@@ -61,13 +61,13 @@ async function getTemporalAnalytics(params = {}) {
   // Get transaction count by hour
   const hourlyCountResult = await database.query(
     `SELECT
-      strftime('%H', t.date) as hour,
+      strftime('%H', datetime(t.date, 'localtime')) as hour,
       COUNT(*) as count
     FROM transactions t
     WHERE t.status = 'completed'
       AND t.category_type = 'expense'
       AND t.price < 0
-      AND strftime('%M', t.date) != '00'
+      AND strftime('%M', datetime(t.date, 'localtime')) != '00'
       AND t.date >= $1
       AND t.date <= $2
     GROUP BY hour
@@ -78,13 +78,13 @@ async function getTemporalAnalytics(params = {}) {
   // Get transaction count by day of week
   const weekdayCountResult = await database.query(
     `SELECT
-      strftime('%w', t.date) as day_of_week,
+      strftime('%w', datetime(t.date, 'localtime')) as day_of_week,
       COUNT(*) as count
     FROM transactions t
     WHERE t.status = 'completed'
       AND t.category_type = 'expense'
       AND t.price < 0
-      AND strftime('%M', t.date) != '00'
+      AND strftime('%M', datetime(t.date, 'localtime')) != '00'
       AND t.date >= $1
       AND t.date <= $2
     GROUP BY day_of_week
@@ -95,7 +95,7 @@ async function getTemporalAnalytics(params = {}) {
   // Get daily evolution data
   const dailyEvolutionResult = await database.query(
     `SELECT
-      DATE(t.date) as date,
+      DATE(datetime(t.date, 'localtime')) as date,
       SUM(ABS(t.price)) as total_amount,
       COUNT(*) as transaction_count
     FROM transactions t
@@ -104,7 +104,7 @@ async function getTemporalAnalytics(params = {}) {
       AND t.price < 0
       AND t.date >= $1
       AND t.date <= $2
-    GROUP BY DATE(t.date)
+    GROUP BY DATE(datetime(t.date, 'localtime'))
     ORDER BY date`,
     [startDate.toISOString(), endDate.toISOString()]
   );
@@ -112,8 +112,8 @@ async function getTemporalAnalytics(params = {}) {
   // Get weekly evolution data
   const weeklyEvolutionResult = await database.query(
     `SELECT
-      strftime('%Y-%W', t.date) as year_week,
-      MIN(DATE(t.date)) as week_start_date,
+      strftime('%Y-%W', datetime(t.date, 'localtime')) as year_week,
+      MIN(DATE(datetime(t.date, 'localtime'))) as week_start_date,
       SUM(ABS(t.price)) as total_amount,
       COUNT(*) as transaction_count
     FROM transactions t
@@ -130,8 +130,8 @@ async function getTemporalAnalytics(params = {}) {
   // Get monthly evolution data
   const monthlyEvolutionResult = await database.query(
     `SELECT
-      strftime('%Y-%m', t.date) as year_month,
-      MIN(DATE(t.date)) as month_start_date,
+      strftime('%Y-%m', datetime(t.date, 'localtime')) as year_month,
+      MIN(DATE(datetime(t.date, 'localtime'))) as month_start_date,
       SUM(ABS(t.price)) as total_amount,
       COUNT(*) as transaction_count
     FROM transactions t

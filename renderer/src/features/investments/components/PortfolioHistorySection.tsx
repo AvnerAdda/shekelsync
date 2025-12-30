@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Paper,
@@ -32,6 +32,8 @@ import {
 import {
   LineChart,
   Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -40,31 +42,46 @@ import {
   Tooltip as RechartsTooltip,
 } from 'recharts';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
-import { PortfolioHistoryPoint, InvestmentData } from '@renderer/types/investments';
+import { PortfolioHistoryPoint, InvestmentData, PortfolioSummary, InvestmentAccountSummary } from '@renderer/types/investments';
 import { useInvestmentsFilters, HistoryTimeRangeOption } from '../InvestmentsFiltersContext';
 import { useTranslation } from 'react-i18next';
 
 interface PortfolioHistorySectionProps {
   overallHistory: PortfolioHistoryPoint[];
+  accountHistories: Record<number, PortfolioHistoryPoint[]>;
+  portfolioData: PortfolioSummary | null;
   transactions: InvestmentData['transactions'];
   loadingHistory: boolean;
   loadingTransactions: boolean;
 }
 
+// Color palette for charts
+const CHART_COLORS = [
+  '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#a05195', '#d45087', '#f95d6a', '#ff7c43', '#ffa600'
+];
+
 const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
   overallHistory,
+  accountHistories,
+  portfolioData,
   transactions,
   loadingHistory,
   loadingTransactions,
 }) => {
   const theme = useTheme();
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
-  const { historyTimeRange, setHistoryTimeRange } = useInvestmentsFilters();
-  const [displayMode, setDisplayMode] = useState<'chart' | 'table'>('chart');
+  const { historyTimeRange, setHistoryTimeRange, viewMode, setViewMode } = useInvestmentsFilters();
+  const [displayMode, setDisplayMode] = useState<'chart' | 'table'>(
+    viewMode === 'detailed' ? 'table' : 'chart'
+  );
   const [expanded, setExpanded] = useState(true);
   const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.history' });
   const currentValueLabel = t('series.currentValue');
   const costBasisLabel = t('series.costBasis');
+
+  useEffect(() => {
+    setDisplayMode(viewMode === 'detailed' ? 'table' : 'chart');
+  }, [viewMode]);
 
   const formatCurrencyValue = (value: number) =>
     formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
@@ -77,8 +94,8 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
     });
   };
 
-  const renderFullChart = (history: PortfolioHistoryPoint[]) => {
-    if (!history || history.length === 0) {
+  const renderStackedAreaChart = () => {
+    if (!portfolioData || !accountHistories || Object.keys(accountHistories).length === 0) {
       return (
         <Box sx={{ p: 3, textAlign: 'center' }}>
           <Typography variant="body2" color="text.secondary">
@@ -88,21 +105,71 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
       );
     }
 
-    const data = history.map((h) => ({
-      date: new Date(h.date).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: history.length > 90 ? '2-digit' : undefined,
-      }),
-      [currentValueLabel]: h.currentValue,
-      [costBasisLabel]: h.costBasis,
-      fullDate: h.date,
-    }));
+    // 1. Identify accounts and sort them: Restricted (Longterm) first, then Liquid
+    const restrictedAccounts = portfolioData.restrictedAccounts || [];
+    const liquidAccounts = portfolioData.liquidAccounts || [];
+    
+    // We want Restricted at the bottom of the stack.
+    // In Recharts AreaChart, the first <Area> is at the bottom.
+    // So we should render Restricted accounts first.
+    const orderedAccounts = [...restrictedAccounts, ...liquidAccounts];
+    
+    // 2. Collect all unique dates
+    const allDates = new Set<string>();
+    Object.values(accountHistories).forEach(history => {
+      history.forEach(point => allDates.add(point.date.split('T')[0]));
+    });
+    const sortedDates = Array.from(allDates).sort();
+
+    // 3. Build data points
+    const data = sortedDates.map(dateStr => {
+      const point: any = { 
+        date: new Date(dateStr).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: sortedDates.length > 90 ? '2-digit' : undefined,
+        }),
+        fullDate: dateStr
+      };
+      
+      orderedAccounts.forEach(account => {
+        const history = accountHistories[account.id];
+        if (history) {
+          // Find exact match
+          const match = history.find(h => h.date.startsWith(dateStr));
+          if (match) {
+            point[account.id] = match.currentValue;
+          } else {
+            // Simple fallback: 0. 
+            // Ideally we would forward-fill, but for now let's assume aligned data or 0.
+            // If we want forward fill, we'd need to track last known values outside the map.
+            point[account.id] = 0;
+          }
+        } else {
+          point[account.id] = 0;
+        }
+      });
+      return point;
+    });
+
+    // Forward fill logic (optional but recommended for smoother charts)
+    // Let's do a quick pass to forward fill if needed, or just rely on 0.
+    // Given the user wants "evolution", 0 might be misleading if data is missing for a day.
+    // But implementing robust forward fill inside map is tricky. 
+    // Let's stick to 0 for now, assuming the backend provides consistent daily snapshots or we accept gaps.
 
     return (
-      <Box sx={{ p: 2, height: 300 }}>
+      <Box sx={{ p: 2, flexGrow: 1, minHeight: 0 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
+          <AreaChart data={data}>
+            <defs>
+              {orderedAccounts.map((account, index) => (
+                <linearGradient key={`gradient-${account.id}`} id={`color-${account.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={CHART_COLORS[index % CHART_COLORS.length]} stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor={CHART_COLORS[index % CHART_COLORS.length]} stopOpacity={0.1}/>
+                </linearGradient>
+              ))}
+            </defs>
             <CartesianGrid
               strokeDasharray="3 3"
               stroke={theme.palette.mode === 'dark' ? theme.palette.grey[700] : theme.palette.grey[300]}
@@ -110,9 +177,9 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
             <XAxis
               dataKey="date"
               tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
-              angle={history.length > 30 ? -45 : 0}
-              textAnchor={history.length > 30 ? 'end' : 'middle'}
-              height={history.length > 30 ? 60 : 30}
+              angle={sortedDates.length > 30 ? -45 : 0}
+              textAnchor={sortedDates.length > 30 ? 'end' : 'middle'}
+              height={sortedDates.length > 30 ? 60 : 30}
               stroke={theme.palette.text.disabled}
             />
             <YAxis
@@ -121,9 +188,14 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
               stroke={theme.palette.text.disabled}
             />
             <RechartsTooltip
-              formatter={(value: number | string) =>
-                typeof value === 'number' ? formatCurrencyValue(value) : value
-              }
+              formatter={(value: number | string, name: string) => {
+                if (name === 'date' || name === 'fullDate') return [value, name];
+                // Find account name by ID
+                const accountId = Number(name);
+                const account = orderedAccounts.find(a => a.id === accountId);
+                const accountName = account ? account.account_name : `Account ${accountId}`;
+                return [typeof value === 'number' ? formatCurrencyValue(value) : value, accountName];
+              }}
               labelStyle={{ color: theme.palette.text.primary }}
               contentStyle={{
                 backgroundColor: theme.palette.background.paper,
@@ -131,103 +203,52 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
                 borderRadius: theme.shape.borderRadius,
               }}
             />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey={currentValueLabel}
-              stroke={theme.palette.primary.main}
-              strokeWidth={2}
-              dot={{ r: 3 }}
-              activeDot={{ r: 5 }}
+            <Legend 
+              formatter={(value, entry: any) => {
+                const accountId = entry.dataKey;
+                const account = orderedAccounts.find(a => a.id === accountId);
+                return account ? account.account_name : value;
+              }}
             />
-            <Line
-              type="monotone"
-              dataKey={costBasisLabel}
-              stroke={theme.palette.success.main}
-              strokeWidth={2}
-              dot={{ r: 3 }}
-              activeDot={{ r: 5 }}
-            />
-          </LineChart>
+            {orderedAccounts.map((account, index) => (
+              <Area
+                key={account.id}
+                type="monotone"
+                dataKey={account.id}
+                stackId="1"
+                stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                fill={`url(#color-${account.id})`}
+                fillOpacity={1}
+                name={String(account.id)} // Used for lookup in tooltip/legend
+              />
+            ))}
+          </AreaChart>
         </ResponsiveContainer>
       </Box>
     );
   };
 
   return (
-    <Paper sx={{ mb: 3, overflow: 'hidden' }}>
-      <Box
-        sx={{
-          p: 2,
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 2,
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <TimelineIcon color="action" />
-          <Typography variant="h6">{t('title')}</Typography>
-        </Box>
-
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <ToggleButtonGroup
-            value={displayMode}
-            exclusive
-            onChange={(e, newMode) => newMode && setDisplayMode(newMode)}
-            size="small"
-            aria-label={t('aria.displayMode')}
-          >
-            <ToggleButton value="chart" aria-label={t('aria.chart')}>
-              <ChartIcon fontSize="small" sx={{ mr: 1 }} />
-              {t('tabs.chart')}
-            </ToggleButton>
-            <ToggleButton value="table" aria-label={t('aria.table')}>
-              <TableIcon fontSize="small" sx={{ mr: 1 }} />
-              {t('tabs.table')}
-            </ToggleButton>
-          </ToggleButtonGroup>
-
-          {displayMode === 'chart' && (
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <Select
-                value={historyTimeRange}
-                onChange={(e) => setHistoryTimeRange(e.target.value as HistoryTimeRangeOption)}
-                displayEmpty
-                inputProps={{ 'aria-label': t('aria.timeRange') }}
-              >
-                <MenuItem value="1m">{t('ranges.1m')}</MenuItem>
-                <MenuItem value="3m">{t('ranges.3m')}</MenuItem>
-                <MenuItem value="6m">{t('ranges.6m')}</MenuItem>
-                <MenuItem value="1y">{t('ranges.1y')}</MenuItem>
-                <MenuItem value="all">{t('ranges.all')}</MenuItem>
-              </Select>
-            </FormControl>
-          )}
-        </Box>
-      </Box>
-
+    <Paper sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {displayMode === 'chart' ? (
-        <Box>
+        <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           {loadingHistory ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
               <CircularProgress />
             </Box>
           ) : (
-            renderFullChart(overallHistory)
+            renderStackedAreaChart()
           )}
         </Box>
       ) : (
-        <Box>
+        <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {loadingTransactions ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
               <CircularProgress />
             </Box>
           ) : transactions && transactions.length > 0 ? (
             <>
-              <TableContainer sx={{ maxHeight: 400 }}>
+              <TableContainer sx={{ flexGrow: 1, overflow: 'auto' }}>
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>

@@ -840,6 +840,13 @@
       "title": "Catégories de dépenses",
       "subtitle": "Répartition de vos dépenses par catégorie",
       "targetVsActual": "Objectif vs Réel",
+      "targetVsActualRange": "Objectif vs Réel ({{range}})",
+      "timeRanges": {
+        "label": "Plage de temps",
+        "currentMonth": "Mois en cours",
+        "last3Months": "Derniers {{count}} mois",
+        "history": "Tout l'historique"
+      },
       "empty": {
         "title": "Aucune donnée de dépense",
         "description": "Commencez à catégoriser vos transactions pour voir les insights."
@@ -857,7 +864,8 @@
         "transactions_one": "1 transaction",
         "transactions_other": "{{count}} transactions",
         "totalSpending_one": "Dépenses totales ({{count}} mois)",
-        "totalSpending_other": "Dépenses totales ({{count}} mois)"
+        "totalSpending_other": "Dépenses totales ({{count}} mois)",
+        "totalSpendingRange": "Dépenses totales ({{range}})"
       },
       "tooltips": {
         "overTarget": "Au-dessus de l'objectif",
@@ -1002,6 +1010,14 @@
       "refresh": "Rafraîchir",
       "refreshing": "Rafraîchissement...",
       "portfolioSetup": "Configurer le portefeuille"
+    },
+    "filters": {
+      "rangeLabel": "Plage des transactions",
+      "viewLabel": "Affichage",
+      "view": {
+        "summary": "Performance",
+        "detailed": "Transactions"
+      }
     },
     "empty": {
       "title": "Commencez votre portefeuille d'investissement",

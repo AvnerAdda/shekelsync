@@ -212,6 +212,108 @@ let healthService = null;
 let scrapingService = null;
 let setupAPIServer = null;
 
+async function initializeBackendServices({ skipEmbeddedApi }) {
+  try {
+    console.log('Initializing application configuration...');
+    logger.info('Initializing configuration');
+    const config = await configManager.initializeConfig();
+    logger.info('Configuration initialised', {
+      databaseMode: config?.database?.mode,
+    });
+
+    const usingSqliteEnv =
+      process.env.USE_SQLITE === 'true' ||
+      Boolean(process.env.SQLITE_DB_PATH) ||
+      config.database.mode === 'sqlite';
+
+    if (!config.database) {
+      config.database = {};
+    }
+    if (!config.database.mode) {
+      config.database.mode = usingSqliteEnv ? 'sqlite' : 'postgres';
+    }
+
+    if (config.database.mode === 'postgres') {
+      process.env.USE_SQLITE = 'false';
+      delete process.env.SQLITE_DB_PATH;
+      delete process.env.USE_SQLCIPHER;
+      delete process.env.SQLCIPHER_DB_PATH;
+
+      process.env.CLARIFY_DB_USER = config.database.user;
+      process.env.CLARIFY_DB_HOST = config.database.host;
+      process.env.CLARIFY_DB_NAME = config.database.database;
+      process.env.CLARIFY_DB_PASSWORD = config.database.password;
+      process.env.CLARIFY_DB_PORT = String(config.database.port ?? 5432);
+    } else {
+      process.env.USE_SQLITE = 'true';
+      const sqlitePath =
+        process.env.SQLITE_DB_PATH ||
+        config.database.path ||
+        path.join(app.getPath('userData'), 'clarify.sqlite');
+      process.env.SQLITE_DB_PATH = sqlitePath;
+      config.database.path = sqlitePath;
+    }
+
+    // Ensure dbManager mode matches the resolved config (constructor runs before env is set)
+    dbManager.mode = config.database.mode;
+
+    if (!skipEmbeddedApi && !setupAPIServer) {
+      try {
+        setupAPIServer = require('./server').setupAPIServer;
+      } catch (error) {
+        console.log('API server module not available, running in basic mode:', error.message);
+        setupAPIServer = null;
+      }
+    }
+
+    let dbResult = { success: true };
+    if (skipEmbeddedApi) {
+      console.log('Skipping main-process database initialization (SKIP_EMBEDDED_API=true).');
+    } else {
+      console.log('Initializing database connection...');
+      logger.info('Connecting to database', { mode: config.database.mode });
+      dbResult = await dbManager.initialize(config.database);
+
+      if (!dbResult.success) {
+        console.error('Database initialization failed:', dbResult.message);
+        logger.error('Database initialization failed', {
+          error: dbResult.message,
+          mode: config.database.mode,
+        });
+        dialog.showErrorBox(
+          'Database Connection Error',
+          `Failed to connect to database: ${dbResult.message}\n\nThe app will run in limited mode.`
+        );
+      }
+    }
+
+    if (!skipEmbeddedApi && setupAPIServer) {
+      try {
+        const serverResult = await setupAPIServer(mainWindow);
+        apiServer = serverResult.server;
+        apiPort = serverResult.port;
+        console.log(`API server started on port ${apiPort}`);
+        logger.info('Embedded API server started', { port: apiPort });
+      } catch (error) {
+        console.error('Failed to start API server:', error);
+        logger.error('Failed to start embedded API server', { error: error.message });
+        console.log('Running without internal API server - using external Next.js dev server');
+      }
+    } else if (skipEmbeddedApi) {
+      console.log('Embedded API server disabled via SKIP_EMBEDDED_API flag.');
+    } else {
+      console.log('Running without internal API server - relying on external dev renderer');
+    }
+  } catch (error) {
+    console.error('Initialization error:', error);
+    logger.error('Fatal initialization error', { error: error.message });
+    dialog.showErrorBox(
+      'Initialization Error',
+      `Failed to initialize application: ${error.message}`
+    );
+  }
+}
+
 // Helper to lazy-load services only when needed (and not in SQLite dev mode)
 function getHealthService() {
   if (!healthService) {
@@ -387,89 +489,6 @@ async function createWindow() {
   const skipEmbeddedApi = process.env.SKIP_EMBEDDED_API === 'true';
   const devRendererUrl = process.env.RENDERER_DEV_URL || 'http://localhost:5173';
 
-  // Initialize configuration and database
-  try {
-    console.log('Initializing application configuration...');
-    logger.info('Initializing configuration');
-    const config = await configManager.initializeConfig();
-    logger.info('Configuration initialised', {
-      databaseMode: config?.database?.mode,
-    });
-
-    const usingSqliteEnv =
-      process.env.USE_SQLITE === 'true' ||
-      Boolean(process.env.SQLITE_DB_PATH) ||
-      config.database.mode === 'sqlite';
-    if (!config.database) {
-      config.database = {};
-    }
-    if (!config.database.mode) {
-      config.database.mode = usingSqliteEnv ? 'sqlite' : 'postgres';
-    }
-
-    if (config.database.mode === 'postgres') {
-      process.env.USE_SQLITE = 'false';
-      delete process.env.SQLITE_DB_PATH;
-      delete process.env.USE_SQLCIPHER;
-      delete process.env.SQLCIPHER_DB_PATH;
-
-      process.env.CLARIFY_DB_USER = config.database.user;
-      process.env.CLARIFY_DB_HOST = config.database.host;
-      process.env.CLARIFY_DB_NAME = config.database.database;
-      process.env.CLARIFY_DB_PASSWORD = config.database.password;
-      process.env.CLARIFY_DB_PORT = String(config.database.port ?? 5432);
-    } else {
-      process.env.USE_SQLITE = 'true';
-      const sqlitePath =
-        process.env.SQLITE_DB_PATH ||
-        config.database.path ||
-        path.join(app.getPath('userData'), 'clarify.sqlite');
-      process.env.SQLITE_DB_PATH = sqlitePath;
-      config.database.path = sqlitePath;
-    }
-
-    if (skipEmbeddedApi) {
-      console.log('SKIP_EMBEDDED_API=true, embedded API server startup disabled.');
-    }
-
-    if (!skipEmbeddedApi && !setupAPIServer) {
-      try {
-        setupAPIServer = require('./server').setupAPIServer;
-      } catch (error) {
-        console.log('API server module not available, running in basic mode:', error.message);
-        setupAPIServer = null;
-      }
-    }
-
-    let dbResult = { success: false };
-    if (skipEmbeddedApi) {
-      console.log('Skipping main-process database initialization (SKIP_EMBEDDED_API=true).');
-    } else {
-      console.log('Initializing database connection...');
-      logger.info('Connecting to database', { mode: config.database.mode });
-      dbResult = await dbManager.initialize(config.database);
-
-      if (!dbResult.success) {
-        console.error('Database initialization failed:', dbResult.message);
-        logger.error('Database initialization failed', {
-          error: dbResult.message,
-          mode: config.database.mode,
-        });
-        dialog.showErrorBox(
-          'Database Connection Error',
-          `Failed to connect to database: ${dbResult.message}\n\nThe app will run in limited mode.`
-        );
-      }
-    }
-  } catch (error) {
-    console.error('Initialization error:', error);
-    logger.error('Fatal initialization error', { error: error.message });
-    dialog.showErrorBox(
-      'Initialization Error',
-      `Failed to initialize application: ${error.message}`
-    );
-  }
-
   if (isDev) {
     process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
   }
@@ -586,24 +605,12 @@ async function createWindow() {
   mainWindow.on('maximize', emitWindowState);
   mainWindow.on('unmaximize', emitWindowState);
 
-  // Set up API server (optional)
-  if (!skipEmbeddedApi && setupAPIServer) {
-    try {
-      const serverResult = await setupAPIServer(mainWindow);
-      apiServer = serverResult.server;
-      apiPort = serverResult.port;
-      console.log(`API server started on port ${apiPort}`);
-      logger.info('Embedded API server started', { port: apiPort });
-    } catch (error) {
-      console.error('Failed to start API server:', error);
-      logger.error('Failed to start embedded API server', { error: error.message });
-      console.log('Running without internal API server - using external Next.js dev server');
-    }
-  } else if (skipEmbeddedApi) {
-    console.log('Embedded API server disabled via SKIP_EMBEDDED_API flag.');
-  } else {
-    console.log('Running without internal API server - relying on external dev renderer');
-  }
+  // Kick off heavy initialization in the background so the window can appear sooner
+  setImmediate(() => {
+    initializeBackendServices({ skipEmbeddedApi }).catch((error) => {
+      console.error('Background initialization failed:', error);
+    });
+  });
 
   // Start renderer server in development
   // Load the app
