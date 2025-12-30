@@ -465,7 +465,12 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       const payload = response.data as any;
       const categoryList = Array.isArray(payload) ? payload : payload?.categories;
-      setCategories(buildCategoryTree(categoryList || []));
+      const normalizedCategories = (categoryList || []).map((cat) => ({
+        ...cat,
+        // Backend (SQLite) may return 0/1; Switch expects a boolean
+        is_active: cat.is_active === undefined ? true : Boolean(cat.is_active),
+      }));
+      setCategories(buildCategoryTree(normalizedCategories));
 
       if (!Array.isArray(payload) && payload?.uncategorized) {
         setUncategorized({
@@ -2097,7 +2102,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   <FormControlLabel
                     control={
                       <Switch
-                        checked={editingCategory.is_active}
+                        checked={!!editingCategory.is_active}
                         onChange={(e) => setEditingCategory({ ...editingCategory, is_active: e.target.checked })}
                       />
                     }

@@ -230,6 +230,13 @@ class DatabaseManager {
       isConnected: this.isConnected
     };
   }
+
+  getSqliteDatabase() {
+    if (this.mode !== 'sqlite') {
+      return null;
+    }
+    return this.sqliteDb;
+  }
 }
 
 // Create a singleton instance

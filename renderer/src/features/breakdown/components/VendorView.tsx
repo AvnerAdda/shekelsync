@@ -1,5 +1,5 @@
 import React from 'react';
-import { Grid, Card, CardContent, Typography, Chip, Box } from '@mui/material';
+import { Grid, Card, CardContent, Typography, Chip, Box, useTheme, alpha } from '@mui/material';
 import { CategoryType, FormatCurrencyFn, VendorBreakdownItem } from '../types';
 import { getBreakdownStrings } from '../strings';
 import TrendSparkline from './TrendSparkline';
@@ -12,6 +12,7 @@ interface VendorViewProps {
 }
 
 const VendorView: React.FC<VendorViewProps> = ({ vendors, categoryType, formatCurrencyValue, vendorTrendLabel }) => {
+  const theme = useTheme();
   const strings = getBreakdownStrings();
   const generalStrings = strings.general;
 
@@ -26,10 +27,24 @@ const VendorView: React.FC<VendorViewProps> = ({ vendors, categoryType, formatCu
     <Grid container spacing={2}>
       {vendors.map((vendor, index) => (
         <Grid item xs={12} sm={6} md={4} key={`${vendor.vendor}-${index}`}>
-          <Card>
+          <Card
+            sx={{
+              height: '100%',
+              background: alpha(theme.palette.background.paper, 0.6),
+              backdropFilter: 'blur(10px)',
+              border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              borderRadius: 2,
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: theme.shadows[4],
+                background: alpha(theme.palette.background.paper, 0.8),
+              },
+            }}
+          >
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                <Typography variant="h6" color="primary">
+                <Typography variant="h6" color="primary" noWrap sx={{ maxWidth: '70%' }}>
                   {vendor.vendor}
                 </Typography>
                 {(() => {
@@ -38,9 +53,14 @@ const VendorView: React.FC<VendorViewProps> = ({ vendors, categoryType, formatCu
                     return null;
                   }
                   const isPositive = delta >= 0;
-                  const color = categoryType === 'expense'
-                    ? isPositive ? 'error' : 'success'
-                    : isPositive ? 'success' : 'error';
+                  let color: 'error' | 'success' | 'default' | 'primary' | 'secondary' | 'info' | 'warning';
+                  
+                  if (categoryType === 'expense') {
+                    color = isPositive ? 'error' : 'success';
+                  } else {
+                    color = isPositive ? 'success' : 'error';
+                  }
+                  
                   const formattedDelta = `${isPositive ? '+' : ''}${delta.toFixed(1)}%`;
                   return (
                     <Chip
@@ -48,6 +68,12 @@ const VendorView: React.FC<VendorViewProps> = ({ vendors, categoryType, formatCu
                       size="small"
                       color={color}
                       variant="outlined"
+                      sx={{
+                        borderRadius: 1,
+                        height: 20,
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                      }}
                     />
                   );
                 })()}

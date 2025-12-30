@@ -64,6 +64,7 @@ const DashboardHomeContent: React.FC = () => {
     fetchByDate: fetchTransactionsByDate,
   } = useTransactionsByDate();
   const [yAxisScale, setYAxisScale] = useState<YAxisScale>('linear');
+  const [fallbackEnabled, setFallbackEnabled] = useState(false);
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
   const { status: onboardingStatus } = useOnboarding();
@@ -90,6 +91,7 @@ const DashboardHomeContent: React.FC = () => {
     startDate: fallbackStartDate,
     endDate: fallbackEndDate,
     aggregation: aggregationPeriod,
+    enabled: fallbackEnabled,
   });
 
   const {
@@ -108,7 +110,8 @@ const DashboardHomeContent: React.FC = () => {
   const {
     data: fallbackWaterfallData,
     loading: fallbackWaterfallLoading,
-  } = useWaterfallData({ startDate: fallbackStartDate, endDate: fallbackEndDate });
+    refresh: refreshFallbackWaterfall,
+  } = useWaterfallData({ startDate: fallbackStartDate, endDate: fallbackEndDate, enabled: fallbackEnabled });
 
   const {
     breakdownData,
@@ -125,9 +128,11 @@ const DashboardHomeContent: React.FC = () => {
     breakdownData: fallbackBreakdownData,
     breakdownLoading: fallbackBreakdownLoading,
     fetchBreakdown: fetchFallbackBreakdown,
+    refreshBreakdowns: refreshFallbackBreakdowns,
   } = useBreakdownData({
     startDate: fallbackStartDate,
     endDate: fallbackEndDate,
+    enabled: fallbackEnabled,
   });
 
   const handleChartAreaClick = (data: any) => {
@@ -219,7 +224,7 @@ const DashboardHomeContent: React.FC = () => {
 
     // If average income is 3x or more than average expenses, suggest log scale
     return avgIncome > 0 && avgExpenses > 0 && avgIncome / avgExpenses >= 3;
-  }, [t]);
+  }, []);
 
   // Detect anomalies (unusual spikes)
   const detectAnomalies = useCallback((history: any[]) => {
@@ -294,16 +299,49 @@ const DashboardHomeContent: React.FC = () => {
     });
 
     return trends;
-  }, []);
+  }, [t]);
+
+  const primaryHasHistory = (data?.history?.length ?? 0) > 0;
+  const fallbackHasHistory = (fallbackDashboardData?.history?.length ?? 0) > 0;
+  const hasTransactions = (onboardingStatus?.stats?.transactionCount ?? 0) > 0;
+
+  useEffect(() => {
+    // Prefer primary data; enable fallback fetches only if the current range is empty
+    if (!fallbackEnabled && !dashboardLoading && !primaryHasHistory && hasTransactions) {
+      setFallbackEnabled(true);
+    }
+  }, [dashboardLoading, fallbackEnabled, hasTransactions, primaryHasHistory]);
+
+  useEffect(() => {
+    // If primary data appears again, stop issuing fallback requests
+    if (fallbackEnabled && primaryHasHistory) {
+      setFallbackEnabled(false);
+    }
+  }, [fallbackEnabled, primaryHasHistory]);
+
+  useEffect(() => {
+    // Reset fallback when the viewed period changes
+    setFallbackEnabled(false);
+  }, [aggregationPeriod, endDate, startDate]);
 
   useEffect(() => {
     const handleDataRefresh = () => {
       refreshDashboard();
       refreshPortfolio();
-      refreshWaterfall();
-      refreshBreakdowns(['expense', 'income']);
-      if (selectedBreakdownType === 'investment') {
+
+      if (fallbackEnabled) {
+        refreshFallbackWaterfall();
+        refreshFallbackBreakdowns(['expense', 'income']);
+        if (selectedBreakdownType === 'investment') {
+          void fetchFallbackBreakdown('investment');
+        }
+      } else if (selectedBreakdownType === 'investment') {
         void fetchBreakdown('investment');
+        refreshWaterfall();
+        refreshBreakdowns(['expense', 'income']);
+      } else {
+        refreshWaterfall();
+        refreshBreakdowns(['expense', 'income']);
       }
       refreshAccountSignals();
     };
@@ -314,36 +352,64 @@ const DashboardHomeContent: React.FC = () => {
     };
   }, [
     fetchBreakdown,
+    fetchFallbackBreakdown,
+    fallbackEnabled,
     refreshAccountSignals,
     refreshBreakdowns,
     refreshDashboard,
+    refreshFallbackBreakdowns,
+    refreshFallbackWaterfall,
     refreshPortfolio,
     refreshWaterfall,
     selectedBreakdownType,
   ]);
 
   useEffect(() => {
-    if (selectedBreakdownType === 'investment' && !breakdownData.investment && !breakdownLoading.investment) {
-      void fetchBreakdown('investment');
+    if (selectedBreakdownType === 'investment') {
+      if (fallbackEnabled) {
+        if (!fallbackBreakdownData.investment && !fallbackBreakdownLoading.investment) {
+          void fetchFallbackBreakdown('investment');
+        }
+      } else if (!breakdownData.investment && !breakdownLoading.investment) {
+        void fetchBreakdown('investment');
+      }
     }
-  }, [selectedBreakdownType, breakdownData.investment, breakdownLoading.investment, fetchBreakdown]);
+  }, [
+    fallbackBreakdownData.investment,
+    fallbackBreakdownLoading.investment,
+    fallbackEnabled,
+    fetchBreakdown,
+    fetchFallbackBreakdown,
+    breakdownData.investment,
+    breakdownLoading.investment,
+    selectedBreakdownType,
+  ]);
 
   // Fetch expense breakdown for SummaryCards Financial Health metrics
   useEffect(() => {
-    if (!breakdownData.expense && !breakdownLoading.expense) {
+    if (fallbackEnabled) {
+      if (!fallbackBreakdownData.expense && !fallbackBreakdownLoading.expense) {
+        void fetchFallbackBreakdown('expense');
+      }
+    } else if (!breakdownData.expense && !breakdownLoading.expense) {
       void fetchBreakdown('expense');
     }
-  }, [breakdownData.expense, breakdownLoading.expense, fetchBreakdown]);
+  }, [
+    breakdownData.expense,
+    breakdownLoading.expense,
+    fallbackBreakdownData.expense,
+    fallbackBreakdownLoading.expense,
+    fallbackEnabled,
+    fetchBreakdown,
+    fetchFallbackBreakdown,
+  ]);
 
   // Toggle to compare current month with last month
   const toggleCompareLastMonth = () => {
     setCompareToLastMonth(!compareToLastMonth);
   };
 
-  // Check if current period has no data but fallback period does
-  const currentPeriodEmpty = (data?.history?.length ?? 0) === 0;
-  const fallbackHasData = (fallbackDashboardData?.history?.length ?? 0) > 0;
-  const shouldUseFallback = currentPeriodEmpty && fallbackHasData && (onboardingStatus?.stats?.transactionCount ?? 0) > 0;
+  const shouldUseFallback = fallbackEnabled && !primaryHasHistory && fallbackHasHistory && hasTransactions;
 
   // Determine effective data to display (use fallback when current period is empty)
   const effectiveData = shouldUseFallback ? fallbackDashboardData : data;
@@ -354,7 +420,7 @@ const DashboardHomeContent: React.FC = () => {
   const effectiveEndDate = shouldUseFallback ? fallbackEndDate : endDate;
 
   // Show loading while primary data loads, or while checking fallback
-  const isLoading = dashboardLoading || (currentPeriodEmpty && fallbackDashboardLoading);
+  const isLoading = dashboardLoading || (fallbackEnabled && fallbackDashboardLoading);
 
   if (isLoading || !effectiveData || !effectiveData.summary) {
     return (

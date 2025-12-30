@@ -1,6 +1,7 @@
 const database = require('./database.js');
 const { standardizeResponse, standardizeError } = require('../../lib/server/query-utils.js');
 const { STALE_SYNC_THRESHOLD_MS } = require('../../utils/constants.js');
+const { parseUTCDate } = require('../../lib/server/time-utils.js');
 const { generateDailyForecast } = require('./forecast.js');
 
 const NOTIFICATION_TYPES = {
@@ -40,12 +41,6 @@ function subDays(date, days) {
   const result = new Date(date.getTime());
   result.setDate(result.getDate() - days);
   return result;
-}
-
-function toDate(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function formatShortMonthDay(date) {
@@ -197,8 +192,8 @@ async function fetchCredentialSyncStates(client) {
   );
 
   return result.rows.map((row) => {
-    const lastSuccess = toDate(row.last_success_event || row.last_scrape_success);
-    const lastAttempt = toDate(row.last_event_time || row.last_scrape_attempt || row.last_scrape_success);
+    const lastSuccess = parseUTCDate(row.last_success_event || row.last_scrape_success);
+    const lastAttempt = parseUTCDate(row.last_event_time || row.last_scrape_attempt || row.last_scrape_success);
     const lastUpdate = lastSuccess || lastAttempt;
     const displayName =
       row.nickname ||

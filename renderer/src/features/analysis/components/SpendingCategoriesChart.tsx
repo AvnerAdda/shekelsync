@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Card,
@@ -31,6 +31,8 @@ interface SpendingCategoriesChartProps {
   months?: number;
 }
 
+type TimeRangeOption = 'current' | 'last3' | 'history';
+
 const SPENDING_CATEGORY_COLORS: Record<SpendingAllocation | 'other', string> = {
   essential: '#2196F3', // Blue
   growth: '#4CAF50',    // Green
@@ -55,11 +57,47 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
   const { formatCurrency } = useFinancePrivacy();
   const { t } = useTranslation('translation', { keyPrefix: 'analysisPage.spendingChart' });
 
-  useEffect(() => {
-    fetchBreakdown(months);
-  }, [months, fetchBreakdown]);
-
+  const [timeRange, setTimeRange] = useState<TimeRangeOption>(months === 1 ? 'current' : 'last3');
   const [viewMode, setViewMode] = useState<'current' | 'incomeIndexed'>('current');
+
+  const timeRangeConfigs = useMemo<Record<TimeRangeOption, {
+    label: string;
+    fetchParams: {
+      currentMonthOnly?: boolean;
+      months?: number;
+      startDate?: string;
+      endDate?: string;
+    };
+  }>>(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return {
+      current: {
+        label: t('timeRanges.currentMonth'),
+        fetchParams: { currentMonthOnly: true },
+      },
+      last3: {
+        label: t('timeRanges.last3Months', { count: months }),
+        fetchParams: { currentMonthOnly: false, months },
+      },
+      history: {
+        label: t('timeRanges.history'),
+        fetchParams: {
+          currentMonthOnly: false,
+          startDate: '1970-01-01',
+          endDate: today,
+        },
+      },
+    };
+  }, [months, t]);
+
+  const timeRangeLabel = timeRangeConfigs[timeRange]?.label ?? '';
+
+  useEffect(() => {
+    const config = timeRangeConfigs[timeRange];
+    if (config) {
+      void fetchBreakdown(config.fetchParams);
+    }
+  }, [timeRange, timeRangeConfigs, fetchBreakdown]);
 
   if (loading) {
     return (
@@ -116,9 +154,39 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
       };
     });
 
+  const handleTimeRangeChange = (_: React.MouseEvent<HTMLElement>, newRange: TimeRangeOption | null) => {
+    if (newRange) {
+      setTimeRange(newRange);
+    }
+  };
+
   const handleViewModeChange = (_: React.MouseEvent<HTMLElement>, newValue: 'current' | 'incomeIndexed' | null) => {
     if (newValue) {
       setViewMode(newValue);
+    }
+  };
+
+  const toggleGroupStyles = {
+    bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+    backdropFilter: 'blur(10px)',
+    borderRadius: 2,
+    p: 0.5,
+    border: '1px solid',
+    borderColor: (theme) => alpha(theme.palette.divider, 0.1),
+    '& .MuiToggleButton-root': {
+      border: 'none',
+      borderRadius: 1.5,
+      px: 2,
+      py: 0.5,
+      color: 'text.secondary',
+      '&.Mui-selected': {
+        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
+        color: 'primary.main',
+        fontWeight: 600,
+      },
+      '&:hover': {
+        bgcolor: (theme) => alpha(theme.palette.action.hover, 0.1),
+      }
     }
   };
 
@@ -141,52 +209,48 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: 1,
+          gap: 1.5,
           mb: 2,
           mt: 2,
         }}
       >
-        <Typography variant="caption" color="text.secondary">
-          {viewMode === 'incomeIndexed'
-            ? (hasIncome
-              ? t('viewToggle.incomeHint', {
-                amount: formatCurrency(totalIncome, { absolute: true, maximumFractionDigits: 0 }),
-              })
-              : t('viewToggle.noIncome'))
-            : t('viewToggle.currentHint')}
-        </Typography>
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={viewMode}
-          onChange={handleViewModeChange}
-          sx={{
-            bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
-            backdropFilter: 'blur(10px)',
-            borderRadius: 2,
-            p: 0.5,
-            border: '1px solid',
-            borderColor: (theme) => alpha(theme.palette.divider, 0.1),
-            '& .MuiToggleButton-root': {
-              border: 'none',
-              borderRadius: 1.5,
-              px: 2,
-              py: 0.5,
-              color: 'text.secondary',
-              '&.Mui-selected': {
-                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
-                color: 'primary.main',
-                fontWeight: 600,
-              },
-              '&:hover': {
-                bgcolor: (theme) => alpha(theme.palette.action.hover, 0.1),
-              }
-            }
-          }}
-        >
-          <ToggleButton value="current">{t('viewToggle.current')}</ToggleButton>
-          <ToggleButton value="incomeIndexed">{t('viewToggle.incomeIndexed')}</ToggleButton>
-        </ToggleButtonGroup>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+            {t('timeRanges.label')}
+          </Typography>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={timeRange}
+            onChange={handleTimeRangeChange}
+            sx={toggleGroupStyles}
+          >
+            <ToggleButton value="current">{t('timeRanges.currentMonth')}</ToggleButton>
+            <ToggleButton value="last3">{t('timeRanges.last3Months', { count: months })}</ToggleButton>
+            <ToggleButton value="history">{t('timeRanges.history')}</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <Typography variant="caption" color="text.secondary">
+            {viewMode === 'incomeIndexed'
+              ? (hasIncome
+                ? t('viewToggle.incomeHint', {
+                  amount: formatCurrency(totalIncome, { absolute: true, maximumFractionDigits: 0 }),
+                })
+                : t('viewToggle.noIncome'))
+              : t('viewToggle.currentHint')}
+          </Typography>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={viewMode}
+            onChange={handleViewModeChange}
+            sx={toggleGroupStyles}
+          >
+            <ToggleButton value="current">{t('viewToggle.current')}</ToggleButton>
+            <ToggleButton value="incomeIndexed">{t('viewToggle.incomeIndexed')}</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
       </Box>
 
       <Grid container spacing={3} sx={{ mt: 1 }}>
@@ -202,7 +266,7 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
           }}>
             <CardContent>
               <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 700, opacity: 0.8 }}>
-                {t('targetVsActual')}
+                {t('targetVsActualRange', { range: timeRangeLabel })}
               </Typography>
               <Grid container spacing={2}>
                 {processedItems.map((item) => {
@@ -349,7 +413,7 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="subtitle2" color="text.secondary">
-              {t('labels.totalSpending', { count: months })}
+              {t('labels.totalSpendingRange', { range: timeRangeLabel })}
             </Typography>
             <Typography variant="h5" fontWeight="bold" sx={{
               background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,

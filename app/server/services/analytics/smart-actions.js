@@ -176,13 +176,13 @@ async function getCategoryTreeMonthlyStats(client, categoryDefinitionId, endDate
  * Detect category spending anomalies using forecast predictions
  */
 async function detectCategoryAnomalies(params = {}) {
-  const { months = 1, locale } = params;
+  const { months = 1, locale, forecastData: injectedForecast } = params;
   const { start, end } = resolveDateRange({ months });
   const anomalies = [];
 
   try {
     // Get forecast data with pattern predictions
-    const forecastData = await forecastService.getForecast({ months: 6 });
+    const forecastData = injectedForecast || await forecastService.getForecast({ months: 6 });
     const patterns = forecastData?.patterns || [];
     const forecastByCategory = forecastData?.forecastByCategory || new Map();
     const outlookMap = new Map();
@@ -532,97 +532,181 @@ async function detectUnusualPurchases(params = {}) {
  * - Unexpected occurrences
  */
 async function detectFixedRecurringAnomalies(params = {}) {
-  const { locale } = params;
+  const { locale, forecastData: injectedForecast } = params;
   const anomalies = [];
 
+  let client;
   try {
     // Get forecast data with pattern information
-    const forecastData = await forecastService.getForecast({ months: 6 });
-    const patterns = forecastData?.patterns || [];
+    const forecastData = injectedForecast || await forecastService.getForecast({ months: 6 });
+    const patterns = (forecastData?.patterns || []).filter(p => p.categoryDefinitionId);
     
     const now = new Date();
-    const currentMonth = now.toISOString().substring(0, 7); // YYYY-MM
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const client = await database.getClient();
+    const startOfMonthStr = startOfMonth.toISOString().split('T')[0];
+    const todayStr = now.toISOString().split('T')[0];
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const monthProgress = now.getDate() / daysInMonth;
+    client = await database.getClient();
 
-    for (const pattern of patterns) {
-      if (!pattern.isFixedRecurring || !pattern.fixedAmount) continue;
+    // Only keep recurring-like patterns (monthly/weekly) with enough history
+    const recurringCandidates = patterns.filter(p => {
+      const hasHistory = (p.monthsOfHistory || 0) >= 2;
+      const recurringFrequency = (p.avgOccurrencesPerMonth || 0) >= 0.8;
+      const likelyFixed = p.isFixedRecurring || (p.isFixedAmount && (p.patternType === 'monthly' || p.patternType === 'bi-monthly'));
+      return hasHistory && (recurringFrequency || likelyFixed);
+    });
 
+    const categoryIds = [...new Set(recurringCandidates.map(p => p.categoryDefinitionId))];
+    const occurrencesByCategory = new Map();
+
+    if (categoryIds.length > 0) {
+      const placeholders = categoryIds.map((_, idx) => `$${idx + 1}`).join(', ');
+      const paramsList = [...categoryIds, startOfMonthStr, todayStr];
+
+      const occurrencesResult = await client.query(`
+        SELECT
+          t.category_definition_id,
+          t.date,
+          ABS(t.price) as amount,
+          t.name
+        FROM transactions t
+        LEFT JOIN account_pairings ap ON (
+          t.vendor = ap.bank_vendor
+          AND ap.is_active = 1
+          AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+          AND ap.match_patterns IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM json_each(ap.match_patterns)
+            WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+          )
+        )
+        WHERE t.category_definition_id IN (${placeholders})
+          AND t.status = 'completed'
+          AND t.category_type = 'expense'
+          AND t.price < 0
+          AND ap.id IS NULL
+          AND t.date >= $${categoryIds.length + 1}
+          AND t.date <= $${categoryIds.length + 2}
+        ORDER BY t.date DESC
+      `, paramsList);
+
+      for (const row of occurrencesResult.rows || []) {
+        const cid = row.category_definition_id;
+        if (!occurrencesByCategory.has(cid)) {
+          occurrencesByCategory.set(cid, []);
+        }
+        occurrencesByCategory.get(cid).push({
+          date: row.date,
+          amount: parseFloat(row.amount),
+          name: row.name,
+          day: new Date(row.date).getDate(),
+        });
+      }
+    }
+
+    for (const pattern of recurringCandidates) {
+      const occurrences = occurrencesByCategory.get(pattern.categoryDefinitionId) || [];
       const localizedName = getLocalizedCategoryName({
         name: pattern.categoryName,
         name_en: pattern.categoryNameEn,
         name_fr: null,
       }, locale) || pattern.categoryName;
 
-      // Check for this month's occurrences
-      const occurrencesResult = await client.query(`
-        SELECT
-          date,
-          ABS(price) as amount,
-          name
-        FROM transactions
-        WHERE category_definition_id = $1
-          AND date >= $2
-          AND date <= $3
-          AND price < 0
-        ORDER BY date DESC
-      `, [pattern.categoryDefinitionId, startOfMonth.toISOString().split('T')[0], now.toISOString().split('T')[0]]);
-
-      const occurrences = occurrencesResult.rows;
-      const expectedAmount = pattern.fixedAmount;
+      const expectedAmount = pattern.fixedAmount || pattern.avgAmount || 0;
       const tolerancePct = 0.05; // 5% tolerance for "fixed" amounts
+      const expectedDay = pattern.fixedDayOfMonth || (pattern.mostLikelyDaysOfMonth?.[0]?.day ?? null);
+      // Anomaly 1: Amount changed significantly (fixed recurring only)
+      if (pattern.isFixedRecurring && pattern.fixedAmount) {
+        for (const txn of occurrences) {
+          const amount = parseFloat(txn.amount);
+          const deviation = Math.abs(amount - expectedAmount) / expectedAmount;
 
-      // Anomaly 1: Amount changed significantly
-      for (const txn of occurrences) {
-        const amount = parseFloat(txn.amount);
-        const deviation = Math.abs(amount - expectedAmount) / expectedAmount;
+          if (deviation > tolerancePct) {
+            const changeType = amount > expectedAmount ? 'increase' : 'decrease';
+            const severity = deviation > 0.2 ? 'high' : 'medium';
 
-        if (deviation > tolerancePct) {
-          const changeType = amount > expectedAmount ? 'increase' : 'decrease';
-          const severity = deviation > 0.2 ? 'high' : 'medium';
-
-          anomalies.push({
-            action_type: 'fixed_recurring_change',
-            trigger_category_id: pattern.categoryDefinitionId,
-            severity,
-            title: `Fixed payment ${changeType}: ${localizedName}`,
-            description: `Your ${localizedName} payment changed from ₪${Math.round(expectedAmount)} to ₪${Math.round(amount)} (${Math.round(deviation * 100)}% ${changeType}). This may indicate a price change, billing adjustment, or service modification.`,
-            metadata: JSON.stringify({
-              expected_amount: expectedAmount,
-              actual_amount: amount,
-              deviation_pct: Math.round(deviation * 100),
-              transaction_name: txn.name,
-              transaction_date: txn.date,
-              change_type: changeType,
-              coefficient_of_variation: pattern.coefficientOfVariation,
-            }),
-            potential_impact: amount > expectedAmount ? -(amount - expectedAmount) : 0,
-            detection_confidence: 0.9,
-          });
+            anomalies.push({
+              action_type: 'fixed_recurring_change',
+              trigger_category_id: pattern.categoryDefinitionId,
+              severity,
+              title: `Fixed payment ${changeType}: ${localizedName}`,
+              description: `Your ${localizedName} payment changed from ₪${Math.round(expectedAmount)} to ₪${Math.round(amount)} (${Math.round(deviation * 100)}% ${changeType}). This may indicate a price change, billing adjustment, or service modification.`,
+              metadata: JSON.stringify({
+                expected_amount: expectedAmount,
+                actual_amount: amount,
+                deviation_pct: Math.round(deviation * 100),
+                transaction_name: txn.name,
+                transaction_date: txn.date,
+                change_type: changeType,
+                coefficient_of_variation: pattern.coefficientOfVariation,
+              }),
+              potential_impact: amount > expectedAmount ? -(amount - expectedAmount) : 0,
+              detection_confidence: 0.9,
+            });
+          }
         }
       }
 
-      // Anomaly 2: Missing expected payment
-      if (occurrences.length === 0 && pattern.fixedDayOfMonth && now.getDate() > pattern.fixedDayOfMonth + 3) {
+      // Expected/late detection: nothing has occurred yet but should have by now
+      const actualOccurrences = occurrences.length;
+      const expectedByNow = Math.max(1, Math.round((pattern.avgOccurrencesPerMonth || 1) * monthProgress));
+      const likelyAmount = Math.round(expectedAmount);
+
+      const isLateMonthly = actualOccurrences === 0 && expectedDay && now.getDate() > (expectedDay + 3);
+      const isBehindSchedule = actualOccurrences === 0 && !expectedDay && monthProgress > 0.6 && expectedByNow >= 1;
+      const isWeeklyLag = actualOccurrences < 1 && pattern.avgOccurrencesPerMonth >= 3 && monthProgress > 0.35;
+      const shouldAlertMissing = isLateMonthly || isBehindSchedule || isWeeklyLag;
+
+      if (shouldAlertMissing) {
         anomalies.push({
           action_type: 'fixed_recurring_missing',
           trigger_category_id: pattern.categoryDefinitionId,
-          severity: 'medium',
+          severity: pattern.isFixedRecurring ? 'medium' : 'low',
           title: `Expected payment missing: ${localizedName}`,
-          description: `Your usual ${localizedName} payment (typically ₪${Math.round(expectedAmount)} around day ${pattern.fixedDayOfMonth}) hasn't occurred this month yet. This might be a billing delay or account change.`,
+          description: `A recurring ${localizedName} charge (usually around ₪${likelyAmount}${expectedDay ? ` near day ${expectedDay}` : ''}) has not appeared yet this month. Consider checking if the bill was paused or paid from another account.`,
           metadata: JSON.stringify({
             expected_amount: expectedAmount,
-            expected_day: pattern.fixedDayOfMonth,
+            expected_day: expectedDay,
             current_day: now.getDate(),
             pattern_confidence: pattern.confidence,
             months_of_history: pattern.monthsOfHistory,
+            avg_occurrences_per_month: pattern.avgOccurrencesPerMonth,
+            most_likely_days: pattern.mostLikelyDaysOfMonth || [],
+            actual_occurrences: actualOccurrences,
+            expected_by_now: expectedByNow,
           }),
           potential_impact: 0,
-          detection_confidence: 0.75,
+          detection_confidence: Math.max(0.6, pattern.confidence || 0.6),
         });
       }
 
-      // Anomaly 3: Unexpected multiple occurrences (should be once per month)
+      // Anomaly 3: Upcoming reminder (within 3 days of expected date, nothing yet)
+      const upcomingWindow = expectedDay ? expectedDay - now.getDate() : null;
+      if (!shouldAlertMissing && actualOccurrences === 0 && upcomingWindow !== null && upcomingWindow <= 3 && upcomingWindow >= -1) {
+        anomalies.push({
+          action_type: 'fixed_recurring_missing',
+          trigger_category_id: pattern.categoryDefinitionId,
+          severity: 'low',
+          title: `Upcoming recurring charge: ${localizedName}`,
+          description: `${localizedName} typically bills around day ${expectedDay}. No charge has posted yet this month. Keep an eye out so it isn't missed.`,
+          metadata: JSON.stringify({
+            expected_day: expectedDay,
+            current_day: now.getDate(),
+            pattern_confidence: pattern.confidence,
+            months_of_history: pattern.monthsOfHistory,
+            avg_occurrences_per_month: pattern.avgOccurrencesPerMonth,
+            most_likely_days: pattern.mostLikelyDaysOfMonth || [],
+            actual_occurrences: actualOccurrences,
+            expected_by_now: expectedByNow,
+          }),
+          potential_impact: 0,
+          detection_confidence: Math.max(0.55, pattern.confidence || 0.55),
+        });
+      }
+
+      // Anomaly 4: Unexpected multiple occurrences (should be once per month)
       if (occurrences.length > 1 && pattern.avgOccurrencesPerMonth < 1.2) {
         anomalies.push({
           action_type: 'fixed_recurring_duplicate',
@@ -642,11 +726,14 @@ async function detectFixedRecurringAnomalies(params = {}) {
       }
     }
 
-    client.release();
     return anomalies;
   } catch (error) {
     console.error('Failed to detect fixed recurring anomalies:', error);
     return [];
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 }
 
@@ -654,11 +741,11 @@ async function detectFixedRecurringAnomalies(params = {}) {
  * Generate forecast-based optimization opportunities
  */
 async function detectOptimizationOpportunities(params = {}) {
-  const { locale } = params;
+  const { locale, forecastData: injectedForecast } = params;
   const opportunities = [];
 
   try {
-    const forecastData = await forecastService.getForecast({ months: 6 });
+    const forecastData = injectedForecast || await forecastService.getForecast({ months: 6 });
     const budgetOutlook = forecastData?.budgetOutlook || [];
     const patterns = forecastData?.patterns || [];
 
@@ -771,12 +858,12 @@ async function detectOptimizationOpportunities(params = {}) {
  * Detect budget overruns using ML forecast projections
  */
 async function detectBudgetOverruns(params = {}) {
-  const { locale } = params;
+  const { locale, forecastData: injectedForecast } = params;
   const budgetAlerts = [];
 
   try {
     // Get forecast data which includes budget outlook
-    const forecastData = await forecastService.getForecast({ months: 6 });
+    const forecastData = injectedForecast || await forecastService.getForecast({ months: 6 });
     const budgetOutlook = forecastData?.budgetOutlook || [];
 
     for (const item of budgetOutlook) {
@@ -861,15 +948,23 @@ async function generateSmartActions(params = {}) {
 
   const allActions = [];
 
+  // Heavy forecast call (patterns + budget outlook) – fetch once and share
+  let sharedForecastData = null;
+  try {
+    sharedForecastData = await forecastService.getForecast({ months: 6 });
+  } catch (err) {
+    console.error('Smart Actions: failed to load shared forecast data, continuing with on-demand calls', err);
+  }
+
   // Run all detection algorithms in parallel (mix of legacy and forecast-based)
   // Use allSettled to prevent one failure from breaking all detections
   const results = await Promise.allSettled([
-    detectCategoryAnomalies({ months, locale }),
+    detectCategoryAnomalies({ months, locale, forecastData: sharedForecastData }),
     detectFixedCategoryVariations({ months, locale }),
     detectUnusualPurchases({ months, locale }),
-    detectBudgetOverruns({ locale }), // Now uses forecast data
-    detectFixedRecurringAnomalies({ locale }), // New: forecast-based
-    detectOptimizationOpportunities({ locale }), // New: forecast-based
+    detectBudgetOverruns({ locale, forecastData: sharedForecastData }), // Now uses forecast data
+    detectFixedRecurringAnomalies({ locale, forecastData: sharedForecastData }), // New: forecast-based
+    detectOptimizationOpportunities({ locale, forecastData: sharedForecastData }), // New: forecast-based
   ]);
 
   // Extract fulfilled results, use empty array for rejected

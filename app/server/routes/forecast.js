@@ -1,13 +1,17 @@
 const express = require('express');
 const path = require('path');
-const Database = require('better-sqlite3');
 const { generateDailyForecast } = require('../services/forecast.js');
 
 // Initialize database for category lookups
 const dbPath = path.join(__dirname, '../../dist/clarify.sqlite');
 let dbInstance = null;
+let Database = null;
 
 function getDatabase() {
+  if (!Database) {
+    // Lazy-load the native module to keep cold-start lighter
+    Database = require('better-sqlite3');
+  }
   if (!dbInstance) {
     dbInstance = new Database(dbPath);
   }
@@ -26,8 +30,9 @@ function isCacheValid() {
   return Date.now() - forecastCache.timestamp < forecastCache.cacheDuration;
 }
 
-function createForecastRouter() {
+function createForecastRouter({ sqliteDb = null } = {}) {
   const router = express.Router();
+  const getDbInstance = () => sqliteDb || getDatabase();
 
   router.get('/daily', async (req, res) => {
     try {
@@ -77,7 +82,7 @@ function createForecastRouter() {
       const monthEndStr = monthEnd.toISOString().split('T')[0];
 
       // Use SQLite directly for actuals/budgets/category lookups
-      const db = getDatabase();
+      const db = getDbInstance();
 
       // Load actual spending (real transactions) for the current month
       let actualSpendingRows = [];

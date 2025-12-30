@@ -7,6 +7,7 @@ interface UseBreakdownDataOptions {
   startDate: Date;
   endDate: Date;
   initialTypes?: BreakdownType[];
+  enabled?: boolean;
 }
 
 interface UseBreakdownDataResult {
@@ -44,6 +45,7 @@ export function useBreakdownData({
   startDate,
   endDate,
   initialTypes,
+  enabled = true,
 }: UseBreakdownDataOptions): UseBreakdownDataResult {
   const [breakdownData, setBreakdownData] = useState(() => createInitialState<any>(null));
   const [breakdownLoading, setBreakdownLoading] = useState(() => createInitialState(false));
@@ -58,9 +60,12 @@ export function useBreakdownData({
 
   useEffect(() => {
     resetState();
-  }, [endDate, startDate, locale, resetState]);
+  }, [enabled, endDate, startDate, locale, resetState]);
 
   const fetchBreakdown = useCallback(async (type: BreakdownType) => {
+    if (!enabled) {
+      return;
+    }
     const cacheKey = makeCacheKey(type, startDate, endDate, locale);
     const cached = breakdownCache.get(cacheKey);
     const now = Date.now();
@@ -108,7 +113,7 @@ export function useBreakdownData({
         setBreakdownLoading((prev) => ({ ...prev, [type]: false }));
       }
     }
-  }, [endDate, locale, startDate]);
+  }, [enabled, endDate, locale, startDate]);
 
   const normalizedInitialTypes = useMemo(() => {
     const sourceInitialTypes = initialTypes ?? DEFAULT_INITIAL_TYPES;
@@ -124,13 +129,19 @@ export function useBreakdownData({
   }, [initialTypes]);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     normalizedInitialTypes.forEach((type) => {
       void fetchBreakdown(type);
     });
-  }, [fetchBreakdown, normalizedInitialTypes]);
+  }, [enabled, fetchBreakdown, normalizedInitialTypes]);
 
   const refreshBreakdowns = useCallback(
     (types?: BreakdownType[]) => {
+      if (!enabled) {
+        return;
+      }
       const targetTypes = types && types.length
         ? types
         : normalizedInitialTypes.length
@@ -141,7 +152,7 @@ export function useBreakdownData({
         void fetchBreakdown(type);
       });
     },
-    [fetchBreakdown, normalizedInitialTypes],
+    [enabled, fetchBreakdown, normalizedInitialTypes],
   );
 
   return {

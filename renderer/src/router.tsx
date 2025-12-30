@@ -1,31 +1,38 @@
-import { createHashRouter } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { createHashRouter, useOutletContext } from 'react-router-dom';
 import AppLayout, { AppLayoutContext } from './routes/AppLayout';
-import HomePage from '@renderer/features/dashboard/pages/HomePage';
-import AnalysisPageNew from '@renderer/features/analysis/pages/AnalysisPageNew';
-import InvestmentsPage from '@renderer/features/investments/pages/InvestmentsPage';
-import SettingsPage from '@renderer/features/settings/pages/SettingsPage';
-import { useOutletContext } from 'react-router-dom';
+
+const HomePage = lazy(() => import('@renderer/features/dashboard/pages/HomePage'));
+const AnalysisPageNew = lazy(() => import('@renderer/features/analysis/pages/AnalysisPageNew'));
+const InvestmentsPage = lazy(() => import('@renderer/features/investments/pages/InvestmentsPage'));
+const SettingsPage = lazy(() => import('@renderer/features/settings/pages/SettingsPage'));
 
 type OutletContext = AppLayoutContext;
 
-const DashboardRoute: React.FC = () => {
+const withSuspense = (node: JSX.Element) => (
+  <Suspense fallback={null}>
+    {node}
+  </Suspense>
+);
+
+const DashboardRoute = () => {
   const { dataRefreshKey } = useOutletContext<OutletContext>();
-  return <HomePage key={dataRefreshKey} />;
+  return withSuspense(<HomePage key={dataRefreshKey} />);
 };
 
-const AnalysisRoute: React.FC = () => {
+const AnalysisRoute = () => {
   const { dataRefreshKey } = useOutletContext<OutletContext>();
-  return <AnalysisPageNew key={`analysis-${dataRefreshKey}`} />;
+  return withSuspense(<AnalysisPageNew key={`analysis-${dataRefreshKey}`} />);
 };
 
-const InvestmentsRoute: React.FC = () => {
+const InvestmentsRoute = () => {
   const { dataRefreshKey } = useOutletContext<OutletContext>();
-  return <InvestmentsPage key={`investments-${dataRefreshKey}`} />;
+  return withSuspense(<InvestmentsPage key={`investments-${dataRefreshKey}`} />);
 };
 
-const SettingsRoute: React.FC = () => {
+const SettingsRoute = () => {
   const { dataRefreshKey } = useOutletContext<OutletContext>();
-  return <SettingsPage key={`settings-${dataRefreshKey}`} />;
+  return withSuspense(<SettingsPage key={`settings-${dataRefreshKey}`} />);
 };
 
 export const router = createHashRouter([

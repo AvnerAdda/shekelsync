@@ -99,9 +99,4 @@ BEGIN
   );
 END;
 
--- Modify existing user_action_items table to mark as deprecated
--- Add column to track deprecation (for gradual migration)
-ALTER TABLE user_action_items ADD COLUMN is_deprecated INTEGER NOT NULL DEFAULT 0 CHECK(is_deprecated IN (0, 1));
-ALTER TABLE user_action_items ADD COLUMN migrated_to_smart_action_id INTEGER REFERENCES smart_action_items(id) ON DELETE SET NULL;
-
 -- Migration complete

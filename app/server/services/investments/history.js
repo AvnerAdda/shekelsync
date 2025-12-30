@@ -22,8 +22,10 @@ function forwardFillHistory(history, startDate = null, endDate = null) {
   const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
   
   // Determine date range
-  const firstDate = startDate || new Date(sorted[0].date);
-  const lastDate = endDate || new Date();
+  const firstDate = startDate ? new Date(startDate) : new Date(sorted[0].date);
+  const lastDate = endDate ? new Date(endDate) : new Date();
+  firstDate.setHours(0, 0, 0, 0);
+  lastDate.setHours(0, 0, 0, 0);
   
   // Build a map of existing dates
   const dateMap = new Map();
@@ -34,6 +36,19 @@ function forwardFillHistory(history, startDate = null, endDate = null) {
   
   const filled = [];
   let lastKnownPoint = null;
+
+  // Seed the initial value with the latest snapshot on or before the start date
+  if (startDate) {
+    const firstDateTime = firstDate.getTime();
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const pointDate = new Date(sorted[i].date);
+      pointDate.setHours(0, 0, 0, 0);
+      if (pointDate.getTime() <= firstDateTime) {
+        lastKnownPoint = { ...sorted[i], date: pointDate.toISOString().split('T')[0] };
+        break;
+      }
+    }
+  }
   
   // Iterate through each day in the range
   const currentDate = new Date(firstDate);
@@ -79,8 +94,10 @@ function forwardFillAggregatedHistory(history, startDate = null, endDate = null)
   const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
   
   // Determine date range
-  const firstDate = startDate || new Date(sorted[0].date);
-  const lastDate = endDate || new Date();
+  const firstDate = startDate ? new Date(startDate) : new Date(sorted[0].date);
+  const lastDate = endDate ? new Date(endDate) : new Date();
+  firstDate.setHours(0, 0, 0, 0);
+  lastDate.setHours(0, 0, 0, 0);
   
   // Build a map of existing dates
   const dateMap = new Map();
@@ -91,6 +108,19 @@ function forwardFillAggregatedHistory(history, startDate = null, endDate = null)
   
   const filled = [];
   let lastKnownPoint = null;
+
+  // Seed the initial value with the latest snapshot on or before the start date
+  if (startDate) {
+    const firstDateTime = firstDate.getTime();
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const pointDate = new Date(sorted[i].date);
+      pointDate.setHours(0, 0, 0, 0);
+      if (pointDate.getTime() <= firstDateTime) {
+        lastKnownPoint = { ...sorted[i], date: pointDate.toISOString().split('T')[0] };
+        break;
+      }
+    }
+  }
   
   // Iterate through each day in the range
   const currentDate = new Date(firstDate);
@@ -152,178 +182,211 @@ function calculateStartDate(timeRange) {
 async function getInvestmentHistory(params = {}) {
   const { accountId, timeRange = '3m', accountIds } = params;
   const startDate = calculateStartDate(timeRange);
+  const startDateStr = startDate ? startDate.toISOString().split('T')[0] : null;
 
-  let query;
-  let queryParams = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const paramsList = [];
+  const accountConditions = [];
+  const idsFilter = accountId
+    ? [accountId]
+    : accountIds
+      ? Array.isArray(accountIds)
+        ? accountIds
+        : [accountIds]
+      : [];
 
   if (accountId) {
-    query = `
-      SELECT 
-        ih.as_of_date as snapshot_date,
-        SUM(ih.current_value) as current_value,
-        SUM(ih.cost_basis) as cost_basis,
-        ih.account_id,
-        ia.account_name,
-        ia.account_type,
-        ${INSTITUTION_SELECT_FIELDS}
-      FROM investment_holdings ih
-      JOIN investment_accounts ia ON ih.account_id = ia.id
-      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
-      WHERE ih.account_id = $1
-      ${startDate ? 'AND ih.as_of_date >= $2' : ''}
-      GROUP BY ih.as_of_date, ih.account_id, ia.account_name, ia.account_type,
-               fi.id, fi.vendor_code, fi.display_name_he, fi.display_name_en,
-               fi.institution_type, fi.category, fi.subcategory, fi.logo_url,
-               fi.is_scrapable, fi.scraper_company_id
-      ORDER BY ih.as_of_date ASC
-    `;
-    queryParams = startDate
-      ? [accountId, startDate.toISOString().split('T')[0]]
-      : [accountId];
-  } else if (accountIds) {
-    const ids = Array.isArray(accountIds) ? accountIds : [accountIds];
-    const baseParams = [...ids];
-    const placeholders = ids.map((_, index) => `$${index + 1}`).join(',');
-    query = `
-      SELECT 
-        ih.as_of_date as snapshot_date,
-        SUM(ih.current_value) as current_value,
-        SUM(ih.cost_basis) as cost_basis,
-        ih.account_id,
-        ia.account_name,
-        ia.account_type,
-        ${INSTITUTION_SELECT_FIELDS}
-      FROM investment_holdings ih
-      JOIN investment_accounts ia ON ih.account_id = ia.id
-      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
-      WHERE ih.account_id IN (${placeholders})
-      ${startDate ? `AND ih.as_of_date >= $${ids.length + 1}` : ''}
-      GROUP BY ih.as_of_date, ih.account_id, ia.account_name, ia.account_type,
-               fi.id, fi.vendor_code, fi.display_name_he, fi.display_name_en,
-               fi.institution_type, fi.category, fi.subcategory, fi.logo_url,
-               fi.is_scrapable, fi.scraper_company_id
-      ORDER BY ih.as_of_date ASC, ih.account_id
-    `;
-    queryParams = startDate
-      ? [...baseParams, startDate.toISOString().split('T')[0]]
-      : baseParams;
-  } else {
-    query = `
-      SELECT 
-        ih.as_of_date as snapshot_date,
-        SUM(ih.current_value) as current_value,
-        SUM(ih.cost_basis) as cost_basis,
-        ih.account_id,
-        ia.account_name,
-        ia.account_type,
-        ${INSTITUTION_SELECT_FIELDS}
-      FROM investment_holdings ih
-      JOIN investment_accounts ia ON ih.account_id = ia.id
-      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
-      ${startDate ? 'WHERE ih.as_of_date >= $1' : ''}
-      GROUP BY ih.as_of_date, ih.account_id, ia.account_name, ia.account_type,
-               fi.id, fi.vendor_code, fi.display_name_he, fi.display_name_en,
-               fi.institution_type, fi.category, fi.subcategory, fi.logo_url,
-               fi.is_scrapable, fi.scraper_company_id
-      ORDER BY ih.as_of_date ASC, ih.account_id
-    `;
-    queryParams = startDate ? [startDate.toISOString().split('T')[0]] : [];
+    paramsList.push(accountId);
+    accountConditions.push(`ih.account_id = $${paramsList.length}`);
+  } else if (idsFilter.length > 0) {
+    const startIndex = paramsList.length;
+    paramsList.push(...idsFilter);
+    const placeholders = idsFilter.map((_, idx) => `$${startIndex + idx + 1}`).join(',');
+    accountConditions.push(`ih.account_id IN (${placeholders})`);
   }
 
-  const result = await database.query(query, queryParams);
+  const holdingsSelect = `
+    SELECT 
+      ih.as_of_date as snapshot_date,
+      ih.current_value,
+      ih.cost_basis,
+      ih.account_id,
+      ia.account_name,
+      ia.account_type,
+      ${INSTITUTION_SELECT_FIELDS}
+    FROM investment_holdings ih
+    JOIN investment_accounts ia ON ih.account_id = ia.id
+    LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
+  `;
 
-  let history;
+  const withStartDate = Boolean(startDateStr);
+  const dateParamIndex = paramsList.length + 1;
 
-  if (accountId || accountIds) {
-    history = await Promise.all(result.rows.map(async (row) => {
-      const currentValue = parseFloat(row.current_value || 0);
-      const costBasis = parseFloat(row.cost_basis || 0);
-      const gainLoss = currentValue - costBasis;
-      let institution = buildInstitutionFromRow(row);
-      if (!institution && row.account_type) {
-        institution = await getInstitutionByVendorCode(database, row.account_type);
-      }
-      return {
-        date: row.snapshot_date,
-        currentValue,
-        costBasis,
-        gainLoss,
-        roi: costBasis > 0 ? (gainLoss / costBasis) * 100 : 0,
-        accountId: row.account_id,
-        accountName: row.account_name,
-        accountType: row.account_type,
-        accountCount: row.account_count ? parseInt(row.account_count, 10) : undefined,
-        accounts: row.accounts || [],
-        institution: institution || null,
-      };
-    }));
-  } else {
-    const grouped = new Map();
+  const buildWhereClause = (comparison) => {
+    const clauses = [...accountConditions];
+    if (withStartDate && comparison) {
+      clauses.push(`ih.as_of_date ${comparison === 'before' ? '<' : '>='} $${dateParamIndex}`);
+    }
+    return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  };
 
-    result.rows.forEach((row) => {
-      const dateKey = row.snapshot_date;
-      const currentValue = parseFloat(row.current_value || 0);
-      const costBasis = parseFloat(row.cost_basis || 0);
+  const queryParams = withStartDate ? [...paramsList, startDateStr] : [...paramsList];
 
-      if (!grouped.has(dateKey)) {
-        grouped.set(dateKey, {
+  const historyQuery = `
+    ${holdingsSelect}
+    ${buildWhereClause('after')}
+    ORDER BY ih.as_of_date ASC, ih.account_id
+  `;
+
+  const historyResult = await database.query(historyQuery, queryParams);
+
+  let baselineRows = [];
+  if (withStartDate) {
+    const baselineQuery = `
+      WITH ordered AS (
+        ${holdingsSelect}
+        ${buildWhereClause('before')}
+      )
+      SELECT *
+      FROM (
+        SELECT 
+          *,
+          ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY snapshot_date DESC) AS rn
+        FROM ordered
+      ) ranked
+      WHERE rn = 1
+    `;
+    const baselineResult = await database.query(baselineQuery, queryParams);
+    baselineRows = baselineResult.rows;
+  }
+
+  // Combine baseline rows (latest before start) with in-range snapshots
+  const uniqueRows = new Map();
+  [...baselineRows, ...historyResult.rows].forEach((row) => {
+    const key = `${row.account_id}-${row.snapshot_date}`;
+    if (!uniqueRows.has(key)) {
+      uniqueRows.set(key, row);
+    }
+  });
+
+  if (uniqueRows.size === 0) {
+    return {
+      success: true,
+      timeRange,
+      startDate: startDateStr,
+      dataPoints: 0,
+      history: [],
+    };
+  }
+
+  // Build per-account histories
+  const accountHistories = new Map();
+  for (const row of uniqueRows.values()) {
+    const currentValue = row.current_value !== null && row.current_value !== undefined
+      ? parseFloat(row.current_value)
+      : 0;
+    const costBasis = row.cost_basis !== null && row.cost_basis !== undefined
+      ? parseFloat(row.cost_basis)
+      : 0;
+    const gainLoss = currentValue - costBasis;
+
+    const accountIdNumber = Number(row.account_id);
+    let institution = buildInstitutionFromRow(row);
+    if (!institution && row.account_type) {
+      institution = await getInstitutionByVendorCode(database, row.account_type);
+    }
+
+    if (!accountHistories.has(accountIdNumber)) {
+      accountHistories.set(accountIdNumber, []);
+    }
+
+    accountHistories.get(accountIdNumber).push({
+      date: row.snapshot_date,
+      currentValue,
+      costBasis,
+      gainLoss,
+      roi: costBasis > 0 ? (gainLoss / costBasis) * 100 : 0,
+      accountId: accountIdNumber,
+      accountName: row.account_name,
+      accountType: row.account_type,
+      institution: institution || null,
+    });
+  }
+
+  // Forward-fill each account individually
+  const filledPerAccount = new Map();
+  for (const [id, points] of accountHistories.entries()) {
+    const filled = forwardFillHistory(points, startDate, today);
+    filledPerAccount.set(id, filled);
+  }
+
+  // If a single account is requested, return its filled history
+  if (accountId) {
+    const accountHistory = filledPerAccount.get(Number(accountId)) || [];
+    return {
+      success: true,
+      timeRange,
+      startDate: startDateStr,
+      dataPoints: accountHistory.length,
+      history: accountHistory,
+    };
+  }
+
+  // Aggregate across the requested accounts (or all accounts)
+  const aggregatedMap = new Map();
+  filledPerAccount.forEach((points) => {
+    points.forEach((point) => {
+      const dateKey = point.date;
+      if (!aggregatedMap.has(dateKey)) {
+        aggregatedMap.set(dateKey, {
+          date: dateKey,
           currentValue: 0,
           costBasis: 0,
           accounts: [],
         });
       }
 
-      const entry = grouped.get(dateKey);
-      entry.currentValue += currentValue;
-      entry.costBasis += costBasis;
+      const entry = aggregatedMap.get(dateKey);
+      entry.currentValue += point.currentValue;
+      entry.costBasis += point.costBasis;
       entry.accounts.push({
-        account_id: row.account_id,
-        account_name: row.account_name,
-        account_type: row.account_type,
-        current_value: currentValue,
-        cost_basis: costBasis,
-        institution: buildInstitutionFromRow(row),
+        account_id: point.accountId,
+        account_name: point.accountName,
+        account_type: point.accountType,
+        current_value: point.currentValue,
+        cost_basis: point.costBasis,
+        institution: point.institution,
       });
     });
+  });
 
-    history = await Promise.all(Array.from(grouped.entries())
-      .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
-      .map(async ([date, entry]) => {
-        const gainLoss = entry.currentValue - entry.costBasis;
-        const accountsWithInstitutions = await Promise.all(entry.accounts.map(async (acct) => {
-          if (acct.institution) return acct;
-          const institution = acct.account_type
-            ? await getInstitutionByVendorCode(database, acct.account_type)
-            : null;
-          return { ...acct, institution: institution || null };
-        }));
-        return {
-          date,
-          currentValue: entry.currentValue,
-          costBasis: entry.costBasis,
-          gainLoss,
-          roi: entry.costBasis > 0 ? (gainLoss / entry.costBasis) * 100 : 0,
-          accountId: null,
-          accountName: null,
-          accountType: null,
-          accountCount: entry.accounts.length,
-          accounts: accountsWithInstitutions,
-        };
-      }));
-  }
+  const aggregatedHistory = Array.from(aggregatedMap.values())
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .map((entry) => {
+      const gainLoss = entry.currentValue - entry.costBasis;
+      return {
+        date: entry.date,
+        currentValue: entry.currentValue,
+        costBasis: entry.costBasis,
+        gainLoss,
+        roi: entry.costBasis > 0 ? (gainLoss / entry.costBasis) * 100 : 0,
+        accountId: null,
+        accountName: null,
+        accountType: null,
+        accountCount: entry.accounts.length,
+        accounts: entry.accounts,
+        institution: null,
+      };
+    });
 
-  // Apply forward-fill to ensure continuous history data
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const filledHistory = accountId || accountIds
-    ? forwardFillHistory(history, startDate, today)
-    : forwardFillAggregatedHistory(history, startDate, today);
+  const filledHistory = forwardFillAggregatedHistory(aggregatedHistory, startDate, today);
 
   return {
     success: true,
     timeRange,
-    startDate: startDate ? startDate.toISOString().split('T')[0] : null,
+    startDate: startDateStr,
     dataPoints: filledHistory.length,
     history: filledHistory,
   };

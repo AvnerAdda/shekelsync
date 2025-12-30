@@ -12,6 +12,7 @@ interface UseDashboardDataOptions {
   startDate: Date;
   endDate: Date;
   aggregation: AggregationPeriod;
+  enabled?: boolean;
 }
 
 interface UseDashboardDataResult {
@@ -148,15 +149,27 @@ async function fetchLastMonthHistory(startDate: Date): Promise<DashboardHistoryE
   }
 }
 
-export function useDashboardData({ startDate, endDate, aggregation }: UseDashboardDataOptions): UseDashboardDataResult {
+export function useDashboardData({
+  startDate,
+  endDate,
+  aggregation,
+  enabled = true,
+}: UseDashboardDataOptions): UseDashboardDataResult {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(Boolean(enabled));
   const [cumulativeData, setCumulativeData] = useState<CumulativePoint[]>([]);
   const requestIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
+    if (!enabled) {
+      setLoading(false);
+      setError(null);
+      setData(null);
+      setCumulativeData([]);
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -208,7 +221,7 @@ export function useDashboardData({ startDate, endDate, aggregation }: UseDashboa
         setLoading(false);
       }
     }
-  }, [aggregation, endDate, startDate]);
+  }, [aggregation, enabled, endDate, startDate]);
 
   useEffect(() => {
     fetchData();

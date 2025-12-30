@@ -893,6 +893,13 @@
       "title": "Spending Categories",
       "subtitle": "How your spending is allocated across different categories",
       "targetVsActual": "Target vs Actual Allocation",
+      "targetVsActualRange": "Target vs Actual Allocation ({{range}})",
+      "timeRanges": {
+        "label": "Time range",
+        "currentMonth": "Current month",
+        "last3Months": "Last {{count}} months",
+        "history": "All history"
+      },
       "viewToggle": {
         "current": "Current spend",
         "incomeIndexed": "Indexed to income",
@@ -919,6 +926,7 @@
         "transactions_other": "{{count}} transactions",
         "totalSpending_one": "Total Spending ({{count}} month)",
         "totalSpending_other": "Total Spending ({{count}} months)",
+        "totalSpendingRange": "Total Spending ({{range}})",
         "currentSpend": "Current spend: {{amount}}",
         "ofIncome": "of income"
       },
@@ -1065,6 +1073,14 @@
       "refresh": "Refresh",
       "refreshing": "Refreshing...",
       "portfolioSetup": "Portfolio Setup"
+    },
+    "filters": {
+      "rangeLabel": "Transactions range",
+      "viewLabel": "History view",
+      "view": {
+        "summary": "Performance",
+        "detailed": "Transactions"
+      }
     },
     "empty": {
       "title": "Get Started with Your Investment Portfolio",

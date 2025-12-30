@@ -11,6 +11,8 @@ import {
   IconButton,
   Breadcrumbs,
   Link,
+  useTheme,
+  alpha,
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -94,6 +96,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
   transactions = [],
 }) => {
   const { formatCurrency } = useFinancePrivacy();
+  const theme = useTheme();
   const strings = getBreakdownStrings();
   const panelStrings = strings.panel;
   const generalStrings = strings.general;
@@ -161,23 +164,58 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
 
   return (
     <>
-      <Paper sx={{ p: 3 }}>
+      <Paper 
+        sx={{ 
+          p: 3,
+          background: alpha(theme.palette.background.paper, 0.4),
+          backdropFilter: 'blur(10px)',
+          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          borderRadius: 3,
+          boxShadow: theme.shadows[2],
+        }}
+      >
         {summary && (
           <Grid container spacing={2} sx={{ mb: 2 }}>
             <Grid item xs={12} sm={4}>
-              <Card variant="outlined">
+              <Card 
+                variant="outlined"
+                sx={{ 
+                  background: alpha(theme.palette.background.paper, 0.6),
+                  backdropFilter: 'blur(10px)',
+                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                  borderRadius: 2,
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: theme.shadows[4],
+                  },
+                }}
+              >
                 <CardContent>
                   <Typography variant="caption" color="text.secondary">
                     {panelStrings.summary.total[categoryType]}
                   </Typography>
-                  <Typography variant="h6" fontWeight="bold">
+                  <Typography variant="h6" fontWeight="bold" color="primary.main">
                     {formatCurrencyValue(summary.total)}
                   </Typography>
                 </CardContent>
               </Card>
             </Grid>
             <Grid item xs={12} sm={4}>
-              <Card variant="outlined">
+              <Card 
+                variant="outlined"
+                sx={{ 
+                  background: alpha(theme.palette.background.paper, 0.6),
+                  backdropFilter: 'blur(10px)',
+                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                  borderRadius: 2,
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: theme.shadows[4],
+                  },
+                }}
+              >
                 <CardContent>
                   <Typography variant="caption" color="text.secondary">
                     {panelStrings.summary.transactions || generalStrings.transactions}
@@ -189,7 +227,20 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
               </Card>
             </Grid>
             <Grid item xs={12} sm={4}>
-              <Card variant="outlined">
+              <Card 
+                variant="outlined"
+                sx={{ 
+                  background: alpha(theme.palette.background.paper, 0.6),
+                  backdropFilter: 'blur(10px)',
+                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                  borderRadius: 2,
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: theme.shadows[4],
+                  },
+                }}
+              >
                 <CardContent>
                   <Typography variant="caption" color="text.secondary">
                     {panelStrings.summary.average || generalStrings.average}
@@ -217,6 +268,21 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
             exclusive
             onChange={(e, newView) => newView && setView(newView)}
             size="small"
+            sx={{
+              '& .MuiToggleButton-root': {
+                borderRadius: 2,
+                mx: 0.5,
+                border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+                '&.Mui-selected': {
+                  backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                  color: theme.palette.primary.main,
+                  borderColor: alpha(theme.palette.primary.main, 0.3),
+                  '&:hover': {
+                    backgroundColor: alpha(theme.palette.primary.main, 0.2),
+                  },
+                },
+              },
+            }}
           >
             <ToggleButton value="overview">
               {currentConfig.icon}

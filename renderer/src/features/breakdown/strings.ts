@@ -260,21 +260,31 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
 };
 
 function normalizeLocale(locale?: string): SupportedLocale {
-  if (locale && locale.toLowerCase().startsWith('fr')) {
+  const normalize = (value?: string) => value?.toLowerCase();
+  const normalizedLocale = normalize(locale);
+
+  if (normalizedLocale?.startsWith('fr')) {
     return 'fr';
   }
 
-  if (locale && locale.toLowerCase().startsWith('he')) {
+  if (normalizedLocale?.startsWith('he')) {
     return 'he';
   }
 
+  if (normalizedLocale?.startsWith('en')) {
+    return 'en';
+  }
+
   if (typeof navigator !== 'undefined') {
-    const navLocale = navigator.language || navigator.languages?.[0];
-    if (navLocale?.toLowerCase().startsWith('fr')) {
+    const navLocale = normalize(navigator.language || navigator.languages?.[0]);
+    if (navLocale?.startsWith('fr')) {
       return 'fr';
     }
-    if (navLocale?.toLowerCase().startsWith('he')) {
+    if (navLocale?.startsWith('he')) {
       return 'he';
+    }
+    if (navLocale?.startsWith('en')) {
+      return 'en';
     }
   }
 

@@ -409,12 +409,6 @@ const AnalysisPageNew: React.FC = () => {
     return t('budgetForecast.overUnder.under', { amount: formatCurrencyValue(Math.abs(delta), { maximumFractionDigits: 0 }) });
   };
 
-  if (isLocked) {
-    return (
-      <LockedPagePlaceholder page="analysis" onboardingStatus={onboardingStatus} />
-    );
-  }
-
   const isRefreshing = loading || budgetForecastLoading || temporalLoading || behavioralLoading || futureLoading || timeValueLoading;
 
   const hourlySeries = useMemo(() => {
@@ -530,6 +524,12 @@ const AnalysisPageNew: React.FC = () => {
     if (typeof value === 'number') return Math.round(value).toString();
     return value;
   };
+
+  if (isLocked) {
+    return (
+      <LockedPagePlaceholder page="analysis" onboardingStatus={onboardingStatus} />
+    );
+  }
 
   return (
     <Box sx={{ width: '100%', p: 3 }}>

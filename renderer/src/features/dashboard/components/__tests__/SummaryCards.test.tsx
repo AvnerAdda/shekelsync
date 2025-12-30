@@ -24,13 +24,6 @@ vi.mock('@renderer/features/budgets/hooks/useSpendingCategories', () => ({
   }),
 }));
 
-vi.mock('@renderer/features/budgets/hooks/useBudgetIntelligence', () => ({
-  useBudgetIntelligence: () => ({
-    health: { summary: { on_track: 1, warning: 0, exceeded: 0 } },
-    fetchHealth: vi.fn(),
-  }),
-}));
-
 vi.mock('@renderer/lib/api-client', () => ({
   apiClient: {
     get: vi.fn(async () => ({

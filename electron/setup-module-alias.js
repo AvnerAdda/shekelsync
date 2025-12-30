@@ -1,3 +1,8 @@
+// Force all Node date operations to use Jerusalem time to avoid UTC drift in timestamps
+if (!process.env.TZ) {
+  process.env.TZ = 'Asia/Jerusalem';
+}
+
 const path = require('path');
 const Module = require('module');
 const { appRoot } = require('./paths');

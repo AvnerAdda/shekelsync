@@ -15,6 +15,9 @@ interface UseSpendingCategoriesOptions {
   categoryDefinitionId?: number;
   autoLoad?: boolean;
   currentMonthOnly?: boolean;
+  months?: number;
+  startDate?: string;
+  endDate?: string;
 }
 
 interface BulkAssignResponse {
@@ -22,8 +25,24 @@ interface BulkAssignResponse {
   updated: number;
 }
 
+type FetchBreakdownOptions = {
+  autoInitialize?: boolean;
+  currentMonthOnly?: boolean;
+  months?: number;
+  startDate?: string;
+  endDate?: string;
+} | boolean;
+
 export function useSpendingCategories(options: UseSpendingCategoriesOptions = {}) {
-  const { spendingCategory, categoryDefinitionId, autoLoad = true, currentMonthOnly = true } = options;
+  const {
+    spendingCategory,
+    categoryDefinitionId,
+    autoLoad = true,
+    currentMonthOnly = true,
+    months: defaultMonths = 3,
+    startDate: defaultStartDate,
+    endDate: defaultEndDate,
+  } = options;
 
   const [mappings, setMappings] = useState<SpendingCategoryMapping[]>([]);
   const [breakdown, setBreakdown] = useState<SpendingCategoryBreakdownResponse | null>(null);
@@ -83,13 +102,41 @@ export function useSpendingCategories(options: UseSpendingCategoriesOptions = {}
     }
   }, [fetchMappings]);
 
-  const fetchBreakdown = useCallback(async (autoInitialize: boolean = true) => {
+  const fetchBreakdown = useCallback(async (options: FetchBreakdownOptions = { autoInitialize: true }) => {
     setLoading(true);
     setError(null);
 
     try {
+      const normalizedOptions = typeof options === 'boolean'
+        ? { autoInitialize: options }
+        : options;
+
+      const {
+        autoInitialize = true,
+        currentMonthOnly: overrideCurrentMonthOnly,
+        months: monthsOverride,
+        startDate: startDateOverride,
+        endDate: endDateOverride,
+      } = normalizedOptions;
+
+      const resolvedCurrentMonthOnly = overrideCurrentMonthOnly ?? currentMonthOnly;
+      const months = monthsOverride ?? defaultMonths;
+      const startDate = startDateOverride ?? defaultStartDate;
+      const endDate = endDateOverride ?? defaultEndDate;
+
       const params = new URLSearchParams();
-      params.append('currentMonthOnly', currentMonthOnly.toString());
+      params.append('currentMonthOnly', resolvedCurrentMonthOnly.toString());
+      if (!resolvedCurrentMonthOnly) {
+        if (months !== undefined) {
+          params.append('months', months.toString());
+        }
+        if (startDate) {
+          params.append('startDate', startDate);
+        }
+        if (endDate) {
+          params.append('endDate', endDate);
+        }
+      }
 
       const response = await apiClient.get(`/api/spending-categories/breakdown?${params.toString()}`);
 
@@ -121,7 +168,7 @@ export function useSpendingCategories(options: UseSpendingCategoriesOptions = {}
     } finally {
       setLoading(false);
     }
-  }, [initialize, currentMonthOnly]);
+  }, [initialize, currentMonthOnly, defaultMonths, defaultStartDate, defaultEndDate]);
 
   const updateMapping = useCallback(async (
     categoryDefId: number,
