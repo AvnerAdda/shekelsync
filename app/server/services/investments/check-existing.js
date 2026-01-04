@@ -59,7 +59,7 @@ async function getExistingInvestments() {
         ${INSTITUTION_SELECT_FIELDS}
       FROM investment_accounts ia
       LEFT JOIN transaction_account_links tal ON ia.id = tal.account_id
-      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
+      LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
       WHERE tal.id IS NOT NULL
       GROUP BY ia.id, ia.account_name, ia.account_type, fi.id, fi.vendor_code, fi.display_name_he,
                fi.display_name_en, fi.institution_type, fi.category, fi.subcategory, fi.logo_url,

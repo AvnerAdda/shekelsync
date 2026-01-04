@@ -38,7 +38,7 @@ async function listAssets(params = {}) {
       ${INSTITUTION_SELECT_FIELDS}
     FROM investment_assets iasset
     JOIN investment_accounts ia ON iasset.account_id = ia.id
-    LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
+    LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
     ${whereClause}
     ORDER BY ia.account_name, iasset.asset_name
   `;

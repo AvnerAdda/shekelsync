@@ -89,6 +89,21 @@ describe('Shared /api/scrape routes', () => {
     expect(mockRunScrape).not.toHaveBeenCalled();
   });
 
+  it('accepts missing startDate and preserves provided dbId', async () => {
+    mockRunScrape.mockResolvedValue({ success: true, accounts: [] });
+
+    await request(app)
+      .post('/api/scrape')
+      .send({
+        options: { companyId: 'isracard' },
+        credentials: { id: '123', password: 'secret', dbId: 777 },
+      })
+      .expect(200);
+
+    expect(mockRunScrape).toHaveBeenCalledTimes(1);
+    expect(mockRunScrape.mock.calls[0][0].credentials.dbId).toBe(777);
+  }, 10000);
+
   it('handles bulk scrape failures gracefully', async () => {
     mockBulkScrape.mockRejectedValue(new Error('boom'));
 

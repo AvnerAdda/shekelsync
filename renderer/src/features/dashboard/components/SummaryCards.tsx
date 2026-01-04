@@ -95,8 +95,19 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
 
   // Calculate if pending expenses will cause financial difficulty
   const netSavingsAfterPending = netSavings - pendingExpenses;
-  const willCauseDeficit = netSavingsAfterPending < 0;
   const hasPendingExpenses = pendingExpenses > 0;
+  const projectedBankBalanceAfterPending =
+    currentBankBalance !== undefined ? currentBankBalance - pendingExpenses : null;
+  const pendingCreatesCashFlowDeficit = netSavingsAfterPending < 0;
+  const pendingOverdrawsBank =
+    projectedBankBalanceAfterPending !== null ? projectedBankBalanceAfterPending < 0 : null;
+  const showPendingDeficitWarning = pendingCreatesCashFlowDeficit && (pendingOverdrawsBank === null || pendingOverdrawsBank);
+  const showPendingDeficitCovered = pendingCreatesCashFlowDeficit && pendingOverdrawsBank === false;
+  const pendingDeficitAmount = Math.abs(netSavingsAfterPending);
+  const pendingOverdraftAmount =
+    projectedBankBalanceAfterPending !== null && projectedBankBalanceAfterPending < 0
+      ? Math.abs(projectedBankBalanceAfterPending)
+      : 0;
 
   // Use absolute values for calculations since expenses might be negative
   const absExpenses = Math.abs(totalExpenses);
@@ -147,6 +158,10 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     impulseControl,
     runwayDays: runwayDays.toFixed(1),
     runwayScore,
+    pendingExpenses,
+    pendingCreatesCashFlowDeficit,
+    pendingOverdrawsBank,
+    projectedBankBalanceAfterPending,
   });
 
   const SPENDING_CATEGORY_COLORS: Record<SpendingCategory, string> = {
@@ -211,7 +226,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     let isMounted = true;
     const fetchHealthSnapshot = async () => {
       try {
-        const response = await apiClient.get<FinancialHealthSnapshot>('/api/analytics/personal-intelligence?months=3');
+        const response = await apiClient.get<FinancialHealthSnapshot>('/api/analytics/personal-intelligence?days=60');
         if (response.ok && isMounted) {
           setHealthSnapshot(response.data);
         }
@@ -362,7 +377,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                   -{formatCurrencyValue(pendingExpenses)}
                 </Typography>
               </Box>
-              {willCauseDeficit && (
+              {showPendingDeficitWarning && (
                 <Box
                   sx={{
                     display: 'flex',
@@ -378,7 +393,29 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                   <WarningIcon sx={{ fontSize: 16, color: 'error.main' }} />
                   <Typography variant="caption" color="error.main" fontWeight="medium">
                     {t('summary.cards.finance.pendingDeficit', {
-                      amount: formatCurrencyValue(Math.abs(netSavingsAfterPending)),
+                      amount: formatCurrencyValue(pendingOverdraftAmount || pendingDeficitAmount),
+                    })}
+                  </Typography>
+                </Box>
+              )}
+              {showPendingDeficitCovered && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    mt: 1,
+                    p: 1,
+                    bgcolor: alpha(theme.palette.info.main, 0.08),
+                    borderRadius: 1,
+                    border: `1px solid ${alpha(theme.palette.info.main, 0.35)}`,
+                  }}
+                >
+                  <InfoIcon sx={{ fontSize: 16, color: 'info.main' }} />
+                  <Typography variant="caption" color="info.main" fontWeight="medium">
+                    {t('summary.cards.finance.pendingDeficitCovered', {
+                      amount: formatCurrencyValue(pendingDeficitAmount),
+                      balance: currentBankBalance !== undefined ? formatCurrencyValue(currentBankBalance) : undefined,
                     })}
                   </Typography>
                 </Box>

@@ -51,10 +51,10 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
       const { options, credentials } = req.body || {};
       const vendor = options?.companyId;
 
-      if (!vendor || !options?.startDate || !credentials) {
+      if (!vendor || !credentials) {
         return res.status(400).json({
           success: false,
-          message: 'Missing required fields: companyId, startDate, or credentials',
+          message: 'Missing required fields: companyId or credentials',
         });
       }
 
@@ -68,16 +68,45 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
       const logger = createLogger(vendor);
 
       // Try to look up the credential ID from the database for scrape event tracking
-      let dbId = null;
-      try {
-        const credentialsService = require('../services/credentials.js');
-        const dbCredentials = await credentialsService.listCredentials({ vendor });
-        // Match by vendor (there's usually only one credential per vendor)
-        if (dbCredentials && dbCredentials.length > 0) {
-          dbId = dbCredentials[0].id;
+      let dbId = credentials?.dbId ?? null;
+      if (!dbId) {
+        try {
+          const credentialsService = require('../services/credentials.js');
+          const dbCredentials = await credentialsService.listCredentials({ vendor });
+
+          if (Array.isArray(dbCredentials) && dbCredentials.length > 0) {
+            const nickname = credentials?.nickname ? String(credentials.nickname) : null;
+            const username = credentials?.username ? String(credentials.username) : null;
+            const idNumber = credentials?.id
+              ? String(credentials.id)
+              : (credentials?.id_number ? String(credentials.id_number) : null);
+
+            const match =
+              (nickname
+                ? dbCredentials.find((entry) => entry?.nickname === nickname)
+                : null) ||
+              (username
+                ? dbCredentials.find(
+                    (entry) =>
+                      entry?.username &&
+                      String(entry.username).toLowerCase() === username.toLowerCase(),
+                  )
+                : null) ||
+              (idNumber
+                ? dbCredentials.find(
+                    (entry) => entry?.id_number && String(entry.id_number) === idNumber,
+                  )
+                : null);
+
+            if (match?.id) {
+              dbId = match.id;
+            } else if (dbCredentials.length === 1) {
+              dbId = dbCredentials[0].id;
+            }
+          }
+        } catch (lookupError) {
+          logger.warn?.('Failed to lookup credential ID, scrape will proceed without it:', lookupError);
         }
-      } catch (lookupError) {
-        logger.warn?.('Failed to lookup credential ID, scrape will proceed without it:', lookupError);
       }
 
       const result = await runScrapeFn({

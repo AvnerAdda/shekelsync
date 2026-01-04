@@ -220,7 +220,7 @@ async function getUnifiedCategoryAnalytics(query = {}) {
 
     const whereClause = `
       LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
-      LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id
+      LEFT JOIN institution_nodes fi ON vc.institution_id = fi.id AND fi.node_type = 'institution'
       LEFT JOIN account_pairings ap ON (
         t.vendor = ap.bank_vendor
         AND ap.is_active = 1

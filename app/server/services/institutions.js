@@ -14,13 +14,15 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
  * SQL fragments for reusable queries
  */
 const INSTITUTION_JOIN_VENDOR_CRED = `
-  LEFT JOIN financial_institutions fi
+  LEFT JOIN institution_nodes fi
   ON vc.institution_id = fi.id
+  AND fi.node_type = 'institution'
 `;
 
 const INSTITUTION_JOIN_INVESTMENT_ACCOUNT = `
-  LEFT JOIN financial_institutions fi
+  LEFT JOIN institution_nodes fi
   ON ia.institution_id = fi.id
+  AND fi.node_type = 'institution'
 `;
 
 const INSTITUTION_SELECT_FIELDS = `
@@ -33,7 +35,10 @@ const INSTITUTION_SELECT_FIELDS = `
   fi.subcategory as institution_subcategory,
   fi.logo_url as institution_logo_url,
   fi.is_scrapable as institution_is_scrapable,
-  fi.scraper_company_id as institution_scraper_company_id
+  fi.scraper_company_id as institution_scraper_company_id,
+  fi.parent_id as institution_parent_id,
+  fi.hierarchy_path as institution_hierarchy_path,
+  fi.depth_level as institution_depth_level
 `;
 
 /**
@@ -62,9 +67,13 @@ async function loadInstitutionsCache(db) {
       logo_url,
       scraper_company_id,
       credential_fields,
-      display_order
-    FROM financial_institutions
+      display_order,
+      parent_id,
+      hierarchy_path,
+      depth_level
+    FROM institution_nodes
     WHERE is_active = 1
+      AND node_type = 'institution'
     ORDER BY category, display_order
   `);
 
@@ -109,9 +118,12 @@ async function getInstitutionById(db, institutionId) {
       logo_url,
       scraper_company_id,
       credential_fields,
-      display_order
-    FROM financial_institutions
-    WHERE id = $1 AND is_active = 1
+      display_order,
+      parent_id,
+      hierarchy_path,
+      depth_level
+    FROM institution_nodes
+    WHERE id = $1 AND is_active = 1 AND node_type = 'institution'
   `, [institutionId]);
 
   return result.rows[0] || null;
@@ -145,9 +157,12 @@ async function getInstitutionByVendorCode(db, vendorCode) {
       logo_url,
       scraper_company_id,
       credential_fields,
-      display_order
-    FROM financial_institutions
-    WHERE vendor_code = $1 AND is_active = 1
+      display_order,
+      parent_id,
+      hierarchy_path,
+      depth_level
+    FROM institution_nodes
+    WHERE vendor_code = $1 AND is_active = 1 AND node_type = 'institution'
   `, [vendorCode]);
 
   return result.rows[0] || null;
@@ -205,6 +220,39 @@ async function getInstitutionsByCategory(db, category) {
  */
 async function getScrapableInstitutions(db) {
   return getAllInstitutions(db, { scrapable: true });
+}
+
+/**
+ * Return the full institution tree (roots, groups, leaves) ordered by hierarchy path.
+ * @param {object} db - Database connection
+ * @returns {Promise<Array>} Array of institution nodes
+ */
+async function getInstitutionTree(db) {
+  const result = await db.query(`
+    SELECT
+      id,
+      parent_id,
+      vendor_code,
+      node_type,
+      institution_type,
+      category,
+      subcategory,
+      display_name_he,
+      display_name_en,
+      is_scrapable,
+      logo_url,
+      scraper_company_id,
+      credential_fields,
+      is_active,
+      display_order,
+      hierarchy_path,
+      depth_level
+    FROM institution_nodes
+    WHERE is_active = 1
+    ORDER BY hierarchy_path
+  `);
+
+  return result.rows;
 }
 
 /**
@@ -285,7 +333,10 @@ function buildInstitutionFromRow(row) {
     subcategory: row.institution_subcategory,
     logo_url: row.institution_logo_url,
     is_scrapable: row.institution_is_scrapable === 1,
-    scraper_company_id: row.institution_scraper_company_id
+    scraper_company_id: row.institution_scraper_company_id,
+    parent_id: row.institution_parent_id,
+    hierarchy_path: row.institution_hierarchy_path,
+    depth_level: row.institution_depth_level
   };
 }
 
@@ -340,11 +391,12 @@ async function backfillMissingInstitutionIds(db) {
       `
         UPDATE vendor_credentials
            SET institution_id = (
-             SELECT fi.id FROM financial_institutions fi
+             SELECT fi.id FROM institution_nodes fi
              WHERE fi.vendor_code = vendor_credentials.vendor
+               AND fi.node_type = 'institution'
            )
          WHERE institution_id IS NULL
-           AND vendor IN (SELECT vendor_code FROM financial_institutions)
+           AND vendor IN (SELECT vendor_code FROM institution_nodes WHERE node_type = 'institution')
       `,
     );
 
@@ -360,11 +412,12 @@ async function backfillMissingInstitutionIds(db) {
       `
         UPDATE investment_accounts
            SET institution_id = (
-             SELECT fi.id FROM financial_institutions fi
+             SELECT fi.id FROM institution_nodes fi
              WHERE fi.vendor_code = investment_accounts.account_type
+               AND fi.node_type = 'institution'
            )
          WHERE institution_id IS NULL
-           AND account_type IN (SELECT vendor_code FROM financial_institutions)
+           AND account_type IN (SELECT vendor_code FROM institution_nodes WHERE node_type = 'institution')
       `,
     );
 
@@ -388,6 +441,7 @@ module.exports = {
   getInstitutionsByType,
   getInstitutionsByCategory,
   getScrapableInstitutions,
+  getInstitutionTree,
 
   // Mapping helpers
   mapInstitutionToVendorCode,

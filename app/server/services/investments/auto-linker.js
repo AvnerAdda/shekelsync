@@ -18,7 +18,7 @@ async function fetchAccountInstitution(accountId) {
       fi.institution_type,
       fi.logo_url
     FROM investment_accounts ia
-    LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
+    LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
     WHERE ia.id = ?
   `;
 

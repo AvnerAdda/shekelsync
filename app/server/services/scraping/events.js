@@ -17,12 +17,12 @@ async function listScrapeEvents({ limit = 100 } = {}) {
        COALESCE(fi_cred.display_name_en, fi_vendor.display_name_en, se.vendor) as institution_name_en,
        COALESCE(fi_cred.logo_url, fi_vendor.logo_url) as institution_logo,
        COALESCE(fi_cred.institution_type, fi_vendor.institution_type) as institution_type
-     FROM scrape_events se
-     LEFT JOIN vendor_credentials vc ON se.vendor = vc.vendor
-     LEFT JOIN financial_institutions fi_cred ON vc.institution_id = fi_cred.id
-     LEFT JOIN financial_institutions fi_vendor ON se.vendor = fi_vendor.vendor_code
-     ORDER BY se.created_at DESC
-     LIMIT $1`,
+    FROM scrape_events se
+    LEFT JOIN vendor_credentials vc ON se.vendor = vc.vendor
+    LEFT JOIN institution_nodes fi_cred ON vc.institution_id = fi_cred.id AND fi_cred.node_type = 'institution'
+    LEFT JOIN institution_nodes fi_vendor ON se.vendor = fi_vendor.vendor_code AND fi_vendor.node_type = 'institution'
+    ORDER BY se.created_at DESC
+    LIMIT $1`,
     [cappedLimit],
   );
 
@@ -61,11 +61,11 @@ async function getScrapeEvent(id) {
        COALESCE(fi_cred.display_name_en, fi_vendor.display_name_en, se.vendor) as institution_name_en,
        COALESCE(fi_cred.logo_url, fi_vendor.logo_url) as institution_logo,
        COALESCE(fi_cred.institution_type, fi_vendor.institution_type) as institution_type
-     FROM scrape_events se
-     LEFT JOIN vendor_credentials vc ON se.vendor = vc.vendor
-     LEFT JOIN financial_institutions fi_cred ON vc.institution_id = fi_cred.id
-     LEFT JOIN financial_institutions fi_vendor ON se.vendor = fi_vendor.vendor_code
-     WHERE se.id = $1`,
+    FROM scrape_events se
+    LEFT JOIN vendor_credentials vc ON se.vendor = vc.vendor
+    LEFT JOIN institution_nodes fi_cred ON vc.institution_id = fi_cred.id AND fi_cred.node_type = 'institution'
+    LEFT JOIN institution_nodes fi_vendor ON se.vendor = fi_vendor.vendor_code AND fi_vendor.node_type = 'institution'
+    WHERE se.id = $1`,
     [id],
   );
 

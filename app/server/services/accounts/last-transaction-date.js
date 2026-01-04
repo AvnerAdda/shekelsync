@@ -64,6 +64,7 @@ async function getLastTransactionDate(params = {}) {
   const baseDate = new Date(lastTransactionDate);
   const nextDay = new Date(baseDate);
   nextDay.setDate(nextDay.getDate() + 1);
+  nextDay.setHours(0, 0, 0, 0);
 
   const credentialInfo = credentialNickname ? ` for ${credentialNickname}` : '';
   return {

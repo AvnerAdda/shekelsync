@@ -90,14 +90,16 @@ Options:
 }
 
 const TABLE_DEFINITIONS = [
-  `CREATE TABLE IF NOT EXISTS financial_institutions (
+  `CREATE TABLE IF NOT EXISTS institution_nodes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      vendor_code TEXT NOT NULL UNIQUE,
-      institution_type TEXT NOT NULL CHECK (institution_type IN ('bank','credit_card','investment','insurance','broker','crypto','other')),
+      parent_id INTEGER,
+      vendor_code TEXT UNIQUE,
+      node_type TEXT NOT NULL CHECK (node_type IN ('root','group','institution')),
+      institution_type TEXT,
+      category TEXT,
+      subcategory TEXT,
       display_name_he TEXT NOT NULL,
       display_name_en TEXT NOT NULL,
-      category TEXT NOT NULL CHECK (category IN ('banking','investments','insurance','brokerage','crypto','other')),
-      subcategory TEXT,
       is_scrapable INTEGER NOT NULL DEFAULT 0 CHECK (is_scrapable IN (0,1)),
       logo_url TEXT,
       scraper_company_id TEXT,
@@ -105,8 +107,13 @@ const TABLE_DEFINITIONS = [
       is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
       display_order INTEGER NOT NULL DEFAULT 0,
       notes TEXT,
+      hierarchy_path TEXT,
+      depth_level INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      CHECK ((node_type = 'root' AND parent_id IS NULL) OR (node_type != 'root' AND parent_id IS NOT NULL)),
+      CHECK ((node_type = 'institution' AND vendor_code IS NOT NULL) OR (node_type != 'institution' AND vendor_code IS NULL)),
+      FOREIGN KEY (parent_id) REFERENCES institution_nodes(id) ON DELETE SET NULL
     );`,
   `CREATE TABLE IF NOT EXISTS category_definitions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -201,7 +208,7 @@ const TABLE_DEFINITIONS = [
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(id_number, username, vendor),
-      FOREIGN KEY (institution_id) REFERENCES financial_institutions(id) ON DELETE SET NULL
+      FOREIGN KEY (institution_id) REFERENCES institution_nodes(id) ON DELETE SET NULL
     );`,
   `CREATE TABLE IF NOT EXISTS transactions (
       identifier TEXT NOT NULL,
@@ -268,7 +275,7 @@ const TABLE_DEFINITIONS = [
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       is_liquid INTEGER,
       investment_category TEXT,
-      FOREIGN KEY (institution_id) REFERENCES financial_institutions(id) ON DELETE SET NULL
+      FOREIGN KEY (institution_id) REFERENCES institution_nodes(id) ON DELETE SET NULL
     );`,
   `CREATE TABLE IF NOT EXISTS investment_assets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -470,11 +477,13 @@ const TABLE_DEFINITIONS = [
 ];
 
 const INDEX_STATEMENTS = [
-  'CREATE INDEX IF NOT EXISTS idx_financial_institutions_vendor_code ON financial_institutions (vendor_code);',
-  'CREATE INDEX IF NOT EXISTS idx_financial_institutions_type ON financial_institutions (institution_type);',
-  'CREATE INDEX IF NOT EXISTS idx_financial_institutions_category ON financial_institutions (category);',
-  'CREATE INDEX IF NOT EXISTS idx_financial_institutions_active ON financial_institutions (is_active);',
-  'CREATE INDEX IF NOT EXISTS idx_financial_institutions_scrapable ON financial_institutions (is_scrapable);',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_institution_nodes_vendor_code ON institution_nodes (vendor_code);',
+  'CREATE INDEX IF NOT EXISTS idx_institution_nodes_type ON institution_nodes (node_type);',
+  'CREATE INDEX IF NOT EXISTS idx_institution_nodes_parent ON institution_nodes (parent_id);',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_institution_nodes_path ON institution_nodes (hierarchy_path);',
+  'CREATE INDEX IF NOT EXISTS idx_institution_nodes_category ON institution_nodes (category);',
+  'CREATE INDEX IF NOT EXISTS idx_institution_nodes_active ON institution_nodes (is_active);',
+  'CREATE INDEX IF NOT EXISTS idx_institution_nodes_scrapable ON institution_nodes (is_scrapable);',
   'CREATE INDEX IF NOT EXISTS idx_categorization_rules_active ON categorization_rules (is_active);',
   'CREATE INDEX IF NOT EXISTS idx_categorization_rules_active_priority ON categorization_rules (is_active, priority DESC) WHERE (is_active = 1);',
   'CREATE INDEX IF NOT EXISTS idx_categorization_rules_pattern ON categorization_rules (name_pattern);',
@@ -552,6 +561,21 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_smart_action_items_detected_at ON smart_action_items(detected_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_smart_action_items_recurrence ON smart_action_items(recurrence_key, user_status);',
   'CREATE INDEX IF NOT EXISTS idx_action_item_history_item_id ON action_item_history(smart_action_item_id, created_at DESC);'
+];
+
+const INSTITUTION_GROUPS = [
+  { key: 'bank', parentKey: null, path: '/bank', nodeType: 'root', nameHe: 'בנקים', nameEn: 'Banks', institutionType: 'bank', category: 'banking', subcategory: null, displayOrder: 10, depth: 0 },
+  { key: 'credit_card', parentKey: null, path: '/credit_card', nodeType: 'root', nameHe: 'כרטיסי אשראי', nameEn: 'Credit Cards', institutionType: 'credit_card', category: 'banking', subcategory: null, displayOrder: 20, depth: 0 },
+  { key: 'investment', parentKey: null, path: '/investment', nodeType: 'root', nameHe: 'השקעות', nameEn: 'Investments', institutionType: 'investment', category: 'investments', subcategory: null, displayOrder: 30, depth: 0 },
+  { key: 'investment_liquid', parentKey: 'investment', path: '/investment/liquid', nodeType: 'group', nameHe: 'השקעות נזילות', nameEn: 'Liquid Investments', institutionType: 'investment', category: 'investments', subcategory: 'liquid', displayOrder: 31, depth: 1 },
+  { key: 'investment_liquid_brokerage', parentKey: 'investment_liquid', path: '/investment/liquid/brokerage', nodeType: 'group', nameHe: 'ברוקראז׳', nameEn: 'Brokerage', institutionType: 'broker', category: 'brokerage', subcategory: 'brokerage', displayOrder: 32, depth: 2 },
+  { key: 'investment_liquid_crypto', parentKey: 'investment_liquid', path: '/investment/liquid/crypto', nodeType: 'group', nameHe: 'קריפטו', nameEn: 'Crypto', institutionType: 'crypto', category: 'crypto', subcategory: 'crypto', displayOrder: 33, depth: 2 },
+  { key: 'investment_liquid_cash', parentKey: 'investment_liquid', path: '/investment/liquid/cash', nodeType: 'group', nameHe: 'מזומן ופיקדונות', nameEn: 'Cash & Deposits', institutionType: 'investment', category: 'investments', subcategory: 'cash', displayOrder: 34, depth: 2 },
+  { key: 'investment_long_term', parentKey: 'investment', path: '/investment/long_term', nodeType: 'group', nameHe: 'חיסכון ארוך טווח', nameEn: 'Long-Term Savings', institutionType: 'investment', category: 'investments', subcategory: 'long_term', displayOrder: 35, depth: 1 },
+  { key: 'investment_long_term_pension', parentKey: 'investment_long_term', path: '/investment/long_term/pension', nodeType: 'group', nameHe: 'פנסיה', nameEn: 'Pension', institutionType: 'investment', category: 'investments', subcategory: 'pension', displayOrder: 36, depth: 2 },
+  { key: 'investment_long_term_provident', parentKey: 'investment_long_term', path: '/investment/long_term/provident', nodeType: 'group', nameHe: 'גמל / השתלמות', nameEn: 'Provident / Study Fund', institutionType: 'investment', category: 'investments', subcategory: 'provident', displayOrder: 37, depth: 2 },
+  { key: 'investment_long_term_other', parentKey: 'investment_long_term', path: '/investment/long_term/other', nodeType: 'group', nameHe: 'השקעות אחרות', nameEn: 'Other Long-Term', institutionType: 'investment', category: 'investments', subcategory: 'other', displayOrder: 38, depth: 2 },
+  { key: 'insurance', parentKey: null, path: '/insurance', nodeType: 'root', nameHe: 'ביטוח', nameEn: 'Insurance', institutionType: 'insurance', category: 'insurance', subcategory: null, displayOrder: 40, depth: 0 }
 ];
 
 const FINANCIAL_INSTITUTIONS = [
@@ -1005,37 +1029,124 @@ function seedCategorizationRules(db, helpers) {
   })();
 }
 
+function resolveInstitutionParentKey(institution) {
+  if (!institution) return null;
+
+  if (institution.type === 'bank') return 'bank';
+  if (institution.type === 'credit_card') return 'credit_card';
+  if (institution.type === 'insurance') return 'insurance';
+  if (institution.type === 'broker') return 'investment_liquid_brokerage';
+  if (institution.type === 'crypto') return 'investment_liquid_crypto';
+
+  if (institution.type === 'investment') {
+    if (institution.subcategory === 'cash') return 'investment_liquid_cash';
+    if (institution.subcategory === 'pension') return 'investment_long_term_pension';
+    if (institution.subcategory === 'provident') return 'investment_long_term_provident';
+    return 'investment_long_term_other';
+  }
+
+  return 'investment_long_term_other';
+}
+
 function seedFinancialInstitutions(db) {
-  const insert = db.prepare(`
-    INSERT INTO financial_institutions
-      (vendor_code, institution_type, display_name_he, display_name_en, category, subcategory,
-       is_scrapable, logo_url, scraper_company_id, credential_fields, is_active, display_order, notes)
+  console.log('  → Seeding financial institution tree...');
+
+  const insertGroup = db.prepare(`
+    INSERT OR IGNORE INTO institution_nodes
+      (parent_id, vendor_code, node_type, institution_type, category, subcategory,
+       display_name_he, display_name_en, is_scrapable, logo_url, scraper_company_id, credential_fields,
+       is_active, display_order, notes, hierarchy_path, depth_level)
     VALUES
-      (@code, @type, @nameHe, @nameEn, @category, @subcategory,
-       @scrapable, NULL, @scraperCompanyId, @credentialFields, 1, @displayOrder, @notes)
+      (@parentId, NULL, @nodeType, @institutionType, @category, @subcategory,
+       @nameHe, @nameEn, 0, NULL, NULL, NULL,
+       1, @displayOrder, NULL, @path, @depth)
   `);
 
-  let insertedCount = 0;
+  const insertLeaf = db.prepare(`
+    INSERT OR IGNORE INTO institution_nodes
+      (parent_id, vendor_code, node_type, institution_type, category, subcategory,
+       display_name_he, display_name_en, is_scrapable, logo_url, scraper_company_id, credential_fields,
+       is_active, display_order, notes, hierarchy_path, depth_level)
+    VALUES
+      (@parentId, @code, 'institution', @type, @category, @subcategory,
+       @nameHe, @nameEn, @scrapable, NULL, @scraperCompanyId, @credentialFields,
+       1, @displayOrder, @notes, @path, @depth)
+  `);
+
+  const findNodeByPath = db.prepare('SELECT id, hierarchy_path, depth_level FROM institution_nodes WHERE hierarchy_path = ? LIMIT 1');
+
+  const groupMetaByKey = new Map();
+  let leafInserted = 0;
+
   db.transaction(() => {
+    // Insert roots/groups in depth order so parents exist before children
+    const sortedGroups = [...INSTITUTION_GROUPS].sort((a, b) => a.depth - b.depth || a.displayOrder - b.displayOrder);
+    for (const group of sortedGroups) {
+      const parentMeta = group.parentKey ? groupMetaByKey.get(group.parentKey) : null;
+      const result = insertGroup.run({
+        parentId: parentMeta ? parentMeta.id : null,
+        nodeType: group.nodeType,
+        institutionType: group.institutionType,
+        category: group.category,
+        subcategory: group.subcategory || null,
+        nameHe: group.nameHe,
+        nameEn: group.nameEn,
+        displayOrder: group.displayOrder,
+        path: group.path,
+        depth: group.depth
+      });
+
+      let id = result.lastInsertRowid;
+      if (!id) {
+        const existing = findNodeByPath.get(group.path);
+        id = existing?.id;
+      }
+
+      if (!id) {
+        console.warn(`Warning: Failed to insert group node for ${group.key}`);
+        continue;
+      }
+
+      groupMetaByKey.set(group.key, { id, path: group.path, depth: group.depth });
+    }
+
     for (const institution of FINANCIAL_INSTITUTIONS) {
-      insert.run({
+      const parentKey = resolveInstitutionParentKey(institution);
+      const parentMeta = parentKey ? groupMetaByKey.get(parentKey) : null;
+
+      if (!parentMeta) {
+        console.warn(`Warning: Parent node '${parentKey}' not found for institution ${institution.code}`);
+        continue;
+      }
+
+      const path = `${parentMeta.path}/${institution.code}`;
+      const depth = parentMeta.depth + 1;
+
+      const result = insertLeaf.run({
+        parentId: parentMeta.id,
         code: institution.code,
         type: institution.type,
-        nameHe: institution.nameHe,
-        nameEn: institution.nameEn,
         category: institution.category,
         subcategory: institution.subcategory || null,
+        nameHe: institution.nameHe,
+        nameEn: institution.nameEn,
         scrapable: institution.scrapable,
         scraperCompanyId: institution.scraperCompanyId || null,
         credentialFields: institution.credentialFields || null,
         displayOrder: institution.displayOrder,
-        notes: institution.notes || null
+        notes: institution.notes || null,
+        path,
+        depth
       });
-      insertedCount++;
+
+      if (result.changes > 0) {
+        leafInserted += 1;
+      }
     }
   })();
 
-  return insertedCount;
+  console.log(`    ✓ Seeded ${leafInserted} institution leaves (tree nodes total: ${leafInserted + groupMetaByKey.size})`);
+  return leafInserted;
 }
 
 function seedSpendingCategoryTargets(db) {
@@ -1159,7 +1270,11 @@ function seedDemoCredentials(db) {
     return 0;
   }
 
-  const findInstitution = db.prepare('SELECT id FROM financial_institutions WHERE vendor_code = ? LIMIT 1');
+  const findInstitution = db.prepare(`
+    SELECT id FROM institution_nodes
+    WHERE vendor_code = ? AND node_type = 'institution'
+    LIMIT 1
+  `);
   const insertCredential = db.prepare(`
     INSERT OR IGNORE INTO vendor_credentials (
       id_number,

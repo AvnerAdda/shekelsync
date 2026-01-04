@@ -46,7 +46,8 @@
           "capitalReturns": "Capital Returns",
           "capitalReturnsNote": "Principal returned from investments (pikadon, deposits). Not counted as income but offsets investment outflows.",
           "pendingLabel": "Pending ({{count}})",
-          "pendingDeficit": "Pending expenses will cause deficit of {{amount}}"
+          "pendingDeficit": "Pending expenses will cause deficit of {{amount}}",
+          "pendingDeficitCovered": "Pending expenses exceed this period by {{amount}} — covered by your bank balance"
         },
         "portfolio": {
           "title": "Investment Portfolio"
@@ -1720,6 +1721,7 @@
     "actions": {
       "pairAccounts": "Pair Accounts",
       "addAccount": "Add Account",
+      "cancel": "Cancel",
       "addCreditCard": "Add Credit Card",
       "addBankAccount": "Add Bank Account",
       "addInvestmentAccount": "Add Investment Account"
@@ -1765,6 +1767,48 @@
       "selectInstitution": "Select an institution to see the required credentials.",
       "noSpecificCredentials": "No specific credential requirements configured. Please provide a username and password."
     },
+    "credentials": {
+      "username": "Username",
+      "password": "Password",
+      "userCode": "User Code",
+      "id": "ID Number",
+      "card6Digits": "Card last 6 digits",
+      "card6DigitsHelper": "Last 6 digits printed on the card",
+      "bankAccountNumber": "Bank Account Number",
+      "nationalID": "National ID",
+      "num": "Identification code (num)",
+      "email": "Email Address",
+      "otpCode": "OTP Code",
+      "otpToken": "OTP Token",
+      "identification_code": "Identification Code"
+    },
+    "credentialsUpdate": {
+      "title": "Update credentials",
+      "description": "Update the saved login details for this account. Leave Password blank to keep the current one.",
+      "optionalFields": "Optional fields",
+      "otpCodeHint": "OTP codes are one-time and aren't saved. Enter it when syncing.",
+      "passwordPlaceholder": "Enter a new password",
+      "passwordHelper": "Leave blank to keep the current password.",
+      "actions": {
+        "save": "Save",
+        "saving": "Saving..."
+      },
+      "validation": {
+        "loginIdentifierRequired": "Login identifier is required",
+        "passwordRequired": "Password is required",
+        "idRequired": "ID Number is required",
+        "card6DigitsRequired": "Card last 6 digits is required",
+        "bankAccountNumberRequired": "Bank account number is required",
+        "extraCodeRequired": "Additional credential is required"
+      },
+      "notifications": {
+        "updated": "Credentials updated",
+        "noChanges": "No changes to save"
+      },
+      "errors": {
+        "saveFailed": "Failed to update credentials"
+      }
+    },
     "valueModal": {
       "title": "Add Value Update",
       "currentValue": "Current Value",
@@ -1805,6 +1849,7 @@
     "tooltips": {
       "addValueUpdate": "Add Value Update",
       "manageAssets": "Manage Assets",
+      "updateCredentials": "Update credentials",
       "deleteAccount": "Delete Account",
       "syncAccount": "Sync Account Data",
       "syncInProgress": "Sync in progress..."
@@ -1837,9 +1882,6 @@
         "notSet": "-",
         "updated": "Updated: {{date}}"
       }
-    },
-    "helpers": {
-      "selectInstitution": "Select an institution to see the required credentials."
     },
     "lastUpdate": {
       "never": "Never",

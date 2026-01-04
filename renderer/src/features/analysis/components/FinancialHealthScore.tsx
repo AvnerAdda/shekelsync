@@ -61,7 +61,7 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
     setInternalLoading(true);
     setInternalError(null);
     try {
-      const response = await apiClient.get<FinancialHealthSnapshot>('/api/analytics/personal-intelligence?months=3');
+      const response = await apiClient.get<FinancialHealthSnapshot>('/api/analytics/personal-intelligence?days=60');
       if (!response.ok) {
         throw new Error(t('errors.fetchFailed'));
       }

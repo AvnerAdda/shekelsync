@@ -2,7 +2,27 @@ const database = require('../database.js');
 const { decrypt } = require('../../../lib/server/encryption.js');
 const { STALE_SYNC_THRESHOLD_MS } = require('../../../utils/constants.js');
 const scrapingService = require('./run.js');
-const accountsService = require('../accounts/last-transaction-date.js');
+
+let databaseRef = database;
+let scrapingServiceRef = scrapingService;
+
+function safeDecrypt(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value !== 'string') {
+    return value;
+  }
+  // Only attempt decryption for values that match our encryption envelope format.
+  if (!value.includes(':')) {
+    return value;
+  }
+  try {
+    return decrypt(value);
+  } catch {
+    return value;
+  }
+}
 
 function defaultLogger() {
   /* no-op */
@@ -36,7 +56,7 @@ async function bulkScrape(options = {}) {
   } = options;
 
   const log = toLogger(logger);
-  const client = await database.getClient();
+  const client = await databaseRef.getClient();
 
   try {
     const thresholdDate = new Date(Date.now() - thresholdMs);
@@ -58,11 +78,12 @@ async function bulkScrape(options = {}) {
         FROM vendor_credentials vc
         LEFT JOIN (
           SELECT 
-            vendor,
+            credential_id,
             MAX(CASE WHEN status = 'success' THEN created_at ELSE NULL END) AS last_successful_scrape
           FROM scrape_events
-          GROUP BY vendor
-        ) last_scrapes ON vc.vendor = last_scrapes.vendor
+          WHERE credential_id IS NOT NULL
+          GROUP BY credential_id
+        ) last_scrapes ON vc.id = last_scrapes.credential_id
         WHERE COALESCE(last_scrapes.last_successful_scrape, vc.created_at) < $1
         ORDER BY last_update ASC
       `,
@@ -96,34 +117,29 @@ async function bulkScrape(options = {}) {
       onAccountStart?.({ account, index, total: totalAccounts });
 
       try {
+        const decryptedUsername = safeDecrypt(account.username);
+        const decryptedIdentificationCode = safeDecrypt(account.identification_code);
+
         const decryptedCredentials = {
           dbId: account.id, // Database row ID for scrape event tracking
-          id: account.id_number ? decrypt(account.id_number) : null,
-          card6Digits: account.card6_digits ? decrypt(account.card6_digits) : null,
-          password: account.password ? decrypt(account.password) : null,
-          username: account.username ? decrypt(account.username) : null,
+          id: safeDecrypt(account.id_number),
+          card6Digits: safeDecrypt(account.card6_digits),
+          password: safeDecrypt(account.password),
+          username: decryptedUsername,
+          userCode: decryptedUsername,
+          email: decryptedUsername,
           bankAccountNumber: account.bank_account_number || null,
-          identification_code: account.identification_code ? decrypt(account.identification_code) : null,
+          identification_code: decryptedIdentificationCode,
+          num: decryptedIdentificationCode,
+          nationalID: decryptedIdentificationCode,
+          otpToken: decryptedIdentificationCode,
           nickname: account.nickname,
           institution_id: account.institution_id,
           vendor: account.vendor,
         };
 
-        let startDate;
-        try {
-          const lookup = await accountsService.getLastTransactionDate({ vendor: account.vendor });
-          startDate = new Date(lookup.lastTransactionDate);
-        } catch (lookupError) {
-          log.warn?.(
-            `[Bulk Scrape] Failed to resolve last transaction date for ${account.vendor}: ${lookupError.message}`,
-          );
-          startDate = new Date();
-          startDate.setDate(startDate.getDate() - 30);
-        }
-
         const scrapeOptions = {
           companyId: account.vendor,
-          startDate,
           combineInstallments: false,
           showBrowser: true,
           additionalTransactionInformation: true,
@@ -133,7 +149,7 @@ async function bulkScrape(options = {}) {
 
         const accountLogger = typeof createLogger === 'function' ? createLogger(account.vendor) : logger;
 
-        const scrapeResult = await scrapingService.runScrape({
+        const scrapeResult = await scrapingServiceRef.runScrape({
           options: scrapeOptions,
           credentials: decryptedCredentials,
           logger: accountLogger,
@@ -209,6 +225,12 @@ async function bulkScrape(options = {}) {
 
 module.exports = {
   bulkScrape,
+  __setDatabaseForTests(overrides = null) {
+    databaseRef = overrides ? { ...database, ...overrides } : database;
+  },
+  __setScrapingServiceForTests(overrides = null) {
+    scrapingServiceRef = overrides ? { ...scrapingService, ...overrides } : scrapingService;
+  },
 };
 
 module.exports.default = module.exports;

@@ -21,7 +21,7 @@ async function listPatterns({ account_id } = {}) {
       ${INSTITUTION_SELECT_FIELDS}
     FROM account_transaction_patterns atp
     JOIN investment_accounts ia ON atp.account_id = ia.id
-    LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
+    LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
   `;
 
   const params = [];

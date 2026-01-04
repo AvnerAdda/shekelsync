@@ -150,7 +150,7 @@ async function getDashboardAnalytics(query = {}) {
         fi.institution_type as institution_type
       FROM transactions t
       LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
-      LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id
+      LEFT JOIN institution_nodes fi ON vc.institution_id = fi.id AND fi.node_type = 'institution'
       LEFT JOIN account_pairings ap ON (
         t.vendor = ap.bank_vendor
         AND ap.is_active = 1
@@ -317,7 +317,7 @@ async function getDashboardAnalytics(query = {}) {
       ih.as_of_date
     FROM investment_accounts ia
     JOIN investment_holdings ih ON ia.id = ih.account_id
-    LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
+    LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
     WHERE ia.account_type = 'bank_balance'
       AND ia.is_active = 1
       AND ih.as_of_date = (
@@ -398,8 +398,9 @@ async function getDashboardAnalytics(query = {}) {
     FROM transactions
     WHERE category_definition_id = 84
       AND vendor IN (
-        SELECT vendor_code FROM financial_institutions
-        WHERE institution_type IN ('bank', 'financial')
+        SELECT vendor_code FROM institution_nodes
+        WHERE node_type = 'institution'
+          AND institution_type IN ('bank', 'financial')
       )
       AND date >= $1`,
     [monthStartDate]

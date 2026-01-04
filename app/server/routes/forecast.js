@@ -30,6 +30,22 @@ function isCacheValid() {
   return Date.now() - forecastCache.timestamp < forecastCache.cacheDuration;
 }
 
+function formatLocalDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseLocalDate(dateStr) {
+  if (typeof dateStr !== 'string') return new Date(dateStr);
+  if (dateStr.includes('T')) return new Date(dateStr);
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return new Date(dateStr);
+  const [year, month, day] = parts;
+  return new Date(year, month - 1, day);
+}
+
 function createForecastRouter({ sqliteDb = null } = {}) {
   const router = express.Router();
   const getDbInstance = () => sqliteDb || getDatabase();
@@ -76,10 +92,10 @@ function createForecastRouter({ sqliteDb = null } = {}) {
 
       // Shared date helpers for current month calculations
       const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
+      const todayStr = formatLocalDate(today);
       const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
       const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      const monthEndStr = monthEnd.toISOString().split('T')[0];
+      const monthEndStr = formatLocalDate(monthEnd);
 
       // Use SQLite directly for actuals/budgets/category lookups
       const db = getDbInstance();
@@ -188,9 +204,9 @@ function createForecastRouter({ sqliteDb = null } = {}) {
       };
 
       // Calculate actual end date (day before forecast starts)
-      const forecastStart = new Date(result.forecastPeriod?.start);
+      const forecastStart = parseLocalDate(result.forecastPeriod?.start);
       forecastStart.setDate(forecastStart.getDate() - 1);
-      const actualEndDate = forecastStart.toISOString().split('T')[0];
+      const actualEndDate = formatLocalDate(forecastStart);
 
       // Calculate total forecasted expenses by scenario for remaining month
       const forecastExpensesByScenario = {

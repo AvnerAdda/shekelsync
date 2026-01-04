@@ -167,7 +167,7 @@ def main():
             ih.as_of_date
         FROM investment_accounts ia
         JOIN investment_holdings ih ON ia.id = ih.account_id
-        LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
+        LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
         WHERE ia.account_type = 'bank_balance'
           AND ia.is_active = 1
           AND ih.as_of_date = (SELECT MAX(as_of_date) FROM investment_holdings WHERE account_id = ia.id)

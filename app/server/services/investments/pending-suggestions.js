@@ -25,7 +25,7 @@ async function listPendingSuggestions(params = {}) {
         pts.suggested_institution_vendor
       FROM pending_transaction_suggestions pts
       LEFT JOIN investment_accounts ia ON pts.suggested_account_id = ia.id
-      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
+      LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
       WHERE pts.status = $1
       ORDER BY pts.confidence DESC, pts.created_at DESC
     `,

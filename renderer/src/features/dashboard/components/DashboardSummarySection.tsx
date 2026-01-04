@@ -34,6 +34,11 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
   const { startDate, endDate } = useDashboardFilters();
   const { t } = useTranslation('translation', { keyPrefix: 'dashboard.summarySection' });
   const theme = useTheme();
+  const hasAnyTransactions =
+    (data?.summary?.totalIncome ?? 0) !== 0 ||
+    (data?.summary?.totalExpenses ?? 0) !== 0 ||
+    (data?.summary?.netInvestments ?? 0) !== 0 ||
+    (data?.summary?.totalCapitalReturns ?? 0) !== 0;
 
   return (
     <>
@@ -75,7 +80,7 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
         />
       </Box>
 
-      {data.summary.totalIncome === 0 && hasBankAccounts !== null && (
+      {data.summary.totalIncome === 0 && !hasAnyTransactions && hasBankAccounts !== null && (
         <Alert 
           severity="info" 
           icon={<InfoOutlinedIcon />} 

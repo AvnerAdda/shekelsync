@@ -1,17 +1,31 @@
 const database = require('../database.js');
 const forecastService = require('../forecast.js');
 
+function formatLocalDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseLocalDate(dateStr) {
+  if (typeof dateStr !== 'string') return new Date(dateStr);
+  if (dateStr.includes('T')) return new Date(dateStr);
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return new Date(dateStr);
+  const [year, month, day] = parts;
+  return new Date(year, month - 1, day);
+}
+
 /**
  * Generate extended forecast with net position history + future scenarios
  * IMPORTANT: Always generates 6 months, regardless of other forecast settings
  */
 async function getExtendedForecast() {
-  // Get daily forecast data (6 months, include today)
-  // Explicitly set forecastDays to 0 to ensure forecastMonths is used (not end-of-month)
+  // Get daily forecast data (6 months, start tomorrow to avoid overlapping with historical actuals)
   const forecastData = await forecastService.generateDailyForecast({
-    includeToday: true,
+    includeToday: false,
     forecastMonths: 6,
-    forecastDays: 0,  // Force use of forecastMonths, not the route's end-of-month default
     verbose: false
   });
 
@@ -69,7 +83,7 @@ async function getExtendedForecast() {
   // Fill from first transaction through today
   const filledHistory = [];
   if (history.length > 0) {
-    const startDate = new Date(history[0].date);
+    const startDate = parseLocalDate(history[0].date);
     const now = new Date();
 
     // Set endDate to today (fills through today with missing dates as zeros)
@@ -82,7 +96,7 @@ async function getExtendedForecast() {
     currentDate.setHours(0, 0, 0, 0); // Normalize to midnight
 
     while (currentDate <= endDate) {
-      const dateStr = currentDate.toISOString().split('T')[0];
+      const dateStr = formatLocalDate(currentDate);
       const dayData = historyMap.get(dateStr);
 
       if (dayData) {
@@ -101,10 +115,18 @@ async function getExtendedForecast() {
   }
 
   // Calculate cumulative net position for history
-  let historicalCumulative = currentBalance;
+  const normalizedCurrentBalance = Number(currentBalance) || 0;
+  const totalHistoricalNetFlow = filledHistory.reduce((sum, day) => {
+    const income = Number(day.income) || 0;
+    const expenses = Number(day.expenses) || 0;
+    return sum + (income - expenses);
+  }, 0);
+
+  // Anchor historical series so it ends at the current balance (today).
+  let historicalCumulative = normalizedCurrentBalance - totalHistoricalNetFlow;
   const historicalData = filledHistory.map(day => {
-    const income = day.income || 0;
-    const expenses = day.expenses || 0;
+    const income = Number(day.income) || 0;
+    const expenses = Number(day.expenses) || 0;
     const netFlow = income - expenses;
     historicalCumulative += netFlow;
     return {
@@ -119,9 +141,13 @@ async function getExtendedForecast() {
 
   // Get starting balance for forecast (last historical cumulative)
   // Track cumulative separately for each scenario
-  let cumulativeP10 = historicalCumulative;
-  let cumulativeP50 = historicalCumulative;
-  let cumulativeP90 = historicalCumulative;
+  const lastHistoricalCumulative = historicalData.length
+    ? historicalData[historicalData.length - 1].historicalCumulative
+    : normalizedCurrentBalance;
+
+  let cumulativeP10 = lastHistoricalCumulative;
+  let cumulativeP50 = lastHistoricalCumulative;
+  let cumulativeP90 = lastHistoricalCumulative;
 
   const mc = forecastData.monteCarloResults || {};
   const scenarioMap = {
@@ -181,6 +207,30 @@ async function getExtendedForecast() {
     p50Cumulative: null,
     p90Cumulative: null
   }));
+
+  // Bridge point: start scenario curves from the last historical value.
+  if (combinedData.length > 0) {
+    const lastIndex = combinedData.length - 1;
+    const bridgeValue = combinedData[lastIndex].historicalCumulative;
+    combinedData[lastIndex] = {
+      ...combinedData[lastIndex],
+      p10Cumulative: bridgeValue,
+      p50Cumulative: bridgeValue,
+      p90Cumulative: bridgeValue,
+    };
+  } else {
+    const todayStr = formatLocalDate(new Date());
+    combinedData.push({
+      date: todayStr,
+      historicalCumulative: lastHistoricalCumulative,
+      income: 0,
+      expenses: 0,
+      netFlow: 0,
+      p10Cumulative: lastHistoricalCumulative,
+      p50Cumulative: lastHistoricalCumulative,
+      p90Cumulative: lastHistoricalCumulative,
+    });
+  }
 
   // Add p10 scenario forecast
   p10Data.forEach(day => {

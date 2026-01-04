@@ -43,8 +43,8 @@ async function listAccountLastUpdates() {
         COALESCE(fi.logo_url, fi_vendor.logo_url) as institution_logo,
         COALESCE(fi.institution_type, fi_vendor.institution_type) as institution_type
       FROM vendor_credentials vc
-      LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id
-      LEFT JOIN financial_institutions fi_vendor ON vc.vendor = fi_vendor.vendor_code
+      LEFT JOIN institution_nodes fi ON vc.institution_id = fi.id AND fi.node_type = 'institution'
+      LEFT JOIN institution_nodes fi_vendor ON vc.vendor = fi_vendor.vendor_code AND fi_vendor.node_type = 'institution'
       LEFT JOIN (
         SELECT
           t.vendor,

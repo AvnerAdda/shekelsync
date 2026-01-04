@@ -57,6 +57,19 @@ describe('Shared /api/credentials routes', () => {
     expect(spy).toHaveBeenCalledWith({ id: '123' });
   });
 
+  it('updates a credential', async () => {
+    const payload = { id: 42, vendor: 'isracard' };
+    const spy = vi.spyOn(credentialsService, 'updateCredential').mockResolvedValue(payload);
+
+    const res = await request(app)
+      .put('/api/credentials/42')
+      .send({ password: 'new-secret' })
+      .expect(200);
+
+    expect(res.body).toEqual(payload);
+    expect(spy).toHaveBeenCalledWith({ id: '42', password: 'new-secret' });
+  });
+
   it('handles credential creation errors', async () => {
     vi.spyOn(credentialsService, 'createCredential').mockRejectedValue(new Error('boom'));
 
@@ -70,6 +83,15 @@ describe('Shared /api/credentials routes', () => {
     );
 
     const res = await request(app).delete('/api/credentials/999').expect(403);
+    expect(res.body.error).toBeDefined();
+  });
+
+  it('handles credential update errors', async () => {
+    vi.spyOn(credentialsService, 'updateCredential').mockRejectedValue(
+      Object.assign(new Error('forbidden'), { statusCode: 403 }),
+    );
+
+    const res = await request(app).put('/api/credentials/999').send({ password: 'x' }).expect(403);
     expect(res.body.error).toBeDefined();
   });
 
