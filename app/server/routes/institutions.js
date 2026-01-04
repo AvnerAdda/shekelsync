@@ -5,6 +5,7 @@ const {
   getAllInstitutions,
   getInstitutionById,
   getInstitutionByVendorCode,
+  getInstitutionTree,
   clearInstitutionsCache,
 } = require('../services/institutions.js');
 
@@ -50,6 +51,27 @@ function createInstitutionsRouter() {
       console.error('Institutions list error:', error);
       res.status(500).json({
         error: 'Failed to fetch institutions',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      });
+    }
+  });
+
+  // Full hierarchy (roots, groups, leaves)
+  router.get('/tree', async (req, res) => {
+    try {
+      const { scrapable } = req.query || {};
+      const scrapableFilter = parseBoolean(scrapable);
+
+      const nodes = await getInstitutionTree(database);
+      const filtered = scrapableFilter === undefined
+        ? nodes
+        : nodes.filter((node) => node.node_type !== 'institution' || node.is_scrapable === (scrapableFilter ? 1 : 0));
+
+      res.json({ nodes: filtered });
+    } catch (error) {
+      console.error('Institution tree error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch institution tree',
         details: process.env.NODE_ENV === 'development' ? error.message : undefined,
       });
     }

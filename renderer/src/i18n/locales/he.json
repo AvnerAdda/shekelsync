@@ -20,7 +20,8 @@
           "capitalReturns": "החזרי הון",
           "capitalReturnsNote": "קרן שהוחזרה מהשקעות (פיקדון/הפקדות). לא נספרת כהכנסה אך מקזזת יציאות להשקעה.",
           "pendingLabel": "בהמתנה ({{count}})",
-          "pendingDeficit": "הוצאות בהמתנה יגרמו לגרעון של {{amount}}"
+          "pendingDeficit": "הוצאות בהמתנה יגרמו לגרעון של {{amount}}",
+          "pendingDeficitCovered": "הוצאות בהמתנה גבוהות מהתקופה ב־{{amount}} — יכוסה מיתרת הבנק"
         },
         "portfolio": { "title": "תיק השקעות" },
         "analysis": { "title": "בריאות פיננסית" }
@@ -1636,6 +1637,7 @@
     "actions": {
       "pairAccounts": "זיווג חשבונות",
       "addAccount": "הוסף חשבון",
+      "cancel": "ביטול",
       "addCreditCard": "הוסף כרטיס אשראי",
       "addBankAccount": "הוסף חשבון בנק",
       "addInvestmentAccount": "הוסף חשבון השקעה"
@@ -1696,6 +1698,33 @@
       "otpToken": "טוקן OTP",
       "identification_code": "קוד זיהוי"
     },
+    "credentialsUpdate": {
+      "title": "עדכון פרטי התחברות",
+      "description": "עדכנו את פרטי ההתחברות השמורים לחשבון הזה. השאירו את שדה הסיסמה ריק כדי לשמור את הסיסמה הקיימת.",
+      "optionalFields": "שדות אופציונליים",
+      "otpCodeHint": "קוד חד-פעמי לא נשמר. הזינו אותו בזמן הסנכרון.",
+      "passwordPlaceholder": "הזינו סיסמה חדשה",
+      "passwordHelper": "השאירו ריק כדי לשמור את הסיסמה הקיימת.",
+      "actions": {
+        "save": "שמור",
+        "saving": "שומר..."
+      },
+      "validation": {
+        "loginIdentifierRequired": "נדרש מזהה התחברות",
+        "passwordRequired": "נדרשת סיסמה",
+        "idRequired": "נדרשת תעודת זהות",
+        "card6DigitsRequired": "נדרשות 6 הספרות האחרונות בכרטיס",
+        "bankAccountNumberRequired": "נדרש מספר חשבון בנק",
+        "extraCodeRequired": "נדרש קוד/פרט התחברות נוסף"
+      },
+      "notifications": {
+        "updated": "פרטי ההתחברות עודכנו",
+        "noChanges": "אין שינויים לשמירה"
+      },
+      "errors": {
+        "saveFailed": "עדכון פרטי ההתחברות נכשל"
+      }
+    },
     "valueModal": {
       "title": "הוספת עדכון שווי",
       "currentValue": "שווי נוכחי",
@@ -1736,6 +1765,7 @@
     "tooltips": {
       "addValueUpdate": "הוסף עדכון שווי",
       "manageAssets": "ניהול נכסים",
+      "updateCredentials": "עדכון פרטי התחברות",
       "deleteAccount": "מחק חשבון",
       "syncAccount": "סנכרן נתוני חשבון",
       "syncInProgress": "סנכרון בתהליך..."
@@ -1768,11 +1798,6 @@
         "notSet": "-",
         "updated": "עודכן: {{date}}"
       }
-    },
-    "helpers": {
-      "selectInstitution": "בחרו מוסד כדי לראות אילו פרטי התחברות נדרשים.",
-      "knownInstitution": "בחרו מרשימה או השאירו ריק להזנת מוסד מותאם",
-      "noSpecificCredentials": "אין דרישות התחברות ספציפיות. הזינו שם משתמש וסיסמה."
     },
     "lastUpdate": {
       "never": "מעולם לא",

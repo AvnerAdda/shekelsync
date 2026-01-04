@@ -157,7 +157,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     
     // Use the actual end date from forecast API, not the chart's last date
     // The chart might have aggregated data that extends beyond actual transactions
-    const actualEndDate = forecastData.actual?.endDate || new Date().toISOString().split('T')[0];
+    const actualEndDate = forecastData.actual?.endDate || format(new Date(), 'yyyy-MM-dd');
+    const chartEndDate =
+      Array.isArray(baseHistoricalData) && baseHistoricalData.length > 0
+        ? baseHistoricalData[baseHistoricalData.length - 1].date
+        : actualEndDate;
 
     // Split historical data into actual vs future placeholder data
     const actualHistoricalData = baseHistoricalData.filter((item: any) => item.date <= actualEndDate);
@@ -193,7 +197,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
     // Forecast entries - have BOTH null historical values AND forecast values
     const forecastEntries = forecastData.dailyForecasts
-      .filter((d: any) => d.date > actualEndDate)
+      .filter((d: any) => d.date > actualEndDate && d.date <= chartEndDate)
       .map((d: any) => ({
         date: d.date,
         income: undefined,
@@ -269,8 +273,12 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     }
 
     // Use actual end date from API, not the chart's last date
-    const actualEndDate = forecastData.actual?.endDate || new Date().toISOString().split('T')[0];
+    const actualEndDate = forecastData.actual?.endDate || format(new Date(), 'yyyy-MM-dd');
     const actualHistoricalData = baseHistoricalData.filter((item: any) => item.date <= actualEndDate);
+    const chartEndDate =
+      Array.isArray(baseHistoricalData) && baseHistoricalData.length > 0
+        ? baseHistoricalData[baseHistoricalData.length - 1].date
+        : actualEndDate;
 
     if (actualHistoricalData.length === 0) {
       return baseHistoricalData.map((item: any) => ({
@@ -318,7 +326,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     let p90Cumulative = startingCumulative;
     
     const forecastEntries = forecastData.dailyForecasts
-      .filter((d: any) => d.date > lastHistoricalDate)
+      .filter((d: any) => d.date > lastHistoricalDate && d.date <= chartEndDate)
       .map((d: any, idx: number) => {
         expectedCumulative += d.cashFlow;
 

@@ -179,6 +179,11 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
   const { startDate, endDate } = useDashboardFilters();
   const { t } = useTranslation('translation', { keyPrefix: 'breakdownTabs' });
   const theme = useTheme();
+  const hasAnyTransactions =
+    (data?.summary?.totalIncome ?? 0) !== 0 ||
+    (data?.summary?.totalExpenses ?? 0) !== 0 ||
+    (data?.summary?.netInvestments ?? 0) !== 0 ||
+    (data?.summary?.totalCapitalReturns ?? 0) !== 0;
 
   const renderWaterfallContent = () => {
     if (waterfallLoading) {
@@ -362,7 +367,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
 
           {(['expense', 'income', 'investment'] as const).map(type => (
             <Box key={type} sx={{ display: selectedBreakdownType === type ? 'block' : 'none' }}>
-              {type === 'income' && data && data.summary.totalIncome === 0 && hasBankAccounts !== null && (
+              {type === 'income' && data && data.summary.totalIncome === 0 && !hasAnyTransactions && hasBankAccounts !== null && (
                 <Alert 
                   severity="info" 
                   icon={<InfoOutlinedIcon />} 

@@ -20,7 +20,8 @@
           "capitalReturns": "Remboursements de capital",
           "capitalReturnsNote": "Capital retourné des placements (pékadon, dépôts). Pas compté comme revenu mais compense les sorties d'investissement.",
           "pendingLabel": "En attente ({{count}})",
-          "pendingDeficit": "Les dépenses en attente provoqueront un déficit de {{amount}}"
+          "pendingDeficit": "Les dépenses en attente provoqueront un déficit de {{amount}}",
+          "pendingDeficitCovered": "Les dépenses en attente dépassent cette période de {{amount}} — couvert par votre solde bancaire"
         },
         "portfolio": { "title": "Portefeuille d'investissement" },
         "analysis": { "title": "Santé financière" }
@@ -1594,6 +1595,7 @@
     "actions": {
       "pairAccounts": "Associer les comptes",
       "addAccount": "Ajouter un compte",
+      "cancel": "Annuler",
       "addCreditCard": "Ajouter une carte de crédit",
       "addBankAccount": "Ajouter un compte bancaire",
       "addInvestmentAccount": "Ajouter un compte d'investissement"
@@ -1654,6 +1656,33 @@
       "otpToken": "Jeton OTP",
       "identification_code": "Code d'identification"
     },
+    "credentialsUpdate": {
+      "title": "Mettre à jour les identifiants",
+      "description": "Mettez à jour les identifiants enregistrés pour ce compte. Laissez le mot de passe vide pour conserver l'actuel.",
+      "optionalFields": "Champs optionnels",
+      "otpCodeHint": "Les codes OTP sont à usage unique et ne sont pas enregistrés. Saisissez-le lors de la synchronisation.",
+      "passwordPlaceholder": "Saisissez un nouveau mot de passe",
+      "passwordHelper": "Laissez vide pour conserver le mot de passe actuel.",
+      "actions": {
+        "save": "Enregistrer",
+        "saving": "Enregistrement..."
+      },
+      "validation": {
+        "loginIdentifierRequired": "Identifiant de connexion requis",
+        "passwordRequired": "Mot de passe requis",
+        "idRequired": "Numéro d'identité requis",
+        "card6DigitsRequired": "Les 6 derniers chiffres de la carte sont requis",
+        "bankAccountNumberRequired": "Numéro de compte bancaire requis",
+        "extraCodeRequired": "Identifiant supplémentaire requis"
+      },
+      "notifications": {
+        "updated": "Identifiants mis à jour",
+        "noChanges": "Aucun changement à enregistrer"
+      },
+      "errors": {
+        "saveFailed": "Échec de la mise à jour des identifiants"
+      }
+    },
     "valueModal": {
       "title": "Ajouter une mise à jour de valeur",
       "currentValue": "Valeur actuelle",
@@ -1694,6 +1723,7 @@
     "tooltips": {
       "addValueUpdate": "Ajouter une mise à jour de valeur",
       "manageAssets": "Gérer les actifs",
+      "updateCredentials": "Mettre à jour les identifiants",
       "deleteAccount": "Supprimer le compte",
       "syncAccount": "Synchroniser les données du compte",
       "syncInProgress": "Synchronisation en cours..."
@@ -1726,11 +1756,6 @@
         "notSet": "-",
         "updated": "Mis à jour : {{date}}"
       }
-    },
-    "helpers": {
-      "selectInstitution": "Sélectionnez une institution pour voir les identifiants requis.",
-      "knownInstitution": "Sélectionnez dans le registre ou laissez vide pour une institution personnalisée",
-      "noSpecificCredentials": "Aucune exigence spécifique configurée. Fournissez un nom d'utilisateur et un mot de passe."
     },
     "lastUpdate": {
       "never": "Jamais",

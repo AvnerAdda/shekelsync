@@ -18,6 +18,7 @@ const VALID_TYPES = new Set([
   'mutual_fund',
   'bonds',
   'real_estate',
+  'insurance',
   'bank_balance',
   'cash',
   'foreign_bank',
@@ -27,6 +28,7 @@ const VALID_TYPES = new Set([
 
 const LIQUID_TYPES = new Set(['brokerage', 'crypto', 'mutual_fund', 'bonds', 'real_estate', 'savings']);
 const RESTRICTED_TYPES = new Set(['pension', 'provident', 'study_fund']);
+const STABILITY_TYPES = new Set(['insurance']);
 const CASH_TYPES = new Set(['bank_balance', 'cash', 'foreign_bank', 'foreign_investment', 'other']);
 
 function serviceError(status, message) {
@@ -164,6 +166,9 @@ async function createAccount(payload = {}) {
   } else if (RESTRICTED_TYPES.has(accountTypeValue)) {
     isLiquid = false;
     investmentCategory = 'restricted';
+  } else if (STABILITY_TYPES.has(accountTypeValue)) {
+    isLiquid = false;
+    investmentCategory = 'stability';
   } else if (CASH_TYPES.has(accountTypeValue)) {
     isLiquid = true;
     investmentCategory = 'cash';
@@ -258,6 +263,11 @@ async function updateAccount(payload = {}) {
       values.push(false);
       updates.push(`investment_category = $${paramIndex++}`);
       values.push('restricted');
+    } else if (STABILITY_TYPES.has(account_type)) {
+      updates.push(`is_liquid = $${paramIndex++}`);
+      values.push(false);
+      updates.push(`investment_category = $${paramIndex++}`);
+      values.push('stability');
     } else if (CASH_TYPES.has(account_type)) {
       updates.push(`is_liquid = $${paramIndex++}`);
       values.push(true);

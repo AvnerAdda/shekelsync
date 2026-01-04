@@ -55,7 +55,7 @@ try {
       fi.display_name_he,
       fi.vendor_code
     FROM vendor_credentials vc
-    JOIN financial_institutions fi ON vc.vendor = fi.vendor_code
+    JOIN institution_nodes fi ON vc.vendor = fi.vendor_code AND fi.node_type = 'institution'
     WHERE vc.current_balance IS NOT NULL
       AND fi.institution_type = 'bank'
     ORDER BY vc.id

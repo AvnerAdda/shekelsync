@@ -66,6 +66,7 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   mutual_fund: 'Mutual Funds',
   bonds: 'Bonds & Loans',
   real_estate: 'Real Estate',
+  insurance: 'Insurance',
   other: 'Other Investments'
 };
 
@@ -125,21 +126,18 @@ useEffect(() => {
   const fetchInstitutions = async () => {
     setInstitutionsLoading(true);
     try {
-      const response = await apiClient.get('/api/institutions');
+      const response = await apiClient.get('/api/institutions/tree');
       if (!response.ok) {
         throw new Error(response.statusText || 'Failed to load institutions');
       }
       const payload = response.data as any;
-      const list = Array.isArray(payload?.institutions)
-        ? payload.institutions
-        : payload?.institution
-          ? [payload.institution]
-          : [];
+      const nodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
+      const list = nodes.filter((n: any) => n.node_type === 'institution');
       if (isMounted) {
         setInstitutions(list);
       }
     } catch (error) {
-      console.error('Failed to load institutions', error);
+      console.error('Failed to load institution tree', error);
       if (isMounted) {
         setInstitutions([]);
       }

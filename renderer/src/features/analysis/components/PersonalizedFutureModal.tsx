@@ -121,6 +121,36 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
 
   const formatCurrencyValue = (value: number) => formatCurrency(value, { absolute: false, maximumFractionDigits: 0 });
 
+  const netPositionDomain = React.useMemo<['auto', 'auto'] | [number, number]>(() => {
+    const source = data?.combinedData;
+    if (!Array.isArray(source) || source.length === 0) {
+      return ['auto', 'auto'];
+    }
+
+    const keys = ['historicalCumulative', 'p10Cumulative', 'p50Cumulative', 'p90Cumulative'] as const;
+    const values: number[] = [];
+
+    source.forEach((entry: any) => {
+      keys.forEach((key) => {
+        const value = entry?.[key];
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          values.push(value);
+        }
+      });
+    });
+
+    if (values.length === 0) {
+      return ['auto', 'auto'];
+    }
+
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min;
+    const padding = range === 0 ? Math.max(1, Math.abs(min) * 0.05) : range * 0.05;
+
+    return [min - padding, max + padding];
+  }, [data]);
+
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -220,6 +250,7 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                     <YAxis
                       stroke={theme.palette.text.secondary}
                       tickFormatter={formatCurrencyValue}
+                      domain={netPositionDomain}
                       style={{ fontSize: '0.75rem' }}
                       tickLine={false}
                       axisLine={false}
@@ -234,6 +265,7 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                       stroke={theme.palette.text.secondary}
                       strokeDasharray="3 3"
                       strokeWidth={1}
+                      ifOverflow="hidden"
                     />
                     <Area
                       type="monotone"
@@ -247,10 +279,10 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                     <Line
                       type="monotone"
                       dataKey="p10Cumulative"
-                      stroke={theme.palette.success.main}
+                      stroke={theme.palette.error.main}
                       strokeWidth={2}
                       strokeDasharray="5 5"
-                      name={`${t('scenarios.good')} (P10)`}
+                      name={`${t('scenarios.bad')} (P10)`}
                       connectNulls
                       dot={false}
                     />
@@ -267,10 +299,10 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                     <Line
                       type="monotone"
                       dataKey="p90Cumulative"
-                      stroke={theme.palette.error.main}
+                      stroke={theme.palette.success.main}
                       strokeWidth={2}
                       strokeDasharray="5 5"
-                      name={`${t('scenarios.bad')} (P90)`}
+                      name={`${t('scenarios.good')} (P90)`}
                       connectNulls
                       dot={false}
                     />
@@ -289,8 +321,17 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                       p: 3,
                       bgcolor: theme.palette.error.dark,
                       color: theme.palette.error.contrastText,
-                      borderTop: 4,
-                      borderColor: theme.palette.error.main,
+                      position: 'relative',
+                      overflow: 'hidden',
+                      '&::before': {
+                        content: '""',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 4,
+                        backgroundColor: theme.palette.error.main,
+                      },
                       transition: 'all 0.2s',
                       '&:hover': {
                         transform: 'translateY(-4px)',
@@ -301,7 +342,7 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
                       <Box>
                         <Typography variant="body2" fontWeight="medium" sx={{ opacity: 0.9 }}>
-                          {t('scenarios.bad')} (P90)
+                          {t('scenarios.bad')} (P10)
                         </Typography>
                         <Typography variant="caption" sx={{ opacity: 0.8, display: 'block', mt: 0.5 }}>
                           Worst case scenario (only 10% chance it's worse)
@@ -340,8 +381,17 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                       p: 3,
                       bgcolor: theme.palette.warning.dark,
                       color: theme.palette.warning.contrastText,
-                      borderTop: 4,
-                      borderColor: theme.palette.warning.main,
+                      position: 'relative',
+                      overflow: 'hidden',
+                      '&::before': {
+                        content: '""',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 4,
+                        backgroundColor: theme.palette.warning.main,
+                      },
                       transition: 'all 0.2s',
                       '&:hover': {
                         transform: 'translateY(-4px)',
@@ -391,8 +441,17 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                       p: 3,
                       bgcolor: theme.palette.success.dark,
                       color: theme.palette.success.contrastText,
-                      borderTop: 4,
-                      borderColor: theme.palette.success.main,
+                      position: 'relative',
+                      overflow: 'hidden',
+                      '&::before': {
+                        content: '""',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 4,
+                        backgroundColor: theme.palette.success.main,
+                      },
                       transition: 'all 0.2s',
                       '&:hover': {
                         transform: 'translateY(-4px)',
@@ -403,10 +462,10 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
                       <Box>
                         <Typography variant="body2" fontWeight="medium" sx={{ opacity: 0.9 }}>
-                          {t('scenarios.good')} (P10)
+                          {t('scenarios.good')} (P90)
                         </Typography>
                         <Typography variant="caption" sx={{ opacity: 0.8, display: 'block', mt: 0.5 }}>
-                          Best case scenario (90% chance it's at least this good)
+                          Best case scenario (only 10% chance it's better)
                         </Typography>
                       </Box>
                     </Box>

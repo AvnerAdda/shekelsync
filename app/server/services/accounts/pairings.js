@@ -76,17 +76,21 @@ async function listPairings(params = {}) {
     LEFT JOIN vendor_credentials vc_cc
       ON ap.credit_card_vendor = vc_cc.vendor
       AND (ap.credit_card_account_number IS NULL OR ap.credit_card_account_number = vc_cc.bank_account_number)
-    LEFT JOIN financial_institutions fi_cc_cred
+    LEFT JOIN institution_nodes fi_cc_cred
       ON vc_cc.institution_id = fi_cc_cred.id
-    LEFT JOIN financial_institutions fi_cc_vendor
+     AND fi_cc_cred.node_type = 'institution'
+    LEFT JOIN institution_nodes fi_cc_vendor
       ON ap.credit_card_vendor = fi_cc_vendor.vendor_code
+     AND fi_cc_vendor.node_type = 'institution'
     LEFT JOIN vendor_credentials vc_bank
       ON ap.bank_vendor = vc_bank.vendor
       AND (ap.bank_account_number IS NULL OR ap.bank_account_number = vc_bank.bank_account_number)
-    LEFT JOIN financial_institutions fi_bank_cred
+    LEFT JOIN institution_nodes fi_bank_cred
       ON vc_bank.institution_id = fi_bank_cred.id
-    LEFT JOIN financial_institutions fi_bank_vendor
+     AND fi_bank_cred.node_type = 'institution'
+    LEFT JOIN institution_nodes fi_bank_vendor
       ON ap.bank_vendor = fi_bank_vendor.vendor_code
+     AND fi_bank_vendor.node_type = 'institution'
   `;
 
   const predicates = [];
@@ -334,17 +338,21 @@ async function getActivePairings(clientInstance) {
         LEFT JOIN vendor_credentials vc_cc
           ON ap.credit_card_vendor = vc_cc.vendor
           AND (ap.credit_card_account_number IS NULL OR ap.credit_card_account_number = vc_cc.bank_account_number)
-        LEFT JOIN financial_institutions fi_cc_cred
+        LEFT JOIN institution_nodes fi_cc_cred
           ON vc_cc.institution_id = fi_cc_cred.id
-        LEFT JOIN financial_institutions fi_cc_vendor
+         AND fi_cc_cred.node_type = 'institution'
+        LEFT JOIN institution_nodes fi_cc_vendor
           ON ap.credit_card_vendor = fi_cc_vendor.vendor_code
+         AND fi_cc_vendor.node_type = 'institution'
         LEFT JOIN vendor_credentials vc_bank
           ON ap.bank_vendor = vc_bank.vendor
           AND (ap.bank_account_number IS NULL OR ap.bank_account_number = vc_bank.bank_account_number)
-        LEFT JOIN financial_institutions fi_bank_cred
+        LEFT JOIN institution_nodes fi_bank_cred
           ON vc_bank.institution_id = fi_bank_cred.id
-        LEFT JOIN financial_institutions fi_bank_vendor
+         AND fi_bank_cred.node_type = 'institution'
+        LEFT JOIN institution_nodes fi_bank_vendor
           ON ap.bank_vendor = fi_bank_vendor.vendor_code
+         AND fi_bank_vendor.node_type = 'institution'
         WHERE ap.is_active = 1
       `,
     );

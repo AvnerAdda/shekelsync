@@ -188,7 +188,7 @@ async function fetchCredentialSyncStates(client) {
          LIMIT 1
        ) AS last_event_status
      FROM vendor_credentials vc
-     LEFT JOIN financial_institutions fi ON vc.institution_id = fi.id OR fi.vendor_code = vc.vendor`,
+    LEFT JOIN institution_nodes fi ON (vc.institution_id = fi.id OR fi.vendor_code = vc.vendor) AND fi.node_type = 'institution'`,
   );
 
   return result.rows.map((row) => {

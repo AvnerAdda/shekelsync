@@ -69,6 +69,14 @@ const ACCOUNT_CATEGORIES = {
         color: '#54d96c',
         types: ['pension', 'provident', 'study_fund']
       },
+      STABILITY: {
+        id: 'stability',
+        label: 'Insurance & Stability',
+        label_he: 'ביטוח ויציבות',
+        icon: 'Security',
+        color: '#ffd3a8',
+        types: ['insurance']
+      },
       ALTERNATIVE: {
         id: 'alternative',
         label: 'Alternative Assets',
@@ -110,6 +118,7 @@ const INVESTMENT_ACCOUNT_TYPES = [
   { value: 'mutual_fund', label: 'Mutual Funds', label_he: 'קרנות נאמנות', category: 'liquid' },
   { value: 'bonds', label: 'Bonds', label_he: 'אג"ח', category: 'alternative' },
   { value: 'real_estate', label: 'Real Estate', label_he: 'נדל"ן', category: 'alternative' },
+  { value: 'insurance', label: 'Insurance', label_he: 'ביטוח', category: 'stability' },
   { value: 'bank_balance', label: 'Bank Balance', label_he: 'יתרת בנק', category: 'other' },
   { value: 'cash', label: 'Cash', label_he: 'מזומן', category: 'other' },
   { value: 'foreign_bank', label: 'Foreign Bank', label_he: 'בנק חוץ', category: 'other' },
@@ -142,7 +151,7 @@ const getAccountSubcategory = (accountType) => {
 };
 
 // ========== FINANCIAL INSTITUTIONS HELPERS ==========
-// These helpers work with the financial_institutions table
+// These helpers work with the institution_nodes tree (leaves are institutions)
 
 /**
  * Get institution by vendor code from database
@@ -153,7 +162,8 @@ const getAccountSubcategory = (accountType) => {
 async function getInstitutionByVendorCode(db, vendorCode) {
   try {
     const result = await db.query(
-      'SELECT * FROM financial_institutions WHERE vendor_code = $1 AND is_active = 1',
+      `SELECT * FROM institution_nodes
+        WHERE vendor_code = $1 AND is_active = 1 AND node_type = 'institution'`,
       [vendorCode]
     );
     return result.rows[0] || null;
@@ -172,7 +182,8 @@ async function getInstitutionByVendorCode(db, vendorCode) {
 async function getInstitutionById(db, institutionId) {
   try {
     const result = await db.query(
-      'SELECT * FROM financial_institutions WHERE id = $1',
+      `SELECT * FROM institution_nodes
+        WHERE id = $1 AND node_type = 'institution'`,
       [institutionId]
     );
     return result.rows[0] || null;
@@ -191,7 +202,9 @@ async function getInstitutionById(db, institutionId) {
 async function getInstitutionsByType(db, institutionType) {
   try {
     const result = await db.query(
-      'SELECT * FROM financial_institutions WHERE institution_type = $1 AND is_active = 1 ORDER BY display_order',
+      `SELECT * FROM institution_nodes
+         WHERE institution_type = $1 AND is_active = 1 AND node_type = 'institution'
+         ORDER BY display_order`,
       [institutionType]
     );
     return result.rows;
@@ -210,7 +223,9 @@ async function getInstitutionsByType(db, institutionType) {
 async function getInstitutionsByCategory(db, category) {
   try {
     const result = await db.query(
-      'SELECT * FROM financial_institutions WHERE category = $1 AND is_active = 1 ORDER BY display_order',
+      `SELECT * FROM institution_nodes
+         WHERE category = $1 AND is_active = 1 AND node_type = 'institution'
+         ORDER BY display_order`,
       [category]
     );
     return result.rows;
@@ -228,7 +243,9 @@ async function getInstitutionsByCategory(db, category) {
 async function getScrapableInstitutions(db) {
   try {
     const result = await db.query(
-      'SELECT * FROM financial_institutions WHERE is_scrapable = 1 AND is_active = 1 ORDER BY display_order',
+      `SELECT * FROM institution_nodes
+         WHERE is_scrapable = 1 AND is_active = 1 AND node_type = 'institution'
+         ORDER BY display_order`,
       []
     );
     return result.rows;
@@ -246,12 +263,35 @@ async function getScrapableInstitutions(db) {
 async function getAllInstitutions(db) {
   try {
     const result = await db.query(
-      'SELECT * FROM financial_institutions WHERE is_active = 1 ORDER BY category, display_order',
+      `SELECT * FROM institution_nodes
+         WHERE is_active = 1 AND node_type = 'institution'
+         ORDER BY category, display_order`,
       []
     );
     return result.rows;
   } catch (error) {
     console.error('[getAllInstitutions] Error:', error);
+    return [];
+  }
+}
+
+/**
+ * Get full institution tree (roots, groups, leaves) ordered by hierarchy_path.
+ * Useful for grouped UI selectors.
+ * @param {object} db - Database connection
+ * @returns {Promise<array>} Array of institution node records
+ */
+async function getInstitutionTree(db) {
+  try {
+    const result = await db.query(
+      `SELECT *
+         FROM institution_nodes
+        WHERE is_active = 1
+        ORDER BY hierarchy_path`
+    );
+    return result.rows;
+  } catch (error) {
+    console.error('[getInstitutionTree] Error:', error);
     return [];
   }
 }
@@ -274,4 +314,5 @@ module.exports = {
   getInstitutionsByCategory,
   getScrapableInstitutions,
   getAllInstitutions,
+  getInstitutionTree,
 };

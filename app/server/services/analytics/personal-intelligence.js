@@ -61,11 +61,12 @@ function safeDiv(numerator, denominator) {
 }
 
 async function getPersonalIntelligence(params = {}) {
-  const { subMonths, differenceInDays } = await loadDateFns();
+  const { subDays, subMonths, differenceInDays } = await loadDateFns();
 
+  const daysInt = Math.max(parseInt(params.days, 10) || 0, 0);
   const monthsInt = Math.max(parseInt(params.months, 10) || 1, 1);
   const endDate = new Date();
-  const startDate = subMonths(endDate, monthsInt);
+  const startDate = daysInt > 0 ? subDays(endDate, daysInt) : subMonths(endDate, monthsInt);
   const startStr = startDate.toISOString().split('T')[0];
   const endStr = endDate.toISOString().split('T')[0];
 
@@ -222,8 +223,9 @@ async function getPersonalIntelligence(params = {}) {
 
     const periodIncome = parseFloat(period_income || 0);
     const periodExpenses = parseFloat(period_expenses || 0);
-    const monthlyIncome = periodIncome / monthsInt;
-    const monthlyExpenses = periodExpenses / monthsInt;
+    const windowMonths = Math.max(1, (dayCount || 1) / 30);
+    const monthlyIncome = periodIncome / windowMonths;
+    const monthlyExpenses = periodExpenses / windowMonths;
     const monthlySavings = monthlyIncome - monthlyExpenses;
 
     const comparativeIntelligence = {
@@ -446,7 +448,7 @@ async function getPersonalIntelligence(params = {}) {
 
     return {
       generatedAt: new Date().toISOString(),
-      period: { startDate, endDate, months: monthsInt },
+      period: { startDate, endDate, months: monthsInt, ...(daysInt > 0 ? { days: daysInt } : {}) },
       userProfile: userProfile || { message: 'Complete your profile for personalized insights' },
       temporalIntelligence,
       behavioralIntelligence,

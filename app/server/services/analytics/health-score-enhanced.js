@@ -55,10 +55,26 @@ async function fetchMonthlyCashFlow(runQuery, start, end) {
     `
     SELECT
       strftime('%Y-%m', t.date) AS month,
-      SUM(CASE WHEN t.price > 0 THEN t.price ELSE 0 END) AS income,
-      SUM(CASE WHEN t.price < 0 THEN ABS(t.price) ELSE 0 END) AS expense,
+      SUM(CASE
+        WHEN (
+          (cd.category_type = 'income' AND t.price > 0 AND COALESCE(cd.is_counted_as_income, 1) = 1)
+          OR (cd.category_type IS NULL AND t.price > 0)
+          OR (COALESCE(cd.name, '') = $3 AND t.price > 0)
+        ) THEN t.price
+        ELSE 0
+      END) AS income,
+      SUM(CASE
+        WHEN (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0))
+          AND t.price < 0
+          AND COALESCE(cd.name, '') != $3
+          AND COALESCE(parent.name, '') != $3
+        THEN ABS(t.price)
+        ELSE 0
+      END) AS expense,
       COUNT(*) AS txn_count
     FROM transactions t
+    LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+    LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
     LEFT JOIN account_pairings ap ON (
       t.vendor = ap.bank_vendor
       AND ap.is_active = 1
@@ -75,7 +91,7 @@ async function fetchMonthlyCashFlow(runQuery, start, end) {
     GROUP BY strftime('%Y-%m', t.date)
     ORDER BY month ASC
     `,
-    [start, end],
+    [start, end, BANK_CATEGORY_NAME],
   );
 
   return result.rows.map((row) => ({
@@ -191,16 +207,12 @@ function computeEnhancedScores({ months, monthlyCashFlow, expenses, currentBalan
   const hasExpenses = monthlyCashFlow.some((m) => m.expense > 0);
   const periodIncome = monthlyCashFlow.reduce((sum, m) => sum + m.income, 0);
   const periodExpenses = monthlyCashFlow.reduce((sum, m) => sum + m.expense, 0);
-  const avgMonthlyIncome = periodIncome / Math.max(1, months);
   const dayCount = Math.max(1, Math.round((dateRange.endDate - dateRange.startDate) / DAY_MS));
+  const monthsEquivalent = Math.max(1, dayCount / 30);
+  const avgMonthlyIncome = periodIncome / monthsEquivalent;
 
-  // Savings: EMA of monthly savings rate, banded mapping.
-  const monthlySavingsRates = monthlyCashFlow.map((m) => {
-    if (m.income <= 0) return 0;
-    return (m.income - m.expense) / m.income;
-  });
-  const savingsAlpha = 2 / (Math.min(3, monthlySavingsRates.length) + 1);
-  const savingsRate = ema(monthlySavingsRates, savingsAlpha || 0.5);
+  // Savings: time-window savings rate, banded mapping.
+  const savingsRate = periodIncome > 0 ? (periodIncome - periodExpenses) / periodIncome : 0;
   const savingsScore = clamp(
     scaleBanded(savingsRate, [
       [-0.5, 0],
@@ -211,7 +223,7 @@ function computeEnhancedScores({ months, monthlyCashFlow, expenses, currentBalan
       [0.35, 100],
     ]),
   );
-  const savingsConfidence = hasIncome && hasExpenses && monthlyCashFlow.length >= Math.min(2, months);
+  const savingsConfidence = hasIncome && hasExpenses && periodIncome > 0 && dayCount >= 30;
   if (!hasIncome) {
     notes.push('Savings score is low-confidence: no income data in the window.');
   }
@@ -223,7 +235,7 @@ function computeEnhancedScores({ months, monthlyCashFlow, expenses, currentBalan
     notes.push('Diversity score is low-confidence: fewer than 20 expense transactions or <3 categories.');
   }
 
-  // Impulse Control: micro-transaction spend share smoothed by EMA.
+  // Impulse Control: micro-transaction spend share over the time window.
   const microThreshold = Math.min(200, Math.max(50, avgMonthlyIncome * 0.003));
   const expenseCount = expenses.length;
   const totalExpenseAmount = expenses.reduce((sum, txn) => sum + txn.amount, 0);
@@ -232,22 +244,8 @@ function computeEnhancedScores({ months, monthlyCashFlow, expenses, currentBalan
   const microAvg = microExpenses.length > 0 ? average(microExpenses.map((t) => t.amount)) : 0;
   const microShare = totalExpenseAmount > 0 ? microSpend / totalExpenseAmount : 0;
 
-  const monthlyMicroRatios = expenses.reduce((acc, txn) => {
-    const key = txn.date.toISOString().slice(0, 7);
-    if (!acc[key]) acc[key] = { microSpend: 0, totalSpend: 0 };
-    acc[key].totalSpend += txn.amount;
-    if (txn.amount < microThreshold) acc[key].microSpend += txn.amount;
-    return acc;
-  }, {});
-
-  const microRatios = Object.values(monthlyMicroRatios).map((m) =>
-    m.totalSpend > 0 ? m.microSpend / m.totalSpend : 0,
-  );
-  const microAlpha = 2 / (Math.min(3, microRatios.length) + 1);
-  const microRatioSmoothed = microRatios.length > 0 ? ema(microRatios, microAlpha || 0.5) : 0;
-
   let impulseScore = clamp(
-    scaleBanded(microRatioSmoothed, [
+    scaleBanded(microShare, [
       [0, 100],
       [0.1, 90],
       [0.2, 75],
@@ -274,7 +272,13 @@ function computeEnhancedScores({ months, monthlyCashFlow, expenses, currentBalan
   const avgDailyBurn = periodExpenses / dayCount;
   const runwayDays = avgDailyBurn > 0 ? Math.max(0, currentBalance) / avgDailyBurn : Infinity;
   const expenseVolatility = (() => {
-    const expensesOnly = monthlyCashFlow.map((m) => m.expense);
+    const endMonthKey = dateRange.endDate.toISOString().slice(0, 7);
+    const endDate = dateRange.endDate;
+    const endMonthLastDay = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate();
+    const shouldExcludeEndMonth = endDate.getDate() !== endMonthLastDay;
+    const expensesOnly = monthlyCashFlow
+      .filter((m) => !shouldExcludeEndMonth || m.month !== endMonthKey)
+      .map((m) => m.expense);
     const mean = average(expensesOnly);
     const std = standardDeviation(expensesOnly);
     return mean > 0 ? std / mean : 0;
@@ -390,6 +394,9 @@ async function computeEnhancedHealthScore({ months, startDate, endDate, currentB
 
 module.exports = {
   computeEnhancedHealthScore,
+  _internal: {
+    computeEnhancedScores,
+  },
 };
 
 module.exports.default = module.exports;

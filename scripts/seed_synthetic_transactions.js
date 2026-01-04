@@ -198,8 +198,8 @@ function seedBankBalanceAccounts(db, count = 3, months = 6, startOffsetMonths = 
   const banks = db
     .prepare(
       `SELECT id, display_name_en
-       FROM financial_institutions
-       WHERE institution_type = 'bank' AND vendor_code = ?
+       FROM institution_nodes
+       WHERE node_type = 'institution' AND institution_type = 'bank' AND vendor_code = ?
        LIMIT 1`,
     )
     .all(BANK_VENDOR);
@@ -522,8 +522,8 @@ function seedVendorCredentials(db, vendorPools) {
   const institutions = db
     .prepare(
       `SELECT id
-       FROM financial_institutions
-       WHERE is_active = 1
+       FROM institution_nodes
+       WHERE is_active = 1 AND node_type = 'institution'
        ORDER BY display_order, id`,
     )
     .all();

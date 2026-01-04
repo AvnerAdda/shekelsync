@@ -218,7 +218,7 @@ async function getInvestmentHistory(params = {}) {
       ${INSTITUTION_SELECT_FIELDS}
     FROM investment_holdings ih
     JOIN investment_accounts ia ON ih.account_id = ia.id
-    LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
+    LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
   `;
 
   const withStartDate = Boolean(startDateStr);

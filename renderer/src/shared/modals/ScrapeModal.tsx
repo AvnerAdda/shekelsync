@@ -192,17 +192,17 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
     const loadInstitutions = async () => {
       setInstitutionsLoading(true);
       try {
-        const response = await apiClient.get('/api/institutions?scrapable=true');
+        const response = await apiClient.get('/api/institutions/tree?scrapable=true');
         if (!response.ok) {
           throw new Error(response.statusText || t('errors.loadInstitutions'));
         }
         const payload = response.data as any;
-        const list = Array.isArray(payload?.institutions)
-          ? payload.institutions
-          : payload?.institution
-            ? [payload.institution]
-            : [];
-        const normalized = list.map((inst: InstitutionMetadata) => ({
+        const nodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
+        const leaves = nodes.filter((n: any) => n.node_type === 'institution');
+        if (leaves.length === 0) {
+          throw new Error('No institution leaves returned from tree');
+        }
+        const normalized = leaves.map((inst: InstitutionMetadata) => ({
           ...inst,
           credentialFieldList: parseCredentialFields((inst as any).credential_fields),
         }));
@@ -211,10 +211,29 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
           setInstitutionsError(null);
         }
       } catch (fetchError) {
-        console.error('[SyncModal] Failed to load institutions', fetchError);
+        console.error('[SyncModal] Failed to load institution tree, falling back to flat list', fetchError);
+        try {
+          const fallback = await apiClient.get('/api/institutions?scrapable=true');
+          const payload = fallback.data as any;
+          const list = Array.isArray(payload?.institutions)
+            ? payload.institutions
+            : payload?.institution
+              ? [payload.institution]
+              : [];
+          const normalized = list.map((inst: InstitutionMetadata) => ({
+            ...inst,
+            credentialFieldList: parseCredentialFields((inst as any).credential_fields),
+          }));
+          if (isMounted) {
+            setInstitutions(normalized);
+            setInstitutionsError(null);
+          }
+        } catch (fallbackError) {
+          console.error('[SyncModal] Failed to load institutions', fallbackError);
         if (isMounted) {
           setInstitutions([]);
           setInstitutionsError(t('errors.loadInstitutionsRetry'));
+        }
         }
       } finally {
         if (isMounted) {

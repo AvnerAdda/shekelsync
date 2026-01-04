@@ -91,8 +91,8 @@ async function fetchCandidateTransactions(client) {
       FROM transactions t
       LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
       LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
-      LEFT JOIN financial_institutions fi_cred ON vc.institution_id = fi_cred.id
-      LEFT JOIN financial_institutions fi_vendor ON t.vendor = fi_vendor.vendor_code
+      LEFT JOIN institution_nodes fi_cred ON vc.institution_id = fi_cred.id AND fi_cred.node_type = 'institution'
+      LEFT JOIN institution_nodes fi_vendor ON t.vendor = fi_vendor.vendor_code AND fi_vendor.node_type = 'institution'
       WHERE t.category_definition_id IN (25, 75)
         AND t.vendor IN (
           SELECT DISTINCT vendor

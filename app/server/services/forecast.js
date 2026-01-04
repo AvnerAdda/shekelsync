@@ -114,7 +114,36 @@ function isLastDayOfMonth(date) {
 }
 
 function formatDate(date) {
-  return date.toISOString().split('T')[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseLocalDate(dateStr) {
+  if (!dateStr) return new Date(dateStr);
+  if (typeof dateStr !== 'string') return new Date(dateStr);
+  if (dateStr.includes('T')) return new Date(dateStr);
+
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return new Date(dateStr);
+  const [year, month, day] = parts;
+  return new Date(year, month - 1, day);
+}
+
+function resolveForecastWindow(now, { includeToday, forecastDays, forecastMonths }) {
+  const startDate = includeToday
+    ? new Date(now)
+    : new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+  if (typeof forecastDays === 'number') {
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + forecastDays - 1);
+    return { startDate, endDate };
+  }
+
+  const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + forecastMonths, 0);
+  return { startDate, endDate };
 }
 
 function getDayName(dayOfWeek) {
@@ -142,65 +171,84 @@ function analyzeCategoryPatterns(transactions) {
   });
 
   Object.entries(tempPatterns).forEach(([categoryKey, txns]) => {
-    const months = new Set(txns.map(t => t.month)).size;
-    const avgOccurrencesPerMonth = txns.length / Math.max(months, 1);
-    const couldBeMonthlyRecurring = avgOccurrencesPerMonth >= 1.5 && avgOccurrencesPerMonth <= 2.0;
+    const categoryType = txns[0]?.category_type;
 
-    if (couldBeMonthlyRecurring) {
-      txns.forEach(txn => {
-        const key = txn.name || categoryKey;
-        if (!patterns[key]) {
-          patterns[key] = {
-            category: categoryKey,
-            transactionName: txn.name,
-            categoryType: txn.category_type,
-            parentCategory: txn.parent_category_name,
-            transactions: [],
-            amounts: [],
-            daysOfWeek: {},
-            daysOfMonth: {},
-            monthlyOccurrences: {},
-            totalCount: 0,
-          };
-        }
-        patterns[key].transactions.push(txn);
-        patterns[key].amounts.push(Math.abs(txn.price));
-        patterns[key].totalCount++;
-        const dow = txn.day_of_week;
-        patterns[key].daysOfWeek[dow] = (patterns[key].daysOfWeek[dow] || 0) + 1;
-        const dom = txn.day_of_month;
-        patterns[key].daysOfMonth[dom] = (patterns[key].daysOfMonth[dom] || 0) + 1;
-        const month = txn.month;
-        patterns[key].monthlyOccurrences[month] = (patterns[key].monthlyOccurrences[month] || 0) + 1;
+    // Some categories include multiple distinct recurring items (e.g., multiple salary sources).
+    // Split only when we see repeatable transaction names; otherwise keep category-level grouping.
+    const txnsByName = new Map();
+    txns.forEach(txn => {
+      const nameKey = typeof txn.name === 'string' ? txn.name.trim() : '';
+      if (!txnsByName.has(nameKey)) txnsByName.set(nameKey, []);
+      txnsByName.get(nameKey).push(txn);
+    });
+
+    const minOccurrencesForSplit = categoryType === 'expense' ? 2 : 3;
+    const recurringNameGroups = Array.from(txnsByName.entries())
+      .filter(([name]) => name)
+      .filter(([, group]) => {
+        const months = new Set(group.map(t => t.month)).size;
+        return months >= 2 && group.length >= minOccurrencesForSplit;
       });
-    } else {
-      const key = categoryKey;
-      patterns[key] = {
-        category: key,
-        transactionName: null,
-        categoryType: txns[0].category_type,
-        parentCategory: txns[0].parent_category_name,
-        transactions: [],
-        amounts: [],
-        dailyTotals: {},
-        daysOfWeek: {},
-        daysOfMonth: {},
-        monthlyOccurrences: {},
-        totalCount: 0,
-      };
-      txns.forEach(txn => {
-        patterns[key].transactions.push(txn);
-        patterns[key].amounts.push(Math.abs(txn.price));
-        patterns[key].totalCount++;
+
+    const shouldSplit =
+      recurringNameGroups.length >= 2 ||
+      (categoryType === 'income' && recurringNameGroups.length >= 1);
+
+    const addTxnToPattern = (patternKey, txn, { includeDailyTotals } = {}) => {
+      if (!patterns[patternKey]) {
+        patterns[patternKey] = {
+          category: categoryKey,
+          transactionName: txn.name || null,
+          categoryType: txn.category_type,
+          parentCategory: txn.parent_category_name,
+          transactions: [],
+          amounts: [],
+          ...(includeDailyTotals ? { dailyTotals: {} } : {}),
+          daysOfWeek: {},
+          daysOfMonth: {},
+          monthlyOccurrences: {},
+          totalCount: 0,
+        };
+      }
+
+      patterns[patternKey].transactions.push(txn);
+      patterns[patternKey].amounts.push(Math.abs(txn.price));
+      patterns[patternKey].totalCount++;
+
+      if (includeDailyTotals) {
         const day = txn.date.split('T')[0];
-        patterns[key].dailyTotals[day] = (patterns[key].dailyTotals[day] || 0) + Math.abs(txn.price);
-        const dow = txn.day_of_week;
-        patterns[key].daysOfWeek[dow] = (patterns[key].daysOfWeek[dow] || 0) + 1;
-        const dom = txn.day_of_month;
-        patterns[key].daysOfMonth[dom] = (patterns[key].daysOfMonth[dom] || 0) + 1;
-        const month = txn.month;
-        patterns[key].monthlyOccurrences[month] = (patterns[key].monthlyOccurrences[month] || 0) + 1;
+        patterns[patternKey].dailyTotals[day] = (patterns[patternKey].dailyTotals[day] || 0) + Math.abs(txn.price);
+      }
+
+      const dow = txn.day_of_week;
+      patterns[patternKey].daysOfWeek[dow] = (patterns[patternKey].daysOfWeek[dow] || 0) + 1;
+      const dom = txn.day_of_month;
+      patterns[patternKey].daysOfMonth[dom] = (patterns[patternKey].daysOfMonth[dom] || 0) + 1;
+      const month = txn.month;
+      patterns[patternKey].monthlyOccurrences[month] = (patterns[patternKey].monthlyOccurrences[month] || 0) + 1;
+    };
+
+    if (shouldSplit) {
+      const used = new Set();
+      recurringNameGroups.forEach(([name, group]) => {
+        group.forEach(txn => {
+          used.add(txn);
+          addTxnToPattern(name, txn);
+        });
       });
+
+      const leftovers = txns.filter(txn => !used.has(txn));
+      leftovers.forEach(txn => {
+        addTxnToPattern(categoryKey, txn, { includeDailyTotals: true });
+      });
+      if (leftovers.length > 0 && patterns[categoryKey]) {
+        patterns[categoryKey].transactionName = null;
+      }
+    } else {
+      txns.forEach(txn => {
+        addTxnToPattern(categoryKey, txn, { includeDailyTotals: true });
+      });
+      patterns[categoryKey].transactionName = null;
     }
   });
 
@@ -306,7 +354,7 @@ function analyzeCategoryPatterns(transactions) {
 
     if (p.transactions.length > 0) {
       p.lastOccurrence = p.transactions[p.transactions.length - 1].date;
-      const lastDate = new Date(p.lastOccurrence);
+      const lastDate = parseLocalDate(p.lastOccurrence);
       const now = new Date();
       p.daysSinceLastOccurrence = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
     }
@@ -398,12 +446,24 @@ function adjustProbabilitiesForCurrentMonth(patterns, currentMonthTransactions, 
 function calculateDayProbability(pattern, date, adjustments, patternKey) {
   const dayOfWeek = date.getDay();
   const dayOfMonth = date.getDate();
-  const topDomDays = pattern.mostLikelyDaysOfMonth ? pattern.mostLikelyDaysOfMonth.map(d => d.day) : [];
-  const topDomDaysWithGrace = topDomDays.flatMap(d => [d - 1, d, d + 1]).filter(d => d >= 1 && d <= 31);
+  const daysInMonthForDate = getDaysInMonth(date.getFullYear(), date.getMonth());
+  const topDomDaysRaw = pattern.mostLikelyDaysOfMonth ? pattern.mostLikelyDaysOfMonth.map(d => d.day) : [];
+  const topDomDays = topDomDaysRaw.map(d => Math.min(d, daysInMonthForDate));
+  const topDomDaysWithGrace = Array.from(
+    new Set(topDomDays.flatMap(d => [d - 1, d, d + 1]).filter(d => d >= 1 && d <= daysInMonthForDate))
+  );
 
   let probability = 0;
   const dowProb = pattern.dayOfWeekProb[dayOfWeek] || 0;
-  const domProb = pattern.dayOfMonthProb[dayOfMonth] || 0;
+  let domProb = pattern.dayOfMonthProb[dayOfMonth] || 0;
+  if (domProb === 0 && dayOfMonth === daysInMonthForDate) {
+    // Month-length edge case: if a pattern is tied to a day that doesn't exist in this month
+    // (e.g. 30/31 in February), shift the day-of-month signal to the last day.
+    const overflowDomDay = topDomDaysRaw.find(d => d > daysInMonthForDate);
+    if (overflowDomDay) {
+      domProb = pattern.dayOfMonthProb[overflowDomDay] || 0;
+    }
+  }
 
   if (pattern.patternType === 'daily') {
     const avgDailyFrequency = pattern.avgOccurrencesPerMonth / 30;
@@ -414,12 +474,9 @@ function calculateDayProbability(pattern, date, adjustments, patternKey) {
       return 0;
     }
     if (pattern.categoryType === 'income') {
-      const mainDay = topDomDays[0];
-      if (mainDay && dayOfMonth === mainDay) {
-        probability = domProb * 0.95 + dowProb * 0.05;
-      } else {
-        return 0;
-      }
+      // For income, allow a small grace window (handled above) and let the monthly adjustment step
+      // select a single occurrence for the month.
+      probability = domProb * 0.95 + dowProb * 0.05;
     } else {
       probability = domProb * 0.8 + dowProb * 0.2;
     }
@@ -437,14 +494,37 @@ function calculateDayProbability(pattern, date, adjustments, patternKey) {
   }
 
   if (pattern.lastOccurrence) {
-    const daysSinceLast = Math.floor((date - new Date(pattern.lastOccurrence)) / (1000 * 60 * 60 * 24));
+    const lastDate = parseLocalDate(pattern.lastOccurrence);
+    const daysSinceLast = Math.floor((date - lastDate) / (1000 * 60 * 60 * 24));
     if (!isNaN(daysSinceLast) && daysSinceLast >= 0) {
+      const monthsSinceLast =
+        (date.getFullYear() - lastDate.getFullYear()) * 12 +
+        (date.getMonth() - lastDate.getMonth());
       const expectedSpacing = 30 / Math.max(pattern.avgOccurrencesPerMonth || 0.001, 0.001);
-      if (daysSinceLast < expectedSpacing * 0.7) {
-        probability *= 0.15;
-      } else if (daysSinceLast < expectedSpacing * 0.9) {
-        probability *= 0.45;
-      } else if (daysSinceLast > expectedSpacing * 1.3) {
+
+      // Timeline-oriented guardrail: prevent "double counting" monthly patterns when a transaction
+      // happens very late in the previous month (e.g., salary paid early) and would otherwise be
+      // forecast again at the start of the next month.
+      if ((pattern.patternType === 'monthly' || pattern.patternType === 'bi-monthly')) {
+        const minGapDays = Math.max(7, Math.round(expectedSpacing * 0.5));
+        if (daysSinceLast < minGapDays) {
+          return 0;
+        }
+      }
+
+      const allowShortGapAcrossMonths =
+        (pattern.patternType === 'monthly' && monthsSinceLast >= 1) ||
+        (pattern.patternType === 'bi-monthly' && monthsSinceLast >= 2);
+
+      if (!allowShortGapAcrossMonths) {
+        if (daysSinceLast < expectedSpacing * 0.7) {
+          probability *= 0.15;
+        } else if (daysSinceLast < expectedSpacing * 0.9) {
+          probability *= 0.45;
+        }
+      }
+
+      if (daysSinceLast > expectedSpacing * 1.3) {
         probability *= 1.2;
       }
     }
@@ -500,10 +580,27 @@ function simulateScenario(dailyForecasts, patterns, adjustmentsByMonth) {
     dailyResults: [],
   };
 
+  // Monthly patterns are normalized in the deterministic forecast by selecting a single
+  // "chosen occurrence" day per month (see adjustMonthlyPatternForecasts). The Monte Carlo
+  // simulation should honor that normalization, otherwise monthly bills/income will almost
+  // never occur due to low per-day probabilities.
+  const chosenMonthlyOccurrenceDateByMonth = {};
+  dailyForecasts.forEach((day) => {
+    const monthKey = typeof day?.date === 'string' ? day.date.slice(0, 7) : null;
+    if (!monthKey) return;
+    (day.predictions || []).forEach((pred) => {
+      if (!pred?.isChosenOccurrence) return;
+      const key = pred.transactionName || pred.category;
+      if (!key) return;
+      if (!chosenMonthlyOccurrenceDateByMonth[monthKey]) chosenMonthlyOccurrenceDateByMonth[monthKey] = {};
+      chosenMonthlyOccurrenceDateByMonth[monthKey][key] = day.date;
+    });
+  });
+
   const monthlyOccurrences = {};
 
   dailyForecasts.forEach(dayForecast => {
-    const date = new Date(dayForecast.date);
+    const date = parseLocalDate(dayForecast.date);
     const monthKey = dayForecast.date.slice(0, 7);
     if (!monthlyOccurrences[monthKey]) {
       monthlyOccurrences[monthKey] = new Set();
@@ -536,7 +633,12 @@ function simulateScenario(dailyForecasts, patterns, adjustmentsByMonth) {
         const monthSet = monthlyOccurrences[monthKey];
         if (monthSet.has(monthlyKey)) return;
 
-        if (willOccur(effectiveProb)) {
+        const chosenDate = chosenMonthlyOccurrenceDateByMonth[monthKey]?.[monthlyKey];
+        if (chosenDate && chosenDate !== dayForecast.date) {
+          return;
+        }
+
+        if (chosenDate ? true : willOccur(effectiveProb)) {
           monthSet.add(monthlyKey);
           const amount = sampleAmount(pattern.avgAmount, pattern.stdDev);
           if (pattern.categoryType === 'income') dayIncome += amount;
@@ -718,6 +820,7 @@ function adjustMonthlyPatternForecasts(dailyForecasts, patterns, adjustments) {
         if (monthlyPattern.categoryType === 'income') day.expectedIncome += adjustmentDelta;
         else if (monthlyPattern.categoryType === 'expense') day.expectedExpenses += adjustmentDelta;
         day.expectedCashFlow = day.expectedIncome - day.expectedExpenses;
+        prediction.probability = 1;
         prediction.probabilityWeightedAmount = prediction.expectedAmount;
         prediction.isChosenOccurrence = true;
       } else {
@@ -725,10 +828,24 @@ function adjustMonthlyPatternForecasts(dailyForecasts, patterns, adjustments) {
         if (monthlyPattern.categoryType === 'income') day.expectedIncome += adjustmentDelta;
         else if (monthlyPattern.categoryType === 'expense') day.expectedExpenses += adjustmentDelta;
         day.expectedCashFlow = day.expectedIncome - day.expectedExpenses;
+        prediction.probability = 0;
         prediction.probabilityWeightedAmount = 0;
         prediction.isChosenOccurrence = false;
       }
     });
+  });
+
+  // Re-sort predictions/topPredictions since monthly normalization changes probabilities.
+  dailyForecasts.forEach((day) => {
+    if (!Array.isArray(day.predictions)) return;
+    day.predictions.sort((a, b) => {
+      const probDiff = (Number(b?.probability) || 0) - (Number(a?.probability) || 0);
+      if (probDiff !== 0) return probDiff;
+      return (Number(b?.expectedAmount) || 0) - (Number(a?.expectedAmount) || 0);
+    });
+    day.topPredictions = day.predictions
+      .filter((p) => (Number(p?.probabilityWeightedAmount) || 0) > 0)
+      .slice(0, 5);
   });
 }
 
@@ -777,11 +894,16 @@ async function generateDailyForecast(options = {}) {
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const currentDay = now.getDate();
 
+  // Treat each call as self-contained; do not rely on previous CONFIG state.
   CONFIG.verbose = !!options.verbose;
-  CONFIG.includeToday = options.includeToday ?? CONFIG.includeToday;
-  CONFIG.forecastMonths = options.forecastMonths ?? CONFIG.forecastMonths;
-  // If forecastDays is explicitly 0, don't use previous value - use forecastMonths instead
-  CONFIG.forecastDays = options.forecastDays !== undefined ? options.forecastDays : CONFIG.forecastDays;
+  CONFIG.includeToday = options.includeToday ?? false;
+  CONFIG.forecastMonths = Number.isFinite(options.forecastMonths) ? options.forecastMonths : 6;
+  if (options.forecastDays === undefined || options.forecastDays === null || Number.isNaN(options.forecastDays)) {
+    CONFIG.forecastDays = null;
+  } else {
+    const forecastDays = Number(options.forecastDays);
+    CONFIG.forecastDays = Number.isFinite(forecastDays) ? Math.max(0, forecastDays) : null;
+  }
 
   const allTransactions = getAllTransactions(db);
   if (allTransactions.length === 0) throw new Error('No transactions found in database');
@@ -791,17 +913,13 @@ async function generateDailyForecast(options = {}) {
   const categoryCount = Object.keys(patterns).length;
   logPatternSummary(patterns);
 
-  let forecastStartDate = CONFIG.includeToday ? new Date(now) : new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const { startDate: forecastStartDate, endDate: forecastEndDate } = resolveForecastWindow(now, {
+    includeToday: CONFIG.includeToday,
+    forecastDays: CONFIG.forecastDays,
+    forecastMonths: CONFIG.forecastMonths,
+  });
   if (!CONFIG.includeToday && isLastDayOfMonth(now)) {
     log('ℹ️ Today is the last day of the month; starting forecast from next month.');
-  }
-
-  let forecastEndDate;
-  if (CONFIG.forecastDays) {
-    forecastEndDate = new Date(forecastStartDate);
-    forecastEndDate.setDate(forecastEndDate.getDate() + CONFIG.forecastDays - 1);
-  } else {
-    forecastEndDate = new Date(forecastStartDate.getFullYear(), forecastStartDate.getMonth() + CONFIG.forecastMonths, 0);
   }
 
   const { dailyForecasts, adjustmentsByMonth } = generateForecastAcrossMonths(patterns, db, forecastStartDate, forecastEndDate, now);
@@ -904,10 +1022,10 @@ function loadCategoryDefinitions(db) {
  */
 function buildBudgetOutlook(result) {
   const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = formatDate(today);
   const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  const monthEndStr = monthEnd.toISOString().split('T')[0];
+  const monthEndStr = formatDate(monthEnd);
 
   const db = new Database(CONFIG.dbPath, { readonly: true });
   const { categoryDefinitionsByName, categoryDefinitionsById } = loadCategoryDefinitions(db);
@@ -1219,4 +1337,15 @@ async function getForecast(options = {}) {
   };
 }
 
-module.exports = { generateDailyForecast, getForecast };
+module.exports = {
+  generateDailyForecast,
+  getForecast,
+  _internal: {
+    calculateDayProbability,
+    formatDate,
+    getDaysInMonth,
+    isLastDayOfMonth,
+    parseLocalDate,
+    resolveForecastWindow,
+  },
+};

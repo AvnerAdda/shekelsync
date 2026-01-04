@@ -280,7 +280,7 @@ const AnalysisPageNew: React.FC = () => {
     setError(null);
 
     try {
-      const response = await apiClient.get<PersonalIntelligence>('/api/analytics/personal-intelligence?months=3');
+      const response = await apiClient.get<PersonalIntelligence>('/api/analytics/personal-intelligence?days=60');
 
       if (!response.ok) {
         throw new Error(t('errors.fetchFailed'));

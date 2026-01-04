@@ -98,6 +98,8 @@ async function resolveStartDate(input, credentials) {
 function buildScraperOptions(options, isBank, executablePath, startDate) {
   // Show browser for banks and problematic credit card scrapers (MAX)
   const shouldShowBrowser = isBank || options.companyId === 'max';
+  const showBrowser =
+    typeof options?.showBrowser === 'boolean' ? options.showBrowser : shouldShowBrowser;
 
   // Use longer timeout for problematic scrapers (MAX and Discount)
   const slowScrapers = ['max', 'discount'];
@@ -107,7 +109,7 @@ function buildScraperOptions(options, isBank, executablePath, startDate) {
     ...options,
     companyId: CompanyTypes[options.companyId],
     startDate,
-    showBrowser: shouldShowBrowser,
+    showBrowser,
     verbose: true,
     timeout,
     executablePath,
@@ -527,15 +529,21 @@ async function updateVendorAccountNumbers(client, options, credentials, discover
   const accountNumbersStr = Array.from(discoveredAccountNumbers).join(';');
   const fieldName = isBank ? 'bank_account_number' : 'card6_digits';
 
-  // Fix: Match by credential ID (primary key) instead of encrypted username/id_number
-  // credentials.id is the database row ID which uniquely identifies the credential
+  // Match by vendor_credentials.id when available to avoid ambiguity between:
+  // - credentials.id (often the user's ID number for authentication)
+  // - credentials.dbId (the vendor_credentials row ID used for scrape_events tracking)
+  const credentialRowId = credentials?.dbId ?? credentials?.id;
+  if (!credentialRowId) {
+    return;
+  }
+
   await client.query(
     `UPDATE vendor_credentials
         SET ${fieldName} = $1,
             updated_at = CURRENT_TIMESTAMP
       WHERE vendor = $2
         AND id = $3`,
-    [accountNumbersStr, options.companyId, credentials.id],
+    [accountNumbersStr, options.companyId, credentialRowId],
   );
 }
 

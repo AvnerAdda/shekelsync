@@ -50,7 +50,7 @@ async function fetchAccounts(client) {
           ORDER BY ih2.as_of_date DESC
           LIMIT 1
         )
-      LEFT JOIN financial_institutions fi ON ia.institution_id = fi.id
+      LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
       WHERE ia.is_active = ${booleanTrue}
       ORDER BY ia.investment_category, ia.account_type, ia.account_name
     `,

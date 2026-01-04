@@ -316,7 +316,7 @@ async function exportData(params = {}) {
           FROM transactions t
           LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
           LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-          LEFT JOIN financial_institutions fi ON fi.vendor_code = t.vendor
+          LEFT JOIN institution_nodes fi ON fi.vendor_code = t.vendor AND fi.node_type = 'institution'
           WHERE t.date >= $1
           AND t.date <= $2
           ${typeFilterClause}
@@ -387,7 +387,7 @@ async function exportData(params = {}) {
           FROM transactions t
           LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
           LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-          LEFT JOIN financial_institutions fi ON fi.vendor_code = t.vendor
+          LEFT JOIN institution_nodes fi ON fi.vendor_code = t.vendor AND fi.node_type = 'institution'
           WHERE t.date >= $1
           AND t.date <= $2
           ${typeFilterClause}

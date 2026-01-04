@@ -137,10 +137,11 @@ function buildEncryptedPayload(payload = {}) {
     identification_code,
     num,
     nationalID,
+    otpToken,
   } = payload;
 
   const usernameValue = userCode || email || username;
-  const identificationValue = num || nationalID || identification_code;
+  const identificationValue = num || nationalID || identification_code || otpToken;
 
   return {
     vendor,
@@ -152,6 +153,125 @@ function buildEncryptedPayload(payload = {}) {
     bank_account_number: bank_account_number || null,
     identification_code: identificationValue ? encrypt(identificationValue) : null,
   };
+}
+
+function normalizeCredentialField(value) {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length === 0 ? null : trimmed;
+  }
+  return String(value);
+}
+
+async function updateCredential(payload = {}) {
+  const id = payload.id;
+
+  if (!id) {
+    const error = new Error('Credential ID is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const hasOwn = (key) => Object.prototype.hasOwnProperty.call(payload, key);
+
+  const updates = {};
+
+  if (hasOwn('password')) {
+    const value = normalizeCredentialField(payload.password);
+    updates.password = value ? encrypt(value) : null;
+  }
+
+  const hasUsernameInputs = hasOwn('username') || hasOwn('userCode') || hasOwn('email');
+  if (hasUsernameInputs) {
+    const usernameValue = normalizeCredentialField(payload.userCode ?? payload.email ?? payload.username);
+    updates.username = usernameValue ? encrypt(usernameValue) : null;
+  }
+
+  if (hasOwn('id_number') || hasOwn('id')) {
+    const idValue = normalizeCredentialField(payload.id_number ?? payload.id);
+    updates.id_number = idValue ? encrypt(idValue) : null;
+  }
+
+  if (hasOwn('card6_digits') || hasOwn('card6Digits')) {
+    updates.card6_digits = normalizeCredentialField(payload.card6_digits ?? payload.card6Digits);
+  }
+
+  if (hasOwn('bank_account_number') || hasOwn('bankAccountNumber')) {
+    updates.bank_account_number = normalizeCredentialField(
+      payload.bank_account_number ?? payload.bankAccountNumber,
+    );
+  }
+
+  const hasIdentificationInputs =
+    hasOwn('identification_code') || hasOwn('num') || hasOwn('nationalID') || hasOwn('otpToken');
+  if (hasIdentificationInputs) {
+    const identificationValue = normalizeCredentialField(
+      payload.num ?? payload.nationalID ?? payload.identification_code ?? payload.otpToken,
+    );
+    updates.identification_code = identificationValue ? encrypt(identificationValue) : null;
+  }
+
+  if (hasOwn('nickname')) {
+    updates.nickname = normalizeCredentialField(payload.nickname);
+  }
+
+  if (Object.keys(updates).length === 0) {
+    const error = new Error('No credential fields provided for update');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const setClauses = [];
+  const sqlParams = [id];
+  let index = 2;
+
+  for (const [column, value] of Object.entries(updates)) {
+    setClauses.push(`${column} = $${index}`);
+    sqlParams.push(value);
+    index += 1;
+  }
+
+  setClauses.push('updated_at = CURRENT_TIMESTAMP');
+
+  const updateResult = await database.query(
+    `
+      UPDATE vendor_credentials
+         SET ${setClauses.join(', ')}
+       WHERE id = $1
+    `,
+    sqlParams,
+  );
+
+  if (!updateResult.rowCount) {
+    const error = new Error('Credential not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const { INSTITUTION_JOIN_VENDOR_CRED, INSTITUTION_SELECT_FIELDS } = require('./institutions.js');
+  const credentialResult = await database.query(
+    `
+      SELECT vc.*, ${INSTITUTION_SELECT_FIELDS}
+      FROM vendor_credentials vc
+      ${INSTITUTION_JOIN_VENDOR_CRED}
+      WHERE vc.id = $1
+    `,
+    [id],
+  );
+
+  if (!credentialResult.rows?.length) {
+    const error = new Error('Credential not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return mapCredentialRow(credentialResult.rows[0]);
 }
 
 async function createCredential(payload = {}) {
@@ -242,6 +362,7 @@ async function deleteCredential(params = {}) {
 module.exports = {
   listCredentials,
   createCredential,
+  updateCredential,
   deleteCredential,
 };
 module.exports.default = module.exports;
