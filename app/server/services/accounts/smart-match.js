@@ -1,4 +1,5 @@
 const database = require('../database.js');
+const { getCreditCardRepaymentCategoryCondition } = require('./repayment-category.js');
 
 // Keywords for credit card matching - includes Hebrew and English variants
 const VENDOR_KEYWORDS = {
@@ -73,6 +74,8 @@ async function findSmartMatches(params = {}) {
   const client = await database.getClient();
 
   try {
+    const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
+
     // Extract all possible search patterns
     const searchPatterns = extractSearchPatterns({
       creditCardVendor,
@@ -110,6 +113,7 @@ async function findSmartMatches(params = {}) {
         t.category_definition_id,
         t.account_number,
         cd.name AS category_name,
+        CASE WHEN ${repaymentCategoryCondition} THEN 1 ELSE 0 END as is_repayment,
         COALESCE(fi_cred.id, fi_vendor.id) as institution_id,
         COALESCE(fi_cred.vendor_code, fi_vendor.vendor_code, t.vendor) as institution_vendor_code,
         COALESCE(fi_cred.display_name_he, fi_vendor.display_name_he, t.vendor) as institution_name_he,
@@ -162,7 +166,7 @@ async function findSmartMatches(params = {}) {
       });
 
       // Boost confidence for settlement categories
-      if (row.category_definition_id === 25 || row.category_definition_id === 75) {
+      if (row.is_repayment) {
         confidence += 3;
       }
 

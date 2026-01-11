@@ -35,11 +35,15 @@ import LinkIcon from '@mui/icons-material/Link';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import EditIcon from '@mui/icons-material/Edit';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import TuneIcon from '@mui/icons-material/Tune';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
+import { useTranslation } from 'react-i18next';
 import ModalHeader from './ModalHeader';
 import UnpairedTransactionsDialog from './UnpairedTransactionsDialog';
 import ManualMatchingModal from '@renderer/features/investments/components/ManualMatchingModal';
 import MatchingTimeSeriesChart from '@renderer/features/investments/components/MatchingTimeSeriesChart';
+import RepaymentDiscrepancyList from '@renderer/shared/components/RepaymentDiscrepancyList';
 import { apiClient } from '@/lib/api-client';
 import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from '@renderer/shared/components/InstitutionBadge';
 
@@ -139,6 +143,85 @@ interface SmartMatchResponse {
   matches: SmartMatchResult[];
 }
 
+interface Discrepancy {
+  exists: boolean;
+  totalBankRepayments: number;
+  totalCCExpenses: number;
+  difference: number;
+  differencePercentage: number;
+  periodMonths?: number;
+  matchedCycleCount?: number;
+  matchPatternsUsed?: string[];
+  method?: string;
+  cycles?: Array<{
+    cycleDate: string;
+    bankTotal: number;
+    ccTotal: number | null;
+    difference: number | null;
+    status: 'matched' | 'missing_cc_cycle';
+    repayments: Array<{
+      identifier: string;
+      vendor: string;
+      accountNumber: string | null;
+      date: string;
+      cycleDate: string;
+      name: string;
+      price: number;
+    }>;
+  }>;
+}
+
+interface AutoPairResult {
+  success: boolean;
+  wasCreated?: boolean;
+  reason?: string;
+  pairing?: {
+    id: number;
+    creditCardVendor: string;
+    creditCardAccountNumber: string | null;
+    bankVendor: string;
+    bankAccountNumber: string | null;
+    matchPatterns: string[];
+    confidence: number;
+  };
+  detection?: {
+    transactionCount: number;
+    sampleTransactions: Array<{
+      name: string;
+      price: number;
+      date: string;
+    }>;
+  };
+  discrepancy?: Discrepancy | null;
+  candidates?: Array<{
+    bankVendor: string;
+    bankAccountNumber: string | null;
+    confidence: number;
+    transactionCount: number;
+  }>;
+}
+
+interface FindBankAccountResult {
+  found: boolean;
+  reason?: string;
+  bankVendor?: string;
+  bankAccountNumber?: string | null;
+  confidence?: number;
+  transactionCount?: number;
+  matchPatterns?: string[];
+  sampleTransactions?: Array<{
+    name: string;
+    price: number;
+    date: string;
+  }>;
+  otherCandidates?: Array<{
+    bankVendor: string;
+    bankAccountNumber: string | null;
+    confidence: number;
+    transactionCount: number;
+  }>;
+}
+
 type ApiErrorPayload = {
   error?: string;
 } | null | undefined;
@@ -187,6 +270,17 @@ export default function AccountPairingModal({
   const [editNewPatternInput, setEditNewPatternInput] = useState('');
   const [smartSelectLoading, setSmartSelectLoading] = useState(false);
   const { showNotification } = useNotification();
+  const { t } = useTranslation();
+
+  // Auto-pairing state
+  const [isAutoMode, setIsAutoMode] = useState(true);
+  const [autoDetecting, setAutoDetecting] = useState(false);
+  const [autoPairResult, setAutoPairResult] = useState<FindBankAccountResult | null>(null);
+  const [autoDiscrepancy, setAutoDiscrepancy] = useState<Discrepancy | null>(null);
+  const [showAutoPatterns, setShowAutoPatterns] = useState(false);
+  const [autoCreatingPairing, setAutoCreatingPairing] = useState(false);
+  const [discrepancyResolving, setDiscrepancyResolving] = useState(false);
+  const [autoPairingId, setAutoPairingId] = useState<number | null>(null);
 
   // Helper function to get display name for an account
   const getAccountDisplayName = useCallback((account: Account, includeVendor: boolean = true): string => {
@@ -289,6 +383,159 @@ export default function AccountPairingModal({
       console.error('Error fetching unpaired count:', error);
     }
   }, []);
+
+  // Auto-detect bank account for selected credit card
+  const handleAutoDetect = useCallback(async (creditCard: Account) => {
+    setAutoDetecting(true);
+    setAutoPairResult(null);
+    setAutoDiscrepancy(null);
+
+    try {
+      const response = await apiClient.post<FindBankAccountResult>('/api/accounts/find-bank-account', {
+        creditCardVendor: creditCard.vendor,
+        creditCardAccountNumber: creditCard.account_number || creditCard.card6_digits || null,
+        creditCardNickname: creditCard.nickname || null,
+      });
+
+      if (response.ok && response.data) {
+        setAutoPairResult(response.data);
+
+        // If found, also calculate discrepancy
+        if (response.data.found && response.data.matchPatterns) {
+          const discrepancyResponse = await apiClient.post<Discrepancy>('/api/accounts/calculate-discrepancy', {
+            bankVendor: response.data.bankVendor,
+            bankAccountNumber: response.data.bankAccountNumber,
+            ccVendor: creditCard.vendor,
+            ccAccountNumber: creditCard.account_number || null,
+            matchPatterns: response.data.matchPatterns,
+          });
+
+          if (discrepancyResponse.ok && discrepancyResponse.data) {
+            setAutoDiscrepancy(discrepancyResponse.data);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Auto-detect error:', error);
+      showNotification('Error detecting bank account', 'error');
+    } finally {
+      setAutoDetecting(false);
+    }
+  }, [showNotification]);
+
+  // Create pairing in auto mode
+  const handleAutoCreatePairing = useCallback(async () => {
+    if (!selectedCreditCard || !autoPairResult?.found) return;
+
+    setAutoCreatingPairing(true);
+    try {
+      const response = await apiClient.post<AutoPairResult>('/api/accounts/auto-pair', {
+        creditCardVendor: selectedCreditCard.vendor,
+        creditCardAccountNumber: selectedCreditCard.account_number || selectedCreditCard.card6_digits || null,
+        creditCardNickname: selectedCreditCard.nickname || null,
+      });
+
+      if (response.ok && response.data?.success) {
+        setAutoPairingId(response.data.pairing?.id ?? null);
+        showNotification(
+          response.data.wasCreated
+            ? t('autoPairing.pairingCreated')
+            : t('autoPairing.pairingExists'),
+          'success'
+        );
+
+        // Update discrepancy if available
+        if (response.data.discrepancy) {
+          setAutoDiscrepancy(response.data.discrepancy);
+        }
+
+        // Refresh pairings list
+        fetchExistingPairings();
+        fetchUnpairableTransactionsCount();
+
+        // Close modal if no discrepancy
+        if (!response.data.discrepancy?.exists) {
+          handleClose();
+          window.dispatchEvent(new CustomEvent('dataRefresh'));
+        }
+      } else {
+        showNotification(response.data?.reason || 'Failed to create pairing', 'error');
+      }
+    } catch (error) {
+      console.error('Auto-pair error:', error);
+      showNotification('Error creating pairing', 'error');
+    } finally {
+      setAutoCreatingPairing(false);
+    }
+  }, [selectedCreditCard, autoPairResult, t, showNotification, fetchExistingPairings, fetchUnpairableTransactionsCount]);
+
+  // Handle discrepancy resolution
+  const handleIgnoreDiscrepancy = useCallback(async (cycleDate: string) => {
+    if (!autoPairingId) {
+      showNotification('Create the pairing first', 'warning');
+      return;
+    }
+
+    setDiscrepancyResolving(true);
+    try {
+      const response = await apiClient.post(`/api/accounts/pairing/${autoPairingId}/resolve-discrepancy`, {
+        action: 'ignore',
+        cycleDate,
+      });
+
+      if (response.ok) {
+        showNotification('Discrepancy ignored', 'success');
+        setAutoDiscrepancy(null);
+        handleClose();
+        window.dispatchEvent(new CustomEvent('dataRefresh'));
+      }
+    } catch (error) {
+      console.error('Error ignoring discrepancy:', error);
+      showNotification('Error resolving discrepancy', 'error');
+    } finally {
+      setDiscrepancyResolving(false);
+    }
+  }, [autoPairingId, showNotification]);
+
+  const handleAddAsFee = useCallback(async (cycleDate: string, amount: number, feeName: string) => {
+    if (!autoPairingId) {
+      showNotification('Create the pairing first', 'warning');
+      return;
+    }
+
+    setDiscrepancyResolving(true);
+    try {
+      const response = await apiClient.post(`/api/accounts/pairing/${autoPairingId}/resolve-discrepancy`, {
+        action: 'add_cc_fee',
+        cycleDate,
+        feeDetails: {
+          amount: Math.abs(amount),
+          date: cycleDate,
+          processedDate: cycleDate,
+          name: feeName,
+        },
+      });
+
+      if (response.ok) {
+        showNotification('Fee transaction created', 'success');
+        setAutoDiscrepancy(null);
+        handleClose();
+        window.dispatchEvent(new CustomEvent('dataRefresh'));
+      }
+    } catch (error) {
+      console.error('Error adding fee:', error);
+      showNotification('Error creating fee transaction', 'error');
+    } finally {
+      setDiscrepancyResolving(false);
+    }
+  }, [autoPairingId, showNotification]);
+
+  // Trigger auto-detect when credit card is selected in auto mode
+  useEffect(() => {
+    if (isAutoMode && selectedCreditCard && isOpen) {
+      handleAutoDetect(selectedCreditCard);
+    }
+  }, [isAutoMode, selectedCreditCard, isOpen, handleAutoDetect]);
 
   useEffect(() => {
     if (isOpen) {
@@ -636,6 +883,12 @@ export default function AccountPairingModal({
     setStats(null);
     setMatchPatterns([]);
     setNewPatternInput('');
+    // Reset auto-pairing state
+    setAutoPairResult(null);
+    setAutoDiscrepancy(null);
+    setShowAutoPatterns(false);
+    setAutoPairingId(null);
+    setIsAutoMode(true);
     onClose();
   };
 
@@ -769,15 +1022,18 @@ export default function AccountPairingModal({
       />
 
       <DialogContent>
-        <Box sx={{ mb: 3 }}>
-          <Stepper activeStep={activeStep}>
-            {steps.map((label) => (
-              <Step key={label}>
-                <StepLabel>{label}</StepLabel>
-              </Step>
-            ))}
-          </Stepper>
-        </Box>
+        {/* Only show stepper in manual mode */}
+        {!isAutoMode && (
+          <Box sx={{ mb: 3 }}>
+            <Stepper activeStep={activeStep}>
+              {steps.map((label) => (
+                <Step key={label}>
+                  <StepLabel>{label}</StepLabel>
+                </Step>
+              ))}
+            </Stepper>
+          </Box>
+        )}
 
         {/* Existing Pairings Section */}
         {activeStep === 0 && existingPairings.length > 0 && (
@@ -907,16 +1163,33 @@ export default function AccountPairingModal({
         {/* Step 1: Select Accounts */}
         {activeStep === 0 && (
           <Box>
+            {/* Mode toggle */}
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+              <Button
+                size="small"
+                variant="text"
+                startIcon={isAutoMode ? <TuneIcon /> : <AutoFixHighIcon />}
+                onClick={() => {
+                  setIsAutoMode(!isAutoMode);
+                  setAutoPairResult(null);
+                  setAutoDiscrepancy(null);
+                }}
+              >
+                {isAutoMode ? t('autoPairing.manualMode') : t('autoPairing.autoMode')}
+              </Button>
+            </Box>
+
             <Alert severity="info" sx={{ mb: 3 }}>
-              <AlertTitle>Account Pairing</AlertTitle>
-              Link your credit card to your bank account to automatically categorize
-              credit card settlement transactions. This helps avoid double-counting expenses.
+              <AlertTitle>{isAutoMode ? t('autoPairing.title') : 'Account Pairing'}</AlertTitle>
+              {isAutoMode
+                ? 'Select a credit card and the system will automatically detect and pair it with the correct bank account.'
+                : 'Link your credit card to your bank account to automatically categorize credit card settlement transactions. This helps avoid double-counting expenses.'}
             </Alert>
 
             <TextField
               fullWidth
               select
-              label="Select Credit Card Account"
+              label={t('autoPairing.selectCC')}
               value={selectedCreditCard ? `${selectedCreditCard.id}-${selectedCreditCard.account_number}` : ''}
               onChange={(e) => {
                 const [idStr, accNum] = e.target.value.split('-');
@@ -962,42 +1235,133 @@ export default function AccountPairingModal({
                 })}
             </TextField>
 
-            <TextField
-              fullWidth
-              select
-              label="Select Bank Account"
-              value={selectedBank ? `${selectedBank.id}-${selectedBank.account_number}` : ''}
-              onChange={(e) => {
-                const [idStr, accNum] = e.target.value.split('-');
-                const id = Number(idStr);
-                const expandedAccount = expandedAccounts.find(
-                  a => a.id === id && a.account_number === (accNum === 'undefined' ? undefined : accNum)
-                );
-                if (expandedAccount) {
-                  setSelectedBank(expandedAccount);
-                }
-              }}
-            >
-              {expandedAccounts
-                .filter(acc => bankAccounts.some(b => b.id === acc.id))
-                .map((account, idx) => {
-                  const key = `${account.id}-${account.account_number || idx}`;
-
-                  return (
-                    <MenuItem key={key} value={`${account.id}-${account.account_number || 'undefined'}`}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <InstitutionBadge
-                          institution={account.institution}
-                          fallback={account.vendor}
-                        />
+            {/* Auto-pairing results */}
+            {isAutoMode && selectedCreditCard && (
+              <Box sx={{ mt: 2 }}>
+                {autoDetecting ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+                    <CircularProgress size={24} />
+                    <Typography variant="body2">{t('autoPairing.detecting')}</Typography>
+                  </Box>
+                ) : autoPairResult?.found ? (
+                  <Box>
+                    {/* Detected bank account */}
+                    <Alert severity="success" sx={{ mb: 2 }}>
+                      <AlertTitle>{t('autoPairing.detected')}</AlertTitle>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                         <Typography variant="body2">
-                          {getAccountDisplayName(account, false) || account.nickname || account.account_number || 'No nickname yet'}
+                          {autoPairResult.bankVendor} - {autoPairResult.bankAccountNumber || 'All accounts'}
                         </Typography>
+                        <Chip
+                          label={`${t('autoPairing.confidence')}: ${autoPairResult.confidence}`}
+                          size="small"
+                          color={autoPairResult.confidence >= 5 ? 'success' : autoPairResult.confidence >= 3 ? 'warning' : 'error'}
+                        />
                       </Box>
-                    </MenuItem>
+
+                      {/* Sample transactions */}
+                      {autoPairResult.sampleTransactions && autoPairResult.sampleTransactions.length > 0 && (
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            {t('autoPairing.sampleTransactions')}:
+                          </Typography>
+                          {autoPairResult.sampleTransactions.slice(0, 2).map((txn, idx) => (
+                            <Typography key={idx} variant="caption" display="block" color="text.secondary">
+                              • {txn.name} (₪{Math.abs(txn.price).toLocaleString()})
+                            </Typography>
+                          ))}
+                        </Box>
+                      )}
+                    </Alert>
+
+                    {/* Match patterns (collapsible) */}
+                    {autoPairResult.matchPatterns && autoPairResult.matchPatterns.length > 0 && (
+                      <Box sx={{ mb: 2 }}>
+                        <Button
+                          size="small"
+                          onClick={() => setShowAutoPatterns(!showAutoPatterns)}
+                        >
+                          {showAutoPatterns ? t('autoPairing.hidePatterns') : t('autoPairing.showPatterns')} ({autoPairResult.matchPatterns.length})
+                        </Button>
+                        {showAutoPatterns && (
+                          <Box sx={{ display: 'flex', gap: 0.5, mt: 1, flexWrap: 'wrap' }}>
+                            {autoPairResult.matchPatterns.map((pattern) => (
+                              <Chip key={pattern} label={pattern} size="small" variant="outlined" />
+                            ))}
+                          </Box>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Discrepancy alert */}
+                    {autoDiscrepancy && autoDiscrepancy.cycles && autoDiscrepancy.cycles.length > 0 && (
+                      <RepaymentDiscrepancyList
+                        discrepancy={autoDiscrepancy}
+                        canResolve={Boolean(autoPairingId)}
+                        onIgnoreCycle={handleIgnoreDiscrepancy}
+                        onAddFeeForCycle={handleAddAsFee}
+                        loading={discrepancyResolving}
+                        ccVendor={selectedCreditCard?.vendor}
+                      />
+                    )}
+                  </Box>
+                ) : autoPairResult && !autoPairResult.found ? (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    <AlertTitle>{t('autoPairing.noMatchFound')}</AlertTitle>
+                    <Typography variant="body2">
+                      {autoPairResult.reason || t('autoPairing.noMatchReason')}
+                    </Typography>
+                    <Button
+                      size="small"
+                      sx={{ mt: 1 }}
+                      onClick={() => setIsAutoMode(false)}
+                    >
+                      {t('autoPairing.manualMode')}
+                    </Button>
+                  </Alert>
+                ) : null}
+              </Box>
+            )}
+
+            {/* Manual mode: Bank account selector */}
+            {!isAutoMode && (
+              <TextField
+                fullWidth
+                select
+                label="Select Bank Account"
+                value={selectedBank ? `${selectedBank.id}-${selectedBank.account_number}` : ''}
+                onChange={(e) => {
+                  const [idStr, accNum] = e.target.value.split('-');
+                  const id = Number(idStr);
+                  const expandedAccount = expandedAccounts.find(
+                    a => a.id === id && a.account_number === (accNum === 'undefined' ? undefined : accNum)
                   );
-                })}
-            </TextField>
+                  if (expandedAccount) {
+                    setSelectedBank(expandedAccount);
+                  }
+                }}
+              >
+                {expandedAccounts
+                  .filter(acc => bankAccounts.some(b => b.id === acc.id))
+                  .map((account, idx) => {
+                    const key = `${account.id}-${account.account_number || idx}`;
+
+                    return (
+                      <MenuItem key={key} value={`${account.id}-${account.account_number || 'undefined'}`}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <InstitutionBadge
+                            institution={account.institution}
+                            fallback={account.vendor}
+                          />
+                          <Typography variant="body2">
+                            {getAccountDisplayName(account, false) || account.nickname || account.account_number || 'No nickname yet'}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    );
+                  })}
+              </TextField>
+            )}
           </Box>
         )}
 
@@ -1257,32 +1621,51 @@ export default function AccountPairingModal({
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
+        <Button onClick={handleClose} disabled={loading || autoCreatingPairing}>
           Cancel
         </Button>
-        {activeStep > 0 && (
-          <Button onClick={handleBack} disabled={loading}>
-            Back
-          </Button>
-        )}
-        {activeStep < steps.length - 1 ? (
+
+        {/* Auto mode: Single step - just create pairing */}
+        {isAutoMode && activeStep === 0 && (
           <Button
-            onClick={handleNext}
-            variant="contained"
-            disabled={loading || (activeStep === 0 && (!selectedCreditCard || !selectedBank))}
-          >
-            Next
-          </Button>
-        ) : (
-          <Button
-            onClick={handleConfirm}
+            onClick={handleAutoCreatePairing}
             variant="contained"
             color="primary"
-            disabled={loading || matchPatterns.length === 0}
-            startIcon={loading ? <CircularProgress size={20} /> : <LinkIcon />}
+            disabled={autoCreatingPairing || autoDetecting || !autoPairResult?.found}
+            startIcon={autoCreatingPairing ? <CircularProgress size={20} /> : <LinkIcon />}
           >
-            Create Pairing
+            {t('autoPairing.createPairing')}
           </Button>
+        )}
+
+        {/* Manual mode: Multi-step flow */}
+        {!isAutoMode && (
+          <>
+            {activeStep > 0 && (
+              <Button onClick={handleBack} disabled={loading}>
+                Back
+              </Button>
+            )}
+            {activeStep < steps.length - 1 ? (
+              <Button
+                onClick={handleNext}
+                variant="contained"
+                disabled={loading || (activeStep === 0 && (!selectedCreditCard || !selectedBank))}
+              >
+                Next
+              </Button>
+            ) : (
+              <Button
+                onClick={handleConfirm}
+                variant="contained"
+                color="primary"
+                disabled={loading || matchPatterns.length === 0}
+                startIcon={loading ? <CircularProgress size={20} /> : <LinkIcon />}
+              >
+                Create Pairing
+              </Button>
+            )}
+          </>
         )}
       </DialogActions>
     </Dialog>

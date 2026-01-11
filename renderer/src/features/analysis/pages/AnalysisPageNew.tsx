@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Box,
   Tabs,
@@ -41,7 +41,7 @@ import {
 import { useOnboarding } from '@app/contexts/OnboardingContext';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import LockedPagePlaceholder from '@renderer/shared/empty-state/LockedPagePlaceholder';
-import SmartActionItemsPanel from '../components/SmartActionItemsPanel';
+import QuestsPanel from '../components/QuestsPanel';
 import SpendingCategoriesChart from '../components/SpendingCategoriesChart';
 import SpendingCategoryTargetsMinimal from '../components/SpendingCategoryTargetsMinimal';
 import FinancialHealthScore, { type FinancialHealthSnapshot } from '../components/FinancialHealthScore';
@@ -103,6 +103,7 @@ interface BudgetOutlookItem {
   limit: number;
   actualSpent: number;
   forecasted: number;
+  scenarios?: { p10: number; p50: number; p90: number } | null;
   projectedTotal: number;
   utilization: number;
   status: 'exceeded' | 'at_risk' | 'on_track';
@@ -189,6 +190,14 @@ const AnalysisPageNew: React.FC = () => {
   const { formatCurrency } = useFinancePrivacy();
   const accessStatus = getPageAccessStatus('analysis');
   const isLocked = accessStatus.isLocked;
+  const fetchOnceRef = useRef({
+    intelligence: false,
+    temporal: false,
+    behavioral: false,
+    future: false,
+    timeValue: false,
+    budget: false,
+  });
 
   // Helper function to format hour based on locale
   const formatHour = (hour: number): string => {
@@ -344,13 +353,60 @@ const AnalysisPageNew: React.FC = () => {
     if (isLocked) {
       return;
     }
+    if (fetchOnceRef.current.intelligence) {
+      return;
+    }
+    fetchOnceRef.current.intelligence = true;
     fetchIntelligence();
-    fetchBudgetForecast();
-    fetchTemporalData();
-    fetchBehavioralData();
-    fetchFutureData();
-    fetchTimeValueData();
-  }, [fetchBehavioralData, fetchBudgetForecast, fetchFutureData, fetchIntelligence, fetchTemporalData, fetchTimeValueData, isLocked]);
+  }, [fetchIntelligence, isLocked]);
+
+  useEffect(() => {
+    if (isLocked) {
+      return;
+    }
+
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
+
+    if (currentTab === 0) {
+      if (!fetchOnceRef.current.temporal) {
+        fetchOnceRef.current.temporal = true;
+        fetchTemporalData();
+      }
+
+      if (!fetchOnceRef.current.behavioral) {
+        fetchOnceRef.current.behavioral = true;
+        fetchBehavioralData();
+      }
+
+      // Defer the heavier endpoints slightly so the tab becomes interactive faster.
+      if (!fetchOnceRef.current.future) {
+        fetchOnceRef.current.future = true;
+        timers.push(setTimeout(() => fetchFutureData(), 250));
+      }
+
+      if (!fetchOnceRef.current.timeValue) {
+        fetchOnceRef.current.timeValue = true;
+        timers.push(setTimeout(() => fetchTimeValueData(), 250));
+      }
+    }
+
+    if (currentTab === 3 && !fetchOnceRef.current.budget) {
+      fetchOnceRef.current.budget = true;
+      fetchBudgetForecast();
+    }
+
+    return () => {
+      timers.forEach(clearTimeout);
+    };
+  }, [
+    currentTab,
+    fetchBehavioralData,
+    fetchBudgetForecast,
+    fetchFutureData,
+    fetchTemporalData,
+    fetchTimeValueData,
+    isLocked,
+  ]);
 
   const formatCurrencyValue = (
     value: number,
@@ -1120,7 +1176,7 @@ const AnalysisPageNew: React.FC = () => {
       </TabPanel>
 
       <TabPanel value={currentTab} index={1}>
-        {/* Actions Tab */}
+        {/* Quests Tab */}
         <Paper sx={{ 
           p: 3,
           borderRadius: 4,
@@ -1130,7 +1186,7 @@ const AnalysisPageNew: React.FC = () => {
           borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
           boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
         }}>
-          <SmartActionItemsPanel />
+          <QuestsPanel />
         </Paper>
       </TabPanel>
 

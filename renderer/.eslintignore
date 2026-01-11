@@ -15,7 +15,7 @@ src/shared/**
 
 src/types/**
 !src/types/budget-intelligence.ts
-!src/types/smart-actions.ts
+!src/types/quests.ts
 !src/types/spending-categories.ts
 !src/types/accounts.ts
 src/App.tsx

@@ -52,8 +52,12 @@ function createForecastRouter({ sqliteDb = null } = {}) {
 
   router.get('/daily', async (req, res) => {
     try {
-      const { months, days, includeToday, verbose, noCache } = req.query;
+      const { months, days, includeToday, verbose, noCache, budgetDays: budgetDaysParam } = req.query;
       const skipCache = noCache === 'true' || noCache === '1';
+      
+      // Budget lookback period (default 30 days)
+      const budgetDays = budgetDaysParam ? Number.parseInt(budgetDaysParam, 10) : 30;
+      const budgetMultiplier = budgetDays / 30; // Pro-rate monthly budgets
 
       // Check cache first (unless explicitly skipped)
       if (!skipCache && isCacheValid()) {
@@ -61,9 +65,8 @@ function createForecastRouter({ sqliteDb = null } = {}) {
         return res.json(forecastCache.data);
       }
 
-      // Default to forecast until end of current month (not 6 months)
+      // Default to 30 days forecast (not end of month)
       const now = new Date();
-      const daysUntilEndOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
 
       let forecastDaysValue;
       let forecastMonthsValue;
@@ -71,7 +74,7 @@ function createForecastRouter({ sqliteDb = null } = {}) {
       if (days) {
         forecastDaysValue = Number.parseInt(days, 10);
       } else {
-        forecastDaysValue = daysUntilEndOfMonth;
+        forecastDaysValue = 30; // Default to 30 days forecast
       }
 
       if (months) {
@@ -90,9 +93,14 @@ function createForecastRouter({ sqliteDb = null } = {}) {
       const result = await generateDailyForecast(opts);
       console.log('[Forecast] Successfully generated forecast with', result.dailyForecasts?.length || 0, 'days');
 
-      // Shared date helpers for current month calculations
+      // Date calculations for budget period (last X days based on budgetDays)
       const today = new Date();
       const todayStr = formatLocalDate(today);
+      const budgetStartDate = new Date(today);
+      budgetStartDate.setDate(budgetStartDate.getDate() - budgetDays);
+      const budgetStartStr = formatLocalDate(budgetStartDate);
+      
+      // Legacy month calculations for forecast filtering
       const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
       const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
       const monthEndStr = formatLocalDate(monthEnd);
@@ -100,7 +108,7 @@ function createForecastRouter({ sqliteDb = null } = {}) {
       // Use SQLite directly for actuals/budgets/category lookups
       const db = getDbInstance();
 
-      // Load actual spending (real transactions) for the current month
+      // Load actual spending (real transactions) for the last X days (budgetDays)
       let actualSpendingRows = [];
       try {
         const actualSpendingQuery = `
@@ -129,10 +137,10 @@ function createForecastRouter({ sqliteDb = null } = {}) {
           WHERE t.status = 'completed'
             AND t.category_type = 'expense'
             AND ap.id IS NULL
-            AND strftime('%Y-%m', t.date) = ?
+            AND t.date >= ? AND t.date <= ?
           GROUP BY cd.id, cd.name, cd.name_en, cd.name_fr, cd.icon, cd.color, cd.parent_id
         `;
-        actualSpendingRows = db.prepare(actualSpendingQuery).all(monthKey);
+        actualSpendingRows = db.prepare(actualSpendingQuery).all(budgetStartStr, todayStr);
       } catch (err) {
         console.warn('[Forecast] Could not load actual spending:', err.message);
       }
@@ -346,12 +354,15 @@ function createForecastRouter({ sqliteDb = null } = {}) {
         entry.categoryColor = entry.categoryColor || row.category_color || null;
       });
 
-      // Apply budgets
+      // Apply budgets (pro-rated based on budgetDays)
       budgetRows.forEach(row => {
-        const limit = Number.parseFloat(row.budget_limit);
-        if (!Number.isFinite(limit) || limit <= 0) return;
+        const monthlyLimit = Number.parseFloat(row.budget_limit);
+        if (!Number.isFinite(monthlyLimit) || monthlyLimit <= 0) return;
+        // Pro-rate: 30 days = 1x monthly, 60 days = 2x monthly, 90 days = 3x monthly
+        const limit = monthlyLimit * budgetMultiplier;
         const entry = getCategoryEntry(row.category_definition_id, row.category_name);
         entry.limit = limit;
+        entry.monthlyLimit = monthlyLimit; // Store original for reference
         entry.budgetId = row.budget_id || null;
         if (row.parent_category_id && !entry.parentCategoryId) {
           entry.parentCategoryId = row.parent_category_id;
@@ -436,7 +447,9 @@ function createForecastRouter({ sqliteDb = null } = {}) {
             return sum + Math.max(0, b.projectedTotal - b.limit);
           }
           return sum;
-        }, 0)
+        }, 0),
+        budgetDays, // Include the period used for budget calculations
+        budgetMultiplier, // Include the pro-rate multiplier
       };
 
       const response = {
@@ -449,7 +462,8 @@ function createForecastRouter({ sqliteDb = null } = {}) {
         },
         summaries,
         actual: {
-          endDate: actualEndDate
+          endDate: actualEndDate,
+          startDate: budgetStartStr, // Budget period start
         },
         budgetOutlook,
         budgetSummary

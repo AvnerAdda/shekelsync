@@ -1,5 +1,6 @@
 const database = require('../database.js');
 const pairingsService = require('./pairings.js');
+const { getCreditCardRepaymentCategoryCondition } = require('./repayment-category.js');
 
 const KEYWORDS = [
   'ויזה', 'visa',
@@ -72,6 +73,7 @@ async function findSettlementCandidates(params = {}) {
 
   try {
     const activePairings = await pairingsService.getActivePairings(client);
+    const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
 
     const keywordConditions = KEYWORDS.map(
       (_, idx) => `LOWER(t.name) LIKE '%' || LOWER($${idx + 3}) || '%'`,
@@ -96,7 +98,7 @@ async function findSettlementCandidates(params = {}) {
         COALESCE(fi_cred.institution_type, fi_vendor.institution_type) as institution_type,
         CASE
           WHEN LOWER(t.name) LIKE '%' || LOWER($1) || '%' THEN 'account_number_match'
-          WHEN t.category_definition_id IN (25, 75) THEN 'category_match'
+          WHEN ${repaymentCategoryCondition} THEN 'category_match'
           WHEN ${keywordConditions} THEN 'keyword_match'
           ELSE 'unknown'
         END AS match_reason
@@ -108,7 +110,7 @@ async function findSettlementCandidates(params = {}) {
       WHERE t.vendor = $2
         AND (
           LOWER(t.name) LIKE '%' || LOWER($1) || '%'
-          OR t.category_definition_id IN (25, 75)
+          OR ${repaymentCategoryCondition}
           OR ${keywordConditions}
         )
     `;

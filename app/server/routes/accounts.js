@@ -7,6 +7,8 @@ const unpairedService = require('../services/accounts/unpaired.js');
 const lastTransactionDateService = require('../services/accounts/last-transaction-date.js');
 const smartMatchService = require('../services/accounts/smart-match.js');
 const creditCardDetectorService = require('../services/accounts/credit-card-detector.js');
+const autoPairingService = require('../services/accounts/auto-pairing.js');
+const discrepancyService = require('../services/accounts/discrepancy.js');
 
 function handleServiceError(res, error, fallbackMessage) {
   const status = error?.status || error?.statusCode || 500;
@@ -131,6 +133,70 @@ function createAccountsRouter() {
     } catch (error) {
       console.error('Credit card suggestions error:', error);
       handleServiceError(res, error, 'Failed to detect credit card suggestions');
+    }
+  });
+
+  // Auto-pair a credit card to its bank account
+  router.post('/auto-pair', async (req, res) => {
+    try {
+      const result = await autoPairingService.autoPairCreditCard(req.body || {});
+      if (result.success) {
+        res.status(result.wasCreated ? 201 : 200).json(result);
+      } else {
+        res.status(200).json(result);
+      }
+    } catch (error) {
+      console.error('Auto-pair error:', error);
+      handleServiceError(res, error, 'Failed to auto-pair credit card');
+    }
+  });
+
+  // Find best bank account for a credit card (without creating pairing)
+  router.post('/find-bank-account', async (req, res) => {
+    try {
+      const result = await autoPairingService.findBestBankAccount(req.body || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Find bank account error:', error);
+      handleServiceError(res, error, 'Failed to find bank account');
+    }
+  });
+
+  // Calculate discrepancy for a pairing
+  router.post('/calculate-discrepancy', async (req, res) => {
+    try {
+      const result = await autoPairingService.calculateDiscrepancy(req.body || {});
+      res.json(result || { exists: false });
+    } catch (error) {
+      console.error('Calculate discrepancy error:', error);
+      handleServiceError(res, error, 'Failed to calculate discrepancy');
+    }
+  });
+
+  // Resolve a discrepancy for a pairing
+  router.post('/pairing/:id/resolve-discrepancy', async (req, res) => {
+    try {
+      const pairingId = parseInt(req.params.id, 10);
+      const result = await discrepancyService.resolveDiscrepancy({
+        pairingId,
+        ...req.body,
+      });
+      res.json(result);
+    } catch (error) {
+      console.error('Resolve discrepancy error:', error);
+      handleServiceError(res, error, 'Failed to resolve discrepancy');
+    }
+  });
+
+  // Get discrepancy status for a pairing
+  router.get('/pairing/:id/discrepancy-status', async (req, res) => {
+    try {
+      const pairingId = parseInt(req.params.id, 10);
+      const result = await discrepancyService.getDiscrepancyStatus(pairingId);
+      res.json(result || { acknowledged: false });
+    } catch (error) {
+      console.error('Get discrepancy status error:', error);
+      handleServiceError(res, error, 'Failed to get discrepancy status');
     }
   });
 

@@ -12,9 +12,9 @@ import {
   IconButton,
 } from '@mui/material';
 import MuiTooltip from '@mui/material/Tooltip';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, BarChart, Bar, ComposedChart, Area } from 'recharts';
+import { ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ComposedChart, Area } from 'recharts';
 import { useTheme } from '@mui/material/styles';
-import { format, endOfMonth, differenceInDays } from 'date-fns';
+import { format, subDays, addDays } from 'date-fns';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
@@ -66,7 +66,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   formatCurrency,
 }) => {
   const theme = useTheme();
-  const { aggregationPeriod, setAggregationPeriod } = useDashboardFilters();
+  const { aggregationPeriod, setAggregationPeriod, periodDays, setPeriodDays } = useDashboardFilters();
   const anomalies = detectAnomalies(data.history);
   const { t } = useTranslation('translation', { keyPrefix: 'transactionHistory' });
 
@@ -78,13 +78,13 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const [forecastLoading, setForecastLoading] = useState(false);
   const [forecastError, setForecastError] = useState<string | null>(null);
 
-  // Fetch forecast data when switching to forecast tabs
+  // Fetch forecast data - always 30 days ahead
   const fetchForecast = useCallback(async () => {
     setForecastLoading(true);
     setForecastError(null);
     try {
-      console.log('[TransactionHistory] Fetching forecast data from /api/forecast/daily');
-      const response = await apiClient.get<any>('/api/forecast/daily');
+      console.log('[TransactionHistory] Fetching forecast data from /api/forecast/daily?days=30');
+      const response = await apiClient.get<any>('/api/forecast/daily?days=30');
       console.log('[TransactionHistory] Forecast response:', { ok: response.ok, status: response.status, hasData: !!response.data });
       if (!response.ok) throw new Error(`Failed to fetch forecast: ${response.statusText}`);
       setForecastData(response.data);
@@ -110,11 +110,21 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     }
   }, [forecastData, forecastLoading, fetchForecast]);
 
-  // Calculate cumulative net position data (historical only)
+  // Calculate cumulative net position data (historical only, filtered by periodDays)
   const getNetPositionData = useCallback(() => {
     if (!data.history || data.history.length === 0) return [];
+    
+    // Filter to last X days based on periodDays
+    const today = new Date();
+    const todayStr = format(today, 'yyyy-MM-dd');
+    const periodStartDate = format(subDays(today, periodDays), 'yyyy-MM-dd');
+    
+    const filteredHistory = (data.history || []).filter((item: any) => 
+      item.date >= periodStartDate && item.date <= todayStr
+    );
+    
     let cumulative = 0;
-    return data.history.map((item: any) => {
+    return filteredHistory.map((item: any) => {
       const netFlow = (item.income || 0) - (item.expenses || 0);
       cumulative += netFlow;
       return {
@@ -126,16 +136,27 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         isForecast: false,
       };
     });
-  }, [data.history]);
+  }, [data.history, periodDays]);
 
   // Get combined data for Daily Income vs Expenses (historical + forecast)
-  // Only shows forecast when aggregation is 'daily' since forecast data is daily
+  // Shows last X days of historical data + 30 days of forecast
   const getDailyIncomeExpenseData = useCallback(() => {
-    // For log scale, we need raw data first to properly handle forecast values
-    const baseHistoricalData = data.history;
+    // Filter historical data to last X days based on periodDays
+    const today = new Date();
+    const todayStr = format(today, 'yyyy-MM-dd');
+    const periodStartDate = format(subDays(today, periodDays), 'yyyy-MM-dd');
+    const forecastEndDate = format(addDays(today, 30), 'yyyy-MM-dd');
+    
+    // Filter base historical data to the selected period
+    const baseHistoricalData = (data.history || []).filter((item: any) => 
+      item.date >= periodStartDate && item.date <= todayStr
+    );
 
     console.log('[getDailyIncomeExpenseData]', {
       aggregationPeriod,
+      periodDays,
+      periodStartDate,
+      forecastEndDate,
       hasForecastData: !!forecastData,
       hasDailyForecasts: !!forecastData?.dailyForecasts,
       forecastLength: forecastData?.dailyForecasts?.length,
@@ -155,15 +176,12 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       }));
     }
     
-    // Use the actual end date from forecast API, not the chart's last date
-    // The chart might have aggregated data that extends beyond actual transactions
-    const actualEndDate = forecastData.actual?.endDate || format(new Date(), 'yyyy-MM-dd');
-    const chartEndDate =
-      Array.isArray(baseHistoricalData) && baseHistoricalData.length > 0
-        ? baseHistoricalData[baseHistoricalData.length - 1].date
-        : actualEndDate;
+    // Use today as the actual end date for historical data
+    const actualEndDate = todayStr;
+    // Chart extends 30 days into the future for forecast
+    const chartEndDate = forecastEndDate;
 
-    // Split historical data into actual vs future placeholder data
+    // Historical data up to today
     const actualHistoricalData = baseHistoricalData.filter((item: any) => item.date <= actualEndDate);
     const lastActualItem = actualHistoricalData.length > 0 ? actualHistoricalData[actualHistoricalData.length - 1] : null;
 
@@ -254,12 +272,17 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     }
 
     return combinedData;
-  }, [data.history, forecastData, yAxisScale, getLogScaleData, aggregationPeriod]);
+  }, [data.history, forecastData, yAxisScale, getLogScaleData, aggregationPeriod, periodDays]);
 
   // Get combined net position data (historical + forecast with P10/P50/P90 scenarios)
-  // Only shows forecast when aggregation is 'daily'
+  // Shows last X days historical + 30 days forecast
   const getCombinedNetPositionData = useCallback(() => {
     const baseHistoricalData = getNetPositionData();
+    
+    // Calculate forecast end date (30 days from today)
+    const today = new Date();
+    const todayStr = format(today, 'yyyy-MM-dd');
+    const forecastEndDateStr = format(addDays(today, 30), 'yyyy-MM-dd');
 
     // Only add forecast data in daily aggregation mode
     if (aggregationPeriod !== 'daily' || !forecastData?.dailyForecasts || baseHistoricalData.length === 0) {
@@ -272,13 +295,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       }));
     }
 
-    // Use actual end date from API, not the chart's last date
-    const actualEndDate = forecastData.actual?.endDate || format(new Date(), 'yyyy-MM-dd');
+    // Use today as the actual end date for historical data
+    const actualEndDate = todayStr;
     const actualHistoricalData = baseHistoricalData.filter((item: any) => item.date <= actualEndDate);
-    const chartEndDate =
-      Array.isArray(baseHistoricalData) && baseHistoricalData.length > 0
-        ? baseHistoricalData[baseHistoricalData.length - 1].date
-        : actualEndDate;
+    // Forecast extends 30 days from today
+    const chartEndDate = forecastEndDateStr;
 
     if (actualHistoricalData.length === 0) {
       return baseHistoricalData.map((item: any) => ({
@@ -365,13 +386,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     return [...historicalData, ...forecastEntries];
   }, [getNetPositionData, forecastData, aggregationPeriod]);
 
-  // Calculate days remaining in current month
-  const getDaysRemaining = () => {
-    const now = new Date();
-    const monthEnd = endOfMonth(now);
-    return differenceInDays(monthEnd, now);
-  };
-
   return (
     <Paper
       sx={(theme) => ({
@@ -443,20 +457,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               </IconButton>
             </MuiTooltip>
           </Box>
-
-          {forecastData && (
-            <Chip
-              label={`${forecastData.dailyForecasts?.length || 0}d forecast`}
-              size="small"
-              color="success"
-              variant="outlined"
-              sx={{ 
-                fontWeight: 600,
-                borderRadius: '8px',
-                borderWidth: 2,
-              }}
-            />
-          )}
         </Box>
         {activeTab === 0 && (
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -550,6 +550,43 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               <ToggleButton value="weekly">{t('periods.weekly')}</ToggleButton>
               <ToggleButton value="monthly">{t('periods.monthly')}</ToggleButton>
             </ToggleButtonGroup>
+
+            {/* Period selector: last 30/60/90 days */}
+            <ToggleButtonGroup
+              value={periodDays}
+              exclusive
+              onChange={(_, newPeriod) => {
+                if (newPeriod) {
+                  setPeriodDays(newPeriod);
+                }
+              }}
+              size="small"
+              sx={{
+                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                borderRadius: '12px',
+                p: 0.5,
+                '& .MuiToggleButton-root': {
+                  border: 'none',
+                  borderRadius: '8px !important',
+                  px: 2,
+                  py: 0.5,
+                  color: 'text.secondary',
+                  '&.Mui-selected': {
+                    bgcolor: 'background.paper',
+                    color: 'primary.main',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    fontWeight: 600,
+                  },
+                  '&:hover': {
+                    bgcolor: 'rgba(0,0,0,0.05)',
+                  }
+                }
+              }}
+            >
+              <ToggleButton value={30}>{t('periodDays.last30', { defaultValue: '30d' })}</ToggleButton>
+              <ToggleButton value={60}>{t('periodDays.last60', { defaultValue: '60d' })}</ToggleButton>
+              <ToggleButton value={90}>{t('periodDays.last90', { defaultValue: '90d' })}</ToggleButton>
+            </ToggleButtonGroup>
           </Box>
         )}
       </Box>
@@ -559,7 +596,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         <>
           {aggregationPeriod === 'daily' && forecastData && (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1, textAlign: 'center' }}>
-              {t('forecast.daysRemaining', { count: getDaysRemaining() })} — {t('forecast.forecastData')} shown as dashed lines
+              {t('periodDays.showingLast', { count: periodDays, defaultValue: `Last ${periodDays} days` })} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })} — {t('forecast.forecastData')} shown as dashed lines
             </Typography>
           )}
           {aggregationPeriod !== 'daily' && (
@@ -816,7 +853,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             <>
               {aggregationPeriod === 'daily' && forecastData && (
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
-                  {t('forecast.daysRemaining', { count: getDaysRemaining() })} • {t('forecast.forecastData')} shown in orange
+                  {t('periodDays.showingLast', { count: periodDays, defaultValue: `Last ${periodDays} days` })} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })} • {t('forecast.forecastData')} shown in orange
                 </Typography>
               )}
               {aggregationPeriod !== 'daily' && (

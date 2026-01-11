@@ -26,12 +26,13 @@ import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpend
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import type { SpendingAllocation, SpendingCategoryBreakdownItem } from '@renderer/types/spending-categories';
 import { useTranslation } from 'react-i18next';
+import { subDays, format } from 'date-fns';
 
 interface SpendingCategoriesChartProps {
   months?: number;
 }
 
-type TimeRangeOption = 'current' | 'last3' | 'history';
+type TimeRangeOption = 'last30' | 'last60' | 'last90';
 
 const SPENDING_CATEGORY_COLORS: Record<SpendingAllocation | 'other', string> = {
   essential: '#2196F3', // Blue
@@ -57,7 +58,7 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
   const { formatCurrency } = useFinancePrivacy();
   const { t } = useTranslation('translation', { keyPrefix: 'analysisPage.spendingChart' });
 
-  const [timeRange, setTimeRange] = useState<TimeRangeOption>(months === 1 ? 'current' : 'last3');
+  const [timeRange, setTimeRange] = useState<TimeRangeOption>('last30');
   const [viewMode, setViewMode] = useState<'current' | 'incomeIndexed'>('current');
 
   const timeRangeConfigs = useMemo<Record<TimeRangeOption, {
@@ -69,26 +70,35 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
       endDate?: string;
     };
   }>>(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date();
+    const todayStr = format(today, 'yyyy-MM-dd');
     return {
-      current: {
-        label: t('timeRanges.currentMonth'),
-        fetchParams: { currentMonthOnly: true },
-      },
-      last3: {
-        label: t('timeRanges.last3Months', { count: months }),
-        fetchParams: { currentMonthOnly: false, months },
-      },
-      history: {
-        label: t('timeRanges.history'),
+      last30: {
+        label: t('timeRanges.last30Days', { defaultValue: 'Last 30 Days' }),
         fetchParams: {
           currentMonthOnly: false,
-          startDate: '1970-01-01',
-          endDate: today,
+          startDate: format(subDays(today, 30), 'yyyy-MM-dd'),
+          endDate: todayStr,
+        },
+      },
+      last60: {
+        label: t('timeRanges.last60Days', { defaultValue: 'Last 60 Days' }),
+        fetchParams: {
+          currentMonthOnly: false,
+          startDate: format(subDays(today, 60), 'yyyy-MM-dd'),
+          endDate: todayStr,
+        },
+      },
+      last90: {
+        label: t('timeRanges.last90Days', { defaultValue: 'Last 90 Days' }),
+        fetchParams: {
+          currentMonthOnly: false,
+          startDate: format(subDays(today, 90), 'yyyy-MM-dd'),
+          endDate: todayStr,
         },
       },
     };
-  }, [months, t]);
+  }, [t]);
 
   const timeRangeLabel = timeRangeConfigs[timeRange]?.label ?? '';
 
@@ -225,9 +235,9 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
             onChange={handleTimeRangeChange}
             sx={toggleGroupStyles}
           >
-            <ToggleButton value="current">{t('timeRanges.currentMonth')}</ToggleButton>
-            <ToggleButton value="last3">{t('timeRanges.last3Months', { count: months })}</ToggleButton>
-            <ToggleButton value="history">{t('timeRanges.history')}</ToggleButton>
+            <ToggleButton value="last30">{t('timeRanges.last30Days', { defaultValue: '30d' })}</ToggleButton>
+            <ToggleButton value="last60">{t('timeRanges.last60Days', { defaultValue: '60d' })}</ToggleButton>
+            <ToggleButton value="last90">{t('timeRanges.last90Days', { defaultValue: '90d' })}</ToggleButton>
           </ToggleButtonGroup>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>

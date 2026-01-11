@@ -606,37 +606,6 @@ const spendingBreakdown = {
   },
 };
 
-const smartActions = {
-  actions: [
-    {
-      id: 1,
-      title: 'Unusual fuel spike',
-      description: 'Fuel spending is up 30% vs last month.',
-      severity: 'high',
-      action_type: 'unusual_purchase',
-      category_name: 'Fuel',
-      detected_at: '2025-09-10T00:00:00.000Z',
-      potential_impact: 200,
-      detection_confidence: 0.82,
-      user_status: 'active',
-      metadata: { spike: 30 },
-    },
-    {
-      id: 2,
-      title: 'Budget overrun risk',
-      description: 'Transport budget likely to exceed limit.',
-      severity: 'medium',
-      action_type: 'budget_overrun',
-      category_name: 'Transport',
-      detected_at: '2025-09-11T00:00:00.000Z',
-      potential_impact: 150,
-      detection_confidence: 0.75,
-      user_status: 'active',
-      metadata: { overrun: 15 },
-    },
-  ],
-};
-
 const notificationsResponse = {
   success: true,
   data: {
@@ -729,9 +698,6 @@ const defaultHandlers: Record<string, Handler> = {
   'POST /api/spending-categories/initialize': respondWith({ success: true, created: 4, skipped: 0, total: 4 }),
   'GET /api/spending-categories/mappings': respondWith({ mappings: [] }),
   'PUT /api/spending-categories/targets': respondOK,
-  'POST /api/smart-actions/generate': respondWith({ success: true, generated: 2 }),
-  'GET /api/smart-actions': respondWith(smartActions),
-  'PUT /api/smart-actions/1/status': respondWith({ success: true, id: 1, status: 'resolved' }),
   'GET /api/analytics/category-details': respondWith({
     summary: {},
     transactions: [],
