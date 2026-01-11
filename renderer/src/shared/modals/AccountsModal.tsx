@@ -2059,7 +2059,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
             onClose();
           }
         }} 
-        maxWidth="md" 
+        maxWidth="lg" 
         fullWidth
         PaperProps={{
           sx: {

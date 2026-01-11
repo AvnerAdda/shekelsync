@@ -12,6 +12,7 @@ const temporalService = require('../services/analytics/temporal.js');
 const behavioralService = require('../services/analytics/behavioral.js');
 const extendedForecastService = require('../services/analytics/extended-forecast.js');
 const timeValueService = require('../services/analytics/time-value.js');
+const questsService = require('../services/analytics/quests.js');
 
 function createAnalyticsRouter() {
   const router = express.Router();
@@ -149,7 +150,8 @@ function createAnalyticsRouter() {
 
   router.get('/behavioral-patterns', async (req, res) => {
     try {
-      const result = await behavioralService.getBehavioralPatterns();
+      const locale = req.locale || 'he';
+      const result = await behavioralService.getBehavioralPatterns(locale);
       res.json(result);
     } catch (error) {
       console.error('Behavioral patterns error:', error);
@@ -182,6 +184,134 @@ function createAnalyticsRouter() {
       console.error('Time value analytics error:', error);
       res.status(500).json({
         error: 'Failed to fetch time value analytics',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // ============================================================================
+  // QUEST SYSTEM ROUTES
+  // ============================================================================
+
+  // Generate new quests based on forecast patterns
+  router.post('/quests/generate', async (req, res) => {
+    try {
+      const { force } = req.body || {};
+      const result = await questsService.generateQuests({
+        locale: req.locale,
+        force: Boolean(force),
+      });
+      res.json(result);
+    } catch (error) {
+      console.error('Quest generation error:', error);
+      res.status(500).json({
+        error: 'Failed to generate quests',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Get active quests with progress
+  router.get('/quests/active', async (req, res) => {
+    try {
+      const result = await questsService.getActiveQuests({
+        locale: req.locale,
+      });
+      res.json(result);
+    } catch (error) {
+      console.error('Get active quests error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch active quests',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Get user quest stats (points, level, streak)
+  router.get('/quests/stats', async (req, res) => {
+    try {
+      const result = await questsService.getUserQuestStats();
+      res.json(result);
+    } catch (error) {
+      console.error('Get quest stats error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch quest stats',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Accept a quest
+  router.post('/quests/:id/accept', async (req, res) => {
+    try {
+      const questId = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(questId)) {
+        return res.status(400).json({ error: 'Invalid quest ID' });
+      }
+      const result = await questsService.acceptQuest(questId);
+      res.json(result);
+    } catch (error) {
+      console.error('Accept quest error:', error);
+      let status = 500;
+      if (error.message.includes('not found')) status = 404;
+      else if (error.message.includes('cannot be accepted')) status = 400;
+      res.status(status).json({
+        error: 'Failed to accept quest',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Decline a quest
+  router.post('/quests/:id/decline', async (req, res) => {
+    try {
+      const questId = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(questId)) {
+        return res.status(400).json({ error: 'Invalid quest ID' });
+      }
+      const result = await questsService.declineQuest(questId);
+      res.json(result);
+    } catch (error) {
+      console.error('Decline quest error:', error);
+      const status = error.message.includes('not found') ? 404 : 500;
+      res.status(status).json({
+        error: 'Failed to decline quest',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Verify quest completion (manual or auto)
+  router.post('/quests/:id/verify', async (req, res) => {
+    try {
+      const questId = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(questId)) {
+        return res.status(400).json({ error: 'Invalid quest ID' });
+      }
+      const manualResult = req.body?.result || null;
+      const result = await questsService.verifyQuestCompletion(questId, manualResult);
+      res.json(result);
+    } catch (error) {
+      console.error('Verify quest error:', error);
+      let status = 500;
+      if (error.message.includes('not found')) status = 404;
+      else if (error.message.includes('cannot be verified')) status = 400;
+      res.status(status).json({
+        error: 'Failed to verify quest',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Check quest deadlines (cron job trigger or manual)
+  router.post('/quests/check-deadlines', async (req, res) => {
+    try {
+      const result = await questsService.checkQuestDeadlines();
+      res.json(result);
+    } catch (error) {
+      console.error('Check quest deadlines error:', error);
+      res.status(500).json({
+        error: 'Failed to check quest deadlines',
         message: error?.message || 'Internal server error',
       });
     }

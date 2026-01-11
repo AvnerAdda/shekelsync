@@ -440,6 +440,12 @@
   },
   "breakdownTabs": {
     "tabs": { "overall": "סה\"כ", "income": "הכנסות", "expense": "הוצאות", "investment": "השקעות" },
+    "periodDays": {
+      "last30": "30י",
+      "last60": "60י",
+      "last90": "90י",
+      "lastXDays": "{{count}} הימים האחרונים"
+    },
     "overall": {
       "totalIncome": "סה\"כ הכנסות: {{amount}}",
       "period": "תקופה: {{start}} - {{end}}",
@@ -484,6 +490,12 @@
       "logRecommendedHint": "זוהו הבדלי ערכים גדולים. שקול להשתמש בסולם לוגריתמי להצגה טובה יותר."
     },
     "periods": { "daily": "יומי", "weekly": "שבועי", "monthly": "חודשי" },
+    "periodDays": {
+      "last30": "30י",
+      "last60": "60י",
+      "last90": "90י",
+      "showingLast": "{{count}} הימים האחרונים"
+    },
     "tabs": {
       "history": "הכנסות והוצאות יומיות",
       "netPosition": "מצב נטו",
@@ -503,6 +515,7 @@
       "cumulative": "מצטבר",
       "historicalData": "היסטורי",
       "forecastData": "תחזית",
+      "next30Days": "תחזית ל-30 יום",
       "scenarioSummary": "תחזית לסוף החודש על בסיס {{simulations}} סימולציות מונטה קרלו",
       "daysRemaining": "{{count}} ימים נותרו בחודש",
       "actualNet": "מצב נטו בפועל",
@@ -693,11 +706,36 @@
           "programmed": "מתוכנן",
           "impulse": "אימפולסיבי"
         },
+        "frequencies": {
+          "daily": "יומי",
+          "dailyDesc": "עסקאות שמתרחשות כמעט כל יום",
+          "weekly": "שבועי",
+          "weeklyDesc": "עסקאות שמתרחשות בערך פעם בשבוע",
+          "biweekly": "דו-שבועי",
+          "biweeklyDesc": "עסקאות שמתרחשות כל שבועיים",
+          "monthly": "חודשי",
+          "monthlyDesc": "עסקאות שמתרחשות פעם בחודש",
+          "bimonthly": "דו-חודשי",
+          "bimonthlyDesc": "עסקאות שמתרחשות כל חודשיים",
+          "variable": "משתנה"
+        },
         "recurring": {
           "title": "תבניות חוזרות",
-          "subtitle": "מנויים והוצאות קבועות",
+          "subtitle": "מנויים והוצאות קבועות לפי תדירות",
           "times": "פעמים",
-          "noData": "לא נמצאו תבניות חוזרות"
+          "consistent": "עקבי",
+          "noData": "לא נמצאו תבניות חוזרות",
+          "noTransactions": "לא נמצאו עסקאות {{frequency}}"
+        },
+        "patternBreakdown": {
+          "title": "ניתוח תבניות לפי תדירות",
+          "subtitle": "ראה כיצד ההוצאות שלך מתפלגות בין מרווחי זמן שונים",
+          "categories": "קטגוריות",
+          "subcategories": "תתי-קטגוריות",
+          "byCategory": "לפי קטגוריה",
+          "bySubcategory": "לפי תת-קטגוריה",
+          "consistency": "עקביות תבנית",
+          "transactions": "עסקאות"
         },
         "categoryAverages": {
           "title": "ממוצע הוצאות לפי קטגוריה",
@@ -818,65 +856,73 @@
         "fallbackTooltip": "מדד מרכזי לבריאות ויציבות פיננסית"
       }
     },
-    "smartActions": {
-      "title": "פריטי פעולה חכמים",
-      "subtitle": "תובנות מבוססות AI לפי דפוסי ההוצאה שלך",
-      "actions": {
-        "generate": "צור",
-        "generating": "יוצר..."
+    "quests": {
+      "title": "משימות פיננסיות",
+      "subtitle": "השלם אתגרים לשיפור הכספים שלך וצבור נקודות",
+      "tabs": {
+        "proposed": "זמינות",
+        "accepted": "בביצוע"
       },
-      "summary": {
-        "totalActions": "סה\"כ פעולות",
-        "criticalHigh": "קריטי/גבוה",
-        "potentialImpact": "השפעה פוטנציאלית"
+      "actions": {
+        "generate": "מצא משימות",
+        "generating": "מחפש...",
+        "accept": "קבל משימה",
+        "decline": "דחה",
+        "verify": "בדוק התקדמות"
+      },
+      "stats": {
+        "level": "רמה {{level}}",
+        "points": "{{points}} נק׳",
+        "streak": "רצף של {{count}} משימות",
+        "nextLevel": "{{points}} נק׳ לרמה {{level}}",
+        "maxLevel": "הגעת לרמה המקסימלית!",
+        "completed": "הושלמו",
+        "failed": "נכשלו"
+      },
+      "difficulty": {
+        "easy": "קל",
+        "medium": "בינוני",
+        "hard": "קשה"
+      },
+      "duration": {
+        "days": "יום {{count}}",
+        "days_plural": "{{count}} ימים",
+        "week": "שבוע",
+        "month": "חודש"
+      },
+      "progress": {
+        "daysLeft": "נותר יום {{count}}",
+        "daysLeft_plural": "נותרו {{count}} ימים",
+        "expired": "עבר הדדליין",
+        "onTrack": "במסלול",
+        "atRisk": "בסיכון"
+      },
+      "rewards": {
+        "points": "+{{points}} נק׳",
+        "bonus": "בונוס: +25%"
       },
       "empty": {
-        "title": "הכל נקי!",
-        "description": "אין פריטי פעולה. הכספים שלך נראים טוב."
+        "proposed": {
+          "title": "אין משימות זמינות",
+          "description": "לחץ על 'מצא משימות' ליצירת אתגרים מותאמים אישית לפי דפוסי ההוצאות שלך."
+        },
+        "accepted": {
+          "title": "אין משימות פעילות",
+          "description": "קבל משימות כדי להתחיל לצבור נקודות!"
+        }
       },
       "types": {
-        "anomaly": "חריגה בהוצאות",
-        "budget_overrun": "התראת תקציב",
-        "optimization": "אופטימיזציה",
-        "fixed_variation": "שינוי עלות קבועה",
-        "unusual_purchase": "רכישה חריגה",
-        "seasonal_alert": "דפוס עונתי",
-        "fixed_recurring_change": "שינוי בסכום תשלום",
-        "fixed_recurring_missing": "תשלום צפוי חסר",
-        "fixed_recurring_duplicate": "תשלום כפול זוהה",
-        "optimization_reallocate": "הזדמנות לחיסכון",
-        "optimization_add_budget": "המלצה לתקציב",
-        "optimization_low_confidence": "דפוס הוצאה לא סדיר"
+        "quest_reduce_spending": "צמצום הוצאות",
+        "quest_savings_target": "יעד חיסכון",
+        "quest_budget_adherence": "אתגר תקציב",
+        "quest_set_budget": "צור תקציב",
+        "quest_reduce_fixed_cost": "צמצום עלות קבועה",
+        "quest_income_goal": "יעד הכנסה"
       },
-      "severities": {
-        "critical": "קריטי",
-        "high": "גבוה",
-        "medium": "בינוני",
-        "low": "נמוך"
-      },
-      "tooltips": {
-        "resolve": "סגירת פעולה",
-        "dismiss": "התעלמות",
-        "snooze": "דחייה ל-{{days}} ימים"
-      },
-      "labels": {
-        "costIncrease": "עלייה בעלות:",
-        "potentialSavings": "חיסכון אפשרי:"
-      },
-      "details": {
-        "title": "פרטי זיהוי",
-        "detected": "תאריך זיהוי",
-        "confidence": "רמת ביטחון",
-        "additionalInfo": "מידע נוסף"
-      },
-      "dialog": {
-        "resolve": { "title": "סגירת פעולה" },
-        "dismiss": { "title": "התעלמות מפעולה" },
-        "snooze": { "title": "דחיית פעולה" },
-        "noteLabel": "הערה (אופציונלי)",
-        "notePlaceholder": "הוסיפו הערה על הפעולה...",
-        "cancel": "ביטול",
-        "confirm": "אישור"
+      "verification": {
+        "success": "המשימה הושלמה! +{{points}} נקודות",
+        "partial": "מאמץ טוב! +{{points}} נקודות ({{pct}}% הושג)",
+        "failed": "המשימה לא הושלמה. המשך לנסות!"
       }
     },
     "spendingChart": {
@@ -1093,6 +1139,40 @@
         "currentValue": "שווי נוכחי",
         "unrealized": "רווח/הפסד לא ממומש"
       }
+    },
+    "balanceSheet": {
+      "title": "מאזן (במעקב)",
+      "subtitle": "נכסים פחות התחייבויות ידועות",
+      "updated": "עודכן {{date}}",
+      "na": "לא זמין",
+      "error": "טעינת נתוני המאזן נכשלה.",
+      "headline": {
+        "netWorth": "שווי נטו",
+        "assets": "נכסים במעקב"
+      },
+      "buckets": {
+        "cash": "מזומן",
+        "liquid": "נזיל",
+        "restricted": "טווח ארוך",
+        "stability": "ביטוח",
+        "other": "אחר"
+      },
+      "bucketMeta": "{{withValue}}/{{total}} עם שווי",
+      "badges": {
+        "partial": "חלקי",
+        "multiCurrency": "רב-מטבע",
+        "missingValues": "{{count}} חסרים"
+      },
+      "liabilities": {
+        "pendingCcDebt": "חוב כרטיס אשראי (ממתין)",
+        "unavailable": "לא זמין",
+        "noBaseline": "נדרש פירעון מסווג"
+      },
+      "hints": {
+        "multiCurrency": "זוהו מספר מטבעות ({{currencies}}). הסכומים מניחים שכל הערכים כבר באותו מטבע.",
+        "pendingDebt": "חוב כרטיס אשראי זמין רק לאחר צימוד כרטיסים וסיווג לפחות פירעון אחד."
+      },
+      "footnote": "הלוואות/משכנתא לא במעקב עדיין"
     },
     "history": {
       "title": "ביצועי התיק",
@@ -1816,5 +1896,50 @@
       "warning": "לא ניתן לבטל פעולה זו. כל הנתונים המשויכים יימחקו לצמיתות.",
       "cta": "מחק חשבון"
     }
+  },
+  "discrepancy": {
+    "title": "זוהה פער בסכומים",
+    "overpaidMessage": "תשלומי הבנק עולים על הוצאות הכרטיס ב-{{amount}}. ייתכן שמדובר בעמלות, ריבית או הוצאות שלא נרשמו.",
+    "underpaidMessage": "הוצאות הכרטיס עולות על תשלומי הבנק ב-{{amount}}. ייתכן שחסרות עסקאות או תשלומים ממתינים.",
+    "noDiscrepancyCycles": "לא זוהה פער לאורך {{cycles}} מחזור(ים) תואם(ים).",
+    "missingCyclesNote": "בחלק מתאריכי הפרעון אין מחזור חיוב תואם בכרטיס (חסר processed_date).",
+    "cycleMatched": "מחזור תואם",
+    "cycleMissing": "חסר מחזור כרטיס",
+    "repaymentsInCycle": "פרעונות במחזור",
+    "moreRepayments": "+עוד {{count}}",
+    "createPairingFirst": "יש ליצור צימוד לפני פתרון.",
+    "feeNameHint": "בשימוש בעת הוספת עמלה",
+    "bankRepayments": "תשלומי בנק",
+    "ccExpenses": "הוצאות כרטיס",
+    "difference": "פער",
+    "period": "תקופת ניתוח: {{months}} חודשים",
+    "howToResolve": "איך לטפל בפער?",
+    "ignore": "התעלם",
+    "addAsFee": "הוסף כעמלה",
+    "feeNamePlaceholder": "תיאור העמלה",
+    "defaultFeeName": "{{vendor}} - עמלות כרטיס",
+    "genericFeeName": "עמלות כרטיס אשראי"
+  },
+  "autoPairing": {
+    "title": "צימוד אוטומטי של כרטיס אשראי",
+    "selectCC": "בחר כרטיס אשראי",
+    "selectCCPlaceholder": "בחר כרטיס לצימוד",
+    "detecting": "מזהה חשבון בנק מתאים...",
+    "detected": "חשבון בנק שזוהה",
+    "confidence": "רמת ביטחון",
+    "matchPatterns": "תבניות התאמה",
+    "showPatterns": "הצג תבניות",
+    "hidePatterns": "הסתר תבניות",
+    "createPairing": "צור צימוד",
+    "pairingCreated": "הצימוד נוצר בהצלחה",
+    "pairingExists": "צימוד כבר קיים",
+    "noMatchFound": "לא נמצא חשבון בנק מתאים",
+    "noMatchReason": "לא ניתן לזהות אוטומטית את חשבון הבנק עבור כרטיס זה. נא להשתמש בצימוד ידני.",
+    "manualMode": "עבור למצב ידני",
+    "autoMode": "עבור למצב אוטומטי",
+    "sampleTransactions": "דוגמאות עסקאות תואמות"
+  },
+  "common": {
+    "or": "או"
   }
 }

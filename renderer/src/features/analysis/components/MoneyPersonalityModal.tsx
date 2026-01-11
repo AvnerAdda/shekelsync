@@ -15,8 +15,22 @@ import {
   Alert,
   Button,
   alpha,
+  Tabs,
+  Tab,
+  Tooltip,
+  LinearProgress,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import RepeatIcon from '@mui/icons-material/Repeat';
+import TodayIcon from '@mui/icons-material/Today';
+import DateRangeIcon from '@mui/icons-material/DateRange';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import EventRepeatIcon from '@mui/icons-material/EventRepeat';
+import ScheduleIcon from '@mui/icons-material/Schedule';
 import { PieChart } from '@mui/x-charts';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@renderer/lib/api-client';
@@ -28,6 +42,14 @@ interface MoneyPersonalityModalProps {
   onClose: () => void;
 }
 
+interface FrequencyConfig {
+  name: string;
+  icon: React.ReactNode;
+  label: string;
+  color: string;
+  description: string;
+}
+
 const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onClose }) => {
   const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'analysisPage.modals.personality' });
@@ -36,8 +58,17 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<number>(0);
+  const [activeFrequencyTab, setActiveFrequencyTab] = useState(0);
 
   const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+  const frequencyConfigs: FrequencyConfig[] = [
+    { name: 'daily', icon: <TodayIcon />, label: t('frequencies.daily'), color: '#e91e63', description: t('frequencies.dailyDesc') },
+    { name: 'weekly', icon: <DateRangeIcon />, label: t('frequencies.weekly'), color: '#9c27b0', description: t('frequencies.weeklyDesc') },
+    { name: 'biweekly', icon: <EventRepeatIcon />, label: t('frequencies.biweekly'), color: '#3f51b5', description: t('frequencies.biweeklyDesc') },
+    { name: 'monthly', icon: <CalendarMonthIcon />, label: t('frequencies.monthly'), color: '#2196f3', description: t('frequencies.monthlyDesc') },
+    { name: 'bimonthly', icon: <ScheduleIcon />, label: t('frequencies.bimonthly'), color: '#00bcd4', description: t('frequencies.bimonthlyDesc') },
+  ];
 
   useEffect(() => {
     if (open && (!data || (Date.now() - lastFetch) > CACHE_DURATION)) {

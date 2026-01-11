@@ -442,6 +442,12 @@
   },
   "breakdownTabs": {
     "tabs": { "overall": "Global", "income": "Revenus", "expense": "Dépenses", "investment": "Investissements" },
+    "periodDays": {
+      "last30": "30j",
+      "last60": "60j",
+      "last90": "90j",
+      "lastXDays": "{{count}} derniers jours"
+    },
     "overall": {
       "totalIncome": "Revenus totaux : {{amount}}",
       "period": "Période : {{start}} - {{end}}",
@@ -486,6 +492,12 @@
       "logRecommendedHint": "Des différences de valeurs importantes ont été détectées. Envisagez d'utiliser l'échelle logarithmique pour une meilleure visualisation."
     },
     "periods": { "daily": "Quotidien", "weekly": "Hebdomadaire", "monthly": "Mensuel" },
+    "periodDays": {
+      "last30": "30j",
+      "last60": "60j",
+      "last90": "90j",
+      "showingLast": "{{count}} derniers jours"
+    },
     "tabs": {
       "history": "Revenus et dépenses quotidiens",
       "netPosition": "Position nette",
@@ -505,6 +517,7 @@
       "cumulative": "Cumulatif",
       "historicalData": "Historique",
       "forecastData": "Prévision",
+      "next30Days": "Prévision 30 jours",
       "scenarioSummary": "Projection de fin de mois basée sur {{simulations}} simulations Monte Carlo",
       "daysRemaining": "{{count}} jours restants dans le mois",
       "actualNet": "Position nette réelle",
@@ -657,11 +670,36 @@
           "programmed": "Programmé",
           "impulse": "Impulsif"
         },
+        "frequencies": {
+          "daily": "Quotidien",
+          "dailyDesc": "Transactions qui se produisent presque tous les jours",
+          "weekly": "Hebdomadaire",
+          "weeklyDesc": "Transactions qui se produisent environ une fois par semaine",
+          "biweekly": "Bi-hebdomadaire",
+          "biweeklyDesc": "Transactions qui se produisent toutes les deux semaines",
+          "monthly": "Mensuel",
+          "monthlyDesc": "Transactions qui se produisent une fois par mois",
+          "bimonthly": "Bimestriel",
+          "bimonthlyDesc": "Transactions qui se produisent tous les deux mois",
+          "variable": "Variable"
+        },
         "recurring": {
           "title": "Modèles récurrents",
-          "subtitle": "Abonnements et dépenses fixes",
+          "subtitle": "Abonnements et dépenses fixes par fréquence",
           "times": "fois",
-          "noData": "Aucun modèle récurrent détecté"
+          "consistent": "Régulier",
+          "noData": "Aucun modèle récurrent détecté",
+          "noTransactions": "Aucune transaction {{frequency}} trouvée"
+        },
+        "patternBreakdown": {
+          "title": "Analyse des modèles par fréquence",
+          "subtitle": "Voyez comment vos dépenses sont réparties sur différents intervalles de temps",
+          "categories": "catégories",
+          "subcategories": "sous-catégories",
+          "byCategory": "Par catégorie",
+          "bySubcategory": "Par sous-catégorie",
+          "consistency": "Régularité du modèle",
+          "transactions": "transactions"
         },
         "categoryAverages": {
           "title": "Dépenses moyennes par catégorie",
@@ -780,61 +818,6 @@
           "tooltip": "Calcule la durée pendant laquelle votre épargne actuelle peut soutenir votre niveau de vie. Un score élevé signifie plus de résilience."
         },
         "fallbackTooltip": "Indicateur clé de votre santé et stabilité financières"
-      }
-    },
-    "smartActions": {
-      "title": "Actions intelligentes",
-      "subtitle": "Insights IA basés sur vos habitudes de dépense",
-      "actions": {
-        "generate": "Générer",
-        "generating": "Génération..."
-      },
-      "summary": {
-        "totalActions": "Total des actions",
-        "criticalHigh": "Critique/Élevée",
-        "potentialImpact": "Impact potentiel"
-      },
-      "empty": {
-        "title": "Tout est ok !",
-        "description": "Aucune action détectée. Vos finances sont en bon état."
-      },
-      "types": {
-        "anomaly": "Anomalie de dépense",
-        "budget_overrun": "Alerte budget",
-        "optimization": "Optimisation",
-        "fixed_variation": "Variation de coût fixe",
-        "unusual_purchase": "Achat inhabituel",
-        "seasonal_alert": "Schéma saisonnier"
-      },
-      "severities": {
-        "critical": "Critique",
-        "high": "Élevée",
-        "medium": "Moyenne",
-        "low": "Faible"
-      },
-      "tooltips": {
-        "resolve": "Résoudre",
-        "dismiss": "Ignorer",
-        "snooze": "Reporter de {{days}} jours"
-      },
-      "labels": {
-        "costIncrease": "Hausse de coût :",
-        "potentialSavings": "Économies potentielles :"
-      },
-      "details": {
-        "title": "Détails de détection",
-        "detected": "Détecté",
-        "confidence": "Confiance",
-        "additionalInfo": "Infos supplémentaires"
-      },
-      "dialog": {
-        "resolve": { "title": "Résoudre l'action" },
-        "dismiss": { "title": "Ignorer l'action" },
-        "snooze": { "title": "Reporter l'action" },
-        "noteLabel": "Note (optionnel)",
-        "notePlaceholder": "Ajoutez une note sur cette action...",
-        "cancel": "Annuler",
-        "confirm": "Confirmer"
       }
     },
     "spendingChart": {
@@ -1774,5 +1757,50 @@
       "warning": "Cette action est irréversible. Toutes les données associées seront supprimées définitivement.",
       "cta": "Supprimer le compte"
     }
+  },
+  "discrepancy": {
+    "title": "Écart de montant détecté",
+    "overpaidMessage": "Les remboursements bancaires dépassent les dépenses de carte de {{amount}}. Cela peut être dû à des frais, des intérêts ou des dépenses non enregistrées.",
+    "underpaidMessage": "Les dépenses de carte dépassent les remboursements bancaires de {{amount}}. Des transactions manquantes ou des paiements en attente sont possibles.",
+    "noDiscrepancyCycles": "Aucun écart détecté sur {{cycles}} cycle(s) de remboursement correspondant(s).",
+    "missingCyclesNote": "Certaines dates de remboursement n'ont pas de cycle de facturation correspondant (processed_date manquant).",
+    "cycleMatched": "Cycle correspondant",
+    "cycleMissing": "Cycle carte manquant",
+    "repaymentsInCycle": "Remboursements dans ce cycle",
+    "moreRepayments": "+{{count}} de plus",
+    "createPairingFirst": "Créez l'appairage d'abord pour résoudre.",
+    "feeNameHint": "Utilisé lors de l'ajout de frais",
+    "bankRepayments": "Remboursements bancaires",
+    "ccExpenses": "Dépenses carte",
+    "difference": "Écart",
+    "period": "Période d'analyse : {{months}} mois",
+    "howToResolve": "Comment souhaitez-vous résoudre cet écart ?",
+    "ignore": "Ignorer",
+    "addAsFee": "Ajouter comme frais",
+    "feeNamePlaceholder": "Description des frais",
+    "defaultFeeName": "{{vendor}} - Frais de carte",
+    "genericFeeName": "Frais de carte de crédit"
+  },
+  "autoPairing": {
+    "title": "Appairage automatique de carte",
+    "selectCC": "Sélectionner une carte",
+    "selectCCPlaceholder": "Choisir une carte à appairer",
+    "detecting": "Détection du compte bancaire correspondant...",
+    "detected": "Compte bancaire détecté",
+    "confidence": "Confiance",
+    "matchPatterns": "Modèles de correspondance",
+    "showPatterns": "Afficher les modèles",
+    "hidePatterns": "Masquer les modèles",
+    "createPairing": "Créer l'appairage",
+    "pairingCreated": "Appairage créé avec succès",
+    "pairingExists": "Appairage déjà existant",
+    "noMatchFound": "Aucun compte bancaire correspondant trouvé",
+    "noMatchReason": "Impossible de détecter automatiquement le compte bancaire pour cette carte. Veuillez utiliser l'appairage manuel.",
+    "manualMode": "Passer en mode manuel",
+    "autoMode": "Passer en mode automatique",
+    "sampleTransactions": "Exemples de transactions correspondantes"
+  },
+  "common": {
+    "or": "ou"
   }
 }

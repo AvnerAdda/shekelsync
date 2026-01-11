@@ -1,4 +1,5 @@
 const database = require('../database.js');
+const { getCreditCardRepaymentCategoryCondition } = require('./repayment-category.js');
 
 // Credit card vendor keywords for detection (Hebrew and English)
 const VENDOR_KEYWORDS = {
@@ -99,6 +100,8 @@ async function detectCreditCardSuggestions() {
   const client = await database.getClient();
 
   try {
+    const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
+
     // Build keyword conditions for SQL query
     const allKeywords = Object.values(VENDOR_KEYWORDS).flat();
     const keywordConditions = allKeywords.map(
@@ -113,11 +116,12 @@ async function detectCreditCardSuggestions() {
         t.price,
         t.date,
         t.category_definition_id,
-        cd.name AS category_name
+        cd.name AS category_name,
+        CASE WHEN ${repaymentCategoryCondition} THEN 1 ELSE 0 END as is_repayment
       FROM transactions t
       LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
       WHERE (
-        t.category_definition_id IN (25, 75)
+        ${repaymentCategoryCondition}
         OR (${keywordConditions})
       )
       ORDER BY t.date DESC
@@ -171,9 +175,7 @@ async function detectCreditCardSuggestions() {
       });
 
       // Check for category match
-      if (row.category_definition_id === 25 || row.category_definition_id === 75) {
-        group.hasCategoryMatch = true;
-      }
+      group.hasCategoryMatch = group.hasCategoryMatch || Boolean(row.is_repayment);
     });
 
     // Build suggestions array - one suggestion per card number

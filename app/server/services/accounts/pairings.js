@@ -11,6 +11,7 @@ function normalizePairing(row) {
     bankAccountNumber: row.bank_account_number,
     matchPatterns: row.match_patterns ? JSON.parse(row.match_patterns) : [],
     isActive: Boolean(row.is_active),
+    discrepancyAcknowledged: Boolean(row.discrepancy_acknowledged),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

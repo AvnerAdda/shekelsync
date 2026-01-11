@@ -168,12 +168,6 @@ async function setupAPIServer(mainWindow, options = {}) {
     lazyRouter(() => require(resolveAppPath('server', 'routes', 'spending-categories.js'))()),
   );
 
-  // Smart actions (AI-generated action items) – lazy load
-  app.use(
-    '/api/smart-actions',
-    lazyRouter(() => require(resolveAppPath('server', 'routes', 'smart-actions.js'))()),
-  );
-
   // Category variability analysis – lazy load
   app.use(
     '/api/category-variability',

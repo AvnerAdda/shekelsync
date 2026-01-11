@@ -11,10 +11,11 @@ import {
   AlertTitle,
   useTheme,
   alpha,
+  ToggleButtonGroup,
+  ToggleButton,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartTooltip } from 'recharts';
-import { format } from 'date-fns';
 import SankeyChart from './SankeyChart';
 import BreakdownPanel from '@renderer/features/breakdown/BreakdownPanel';
 import { PortfolioBreakdownItem } from '@renderer/types/investments';
@@ -176,9 +177,14 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
   data,
   chartColors,
 }) => {
-  const { startDate, endDate } = useDashboardFilters();
+  const { startDate, endDate, periodDays, setPeriodDays } = useDashboardFilters();
   const { t } = useTranslation('translation', { keyPrefix: 'breakdownTabs' });
   const theme = useTheme();
+  
+  // Use context dates directly (updated when periodDays changes)
+  const effectiveStartDate = startDate;
+  const effectiveEndDate = endDate;
+  
   const hasAnyTransactions =
     (data?.summary?.totalIncome ?? 0) !== 0 ||
     (data?.summary?.totalExpenses ?? 0) !== 0 ||
@@ -225,7 +231,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
                 Period
               </Typography>
               <Typography variant="body2" fontWeight="500">
-                {format(startDate, 'MMM dd, yyyy')} - {format(endDate, 'MMM dd, yyyy')}
+                {t('periodDays.lastXDays', { count: periodDays, defaultValue: `Last ${periodDays} days` })}
               </Typography>
             </Box>
           </Box>
@@ -259,8 +265,8 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
         <BreakdownPanel
           breakdowns={breakdownData[type].breakdowns}
           summary={breakdownData[type].summary}
-          startDate={startDate}
-          endDate={endDate}
+          startDate={effectiveStartDate}
+          endDate={effectiveEndDate}
           categoryType={type as any}
           transactions={breakdownData[type].transactions}
         />
@@ -288,35 +294,73 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
           boxShadow: theme.shadows[2],
         }}
       >
-        <Tabs 
-          value={selectedBreakdownType} 
-          onChange={(event, newValue) => newValue && onSelectBreakdown(newValue)} 
-          variant="fullWidth"
-          sx={{
-            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            '& .MuiTab-root': {
-              textTransform: 'none',
-              fontWeight: 600,
-              fontSize: '0.95rem',
-              transition: 'all 0.2s',
-              '&:hover': {
-                backgroundColor: alpha(theme.palette.primary.main, 0.05),
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+          <Tabs 
+            value={selectedBreakdownType} 
+            onChange={(event, newValue) => newValue && onSelectBreakdown(newValue)} 
+            sx={{
+              '& .MuiTab-root': {
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.95rem',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.primary.main, 0.05),
+                },
+                '&.Mui-selected': {
+                  color: theme.palette.primary.main,
+                },
               },
-              '&.Mui-selected': {
-                color: theme.palette.primary.main,
+              '& .MuiTabs-indicator': {
+                height: 3,
+                borderRadius: '3px 3px 0 0',
               },
-            },
-            '& .MuiTabs-indicator': {
-              height: 3,
-              borderRadius: '3px 3px 0 0',
-            },
-          }}
-        >
-          <Tab label={t('tabs.overall')} value="overall" />
-          <Tab label={t('tabs.income')} value="income" />
-          <Tab label={t('tabs.expense')} value="expense" />
-          <Tab label={t('tabs.investment')} value="investment" />
-        </Tabs>
+            }}
+          >
+            <Tab label={t('tabs.overall')} value="overall" />
+            <Tab label={t('tabs.income')} value="income" />
+            <Tab label={t('tabs.expense')} value="expense" />
+            <Tab label={t('tabs.investment')} value="investment" />
+          </Tabs>
+          
+          {/* Period selector: last 30/60/90 days */}
+          <ToggleButtonGroup
+            value={periodDays}
+            exclusive
+            onChange={(_, newPeriod) => {
+              if (newPeriod) {
+                setPeriodDays(newPeriod);
+              }
+            }}
+            size="small"
+            sx={{
+              mr: 2,
+              bgcolor: alpha(theme.palette.background.paper, 0.4),
+              borderRadius: '12px',
+              p: 0.5,
+              '& .MuiToggleButton-root': {
+                border: 'none',
+                borderRadius: '8px !important',
+                px: 2,
+                py: 0.5,
+                color: 'text.secondary',
+                '&.Mui-selected': {
+                  bgcolor: 'background.paper',
+                  color: 'primary.main',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  fontWeight: 600,
+                },
+                '&:hover': {
+                  bgcolor: alpha(theme.palette.action.hover, 0.1),
+                }
+              }
+            }}
+          >
+            <ToggleButton value={30}>{t('periodDays.last30', { defaultValue: '30d' })}</ToggleButton>
+            <ToggleButton value={60}>{t('periodDays.last60', { defaultValue: '60d' })}</ToggleButton>
+            <ToggleButton value={90}>{t('periodDays.last90', { defaultValue: '90d' })}</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
         <Box sx={{ p: 3 }}>
           {selectedBreakdownType === 'overall' && (
             <Grid container spacing={3}>

@@ -439,26 +439,35 @@ const TABLE_DEFINITIONS = [
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );`,
-  // Smart Action Items Tables
+  // Quest System Tables
   `CREATE TABLE IF NOT EXISTS smart_action_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       action_type TEXT NOT NULL CHECK(action_type IN (
-        'anomaly', 'budget_overrun', 'optimization', 'fixed_variation', 'unusual_purchase', 'seasonal_alert'
+        'quest_reduce_spending', 'quest_savings_target', 'quest_budget_adherence', 
+        'quest_set_budget', 'quest_reduce_fixed_cost', 'quest_income_goal'
       )),
       trigger_category_id INTEGER,
-      severity TEXT NOT NULL DEFAULT 'medium' CHECK(severity IN ('low', 'medium', 'high', 'critical')),
+      severity TEXT NOT NULL DEFAULT 'medium' CHECK(severity IN ('low', 'medium', 'high')),
       title TEXT NOT NULL,
       description TEXT,
       detected_at TEXT NOT NULL DEFAULT (datetime('now')),
       resolved_at TEXT,
       dismissed_at TEXT,
-      snoozed_until TEXT,
-      user_status TEXT NOT NULL DEFAULT 'active' CHECK(user_status IN ('active', 'dismissed', 'resolved', 'snoozed')),
+      user_status TEXT NOT NULL DEFAULT 'active' CHECK(user_status IN ('active', 'dismissed', 'resolved', 'accepted', 'failed')),
       metadata TEXT,
       potential_impact REAL,
       detection_confidence REAL DEFAULT 0.5 CHECK(detection_confidence >= 0 AND detection_confidence <= 1),
       is_recurring INTEGER NOT NULL DEFAULT 0 CHECK(is_recurring IN (0, 1)),
       recurrence_key TEXT,
+      -- Quest-specific columns
+      deadline TEXT,
+      accepted_at TEXT,
+      points_reward INTEGER DEFAULT 0,
+      points_earned INTEGER DEFAULT 0,
+      completion_criteria TEXT,
+      completion_result TEXT,
+      quest_difficulty TEXT CHECK(quest_difficulty IS NULL OR quest_difficulty IN ('easy', 'medium', 'hard')),
+      quest_duration_days INTEGER,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (trigger_category_id) REFERENCES category_definitions(id) ON DELETE SET NULL
@@ -466,14 +475,30 @@ const TABLE_DEFINITIONS = [
   `CREATE TABLE IF NOT EXISTS action_item_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       smart_action_item_id INTEGER NOT NULL,
-      action TEXT NOT NULL CHECK(action IN ('created', 'dismissed', 'resolved', 'snoozed', 'reactivated', 'updated')),
+      action TEXT NOT NULL CHECK(action IN ('created', 'dismissed', 'resolved', 'accepted', 'completed', 'failed')),
       previous_status TEXT,
       new_status TEXT,
       user_note TEXT,
       metadata TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (smart_action_item_id) REFERENCES smart_action_items(id) ON DELETE CASCADE
-    );`
+    );`,
+  // User Quest Stats Table (single-row for gamification)
+  `CREATE TABLE IF NOT EXISTS user_quest_stats (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      total_points INTEGER NOT NULL DEFAULT 0,
+      current_streak INTEGER NOT NULL DEFAULT 0,
+      best_streak INTEGER NOT NULL DEFAULT 0,
+      quests_completed INTEGER NOT NULL DEFAULT 0,
+      quests_failed INTEGER NOT NULL DEFAULT 0,
+      quests_declined INTEGER NOT NULL DEFAULT 0,
+      level INTEGER NOT NULL DEFAULT 1,
+      last_completed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`,
+  `INSERT OR IGNORE INTO user_quest_stats (id, total_points, current_streak, best_streak, quests_completed, quests_failed, quests_declined, level)
+    VALUES (1, 0, 0, 0, 0, 0, 0, 1);`
 ];
 
 const INDEX_STATEMENTS = [
@@ -560,7 +585,11 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_smart_action_items_category ON smart_action_items(trigger_category_id);',
   'CREATE INDEX IF NOT EXISTS idx_smart_action_items_detected_at ON smart_action_items(detected_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_smart_action_items_recurrence ON smart_action_items(recurrence_key, user_status);',
-  'CREATE INDEX IF NOT EXISTS idx_action_item_history_item_id ON action_item_history(smart_action_item_id, created_at DESC);'
+  'CREATE INDEX IF NOT EXISTS idx_action_item_history_item_id ON action_item_history(smart_action_item_id, created_at DESC);',
+  // Quest-specific indexes
+  'CREATE INDEX IF NOT EXISTS idx_smart_action_items_deadline ON smart_action_items(deadline);',
+  'CREATE INDEX IF NOT EXISTS idx_smart_action_items_accepted_at ON smart_action_items(accepted_at);',
+  'CREATE INDEX IF NOT EXISTS idx_smart_action_items_quest_difficulty ON smart_action_items(quest_difficulty);'
 ];
 
 const INSTITUTION_GROUPS = [

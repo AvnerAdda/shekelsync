@@ -1,6 +1,7 @@
 const database = require('../database.js');
 const pairingsService = require('./pairings.js');
 const { getVendorCodesByTypes } = require('../institutions.js');
+const { getCreditCardRepaymentCategoryCondition } = require('./repayment-category.js');
 
 let cachedBankVendors = null;
 let bankVendorCacheTimestamp = 0;
@@ -69,6 +70,8 @@ async function fetchCandidateTransactions(client) {
     return [];
   }
 
+  const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
+
   // SQLite doesn't support ANY operator, so we build IN clause with placeholders
   const placeholders = bankVendors.map((_, i) => `$${i + 1}`).join(', ');
 
@@ -93,7 +96,7 @@ async function fetchCandidateTransactions(client) {
       LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
       LEFT JOIN institution_nodes fi_cred ON vc.institution_id = fi_cred.id AND fi_cred.node_type = 'institution'
       LEFT JOIN institution_nodes fi_vendor ON t.vendor = fi_vendor.vendor_code AND fi_vendor.node_type = 'institution'
-      WHERE t.category_definition_id IN (25, 75)
+      WHERE ${repaymentCategoryCondition}
         AND t.vendor IN (
           SELECT DISTINCT vendor
           FROM vendor_credentials

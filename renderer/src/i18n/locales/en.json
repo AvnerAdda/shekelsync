@@ -437,6 +437,12 @@
       "expense": "Expenses",
       "investment": "Investment"
     },
+    "periodDays": {
+      "last30": "30d",
+      "last60": "60d",
+      "last90": "90d",
+      "lastXDays": "Last {{count}} days"
+    },
     "overall": {
       "totalIncome": "Total Income: {{amount}}",
       "period": "Period: {{start}} - {{end}}",
@@ -487,6 +493,12 @@
       "weekly": "Weekly",
       "monthly": "Monthly"
     },
+    "periodDays": {
+      "last30": "30d",
+      "last60": "60d",
+      "last90": "90d",
+      "showingLast": "Last {{count}} days"
+    },
     "tabs": {
       "history": "Daily Income vs Expenses",
       "netPosition": "Net Position",
@@ -506,6 +518,7 @@
       "cumulative": "Cumulative",
       "historicalData": "Historical",
       "forecastData": "Forecast",
+      "next30Days": "30 day forecast",
       "scenarioSummary": "End of month projection based on {{simulations}} Monte Carlo simulations",
       "daysRemaining": "{{count}} days remaining in month",
       "actualNet": "Actual Net Position",
@@ -704,11 +717,36 @@
           "programmed": "Programmed",
           "impulse": "Impulse"
         },
+        "frequencies": {
+          "daily": "Daily",
+          "dailyDesc": "Transactions that occur almost every day",
+          "weekly": "Weekly",
+          "weeklyDesc": "Transactions that occur about once a week",
+          "biweekly": "Bi-weekly",
+          "biweeklyDesc": "Transactions that occur every two weeks",
+          "monthly": "Monthly",
+          "monthlyDesc": "Transactions that occur once a month",
+          "bimonthly": "Bi-monthly",
+          "bimonthlyDesc": "Transactions that occur every two months",
+          "variable": "Variable"
+        },
         "recurring": {
           "title": "Recurring Patterns",
-          "subtitle": "Subscriptions and fixed expenses",
+          "subtitle": "Subscriptions and fixed expenses by frequency",
           "times": "times",
-          "noData": "No recurring patterns detected"
+          "consistent": "Consistent",
+          "noData": "No recurring patterns detected",
+          "noTransactions": "No {{frequency}} transactions found"
+        },
+        "patternBreakdown": {
+          "title": "Pattern Analysis by Frequency",
+          "subtitle": "See how your spending is distributed across different time intervals",
+          "categories": "categories",
+          "subcategories": "subcategories",
+          "byCategory": "By Category",
+          "bySubcategory": "By Subcategory",
+          "consistency": "Pattern Consistency",
+          "transactions": "transactions"
         },
         "categoryAverages": {
           "title": "Average Spending per Category",
@@ -829,65 +867,73 @@
         "fallbackTooltip": "A key indicator of your financial health and stability"
       }
     },
-    "smartActions": {
-      "title": "Smart Action Items",
-      "subtitle": "AI-generated insights based on your spending patterns",
-      "actions": {
-        "generate": "Generate",
-        "generating": "Generating..."
+    "quests": {
+      "title": "Financial Quests",
+      "subtitle": "Complete challenges to improve your finances and earn rewards",
+      "tabs": {
+        "proposed": "Available",
+        "accepted": "In Progress"
       },
-      "summary": {
-        "totalActions": "Total Actions",
-        "criticalHigh": "Critical/High",
-        "potentialImpact": "Potential Impact"
+      "actions": {
+        "generate": "Find Quests",
+        "generating": "Finding...",
+        "accept": "Accept Quest",
+        "decline": "Decline",
+        "verify": "Check Progress"
+      },
+      "stats": {
+        "level": "Level {{level}}",
+        "points": "{{points}} pts",
+        "streak": "{{count}} quest streak",
+        "nextLevel": "{{points}} pts to level {{level}}",
+        "maxLevel": "Max level reached!",
+        "completed": "Completed",
+        "failed": "Failed"
+      },
+      "difficulty": {
+        "easy": "Easy",
+        "medium": "Medium",
+        "hard": "Hard"
+      },
+      "duration": {
+        "days": "{{count}} day",
+        "days_plural": "{{count}} days",
+        "week": "1 week",
+        "month": "1 month"
+      },
+      "progress": {
+        "daysLeft": "{{count}} day left",
+        "daysLeft_plural": "{{count}} days left",
+        "expired": "Deadline passed",
+        "onTrack": "On track",
+        "atRisk": "At risk"
+      },
+      "rewards": {
+        "points": "+{{points}} pts",
+        "bonus": "Bonus: +25%"
       },
       "empty": {
-        "title": "All clear!",
-        "description": "No action items detected. Your finances are looking good."
+        "proposed": {
+          "title": "No quests available",
+          "description": "Click 'Find Quests' to generate personalized challenges based on your spending patterns."
+        },
+        "accepted": {
+          "title": "No active quests",
+          "description": "Accept some quests to start earning points!"
+        }
       },
       "types": {
-        "anomaly": "Spending Anomaly",
-        "budget_overrun": "Budget Alert",
-        "optimization": "Optimization",
-        "fixed_variation": "Fixed Cost Variation",
-        "unusual_purchase": "Unusual Purchase",
-        "seasonal_alert": "Seasonal Pattern",
-        "fixed_recurring_change": "Payment Amount Changed",
-        "fixed_recurring_missing": "Expected Payment Missing",
-        "fixed_recurring_duplicate": "Duplicate Payment Detected",
-        "optimization_reallocate": "Savings Opportunity",
-        "optimization_add_budget": "Budget Recommendation",
-        "optimization_low_confidence": "Irregular Spending Pattern"
+        "quest_reduce_spending": "Reduce Spending",
+        "quest_savings_target": "Savings Goal",
+        "quest_budget_adherence": "Budget Challenge",
+        "quest_set_budget": "Create Budget",
+        "quest_reduce_fixed_cost": "Reduce Fixed Cost",
+        "quest_income_goal": "Income Goal"
       },
-      "severities": {
-        "critical": "Critical",
-        "high": "High",
-        "medium": "Medium",
-        "low": "Low"
-      },
-      "tooltips": {
-        "resolve": "Resolve",
-        "dismiss": "Dismiss",
-        "snooze": "Snooze for {{days}} days"
-      },
-      "labels": {
-        "costIncrease": "Cost increase:",
-        "potentialSavings": "Potential savings:"
-      },
-      "details": {
-        "title": "Detection Details",
-        "detected": "Detected",
-        "confidence": "Confidence",
-        "additionalInfo": "Additional Info"
-      },
-      "dialog": {
-        "resolve": { "title": "Resolve Action" },
-        "dismiss": { "title": "Dismiss Action" },
-        "snooze": { "title": "Snooze Action" },
-        "noteLabel": "Note (optional)",
-        "notePlaceholder": "Add a note about this action...",
-        "cancel": "Cancel",
-        "confirm": "Confirm"
+      "verification": {
+        "success": "Quest completed! +{{points}} points",
+        "partial": "Good effort! +{{points}} points ({{pct}}% achieved)",
+        "failed": "Quest not completed. Keep trying!"
       }
     },
     "spendingChart": {
@@ -1114,6 +1160,40 @@
         "currentValue": "CURRENT VALUE",
         "unrealized": "UNREALIZED P&L"
       }
+    },
+    "balanceSheet": {
+      "title": "Balance Sheet (Tracked)",
+      "subtitle": "Assets minus known liabilities",
+      "updated": "Updated {{date}}",
+      "na": "N/A",
+      "error": "Failed to load balance sheet snapshot.",
+      "headline": {
+        "netWorth": "NET WORTH",
+        "assets": "TRACKED ASSETS"
+      },
+      "buckets": {
+        "cash": "Cash",
+        "liquid": "Liquid",
+        "restricted": "Long-term",
+        "stability": "Insurance",
+        "other": "Other"
+      },
+      "bucketMeta": "{{withValue}}/{{total}} valued",
+      "badges": {
+        "partial": "Partial",
+        "multiCurrency": "Multi-currency",
+        "missingValues": "{{count}} missing valuations"
+      },
+      "liabilities": {
+        "pendingCcDebt": "Pending credit card debt",
+        "unavailable": "Unavailable",
+        "noBaseline": "Need a categorized repayment"
+      },
+      "hints": {
+        "multiCurrency": "Multiple currencies detected ({{currencies}}). Totals assume values are already in the same currency.",
+        "pendingDebt": "Pending credit card debt is unavailable until you set up card pairings and categorize at least one repayment."
+      },
+      "footnote": "Excludes loans/mortgage (not tracked yet)"
     },
     "history": {
       "title": "Portfolio Performance",
@@ -1900,5 +1980,50 @@
       "warning": "This action cannot be undone. All associated data will be permanently removed.",
       "cta": "Delete Account"
     }
+  },
+  "discrepancy": {
+    "title": "Amount Discrepancy Detected",
+    "overpaidMessage": "Bank repayments exceed credit card expenses by {{amount}}. This may be due to CC fees, interest, or untracked expenses.",
+    "underpaidMessage": "Credit card expenses exceed bank repayments by {{amount}}. This may indicate missing transactions or pending payments.",
+    "noDiscrepancyCycles": "No discrepancy detected across {{cycles}} matched repayment cycle(s).",
+    "missingCyclesNote": "Some repayment dates have no matching credit card billing cycle (missing processed_date coverage).",
+    "cycleMatched": "Matched cycle",
+    "cycleMissing": "Missing CC cycle",
+    "repaymentsInCycle": "Repayments in this cycle",
+    "moreRepayments": "+{{count}} more",
+    "createPairingFirst": "Create the pairing first to resolve.",
+    "feeNameHint": "Used when adding a fee",
+    "bankRepayments": "Bank repayments",
+    "ccExpenses": "CC expenses",
+    "difference": "Difference",
+    "period": "Analysis period: {{months}} months",
+    "howToResolve": "How would you like to resolve this?",
+    "ignore": "Ignore",
+    "addAsFee": "Add as CC Fee",
+    "feeNamePlaceholder": "Fee description",
+    "defaultFeeName": "{{vendor}} - CC Fees",
+    "genericFeeName": "Credit Card Fees"
+  },
+  "autoPairing": {
+    "title": "Auto-Pair Credit Card",
+    "selectCC": "Select Credit Card",
+    "selectCCPlaceholder": "Choose a credit card to pair",
+    "detecting": "Detecting matching bank account...",
+    "detected": "Detected Bank Account",
+    "confidence": "Confidence",
+    "matchPatterns": "Match Patterns",
+    "showPatterns": "Show patterns",
+    "hidePatterns": "Hide patterns",
+    "createPairing": "Create Pairing",
+    "pairingCreated": "Pairing created successfully",
+    "pairingExists": "Pairing already exists",
+    "noMatchFound": "No matching bank account found",
+    "noMatchReason": "Could not automatically detect the bank account for this credit card. Please use manual pairing.",
+    "manualMode": "Switch to Manual Mode",
+    "autoMode": "Switch to Auto Mode",
+    "sampleTransactions": "Sample matched transactions"
+  },
+  "common": {
+    "or": "or"
   }
 }
