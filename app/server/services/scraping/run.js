@@ -21,6 +21,8 @@ const MAX_TIMEOUT = 300000; // 5 minutes for problematic scrapers
 const DEFAULT_LOOKBACK_MONTHS = 3;
 let cachedBankCategory = null;
 
+const PENDING_COMPLETED_MATCH_WINDOW_HOURS = 36; // 1.5 days (handles timezone/date rounding)
+
 // Mutex to serialize scrape operations and prevent SQLite transaction conflicts
 // SQLite uses a single connection and doesn't support nested transactions
 const scrapeMutex = new Mutex();
@@ -230,7 +232,148 @@ async function markCredentialScrapeStatus(client, credentialId, status) {
   await client.query(sql, [credentialId]);
 }
 
+function normalizeComparableText(value) {
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function getNameMatchScore(left, right) {
+  const a = normalizeComparableText(left);
+  const b = normalizeComparableText(right);
+  if (!a || !b) return 0;
+  if (a === b) return 3;
+  if (a.startsWith(b) || b.startsWith(a)) return 2;
+  const minLen = Math.min(a.length, b.length);
+  if (minLen >= 6 && (a.includes(b) || b.includes(a))) return 1;
+  return 0;
+}
+
+function getAbsHoursDiff(leftIso, rightIso) {
+  const left = new Date(leftIso);
+  const right = new Date(rightIso);
+  if (Number.isNaN(left.getTime()) || Number.isNaN(right.getTime())) return Number.POSITIVE_INFINITY;
+  return Math.abs(left.getTime() - right.getTime()) / (1000 * 60 * 60);
+}
+
+async function findPotentialDuplicateTransactions(client, { vendor, accountNumber, price, transactionDatetimeIso }) {
+  const transactionDate = new Date(transactionDatetimeIso);
+  if (Number.isNaN(transactionDate.getTime())) return [];
+
+  const windowMs = PENDING_COMPLETED_MATCH_WINDOW_HOURS * 60 * 60 * 1000;
+  const startIso = new Date(transactionDate.getTime() - windowMs).toISOString();
+  const endIso = new Date(transactionDate.getTime() + windowMs).toISOString();
+
+  const result = await client.query(
+    `
+      SELECT
+        identifier,
+        vendor,
+        name,
+        status,
+        COALESCE(transaction_datetime, date) AS transaction_datetime
+      FROM transactions
+      WHERE vendor = $1
+        AND (account_number IS $2 OR (account_number IS NULL AND $2 IS NULL))
+        AND price = $3
+        AND COALESCE(transaction_datetime, date) BETWEEN $4 AND $5
+    `,
+    [vendor, accountNumber ?? null, price, startIso, endIso],
+  );
+
+  return result.rows || [];
+}
+
+function pickBestDuplicateCandidate(candidates, { name, transactionDatetimeIso, status }) {
+  const scored = candidates
+    .filter((candidate) => (status ? candidate.status === status : true))
+    .map((candidate) => {
+      const matchScore = getNameMatchScore(name, candidate.name);
+      if (matchScore <= 0) return null;
+      const hoursDiff = getAbsHoursDiff(transactionDatetimeIso, candidate.transaction_datetime);
+      return { ...candidate, matchScore, hoursDiff };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.matchScore - a.matchScore || a.hoursDiff - b.hoursDiff);
+
+  return scored[0] || null;
+}
+
 async function insertTransaction(txn, client, companyId, isBank, accountNumber, vendorNickname) {
+  const transactionDate = new Date(txn.date);
+  const transactionDatetimeIso = Number.isNaN(transactionDate.getTime())
+    ? null
+    : transactionDate.toISOString();
+
+  const rawAmount = txn.chargedAmount || txn.originalAmount || 0;
+  const transactionPrice = isBank ? rawAmount : rawAmount > 0 ? rawAmount * -1 : rawAmount;
+
+  if (transactionDatetimeIso && (txn.status === 'pending' || txn.status === 'completed')) {
+    const candidates = await findPotentialDuplicateTransactions(client, {
+      vendor: companyId,
+      accountNumber,
+      price: transactionPrice,
+      transactionDatetimeIso,
+    });
+
+    const bestPending = pickBestDuplicateCandidate(candidates, {
+      name: txn.description,
+      transactionDatetimeIso,
+      status: 'pending',
+    });
+
+    const bestCompleted = pickBestDuplicateCandidate(candidates, {
+      name: txn.description,
+      transactionDatetimeIso,
+      status: 'completed',
+    });
+
+    if (txn.status === 'pending' && bestCompleted) {
+      return;
+    }
+
+    if (txn.status === 'completed' && bestPending) {
+      if (bestCompleted) {
+        await client.query(
+          `DELETE FROM transactions WHERE identifier = $1 AND vendor = $2`,
+          [bestPending.identifier, bestPending.vendor],
+        );
+        return;
+      }
+
+      await client.query(
+        `
+          UPDATE transactions
+          SET status = 'completed',
+              processed_date = COALESCE($1, processed_date),
+              processed_datetime = COALESCE($2, processed_datetime),
+              original_amount = COALESCE($3, original_amount),
+              original_currency = COALESCE($4, original_currency),
+              charged_currency = COALESCE($5, charged_currency),
+              memo = CASE
+                WHEN (memo IS NULL OR memo = '') AND $6 IS NOT NULL THEN $6
+                ELSE memo
+              END,
+              type = COALESCE($7, type)
+          WHERE identifier = $8 AND vendor = $9
+        `,
+        [
+          txn.processedDate || null,
+          txn.processedDate ? new Date(txn.processedDate) : null,
+          txn.originalAmount ?? null,
+          txn.originalCurrency ?? null,
+          txn.chargedCurrency ?? null,
+          txn.memo ?? null,
+          txn.type ?? null,
+          bestPending.identifier,
+          bestPending.vendor,
+        ],
+      );
+      return;
+    }
+  }
+
   const uniqueId = `${txn.identifier}-${companyId}-${txn.processedDate}-${txn.description}`;
   const hash = crypto.createHash('sha1');
   hash.update(uniqueId);
@@ -267,9 +410,9 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber, 
         identifier,
         companyId,
         vendorNickname || null,
-        new Date(txn.date),
+        transactionDate,
         txn.description,
-        txn.chargedAmount || txn.originalAmount || 0,
+        transactionPrice,
         bankCategory.category_definition_id || bankCategory.id,
         txn.description,
         true,
@@ -283,15 +426,14 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber, 
         txn.status,
         accountNumber,
         bankCategory.category_type || 'expense',
-        new Date(txn.date),
+        transactionDate,
         txn.processedDate ? new Date(txn.processedDate) : new Date(),
       ],
     );
     return;
   }
 
-  const rawAmount = txn.chargedAmount || txn.originalAmount || 0;
-  const amount = rawAmount > 0 ? rawAmount * -1 : rawAmount;
+  const amount = transactionPrice;
 
   let categoryDefinitionId = null;
   let parentCategory = null;
@@ -351,7 +493,7 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber, 
       identifier,
       companyId,
       vendorNickname || null,
-      new Date(txn.date),
+      transactionDate,
       txn.description,
       amount,
       categoryDefinitionId,
@@ -367,7 +509,7 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber, 
       txn.status,
       accountNumber,
       categoryType,
-      new Date(txn.date),
+      transactionDate,
       txn.processedDate ? new Date(txn.processedDate) : new Date(),
     ],
   );
