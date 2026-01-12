@@ -2,7 +2,7 @@ const database = require('../database.js');
 const pairingsService = require('./pairings.js');
 const { getCreditCardRepaymentCategoryCondition } = require('./repayment-category.js');
 
-// Credit card vendor keywords (Hebrew and English) - reused from smart-match.js
+// Credit card vendor keywords (Hebrew and English)
 const VENDOR_KEYWORDS = {
   max: ['מקס', 'max'],
   visaCal: ['כ.א.ל', 'cal', 'ויזה כאל', 'visa cal'],
@@ -12,147 +12,103 @@ const VENDOR_KEYWORDS = {
   diners: ['דיינרס', 'diners'],
 };
 
-function uniq(array) {
-  return Array.from(new Set(array));
-}
-
-function normalizePattern(pattern) {
-  const trimmed = String(pattern || '').trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function pickDiscrepancyPatterns(matchPatterns = [], ccVendor, ccAccountNumber) {
-  const normalizedPatterns = uniq(matchPatterns.map(normalizePattern).filter(Boolean));
-  const vendorKeywords = new Set((VENDOR_KEYWORDS[ccVendor] || []).map((kw) => kw.toLowerCase()));
-
-  const nonVendorPatterns = normalizedPatterns.filter((pattern) => !vendorKeywords.has(pattern.toLowerCase()));
-  const numericNonVendor = nonVendorPatterns.filter((pattern) => /^\d{4,}$/.test(pattern));
-
-  const accountNumber = normalizePattern(ccAccountNumber);
-  const accountPatterns = [];
-  if (accountNumber && accountNumber !== 'undefined' && accountNumber !== 'null') {
-    accountPatterns.push(accountNumber);
-    if (accountNumber.length > 4) {
-      accountPatterns.push(accountNumber.slice(-4));
-    }
+async function getCCFeesCategoryId(client) {
+  try {
+    const result = await client.query(`
+      SELECT id FROM category_definitions
+      WHERE name_en = 'Bank & Card Fees'
+         OR name = 'עמלות בנק וכרטיס'
+      LIMIT 1
+    `);
+    return result.rows?.[0]?.id ?? null;
+  } catch (_error) {
+    return null;
   }
-
-  const accountPatternsUnique = uniq(accountPatterns);
-  const numericAccountPatterns = accountPatternsUnique.filter((pattern) => /^\d{4,}$/.test(pattern));
-
-  // Prefer account number patterns first, then other numeric patterns, then any non-vendor patterns.
-  if (numericAccountPatterns.length > 0) return numericAccountPatterns;
-  if (numericNonVendor.length > 0) return numericNonVendor;
-  if (accountPatternsUnique.length > 0) return accountPatternsUnique;
-  if (nonVendorPatterns.length > 0) return nonVendorPatterns;
-
-  // If we only have vendor keywords, discrepancy matching is too ambiguous.
-  return [];
-}
-
-function getDiscrepancyPatternSets(matchPatterns = [], ccVendor, ccAccountNumber) {
-  const preferred = pickDiscrepancyPatterns(matchPatterns, ccVendor, ccAccountNumber);
-  const normalizedAll = uniq(matchPatterns.map(normalizePattern).filter(Boolean));
-  const vendorKeywords = uniq(VENDOR_KEYWORDS[ccVendor] || []);
-
-  const sets = [];
-  if (preferred.length > 0) sets.push({ patterns: preferred, label: 'preferred' });
-  if (normalizedAll.length > 0) sets.push({ patterns: normalizedAll, label: 'all_patterns' });
-  if (vendorKeywords.length > 0) sets.push({ patterns: vendorKeywords, label: 'vendor_keywords' });
-  sets.push({ patterns: [], label: 'category_only' });
-
-  // Ensure unique by pattern content
-  const seen = new Set();
-  return sets.filter((set) => {
-    const key = set.patterns.map((p) => p.toLowerCase()).sort().join('|');
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 /**
- * Extract potential match patterns from bank transactions
+ * Extract the last 4 digits from a CC account number
  */
-function extractPatternsFromTransactions(transactions, ccVendor, ccAccountNumber) {
-  const patterns = new Set();
+function getAccountLast4(accountNumber) {
+  if (!accountNumber || typeof accountNumber !== 'string') return null;
+  const trimmed = accountNumber.trim();
+  if (trimmed.length === 0) return null;
+  return trimmed.length > 4 ? trimmed.slice(-4) : trimmed;
+}
 
-  // Add vendor keywords
+/**
+ * Extract all 4-digit sequences from a string
+ */
+function extractDigitSequences(text) {
+  if (!text) return [];
+  const matches = text.match(/\d{4,}/g) || [];
+  // For longer sequences, also extract the last 4 digits
+  const result = new Set();
+  matches.forEach(m => {
+    result.add(m);
+    if (m.length > 4) {
+      result.add(m.slice(-4));
+    }
+  });
+  return Array.from(result);
+}
+
+/**
+ * Check if a transaction name contains any vendor keywords for the given CC vendor
+ */
+function nameContainsVendor(name, ccVendor) {
+  if (!name || !ccVendor) return false;
+  const nameLower = name.toLowerCase();
+  const keywords = VENDOR_KEYWORDS[ccVendor] || [];
+  return keywords.some(kw => nameLower.includes(kw.toLowerCase()));
+}
+
+function detectCCVendorFromName(name) {
+  if (!name) return null;
+  const nameLower = name.toLowerCase();
+  for (const [vendor, keywords] of Object.entries(VENDOR_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (nameLower.includes(String(kw).toLowerCase())) {
+        return vendor;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Build match patterns for the pairing from CC info
+ */
+function buildMatchPatterns(ccVendor, ccAccountNumber) {
+  const patterns = [];
+
   const vendorKeywords = VENDOR_KEYWORDS[ccVendor] || [];
-  vendorKeywords.forEach(kw => patterns.add(kw));
+  patterns.push(...vendorKeywords);
 
-  // Add account number patterns if available
   if (ccAccountNumber) {
-    patterns.add(ccAccountNumber);
-    if (ccAccountNumber.length > 4) {
-      patterns.add(ccAccountNumber.slice(-4));
+    patterns.push(ccAccountNumber);
+    const last4 = getAccountLast4(ccAccountNumber);
+    if (last4 && last4 !== ccAccountNumber) {
+      patterns.push(last4);
     }
   }
 
-  // Extract patterns from transaction names
-  transactions.forEach(txn => {
-    const name = (txn.name || '').toLowerCase();
-
-    // Check which vendor keywords appear in name
-    vendorKeywords.forEach(kw => {
-      if (name.includes(kw.toLowerCase())) {
-        patterns.add(kw);
-      }
-    });
-
-    // Extract 4-digit sequences (potential card numbers)
-    const digitMatches = name.match(/\d{4}/g);
-    if (digitMatches) {
-      digitMatches.forEach(digits => {
-        // Only add if it looks like it could be a card number (appears in repayment context)
-        if (ccAccountNumber && ccAccountNumber.includes(digits)) {
-          patterns.add(digits);
-        }
-      });
-    }
-  });
-
-  return Array.from(patterns).filter(p => p && p.length > 0);
+  return [...new Set(patterns.filter(p => p && p.length > 0))];
 }
 
 /**
- * Calculate confidence score for a bank account match
- */
-function calculateBankAccountConfidence(transactions, ccVendor) {
-  let score = 0;
-  const vendorKeywords = VENDOR_KEYWORDS[ccVendor] || [];
-
-  transactions.forEach(txn => {
-    const nameLower = (txn.name || '').toLowerCase();
-
-    // Repayment category match - strong signal
-    if (txn.is_repayment) {
-      score += 3;
-    }
-
-    // Vendor keyword match
-    vendorKeywords.forEach(kw => {
-      if (nameLower.includes(kw.toLowerCase())) {
-        score += kw.length > 4 ? 2 : 1;
-      }
-    });
-  });
-
-  // Boost for multiple transactions
-  score += Math.min(Math.floor(transactions.length / 2), 5);
-
-  return score;
-}
-
-/**
- * Find the best matching bank account for a credit card
- * Searches bank transactions for repayments that match the CC vendor
+ * SIMPLIFIED: Find the best matching bank account for a credit card
+ *
+ * Logic:
+ * 1. Get the CC's last-4 digits
+ * 2. Find all bank repayment transactions (by category)
+ * 3. Check if repayment names contain the CC's last-4 or vendor keywords
+ * 4. Group by bank vendor/account and pick the best match
  */
 async function findBestBankAccount(params) {
   const {
     creditCardVendor,
     creditCardAccountNumber = null,
-    creditCardNickname = null,
   } = params;
 
   if (!creditCardVendor) {
@@ -164,42 +120,15 @@ async function findBestBankAccount(params) {
   const client = await database.getClient();
 
   try {
-    // Build search patterns from CC info
-    const searchPatterns = [];
+    const ccLast4 = getAccountLast4(creditCardAccountNumber);
 
-    // Add vendor keywords
-    const vendorKeywords = VENDOR_KEYWORDS[creditCardVendor] || [];
-    searchPatterns.push(...vendorKeywords);
-
-    // Add account number patterns
-    if (creditCardAccountNumber) {
-      searchPatterns.push(creditCardAccountNumber);
-      if (creditCardAccountNumber.length > 4) {
-        searchPatterns.push(creditCardAccountNumber.slice(-4));
-      }
-    }
-
-    // Add nickname patterns
-    if (creditCardNickname) {
-      const words = creditCardNickname.split(/\s+/).filter(w => w.length > 2);
-      searchPatterns.push(...words);
-    }
-
-    if (searchPatterns.length === 0) {
-      return { found: false, reason: 'No search patterns could be derived from CC info' };
-    }
-
-    // Build query to find bank transactions matching CC patterns
-    // Exclude transactions from CC vendors (we want bank transactions only)
+    // Exclude CC vendors from bank search
     const ccVendors = Object.keys(VENDOR_KEYWORDS);
     const ccVendorPlaceholders = ccVendors.map((_, i) => `$${i + 1}`).join(', ');
 
-    const patternConditions = searchPatterns.map(
-      (_, idx) => `LOWER(t.name) LIKE '%' || LOWER($${ccVendors.length + idx + 1}) || '%'`
-    );
-
     const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
 
+    // Find all bank repayment transactions (by category only)
     const query = `
       SELECT
         t.identifier,
@@ -207,30 +136,25 @@ async function findBestBankAccount(params) {
         t.account_number,
         t.name,
         t.price,
-        t.date,
-        t.category_definition_id,
-        CASE WHEN ${repaymentCategoryCondition} THEN 1 ELSE 0 END as is_repayment
+        t.date
       FROM transactions t
       LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
       WHERE t.vendor NOT IN (${ccVendorPlaceholders})
         AND t.price < 0
-        AND (
-          ${repaymentCategoryCondition}
-          OR (${patternConditions.join(' OR ')})
-        )
+        AND ${repaymentCategoryCondition}
       ORDER BY t.date DESC
-      LIMIT 200
+      LIMIT 500
     `;
 
-    const queryParams = [...ccVendors, ...searchPatterns];
-    const result = await client.query(query, queryParams);
+    const result = await client.query(query, ccVendors);
 
     if (result.rows.length === 0) {
-      return { found: false, reason: 'No matching bank transactions found' };
+      return { found: false, reason: 'No bank repayment transactions found' };
     }
 
-    // Group transactions by bank vendor + account number
+    // Group repayments by bank vendor + account
     const bankAccountGroups = {};
+
     result.rows.forEach(row => {
       const key = `${row.vendor}|${row.account_number || 'null'}`;
       if (!bankAccountGroups[key]) {
@@ -238,51 +162,74 @@ async function findBestBankAccount(params) {
           bankVendor: row.vendor,
           bankAccountNumber: row.account_number,
           transactions: [],
+          matchingLast4Count: 0,
+          matchingVendorCount: 0,
         };
       }
-      bankAccountGroups[key].transactions.push(row);
+
+      const group = bankAccountGroups[key];
+      group.transactions.push(row);
+
+      // Check if this repayment matches our CC
+      const nameContainsCC = ccLast4 && row.name && row.name.includes(ccLast4);
+      const nameHasVendor = nameContainsVendor(row.name, creditCardVendor);
+
+      if (nameContainsCC) {
+        group.matchingLast4Count++;
+      }
+      if (nameHasVendor) {
+        group.matchingVendorCount++;
+      }
     });
 
-    // Calculate confidence for each bank account
-    const candidates = Object.values(bankAccountGroups).map(group => ({
-      ...group,
-      confidence: calculateBankAccountConfidence(group.transactions, creditCardVendor),
-      transactionCount: group.transactions.length,
-    }));
+    // Find best match
+    const candidates = Object.values(bankAccountGroups)
+      .filter(g => g.matchingLast4Count > 0 || g.matchingVendorCount > 0)
+      .sort((a, b) => {
+        if (a.matchingLast4Count !== b.matchingLast4Count) {
+          return b.matchingLast4Count - a.matchingLast4Count;
+        }
+        if (a.matchingVendorCount !== b.matchingVendorCount) {
+          return b.matchingVendorCount - a.matchingVendorCount;
+        }
+        return b.transactions.length - a.transactions.length;
+      });
 
-    // Sort by confidence (highest first)
-    candidates.sort((a, b) => b.confidence - a.confidence);
-
-    const bestMatch = candidates[0];
-
-    if (!bestMatch || bestMatch.confidence < 3) {
+    if (candidates.length === 0) {
       return {
         found: false,
-        reason: 'No bank account with sufficient confidence found',
-        candidates: candidates.slice(0, 3),
+        reason: `No bank repayments reference this credit card (last4: ${ccLast4 || 'unknown'})`,
       };
     }
 
-    // Extract match patterns from matched transactions
-    const matchPatterns = extractPatternsFromTransactions(
-      bestMatch.transactions,
-      creditCardVendor,
-      creditCardAccountNumber
-    );
+    const bestMatch = candidates[0];
+    const matchPatterns = buildMatchPatterns(creditCardVendor, creditCardAccountNumber);
 
     return {
       found: true,
       bankVendor: bestMatch.bankVendor,
       bankAccountNumber: bestMatch.bankAccountNumber,
-      confidence: bestMatch.confidence,
-      transactionCount: bestMatch.transactionCount,
+      transactionCount: bestMatch.transactions.length,
+      matchingLast4Count: bestMatch.matchingLast4Count,
+      matchingVendorCount: bestMatch.matchingVendorCount,
       matchPatterns,
-      sampleTransactions: bestMatch.transactions.slice(0, 3).map(t => ({
-        name: t.name,
-        price: t.price,
-        date: t.date,
+      sampleTransactions: bestMatch.transactions
+        .filter(t => {
+          const hasLast4 = ccLast4 && t.name && t.name.includes(ccLast4);
+          const hasVendor = nameContainsVendor(t.name, creditCardVendor);
+          return hasLast4 || hasVendor;
+        })
+        .slice(0, 3)
+        .map(t => ({
+          name: t.name,
+          price: t.price,
+          date: t.date,
+        })),
+      otherCandidates: candidates.slice(1, 3).map(c => ({
+        bankVendor: c.bankVendor,
+        bankAccountNumber: c.bankAccountNumber,
+        transactionCount: c.transactions.length,
       })),
-      otherCandidates: candidates.slice(1, 3),
     };
   } finally {
     client.release();
@@ -290,16 +237,21 @@ async function findBestBankAccount(params) {
 }
 
 /**
- * Calculate exact discrepancy between bank repayments and CC expenses
- * Uses 0 tolerance (exact match required)
+ * IMPROVED: Calculate discrepancy between bank repayments and CC expenses
+ *
+ * NEW LOGIC:
+ * 1. Get all bank repayment transactions (by date)
+ * 2. For each repayment date, query CC transactions with that processed_date
+ * 3. Match by: processed_date == repayment_date AND amount matches AND account_number hint
+ * 4. Report matches and unmatched cycles
  */
 async function calculateDiscrepancy(params) {
   const {
+    pairingId = null,
     bankVendor,
     bankAccountNumber = null,
     ccVendor,
     ccAccountNumber = null,
-    matchPatterns = [],
     monthsBack = 3,
   } = params;
 
@@ -307,239 +259,477 @@ async function calculateDiscrepancy(params) {
     return null;
   }
 
-  // Heuristics:
-  // - Exclude CC cycles whose billed/processed date is in the future (installments / not-yet-posted charges).
-  // - Treat very large diffs in the first observed CC cycle as incomplete history (avoid false alarms).
   const todayStr = new Date().toISOString().split('T')[0];
-  const EPSILON = 0.01;
-  const MAX_FEE_AMOUNT = 200; // ILS; above this is unlikely to be "just fees"
-  const MIN_HISTORY_COVERAGE_DAYS = 20; // < 20 days of purchases in first cycle => likely incomplete history
+  const EPSILON = 1.0; // Allow 1 ILS tolerance for rounding
+  const MAX_FEE_AMOUNT = 200;
 
   const client = await database.getClient();
 
   try {
+    // Check if discrepancy was already acknowledged
+    let acknowledged = false;
+    if (pairingId) {
+      try {
+        const ackRow = (await client.query(
+          'SELECT discrepancy_acknowledged FROM account_pairings WHERE id = $1',
+          [pairingId],
+        )).rows?.[0];
+        acknowledged = Boolean(ackRow?.discrepancy_acknowledged);
+      } catch (error) {
+        console.warn('[auto-pairing] Failed to read discrepancy_acknowledged', error);
+      }
+    }
+
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - monthsBack);
     const startDateStr = startDate.toISOString().split('T')[0];
 
     const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
-
-    let chosen = null;
-    const patternSets = getDiscrepancyPatternSets(matchPatterns, ccVendor, ccAccountNumber);
-
-    for (const candidate of patternSets) {
-      const patterns = candidate.patterns;
-      const patternConditions = patterns.length > 0
-        ? `AND (${patterns.map((_, idx) => `LOWER(t.name) LIKE '%' || LOWER($${idx + 4}) || '%'`).join(' OR ')})`
-        : '';
-
-      const bankParams = [bankVendor, startDateStr, todayStr, ...patterns];
-      let bankAccountFilter = '';
-      if (bankAccountNumber) {
-        bankParams.push(bankAccountNumber);
-        bankAccountFilter = `AND t.account_number = $${bankParams.length}`;
+    const ccFeesCategoryId = await getCCFeesCategoryId(client);
+    let earliestCcCycleDate = null;
+    try {
+      const earliestParams = [ccVendor];
+      let earliestAccountFilter = '';
+      if (ccAccountNumber) {
+        earliestParams.push(ccAccountNumber);
+        earliestAccountFilter = `AND t.account_number = $${earliestParams.length}`;
       }
 
-      const bankRepaymentsQuery = `
+      let earliestFeesFilter = '';
+      if (ccFeesCategoryId) {
+        earliestParams.push(ccFeesCategoryId);
+        earliestFeesFilter = `AND (t.category_definition_id IS NULL OR t.category_definition_id <> $${earliestParams.length})`;
+      }
+
+      const earliestRow = (await client.query(
+        `
+          SELECT MIN(substr(COALESCE(t.processed_date, t.date), 1, 10)) AS min_date
+          FROM transactions t
+          WHERE t.vendor = $1
+            AND t.status = 'completed'
+            AND t.price < 0
+            ${earliestAccountFilter}
+            ${earliestFeesFilter}
+        `,
+        earliestParams,
+      )).rows?.[0];
+      earliestCcCycleDate = earliestRow?.min_date || null;
+    } catch (_error) {
+      earliestCcCycleDate = null;
+    }
+
+    // Get CC's last-4 and vendor keywords for filtering repayments
+    const ccLast4 = getAccountLast4(ccAccountNumber);
+    const ccKeywords = VENDOR_KEYWORDS[ccVendor] || [];
+
+    /**
+     * Check if a bank repayment matches this specific credit card
+     * by looking for the CC's last-4 digits or vendor keywords in the name
+     */
+    function repaymentMatchesCC(name) {
+      if (!name) return false;
+      const nameLower = name.toLowerCase();
+
+      // Check for last-4 digits
+      if (ccLast4 && name.includes(ccLast4)) {
+        return true;
+      }
+
+      // Check for vendor keywords
+      for (const kw of ccKeywords) {
+        if (nameLower.includes(kw.toLowerCase())) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    // Step 1: Get all bank repayment transactions
+    const bankParams = [bankVendor, startDateStr, todayStr];
+    let bankAccountFilter = '';
+    if (bankAccountNumber) {
+      bankParams.push(bankAccountNumber);
+      bankAccountFilter = `AND t.account_number = $${bankParams.length}`;
+    }
+
+    const bankRepaymentsQuery = `
+      SELECT
+        t.identifier,
+        t.vendor,
+        t.account_number,
+        t.date,
+        substr(t.date, 1, 10) as repayment_date,
+        t.name,
+        t.price
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
+      WHERE t.vendor = $1
+        AND substr(t.date, 1, 10) >= $2
+        AND substr(t.date, 1, 10) <= $3
+        AND t.status = 'completed'
+        AND t.price < 0
+        AND ${repaymentCategoryCondition}
+        ${bankAccountFilter}
+      ORDER BY t.date DESC
+      LIMIT 500
+    `;
+
+    const repaymentRows = (await client.query(bankRepaymentsQuery, bankParams)).rows || [];
+
+    // Step 2: Filter repayments for THIS CC. If multiple CCs of the same vendor share
+    // the same bank account, allocate ambiguous repayments (e.g. "מקס ...") across accounts
+    // so we don't duplicate a repayment under multiple cards.
+    let method = 'direct';
+    let matchingRepayments = repaymentRows.filter(row => repaymentMatchesCC(row.name));
+
+    if (bankAccountNumber && ccAccountNumber) {
+      try {
+        const rows = (await client.query(
+          `
+            SELECT credit_card_account_number
+            FROM account_pairings
+            WHERE is_active = 1
+              AND bank_vendor = $1
+              AND bank_account_number = $2
+              AND credit_card_vendor = $3
+              AND credit_card_account_number IS NOT NULL
+          `,
+          [bankVendor, bankAccountNumber, ccVendor],
+        )).rows || [];
+
+        const groupAccounts = Array.from(new Set(
+          rows
+            .map(r => r.credit_card_account_number)
+            .filter(Boolean)
+            .concat([ccAccountNumber]),
+        ));
+
+        if (groupAccounts.length >= 2) {
+          const accountPlaceholders = groupAccounts.map((_, i) => `$${i + 5}`).join(', ');
+          const ccTotalsParams = [ccVendor, startDateStr, todayStr, ccFeesCategoryId || -1, ...groupAccounts];
+
+          const ccTotalsQuery = `
+            SELECT
+              t.account_number,
+              substr(COALESCE(t.processed_date, t.date), 1, 10) AS cycle_date,
+              COALESCE(SUM(
+                CASE
+                  WHEN t.category_definition_id = $4
+                    AND t.price < 0
+                    AND lower(COALESCE(t.name, '')) LIKE '%דמי כרטיס%'
+                    AND (
+                      lower(COALESCE(t.name, '')) LIKE '%פטור%'
+                      OR lower(COALESCE(t.name, '')) LIKE '%הנחה%'
+                    )
+                    THEN t.price
+                  ELSE -t.price
+                END
+              ), 0) AS total
+            FROM transactions t
+            WHERE t.vendor = $1
+              AND t.status = 'completed'
+              AND substr(COALESCE(t.processed_date, t.date), 1, 10) >= $2
+              AND substr(COALESCE(t.processed_date, t.date), 1, 10) <= $3
+              AND t.account_number IN (${accountPlaceholders})
+            GROUP BY t.account_number, substr(COALESCE(t.processed_date, t.date), 1, 10)
+          `;
+
+          const ccTotalsRows = (await client.query(ccTotalsQuery, ccTotalsParams)).rows || [];
+          const ccTotalsByAccount = new Map();
+          for (const row of ccTotalsRows) {
+            const acct = row.account_number;
+            const dateKey = row.cycle_date;
+            const total = Math.max(0, Number.parseFloat(row.total) || 0);
+            if (!acct || !dateKey) continue;
+            if (!ccTotalsByAccount.has(acct)) {
+              ccTotalsByAccount.set(acct, new Map());
+            }
+            ccTotalsByAccount.get(acct).set(dateKey, total);
+          }
+
+          // Allocate repayments per date across the groupAccounts.
+          const repaymentRowsByDate = new Map();
+          for (const row of repaymentRows) {
+            const dateKey = row.repayment_date;
+            if (!dateKey) continue;
+            if (!repaymentRowsByDate.has(dateKey)) {
+              repaymentRowsByDate.set(dateKey, []);
+            }
+            repaymentRowsByDate.get(dateKey).push(row);
+          }
+
+          const allocatedForThisAccount = [];
+          for (const [dateKey, dayRows] of repaymentRowsByDate) {
+            const assignedTotal = Object.fromEntries(groupAccounts.map(a => [a, 0]));
+            const assignedRows = Object.fromEntries(groupAccounts.map(a => [a, []]));
+
+            const sorted = [...dayRows].sort((a, b) => Math.abs(Number.parseFloat(b.price) || 0) - Math.abs(Number.parseFloat(a.price) || 0));
+            for (const row of sorted) {
+              const amount = Math.abs(Number.parseFloat(row.price) || 0);
+              if (amount <= 0) continue;
+
+              const name = row.name || '';
+              const hints = extractDigitSequences(name);
+
+              const digitCandidates = groupAccounts.filter(acct => {
+                const last4 = getAccountLast4(acct);
+                return hints.includes(acct) || (last4 && hints.includes(last4));
+              });
+
+              let candidates = groupAccounts;
+              let hasSignal = true;
+              if (digitCandidates.length > 0) {
+                candidates = digitCandidates;
+              } else if (nameContainsVendor(name, ccVendor)) {
+                candidates = groupAccounts;
+              } else {
+                candidates = groupAccounts;
+                hasSignal = false;
+              }
+
+              if (!hasSignal) {
+                const detectedVendor = detectCCVendorFromName(name);
+                if (detectedVendor && detectedVendor !== ccVendor) {
+                  continue;
+                }
+              }
+
+              let bestAccount = null;
+              let bestNewDiff = null;
+              for (const acct of candidates) {
+                const ccTotal = ccTotalsByAccount.get(acct)?.get(dateKey);
+                if (ccTotal === undefined) continue;
+                const newDiff = Math.abs((assignedTotal[acct] + amount) - ccTotal);
+                if (bestNewDiff === null || newDiff < bestNewDiff) {
+                  bestNewDiff = newDiff;
+                  bestAccount = acct;
+                }
+              }
+
+              if (bestAccount === null) {
+                if (!hasSignal) {
+                  continue;
+                }
+                bestAccount = candidates[0];
+              } else if (!hasSignal && bestNewDiff !== null && bestNewDiff > EPSILON) {
+                continue;
+              }
+
+              assignedTotal[bestAccount] += amount;
+              assignedRows[bestAccount].push(row);
+            }
+
+            allocatedForThisAccount.push(...(assignedRows[ccAccountNumber] || []));
+          }
+
+          matchingRepayments = allocatedForThisAccount;
+          method = 'allocated';
+        }
+      } catch (_error) {
+        // Fall back to direct matching.
+      }
+    }
+
+    if (matchingRepayments.length === 0) {
+      return {
+        exists: false,
+        reason: `No bank repayments found matching this credit card (${ccVendor} ${ccLast4 || ''})`,
+        periodMonths: monthsBack,
+        method,
+        cycles: [],
+      };
+    }
+
+    // Step 3: Group matching repayments by date
+    const repaymentsByDate = new Map();
+    for (const row of matchingRepayments) {
+      const dateKey = row.repayment_date;
+      if (!repaymentsByDate.has(dateKey)) {
+        repaymentsByDate.set(dateKey, {
+          repaymentDate: dateKey,
+          repayments: [],
+          bankTotal: 0,
+        });
+      }
+      const bucket = repaymentsByDate.get(dateKey);
+      bucket.repayments.push({
+        identifier: row.identifier,
+        vendor: row.vendor,
+        accountNumber: row.account_number,
+        date: row.date,
+        cycleDate: dateKey,
+        name: row.name,
+        price: Number.parseFloat(row.price),
+      });
+      bucket.bankTotal += Math.abs(Number.parseFloat(row.price));
+    }
+
+    // Step 3: For each repayment date, query CC transactions with that processed_date
+    const cycles = [];
+
+    for (const [dateKey, repaymentBucket] of repaymentsByDate) {
+      // Query CC transactions for this specific processed_date
+      const ccParams = [ccVendor, dateKey, ccFeesCategoryId || -1];
+      let ccAccountFilter = '';
+      if (ccAccountNumber) {
+        ccParams.push(ccAccountNumber);
+        ccAccountFilter = `AND t.account_number = $${ccParams.length}`;
+      }
+
+      // Use substr for consistent date comparison (handles both ISO strings and date-only)
+      const ccQuery = `
         SELECT
-          t.identifier,
-          t.vendor,
           t.account_number,
-          t.date,
-          date(t.date) as cycle_date,
-          t.name,
-          t.price
+          COALESCE(SUM(
+            CASE
+              WHEN t.category_definition_id = $3
+                AND t.price < 0
+                AND lower(COALESCE(t.name, '')) LIKE '%דמי כרטיס%'
+                AND (
+                  lower(COALESCE(t.name, '')) LIKE '%פטור%'
+                  OR lower(COALESCE(t.name, '')) LIKE '%הנחה%'
+                )
+                THEN t.price
+              ELSE -t.price
+            END
+          ), 0) AS total,
+          COUNT(*) as txn_count
         FROM transactions t
-        LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
         WHERE t.vendor = $1
-          AND date(t.date) >= $2
-          AND date(t.date) <= $3
-          AND t.price < 0
-          AND ${repaymentCategoryCondition}
-          ${patternConditions}
-          ${bankAccountFilter}
-        ORDER BY t.date DESC
-        LIMIT 500
+          AND t.status = 'completed'
+          AND substr(COALESCE(t.processed_date, t.date), 1, 10) = $2
+          ${ccAccountFilter}
+        GROUP BY t.account_number
       `;
 
-      const repaymentRows = (await client.query(bankRepaymentsQuery, bankParams)).rows || [];
-      if (repaymentRows.length === 0) {
+      const ccRows = (await client.query(ccQuery, ccParams)).rows || [];
+
+      // Find the best matching CC account for this repayment
+      let ccTotal = null;
+      let matchedAccount = null;
+      let status = 'missing_cc_cycle';
+
+      if (ccRows.length > 0) {
+        // Extract account number hints from repayment names
+        const accountHints = new Set();
+        repaymentBucket.repayments.forEach(r => {
+          const hints = extractDigitSequences(r.name);
+          hints.forEach(h => accountHints.add(h));
+        });
+
+        // Try to find exact or near match
+        for (const ccRow of ccRows) {
+          const rowTotal = Math.max(0, Number.parseFloat(ccRow.total) || 0);
+          const diff = Math.abs(repaymentBucket.bankTotal - rowTotal);
+
+          // Check if this CC account matches based on amount
+          if (diff <= EPSILON) {
+            // Exact match (within tolerance)
+            ccTotal = rowTotal;
+            matchedAccount = ccRow.account_number;
+            status = 'matched';
+            break;
+          } else if (diff <= MAX_FEE_AMOUNT && diff > EPSILON) {
+            // Could be a fee candidate - bank paid more than CC total
+            if (repaymentBucket.bankTotal > rowTotal) {
+              ccTotal = rowTotal;
+              matchedAccount = ccRow.account_number;
+              status = 'fee_candidate';
+            }
+          }
+        }
+
+        // If no exact match, check if CC account matches by account number hint
+        if (status === 'missing_cc_cycle' && ccAccountNumber) {
+          const ccRow = ccRows.find(r => r.account_number === ccAccountNumber);
+          if (ccRow) {
+            const rowTotal = Math.max(0, Number.parseFloat(ccRow.total) || 0);
+            const diff = repaymentBucket.bankTotal - rowTotal;
+            ccTotal = rowTotal;
+            matchedAccount = ccRow.account_number;
+
+            if (Math.abs(diff) <= EPSILON) {
+              status = 'matched';
+            } else if (diff > 0 && diff <= MAX_FEE_AMOUNT) {
+              status = 'fee_candidate';
+            } else if (diff > MAX_FEE_AMOUNT) {
+              status = 'large_discrepancy';
+            } else {
+              status = 'cc_over_bank';
+            }
+          }
+        }
+      }
+
+      const difference = ccTotal === null ? null : (repaymentBucket.bankTotal - ccTotal);
+
+      cycles.push({
+        cycleDate: dateKey,
+        bankTotal: Math.round(repaymentBucket.bankTotal * 100) / 100,
+        ccTotal: ccTotal === null ? null : (Math.round(ccTotal * 100) / 100),
+        difference: difference === null ? null : (Math.round(difference * 100) / 100),
+        repayments: repaymentBucket.repayments,
+        status,
+        matchedAccount,
+      });
+    }
+
+    // Sort cycles by date descending
+    cycles.sort((a, b) => (a.cycleDate < b.cycleDate ? 1 : -1));
+
+    const actionableStatuses = new Set(['fee_candidate', 'large_discrepancy', 'cc_over_bank', 'missing_cc_cycle']);
+    const EARLY_GRACE_DAYS = 14;
+    const RECENT_GRACE_DAYS = 14;
+    const todayDate = new Date(`${todayStr}T00:00:00Z`);
+    const earliestDate = earliestCcCycleDate ? new Date(`${earliestCcCycleDate}T00:00:00Z`) : null;
+
+    for (const cycle of cycles) {
+      if (!actionableStatuses.has(cycle.status)) {
+        continue;
+      }
+      const cycleDate = new Date(`${cycle.cycleDate}T00:00:00Z`);
+      if (Number.isNaN(cycleDate.getTime())) {
         continue;
       }
 
-      chosen = {
-        label: candidate.label,
-        patterns,
-        repayments: repaymentRows.map((row) => ({
-          identifier: row.identifier,
-          vendor: row.vendor,
-          accountNumber: row.account_number,
-          date: row.date,
-          cycleDate: row.cycle_date,
-          name: row.name,
-          price: parseFloat(row.price),
-        })),
-      };
-      break;
-    }
-
-    if (!chosen) {
-      return {
-        exists: false,
-        reason: 'No credit card repayment transactions found for this pairing',
-        periodMonths: monthsBack,
-      };
-    }
-
-    // Group repayments by cycleDate
-    const cycleMap = new Map();
-    for (const repayment of chosen.repayments) {
-      const key = repayment.cycleDate;
-      if (!cycleMap.has(key)) {
-        cycleMap.set(key, { cycleDate: key, repayments: [], bankTotal: 0 });
-      }
-      const bucket = cycleMap.get(key);
-      bucket.repayments.push(repayment);
-      bucket.bankTotal += Math.abs(repayment.price);
-    }
-
-    // Fetch CC cycle totals by billed date (processed_date when available), excluding future cycles.
-    const ccParams = [ccVendor, startDateStr, todayStr];
-    let ccAccountFilter = '';
-    if (ccAccountNumber) {
-      ccParams.push(ccAccountNumber);
-      ccAccountFilter = `AND t.account_number = $${ccParams.length}`;
-    }
-
-    const ccCyclesQuery = `
-      SELECT
-        date(COALESCE(t.processed_date, t.date)) AS cycle_date,
-        COUNT(*) AS txn_count,
-        MIN(date(t.date)) AS min_purchase_date,
-        MAX(date(t.date)) AS max_purchase_date,
-        COALESCE(SUM(ABS(t.price)), 0) AS total
-      FROM transactions t
-      WHERE t.vendor = $1
-        AND t.price < 0
-        AND date(COALESCE(t.processed_date, t.date)) >= $2
-        AND date(COALESCE(t.processed_date, t.date)) <= $3
-        ${ccAccountFilter}
-      GROUP BY date(COALESCE(t.processed_date, t.date))
-    `;
-
-    const ccRows = (await client.query(ccCyclesQuery, ccParams)).rows || [];
-    const ccCycleTotals = new Map(ccRows.map((row) => [row.cycle_date, {
-      total: parseFloat(row.total) || 0,
-      txnCount: parseInt(row.txn_count, 10) || 0,
-      minPurchaseDate: row.min_purchase_date || null,
-      maxPurchaseDate: row.max_purchase_date || null,
-    }]));
-
-    // Global CC bounds for "incomplete history" detection.
-    const ccMetaParams = [ccVendor];
-    let ccMetaAccountFilter = '';
-    if (ccAccountNumber) {
-      ccMetaParams.push(ccAccountNumber);
-      ccMetaAccountFilter = `AND t.account_number = $${ccMetaParams.length}`;
-    }
-
-    const ccMetaQuery = `
-      SELECT MIN(date(t.date)) AS min_purchase_date
-      FROM transactions t
-      WHERE t.vendor = $1
-        AND t.price < 0
-        ${ccMetaAccountFilter}
-    `;
-
-    const ccMetaRow = (await client.query(ccMetaQuery, ccMetaParams)).rows?.[0] || null;
-    const globalMinPurchaseDate = ccMetaRow?.min_purchase_date || null;
-
-    function dayDiff(later, earlier) {
-      if (!later || !earlier) return null;
-      const tLater = Date.parse(`${later}T00:00:00Z`);
-      const tEarlier = Date.parse(`${earlier}T00:00:00Z`);
-      if (Number.isNaN(tLater) || Number.isNaN(tEarlier)) return null;
-      return Math.round((tLater - tEarlier) / 86400000);
-    }
-
-    const cycles = Array.from(cycleMap.values())
-      .map((cycle) => {
-        const ccInfo = ccCycleTotals.has(cycle.cycleDate) ? ccCycleTotals.get(cycle.cycleDate) : null;
-        const ccTotal = ccInfo ? ccInfo.total : null;
-        const difference = ccTotal === null ? null : (cycle.bankTotal - ccTotal);
-        const coverageDays = ccInfo?.minPurchaseDate ? dayDiff(cycle.cycleDate, ccInfo.minPurchaseDate) : null;
-        const isFirstHistoryCycle = Boolean(
-          globalMinPurchaseDate &&
-          ccInfo?.minPurchaseDate &&
-          dayDiff(ccInfo.minPurchaseDate, globalMinPurchaseDate) !== null &&
-          dayDiff(ccInfo.minPurchaseDate, globalMinPurchaseDate) <= 1,
-        );
-
-        const isIncompleteHistory = Boolean(
-          ccTotal !== null &&
-          difference !== null &&
-          difference > MAX_FEE_AMOUNT &&
-          isFirstHistoryCycle &&
-          coverageDays !== null &&
-          coverageDays >= 0 &&
-          coverageDays < MIN_HISTORY_COVERAGE_DAYS,
-        );
-
-        let status;
-        if (ccTotal === null) {
-          status = 'missing_cc_cycle';
-        } else if (difference === null || Math.abs(difference) <= EPSILON) {
-          status = 'matched';
-        } else if (difference > 0) {
-          if (difference <= MAX_FEE_AMOUNT) {
-            status = 'fee_candidate';
-          } else if (isIncompleteHistory) {
-            status = 'incomplete_history';
-          } else {
-            status = 'large_discrepancy';
-          }
-        } else {
-          status = 'cc_over_bank';
+      if (earliestDate) {
+        const daysFromEarliest = Math.floor((cycleDate.getTime() - earliestDate.getTime()) / (24 * 60 * 60 * 1000));
+        if (daysFromEarliest <= EARLY_GRACE_DAYS) {
+          cycle.status = 'incomplete_history';
+          continue;
         }
+      }
 
-        return {
-          cycleDate: cycle.cycleDate,
-          bankTotal: Math.round(cycle.bankTotal * 100) / 100,
-          ccTotal: ccTotal === null ? null : (Math.round(ccTotal * 100) / 100),
-          difference: difference === null ? null : (Math.round(difference * 100) / 100),
-          repayments: cycle.repayments,
-          status,
-          ccTxnCount: ccInfo?.txnCount ?? null,
-          ccMinPurchaseDate: ccInfo?.minPurchaseDate ?? null,
-          ccMaxPurchaseDate: ccInfo?.maxPurchaseDate ?? null,
-          ccCoverageDays: coverageDays,
-          maxFeeAmount: MAX_FEE_AMOUNT,
-          excludedFutureCycles: true,
-        };
-      })
-      .sort((a, b) => (a.cycleDate < b.cycleDate ? 1 : -1));
+      const daysAgo = Math.floor((todayDate.getTime() - cycleDate.getTime()) / (24 * 60 * 60 * 1000));
+      if (daysAgo >= 0 && daysAgo <= RECENT_GRACE_DAYS) {
+        cycle.status = 'incomplete_history';
+      }
+    }
 
-    const comparableCycles = cycles.filter((c) => c.ccTotal !== null && c.status !== 'incomplete_history');
+    // Calculate overall stats
+    const comparableCycles = cycles.filter(c => c.ccTotal !== null && c.status !== 'incomplete_history');
     const totalBankMatched = comparableCycles.reduce((sum, c) => sum + c.bankTotal, 0);
     const totalCCMatched = comparableCycles.reduce((sum, c) => sum + (c.ccTotal || 0), 0);
     const totalDifference = totalBankMatched - totalCCMatched;
-    const actionableStatuses = new Set(['fee_candidate', 'large_discrepancy', 'cc_over_bank']);
-    const hasDiscrepancy = cycles.some((c) => c.difference !== null && actionableStatuses.has(c.status));
 
-    return {
-      exists: hasDiscrepancy,
-      totalBankRepayments: Math.round(totalBankMatched * 100) / 100,
-      totalCCExpenses: Math.round(totalCCMatched * 100) / 100,
-      difference: Math.round(totalDifference * 100) / 100,
-      differencePercentage: totalCCMatched > 0
-        ? Math.round((totalDifference / totalCCMatched) * 10000) / 100
-        : 0,
-      periodMonths: monthsBack,
-      matchedCycleCount: comparableCycles.length,
-      matchPatternsUsed: chosen.patterns,
-      method: `repayment_cycles:${chosen.label}`,
-      cycles,
-    };
+    const hasDiscrepancy = cycles.some(c => actionableStatuses.has(c.status));
+
+	    return {
+	      exists: hasDiscrepancy && !acknowledged,
+	      acknowledged,
+	      totalBankRepayments: Math.round(totalBankMatched * 100) / 100,
+	      totalCCExpenses: Math.round(totalCCMatched * 100) / 100,
+	      difference: Math.round(totalDifference * 100) / 100,
+	      differencePercentage: totalCCMatched > 0
+	        ? Math.round((totalDifference / totalCCMatched) * 10000) / 100
+	        : 0,
+	      periodMonths: monthsBack,
+	      method,
+	      matchedCycleCount: cycles.filter(c => c.status === 'matched').length,
+	      totalCycles: cycles.length,
+	      cycles,
+	    };
   } finally {
     client.release();
   }
@@ -547,13 +737,11 @@ async function calculateDiscrepancy(params) {
 
 /**
  * Auto-pair a credit card to its bank account
- * Main orchestrator function
  */
 async function autoPairCreditCard(params) {
   const {
     creditCardVendor,
     creditCardAccountNumber = null,
-    creditCardNickname = null,
   } = params;
 
   if (!creditCardVendor) {
@@ -566,14 +754,12 @@ async function autoPairCreditCard(params) {
   const bankAccountResult = await findBestBankAccount({
     creditCardVendor,
     creditCardAccountNumber,
-    creditCardNickname,
   });
 
   if (!bankAccountResult.found) {
     return {
       success: false,
       reason: bankAccountResult.reason,
-      candidates: bankAccountResult.candidates || [],
     };
   }
 
@@ -591,7 +777,6 @@ async function autoPairCreditCard(params) {
 
   if (existingPairing) {
     pairingId = existingPairing.id;
-    // If it was inactive, reactivate it
     if (!existingPairing.isActive) {
       await pairingsService.updatePairing({
         id: pairingId,
@@ -600,7 +785,6 @@ async function autoPairCreditCard(params) {
       });
     }
   } else {
-    // Step 3: Create the pairing
     const createResult = await pairingsService.createPairing({
       creditCardVendor,
       creditCardAccountNumber,
@@ -618,7 +802,6 @@ async function autoPairCreditCard(params) {
     bankAccountNumber: bankAccountResult.bankAccountNumber,
     ccVendor: creditCardVendor,
     ccAccountNumber: creditCardAccountNumber,
-    matchPatterns: bankAccountResult.matchPatterns,
   });
 
   return {
@@ -631,10 +814,11 @@ async function autoPairCreditCard(params) {
       bankVendor: bankAccountResult.bankVendor,
       bankAccountNumber: bankAccountResult.bankAccountNumber,
       matchPatterns: bankAccountResult.matchPatterns,
-      confidence: bankAccountResult.confidence,
     },
     detection: {
       transactionCount: bankAccountResult.transactionCount,
+      matchingLast4Count: bankAccountResult.matchingLast4Count,
+      matchingVendorCount: bankAccountResult.matchingVendorCount,
       sampleTransactions: bankAccountResult.sampleTransactions,
     },
     discrepancy,
@@ -645,7 +829,6 @@ module.exports = {
   autoPairCreditCard,
   findBestBankAccount,
   calculateDiscrepancy,
-  extractPatternsFromTransactions,
 };
 
 module.exports.default = module.exports;

@@ -57,6 +57,20 @@ function createSqlitePool(options = {}) {
   db.pragma('foreign_keys = ON');
   db.pragma('journal_mode = WAL');
 
+  // Lightweight schema fixes for older DBs.
+  // Keep this minimal and idempotent: only additive, safe ALTER TABLE statements.
+  try {
+    const pairingColumns = db.prepare("PRAGMA table_info('account_pairings')").all();
+    if (Array.isArray(pairingColumns) && pairingColumns.length > 0) {
+      const hasDiscrepancyAck = pairingColumns.some((col) => col && col.name === 'discrepancy_acknowledged');
+      if (!hasDiscrepancyAck) {
+        db.exec('ALTER TABLE account_pairings ADD COLUMN discrepancy_acknowledged INTEGER DEFAULT 0');
+      }
+    }
+  } catch (_error) {
+    // Ignore: table may not exist yet (e.g., before init_sqlite_db runs).
+  }
+
   const prepareStatement = (sql, params) => {
     const indices = [];
     const convertedSql = sql.replace(PLACEHOLDER_REGEX, (_, index) => {

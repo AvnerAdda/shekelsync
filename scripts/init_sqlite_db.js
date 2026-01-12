@@ -376,6 +376,7 @@ const TABLE_DEFINITIONS = [
       bank_account_number TEXT,
       match_patterns TEXT,
       is_active INTEGER DEFAULT 1,
+      discrepancy_acknowledged INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
       UNIQUE(credit_card_vendor, credit_card_account_number, bank_vendor, bank_account_number)

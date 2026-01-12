@@ -155,7 +155,7 @@ export default function MatchingTimeSeriesChart({ pairing, compact = false }: Ma
   return (
     <Box sx={{ width: '100%', mt: compact ? 1 : 2 }}>
       <Typography variant={compact ? 'caption' : 'subtitle2'} color="text.secondary" gutterBottom>
-        Weekly Matching Progress
+        Weekly Expense Matching Progress
       </Typography>
 
       <ResponsiveContainer width="100%" height={chartHeight}>
