@@ -8,9 +8,10 @@ import {
   Paper,
   Tooltip,
   CircularProgress,
-  ToggleButtonGroup,
-  ToggleButton,
   Grid,
+  useTheme,
+  alpha,
+  IconButton,
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
@@ -22,7 +23,6 @@ import { apiClient } from '@/lib/api-client';
 import { useTranslation } from 'react-i18next';
 import InvestmentAccountsModal from '../components/InvestmentAccountsModal';
 import {
-  InvestmentData,
   PortfolioSummary,
   PortfolioHistoryResponse,
   PortfolioHistoryPoint,
@@ -30,31 +30,29 @@ import {
 import {
   InvestmentsFiltersProvider,
   useInvestmentsFilters,
+  HistoryTimeRangeOption,
 } from '../InvestmentsFiltersContext';
-import PortfolioHistorySection from '../components/PortfolioHistorySection';
-import PortfolioBreakdownSection from '../components/PortfolioBreakdownSection';
+import PortfolioValuePanel from '../components/PortfolioValuePanel';
+import AllocationDonutChart from '../components/AllocationDonutChart';
+import PerformanceCardsSection from '../components/PerformanceCardsSection';
 
 const InvestmentsPageContent: React.FC = () => {
+  const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage' });
   const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
   const accessStatus = getPageAccessStatus('investments');
   const isLocked = accessStatus.isLocked;
 
   const {
-    dateRange,
     historyTimeRange,
+    setHistoryTimeRange,
     refreshTrigger,
     triggerRefresh,
     isRefreshing,
     setIsRefreshing,
-    setDateRange,
-    viewMode,
-    setViewMode,
   } = useInvestmentsFilters();
 
-  const [data, setData] = useState<InvestmentData | null>(null);
   const [portfolioData, setPortfolioData] = useState<PortfolioSummary | null>(null);
-  const [loading, setLoading] = useState(true);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [portfolioModalOpen, setPortfolioModalOpen] = useState(false);
   const [portfolioModalTab, setPortfolioModalTab] = useState(0);
@@ -64,6 +62,10 @@ const InvestmentsPageContent: React.FC = () => {
     Record<number, PortfolioHistoryPoint[]>
   >({});
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // New state for the dashboard
+  const [chartViewMode, setChartViewMode] = useState<'value' | 'performance'>('value');
+  const [categoryFilter, setCategoryFilter] = useState('all');
 
   const fetchHistoryData = useCallback(async () => {
     if (isLocked) return;
@@ -147,49 +149,9 @@ const InvestmentsPageContent: React.FC = () => {
     }
   }, [isLocked]);
 
-  const fetchData = useCallback(async () => {
-    if (isLocked) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-
-      if (dateRange !== 'all') {
-        const endDate = new Date();
-        const startDate = new Date();
-
-        switch (dateRange) {
-          case '3m':
-            startDate.setMonth(endDate.getMonth() - 3);
-            break;
-          case '6m':
-            startDate.setMonth(endDate.getMonth() - 6);
-            break;
-          case '1y':
-            startDate.setFullYear(endDate.getFullYear() - 1);
-            break;
-        }
-
-        params.append('startDate', startDate.toISOString().split('T')[0]);
-        params.append('endDate', endDate.toISOString().split('T')[0]);
-      }
-
-      const response = await apiClient.get(`/api/analytics/investments?${params}`);
-      if (!response.ok) {
-        throw new Error(response.statusText || 'Failed to fetch investments analytics');
-      }
-      setData(response.data as InvestmentData);
-    } catch (error) {
-      console.error('Error fetching investment data:', error);
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [dateRange, isLocked]);
-
   useEffect(() => {
-    fetchData();
     fetchPortfolioData();
-  }, [fetchData, fetchPortfolioData, refreshTrigger]);
+  }, [fetchPortfolioData, refreshTrigger]);
 
   const handleSetupComplete = () => {
     triggerRefresh();
@@ -199,7 +161,6 @@ const InvestmentsPageContent: React.FC = () => {
     setIsRefreshing(true);
     try {
       await Promise.all([
-        fetchData(),
         fetchPortfolioData(),
         portfolioData && portfolioData.summary.totalAccounts > 0
           ? fetchHistoryData()
@@ -216,8 +177,18 @@ const InvestmentsPageContent: React.FC = () => {
     return <LockedPagePlaceholder page="investments" onboardingStatus={onboardingStatus} />;
   }
 
+  const hasPortfolio = portfolioData && portfolioData.summary.totalAccounts > 0;
+
   return (
-    <Box sx={{ p: 3, height: { xs: 'auto', lg: 'calc(100vh - 64px)' }, display: 'flex', flexDirection: 'column', overflow: { xs: 'auto', lg: 'hidden' } }}>
+    <Box
+      sx={{
+        p: 3,
+        height: { xs: 'auto', lg: 'calc(100vh - 64px)' },
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'auto',
+      }}
+    >
       <InvestmentAccountsModal
         open={portfolioModalOpen}
         onClose={() => setPortfolioModalOpen(false)}
@@ -225,153 +196,128 @@ const InvestmentsPageContent: React.FC = () => {
         defaultTab={portfolioModalTab}
       />
 
-      {/* Header */}
-      <Box sx={{ mb: 2, flexShrink: 0 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            mb: 2,
-          }}
-        >
-          <Box>
-            <Typography variant="h4" fontWeight="bold" gutterBottom>
-              {t('header.title')}
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              {t('header.subtitle')}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            <Tooltip title={t('actions.refreshTooltip')}>
-              <Button
-                variant="outlined"
-                startIcon={isRefreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
-                onClick={handleRefreshAll}
-                disabled={isRefreshing}
-                size="small"
-                sx={{ textTransform: 'none', minWidth: 100 }}
-              >
-                {isRefreshing ? t('actions.refreshing') : t('actions.refresh')}
-              </Button>
-            </Tooltip>
-            <Button
-              variant="outlined"
-              startIcon={<SettingsIcon />}
+      {/* Minimal Header */}
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 3,
+          flexShrink: 0,
+        }}
+      >
+        <Typography variant="h5" fontWeight={700}>
+          {t('header.title')}
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Tooltip title={t('actions.refreshTooltip')}>
+            <IconButton
+              onClick={handleRefreshAll}
+              disabled={isRefreshing}
+              size="small"
+              sx={{
+                bgcolor: alpha(theme.palette.action.selected, 0.1),
+                '&:hover': {
+                  bgcolor: alpha(theme.palette.action.selected, 0.2),
+                },
+              }}
+            >
+              {isRefreshing ? <CircularProgress size={18} /> : <RefreshIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={t('actions.portfolioSetup')}>
+            <IconButton
               onClick={() => {
                 setPortfolioModalTab(0);
                 setPortfolioModalOpen(true);
               }}
               size="small"
-              sx={{ textTransform: 'none' }}
+              sx={{
+                bgcolor: alpha(theme.palette.action.selected, 0.1),
+                '&:hover': {
+                  bgcolor: alpha(theme.palette.action.selected, 0.2),
+                },
+              }}
             >
-              {t('actions.portfolioSetup')}
-            </Button>
-          </Box>
-        </Box>
-
-        <Box
-          sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 2,
-            alignItems: 'center',
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              {t('filters.rangeLabel')}
-            </Typography>
-            <ToggleButtonGroup
-              value={dateRange}
-              exclusive
-              onChange={(_, value: typeof dateRange | null) => value && setDateRange(value)}
-              size="small"
-            >
-              <ToggleButton value="3m">{t('history.ranges.3m')}</ToggleButton>
-              <ToggleButton value="6m">{t('history.ranges.6m')}</ToggleButton>
-              <ToggleButton value="1y">{t('history.ranges.1y')}</ToggleButton>
-              <ToggleButton value="all">{t('history.ranges.all')}</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
-
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              {t('filters.viewLabel')}
-            </Typography>
-            <ToggleButtonGroup
-              value={viewMode}
-              exclusive
-              onChange={(_, value: typeof viewMode | null) => value && setViewMode(value)}
-              size="small"
-            >
-              <ToggleButton value="summary">{t('filters.view.summary')}</ToggleButton>
-              <ToggleButton value="detailed">{t('filters.view.detailed')}</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Box>
       </Box>
 
-      {/* Sections */}
-      <Box sx={{ flexGrow: 1, minHeight: 0, overflow: { xs: 'visible', lg: 'hidden' } }}>
-        <Grid container spacing={2} sx={{ height: { xs: 'auto', lg: '100%' } }}>
-          <Grid item xs={12} lg={9} sx={{ height: { xs: 'auto', lg: '100%' }, display: 'flex', flexDirection: 'column' }}>
-            <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
-              {portfolioData && portfolioData.summary.totalAccounts > 0 ? (
-                <PortfolioHistorySection
+      {hasPortfolio ? (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, flexGrow: 1 }}>
+          {/* Top Row: Portfolio Value Panel + Allocation Chart */}
+          <Grid container spacing={3} sx={{ flexShrink: 0 }}>
+            {/* Portfolio Value Panel - 2/3 width */}
+            <Grid item xs={12} lg={8}>
+              <Box sx={{ height: { xs: 400, lg: 380 } }}>
+                <PortfolioValuePanel
+                  portfolioData={portfolioData}
                   overallHistory={overallHistory}
-                  accountHistories={accountHistories}
-                  portfolioData={portfolioData}
-                  transactions={data?.transactions || []}
-                  loadingHistory={historyLoading}
-                  loadingTransactions={loading}
+                  historyTimeRange={historyTimeRange}
+                  onTimeRangeChange={(range: HistoryTimeRangeOption) => setHistoryTimeRange(range)}
+                  viewMode={chartViewMode}
+                  onViewModeChange={setChartViewMode}
+                  loading={portfolioLoading || historyLoading}
                 />
-              ) : (
-                !portfolioLoading && (
-                  <Paper sx={{ p: 4, textAlign: 'center', mt: 4 }}>
-                    <AccountIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-                    <Typography variant="h5" gutterBottom fontWeight="medium">
-                      {t('empty.title')}
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      color="text.secondary"
-                      sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}
-                    >
-                      {t('empty.description')}
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      size="large"
-                      startIcon={<AddIcon />}
-                      onClick={() => {
-                        setPortfolioModalTab(0);
-                        setPortfolioModalOpen(true);
-                      }}
-                      sx={{ borderRadius: 2, textTransform: 'none', px: 4 }}
-                    >
-                      {t('empty.cta')}
-                    </Button>
-                  </Paper>
-                )
-              )}
-            </Box>
+              </Box>
+            </Grid>
+
+            {/* Allocation Donut Chart - 1/3 width */}
+            <Grid item xs={12} lg={4}>
+              <Box sx={{ height: { xs: 350, lg: 380 } }}>
+                <AllocationDonutChart portfolioData={portfolioData} />
+              </Box>
+            </Grid>
           </Grid>
 
-          <Grid item xs={12} lg={3} sx={{ height: { xs: 'auto', lg: '100%' } }}>
-            <Box sx={{ height: '100%', overflowY: 'auto', pr: 1 }}>
-              {portfolioData && portfolioData.summary.totalAccounts > 0 && (
-                <PortfolioBreakdownSection
-                  portfolioData={portfolioData}
-                  accountHistories={accountHistories}
-                  historyLoading={historyLoading}
-                />
-              )}
-            </Box>
-          </Grid>
-        </Grid>
-      </Box>
+          {/* Bottom Row: Performance Cards */}
+          <Box sx={{ flexShrink: 0 }}>
+            <PerformanceCardsSection
+              portfolioData={portfolioData}
+              accountHistories={accountHistories}
+              categoryFilter={categoryFilter}
+              onCategoryFilterChange={setCategoryFilter}
+            />
+          </Box>
+        </Box>
+      ) : (
+        !portfolioLoading && (
+          <Paper
+            elevation={0}
+            sx={{
+              p: 6,
+              textAlign: 'center',
+              mt: 4,
+            }}
+          >
+            <AccountIcon sx={{ fontSize: 72, color: 'text.secondary', mb: 3 }} />
+            <Typography variant="h5" gutterBottom fontWeight={600}>
+              {t('empty.title')}
+            </Typography>
+            <Typography
+              variant="body1"
+              color="text.secondary"
+              sx={{ mb: 4, maxWidth: 500, mx: 'auto' }}
+            >
+              {t('empty.description')}
+            </Typography>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setPortfolioModalTab(0);
+                setPortfolioModalOpen(true);
+              }}
+              sx={{ borderRadius: 2, textTransform: 'none', px: 4 }}
+            >
+              {t('empty.cta')}
+            </Button>
+          </Paper>
+        )
+      )}
     </Box>
   );
 };
