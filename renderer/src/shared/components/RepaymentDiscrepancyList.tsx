@@ -27,14 +27,17 @@ interface RepaymentTxn {
 interface DiscrepancyCycle {
   cycleDate: string;
   bankTotal: number;
+  bankPaymentTotal?: number;
+  bankRefundTotal?: number;
   ccTotal: number | null;
   difference: number | null;
-  status: 'matched' | 'missing_cc_cycle';
+  status: 'matched' | 'missing_cc_cycle' | 'fee_candidate' | 'large_discrepancy' | 'cc_over_bank' | 'incomplete_history';
   repayments: RepaymentTxn[];
 }
 
 interface Discrepancy {
   exists: boolean;
+  acknowledged?: boolean;
   totalBankRepayments: number;
   totalCCExpenses: number;
   difference: number;
@@ -64,6 +67,53 @@ function formatCurrency(amount: number): string {
   }).format(Math.abs(amount));
 }
 
+function formatCurrencySigned(amount: number): string {
+  return new Intl.NumberFormat('he-IL', {
+    style: 'currency',
+    currency: 'ILS',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+function getCycleStatusLabel(status: DiscrepancyCycle['status'], t: (key: string, params?: any) => string): string {
+  switch (status) {
+    case 'matched':
+      return t('discrepancy.cycleMatched');
+    case 'missing_cc_cycle':
+      return t('discrepancy.cycleMissing');
+    case 'fee_candidate':
+      return t('discrepancy.cycleFeeCandidate', { defaultValue: 'Fee candidate' });
+    case 'large_discrepancy':
+      return t('discrepancy.cycleLargeDiscrepancy', { defaultValue: 'Large discrepancy' });
+    case 'cc_over_bank':
+      return t('discrepancy.cycleCCOverBank', { defaultValue: 'CC > bank' });
+    case 'incomplete_history':
+      return t('discrepancy.cycleIncompleteHistory', { defaultValue: 'Incomplete history' });
+    default:
+      return status;
+  }
+}
+
+function getCycleStatusColor(status: DiscrepancyCycle['status']): 'default' | 'warning' | 'error' | 'success' | 'info' {
+  switch (status) {
+    case 'matched':
+      return 'success';
+    case 'fee_candidate':
+      return 'warning';
+    case 'missing_cc_cycle':
+      return 'warning';
+    case 'cc_over_bank':
+      return 'warning';
+    case 'large_discrepancy':
+      return 'error';
+    case 'incomplete_history':
+      return 'info';
+    default:
+      return 'default';
+  }
+}
+
 export default function RepaymentDiscrepancyList({
   discrepancy,
   canResolve,
@@ -84,17 +134,21 @@ export default function RepaymentDiscrepancyList({
   }
 
   const hasMissingCycles = cycles.some((c) => c.status === 'missing_cc_cycle');
+  const isAcknowledged = Boolean(discrepancy.acknowledged);
+  const alertSeverity = isAcknowledged ? 'info' : (discrepancy.exists ? 'warning' : 'info');
 
   return (
-    <Alert severity={discrepancy.exists ? 'warning' : 'info'} sx={{ mb: 2 }}>
+    <Alert severity={alertSeverity} sx={{ mb: 2 }}>
       <AlertTitle>{t('discrepancy.title')}</AlertTitle>
 
       <Typography variant="body2" sx={{ mb: 1 }}>
-        {discrepancy.exists
-          ? (discrepancy.difference > 0
-            ? t('discrepancy.overpaidMessage', { amount: formatCurrency(discrepancy.difference) })
-            : t('discrepancy.underpaidMessage', { amount: formatCurrency(discrepancy.difference) }))
-          : t('discrepancy.noDiscrepancyCycles', { cycles: discrepancy.matchedCycleCount || 0 })}
+        {isAcknowledged
+          ? t('discrepancy.acknowledgedMessage', { defaultValue: 'Discrepancy acknowledged. This warning will reappear if new transactions change the totals.' })
+          : discrepancy.exists
+            ? (discrepancy.difference > 0
+              ? t('discrepancy.overpaidMessage', { amount: formatCurrency(discrepancy.difference) })
+              : t('discrepancy.underpaidMessage', { amount: formatCurrency(discrepancy.difference) }))
+            : t('discrepancy.noDiscrepancyCycles', { cycles: discrepancy.matchedCycleCount || 0 })}
       </Typography>
 
       {hasMissingCycles && (
@@ -129,9 +183,15 @@ export default function RepaymentDiscrepancyList({
       </Box>
 
       {cycles.map((cycle) => {
-        const isMatched = cycle.status === 'matched';
         const difference = cycle.difference;
-        const canAddFee = canResolve && isMatched && typeof difference === 'number' && difference > 0.01;
+        const canAddFee = canResolve && cycle.status === 'fee_candidate' && typeof difference === 'number' && difference > 0.01;
+        const bankPaymentsTotal = cycle.bankPaymentTotal ?? cycle.repayments.reduce((sum, txn) => (
+          txn.price < 0 ? sum + Math.abs(txn.price) : sum
+        ), 0);
+        const bankRefundsTotal = cycle.bankRefundTotal ?? cycle.repayments.reduce((sum, txn) => (
+          txn.price > 0 ? sum + Math.abs(txn.price) : sum
+        ), 0);
+        const bankNetTotal = bankPaymentsTotal - bankRefundsTotal;
 
         return (
           <Accordion key={cycle.cycleDate} disableGutters sx={{ mb: 1 }}>
@@ -143,13 +203,16 @@ export default function RepaymentDiscrepancyList({
                   </Typography>
                   <Chip
                     size="small"
-                    color={cycle.status === 'matched' ? 'default' : 'warning'}
-                    label={cycle.status === 'matched' ? t('discrepancy.cycleMatched') : t('discrepancy.cycleMissing')}
+                    color={getCycleStatusColor(cycle.status)}
+                    label={getCycleStatusLabel(cycle.status, t)}
                     variant="outlined"
                   />
                 </Box>
                 <Typography variant="caption" color="text.secondary">
-                  {t('discrepancy.bankRepayments')}: {formatCurrency(cycle.bankTotal)}{' '}
+                  {t('discrepancy.bankRepayments')}: {formatCurrencySigned(bankNetTotal)}{' '}
+                  {bankRefundsTotal > 0 && (
+                    <>({t('discrepancy.bankRepaymentsPay', { defaultValue: 'pay' })} {formatCurrency(bankPaymentsTotal)} • {t('discrepancy.bankRepaymentsRefund', { defaultValue: 'refund' })} {formatCurrency(bankRefundsTotal)})</>
+                  )}
                   • {t('discrepancy.ccExpenses')}: {cycle.ccTotal === null ? '—' : formatCurrency(cycle.ccTotal)}
                   {difference !== null && (
                     <> • {t('discrepancy.difference')}: {formatCurrency(difference)}</>
@@ -192,7 +255,8 @@ export default function RepaymentDiscrepancyList({
                   </Typography>
                   {cycle.repayments.slice(0, 8).map((repayment) => (
                     <Typography key={repayment.identifier} variant="caption" display="block" color="text.secondary">
-                      • {repayment.name} ({formatCurrency(repayment.price)}) — {new Date(repayment.date).toISOString().split('T')[0]}
+                      • {repayment.price < 0 ? t('discrepancy.repaymentLabel', { defaultValue: '→ Credit Card Repayment' }) : t('discrepancy.refundLabel', { defaultValue: '→ Refund' })}{' '}
+                      {repayment.name} ({formatCurrency(repayment.price)}) — {new Date(repayment.date).toISOString().split('T')[0]}
                     </Typography>
                   ))}
                   {cycle.repayments.length > 8 && (
@@ -209,4 +273,3 @@ export default function RepaymentDiscrepancyList({
     </Alert>
   );
 }
-
