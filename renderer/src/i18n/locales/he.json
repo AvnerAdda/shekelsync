@@ -1128,6 +1128,27 @@
         "detailed": "עסקאות"
       }
     },
+    "portfolio": {
+      "title": "שווי התיק",
+      "noData": "אין נתונים",
+      "noChartData": "אין נתוני היסטוריה זמינים",
+      "modes": {
+        "value": "שווי",
+        "performance": "ביצועים"
+      },
+      "tooltipValue": "שווי",
+      "tooltipPerformance": "שינוי"
+    },
+    "allocation": {
+      "title": "הקצאה",
+      "total": "סה\"כ",
+      "viewMore": "ראה עוד"
+    },
+    "performance": {
+      "title": "הביצועים שלי",
+      "allCategories": "כל הקטגוריות",
+      "noAccounts": "לא נמצאו חשבונות השקעה"
+    },
     "empty": {
       "title": "התחילו עם תיק ההשקעות",
       "description": "עקבו אחרי ביצועי ההשקעות במספר חשבונות. חברו ברוקר, פנסיה וחסכונות כדי לראות תמונה מלאה.",

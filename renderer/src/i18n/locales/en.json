@@ -1149,6 +1149,27 @@
         "detailed": "Transactions"
       }
     },
+    "portfolio": {
+      "title": "Portfolio Value",
+      "noData": "No data",
+      "noChartData": "No history data available",
+      "modes": {
+        "value": "Value",
+        "performance": "Performance"
+      },
+      "tooltipValue": "Value",
+      "tooltipPerformance": "Change"
+    },
+    "allocation": {
+      "title": "Allocation",
+      "total": "Total",
+      "viewMore": "View more"
+    },
+    "performance": {
+      "title": "My Performance",
+      "allCategories": "All Categories",
+      "noAccounts": "No investment accounts found"
+    },
     "empty": {
       "title": "Get Started with Your Investment Portfolio",
       "description": "Track your investment performance across multiple accounts. Connect your brokerage, pension, and savings accounts to see your complete financial picture.",
