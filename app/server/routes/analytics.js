@@ -5,6 +5,7 @@ const dashboardService = require('../services/analytics/dashboard.js');
 const unifiedCategoryService = require('../services/analytics/unified-category.js');
 const waterfallService = require('../services/analytics/waterfall.js');
 const personalIntelligenceService = require('../services/analytics/personal-intelligence.js');
+const healthScoreHistoryService = require('../services/analytics/health-score-history.js');
 const categoryDetailsService = require('../services/analytics/category-details.js');
 const transactionsByDateService = require('../services/analytics/transactions-by-date.js');
 const investmentsAnalyticsService = require('../services/analytics/investments.js');
@@ -75,6 +76,19 @@ function createAnalyticsRouter() {
       console.error('Personal intelligence error:', error);
       res.status(500).json({
         error: 'Failed to generate personal intelligence',
+        message: error.message,
+      });
+    }
+  });
+
+  router.get('/health-score-history', async (req, res) => {
+    try {
+      const result = await healthScoreHistoryService.getHealthScoreHistory(req.query);
+      res.json(result);
+    } catch (error) {
+      console.error('Health score history error:', error);
+      res.status(500).json({
+        error: 'Failed to generate health score history',
         message: error.message,
       });
     }

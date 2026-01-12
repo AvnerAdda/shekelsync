@@ -23,6 +23,7 @@ import {
 } from '@mui/icons-material';
 import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
+import HealthScoreTrendModal from './HealthScoreTrendModal';
 
 export interface HealthBreakdown {
   savingsScore?: number;
@@ -50,6 +51,7 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
   const [intelligence, setIntelligence] = useState<FinancialHealthSnapshot | null>(data ?? null);
   const [internalLoading, setInternalLoading] = useState(!hasExternalData);
   const [internalError, setInternalError] = useState<string | null>(null);
+  const [trendModalOpen, setTrendModalOpen] = useState(false);
 
   useEffect(() => {
     if (hasExternalData) {
@@ -272,6 +274,7 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
                   color="primary"
                   size="medium"
                   startIcon={<TrendIcon />}
+                  onClick={() => setTrendModalOpen(true)}
                   sx={{
                     borderRadius: 2,
                     textTransform: 'none',
@@ -426,6 +429,8 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
           );
         })}
       </Grid>
+
+      <HealthScoreTrendModal open={trendModalOpen} onClose={() => setTrendModalOpen(false)} days={60} windowDays={60} />
     </Box>
   );
 };
