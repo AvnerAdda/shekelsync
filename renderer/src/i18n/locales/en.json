@@ -819,11 +819,31 @@
       "actions": {
         "refresh": "Refresh",
         "retry": "Retry",
-        "improve": "Improve Score"
+        "improve": "Score Trend"
       },
       "labels": {
         "healthScore": "Health Score",
         "score": "Score"
+      },
+      "trendModal": {
+        "title": "Score Trend",
+        "subtitle": "Day-by-day over the last {{days}} days ({{windowDays}}-day rolling window)",
+        "summary": "Change: {{delta}} points (7-day avg)",
+        "trend": {
+          "up": "Good trend",
+          "down": "Bad trend",
+          "flat": "Stable"
+        },
+        "tooltip": {
+          "score": "Score"
+        },
+        "actions": {
+          "close": "Close"
+        },
+        "errors": {
+          "fetchFailed": "Failed to fetch score history",
+          "generic": "Unknown error"
+        }
       },
       "empty": "No health score data available. Please ensure you have sufficient transaction history.",
       "errors": {

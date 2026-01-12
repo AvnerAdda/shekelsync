@@ -111,7 +111,7 @@ async function getActiveQuestCount(client) {
     SELECT COUNT(*) as count
     FROM smart_action_items
     WHERE action_type LIKE 'quest_%'
-      AND user_status IN ('active', 'accepted')
+      AND user_status = 'accepted'
   `);
   return parseInt(result.rows[0]?.count || 0, 10);
 }

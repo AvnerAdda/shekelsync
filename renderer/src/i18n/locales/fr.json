@@ -772,11 +772,31 @@
       "actions": {
         "refresh": "Actualiser",
         "retry": "Réessayer",
-        "improve": "Améliorer le score"
+        "improve": "Tendance du score"
       },
       "labels": {
         "healthScore": "Score de santé",
         "score": "Score"
+      },
+      "trendModal": {
+        "title": "Tendance du score",
+        "subtitle": "Évolution quotidienne sur les {{days}} derniers jours (fenêtre glissante de {{windowDays}} jours)",
+        "summary": "Variation : {{delta}} points (moy. 7 jours)",
+        "trend": {
+          "up": "Bonne tendance",
+          "down": "Mauvaise tendance",
+          "flat": "Stable"
+        },
+        "tooltip": {
+          "score": "Score"
+        },
+        "actions": {
+          "close": "Fermer"
+        },
+        "errors": {
+          "fetchFailed": "Échec du chargement de l'historique du score",
+          "generic": "Erreur inconnue"
+        }
       },
       "empty": "Aucune donnée de score disponible. Vérifiez que vous avez suffisamment d'historique de transactions.",
       "errors": {
