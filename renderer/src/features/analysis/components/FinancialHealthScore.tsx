@@ -220,7 +220,7 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
       >
         <Grid container spacing={3} alignItems="center">
           {/* Overall Score Circle */}
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Box textAlign="center">
               <Box sx={{ position: 'relative', display: 'inline-flex', mb: 1 }}>
                 <CircularProgress
@@ -289,7 +289,7 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
           </Grid>
 
           {/* Health Breakdown Metrics */}
-          <Grid item xs={12} md={8}>
+          <Grid size={{ xs: 12, md: 8 }}>
             <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ mb: 2 }}>
               {t('scorecard.breakdown')}
             </Typography>
@@ -299,7 +299,7 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
                 const color = getHealthScoreColor(score);
 
                 return (
-                  <Grid item xs={6} sm={3} key={key}>
+                  <Grid size={{ xs: 6, sm: 3 }} key={key}>
                     <Tooltip title={getHealthMetricTooltip(key)} placement="top" arrow>
                       <Card
                         variant="outlined"
@@ -382,7 +382,7 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
           const color = getHealthScoreColor(score);
 
           return (
-            <Grid item xs={12} md={6} key={key}>
+            <Grid size={{ xs: 12, md: 6 }} key={key}>
               <Card variant="outlined">
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>

@@ -28,7 +28,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
   if (loading) {
     return (
       <Grid container spacing={2}>
-        <Grid item xs={12} md={5}>
+        <Grid size={{ xs: 12, md: 5 }}>
           <Card sx={{ height: 180, p: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
               <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
@@ -47,7 +47,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
             </Box>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3.5}>
+        <Grid size={{ xs: 12, sm: 6 }} md={3.5}>
           <Card sx={{ height: 180, p: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
               <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
@@ -57,7 +57,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
             <Skeleton variant="text" width={100} height={16} />
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3.5}>
+        <Grid size={{ xs: 12, sm: 6 }} md={3.5}>
           <Card sx={{ height: 180, p: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
               <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
@@ -99,7 +99,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
           </Box>
         </Box>
         <Grid container spacing={3}>
-          <Grid item xs={6} md={3}>
+          <Grid size={{ xs: 6, md: 3 }}>
             <Typography variant="caption" color="text.secondary">
               {t('overall.totalValue')}
             </Typography>
@@ -107,7 +107,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
               {formatCurrencyValue(portfolioData.summary.totalPortfolioValue)}
             </Typography>
           </Grid>
-          <Grid item xs={6} md={3}>
+          <Grid size={{ xs: 6, md: 3 }}>
             <Typography variant="caption" color="text.secondary">
               {t('overall.totalCost')}
             </Typography>
@@ -115,7 +115,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
               {formatCurrencyValue(portfolioData.summary.totalCostBasis)}
             </Typography>
           </Grid>
-          <Grid item xs={6} md={3}>
+          <Grid size={{ xs: 6, md: 3 }}>
             <Typography variant="caption" color="text.secondary">
               {t('overall.unrealized')}
             </Typography>
@@ -130,7 +130,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
               {formatCurrencyValue(portfolioData.summary.unrealizedGainLoss)}
             </Typography>
           </Grid>
-          <Grid item xs={6} md={3}>
+          <Grid size={{ xs: 6, md: 3 }}>
             <Typography variant="caption" color="text.secondary">
               {t('overall.roi')}
             </Typography>
@@ -148,7 +148,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
 
       {/* Liquid & Restricted - Side by Side on large screens */}
       <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           {/* Liquid Investments Section */}
           <Card sx={{ p: 3, height: '100%', border: '2px solid', borderColor: 'info.light' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -163,7 +163,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
               </Box>
             </Box>
             <Grid container spacing={2}>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <Typography variant="caption" color="text.secondary">
                   {t('liquid.currentValue')}
                 </Typography>
@@ -171,7 +171,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
                   {formatCurrencyValue(portfolioData.summary.liquid.totalValue)}
                 </Typography>
               </Grid>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <Typography variant="caption" color="text.secondary">
                   {t('liquid.unrealized')}
                 </Typography>
@@ -192,7 +192,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
           </Card>
         </Grid>
         
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           {/* Restricted Long-term Savings Section */}
           <Card sx={{ p: 3, height: '100%', border: '2px solid', borderColor: 'warning.light' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -209,7 +209,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
               </Box>
             </Box>
             <Grid container spacing={2}>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <Typography variant="caption" color="text.secondary">
                   {t('restricted.currentValue')}
                 </Typography>
@@ -217,7 +217,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
                   {formatCurrencyValue(portfolioData.summary.restricted.totalValue)}
                 </Typography>
               </Grid>
-              <Grid item xs={6}>
+              <Grid size={{ xs: 6 }}>
                 <Typography variant="caption" color="text.secondary">
                   {t('restricted.unrealized')}
                 </Typography>

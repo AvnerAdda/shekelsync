@@ -704,7 +704,7 @@ const AnalysisPageNew: React.FC = () => {
         {isRefreshing && !intelligence && !temporalData && !behavioralData && !futureData && !timeValueData ? (
           <Grid container spacing={2}>
             {[1, 2, 3, 4].map((i) => (
-              <Grid item xs={12} md={6} key={i}>
+              <Grid size={{ xs: 12, md: 6 }} key={i}>
                 <Card elevation={0} sx={{
                   height: '100%',
                   borderRadius: 4,
@@ -740,7 +740,7 @@ const AnalysisPageNew: React.FC = () => {
         ) : (
           <Grid container spacing={2}>
             {/* Your Financial Rhythm */}
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Card elevation={0} sx={{
                 height: '100%',
                 borderRadius: 4,
@@ -830,7 +830,7 @@ const AnalysisPageNew: React.FC = () => {
                   )}
 
                   <Grid container spacing={1}>
-                    <Grid item xs={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.avgDaily')}</Typography>
                       <Typography variant="h6">
                         {rhythmStats?.avgDailySpend !== null && rhythmStats?.avgDailySpend !== undefined
@@ -838,7 +838,7 @@ const AnalysisPageNew: React.FC = () => {
                           : t('dashboard.rhythm.na')}
                       </Typography>
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.weekendShare')}</Typography>
                       <Typography variant="h6">
                         {rhythmStats?.weekendPercentage !== null && rhythmStats?.weekendPercentage !== undefined
@@ -846,7 +846,7 @@ const AnalysisPageNew: React.FC = () => {
                           : t('dashboard.rhythm.na')}
                       </Typography>
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.peakHour')}</Typography>
                       <Typography variant="body2">
                         {rhythmStats?.peakHour !== undefined && rhythmStats?.peakHour !== null
@@ -854,7 +854,7 @@ const AnalysisPageNew: React.FC = () => {
                           : t('dashboard.rhythm.na')}
                       </Typography>
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.preciseTime')}</Typography>
                       <Typography variant="body2">
                         {rhythmStats?.preciseTimePercentage !== null && rhythmStats?.preciseTimePercentage !== undefined
@@ -868,7 +868,7 @@ const AnalysisPageNew: React.FC = () => {
             </Grid>
 
             {/* Your Money Personality */}
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Card elevation={0} sx={{
                 height: '100%',
                 borderRadius: 4,
@@ -949,7 +949,7 @@ const AnalysisPageNew: React.FC = () => {
                       </Box>
 
                       <Grid container spacing={1}>
-                        <Grid item xs={6}>
+                        <Grid size={{ xs: 6 }}>
                           <Typography variant="caption" color="text.secondary">{t('dashboard.personality.programmedSpend')}</Typography>
                           <Typography variant="h6" color="success.main">
                             {personalityMetrics.programmedAmount !== null
@@ -957,7 +957,7 @@ const AnalysisPageNew: React.FC = () => {
                               : t('dashboard.personality.na')}
                           </Typography>
                         </Grid>
-                        <Grid item xs={6}>
+                        <Grid size={{ xs: 6 }}>
                           <Typography variant="caption" color="text.secondary">{t('dashboard.personality.impulseSpend')}</Typography>
                           <Typography variant="h6" color="warning.main">
                             {personalityMetrics.impulseAmount !== null
@@ -965,13 +965,13 @@ const AnalysisPageNew: React.FC = () => {
                               : t('dashboard.personality.na')}
                           </Typography>
                         </Grid>
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                           <Typography variant="caption" color="text.secondary">{t('dashboard.personality.recurringPatterns')}</Typography>
                           <Typography variant="h6">
                             {personalityMetrics.recurringCount ?? 0}
                           </Typography>
                         </Grid>
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                           <Typography variant="caption" color="text.secondary">
                             {t('dashboard.personality.topCategoryWeekly', { category: personalityMetrics.topCategoryName || t('dashboard.personality.na') })}
                           </Typography>
@@ -989,7 +989,7 @@ const AnalysisPageNew: React.FC = () => {
             </Grid>
 
             {/* Your Financial Future */}
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Card elevation={0} sx={{
                 height: '100%',
                 borderRadius: 4,
@@ -1063,7 +1063,7 @@ const AnalysisPageNew: React.FC = () => {
                       </Box>
 
                       <Grid container spacing={1}>
-                        <Grid item xs={6}>
+                        <Grid size={{ xs: 6 }}>
                           <Typography variant="caption" color="text.secondary">{t('dashboard.future.baseCase')}</Typography>
                           <Typography variant="h6" color="primary.main">
                             {scenarioEndBalances.p50 !== null && scenarioEndBalances.p50 !== undefined
@@ -1071,7 +1071,7 @@ const AnalysisPageNew: React.FC = () => {
                               : t('dashboard.future.na')}
                           </Typography>
                         </Grid>
-                        <Grid item xs={6}>
+                        <Grid size={{ xs: 6 }}>
                           <Typography variant="caption" color="text.secondary">{t('dashboard.future.bestCase')}</Typography>
                           <Typography
                             variant="h6"
@@ -1082,7 +1082,7 @@ const AnalysisPageNew: React.FC = () => {
                               : t('dashboard.future.na')}
                           </Typography>
                         </Grid>
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                           <Typography variant="caption" color="text.secondary">{t('dashboard.future.worstCase')}</Typography>
                           <Typography variant="body2" color="error.main" fontWeight="bold">
                             {scenarioEndBalances.p10 !== null && scenarioEndBalances.p10 !== undefined
@@ -1098,7 +1098,7 @@ const AnalysisPageNew: React.FC = () => {
             </Grid>
 
             {/* Make It Real */}
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Card elevation={0} sx={{
                 height: '100%',
                 borderRadius: 4,
@@ -1325,7 +1325,7 @@ const AnalysisPageNew: React.FC = () => {
                     ) : null;
 
                     return (
-                      <Grid item xs={12} sm={6} md={4} lg={3} key={`${item.categoryDefinitionId ?? 'cat'}-${idx}`}>
+                      <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={`${item.categoryDefinitionId ?? 'cat'}-${idx}`}>
                         <Tooltip title={tooltipContent} enterDelay={200}>
                           <Box
                             sx={{

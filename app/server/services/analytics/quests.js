@@ -59,6 +59,72 @@ const QUEST_ACTION_TYPES = [
   'quest_income_goal',
 ];
 
+function median(values) {
+  if (!Array.isArray(values) || values.length === 0) return 0;
+
+  const sorted = values.slice().sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  return sorted[mid];
+}
+
+function coerceNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function computeWeeklyBaselineStats(weeklyTotals) {
+  const totals = Array.isArray(weeklyTotals) ? weeklyTotals.map(coerceNumber) : [];
+  const weeksWithSpend = totals.filter((amount) => amount > 0).length;
+
+  const baselineWeeklyMedian = median(totals);
+
+  const deviations = totals.map((amount) => Math.abs(amount - baselineWeeklyMedian));
+  const medianAbsoluteDeviation = median(deviations);
+  const medianRelativeSpread =
+    baselineWeeklyMedian === 0 ? (medianAbsoluteDeviation === 0 ? 0 : 1) : medianAbsoluteDeviation / baselineWeeklyMedian;
+
+  const spendShare = totals.length === 0 ? 0 : weeksWithSpend / totals.length;
+  const isSporadic = baselineWeeklyMedian === 0 ? weeksWithSpend <= 2 : spendShare <= 0.25;
+  const isStable = !isSporadic && baselineWeeklyMedian > 0 && medianRelativeSpread <= 0.1;
+
+  return {
+    baselineWeeklyMedian,
+    medianRelativeSpread,
+    weeksWithSpend,
+    isSporadic,
+    isStable,
+  };
+}
+
+function isExcludedCategoryName(name, nameEn) {
+  const primary = String(name || '');
+  const secondary = String(nameEn || '');
+  const combinedLower = `${primary} ${secondary}`.toLowerCase();
+
+  if (/פרעון/.test(primary) && /(כרטיס|אשראי)/.test(primary)) {
+    return true;
+  }
+
+  if (/\b(rent|mortgage)\b/.test(combinedLower)) {
+    return true;
+  }
+
+  if (/(credit\s*card\s*(payment|repayment)|card\s*repayment|cc\s*payment)/.test(combinedLower)) {
+    return true;
+  }
+
+  if (/(loan|debt)\s*repayment/.test(combinedLower)) {
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Calculate level from total points
  */
@@ -982,6 +1048,10 @@ module.exports = {
   QUEST_ACTION_TYPES,
   LEVEL_TIERS,
   MAX_ACTIVE_QUESTS,
+  _internal: {
+    computeWeeklyBaselineStats,
+    isExcludedCategoryName,
+  },
   __setDatabase(mock) {
     database = mock || actualDatabase;
   },

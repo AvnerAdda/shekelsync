@@ -37,7 +37,7 @@ function serviceError(status, message) {
 }
 
 async function listBudgets() {
-  const result = await database.query(
+  const result = await getDatabase().query(
     `${BASE_SELECT}
      WHERE cb.is_active = true
      ORDER BY cd.category_type, parent.name, cd.name, cb.period_type`
@@ -46,7 +46,7 @@ async function listBudgets() {
 }
 
 async function getCategoryForBudget(categoryId) {
-  const result = await database.query(
+  const result = await getDatabase().query(
     'SELECT id, category_type FROM category_definitions WHERE id = $1',
     [categoryId]
   );
@@ -59,7 +59,7 @@ async function getCategoryForBudget(categoryId) {
 }
 
 async function fetchBudgetById(id) {
-  const result = await database.query(
+  const result = await getDatabase().query(
     `${BASE_SELECT}
      WHERE cb.id = $1`,
     [id]
@@ -98,7 +98,7 @@ async function upsertBudget(payload = {}) {
     throw serviceError(400, 'Budget limit must be greater than zero');
   }
 
-  const result = await database.query(
+  const result = await getDatabase().query(
     `INSERT INTO category_budgets (category_definition_id, period_type, budget_limit)
      VALUES ($1, $2, $3)
      ON CONFLICT (category_definition_id, period_type)
@@ -143,7 +143,7 @@ async function updateBudget(payload = {}) {
   updates.push(`updated_at = CURRENT_TIMESTAMP`);
   params.push(id);
 
-  const updateResult = await database.query(
+  const updateResult = await getDatabase().query(
     `UPDATE category_budgets
      SET ${updates.join(', ')}
      WHERE id = $${paramIndex}
@@ -166,7 +166,7 @@ async function deactivateBudget(query = {}) {
     throw serviceError(400, 'Missing budget ID');
   }
 
-  const result = await database.query(
+  const result = await getDatabase().query(
     'UPDATE category_budgets SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
     [id]
   );
@@ -281,7 +281,7 @@ async function computeBudgetSpent(client, { categoryDefinitionId, categoryName }
 
 async function listBudgetUsage() {
   const dateFns = await loadDateFns();
-  const client = await database.getClient();
+  const client = await getDatabase().getClient();
 
   try {
     let budgetsResult;
@@ -394,11 +394,28 @@ async function listBudgetUsage() {
   }
 }
 
+// Test helpers for dependency injection
+let testDatabase = null;
+
+function __setDatabase(db) {
+  testDatabase = db;
+}
+
+function __resetDatabase() {
+  testDatabase = null;
+}
+
+function getDatabase() {
+  return testDatabase || database;
+}
+
 module.exports = {
   listBudgets,
   upsertBudget,
   updateBudget,
   deactivateBudget,
   listBudgetUsage,
+  __setDatabase,
+  __resetDatabase,
 };
 module.exports.default = module.exports;

@@ -197,7 +197,7 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
         ) : data ? (
           <Grid container spacing={3}>
             {/* Spending by Hour of Day */}
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('hourOfDay.title')}
@@ -243,7 +243,7 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
             </Grid>
 
             {/* Spending by Day of Week */}
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('dayOfWeek.title')}
@@ -289,7 +289,7 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
             </Grid>
 
             {/* Weekend vs Weekday */}
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('weekendVsWeekday.title')}
@@ -322,7 +322,7 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
             </Grid>
 
             {/* Week-by-Week Trend */}
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('weeklyTrend.title')}
@@ -368,7 +368,7 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
             </Grid>
 
             {/* Evolution Curve */}
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Box>

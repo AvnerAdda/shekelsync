@@ -102,7 +102,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
   return (
     <Fade in={!isZooming} timeout={300}>
       <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Box sx={{ position: 'relative' }}>
             <Typography variant="h6" gutterBottom align="center">
               {headerTitle}
@@ -192,7 +192,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
           </Box>
         </Grid>
 
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Box sx={{ maxHeight: 400, overflowY: 'auto', pr: 1 }}>
             {data.map((item, index) => {
               const percentage = totalAmount ? ((item.value / totalAmount) * 100).toFixed(1) : '0.0';

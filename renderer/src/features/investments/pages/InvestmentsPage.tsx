@@ -250,7 +250,7 @@ const InvestmentsPageContent: React.FC = () => {
           {/* Top Row: Portfolio Value Panel + Allocation Chart */}
           <Grid container spacing={3} sx={{ flexShrink: 0 }}>
             {/* Portfolio Value Panel - 2/3 width */}
-            <Grid item xs={12} lg={8}>
+            <Grid size={{ xs: 12, lg: 8 }}>
               <Box sx={{ height: { xs: 400, lg: 380 } }}>
                 <PortfolioValuePanel
                   portfolioData={portfolioData}
@@ -265,7 +265,7 @@ const InvestmentsPageContent: React.FC = () => {
             </Grid>
 
             {/* Allocation Donut Chart - 1/3 width */}
-            <Grid item xs={12} lg={4}>
+            <Grid size={{ xs: 12, lg: 4 }}>
               <Box sx={{ height: { xs: 350, lg: 380 } }}>
                 <AllocationDonutChart portfolioData={portfolioData} />
               </Box>

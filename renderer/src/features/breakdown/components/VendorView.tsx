@@ -26,7 +26,7 @@ const VendorView: React.FC<VendorViewProps> = ({ vendors, categoryType, formatCu
   return (
     <Grid container spacing={2}>
       {vendors.map((vendor, index) => (
-        <Grid item xs={12} sm={6} md={4} key={`${vendor.vendor}-${index}`}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }} key={`${vendor.vendor}-${index}`}>
           <Card
             sx={{
               height: '100%',

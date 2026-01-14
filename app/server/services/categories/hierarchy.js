@@ -82,7 +82,7 @@ async function listHierarchy(params = {}) {
     ORDER BY cd.category_type, cd.display_order, cd.name
   `;
 
-  const categoryResult = await database.query(query, queryParams);
+  const categoryResult = await getDatabase().query(query, queryParams);
   const categories = categoryResult.rows.map((row) => ({
     ...row,
     transaction_count: Number.parseInt(row.transaction_count, 10) || 0,
@@ -93,7 +93,7 @@ async function listHierarchy(params = {}) {
   // 1. Transactions with no category assigned (category_definition_id IS NULL)
   // 2. Transactions assigned to non-leaf categories (categories that have children)
   const [uncategorizedSummary, uncategorizedRecent] = await Promise.all([
-    database.query(
+    getDatabase().query(
       `SELECT COUNT(*) AS total_transactions, COALESCE(SUM(ABS(price)), 0) AS total_amount
        FROM transactions t
        LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
@@ -103,7 +103,7 @@ async function listHierarchy(params = {}) {
             WHERE child.parent_id = cd.id
           )`,
     ),
-    database.query(
+    getDatabase().query(
       `SELECT
          t.identifier,
          t.vendor,
@@ -128,7 +128,8 @@ async function listHierarchy(params = {}) {
     ),
   ]);
 
-  const summaryRow = uncategorizedSummary.rows[0] || { total_transactions: 0, total_amount: 0 };
+  const summaryRow = uncategorizedSummary.rows[0] || { total_transactions: 0, total_amount: 0 
+};
 
   return {
     categories,
@@ -149,7 +150,8 @@ async function listHierarchy(params = {}) {
         categoryIcon: row.category_icon,
       })),
     },
-  };
+  
+};
 }
 
 async function createCategory(payload = {}) {
@@ -173,7 +175,7 @@ async function createCategory(payload = {}) {
 
   const parentId = parent_id !== undefined ? normalizeNumeric(parent_id, 'parent_id') : null;
 
-  const duplicateCheck = await database.query(
+  const duplicateCheck = await getDatabase().query(
     `SELECT id FROM category_definitions
      WHERE name = $1 AND parent_id IS NOT DISTINCT FROM $2 AND category_type = $3`,
     [name, parentId, category_type],
@@ -187,7 +189,7 @@ async function createCategory(payload = {}) {
   let depthLevel = 0;
 
   if (parentId !== null) {
-    const parentResult = await database.query(
+    const parentResult = await getDatabase().query(
       'SELECT category_type, hierarchy_path, depth_level FROM category_definitions WHERE id = $1',
       [parentId],
     );
@@ -212,7 +214,7 @@ async function createCategory(payload = {}) {
   }
 
   if (finalDisplayOrder === null || finalDisplayOrder === undefined) {
-    const orderResult = await database.query(
+    const orderResult = await getDatabase().query(
       `SELECT COALESCE(MAX(display_order), 0) + 1 as next_order
        FROM category_definitions
        WHERE parent_id IS NOT DISTINCT FROM $1 AND category_type = $2`,
@@ -221,7 +223,7 @@ async function createCategory(payload = {}) {
     finalDisplayOrder = orderResult.rows[0].next_order;
   }
 
-  const insertResult = await database.query(
+  const insertResult = await getDatabase().query(
     `INSERT INTO category_definitions
       (name, parent_id, category_type, icon, color, description, display_order, depth_level, is_active)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
@@ -252,7 +254,7 @@ async function createCategory(payload = {}) {
     hierarchyPath = String(newId);
   }
 
-  await database.query(
+  await getDatabase().query(
     'UPDATE category_definitions SET hierarchy_path = $1 WHERE id = $2',
     [hierarchyPath, newId],
   );
@@ -312,7 +314,7 @@ async function updateCategory(payload = {}) {
   updates.push('updated_at = CURRENT_TIMESTAMP');
   params.push(categoryId);
 
-  const result = await database.query(
+  const result = await getDatabase().query(
     `UPDATE category_definitions
      SET ${updates.join(', ')}
      WHERE id = $${paramIndex}
@@ -330,7 +332,7 @@ async function updateCategory(payload = {}) {
 async function deleteCategory(params = {}) {
   const categoryId = normalizeNumeric(params.id, 'Category ID', { required: true });
 
-  const txnCheck = await database.query(
+  const txnCheck = await getDatabase().query(
     'SELECT COUNT(*) as count FROM transactions WHERE category_definition_id = $1',
     [categoryId],
   );
@@ -342,7 +344,7 @@ async function deleteCategory(params = {}) {
     );
   }
 
-  const childCheck = await database.query(
+  const childCheck = await getDatabase().query(
     'SELECT COUNT(*) as count FROM category_definitions WHERE parent_id = $1',
     [categoryId],
   );
@@ -354,7 +356,7 @@ async function deleteCategory(params = {}) {
     );
   }
 
-  const result = await database.query(
+  const result = await getDatabase().query(
     'DELETE FROM category_definitions WHERE id = $1 RETURNING *',
     [categoryId],
   );
@@ -363,7 +365,23 @@ async function deleteCategory(params = {}) {
     throw serviceError(404, 'Category not found');
   }
 
-  return { message: 'Category deleted successfully', category: result.rows[0] };
+  return { message: 'Category deleted successfully', category: result.rows[0] 
+};
+}
+
+// Test helpers for dependency injection
+let testDatabase = null;
+
+function __setDatabase(db) {
+  testDatabase = db;
+}
+
+function __resetDatabase() {
+  testDatabase = null;
+}
+
+function getDatabase() {
+  return testDatabase || database;
 }
 
 module.exports = {
@@ -371,5 +389,8 @@ module.exports = {
   createCategory,
   updateCategory,
   deleteCategory,
+  __setDatabase,
+  __resetDatabase,
 };
+
 module.exports.default = module.exports;

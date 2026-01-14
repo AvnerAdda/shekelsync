@@ -280,7 +280,7 @@ const DataExportPanel: React.FC = () => {
 
       <Grid container spacing={3}>
         {/* Export Configuration */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card variant="outlined">
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -369,7 +369,7 @@ const DataExportPanel: React.FC = () => {
         </Grid>
 
         {/* Filters */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card variant="outlined">
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -472,7 +472,7 @@ const DataExportPanel: React.FC = () => {
         </Grid>
 
         {/* Export Summary & Action */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Card variant="outlined" sx={{ bgcolor: 'action.hover' }}>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>

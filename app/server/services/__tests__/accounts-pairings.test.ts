@@ -62,6 +62,7 @@ describe('accounts pairings service', () => {
         bankAccountNumber: '5678',
         matchPatterns: ['CARD123', 'CARD456'],
         isActive: true,
+        discrepancyAcknowledged: false,
         createdAt: '2025-01-01T00:00:00Z',
         updatedAt: '2025-01-02T00:00:00Z',
       },

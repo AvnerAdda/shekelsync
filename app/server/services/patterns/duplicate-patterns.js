@@ -1,5 +1,14 @@
-const database = require('../database.js');
+let database = require('../database.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
+
+// For testing: allow injection of mock database
+let _originalDatabase = database;
+function __setDatabase(mockDb) {
+  database = mockDb;
+}
+function __resetDatabase() {
+  database = _originalDatabase;
+}
 
 function serviceError(status, message) {
   const error = new Error(message);
@@ -59,6 +68,7 @@ async function listPatterns(params = {}) {
     await ensurePatternsTable(client);
 
     const includeInactive = params.includeInactive === 'true' || params.includeInactive === true;
+    const userDefinedOnly = params.userDefinedOnly === 'true' || params.userDefinedOnly === true;
     const hasOverride = await hasOverrideCategoryColumn(client);
 
     const overrideColumns = hasOverride
@@ -88,8 +98,15 @@ async function listPatterns(params = {}) {
       FROM duplicate_patterns dp${overrideJoin}
     `;
 
+    const whereConditions = [];
     if (!includeInactive) {
-      query += ' WHERE dp.is_active = true';
+      whereConditions.push('dp.is_active = true');
+    }
+    if (userDefinedOnly) {
+      whereConditions.push('dp.is_user_defined = true');
+    }
+    if (whereConditions.length > 0) {
+      query += ' WHERE ' + whereConditions.join(' AND ');
     }
 
     query += ' ORDER BY dp.is_active DESC, dp.confidence DESC, dp.match_count DESC';
@@ -198,6 +215,7 @@ async function updatePattern(payload = {}) {
     overrideCategoryDefinitionId,
     isActive,
     notes,
+    confidence,
   } = payload;
 
   if (!id) {
@@ -260,6 +278,10 @@ async function updatePattern(payload = {}) {
     if (notes !== undefined) {
       updates.push(`notes = $${idx++}`);
       values.push(notes);
+    }
+    if (confidence !== undefined) {
+      updates.push(`confidence = $${idx++}`);
+      values.push(confidence);
     }
 
     if (updates.length === 0) {
@@ -324,6 +346,8 @@ module.exports = {
   createPattern,
   updatePattern,
   deletePattern,
+  __setDatabase,
+  __resetDatabase,
 };
 
 module.exports.default = module.exports;

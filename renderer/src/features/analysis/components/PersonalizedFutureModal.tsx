@@ -219,7 +219,7 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
         ) : data ? (
           <Grid container spacing={3}>
             {/* Net Position with Three Scenario Curves */}
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('netPosition.title')}
@@ -312,9 +312,9 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
             </Grid>
 
             {/* Scenario Summary Cards */}
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={4}>
+                <Grid size={{ xs: 12, md: 4 }}>
                   <Paper
                     elevation={3}
                     sx={{
@@ -374,7 +374,7 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                     </Typography>
                   </Paper>
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid size={{ xs: 12, md: 4 }}>
                   <Paper
                     elevation={3}
                     sx={{
@@ -434,7 +434,7 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                     </Typography>
                   </Paper>
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid size={{ xs: 12, md: 4 }}>
                   <Paper
                     elevation={3}
                     sx={{

@@ -2,6 +2,21 @@ const database = require('./database.js');
 const { dialect } = require('../../lib/sql-dialect.js');
 const { getVendorCodesByTypes } = require('./institutions.js');
 
+// Test helpers for dependency injection
+let testDatabase = null;
+
+function __setDatabase(db) {
+  testDatabase = db;
+}
+
+function __resetDatabase() {
+  testDatabase = null;
+}
+
+function getDatabase() {
+  return testDatabase || database;
+}
+
 function buildVendorQueryFragments(vendors) {
   if (!vendors || vendors.length === 0) {
     return null;
@@ -22,12 +37,12 @@ function buildVendorQueryFragments(vendors) {
 }
 
 async function getOnboardingStatus() {
-  const client = await database.getClient();
+  const client = await getDatabase().getClient();
 
   try {
     const [dbBankVendors, dbCreditVendors] = await Promise.all([
-      getVendorCodesByTypes(database, ['bank']),
-      getVendorCodesByTypes(database, ['credit_card']),
+      getVendorCodesByTypes(getDatabase(), ['bank']),
+      getVendorCodesByTypes(getDatabase(), ['credit_card']),
     ]);
 
     const bankVendors = Array.isArray(dbBankVendors) ? dbBankVendors : [];
@@ -121,7 +136,7 @@ async function getOnboardingStatus() {
 }
 
 async function dismissOnboarding() {
-  const client = await database.getClient();
+  const client = await getDatabase().getClient();
 
   try {
     const now = new Date();
@@ -134,7 +149,7 @@ async function dismissOnboarding() {
            onboarding_dismissed,
            onboarding_dismissed_at,
            last_active_at
-         ) VALUES ($1, $2, $3, $4)` ,
+         ) VALUES ($1, $2, $3, $4)`,
         ['User', 1, now, now],
       );
     } else {
@@ -162,6 +177,7 @@ async function dismissOnboarding() {
 module.exports = {
   getOnboardingStatus,
   dismissOnboarding,
+  __setDatabase,
+  __resetDatabase,
 };
-
 module.exports.default = module.exports;

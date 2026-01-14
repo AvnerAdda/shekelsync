@@ -715,7 +715,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     (institution?: InstitutionMetadata | null) => {
       if (!institution) {
         return (
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Alert severity="info">{t('helpers.selectInstitution')}</Alert>
           </Grid>
         );
@@ -739,7 +739,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
           ? t(`credentials.${fieldKey}Helper`, { defaultValue: config.helperText })
           : undefined;
         return (
-          <Grid item xs={12} key={`${institution.vendor_code}-${fieldKey}`}>
+          <Grid size={{ xs: 12 }} key={`${institution.vendor_code}-${fieldKey}`}>
             <TextField
               fullWidth
               label={label}
@@ -756,7 +756,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       if (!hasExplicitFields) {
         return [
           (
-            <Grid item xs={12} key={`${institution.vendor_code}-fallback-info`}>
+            <Grid size={{ xs: 12 }} key={`${institution.vendor_code}-fallback-info`}>
               <Alert severity="info">
                 {t('helpers.noSpecificCredentials')}
               </Alert>
@@ -2171,7 +2171,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
           {isAdding ? (
             <Grid container spacing={3}>
-              <Grid item xs={12} md={5}>
+              <Grid size={{ xs: 12, md: 5 }}>
                 <Card sx={{
                   borderRadius: '12px',
                   boxShadow: (theme) => theme.palette.mode === 'dark'
@@ -2256,7 +2256,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                 </Card>
               </Grid>
 
-              <Grid item xs={12} md={7}>
+              <Grid size={{ xs: 12, md: 7 }}>
                 <Card sx={{
                   borderRadius: '12px',
                   boxShadow: (theme) => theme.palette.mode === 'dark'
@@ -2298,7 +2298,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
                         {addWizardMode === 'banking' ? (
                           <Grid container spacing={2}>
-                            <Grid item xs={12}>
+                            <Grid size={{ xs: 12 }}>
                               <TextField
                                 fullWidth
                                 label={t('fields.accountNickname')}
@@ -2315,7 +2315,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
                             {renderCredentialFieldInputs(addWizardSelectedInstitutionMeta)}
 
-                            <Grid item xs={12}>
+                            <Grid size={{ xs: 12 }}>
                               <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                                 <Button onClick={() => setIsAdding(false)}>{t('actions.cancel')}</Button>
                                 <Button
@@ -2332,7 +2332,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           </Grid>
                         ) : (
                           <Grid container spacing={2}>
-                            <Grid item xs={12}>
+                            <Grid size={{ xs: 12 }}>
                               {(() => {
                                 const investmentMatch = newInvestmentAccount.account_name
                                   ? isExistingInvestment(newInvestmentAccount.account_name)
@@ -2380,7 +2380,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                               })()}
                             </Grid>
 
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                               <TextField
                                 fullWidth
                                 select
@@ -2397,7 +2397,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                               </TextField>
                             </Grid>
 
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                               <TextField
                                 fullWidth
                                 label={t('fields.institution')}
@@ -2407,7 +2407,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                               />
                             </Grid>
 
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                               <TextField
                                 fullWidth
                                 label={t('fields.accountNumber')}
@@ -2417,7 +2417,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                               />
                             </Grid>
 
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                               <TextField
                                 fullWidth
                                 select
@@ -2431,7 +2431,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                               </TextField>
                             </Grid>
 
-                            <Grid item xs={12}>
+                            <Grid size={{ xs: 12 }}>
                               <TextField
                                 fullWidth
                                 multiline
@@ -2443,13 +2443,13 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                               />
                             </Grid>
 
-                            <Grid item xs={12}>
+                            <Grid size={{ xs: 12 }}>
                               <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
                                 {t('sections.initialValue', { defaultValue: 'Initial value' })} ({t('placeholders.optional')})
                               </Typography>
                             </Grid>
 
-                            <Grid item xs={12} sm={4}>
+                            <Grid size={{ xs: 12, sm: 4 }}>
                               <TextField
                                 fullWidth
                                 type="number"
@@ -2463,7 +2463,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                               />
                             </Grid>
 
-                            <Grid item xs={12} sm={4}>
+                            <Grid size={{ xs: 12, sm: 4 }}>
                               <TextField
                                 fullWidth
                                 type="number"
@@ -2477,7 +2477,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                               />
                             </Grid>
 
-                            <Grid item xs={12} sm={4}>
+                            <Grid size={{ xs: 12, sm: 4 }}>
                               <TextField
                                 fullWidth
                                 type="date"
@@ -2488,7 +2488,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                               />
                             </Grid>
 
-                            <Grid item xs={12}>
+                            <Grid size={{ xs: 12 }}>
                               <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                                 <Button onClick={() => setIsAdding(false)}>{t('actions.cancel')}</Button>
                                 <Button variant="contained" onClick={handleAddInvestmentAccount}>
@@ -2553,7 +2553,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     </AccordionSummary>
                     <AccordionDetails>
                       <Grid container spacing={2}>
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                           <TextField
                             fullWidth
                             label={t('fields.accountNickname')}
@@ -2563,7 +2563,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             required
                           />
                         </Grid>
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                           <TextField
                             fullWidth
                             select
@@ -2596,7 +2596,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                         </Grid>
                         {renderCredentialFieldInputs(findInstitutionByVendor(newAccount.vendor))}
 
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                           <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                             <Button onClick={() => setIsAdding(false)}>{t('actions.cancel')}</Button>
                             <Button variant="contained" color="secondary" onClick={handleAdd}>
@@ -2649,7 +2649,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     </AccordionSummary>
                     <AccordionDetails>
                       <Grid container spacing={2}>
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                           <TextField
                             fullWidth
                             label={t('fields.accountNickname')}
@@ -2659,7 +2659,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             required
                           />
                         </Grid>
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                         <TextField
                           fullWidth
                           select
@@ -2693,7 +2693,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
                         {renderCredentialFieldInputs(findInstitutionByVendor(newAccount.vendor))}
 
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                           <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                             <Button onClick={() => setIsAdding(false)}>{t('actions.cancel')}</Button>
                             <Button variant="contained" color="primary" onClick={handleAdd}>
@@ -2764,7 +2764,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   <CardHeader title={t('sections.addInvestmentAccount')} />
                   <CardContent>
                     <Grid container spacing={2}>
-                      <Grid item xs={12}>
+                      <Grid size={{ xs: 12 }}>
                         {(() => {
                           const investmentMatch = newInvestmentAccount.account_name ? isExistingInvestment(newInvestmentAccount.account_name) : { match: false };
                           return (
@@ -2809,7 +2809,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           );
                         })()}
                       </Grid>
-                      <Grid item xs={12} sm={6}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                           fullWidth
                           select
@@ -2825,7 +2825,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           ))}
                         </TextField>
                       </Grid>
-                      <Grid item xs={12} sm={6}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                           fullWidth
                           label={t('fields.institution')}
@@ -2834,7 +2834,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           placeholder={t('placeholders.institution')}
                         />
                       </Grid>
-                      <Grid item xs={12} sm={6}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                           fullWidth
                           select
@@ -2876,7 +2876,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           ))}
                         </TextField>
                       </Grid>
-                      <Grid item xs={12} sm={6}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                           fullWidth
                           label={t('fields.accountNumber')}
@@ -2885,7 +2885,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           placeholder={t('placeholders.optional')}
                         />
                       </Grid>
-                      <Grid item xs={12} sm={6}>
+                      <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField
                           fullWidth
                           select
@@ -2898,7 +2898,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           <MenuItem value="EUR">EUR (€)</MenuItem>
                         </TextField>
                       </Grid>
-                      <Grid item xs={12}>
+                      <Grid size={{ xs: 12 }}>
                         <TextField
                           fullWidth
                           multiline
@@ -2909,12 +2909,12 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           placeholder={t('placeholders.notes')}
                         />
                       </Grid>
-                      <Grid item xs={12}>
+                      <Grid size={{ xs: 12 }}>
                         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
                           {t('sections.initialValue')} ({t('helpers.optional')})
                         </Typography>
                       </Grid>
-                      <Grid item xs={12} sm={4}>
+                      <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField
                           fullWidth
                           type="number"
@@ -2927,7 +2927,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           }}
                         />
                       </Grid>
-                      <Grid item xs={12} sm={4}>
+                      <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField
                           fullWidth
                           type="number"
@@ -2940,7 +2940,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           }}
                         />
                       </Grid>
-                      <Grid item xs={12} sm={4}>
+                      <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField
                           fullWidth
                           type="date"
@@ -2950,7 +2950,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           InputLabelProps={{ shrink: true }}
                         />
                       </Grid>
-                      <Grid item xs={12}>
+                      <Grid size={{ xs: 12 }}>
                         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                           <Button onClick={() => setIsAdding(false)}>Cancel</Button>
                           <Button variant="contained" onClick={handleAdd}>
@@ -3038,7 +3038,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         <DialogContent>
           <Box sx={{ pt: 2 }}>
             <Grid container spacing={2}>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   select
@@ -3054,7 +3054,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   ))}
                 </TextField>
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   type="number"
@@ -3067,7 +3067,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   required
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   type="date"
@@ -3078,7 +3078,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   required
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   type="number"
@@ -3091,7 +3091,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   helperText={t('valueModal.costBasisHelper')}
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   select
@@ -3104,7 +3104,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   <MenuItem value="EUR">EUR (€)</MenuItem>
                 </TextField>
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   multiline
@@ -3186,7 +3186,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   }}>
                     <CardContent>
                       <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                           <TextField
                             fullWidth
                             select
@@ -3202,7 +3202,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             ))}
                           </TextField>
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                           <TextField
                             fullWidth
                             label={t('assets.symbol')}
@@ -3212,7 +3212,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             required
                           />
                         </Grid>
-                        <Grid item xs={12} sm={4}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                           <TextField
                             fullWidth
                             type="number"
@@ -3222,7 +3222,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             required
                           />
                         </Grid>
-                        <Grid item xs={12} sm={4}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                           <TextField
                             fullWidth
                             type="number"
@@ -3234,7 +3234,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             }}
                           />
                         </Grid>
-                        <Grid item xs={12} sm={4}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                           <TextField
                             fullWidth
                             type="date"
@@ -3245,7 +3245,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             required
                           />
                         </Grid>
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                           <Box sx={{ display: 'flex', gap: 1 }}>
                             <Button onClick={handleAddAsset} variant="contained" size="small">
                               {t('assets.addAsset')}
@@ -3435,7 +3435,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                   )}
 
                   <Grid container spacing={2} sx={{ mb: optionalSectionVisible ? 2 : 0 }}>
-                    <Grid item xs={12}>
+                    <Grid size={{ xs: 12 }}>
                       <TextField
                         fullWidth
                         label={t('fields.accountNickname')}
@@ -3446,7 +3446,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                       />
                     </Grid>
 
-                    <Grid item xs={12}>
+                    <Grid size={{ xs: 12 }}>
                       <TextField
                         fullWidth
                         label={t(`credentials.${loginLabelKey}`)}
@@ -3458,7 +3458,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     </Grid>
 
                     {showIdRequired && (
-                      <Grid item xs={12}>
+                      <Grid size={{ xs: 12 }}>
                         <TextField
                           fullWidth
                           required
@@ -3470,7 +3470,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     )}
 
                     {showCard6Required && (
-                      <Grid item xs={12}>
+                      <Grid size={{ xs: 12 }}>
                         <TextField
                           fullWidth
                           required
@@ -3483,7 +3483,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     )}
 
                     {showBankAccountRequired && (
-                      <Grid item xs={12}>
+                      <Grid size={{ xs: 12 }}>
                         <TextField
                           fullWidth
                           required
@@ -3497,7 +3497,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     )}
 
                     {showExtraRequired && (
-                      <Grid item xs={12}>
+                      <Grid size={{ xs: 12 }}>
                         <TextField
                           fullWidth
                           required
@@ -3508,7 +3508,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                       </Grid>
                     )}
 
-                    <Grid item xs={12}>
+                    <Grid size={{ xs: 12 }}>
                       <TextField
                         fullWidth
                         type="password"
@@ -3534,7 +3534,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                       <AccordionDetails>
                         <Grid container spacing={2}>
                           {hasOptionalId && (
-                            <Grid item xs={12}>
+                            <Grid size={{ xs: 12 }}>
                               <TextField
                                 fullWidth
                                 label={t('credentials.id')}
@@ -3547,7 +3547,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           )}
 
                           {hasOptionalCard6 && (
-                            <Grid item xs={12}>
+                            <Grid size={{ xs: 12 }}>
                               <TextField
                                 fullWidth
                                 label={t('credentials.card6Digits')}
@@ -3561,7 +3561,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           )}
 
                           {hasOptionalBankAccount && (
-                            <Grid item xs={12}>
+                            <Grid size={{ xs: 12 }}>
                               <TextField
                                 fullWidth
                                 label={t('credentials.bankAccountNumber')}
@@ -3574,7 +3574,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           )}
 
                           {hasOptionalExtra && (
-                            <Grid item xs={12}>
+                            <Grid size={{ xs: 12 }}>
                               <TextField
                                 fullWidth
                                 label={t(`credentials.${extraLabelKey}`)}
