@@ -107,9 +107,9 @@ describe('sqlite-pool', () => {
     const result = await pool.query('SELECT * FROM foo WHERE id = $1 AND active = $2', [7, true]);
 
     expect(result.rows).toEqual([{ ok: true }]);
-    const stmt = latestDb!.statements[0];
-    expect(stmt.sql).toBe('SELECT * FROM foo WHERE id = ? AND active = ?');
-    expect(stmt.allCalls[0]).toEqual([7, 1]);
+    const stmt = latestDb!.statements.find((record) => record.sql === 'SELECT * FROM foo WHERE id = ? AND active = ?');
+    expect(stmt).toBeTruthy();
+    expect(stmt!.allCalls[0]).toEqual([7, 1]);
   });
 
   it('runs non-select statements and returns affected row count', async () => {
@@ -118,9 +118,9 @@ describe('sqlite-pool', () => {
     const result = await pool.query('UPDATE foo SET active = $1 WHERE id = $2', [false, 3]);
 
     expect(result).toEqual({ rows: [], rowCount: 1 });
-    const stmt = latestDb!.statements[0];
-    expect(stmt.sql).toBe('UPDATE foo SET active = ? WHERE id = ?');
-    expect(stmt.runCalls[0]).toEqual([0, 3]);
+    const stmt = latestDb!.statements.find((record) => record.sql === 'UPDATE foo SET active = ? WHERE id = ?');
+    expect(stmt).toBeTruthy();
+    expect(stmt!.runCalls[0]).toEqual([0, 3]);
   });
 
   it('executes transaction control statements directly', async () => {
@@ -129,7 +129,7 @@ describe('sqlite-pool', () => {
     await pool.query('BEGIN');
     await pool.query('COMMIT');
 
-    expect(latestDb!.execCalls).toEqual(['BEGIN', 'COMMIT']);
+    expect(latestDb!.execCalls.slice(-2)).toEqual(['BEGIN', 'COMMIT']);
   });
 
   it('throws when not enough positional parameter values are provided', async () => {

@@ -311,7 +311,7 @@ export const DiagnosticsPanel: React.FC = () => {
                 ? Object.entries(summary.latest.rowCounts)
                 : [];
               return (
-                <Grid item xs={12} md={6} key={summary.bucket}>
+                <Grid size={{ xs: 12, md: 6 }} key={summary.bucket}>
                   <Paper variant="outlined" sx={{ p: 2 }}>
                     <Typography variant="body2" fontWeight="bold">
                       {summary.label}

@@ -1847,7 +1847,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
                         <Grid container spacing={1.5} alignItems="center">
                           {renderCategorySelectors(key, draft, rootOptions)}
-                          <Grid item xs={12} md={3}>
+                          <Grid size={{ xs: 12, md: 3 }}>
                             <ButtonGroup
                               fullWidth
                               variant="contained"
@@ -2080,7 +2080,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             <DialogTitle>{t('editDialog.title')}</DialogTitle>
             <DialogContent>
               <Grid container spacing={2} sx={{ mt: 1 }}>
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <TextField
                     fullWidth
                     label={t('editDialog.fields.name')}
@@ -2088,7 +2088,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                     onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
                   />
                 </Grid>
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <TextField
                     fullWidth
                     label={t('editDialog.fields.description')}
@@ -2098,7 +2098,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                     rows={2}
                   />
                 </Grid>
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -2323,7 +2323,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             {t('rulesForm.description')}
           </Typography>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <TextField
                 fullWidth
                 label={t('rulesForm.fields.pattern')}
@@ -2338,7 +2338,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 }
               />
             </Grid>
-            <Grid item xs={12} md={2}>
+            <Grid size={{ xs: 12, md: 2 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>{t('rulesForm.fields.type')}</InputLabel>
                 <Select
@@ -2356,7 +2356,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>{t('rulesForm.fields.category')}</InputLabel>
                 <Select
@@ -2377,7 +2377,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={2}>
+            <Grid size={{ xs: 12, md: 2 }}>
               <FormControl fullWidth size="small" disabled={!newRuleParentId || childOptions.length === 0}>
                 <InputLabel>{t('rulesForm.fields.subcategory')}</InputLabel>
                 <Select
@@ -2398,7 +2398,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={1}>
+            <Grid size={{ xs: 12, md: 1 }}>
               <Button
                 fullWidth
                 variant="contained"
@@ -2514,7 +2514,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               const categoryDisplayColor = ruleCategory?.color;
 
               return (
-                <Grid item xs={12} key={rule.id}>
+                <Grid size={{ xs: 12 }} key={rule.id}>
                   <Card variant="outlined">
                     <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                       <Box display="flex" alignItems="center" justifyContent="space-between">

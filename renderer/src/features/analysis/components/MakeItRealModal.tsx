@@ -92,7 +92,7 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
     return (
           <Grid container spacing={3}>
             {/* Hourly Wage Hero Section */}
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Paper
                 elevation={0}
                 sx={{
@@ -131,7 +131,7 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
             </Grid>
 
             {/* Income vs Expense Comparison */}
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Paper sx={{
                 p: 3,
                 height: '100%',
@@ -189,7 +189,7 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
                 </Box>
                 <Box sx={{ mt: 'auto', pt: 2, borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
                   <Grid container alignItems="center" justifyContent="space-between">
-                    <Grid item>
+                    <Grid>
                       <Typography variant="caption" color="text.secondary" display="block">
                         {t('incomeVsExpense.ratio')}
                       </Typography>
@@ -197,7 +197,7 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
                         {((data.totalExpenses / (data.totalIncome || 1)) * 100).toFixed(1)}%
                       </Typography>
                     </Grid>
-                    <Grid item>
+                    <Grid>
                       <Typography variant="caption" color="text.secondary">
                         {t('incomeVsExpense.ofIncome')}
                       </Typography>
@@ -208,7 +208,7 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
             </Grid>
 
             {/* Hours Required per Category */}
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Paper sx={{
                 p: 3,
                 height: '100%',
@@ -260,7 +260,7 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
             </Grid>
 
             {/* Category Costs in Work Hours */}
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Paper sx={{
                 p: 3,
                 bgcolor: alpha(theme.palette.background.paper, 0.4),
@@ -314,7 +314,7 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
             </Grid>
 
             {/* Biggest Purchase Analysis */}
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Paper
                 elevation={0}
                 sx={{
@@ -347,7 +347,7 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
                       {formatCurrencyValue(data.biggestPurchase.amount)}
                     </Typography>
                     <Grid container spacing={3}>
-                      <Grid item xs={6} sm={3}>
+                      <Grid size={{ xs: 6, sm: 3 }}>
                         <Paper
                           elevation={0}
                           sx={{
@@ -369,7 +369,7 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
                           </Typography>
                         </Paper>
                       </Grid>
-                      <Grid item xs={6} sm={3}>
+                      <Grid size={{ xs: 6, sm: 3 }}>
                         <Paper
                           elevation={0}
                           sx={{

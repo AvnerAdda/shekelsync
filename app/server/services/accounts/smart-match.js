@@ -9,6 +9,7 @@ const VENDOR_KEYWORDS = {
   amex: ['אמקס', 'אמריקן אקספרס', 'amex', 'american express'],
   leumi: ['לאומי כרט', 'leumi card'],
   diners: ['דיינרס', 'diners'],
+
 };
 
 /**
@@ -71,7 +72,7 @@ async function findSmartMatches(params = {}) {
     throw error;
   }
 
-  const client = await database.getClient();
+  const client = await getDatabase().getClient();
 
   try {
     const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
@@ -89,7 +90,8 @@ async function findSmartMatches(params = {}) {
         matches: [],
         patterns: [],
         searchPatterns: [],
-      };
+      
+};
     }
 
     // Build dynamic query with multiple LIKE conditions on transaction name
@@ -192,7 +194,8 @@ async function findSmartMatches(params = {}) {
         confidence,
         matchedPatterns,
         institution,
-      };
+      
+};
     });
 
     // Sort by confidence (highest first)
@@ -205,14 +208,32 @@ async function findSmartMatches(params = {}) {
       matches,
       patterns: foundPatterns,
       searchPatterns,
-    };
+    
+};
   } finally {
     client.release();
   }
 }
 
+// Test helpers for dependency injection
+let testDatabase = null;
+
+function __setDatabase(db) {
+  testDatabase = db;
+}
+
+function __resetDatabase() {
+  testDatabase = null;
+}
+
+function getDatabase() {
+  return testDatabase || database;
+}
+
 module.exports = {
   findSmartMatches,
+  __setDatabase,
+  __resetDatabase,
 };
 
 module.exports.default = module.exports;

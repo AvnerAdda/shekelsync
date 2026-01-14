@@ -275,7 +275,7 @@ async function processMessage(payload = {}) {
     throw serviceError(400, 'Message is required');
   }
 
-  const client = await database.getClient();
+  const client = await getDatabase().getClient();
 
   try {
     const financialContext = await getFinancialContext(client);
@@ -301,7 +301,24 @@ async function processMessage(payload = {}) {
   }
 }
 
+// Test helpers for dependency injection
+let testDatabase = null;
+
+function __setDatabase(db) {
+  testDatabase = db;
+}
+
+function __resetDatabase() {
+  testDatabase = null;
+}
+
+function getDatabase() {
+  return testDatabase || database;
+}
+
 module.exports = {
   processMessage,
+  __setDatabase,
+  __resetDatabase,
 };
 module.exports.default = module.exports;

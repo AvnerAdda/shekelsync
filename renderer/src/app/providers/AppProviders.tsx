@@ -1,4 +1,4 @@
-import { ThemeContextProvider } from '@app/contexts/ThemeContext';
+import { ThemeContextProvider } from '@renderer/contexts/ThemeContext';
 import { AuthProvider } from '@app/contexts/AuthContext';
 import { FinancePrivacyProvider } from '@app/contexts/FinancePrivacyContext';
 import { ChatbotPermissionsProvider } from '@app/contexts/ChatbotPermissionsContext';

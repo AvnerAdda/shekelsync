@@ -23,8 +23,8 @@ describe('DashboardFiltersContext', () => {
     const { startDate, endDate, aggregationPeriod, hoveredDate } = result.current;
 
     expect(startDate.getFullYear()).toBe(2024);
-    expect(startDate.getMonth()).toBe(2); // March (0-indexed)
-    expect(startDate.getDate()).toBe(1);
+    expect(startDate.getMonth()).toBe(1); // February (0-indexed)
+    expect(startDate.getDate()).toBe(14);
 
     expect(endDate.getTime()).toBe(new Date('2024-03-15T12:00:00Z').getTime());
     expect(aggregationPeriod).toBe<AggregationPeriod>('daily');

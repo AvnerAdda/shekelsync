@@ -176,7 +176,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
       >
         {summary && (
           <Grid container spacing={2} sx={{ mb: 2 }}>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Card 
                 variant="outlined"
                 sx={{ 
@@ -201,7 +201,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Card 
                 variant="outlined"
                 sx={{ 
@@ -226,7 +226,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <Card 
                 variant="outlined"
                 sx={{ 

@@ -59,19 +59,14 @@ export default defineConfig({
     react(),
     commonjsToEsm(),
   ],
+  ssr: {
+    noExternal: ['@mui/material', '@mui/system', '@mui/icons-material'],
+  },
   resolve: {
     alias: {
       '@app': path.resolve(__dirname, '../app'),
       '@': path.resolve(__dirname, '../app'),
       '@renderer': path.resolve(__dirname, 'src'),
-      '@mui/material': path.resolve(__dirname, 'node_modules/@mui/material'),
-      '@mui/icons-material': path.resolve(__dirname, 'node_modules/@mui/icons-material'),
-      '@mui/x-date-pickers': path.resolve(__dirname, 'node_modules/@mui/x-date-pickers'),
-      '@mui/x-charts': path.resolve(__dirname, 'node_modules/@mui/x-charts'),
-      '@mui/styled-engine-sc': path.resolve(__dirname, 'node_modules/@mui/styled-engine-sc'),
-      '@mui/system': path.resolve(__dirname, 'node_modules/@mui/system'),
-      '@emotion/react': path.resolve(__dirname, 'node_modules/@emotion/react'),
-      '@emotion/styled': path.resolve(__dirname, 'node_modules/@emotion/styled'),
       '@fontsource/roboto': path.resolve(__dirname, 'node_modules/@fontsource/roboto'),
       react: path.resolve(__dirname, 'node_modules/react'),
       'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
@@ -86,11 +81,20 @@ export default defineConfig({
         'node_modules/react/jsx-dev-runtime',
       ),
     },
-    dedupe: ['react', 'react-dom'],
+    dedupe: [
+      'react',
+      'react-dom',
+      '@mui/material',
+      '@mui/system',
+      '@emotion/react',
+      '@emotion/styled',
+    ],
     extensions: ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.json'],
   },
   optimizeDeps: {
-    include: ['@app/utils/constants'],
+    include: [
+      '@app/utils/constants',
+    ],
     esbuildOptions: {
       mainFields: ['module', 'main'],
     },

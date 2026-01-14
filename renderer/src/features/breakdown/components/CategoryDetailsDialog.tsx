@@ -100,7 +100,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
       <DialogContent>
         <Box>
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={4}>
+            <Grid size={{ xs: 4 }}>
               <Card 
                 variant="outlined"
                 sx={{ 
@@ -124,7 +124,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={4}>
+            <Grid size={{ xs: 4 }}>
               <Card 
                 variant="outlined"
                 sx={{ 
@@ -156,7 +156,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={4}>
+            <Grid size={{ xs: 4 }}>
               <Card 
                 variant="outlined"
                 sx={{ 
@@ -185,7 +185,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
               </Typography>
               <Grid container spacing={1} sx={{ mb: 3 }}>
                 {details.subcategories.map(sub => (
-                  <Grid item xs={12} key={sub.id}>
+                  <Grid size={{ xs: 12 }} key={sub.id}>
                     <Box
                       sx={{
                         p: 2,
@@ -241,7 +241,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
               </Typography>
               <Grid container spacing={1} sx={{ mb: 3 }}>
                 {details.byVendor.map((vendor, index) => (
-                  <Grid item xs={6} key={`${vendor.vendor}-${index}`}>
+                  <Grid size={{ xs: 6 }} key={`${vendor.vendor}-${index}`}>
                     <Box
                       sx={{
                         p: 1.5,
@@ -277,7 +277,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
               </Typography>
               <Grid container spacing={1} sx={{ mb: 3 }}>
                 {details.byCard.map((card, index) => (
-                  <Grid item xs={6} key={`${card.accountNumber}-${index}`}>
+                  <Grid size={{ xs: 6 }} key={`${card.accountNumber}-${index}`}>
                     <Box
                       sx={{
                         p: 1.5,

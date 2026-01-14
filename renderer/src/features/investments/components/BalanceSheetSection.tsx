@@ -42,14 +42,14 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
           </Box>
         </Box>
         <Grid container spacing={2}>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Skeleton variant="text" width={120} height={18} />
             <Skeleton variant="text" width={240} height={48} />
           </Grid>
-          <Grid item xs={12} md={8}>
+          <Grid size={{ xs: 12, md: 8 }}>
             <Grid container spacing={2}>
               {[0, 1, 2, 3].map((idx) => (
-                <Grid item xs={6} md={3} key={idx}>
+                <Grid size={{ xs: 6, md: 3 }} key={idx}>
                   <Skeleton variant="rounded" height={84} />
                 </Grid>
               ))}
@@ -199,7 +199,7 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
       </Box>
 
       <Grid container spacing={2} alignItems="stretch">
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <Typography variant="caption" color="text.secondary">
             {headlineLabel}
           </Typography>
@@ -211,30 +211,30 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
           </Typography>
         </Grid>
 
-        <Grid item xs={12} md={8}>
+        <Grid size={{ xs: 12, md: 8 }}>
           <Grid container spacing={2}>
-            <Grid item xs={6} md={3}>
+            <Grid size={{ xs: 6, md: 3 }}>
               {bucketCard('cash', {
                 icon: <AccountBalanceIcon fontSize="small" />,
                 label: t('buckets.cash'),
                 color: theme.palette.primary.main,
               })}
             </Grid>
-            <Grid item xs={6} md={3}>
+            <Grid size={{ xs: 6, md: 3 }}>
               {bucketCard('liquid', {
                 icon: <ShowChartIcon fontSize="small" />,
                 label: t('buckets.liquid'),
                 color: theme.palette.info.main,
               })}
             </Grid>
-            <Grid item xs={6} md={3}>
+            <Grid size={{ xs: 6, md: 3 }}>
               {bucketCard('restricted', {
                 icon: <SchoolIcon fontSize="small" />,
                 label: t('buckets.restricted'),
                 color: theme.palette.warning.main,
               })}
             </Grid>
-            <Grid item xs={6} md={3}>
+            <Grid size={{ xs: 6, md: 3 }}>
               {liabilityCard()}
             </Grid>
           </Grid>

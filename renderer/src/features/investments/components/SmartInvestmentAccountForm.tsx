@@ -320,7 +320,7 @@ useEffect(() => {
             )}
 
             <Grid container spacing={2}>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   required
@@ -332,7 +332,7 @@ useEffect(() => {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControl fullWidth required>
                   <InputLabel>Account Type</InputLabel>
                   <Select
@@ -349,7 +349,7 @@ useEffect(() => {
                 </FormControl>
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Autocomplete<InstitutionMetadata, false, false, false>
                   loading={institutionsLoading}
                   options={institutions}
@@ -375,7 +375,7 @@ useEffect(() => {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
                   fullWidth
                   label="Institution Name (Custom)"
@@ -389,7 +389,7 @@ useEffect(() => {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
                   fullWidth
                   label="Account Number"
@@ -399,7 +399,7 @@ useEffect(() => {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControl fullWidth>
                   <InputLabel>Currency</InputLabel>
                   <Select
@@ -416,7 +416,7 @@ useEffect(() => {
                 </FormControl>
               </Grid>
 
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   multiline
@@ -445,7 +445,7 @@ useEffect(() => {
             </Alert>
 
             <Grid container spacing={2}>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   required
@@ -460,7 +460,7 @@ useEffect(() => {
                 />
               </Grid>
 
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   required
@@ -479,7 +479,7 @@ useEffect(() => {
                 />
               </Grid>
 
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   type="date"
@@ -493,7 +493,7 @@ useEffect(() => {
               </Grid>
 
               {currentValue && costBasis && (
-                <Grid item xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <Alert severity={calculateROI() >= 0 ? 'success' : 'warning'}>
                     <Box display="flex" alignItems="center" gap={1}>
                       <Typography variant="body2">

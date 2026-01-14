@@ -386,7 +386,7 @@ const EnhancedProfileSection: React.FC = () => {
         </AccordionSummary>
         <AccordionDetails>
           <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 label={t('fields.username')}
                 fullWidth
@@ -402,7 +402,7 @@ const EnhancedProfileSection: React.FC = () => {
               />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 label={t('fields.birthDate')}
                 type="date"
@@ -436,7 +436,7 @@ const EnhancedProfileSection: React.FC = () => {
               />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <FormControl fullWidth>
                 <InputLabel>{t('fields.maritalStatus')}</InputLabel>
                 <Select
@@ -452,7 +452,7 @@ const EnhancedProfileSection: React.FC = () => {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <FormControl fullWidth>
                 <InputLabel>{t('fields.location')}</InputLabel>
                 <Select
@@ -480,7 +480,7 @@ const EnhancedProfileSection: React.FC = () => {
         </AccordionSummary>
         <AccordionDetails>
           <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 label={t('fields.occupation')}
                 fullWidth
@@ -497,7 +497,7 @@ const EnhancedProfileSection: React.FC = () => {
               />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <FormControl fullWidth>
                 <InputLabel>{t('fields.industry')}</InputLabel>
                 <Select
@@ -512,7 +512,7 @@ const EnhancedProfileSection: React.FC = () => {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <FormControl fullWidth>
                 <InputLabel>{t('fields.employmentStatus')}</InputLabel>
                 <Select
@@ -527,7 +527,7 @@ const EnhancedProfileSection: React.FC = () => {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <FormControl fullWidth>
                 <InputLabel>{t('fields.educationLevel')}</InputLabel>
                 <Select
@@ -542,7 +542,7 @@ const EnhancedProfileSection: React.FC = () => {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 label={t('fields.monthlyIncome')}
                 type="number"
@@ -561,7 +561,7 @@ const EnhancedProfileSection: React.FC = () => {
               />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <FormControl fullWidth>
                 <InputLabel>{t('fields.homeOwnership')}</InputLabel>
                 <Select
@@ -593,7 +593,7 @@ const EnhancedProfileSection: React.FC = () => {
           </AccordionSummary>
           <AccordionDetails>
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
                   label={t('fields.spouseName')}
                   fullWidth
@@ -609,7 +609,7 @@ const EnhancedProfileSection: React.FC = () => {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
                   label={t('fields.spouseBirthDate')}
                   type="date"
@@ -627,7 +627,7 @@ const EnhancedProfileSection: React.FC = () => {
               />
             </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
                   label={t('fields.spouseOccupation')}
                   fullWidth
@@ -636,7 +636,7 @@ const EnhancedProfileSection: React.FC = () => {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControl fullWidth>
                   <InputLabel>{t('fields.spouseIndustry')}</InputLabel>
                   <Select
@@ -651,7 +651,7 @@ const EnhancedProfileSection: React.FC = () => {
                 </FormControl>
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
                   label={t('fields.spouseIncome')}
                   type="number"
@@ -668,7 +668,7 @@ const EnhancedProfileSection: React.FC = () => {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControl fullWidth>
                   <InputLabel>{t('fields.spouseEmployment')}</InputLabel>
                   <Select
@@ -712,7 +712,7 @@ const EnhancedProfileSection: React.FC = () => {
                   const age = child.birth_date ? calculateAge(child.birth_date) : null;
                   const educationLabel = CHILD_EDUCATION_OPTIONS.find((option) => option.value === child.education_stage)?.label;
                   return (
-                    <Grid item xs={12} md={6} key={child.id || index}>
+                    <Grid size={{ xs: 12, md: 6 }} key={child.id || index}>
                       <Card variant="outlined">
                         <CardContent>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
@@ -821,7 +821,7 @@ const EnhancedProfileSection: React.FC = () => {
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <TextField
                 label={t('children.dialog.name')}
                 fullWidth
@@ -831,7 +831,7 @@ const EnhancedProfileSection: React.FC = () => {
               />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 label={t('children.dialog.birthDate')}
                 type="date"
@@ -850,7 +850,7 @@ const EnhancedProfileSection: React.FC = () => {
               />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <FormControl fullWidth>
                 <InputLabel>{t('children.dialog.gender')}</InputLabel>
                 <Select
@@ -865,7 +865,7 @@ const EnhancedProfileSection: React.FC = () => {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <FormControl fullWidth>
                 <InputLabel>{t('children.dialog.educationStage')}</InputLabel>
                 <Select
@@ -880,7 +880,7 @@ const EnhancedProfileSection: React.FC = () => {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <FormControlLabel
                 control={
                   <Checkbox

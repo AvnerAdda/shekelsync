@@ -61,7 +61,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import logoUrl from '@app/public/logo.svg?url';
 import SmartNotifications from '@renderer/features/notifications/components/SmartNotifications';
-import { useThemeMode } from '@app/contexts/ThemeContext';
+import { useThemeMode } from '@renderer/contexts/ThemeContext';
 import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
 import type { SupportedLocale } from '@renderer/i18n';
 
@@ -549,38 +549,34 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
             },
           }}
         >
-          {activeSubmenu ? (
-            <>
-              <MenuItem onClick={() => setActiveSubmenu(null)} sx={{ fontWeight: 600, fontSize: '0.9rem', py: 1.5 }}>
+          {activeSubmenu ? [
+              <MenuItem key="back" onClick={() => setActiveSubmenu(null)} sx={{ fontWeight: 600, fontSize: '0.9rem', py: 1.5 }}>
                 {t('titleBar.menu.back')}
-              </MenuItem>
-              <Divider sx={{ borderColor: alpha(theme.palette.divider, 0.1) }} />
-              {renderSubmenu(activeSubmenu)}
-            </>
-          ) : (
-            <>
-              <MenuItem onClick={() => setActiveSubmenu('file')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
+              </MenuItem>,
+              <Divider key="divider" sx={{ borderColor: alpha(theme.palette.divider, 0.1) }} />,
+              renderSubmenu(activeSubmenu)
+          ] : [
+              <MenuItem key="file" onClick={() => setActiveSubmenu('file')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
                 <ListItemIcon><FileIcon fontSize="small" /></ListItemIcon>
                 <ListItemText primary={t('titleBar.menu.file')} />
-              </MenuItem>
-              <MenuItem onClick={() => setActiveSubmenu('edit')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
+              </MenuItem>,
+              <MenuItem key="edit" onClick={() => setActiveSubmenu('edit')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
                 <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
                 <ListItemText primary={t('titleBar.menu.edit')} />
-              </MenuItem>
-              <MenuItem onClick={() => setActiveSubmenu('view')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
+              </MenuItem>,
+              <MenuItem key="view" onClick={() => setActiveSubmenu('view')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
                 <ListItemIcon><ViewIcon fontSize="small" /></ListItemIcon>
                 <ListItemText primary={t('titleBar.menu.view')} />
-              </MenuItem>
-              <MenuItem onClick={() => setActiveSubmenu('go')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
+              </MenuItem>,
+              <MenuItem key="go" onClick={() => setActiveSubmenu('go')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
                 <ListItemIcon><GoIcon fontSize="small" /></ListItemIcon>
                 <ListItemText primary={t('titleBar.menu.go')} />
-              </MenuItem>
-              <MenuItem onClick={() => setActiveSubmenu('help')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
+              </MenuItem>,
+              <MenuItem key="help" onClick={() => setActiveSubmenu('help')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
                 <ListItemIcon><HelpIcon fontSize="small" /></ListItemIcon>
                 <ListItemText primary={t('titleBar.menu.help')} />
               </MenuItem>
-            </>
-          )}
+          ]}
         </Menu>
 
         <Box

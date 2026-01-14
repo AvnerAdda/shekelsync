@@ -23,7 +23,7 @@ import {
   BugReport as BugReportIcon,
   Translate as LanguageIcon,
 } from '@mui/icons-material';
-import { useThemeMode } from '@app/contexts/ThemeContext';
+import { useThemeMode } from '@renderer/contexts/ThemeContext';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useChatbotPermissions } from '@app/contexts/ChatbotPermissionsContext';
 import DataExportPanel from '../components/DataExportPanel';

@@ -265,7 +265,7 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
 
       <Grid container spacing={3} sx={{ mt: 1 }}>
         {/* Breakdown Details Full Width */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Card elevation={0} sx={{
             borderRadius: 4,
             bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),

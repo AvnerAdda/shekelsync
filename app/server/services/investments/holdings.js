@@ -1,4 +1,13 @@
-const database = require('../database.js');
+let database = require('../database.js');
+
+// For testing: allow injection of mock database
+let _originalDatabase = database;
+function __setDatabase(mockDb) {
+  database = mockDb;
+}
+function __resetDatabase() {
+  database = _originalDatabase;
+}
 const {
   INSTITUTION_SELECT_FIELDS,
   buildInstitutionFromRow,
@@ -252,6 +261,8 @@ module.exports = {
   listHoldings,
   upsertHolding,
   deleteHolding,
+  __setDatabase,
+  __resetDatabase,
 };
 
 module.exports.default = module.exports;

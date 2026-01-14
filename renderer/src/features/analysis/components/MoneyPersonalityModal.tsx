@@ -148,7 +148,7 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
         ) : data ? (
           <Grid container spacing={3}>
             {/* Programmed vs Impulse */}
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('spendingBehavior.title')}
@@ -196,7 +196,7 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
             </Grid>
 
             {/* Recurring Patterns */}
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('recurring.title')}
@@ -234,7 +234,7 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
             </Grid>
 
             {/* Average Spending per Category - Enhanced Design */}
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('categoryAverages.title')}
@@ -255,7 +255,7 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                           const categoryColor = getCategoryColor(cat.avgPerWeek, minAmount, maxAmount);
 
                           return (
-                            <Grid item xs={12} sm={6} md={4} key={index}>
+                            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
                               <Paper
                                 elevation={0}
                                 sx={{

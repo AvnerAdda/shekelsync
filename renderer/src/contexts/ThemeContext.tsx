@@ -2,7 +2,8 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import createCache from '@emotion/cache';
 import { CacheProvider } from '@emotion/react';
 import rtlPlugin from 'stylis-plugin-rtl';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
+import { createTheme as createMuiTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 
 type ThemeMode = 'light' | 'dark' | 'system';
@@ -88,7 +89,7 @@ export const ThemeContextProvider: React.FC<ThemeContextProviderProps> = ({
   const fontSizeMultiplier = fontSize === 'small' ? 0.9 : fontSize === 'large' ? 1.1 : 1;
 
   const theme = useMemo(
-    () => createTheme({
+    () => createMuiTheme({
       direction,
       palette: {
         mode: actualTheme,

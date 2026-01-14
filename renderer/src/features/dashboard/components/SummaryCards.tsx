@@ -8,9 +8,9 @@ import {
   LinearProgress,
   CircularProgress,
   Tooltip,
+  Grid,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import Grid2 from '@mui/material/Grid2';
 import {
   AccountBalance as AccountBalanceIcon,
   TrendingUp as TrendingUpIcon,
@@ -650,9 +650,9 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   ];
 
   return (
-    <Grid2 container spacing={3}>
+    <Grid container spacing={3}>
       {cards.map((card) => (
-        <Grid2 size={{ xs: 12, md: 4 }} key={card.id}>
+        <Grid size={{ xs: 12, md: 4 }} key={card.id}>
           <Card sx={{ 
             height: '100%',
             borderRadius: 4,
@@ -701,9 +701,9 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
               {card.details}
             </CardContent>
           </Card>
-        </Grid2>
+        </Grid>
       ))}
-    </Grid2>
+    </Grid>
   );
 };
 

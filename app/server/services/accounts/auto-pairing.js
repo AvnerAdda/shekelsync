@@ -117,7 +117,7 @@ async function findBestBankAccount(params) {
     throw error;
   }
 
-  const client = await database.getClient();
+  const client = await getDatabase().getClient();
 
   try {
     const ccLast4 = getAccountLast4(creditCardAccountNumber);
@@ -149,11 +149,13 @@ async function findBestBankAccount(params) {
     const result = await client.query(query, ccVendors);
 
     if (result.rows.length === 0) {
-      return { found: false, reason: 'No bank repayment transactions found' };
+      return { found: false, reason: 'No bank repayment transactions found' 
+};
     }
 
     // Group repayments by bank vendor + account
-    const bankAccountGroups = {};
+    const bankAccountGroups = {
+};
 
     result.rows.forEach(row => {
       const key = `${row.vendor}|${row.account_number || 'null'}`;
@@ -164,7 +166,8 @@ async function findBestBankAccount(params) {
           transactions: [],
           matchingLast4Count: 0,
           matchingVendorCount: 0,
-        };
+        
+};
       }
 
       const group = bankAccountGroups[key];
@@ -199,7 +202,8 @@ async function findBestBankAccount(params) {
       return {
         found: false,
         reason: `No bank repayments reference this credit card (last4: ${ccLast4 || 'unknown'})`,
-      };
+      
+};
     }
 
     const bestMatch = candidates[0];
@@ -230,7 +234,8 @@ async function findBestBankAccount(params) {
         bankAccountNumber: c.bankAccountNumber,
         transactionCount: c.transactions.length,
       })),
-    };
+    
+};
   } finally {
     client.release();
   }
@@ -263,7 +268,7 @@ async function calculateDiscrepancy(params) {
   const EPSILON = 1.0; // Allow 1 ILS tolerance for rounding
   const MAX_FEE_AMOUNT = 200;
 
-  const client = await database.getClient();
+  const client = await getDatabase().getClient();
 
   try {
     // Check if discrepancy was already acknowledged
@@ -534,6 +539,7 @@ async function calculateDiscrepancy(params) {
     if (matchingRepayments.length === 0) {
       return {
         exists: false,
+        acknowledged,
         reason: `No bank repayments found matching this credit card (${ccVendor} ${ccLast4 || ''})`,
         periodMonths: monthsBack,
         method,
@@ -825,10 +831,27 @@ async function autoPairCreditCard(params) {
   };
 }
 
+// Test helpers for dependency injection
+let testDatabase = null;
+
+function __setDatabase(db) {
+  testDatabase = db;
+}
+
+function __resetDatabase() {
+  testDatabase = null;
+}
+
+function getDatabase() {
+  return testDatabase || database;
+}
+
 module.exports = {
   autoPairCreditCard,
   findBestBankAccount,
   calculateDiscrepancy,
+  __setDatabase,
+  __resetDatabase,
 };
 
 module.exports.default = module.exports;
