@@ -2,13 +2,16 @@
  * Quest System Types
  */
 
-export type QuestActionType = 
+export type QuestActionType =
   | 'quest_reduce_spending'
   | 'quest_savings_target'
   | 'quest_budget_adherence'
   | 'quest_set_budget'
   | 'quest_reduce_fixed_cost'
-  | 'quest_income_goal';
+  | 'quest_income_goal'
+  // Actionable quest types
+  | 'quest_merchant_limit'
+  | 'quest_weekend_limit';
 
 export type QuestStatus = 'active' | 'dismissed' | 'resolved' | 'accepted' | 'failed';
 export type QuestDifficulty = 'easy' | 'medium' | 'hard';
@@ -39,16 +42,38 @@ export interface QuestMetadata {
     name: string;
     surplus: number;
   }>;
+  // Merchant quest metadata
+  merchant_name?: string;
+  merchant_frequency?: string;
+  baseline_visits?: number;
+  target_visits?: number;
+  // Weekend quest metadata
+  avg_weekend_spend?: number;
+  target_weekend_spend?: number;
 }
 
 export interface QuestCompletionCriteria {
-  type: 'spending_limit' | 'budget_adherence' | 'budget_exists' | 'fixed_cost_reduction' | 'savings_transfer';
+  type:
+    | 'spending_limit'
+    | 'budget_adherence'
+    | 'budget_exists'
+    | 'fixed_cost_reduction'
+    | 'savings_transfer'
+    // Actionable quest criteria types
+    | 'merchant_frequency_limit'
+    | 'weekend_spending_limit';
   category_definition_id?: number;
   budget_id?: number;
   target_amount?: number;
   target_limit?: number;
   baseline_amount?: number;
   comparison?: 'less_than' | 'less_than_or_equal' | 'greater_than' | 'greater_than_or_equal';
+  // Merchant quest fields
+  merchant_pattern?: string;
+  max_transactions?: number;
+  baseline_transactions?: number;
+  // Weekend quest fields
+  days_of_week?: number[];
 }
 
 export interface QuestCompletionResult {

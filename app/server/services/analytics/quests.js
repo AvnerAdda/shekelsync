@@ -12,6 +12,7 @@
 const actualDatabase = require('../database.js');
 const { resolveLocale, getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
 const forecastService = require('../forecast.js');
+const { getBehavioralPatterns } = require('./behavioral.js');
 
 let database = actualDatabase;
 
@@ -57,6 +58,19 @@ const QUEST_ACTION_TYPES = [
   'quest_set_budget',
   'quest_reduce_fixed_cost',
   'quest_income_goal',
+  // Actionable quest types
+  'quest_merchant_limit',
+  'quest_weekend_limit',
+];
+
+// Merchants to exclude from quest generation (essential services)
+const EXCLUDED_MERCHANT_PATTERNS = [
+  /סופרמרקט/i,
+  /supermarket/i,
+  /pharmacy/i,
+  /בית מרקחת/i,
+  /gas station/i,
+  /תחנת דלק/i,
 ];
 
 function median(values) {
@@ -123,6 +137,170 @@ function isExcludedCategoryName(name, nameEn) {
   }
 
   return false;
+}
+
+/**
+ * Check if a merchant name should be excluded from quest generation
+ */
+function isExcludedMerchant(merchantName) {
+  if (!merchantName) return true;
+  const name = String(merchantName).toLowerCase();
+  return EXCLUDED_MERCHANT_PATTERNS.some(pattern => pattern.test(name));
+}
+
+/**
+ * Generate merchant-specific quests based on high-frequency transactions
+ * @param {Object} context - Quest generation context
+ * @param {number} slotsAvailable - Available quest slots
+ * @param {Object} client - Database client
+ * @returns {Array} Generated merchant quests
+ */
+async function generateMerchantQuests(context, slotsAvailable, client) {
+  if (slotsAvailable <= 0) return [];
+
+  const { locale } = context;
+  const quests = [];
+
+  try {
+    const behavioralData = await getBehavioralPatterns(locale);
+    const { recurringPatterns } = behavioralData;
+
+    if (!recurringPatterns || recurringPatterns.length === 0) {
+      console.log('[Quests] No recurring patterns found for merchant quests');
+      return [];
+    }
+
+    // Find high-frequency merchants (daily or weekly visits with meaningful spend)
+    const targetMerchants = recurringPatterns
+      .filter(p => p.frequency === 'daily' || p.frequency === 'weekly')
+      .filter(p => (p.avgAmount || 0) * (p.occurrences || 0) > 200) // >200₪ monthly spend
+      .filter(p => !isExcludedMerchant(p.name))
+      .slice(0, 3);
+
+    console.log('[Quests] Found', targetMerchants.length, 'potential merchant quest targets');
+
+    for (const merchant of targetMerchants) {
+      if (quests.length >= slotsAvailable) break;
+
+      const baselineVisits = merchant.occurrences || 4;
+      const targetVisits = Math.max(1, Math.ceil(baselineVisits * 0.6)); // Reduce by ~40%
+      const reductionPct = Math.round((1 - targetVisits / baselineVisits) * 100);
+
+      const difficulty = reductionPct >= 50 ? 'medium' : 'easy';
+      const durationDays = 7; // Weekly challenge
+      const points = calculateQuestPoints(durationDays, difficulty, reductionPct);
+
+      const potentialSavings = Math.round((merchant.avgAmount || 0) * (baselineVisits - targetVisits));
+
+      quests.push({
+        action_type: 'quest_merchant_limit',
+        trigger_category_id: null,
+        severity: 'low',
+        title: `Reduce ${merchant.name} visits`,
+        description: `Challenge: Visit ${merchant.name} max ${targetVisits} times this week (currently ~${baselineVisits}/week). Save up to ₪${potentialSavings}.`,
+        metadata: JSON.stringify({
+          quest_type: 'merchant_limit',
+          merchant_name: merchant.name,
+          merchant_frequency: merchant.frequency,
+          baseline_visits: baselineVisits,
+          target_visits: targetVisits,
+          avg_transaction: merchant.avgAmount,
+        }),
+        completion_criteria: JSON.stringify({
+          type: 'merchant_frequency_limit',
+          merchant_pattern: merchant.name.toLowerCase(),
+          max_transactions: targetVisits,
+          baseline_transactions: baselineVisits,
+        }),
+        quest_difficulty: difficulty,
+        quest_duration_days: durationDays,
+        points_reward: points,
+        potential_impact: potentialSavings,
+        detection_confidence: 0.85,
+      });
+    }
+  } catch (error) {
+    console.error('[Quests] Error generating merchant quests:', error);
+  }
+
+  return quests;
+}
+
+/**
+ * Generate weekend spending limit quests
+ * @param {Object} context - Quest generation context
+ * @param {number} slotsAvailable - Available quest slots
+ * @param {Object} client - Database client
+ * @returns {Array} Generated weekend quests
+ */
+async function generateWeekendQuests(context, slotsAvailable, client) {
+  if (slotsAvailable <= 0) return [];
+
+  const quests = [];
+
+  try {
+    // Get last 4 weeks of weekend spending (Friday evening + Saturday + Sunday)
+    const weekendStats = await client.query(`
+      SELECT
+        AVG(weekly_total) as avg_weekend_spend,
+        COUNT(*) as weeks_analyzed
+      FROM (
+        SELECT strftime('%Y-%W', date) as week, SUM(ABS(price)) as weekly_total
+        FROM transactions
+        WHERE date >= date('now', '-28 days')
+          AND price < 0
+          AND CAST(strftime('%w', date) AS INTEGER) IN (0, 5, 6)
+        GROUP BY strftime('%Y-%W', date)
+      )
+    `);
+
+    const avgWeekendSpend = parseFloat(weekendStats.rows[0]?.avg_weekend_spend || 0);
+    const weeksAnalyzed = parseInt(weekendStats.rows[0]?.weeks_analyzed || 0, 10);
+
+    console.log('[Quests] Weekend spending analysis:', { avgWeekendSpend, weeksAnalyzed });
+
+    // Only generate if we have enough data and spending is significant
+    if (weeksAnalyzed < 2 || avgWeekendSpend < 300) {
+      console.log('[Quests] Not enough weekend data or spending too low for weekend quest');
+      return [];
+    }
+
+    const reductionPct = 15;
+    const targetAmount = Math.round(avgWeekendSpend * (1 - reductionPct / 100));
+
+    const difficulty = avgWeekendSpend > 600 ? 'medium' : 'easy';
+    const durationDays = 7;
+    const points = calculateQuestPoints(durationDays, difficulty, reductionPct);
+
+    quests.push({
+      action_type: 'quest_weekend_limit',
+      trigger_category_id: null,
+      severity: 'low',
+      title: 'Weekend Spending Challenge',
+      description: `Challenge: Keep your weekend spending under ₪${targetAmount} this week. Your average is ₪${Math.round(avgWeekendSpend)}.`,
+      metadata: JSON.stringify({
+        quest_type: 'weekend_limit',
+        avg_weekend_spend: Math.round(avgWeekendSpend),
+        target_weekend_spend: targetAmount,
+        reduction_pct: reductionPct,
+      }),
+      completion_criteria: JSON.stringify({
+        type: 'weekend_spending_limit',
+        target_amount: targetAmount,
+        baseline_amount: Math.round(avgWeekendSpend),
+        days_of_week: [0, 5, 6], // Sunday, Friday, Saturday
+      }),
+      quest_difficulty: difficulty,
+      quest_duration_days: durationDays,
+      points_reward: points,
+      potential_impact: Math.round(avgWeekendSpend - targetAmount),
+      detection_confidence: 0.8,
+    });
+  } catch (error) {
+    console.error('[Quests] Error generating weekend quests:', error);
+  }
+
+  return quests;
 }
 
 /**
@@ -491,6 +669,16 @@ async function generateQuests(params = {}) {
       }
     }
 
+    // Quest Type 6: Merchant-specific quests (actionable)
+    const merchantQuests = await generateMerchantQuests({ locale }, slotsAvailable - quests.length, client);
+    quests.push(...merchantQuests);
+    console.log('[Quests] Generated', merchantQuests.length, 'merchant quests');
+
+    // Quest Type 7: Weekend spending limit quests (actionable)
+    const weekendQuests = await generateWeekendQuests({ locale }, slotsAvailable - quests.length, client);
+    quests.push(...weekendQuests);
+    console.log('[Quests] Generated', weekendQuests.length, 'weekend quests');
+
     // Save quests to database
     let created = 0;
     const now = new Date();
@@ -760,6 +948,51 @@ async function verifyQuestCompletion(questId, manualResult = null) {
           }
           break;
         }
+
+        case 'merchant_frequency_limit': {
+          // Count transactions matching merchant pattern during quest period
+          const merchantCount = await client.query(`
+            SELECT COUNT(*) as cnt
+            FROM transactions
+            WHERE date >= $1 AND date <= $2
+              AND LOWER(name) LIKE '%' || $3 || '%'
+              AND price < 0
+          `, [
+            quest.accepted_at.split('T')[0],
+            (quest.deadline || new Date().toISOString()).split('T')[0],
+            criteria.merchant_pattern,
+          ]);
+
+          actualValue = parseInt(merchantCount.rows[0]?.cnt || 0, 10);
+          success = actualValue <= criteria.max_transactions;
+          // Achievement: how much under the limit (inverted scale)
+          achievementPct = criteria.max_transactions > 0
+            ? Math.round((1 - (actualValue - criteria.max_transactions) / criteria.baseline_transactions) * 100)
+            : (success ? 100 : 0);
+          achievementPct = Math.max(0, Math.min(150, achievementPct)); // Clamp to 0-150%
+          break;
+        }
+
+        case 'weekend_spending_limit': {
+          // Sum weekend spending during quest period
+          const weekendSpending = await client.query(`
+            SELECT COALESCE(SUM(ABS(price)), 0) as total
+            FROM transactions
+            WHERE date >= $1 AND date <= $2
+              AND price < 0
+              AND CAST(strftime('%w', date) AS INTEGER) IN (0, 5, 6)
+          `, [
+            quest.accepted_at.split('T')[0],
+            (quest.deadline || new Date().toISOString()).split('T')[0],
+          ]);
+
+          actualValue = parseFloat(weekendSpending.rows[0]?.total || 0);
+          success = actualValue <= criteria.target_amount;
+          achievementPct = criteria.target_amount > 0
+            ? Math.round((1 - actualValue / criteria.target_amount) * 100 + 100)
+            : 100;
+          break;
+        }
       }
     }
 
@@ -899,6 +1132,42 @@ async function getActiveQuests(params = {}) {
 
           const spent = parseFloat(spendingResult.rows[0]?.total_spent || 0);
           const target = criteria.target_amount || criteria.target_limit || 0;
+          progress = {
+            current: spent,
+            target,
+            percentage: target > 0 ? Math.round((spent / target) * 100) : 0,
+            on_track: spent <= target,
+          };
+        } else if (criteria.type === 'merchant_frequency_limit') {
+          const startDate = row.accepted_at;
+          const countResult = await client.query(`
+            SELECT COUNT(*) as cnt
+            FROM transactions
+            WHERE date >= $1
+              AND LOWER(name) LIKE '%' || $2 || '%'
+              AND price < 0
+          `, [startDate.split('T')[0], criteria.merchant_pattern]);
+
+          const current = parseInt(countResult.rows[0]?.cnt || 0, 10);
+          const target = criteria.max_transactions || 0;
+          progress = {
+            current,
+            target,
+            percentage: target > 0 ? Math.round((current / target) * 100) : 0,
+            on_track: current <= target,
+          };
+        } else if (criteria.type === 'weekend_spending_limit') {
+          const startDate = row.accepted_at;
+          const spendingResult = await client.query(`
+            SELECT COALESCE(SUM(ABS(price)), 0) as total_spent
+            FROM transactions
+            WHERE date >= $1
+              AND price < 0
+              AND CAST(strftime('%w', date) AS INTEGER) IN (0, 5, 6)
+          `, [startDate.split('T')[0]]);
+
+          const spent = parseFloat(spendingResult.rows[0]?.total_spent || 0);
+          const target = criteria.target_amount || 0;
           progress = {
             current: spent,
             target,

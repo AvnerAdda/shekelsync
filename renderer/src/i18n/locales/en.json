@@ -926,7 +926,8 @@
         "daysLeft_plural": "{{count}} days left",
         "expired": "Deadline passed",
         "onTrack": "On track",
-        "atRisk": "At risk"
+        "atRisk": "At risk",
+        "visits": "visits"
       },
       "rewards": {
         "points": "+{{points}} pts",
@@ -948,7 +949,9 @@
         "quest_budget_adherence": "Budget Challenge",
         "quest_set_budget": "Create Budget",
         "quest_reduce_fixed_cost": "Reduce Fixed Cost",
-        "quest_income_goal": "Income Goal"
+        "quest_income_goal": "Income Goal",
+        "quest_merchant_limit": "Merchant Challenge",
+        "quest_weekend_limit": "Weekend Challenge"
       },
       "verification": {
         "success": "Quest completed! +{{points}} points",
