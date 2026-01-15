@@ -829,10 +829,17 @@
         "title": "Score Trend",
         "subtitle": "Day-by-day over the last {{days}} days ({{windowDays}}-day rolling window)",
         "summary": "Change: {{delta}} points (7-day avg)",
+        "showBreakdown": "Show breakdown",
         "trend": {
           "up": "Good trend",
           "down": "Bad trend",
           "flat": "Stable"
+        },
+        "breakdown": {
+          "savings": "Savings",
+          "diversity": "Diversity",
+          "impulse": "Impulse",
+          "runway": "Runway"
         },
         "tooltip": {
           "score": "Score"

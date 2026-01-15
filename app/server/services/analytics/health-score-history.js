@@ -165,6 +165,7 @@ async function getHealthScoreHistory(params = {}) {
       points.push({
         date: pointIso,
         overallHealthScore: score.overallScore,
+        breakdown: score.breakdown,
       });
     }
 
