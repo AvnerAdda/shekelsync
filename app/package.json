@@ -97,6 +97,9 @@
     },
     "files": [
       "server/**/*",
+      "lib/**/*",
+      "utils/**/*",
+      "config/**/*",
       "node_modules/**/*",
       "package.json",
       {
