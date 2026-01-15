@@ -7,7 +7,9 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
+  Switch,
   Typography,
   alpha,
   useTheme,
@@ -16,15 +18,27 @@ import CloseIcon from '@mui/icons-material/Close';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import TrendingFlatIcon from '@mui/icons-material/TrendingFlat';
-import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Line } from 'recharts';
+import SavingsIcon from '@mui/icons-material/Savings';
+import Diversity3Icon from '@mui/icons-material/Diversity3';
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Line, Legend } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@renderer/lib/api-client';
 
 type TrendDirection = 'up' | 'down' | 'flat';
 
+interface HealthBreakdown {
+  savingsScore: number;
+  diversityScore: number;
+  impulseScore: number;
+  runwayScore: number;
+}
+
 interface HealthScoreHistoryPoint {
   date: string;
   overallHealthScore: number;
+  breakdown?: HealthBreakdown;
 }
 
 interface HealthScoreHistoryResponse {
@@ -41,6 +55,20 @@ interface HealthScoreHistoryResponse {
   };
 }
 
+const BREAKDOWN_COLORS = {
+  savingsScore: '#4caf50',
+  diversityScore: '#2196f3',
+  impulseScore: '#ff9800',
+  runwayScore: '#9c27b0',
+};
+
+const BREAKDOWN_ICONS: Record<string, React.ReactNode> = {
+  savingsScore: <SavingsIcon fontSize="small" />,
+  diversityScore: <Diversity3Icon fontSize="small" />,
+  impulseScore: <ShoppingCartIcon fontSize="small" />,
+  runwayScore: <ScheduleIcon fontSize="small" />,
+};
+
 interface HealthScoreTrendModalProps {
   open: boolean;
   onClose: () => void;
@@ -55,6 +83,7 @@ const HealthScoreTrendModal: React.FC<HealthScoreTrendModalProps> = ({ open, onC
   const [data, setData] = useState<HealthScoreHistoryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState(0);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
@@ -103,7 +132,15 @@ const HealthScoreTrendModal: React.FC<HealthScoreTrendModalProps> = ({ open, onC
     return data.points.map((point) => ({
       date: point.date,
       score: point.overallHealthScore,
+      savingsScore: point.breakdown?.savingsScore,
+      diversityScore: point.breakdown?.diversityScore,
+      impulseScore: point.breakdown?.impulseScore,
+      runwayScore: point.breakdown?.runwayScore,
     }));
+  }, [data]);
+
+  const hasBreakdownData = useMemo(() => {
+    return data?.points?.some((p) => p.breakdown) ?? false;
   }, [data]);
 
   const trend = data?.trend;
@@ -182,20 +219,63 @@ const HealthScoreTrendModal: React.FC<HealthScoreTrendModalProps> = ({ open, onC
 
         {!loading && !error && data && (
           <>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 2 }}>
-              <Chip
-                icon={trendMeta.icon}
-                label={trendMeta.label}
-                sx={{
-                  bgcolor: alpha(trendMeta.color, 0.12),
-                  color: trendMeta.color,
-                  fontWeight: 700,
-                }}
-              />
-              <Typography variant="body2" color="text.secondary">
-                {t('summary', { delta: trendDelta > 0 ? `+${trendDelta}` : `${trendDelta}` })}
-              </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Chip
+                  icon={trendMeta.icon}
+                  label={trendMeta.label}
+                  sx={{
+                    bgcolor: alpha(trendMeta.color, 0.12),
+                    color: trendMeta.color,
+                    fontWeight: 700,
+                  }}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  {t('summary', { delta: trendDelta > 0 ? `+${trendDelta}` : `${trendDelta}` })}
+                </Typography>
+              </Box>
+              {hasBreakdownData && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={showBreakdown}
+                      onChange={(e) => setShowBreakdown(e.target.checked)}
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" color="text.secondary">
+                      {t('showBreakdown', { defaultValue: 'Show breakdown' })}
+                    </Typography>
+                  }
+                />
+              )}
             </Box>
+
+            {showBreakdown && hasBreakdownData && (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 2, justifyContent: 'center' }}>
+                {Object.entries(BREAKDOWN_COLORS).map(([key, color]) => (
+                  <Box
+                    key={key}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      px: 1.5,
+                      py: 0.5,
+                      borderRadius: 2,
+                      bgcolor: alpha(color, 0.1),
+                      border: `1px solid ${alpha(color, 0.3)}`,
+                    }}
+                  >
+                    <Box sx={{ color, display: 'flex' }}>{BREAKDOWN_ICONS[key]}</Box>
+                    <Typography variant="caption" sx={{ color, fontWeight: 600 }}>
+                      {t(`breakdown.${key.replace('Score', '')}`, { defaultValue: key.replace('Score', '') })}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
 
             <Box sx={{ width: '100%', height: 320 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -208,7 +288,12 @@ const HealthScoreTrendModal: React.FC<HealthScoreTrendModalProps> = ({ open, onC
                   />
                   <YAxis domain={[0, 100]} tickCount={6} />
                   <RechartsTooltip
-                    formatter={(value: number) => [`${Math.round(value)}`, t('tooltip.score')]}
+                    formatter={(value, name) => {
+                      if (value === undefined || value === null) return ['-', name ?? ''];
+                      const nameStr = String(name ?? 'score');
+                      const labelKey = nameStr === 'score' ? 'tooltip.score' : `breakdown.${nameStr.replace('Score', '')}`;
+                      return [`${Math.round(Number(value))}`, t(labelKey, { defaultValue: nameStr })];
+                    }}
                     labelFormatter={(label: string) => label}
                     contentStyle={{
                       backgroundColor: alpha(theme.palette.background.paper, 0.85),
@@ -222,9 +307,50 @@ const HealthScoreTrendModal: React.FC<HealthScoreTrendModalProps> = ({ open, onC
                     type="monotone"
                     dataKey="score"
                     stroke={trendMeta.color}
-                    strokeWidth={3}
+                    strokeWidth={showBreakdown ? 2 : 3}
                     dot={false}
+                    name="score"
                   />
+                  {showBreakdown && hasBreakdownData && (
+                    <>
+                      <Line
+                        type="monotone"
+                        dataKey="savingsScore"
+                        stroke={BREAKDOWN_COLORS.savingsScore}
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        dot={false}
+                        name="savingsScore"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="diversityScore"
+                        stroke={BREAKDOWN_COLORS.diversityScore}
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        dot={false}
+                        name="diversityScore"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="impulseScore"
+                        stroke={BREAKDOWN_COLORS.impulseScore}
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        dot={false}
+                        name="impulseScore"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="runwayScore"
+                        stroke={BREAKDOWN_COLORS.runwayScore}
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        dot={false}
+                        name="runwayScore"
+                      />
+                    </>
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </Box>
