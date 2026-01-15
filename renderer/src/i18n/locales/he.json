@@ -1448,9 +1448,10 @@
     }
   },
   "categoryHierarchy": {
-    "header": { "title": "היררכיית קטגוריות" },
+    "header": { "title": "ניהול קטגוריות" },
     "tabs": {
-      "hierarchy": "היררכיית קטגוריות",
+      "categorize": "קטגוריזציה",
+      "hierarchy": "קטגוריות",
       "rules": "כללי התאמה"
     },
     "actions": {
@@ -1539,13 +1540,24 @@
       "fields": {
         "name": "שם קטגוריה",
         "description": "תיאור",
+        "notes": "הערות",
+        "notesPlaceholder": "הוסיפו הערות או מידע נוסף על קטגוריה זו...",
+        "tags": "תגיות",
+        "addTagPlaceholder": "הקלידו ולחצו Enter להוספת תגית",
         "active": "פעילה"
       }
+    },
+    "search": {
+      "categoryPlaceholder": "חיפוש קטגוריות...",
+      "resultsFound": "נמצאו {{count}} קטגוריות תואמות עבור \"{{query}}\"",
+      "searchHint": "חיפוש לפי שם, תיאור, תגיות או סוג",
+      "noResults": "לא נמצאו קטגוריות"
     },
     "transactions": {
       "title": "עסקאות {{name}}",
       "count": "{{count}} {{count, plural, one {עסקה} other {עסקאות}}}",
       "none": "לא נמצאו עסקאות עבור קטגוריה זו.",
+      "loading": "טוען עסקאות...",
       "unknown": "עסקה לא ידועה",
       "unknownVendor": "ספק לא ידוע",
       "remove": "הסרה מהקטגוריה",
