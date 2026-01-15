@@ -29,6 +29,8 @@ import {
   AccountBalance as BudgetIcon,
   Refresh as RefreshIcon,
   PlayArrow as AcceptIcon,
+  Storefront as MerchantIcon,
+  Weekend as WeekendIcon,
 } from '@mui/icons-material';
 import { useQuests } from '@renderer/features/analysis/hooks/useQuests';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
@@ -82,6 +84,8 @@ const QuestsPanel: React.FC = () => {
   };
 
   const getQuestIcon = (type: SmartAction['action_type']) => {
+    if (type === 'quest_merchant_limit') return <MerchantIcon />;
+    if (type === 'quest_weekend_limit') return <WeekendIcon />;
     if (type.includes('reduce') || type.includes('spending')) return <ReduceIcon />;
     if (type.includes('savings')) return <SavingsIcon />;
     if (type.includes('budget')) return <BudgetIcon />;
@@ -272,7 +276,9 @@ const QuestsPanel: React.FC = () => {
                 <Box mb={1}>
                   <Stack direction="row" justifyContent="space-between" mb={0.5}>
                     <Typography variant="caption" color="text.secondary">
-                      {formatCurrency(progress.current)} / {formatCurrency(progress.target)}
+                      {quest.action_type === 'quest_merchant_limit'
+                        ? `${progress.current} / ${progress.target} ${t('progress.visits')}`
+                        : `${formatCurrency(progress.current)} / ${formatCurrency(progress.target)}`}
                     </Typography>
                     <Typography
                       variant="caption"

@@ -915,7 +915,8 @@
         "daysLeft_plural": "נותרו {{count}} ימים",
         "expired": "עבר הדדליין",
         "onTrack": "במסלול",
-        "atRisk": "בסיכון"
+        "atRisk": "בסיכון",
+        "visits": "ביקורים"
       },
       "rewards": {
         "points": "+{{points}} נק׳",
@@ -937,7 +938,9 @@
         "quest_budget_adherence": "אתגר תקציב",
         "quest_set_budget": "צור תקציב",
         "quest_reduce_fixed_cost": "צמצום עלות קבועה",
-        "quest_income_goal": "יעד הכנסה"
+        "quest_income_goal": "יעד הכנסה",
+        "quest_merchant_limit": "אתגר חנות",
+        "quest_weekend_limit": "אתגר סוף שבוע"
       },
       "verification": {
         "success": "המשימה הושלמה! +{{points}} נקודות",
