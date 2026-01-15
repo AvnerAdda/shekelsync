@@ -42,12 +42,14 @@ async function listHierarchy(params = {}) {
       cd.id,
       cd.name,
       cd.name_en,
+      cd.name_fr,
       cd.parent_id,
       cd.category_type,
       cd.display_order,
       cd.icon,
       cd.color,
       cd.description,
+      cd.tags,
       cd.is_active,
       cd.hierarchy_path,
       cd.depth_level,
@@ -76,18 +78,29 @@ async function listHierarchy(params = {}) {
   }
 
   query += `
-    GROUP BY cd.id, cd.name, cd.name_en, cd.parent_id, cd.category_type, cd.display_order,
-             cd.icon, cd.color, cd.description, cd.is_active, cd.hierarchy_path, cd.depth_level,
+    GROUP BY cd.id, cd.name, cd.name_en, cd.name_fr, cd.parent_id, cd.category_type, cd.display_order,
+             cd.icon, cd.color, cd.description, cd.tags, cd.is_active, cd.hierarchy_path, cd.depth_level,
              cd.created_at, cd.updated_at
     ORDER BY cd.category_type, cd.display_order, cd.name
   `;
 
   const categoryResult = await getDatabase().query(query, queryParams);
-  const categories = categoryResult.rows.map((row) => ({
-    ...row,
-    transaction_count: Number.parseInt(row.transaction_count, 10) || 0,
-    total_amount: Number.parseFloat(row.total_amount) || 0,
-  }));
+  const categories = categoryResult.rows.map((row) => {
+    let parsedTags = [];
+    if (row.tags) {
+      try {
+        parsedTags = JSON.parse(row.tags);
+      } catch {
+        parsedTags = [];
+      }
+    }
+    return {
+      ...row,
+      tags: parsedTags,
+      transaction_count: Number.parseInt(row.transaction_count, 10) || 0,
+      total_amount: Number.parseFloat(row.total_amount) || 0,
+    };
+  });
 
   // Find transactions that need categorization:
   // 1. Transactions with no category assigned (category_definition_id IS NULL)
@@ -163,6 +176,7 @@ async function createCategory(payload = {}) {
     color,
     description,
     display_order,
+    tags,
   } = payload;
 
   if (!name || !category_type) {
@@ -223,10 +237,13 @@ async function createCategory(payload = {}) {
     finalDisplayOrder = orderResult.rows[0].next_order;
   }
 
+  // Serialize tags array to JSON string for storage
+  const tagsJson = Array.isArray(tags) ? JSON.stringify(tags) : null;
+
   const insertResult = await getDatabase().query(
     `INSERT INTO category_definitions
-      (name, parent_id, category_type, icon, color, description, display_order, depth_level, is_active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+      (name, parent_id, category_type, icon, color, description, display_order, depth_level, tags, is_active)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
      RETURNING *`,
     [
       name,
@@ -237,6 +254,7 @@ async function createCategory(payload = {}) {
       description || null,
       finalDisplayOrder,
       depthLevel,
+      tagsJson,
     ],
   );
 
@@ -264,7 +282,7 @@ async function createCategory(payload = {}) {
 }
 
 async function updateCategory(payload = {}) {
-  const { id, name, icon, color, description, display_order, is_active } = payload;
+  const { id, name, icon, color, description, display_order, is_active, tags } = payload;
 
   const categoryId = normalizeNumeric(id, 'Category ID', { required: true });
 
@@ -305,6 +323,12 @@ async function updateCategory(payload = {}) {
     }
     updates.push(`is_active = $${paramIndex++}`);
     params.push(activeValue);
+  }
+
+  if (tags !== undefined) {
+    const tagsJson = Array.isArray(tags) ? JSON.stringify(tags) : null;
+    updates.push(`tags = $${paramIndex++}`);
+    params.push(tagsJson);
   }
 
   if (updates.length === 0) {

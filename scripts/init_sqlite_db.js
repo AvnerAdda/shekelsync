@@ -38,6 +38,14 @@ function applySchemaUpgrades(db) {
     SET name_fr = name
     WHERE name_fr IS NULL
   `);
+
+  // Add tags column for category tagging (stores JSON array of strings)
+  ensureColumnExists(
+    db,
+    'category_definitions',
+    'tags',
+    'tags TEXT'
+  );
 }
 
 function parseArgs() {

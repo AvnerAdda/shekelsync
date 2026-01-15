@@ -36,7 +36,9 @@ import {
   Menu,
   ListItemIcon,
   LinearProgress,
+  useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -107,6 +109,7 @@ interface CategoryDefinition {
   icon?: string;
   color?: string;
   description?: string;
+  tags?: string[];
   display_order: number;
   is_active: boolean;
   children?: CategoryDefinition[];
@@ -239,6 +242,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   onCategoriesUpdated = () => {},
 }) => {
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'categoryHierarchy' });
+  const theme = useTheme();
   const locale = useMemo(() => (i18n.language?.split('-')[0] || 'he') as 'he' | 'en' | 'fr', [i18n.language]);
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -285,15 +289,24 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [creatingRules, setCreatingRules] = useState<Record<string, boolean>>({});
   const [assignMenuAnchors, setAssignMenuAnchors] = useState<Record<string, HTMLElement | null>>({});
 
-  // Transaction Viewer State
-  const [selectedCategoryForTransactions, setSelectedCategoryForTransactions] = useState<CategoryDefinition | null>(null);
-  const [categoryTransactions, setCategoryTransactions] = useState<TransactionMatch[]>([]);
-  const [loadingCategoryTransactions, setLoadingCategoryTransactions] = useState(false);
+  // Inline Transaction Viewer State (within tree)
+  const [expandedCategoryTransactions, setExpandedCategoryTransactions] = useState<number | null>(null);
+  const [categoryTransactionsMap, setCategoryTransactionsMap] = useState<Map<number, TransactionMatch[]>>(new Map());
+  const [loadingCategoryTransactions, setLoadingCategoryTransactions] = useState<number | null>(null);
+  const [expandedTransactionNames, setExpandedTransactionNames] = useState<Set<string>>(new Set());
   const [transactionToMove, setTransactionToMove] = useState<TransactionMatch | null>(null);
   const [transactionMoveMenuAnchor, setTransactionMoveMenuAnchor] = useState<HTMLElement | null>(null);
+  const [movingFromCategory, setMovingFromCategory] = useState<CategoryDefinition | null>(null);
 
   // Sorting State for Uncategorized Transactions
   const [sortBy, setSortBy] = useState<'name' | 'amount' | 'date'>('date');
+
+  // Category Search State
+  const [categorySearchQuery, setCategorySearchQuery] = useState<string>('');
+  const [editingTags, setEditingTags] = useState<string[]>([]);
+  const [newTagInput, setNewTagInput] = useState<string>('');
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [parentCategoryForCreation, setParentCategoryForCreation] = useState<CategoryDefinition | null>(null);
 
   const getLocalizedCategoryName = useCallback((category?: LocalizedCategoryInfo | null) => {
     if (!category) return '';
@@ -465,7 +478,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       const payload = response.data as any;
       const categoryList = Array.isArray(payload) ? payload : payload?.categories;
-      const normalizedCategories = (categoryList || []).map((cat) => ({
+      const normalizedCategories = (categoryList || []).map((cat: any) => ({
         ...cat,
         // Backend (SQLite) may return 0/1; Switch expects a boolean
         is_active: cat.is_active === undefined ? true : Boolean(cat.is_active),
@@ -728,7 +741,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     rootCategories: CategoryDefinition[]
   ) => {
     const path = draft?.categoryPath || [];
-    const selectors: JSX.Element[] = [];
+    const selectors: React.ReactElement[] = [];
 
     // Determine maximum depth to render (current path length + 1 for next level)
     const maxDepth = path.length + 1;
@@ -768,7 +781,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       const label = getLabel(depth);
 
       selectors.push(
-        <Grid key={`cat-${depth}`} item xs={12} md={3}>
+        <Grid key={`cat-${depth}`} size={{ xs: 12, md: 3 }}>
           <FormControl
             fullWidth
             size="small"
@@ -1124,35 +1137,46 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     }
   };
 
-  const fetchCategoryTransactions = async (category: CategoryDefinition) => {
-    try {
-      setLoadingCategoryTransactions(true);
-      setSelectedCategoryForTransactions(category);
+  const fetchCategoryTransactionsInline = async (category: CategoryDefinition) => {
+    // If already expanded, collapse it
+    if (expandedCategoryTransactions === category.id) {
+      setExpandedCategoryTransactions(null);
+      setExpandedTransactionNames(new Set());
+      return;
+    }
 
-      const response = await apiClient.get(`/api/categories/transactions?categoryId=${category.id}&limit=200`);
+    try {
+      setLoadingCategoryTransactions(category.id);
+      setExpandedCategoryTransactions(category.id);
+      setExpandedTransactionNames(new Set());
+
+      const response = await apiClient.get(`/api/categories/transactions?categoryId=${category.id}&limit=500`);
 
       if (!response.ok) {
         throw new Error(t('errors.loadCategoryTransactions'));
       }
 
       const data = response.data as any;
-      setCategoryTransactions(data?.transactions?.map((txn: any) => ({
+      const transactions = data?.transactions?.map((txn: any) => ({
         identifier: txn.identifier,
         vendor: txn.vendor,
         date: txn.date,
         name: txn.name,
         price: txn.price,
         accountNumber: txn.accountNumber,
-      })));
+      })) || [];
+
+      setCategoryTransactionsMap(prev => new Map(prev).set(category.id, transactions));
     } catch (error) {
       console.error('Error fetching category transactions:', error);
       setError(error instanceof Error && error.message ? error.message : t('errors.loadCategoryTransactions'));
+      setExpandedCategoryTransactions(null);
     } finally {
-      setLoadingCategoryTransactions(false);
+      setLoadingCategoryTransactions(null);
     }
   };
 
-  const handleRemoveTransactionFromCategory = async (txn: TransactionMatch) => {
+  const handleRemoveTransactionFromCategory = async (txn: TransactionMatch, categoryId: number) => {
     try {
       setError(null);
 
@@ -1169,9 +1193,14 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setSuccess(t('notifications.transactionRemoved'));
       setTimeout(() => setSuccess(null), 3000);
 
-      // Refresh the transaction list
-      if (selectedCategoryForTransactions) {
-        await fetchCategoryTransactions(selectedCategoryForTransactions);
+      // Refresh the transaction list for this category
+      const category = categoryLookup.get(categoryId);
+      if (category) {
+        // Force re-fetch by clearing and re-fetching
+        setExpandedCategoryTransactions(null);
+        setTimeout(() => {
+          fetchCategoryTransactionsInline(category);
+        }, 100);
       }
       await fetchCategories();
       onCategoriesUpdated();
@@ -1181,19 +1210,14 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     }
   };
 
-  const handleCreateRuleFromTransaction = async (txn: TransactionMatch) => {
+  const handleCreateRuleFromTransaction = async (txn: TransactionMatch, category: CategoryDefinition) => {
     try {
       setError(null);
 
-      if (!selectedCategoryForTransactions) {
-        setError(t('errors.noCategorySelected'));
-        return;
-      }
-
       const response = await apiClient.post('/api/categorization_rules/auto-create', {
         transactionName: txn.name,
-        categoryDefinitionId: selectedCategoryForTransactions.id,
-        categoryType: selectedCategoryForTransactions.category_type,
+        categoryDefinitionId: category.id,
+        categoryType: category.category_type,
       });
 
       const result = response.data as any;
@@ -1241,16 +1265,20 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         throw new Error(errorPayload?.error || t('errors.moveTransaction'));
       }
 
-      setSuccess(t('notifications.transactionMoved', { category: targetCategory.name }));
+      setSuccess(t('notifications.transactionMoved', { category: getLocalizedCategoryName(targetCategory) || targetCategory.name }));
       setTimeout(() => setSuccess(null), 3000);
 
       // Close the move menu
       setTransactionMoveMenuAnchor(null);
       setTransactionToMove(null);
 
-      // Refresh the transaction list
-      if (selectedCategoryForTransactions) {
-        await fetchCategoryTransactions(selectedCategoryForTransactions);
+      // Refresh the transaction list for the source category
+      if (movingFromCategory) {
+        setExpandedCategoryTransactions(null);
+        setTimeout(() => {
+          fetchCategoryTransactionsInline(movingFromCategory);
+        }, 100);
+        setMovingFromCategory(null);
       }
       await fetchCategories();
       onCategoriesUpdated();
@@ -1288,111 +1316,566 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     }
   };
 
-  const renderCategoryTree = (category: CategoryDefinition, level: number = 0) => {
+  const HighlightedText = ({ text, highlight }: { text: string, highlight: string }) => {
+    if (!highlight.trim()) {
+      return <span>{text}</span>;
+    }
+    const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+    return (
+      <span>
+        {parts.map((part, i) =>
+          regex.test(part) ? (
+            <Box
+              component="span"
+              key={i}
+              sx={{
+                color: 'primary.main',
+                fontWeight: 'bold',
+                bgcolor: alpha(theme.palette.primary.main, 0.1),
+                px: 0.25,
+                borderRadius: 0.5
+              }}
+            >
+              {part}
+            </Box>
+          ) : (
+            <span key={i}>{part}</span>
+          )
+        )}
+      </span>
+    );
+  };
+
+  const renderCategoryTree = (category: CategoryDefinition, level: number = 0, isSearching: boolean = false, matchingIds: Set<number> = new Set()) => {
     const hasChildren = category.children && category.children.length > 0;
-    const isExpanded = expandedCategories.has(category.id);
+    // Auto-expand if searching and this category or a child matches
+    const isExpanded = isSearching ? matchingIds.has(category.id) : expandedCategories.has(category.id);
     const isLeafCategory = !hasChildren && level > 0; // Leaf categories are those without children and not at root level
+
+    // Check if this category text matches search query
+    // Check if this category matches search query across all fields
+    const lowerQuery = categorySearchQuery.toLowerCase();
+    const isMatch = isSearching && categorySearchQuery && (
+      (category.name || '').toLowerCase().includes(lowerQuery) ||
+      (category.name_en || '').toLowerCase().includes(lowerQuery) ||
+      (category.name_fr || '').toLowerCase().includes(lowerQuery) ||
+      (category.name_he || '').toLowerCase().includes(lowerQuery) ||
+      (category.description || '').toLowerCase().includes(lowerQuery) ||
+      (category.tags || []).some(tag => tag.toLowerCase().includes(lowerQuery)) ||
+      (category.icon || '').toLowerCase().includes(lowerQuery) ||
+      (category.category_type || '').toLowerCase().includes(lowerQuery)
+    );
+
+    const displayName = getLocalizedCategoryName(category) || category.name;
+
+    // Check if this leaf category has its transactions expanded
+    const hasTransactionsExpanded = isLeafCategory && expandedCategoryTransactions === category.id;
+    const transactions = categoryTransactionsMap.get(category.id) || [];
+    const isLoadingTransactions = loadingCategoryTransactions === category.id;
+
+    // Group transactions by unique name (computed inline, no hooks)
+    const groupTransactionsByName = (txns: TransactionMatch[]): [string, TransactionMatch[]][] => {
+      const grouped = new Map<string, TransactionMatch[]>();
+      txns.forEach(txn => {
+        const name = txn.name || t('transactions.unknown');
+        if (!grouped.has(name)) {
+          grouped.set(name, []);
+        }
+        grouped.get(name)!.push(txn);
+      });
+      // Sort by count (descending) then by name
+      return Array.from(grouped.entries()).sort((a, b) => b[1].length - a[1].length);
+    };
+
+    const transactionsByName = hasTransactionsExpanded ? groupTransactionsByName(transactions) : [];
+
+    const toggleTransactionName = (name: string) => {
+      setExpandedTransactionNames(prev => {
+        const next = new Set(prev);
+        if (next.has(name)) {
+          next.delete(name);
+        } else {
+          next.add(name);
+        }
+        return next;
+      });
+    };
 
     return (
       <React.Fragment key={category.id}>
         <ListItem
-          sx={(theme) => ({
-            pl: level * 4 + 2,
-            borderLeft: level > 0 ? `2px solid ${theme.palette.divider}` : 'none',
-            transition: 'all 0.2s ease',
-            '&:hover': {
-              bgcolor: theme.palette.action.hover,
-              pl: level * 4 + 2.5, // Slight indent on hover
-            },
-            cursor: (hasChildren || isLeafCategory) ? 'pointer' : 'default',
-            my: 0.5,
-            borderRadius: '0 8px 8px 0',
-          })}
-          onClick={(e) => {
-            // If clicking the row, toggle expansion if it has children
-            if (hasChildren) {
-              toggleCategory(category.id);
-            } else if (isLeafCategory && category.transaction_count && category.transaction_count > 0) {
-              fetchCategoryTransactions(category);
-            }
+          disablePadding
+          sx={{
+            display: 'block',
+            mb: 0.5,
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-            {hasChildren && (
-              <IconButton
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              position: 'relative',
+              borderRadius: 2,
+              bgcolor: isMatch ? alpha(theme.palette.primary.main, 0.08) : (hasTransactionsExpanded ? alpha(theme.palette.primary.main, 0.04) : 'transparent'),
+              transition: 'all 0.2s ease',
+              border: '1px solid',
+              borderColor: isMatch ? alpha(theme.palette.primary.main, 0.3) : (hasTransactionsExpanded ? alpha(theme.palette.primary.main, 0.2) : 'transparent'),
+              '&:hover': {
+                bgcolor: alpha(theme.palette.text.primary, 0.04),
+                '& .tree-actions': {
+                  opacity: 1,
+                  visibility: 'visible',
+                  transform: 'translateX(0)',
+                }
+              },
+            }}
+          >
+            {/* Expand/Collapse Button or Spacer */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 32,
+                height: 40,
+                cursor: (hasChildren || (isLeafCategory && category.transaction_count && category.transaction_count > 0)) ? 'pointer' : 'default',
+                color: 'text.secondary',
+                flexShrink: 0,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (hasChildren) {
                   toggleCategory(category.id);
-                }}
-                sx={{
-                  mr: 1,
-                  transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
-                  transition: 'transform 0.2s ease',
-                }}
-              >
-                <ExpandMoreIcon />
-              </IconButton>
-            )}
-            {!hasChildren && <Box sx={{ width: 40 }} />}
+                } else if (isLeafCategory && category.transaction_count && category.transaction_count > 0) {
+                  fetchCategoryTransactionsInline(category);
+                }
+              }}
+            >
+              {(hasChildren || (isLeafCategory && category.transaction_count && category.transaction_count > 0)) && (
+                <ExpandMoreIcon
+                  sx={{
+                    transform: (isExpanded || hasTransactionsExpanded) ? 'rotate(0deg)' : 'rotate(-90deg)',
+                    transition: 'transform 0.2s ease',
+                    fontSize: 20,
+                    color: (isExpanded || hasTransactionsExpanded) ? 'primary.main' : 'inherit'
+                  }}
+                />
+              )}
+            </Box>
 
-            {getCategoryIcon(category)}
+            {/* Main Content Area */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                flexGrow: 1,
+                py: 1,
+                pr: 1,
+                cursor: (hasChildren || (isLeafCategory && category.transaction_count && category.transaction_count > 0)) ? 'pointer' : 'default',
+                minWidth: 0, // Prevent flex overflow
+              }}
+              onClick={() => {
+                if (hasChildren) {
+                  toggleCategory(category.id);
+                } else if (isLeafCategory && category.transaction_count && category.transaction_count > 0) {
+                  fetchCategoryTransactionsInline(category);
+                }
+              }}
+            >
+              {/* Icon */}
+              <Box sx={{ mr: 1.5, display: 'flex', alignItems: 'center', color: category.color || 'text.secondary' }}>
+                {getCategoryIcon(category)}
+              </Box>
 
-            <ListItemText
-              primary={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body1" fontWeight={level === 0 ? 'bold' : 'medium'}>
-                    {getLocalizedCategoryName(category) || category.name}
+              {/* Text Content */}
+              <Box sx={{ flexGrow: 1, minWidth: 0, mr: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  <Typography
+                    variant="body2"
+                    fontWeight={level === 0 ? 'bold' : 'medium'}
+                    noWrap={false}
+                    sx={{ lineHeight: 1.2 }}
+                  >
+                    <HighlightedText text={displayName} highlight={categorySearchQuery} />
                   </Typography>
+
+                  {/* Badges/Chips */}
+                  <Box display="flex" gap={0.5} alignItems="center">
                   {category.transaction_count !== undefined && category.transaction_count > 0 && (
                     <Chip
                       label={category.transaction_count}
                       size="small"
                       variant="outlined"
-                      sx={{ height: 20, minWidth: 20, '& .MuiChip-label': { px: 1 } }}
+                      sx={{
+                        height: 18,
+                        minWidth: 18,
+                        fontSize: '0.65rem',
+                        borderColor: hasTransactionsExpanded ? 'primary.main' : alpha(theme.palette.divider, 0.8),
+                        bgcolor: hasTransactionsExpanded ? alpha(theme.palette.primary.main, 0.1) : alpha(theme.palette.background.paper, 0.5),
+                        color: hasTransactionsExpanded ? 'primary.main' : 'inherit',
+                          '& .MuiChip-label': { px: 0.5 }
+                      }}
                     />
                   )}
+                  {category.tags && category.tags.length > 0 && (
+                      category.tags.slice(0, 2).map((tag, idx) => (
+                        <Chip
+                          key={idx}
+                          label={<HighlightedText text={tag} highlight={categorySearchQuery} />}
+                          size="small"
+                          color="secondary"
+                          variant="outlined"
+                          sx={{ height: 16, fontSize: '0.6rem', '& .MuiChip-label': { px: 0.5 }, opacity: 0.8 }}
+                        />
+                      ))
+                  )}
+                  </Box>
                 </Box>
-              }
-              secondary={category.description}
-              secondaryTypographyProps={{
-                noWrap: true,
-                sx: { maxWidth: 300, fontSize: '0.75rem' }
-              }}
-            />
+                {category.description && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 1,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                      mt: 0.25,
+                      lineHeight: 1.2
+                    }}
+                  >
+                    <HighlightedText text={category.description} highlight={categorySearchQuery} />
+                  </Typography>
+                )}
+              </Box>
 
-            <ListItemSecondaryAction>
-              <Tooltip title={t('actions.edit')}>
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingCategory(category);
-                  }}
-                  sx={{ color: 'primary.main', opacity: 0.7, '&:hover': { opacity: 1 } }}
-                >
-                  <EditIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title={t('actions.delete')}>
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteCategory(category.id);
-                  }}
-                  sx={{ color: 'error.main', opacity: 0.7, '&:hover': { opacity: 1 } }}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </ListItemSecondaryAction>
+              {/* Actions */}
+              <Box
+                className="tree-actions"
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  opacity: 0,
+                  visibility: 'hidden',
+                  transform: 'translateX(10px)',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  bgcolor: theme.palette.background.paper,
+                  borderRadius: 16,
+                  boxShadow: theme.shadows[2],
+                  px: 0.5,
+                  py: 0.25,
+                  position: 'absolute',
+                  right: 8,
+                  zIndex: 2,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Tooltip title={t('actions.addSubcategory') || 'Add Subcategory'}>
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      setParentCategoryForCreation(category);
+                      setNewCategory({
+                        name: '',
+                        parent_id: category.id,
+                        category_type: category.category_type as CategoryType,
+                        description: '',
+                        tags: [],
+                      });
+                      setEditingTags([]);
+                      setNewTagInput('');
+                      setCreateDialogOpen(true);
+                    }}
+                    sx={{ color: 'primary.main', p: 0.5 }}
+                  >
+                    <AddIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={t('actions.edit')}>
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      setEditingCategory(category);
+                      setEditingTags(category.tags || []);
+                    }}
+                    sx={{ color: 'info.main', p: 0.5 }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={t('actions.delete')}>
+                  <IconButton
+                    size="small"
+                    onClick={() => handleDeleteCategory(category.id)}
+                    sx={{ color: 'error.main', p: 0.5 }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </Box>
           </Box>
         </ListItem>
 
-        {hasChildren && isExpanded && (
-          <Collapse in={isExpanded}>
-            {category.children!.map(child => renderCategoryTree(child, level + 1))}
+        {/* Children Container with Guide Line */}
+        {hasChildren && (
+          <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+            <Box
+              sx={{
+                pl: 2,
+                ml: 2, // Indent children
+                position: 'relative',
+                // Vertical guide line
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  bottom: 8,
+                  width: 2,
+                  bgcolor: alpha(theme.palette.divider, 0.5),
+                  borderRadius: 1,
+                }
+              }}
+            >
+              {category.children!.map(child => renderCategoryTree(child, level + 1, isSearching, matchingIds))}
+            </Box>
+          </Collapse>
+        )}
+
+        {/* Inline Transactions for Leaf Categories */}
+        {isLeafCategory && (
+          <Collapse in={hasTransactionsExpanded} timeout="auto" unmountOnExit>
+            <Box
+              sx={{
+                pl: 4,
+                ml: 2,
+                position: 'relative',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  bottom: 8,
+                  width: 2,
+                  bgcolor: alpha(category.color || theme.palette.primary.main, 0.3),
+                  borderRadius: 1,
+                }
+              }}
+            >
+              {isLoadingTransactions ? (
+                <Box display="flex" alignItems="center" gap={1} py={2} pl={2}>
+                  <CircularProgress size={16} />
+                  <Typography variant="caption" color="text.secondary">
+                    {t('transactions.loading')}
+                  </Typography>
+                </Box>
+              ) : transactionsByName.length === 0 ? (
+                <Typography variant="caption" color="text.secondary" sx={{ py: 2, pl: 2, display: 'block' }}>
+                  {t('transactions.none')}
+                </Typography>
+              ) : (
+                <List dense disablePadding sx={{ py: 1 }}>
+                  {transactionsByName.map(([txnName, txns]) => {
+                    const isNameExpanded = expandedTransactionNames.has(txnName);
+                    const totalAmount = txns.reduce((sum, t) => sum + t.price, 0);
+                    const uniqueKey = `${category.id}-${txnName}`;
+
+                    return (
+                      <Box key={uniqueKey}>
+                        {/* Transaction Name Row */}
+                        <ListItem
+                          disablePadding
+                          sx={{
+                            borderRadius: 1.5,
+                            mb: 0.5,
+                            '&:hover': {
+                              bgcolor: alpha(theme.palette.text.primary, 0.03),
+                              '& .txn-actions': {
+                                opacity: 1,
+                              }
+                            },
+                          }}
+                        >
+                          <ListItemButton
+                            onClick={() => toggleTransactionName(txnName)}
+                            dense
+                            sx={{
+                              borderRadius: 1.5,
+                              py: 0.75,
+                              pl: 1,
+                              pr: 0.5,
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                width: 20,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                mr: 1,
+                              }}
+                            >
+                              {txns.length > 1 && (
+                                <ExpandMoreIcon
+                                  sx={{
+                                    fontSize: 16,
+                                    transform: isNameExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                                    transition: 'transform 0.2s ease',
+                                    color: 'text.secondary'
+                                  }}
+                                />
+                              )}
+                            </Box>
+                            <ListItemText
+                              primary={
+                                <Box display="flex" alignItems="center" gap={1}>
+                                  <Typography variant="body2" fontWeight={500} noWrap sx={{ maxWidth: 250 }}>
+                                    {txnName}
+                                  </Typography>
+                                  {txns.length > 1 && (
+                                    <Chip
+                                      label={`x${txns.length}`}
+                                      size="small"
+                                      sx={{
+                                        height: 16,
+                                        fontSize: '0.6rem',
+                                        bgcolor: alpha(theme.palette.info.main, 0.1),
+                                        color: 'info.main',
+                                        '& .MuiChip-label': { px: 0.5 }
+                                      }}
+                                    />
+                                  )}
+                                </Box>
+                              }
+                              secondary={txns.length === 1 ? formatDate(txns[0].date) : undefined}
+                              secondaryTypographyProps={{ variant: 'caption' }}
+                            />
+                            <Typography
+                              variant="body2"
+                              fontWeight={600}
+                              sx={{
+                                color: totalAmount < 0 ? 'error.main' : 'success.main',
+                                mr: 1,
+                                minWidth: 70,
+                                textAlign: 'right'
+                              }}
+                            >
+                              {formatCurrency(totalAmount)}
+                            </Typography>
+                            {/* Actions for the transaction group */}
+                            <Box
+                              className="txn-actions"
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                opacity: 0,
+                                transition: 'opacity 0.2s ease',
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Tooltip title={t('transactions.createRule')}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleCreateRuleFromTransaction(txns[0], category)}
+                                  sx={{ p: 0.25 }}
+                                >
+                                  <AutoAwesomeIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          </ListItemButton>
+                        </ListItem>
+
+                        {/* Expanded Transaction Details */}
+                        <Collapse in={isNameExpanded || txns.length === 1} timeout="auto" unmountOnExit>
+                          <Box sx={{ pl: 4, pr: 1, pb: 1 }}>
+                            {txns.map((txn, idx) => (
+                              <Box
+                                key={`${txn.identifier}-${txn.vendor}-${idx}`}
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  py: 0.5,
+                                  px: 1,
+                                  borderRadius: 1,
+                                  bgcolor: alpha(theme.palette.background.default, 0.5),
+                                  mb: 0.5,
+                                  '&:hover': {
+                                    bgcolor: alpha(theme.palette.text.primary, 0.04),
+                                    '& .detail-actions': {
+                                      opacity: 1,
+                                    }
+                                  },
+                                }}
+                              >
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                                  <Typography variant="caption" color="text.secondary" sx={{ minWidth: 70 }}>
+                                    {formatDate(txn.date)}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 100 }}>
+                                    {txn.vendor}
+                                  </Typography>
+                                  {txn.accountNumber && (
+                                    <Typography variant="caption" color="text.disabled">
+                                      ****{txn.accountNumber}
+                                    </Typography>
+                                  )}
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Typography
+                                    variant="caption"
+                                    fontWeight={600}
+                                    sx={{ color: txn.price < 0 ? 'error.main' : 'success.main' }}
+                                  >
+                                    {formatCurrency(txn.price)}
+                                  </Typography>
+                                  <Box
+                                    className="detail-actions"
+                                    sx={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      opacity: 0,
+                                      transition: 'opacity 0.2s ease',
+                                    }}
+                                  >
+                                    <Tooltip title={t('transactions.move')}>
+                                      <IconButton
+                                        size="small"
+                                        onClick={(e) => {
+                                          setTransactionToMove(txn);
+                                          setMovingFromCategory(category);
+                                          setTransactionMoveMenuAnchor(e.currentTarget);
+                                        }}
+                                        sx={{ p: 0.25 }}
+                                      >
+                                        <SwapVertIcon sx={{ fontSize: 14 }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title={t('transactions.remove')}>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleRemoveTransactionFromCategory(txn, category.id)}
+                                        sx={{ p: 0.25, color: 'error.main' }}
+                                      >
+                                        <DeleteIcon sx={{ fontSize: 14 }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </Box>
+                                </Box>
+                              </Box>
+                            ))}
+                          </Box>
+                        </Collapse>
+                      </Box>
+                    );
+                  })}
+                </List>
+              )}
+            </Box>
           </Collapse>
         )}
       </React.Fragment>
@@ -1433,10 +1916,100 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     }
   };
 
-  const renderHierarchyTab = () => {
-  const expenseCategories = categories.filter((c: CategoryDefinition) => c.category_type === 'expense');
-  const investmentCategories = categories.filter((c: CategoryDefinition) => c.category_type === 'investment');
-  const incomeCategories = categories.filter((c: CategoryDefinition) => c.category_type === 'income');
+  // Helper function to filter categories by search query (returns matching categories with their children preserved)
+  const filterCategoriesBySearch = useCallback((cats: CategoryDefinition[], query: string): CategoryDefinition[] => {
+    if (!query.trim()) return cats;
+    
+    const lowerQuery = query.toLowerCase();
+    
+    const categoryMatches = (cat: CategoryDefinition): boolean => {
+      // Search in all localized names
+      const nameMatch = (cat.name || '').toLowerCase().includes(lowerQuery);
+      const nameEnMatch = (cat.name_en || '').toLowerCase().includes(lowerQuery);
+      const nameFrMatch = (cat.name_fr || '').toLowerCase().includes(lowerQuery);
+      const nameHeMatch = (cat.name_he || '').toLowerCase().includes(lowerQuery);
+      
+      // Search in description/notes
+      const descMatch = (cat.description || '').toLowerCase().includes(lowerQuery);
+      
+      // Search in tags
+      const tagMatch = (cat.tags || []).some(tag => tag.toLowerCase().includes(lowerQuery));
+      
+      // Search in icon name
+      const iconMatch = (cat.icon || '').toLowerCase().includes(lowerQuery);
+      
+      // Search in category type
+      const typeMatch = (cat.category_type || '').toLowerCase().includes(lowerQuery);
+      
+      return nameMatch || nameEnMatch || nameFrMatch || nameHeMatch || descMatch || tagMatch || iconMatch || typeMatch;
+    };
+    
+    const filterRecursive = (categories: CategoryDefinition[]): CategoryDefinition[] => {
+      return categories.reduce((acc: CategoryDefinition[], cat) => {
+        const filteredChildren = cat.children ? filterRecursive(cat.children) : [];
+        const hasMatchingChildren = filteredChildren.length > 0;
+        const selfMatches = categoryMatches(cat);
+        
+        if (selfMatches || hasMatchingChildren) {
+          acc.push({
+            ...cat,
+            children: selfMatches && cat.children ? cat.children : filteredChildren,
+          });
+        }
+        return acc;
+      }, []);
+    };
+    
+    return filterRecursive(cats);
+  }, []);
+
+  // Get IDs of categories that match search (to auto-expand parents)
+  const getMatchingCategoryIds = useCallback((cats: CategoryDefinition[], query: string): Set<number> => {
+    if (!query.trim()) return new Set();
+    
+    const lowerQuery = query.toLowerCase();
+    const matchingIds = new Set<number>();
+    
+    const categoryMatches = (cat: CategoryDefinition): boolean => {
+      // Search in all localized names
+      const nameMatch = (cat.name || '').toLowerCase().includes(lowerQuery);
+      const nameEnMatch = (cat.name_en || '').toLowerCase().includes(lowerQuery);
+      const nameFrMatch = (cat.name_fr || '').toLowerCase().includes(lowerQuery);
+      const nameHeMatch = (cat.name_he || '').toLowerCase().includes(lowerQuery);
+      
+      // Search in description/notes
+      const descMatch = (cat.description || '').toLowerCase().includes(lowerQuery);
+      
+      // Search in tags
+      const tagMatch = (cat.tags || []).some(tag => tag.toLowerCase().includes(lowerQuery));
+      
+      // Search in icon name
+      const iconMatch = (cat.icon || '').toLowerCase().includes(lowerQuery);
+      
+      // Search in category type
+      const typeMatch = (cat.category_type || '').toLowerCase().includes(lowerQuery);
+      
+      return nameMatch || nameEnMatch || nameFrMatch || nameHeMatch || descMatch || tagMatch || iconMatch || typeMatch;
+    };
+    
+    const collectMatchingIds = (categories: CategoryDefinition[], parentIds: number[] = []) => {
+      categories.forEach(cat => {
+        const selfMatches = categoryMatches(cat);
+        if (selfMatches) {
+          matchingIds.add(cat.id);
+          parentIds.forEach(id => matchingIds.add(id));
+        }
+        if (cat.children) {
+          collectMatchingIds(cat.children, [...parentIds, cat.id]);
+        }
+      });
+    };
+    
+    collectMatchingIds(cats);
+    return matchingIds;
+  }, [getLocalizedCategoryName]);
+
+  const renderCategorizationTab = () => {
     const allUncategorizedTxns = uncategorized?.recentTransactions ?? [];
     const sortedTransactions = getSortedTransactions(allUncategorizedTxns);
     const uncategorizedPreview = sortedTransactions.slice(0, 10);
@@ -1628,7 +2201,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                             >
                               {assignedPercent > 15 && (
                                 <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold' }}>
-                                  {t('helpers.complete', { count: assignedToLeaf.toLocaleString() })}
+                                  {t('helpers.complete', { count: assignedToLeaf })}
                                 </Typography>
                               )}
                             </Box>
@@ -1926,157 +2499,172 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             )}
           </Paper>
         )}
+      </Box>
+    );
+  };
 
-        {/* Category Tree */}
+  const renderCategoryTreeTab = () => {
+    // Apply search filter
+    const filteredCategories = filterCategoriesBySearch(categories, categorySearchQuery);
+    
+    // Auto-expand sections and categories when searching
+    const hasSearchQuery = categorySearchQuery.trim().length > 0;
+    const matchingIds = getMatchingCategoryIds(categories, categorySearchQuery);
+
+    // Get type color for root categories
+    const getTypeColor = (type: string) => {
+      switch (type) {
+        case 'expense': return '#ef5350';
+        case 'investment': return '#66bb6a';
+        case 'income': return '#42a5f5';
+        default: return theme.palette.text.secondary;
+      }
+    };
+
+    return (
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        {/* Sticky Header with Search */}
+        <Box sx={{ mb: 2, position: 'sticky', top: 0, zIndex: 10, bgcolor: theme.palette.background.paper, pt: 1, pb: 2, borderBottom: `1px solid ${theme.palette.divider}` }}>
+          <TextField
+            fullWidth
+            placeholder={t('search.categoryPlaceholder')}
+            value={categorySearchQuery}
+            onChange={(e) => setCategorySearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: <SearchIcon sx={{ mr: 1.5, color: 'text.secondary', fontSize: 22 }} />,
+              endAdornment: categorySearchQuery && (
+                <IconButton
+                  size="small"
+                  onClick={() => setCategorySearchQuery('')}
+                  sx={{ ml: 1, bgcolor: alpha(theme.palette.text.primary, 0.05) }}
+                >
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              ),
+              sx: {
+                borderRadius: 3,
+                bgcolor: alpha(theme.palette.background.default, 0.6),
+                '&.Mui-focused': {
+                  bgcolor: theme.palette.background.paper,
+                  boxShadow: `0 0 0 4px ${alpha(theme.palette.primary.main, 0.1)}`,
+                },
+                transition: 'all 0.2s ease',
+                pl: 2
+              }
+            }}
+            variant="outlined"
+            sx={{
+              '& .MuiOutlinedInput-notchedOutline': {
+                border: 'none',
+              },
+            }}
+            helperText={!hasSearchQuery ? t('search.searchHint') : undefined}
+            FormHelperTextProps={{
+              sx: { ml: 2, mt: 0.5, opacity: 0.7 }
+            }}
+          />
+
+          {/* Search Results Info */}
+          {hasSearchQuery && (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1, mt: 1 }}>
+              <Typography variant="caption" fontWeight="bold" color="text.secondary">
+                {t('search.resultsFound', {
+                  count: filteredCategories.length,
+                  query: categorySearchQuery
+                })}
+              </Typography>
+            </Box>
+          )}
+        </Box>
+
+        {/* Category Tree Content */}
         {loading ? (
           <Box display="flex" justifyContent="center" p={4}>
             <CircularProgress />
           </Box>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* Expense Section */}
-            <Paper
-              elevation={0}
-              sx={(theme) => ({
-                overflow: 'hidden',
-                borderRadius: 3,
-                border: `1px solid ${theme.palette.divider}`,
-                background: theme.palette.mode === 'dark'
-                  ? 'rgba(30, 30, 30, 0.6)'
-                  : 'rgba(255, 255, 255, 0.6)',
-                backdropFilter: 'blur(10px)',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  boxShadow: theme.palette.mode === 'dark'
-                    ? '0 8px 24px rgba(0,0,0,0.4)'
-                    : '0 8px 24px rgba(0,0,0,0.1)',
-                  transform: 'translateY(-2px)',
-                }
-              })}
+          <Paper
+            elevation={0}
+            sx={{
+              flexGrow: 1,
+              overflow: 'hidden',
+              borderRadius: 4,
+              border: `1px solid ${theme.palette.divider}`,
+              bgcolor: alpha(theme.palette.background.paper, 0.5),
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            {/* Legend Header */}
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 3,
+                px: 2,
+                py: 1.5,
+                borderBottom: `1px solid ${theme.palette.divider}`,
+                bgcolor: alpha(theme.palette.background.default, 0.5),
+              }}
             >
-              <ListItemButton
-                onClick={() => setExpandedSections(prev => ({ ...prev, expense: !prev.expense }))}
-                sx={{
-                  py: 2,
-                  background: (theme) => theme.palette.mode === 'dark'
-                    ? 'linear-gradient(to right, rgba(239, 83, 80, 0.15), transparent)'
-                    : 'linear-gradient(to right, rgba(239, 83, 80, 0.08), transparent)',
-                }}
-              >
-                <ListItemIcon>
-                  <ExpenseIcon sx={{ color: '#ef5350', fontSize: 28 }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary={t('sections.expense')}
-                  primaryTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  secondary={t('sections.expenseSubtitle', { count: expenseCategories.length })}
-                />
-                {expandedSections.expense ? <ExpandMoreIcon /> : <ChevronRightIcon />}
-              </ListItemButton>
-              <Collapse in={expandedSections.expense} timeout="auto" unmountOnExit>
-                <List dense sx={{ px: 2, pb: 2 }}>
-                  {expenseCategories.map(category => renderCategoryTree(category))}
-                </List>
-              </Collapse>
-            </Paper>
+              <Box display="flex" alignItems="center" gap={0.75}>
+                <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#ef5350' }} />
+                <Typography variant="caption" color="text.secondary" fontWeight={500}>{t('sections.expense')}</Typography>
+              </Box>
+              <Box display="flex" alignItems="center" gap={0.75}>
+                <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#66bb6a' }} />
+                <Typography variant="caption" color="text.secondary" fontWeight={500}>{t('sections.investment')}</Typography>
+              </Box>
+              <Box display="flex" alignItems="center" gap={0.75}>
+                <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#42a5f5' }} />
+                <Typography variant="caption" color="text.secondary" fontWeight={500}>{t('sections.income')}</Typography>
+              </Box>
+            </Box>
 
-            {/* Investment Section */}
-            <Paper
-              elevation={0}
-              sx={(theme) => ({
-                overflow: 'hidden',
-                borderRadius: 3,
-                border: `1px solid ${theme.palette.divider}`,
-                background: theme.palette.mode === 'dark'
-                  ? 'rgba(30, 30, 30, 0.6)'
-                  : 'rgba(255, 255, 255, 0.6)',
-                backdropFilter: 'blur(10px)',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  boxShadow: theme.palette.mode === 'dark'
-                    ? '0 8px 24px rgba(0,0,0,0.4)'
-                    : '0 8px 24px rgba(0,0,0,0.1)',
-                  transform: 'translateY(-2px)',
-                }
-              })}
-            >
-              <ListItemButton
-                onClick={() => setExpandedSections(prev => ({ ...prev, investment: !prev.investment }))}
-                sx={{
-                  py: 2,
-                  background: (theme) => theme.palette.mode === 'dark'
-                    ? 'linear-gradient(to right, rgba(102, 187, 106, 0.15), transparent)'
-                    : 'linear-gradient(to right, rgba(102, 187, 106, 0.08), transparent)',
-                }}
-              >
-                <ListItemIcon>
-                  <InvestmentIcon sx={{ color: '#66bb6a', fontSize: 28 }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary={t('sections.investment')}
-                  primaryTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  secondary={t('sections.investmentSubtitle', { count: investmentCategories.length })}
-                />
-                {expandedSections.investment ? <ExpandMoreIcon /> : <ChevronRightIcon />}
-              </ListItemButton>
-              <Collapse in={expandedSections.investment} timeout="auto" unmountOnExit>
-                <List dense sx={{ px: 2, pb: 2 }}>
-                  {investmentCategories.map(category => renderCategoryTree(category))}
+            {/* Unified Tree */}
+            <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 1.5 }}>
+              {filteredCategories.length === 0 ? (
+                <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={6} sx={{ opacity: 0.5 }}>
+                  <CategoryIcon sx={{ fontSize: 48, mb: 2, color: 'text.secondary' }} />
+                  <Typography variant="body1" color="text.secondary">
+                    {t('search.noResults')}
+                  </Typography>
+                </Box>
+              ) : (
+                <List dense sx={{ pt: 0 }}>
+                  {filteredCategories.map((category) => {
+                    const typeColor = getTypeColor(category.category_type);
+                    return (
+                      <Box
+                        key={category.id}
+                        sx={{
+                          position: 'relative',
+                          '&::before': {
+                            content: '""',
+                            position: 'absolute',
+                            left: 0,
+                            top: 8,
+                            bottom: 8,
+                            width: 3,
+                            bgcolor: typeColor,
+                            borderRadius: 1,
+                          },
+                          pl: 1.5,
+                          mb: 0.5,
+                        }}
+                      >
+                        {renderCategoryTree(category, 0, hasSearchQuery, matchingIds)}
+                      </Box>
+                    );
+                  })}
                 </List>
-              </Collapse>
-            </Paper>
-
-            {/* Income Section */}
-            <Paper
-              elevation={0}
-              sx={(theme) => ({
-                overflow: 'hidden',
-                borderRadius: 3,
-                border: `1px solid ${theme.palette.divider}`,
-                background: theme.palette.mode === 'dark'
-                  ? 'rgba(30, 30, 30, 0.6)'
-                  : 'rgba(255, 255, 255, 0.6)',
-                backdropFilter: 'blur(10px)',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  boxShadow: theme.palette.mode === 'dark'
-                    ? '0 8px 24px rgba(0,0,0,0.4)'
-                    : '0 8px 24px rgba(0,0,0,0.1)',
-                  transform: 'translateY(-2px)',
-                }
-              })}
-            >
-              <ListItemButton
-                onClick={() => setExpandedSections(prev => ({ ...prev, income: !prev.income }))}
-                sx={{
-                  py: 2,
-                  background: (theme) => theme.palette.mode === 'dark'
-                    ? 'linear-gradient(to right, rgba(66, 165, 245, 0.15), transparent)'
-                    : 'linear-gradient(to right, rgba(66, 165, 245, 0.08), transparent)',
-                }}
-              >
-                <ListItemIcon>
-                  <IncomeIcon sx={{ color: '#42a5f5', fontSize: 28 }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary={t('sections.income')}
-                  primaryTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-                  secondary={t('sections.incomeSubtitle', { count: incomeCategories.length })}
-                />
-                {expandedSections.income ? <ExpandMoreIcon /> : <ChevronRightIcon />}
-              </ListItemButton>
-              <Collapse in={expandedSections.income} timeout="auto" unmountOnExit>
-                <List dense sx={{ px: 2, pb: 2 }}>
-                  {incomeCategories.map(category => renderCategoryTree(category))}
-                </List>
-              </Collapse>
-            </Paper>
-          </Box>
+              )}
+            </Box>
+          </Paper>
         )}
 
         {/* Edit Category Dialog */}
         {editingCategory && (
-          <Dialog open={true} onClose={() => setEditingCategory(null)} maxWidth="sm" fullWidth>
+          <Dialog open={true} onClose={() => { setEditingCategory(null); setEditingTags([]); setNewTagInput(''); }} maxWidth="sm" fullWidth>
             <DialogTitle>{t('editDialog.title')}</DialogTitle>
             <DialogContent>
               <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -2091,11 +2679,64 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 <Grid size={{ xs: 12 }}>
                   <TextField
                     fullWidth
-                    label={t('editDialog.fields.description')}
+                    label={t('editDialog.fields.notes')}
                     value={editingCategory.description || ''}
                     onChange={(e) => setEditingCategory({ ...editingCategory, description: e.target.value })}
                     multiline
-                    rows={2}
+                    rows={3}
+                    placeholder={t('editDialog.fields.notesPlaceholder')}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('editDialog.fields.tags')}</Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
+                    {(editingCategory.tags || []).map((tag, idx) => (
+                      <Chip
+                        key={idx}
+                        label={tag}
+                        size="small"
+                        onDelete={() => {
+                          const newTags = [...(editingCategory.tags || [])];
+                          newTags.splice(idx, 1);
+                          setEditingCategory({ ...editingCategory, tags: newTags });
+                        }}
+                        color="primary"
+                        variant="outlined"
+                      />
+                    ))}
+                  </Box>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder={t('editDialog.fields.addTagPlaceholder')}
+                    value={newTagInput}
+                    onChange={(e) => setNewTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newTagInput.trim()) {
+                        e.preventDefault();
+                        const currentTags = editingCategory.tags || [];
+                        if (!currentTags.includes(newTagInput.trim())) {
+                          setEditingCategory({ ...editingCategory, tags: [...currentTags, newTagInput.trim()] });
+                        }
+                        setNewTagInput('');
+                      }
+                    }}
+                    InputProps={{
+                      endAdornment: newTagInput.trim() && (
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            const currentTags = editingCategory.tags || [];
+                            if (!currentTags.includes(newTagInput.trim())) {
+                              setEditingCategory({ ...editingCategory, tags: [...currentTags, newTagInput.trim()] });
+                            }
+                            setNewTagInput('');
+                          }}
+                        >
+                          <AddIcon fontSize="small" />
+                        </IconButton>
+                      ),
+                    }}
                   />
                 </Grid>
                 <Grid size={{ xs: 12 }}>
@@ -2112,124 +2753,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               </Grid>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setEditingCategory(null)}>{t('actions.cancel')}</Button>
+              <Button onClick={() => { setEditingCategory(null); setEditingTags([]); setNewTagInput(''); }}>{t('actions.cancel')}</Button>
               <Button variant="contained" onClick={() => handleUpdateCategory(editingCategory)}>
                 {t('actions.save')}
               </Button>
             </DialogActions>
           </Dialog>
         )}
-
-        {/* Transaction Viewer Dialog */}
-        {selectedCategoryForTransactions && (
-          <Dialog
-            open={true}
-            onClose={() => {
-              setSelectedCategoryForTransactions(null);
-              setCategoryTransactions([]);
-            }}
-            maxWidth="md"
-            fullWidth
-          >
-            <DialogTitle>
-              <Box display="flex" alignItems="center" gap={1}>
-                {getCategoryIcon(selectedCategoryForTransactions)}
-                <Typography variant="h6">
-                  {t('transactions.title', { name: getLocalizedCategoryName(selectedCategoryForTransactions) || selectedCategoryForTransactions.name })}
-                </Typography>
-                <Chip
-                  label={t('transactions.count', { count: categoryTransactions.length })}
-                  size="small"
-                  color="primary"
-                />
-              </Box>
-            </DialogTitle>
-            <DialogContent>
-              {loadingCategoryTransactions ? (
-                <Box display="flex" justifyContent="center" py={4}>
-                  <CircularProgress />
-                </Box>
-              ) : categoryTransactions.length === 0 ? (
-                <Alert severity="info">{t('transactions.none')}</Alert>
-              ) : (
-                <List dense>
-                  {categoryTransactions.map((txn, idx) => (
-                    <ListItem
-                      key={`${txn.identifier}-${txn.vendor}-${idx}`}
-                      sx={{
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        borderRadius: 2,
-                        mb: 1,
-                        flexDirection: 'column',
-                        alignItems: 'stretch',
-                      }}
-                    >
-                      <Box display="flex" justifyContent="space-between" width="100%" mb={1}>
-                        <Box>
-                          <Typography variant="subtitle2" fontWeight="600">
-                            {txn.name || t('transactions.unknown')}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {txn.vendor || t('transactions.unknownVendor')}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {formatDate(txn.date)}
-                            {txn.accountNumber ? ` • ****${txn.accountNumber}` : ''}
-                          </Typography>
-                        </Box>
-                        <Typography variant="subtitle2" fontWeight="bold">
-                          {formatCurrency(txn.price)}
-                        </Typography>
-                      </Box>
-                      <Box display="flex" gap={1}>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="error"
-                            startIcon={<DeleteIcon />}
-                            onClick={() => handleRemoveTransactionFromCategory(txn)}
-                          >
-                            {t('transactions.remove')}
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                            startIcon={<EditIcon />}
-                          onClick={(e) => {
-                              setTransactionToMove(txn);
-                              setTransactionMoveMenuAnchor(e.currentTarget);
-                            }}
-                          >
-                            {t('transactions.move')}
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<AutoAwesomeIcon />}
-                            onClick={() => handleCreateRuleFromTransaction(txn)}
-                          >
-                            {t('transactions.createRule')}
-                          </Button>
-                      </Box>
-                    </ListItem>
-                  ))}
-                </List>
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button
-                onClick={() => {
-              setSelectedCategoryForTransactions(null);
-              setCategoryTransactions([]);
-            }}
-          >
-            {t('actions.close')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    )}
 
         {/* Move to Category Menu */}
         {transactionToMove && (
@@ -2254,8 +2784,8 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             </MenuItem>
             <Divider />
             {categories.map((rootCategory) => {
-              const renderCategoryMenuItem = (cat: CategoryDefinition, depth: number = 0): JSX.Element[] => {
-                const items: JSX.Element[] = [];
+              const renderCategoryMenuItem = (cat: CategoryDefinition, depth: number = 0): React.ReactElement[] => {
+                const items: React.ReactElement[] = [];
 
                 // Only show leaf categories (those without children) as options
                 if (!cat.children || cat.children.length === 0) {
@@ -2363,7 +2893,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   value={newRuleParentId ?? ''}
                   label={t('rulesForm.fields.category')}
                   onChange={(e) => {
-                    const value = e.target.value;
+                    const value = e.target.value as string | number;
                     setNewRuleParentId(value === '' ? null : Number(value));
                     setNewRuleCategoryId(null);
                   }}
@@ -2384,7 +2914,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   value={subcategoryValue}
                   label={t('rulesForm.fields.subcategory')}
                   onChange={(e) => {
-                    const value = e.target.value;
+                    const value = e.target.value as string | number;
                     setNewRuleCategoryId(value === '' ? null : Number(value));
                   }}
                   displayEmpty
@@ -2696,12 +3226,14 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
           onChange={(e, newValue) => setActiveTab(newValue)}
           sx={{ mb: 3 }}
         >
+          <Tab label={t('tabs.categorize')} />
           <Tab label={t('tabs.hierarchy')} />
           <Tab label={t('tabs.rules')} />
         </Tabs>
 
-        {activeTab === 0 && renderHierarchyTab()}
-        {activeTab === 1 && renderPatternRulesTab()}
+        {activeTab === 0 && renderCategorizationTab()}
+        {activeTab === 1 && renderCategoryTreeTab()}
+        {activeTab === 2 && renderPatternRulesTab()}
       </DialogContent>
 
       <DialogActions style={{ padding: '16px 24px 24px 24px' }}>

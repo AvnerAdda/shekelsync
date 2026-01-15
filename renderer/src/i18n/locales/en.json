@@ -1532,9 +1532,10 @@
     }
   },
   "categoryHierarchy": {
-    "header": { "title": "Category Hierarchy" },
+    "header": { "title": "Category Management" },
     "tabs": {
-      "hierarchy": "Category Hierarchy",
+      "categorize": "Categorize",
+      "hierarchy": "Categories",
       "rules": "Pattern Rules"
     },
     "actions": {
@@ -1623,13 +1624,24 @@
       "fields": {
         "name": "Category Name",
         "description": "Description",
+        "notes": "Notes",
+        "notesPlaceholder": "Add notes or additional information about this category...",
+        "tags": "Tags",
+        "addTagPlaceholder": "Type and press Enter to add a tag",
         "active": "Active"
       }
+    },
+    "search": {
+      "categoryPlaceholder": "Search categories...",
+      "resultsFound": "Found {{count}} matching categories for \"{{query}}\"",
+      "searchHint": "Search by name, description, tags, or type",
+      "noResults": "No categories found"
     },
     "transactions": {
       "title": "{{name}} Transactions",
       "count": "{{count}} transaction{{count, plural, one {} other {s}}}",
       "none": "No transactions found for this category.",
+      "loading": "Loading transactions...",
       "unknown": "Unknown transaction",
       "unknownVendor": "Unknown vendor",
       "remove": "Remove from Category",

@@ -1288,9 +1288,10 @@
     }
   },
   "categoryHierarchy": {
-    "header": { "title": "Hiérarchie des catégories" },
+    "header": { "title": "Gestion des catégories" },
     "tabs": {
-      "hierarchy": "Hiérarchie des catégories",
+      "categorize": "Catégoriser",
+      "hierarchy": "Catégories",
       "rules": "Règles de correspondance"
     },
     "actions": {
@@ -1379,18 +1380,29 @@
       "fields": {
         "name": "Nom de la catégorie",
         "description": "Description",
+        "notes": "Notes",
+        "notesPlaceholder": "Ajoutez des notes ou informations supplémentaires sur cette catégorie...",
+        "tags": "Tags",
+        "addTagPlaceholder": "Tapez et appuyez sur Entrée pour ajouter un tag",
         "active": "Actif"
       }
+    },
+    "search": {
+      "categoryPlaceholder": "Rechercher des categories...",
+      "resultsFound": "{{count}} categories trouvees pour \"{{query}}\"",
+      "searchHint": "Rechercher par nom, description, tags ou type",
+      "noResults": "Aucune categorie trouvee"
     },
     "transactions": {
       "title": "Transactions {{name}}",
       "count": "{{count}} transaction{{count, plural, one {} other {s}}}",
-      "none": "Aucune transaction trouvée pour cette catégorie.",
+      "none": "Aucune transaction trouvee pour cette categorie.",
+      "loading": "Chargement des transactions...",
       "unknown": "Transaction inconnue",
       "unknownVendor": "Vendeur inconnu",
-      "remove": "Retirer de la catégorie",
-      "move": "Déplacer vers une catégorie",
-      "createRule": "Créer une règle"
+      "remove": "Retirer de la categorie",
+      "move": "Deplacer vers une categorie",
+      "createRule": "Creer une regle"
     },
     "rulesForm": {
       "title": "Ajouter une règle de catégorisation",
