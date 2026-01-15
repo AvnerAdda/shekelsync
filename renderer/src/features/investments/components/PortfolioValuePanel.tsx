@@ -21,6 +21,7 @@ import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioSummary, PortfolioHistoryPoint } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
 import { HistoryTimeRangeOption } from '../InvestmentsFiltersContext';
+import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
 
 interface PortfolioValuePanelProps {
   portfolioData: PortfolioSummary | null;
@@ -233,17 +234,63 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
                 domain={['dataMin', 'dataMax']}
               />
               <RechartsTooltip
-                formatter={(value: number) => [
-                  viewMode === 'value'
-                    ? formatCurrencyValue(value)
-                    : `${value.toFixed(2)}%`,
-                  viewMode === 'value' ? t('tooltipValue', 'Value') : t('tooltipPerformance', 'Change'),
-                ]}
-                labelStyle={{ color: theme.palette.text.primary }}
-                contentStyle={{
-                  backgroundColor: theme.palette.background.paper,
-                  border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: theme.shape.borderRadius,
+                content={({ active, payload, label }) => {
+                  if (!active || !payload || payload.length === 0) return null;
+
+                  const dataPoint = payload[0];
+                  const value = dataPoint.value as number;
+
+                  // Find the original data point to get full date
+                  const originalPoint = chartData.find(d => d.date === label);
+                  const fullDate = originalPoint?.fullDate;
+
+                  const items: TooltipDataItem[] = [];
+
+                  if (viewMode === 'value') {
+                    items.push({
+                      label: t('tooltipValue', 'Portfolio Value'),
+                      value: value,
+                      type: 'currency',
+                      color: chartColor,
+                    });
+
+                    // Calculate change from start
+                    if (firstPoint && firstPoint.currentValue > 0) {
+                      const change = value - firstPoint.currentValue;
+                      const changePercent = (change / firstPoint.currentValue) * 100;
+
+                      items.push({
+                        label: t('tooltipChange', 'Change from Start'),
+                        value: change,
+                        type: 'currency',
+                      });
+
+                      items.push({
+                        label: t('tooltipChangePercent', 'Change %'),
+                        value: changePercent.toFixed(2),
+                        type: 'percentage',
+                      });
+                    }
+                  } else {
+                    items.push({
+                      label: t('tooltipPerformance', 'Performance'),
+                      value: `${value >= 0 ? '+' : ''}${value.toFixed(2)}`,
+                      type: 'percentage',
+                      color: chartColor,
+                    });
+                  }
+
+                  return (
+                    <CustomTooltip
+                      active={active}
+                      items={items}
+                      title={fullDate ? new Date(fullDate).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      }) : label}
+                    />
+                  );
                 }}
               />
               <Area
@@ -252,6 +299,12 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
                 stroke={chartColor}
                 strokeWidth={2}
                 fill="url(#colorValue)"
+                activeDot={{
+                  r: 5,
+                  fill: chartColor,
+                  stroke: theme.palette.background.paper,
+                  strokeWidth: 2,
+                }}
               />
             </AreaChart>
           </ResponsiveContainer>

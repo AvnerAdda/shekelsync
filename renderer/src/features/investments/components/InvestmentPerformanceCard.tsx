@@ -4,15 +4,20 @@ import {
   LineChart,
   Line,
   ResponsiveContainer,
+  Tooltip,
 } from 'recharts';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { InvestmentAccountSummary, PortfolioHistoryPoint } from '@renderer/types/investments';
+import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
 import {
   AccountBalance as BankIcon,
   TrendingUp as StockIcon,
   Savings as SavingsIcon,
   Home as RealEstateIcon,
   CurrencyBitcoin as CryptoIcon,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
+  TrendingFlat as TrendingFlatIcon,
 } from '@mui/icons-material';
 
 interface InvestmentPerformanceCardProps {
@@ -54,15 +59,34 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
     .slice(-30)
     .map(point => ({
       value: point.currentValue,
+      date: point.date,
+      displayDate: new Date(point.date).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+      }),
     }));
 
-  // Determine sparkline color based on trend
+  // Calculate min and max values for tooltip
+  const values = sparklineData.map(d => d.value);
+  const minValue = values.length > 0 ? Math.min(...values) : 0;
+  const maxValue = values.length > 0 ? Math.max(...values) : 0;
+
+  // Determine sparkline color and trend based on change
   const firstValue = sparklineData[0]?.value || 0;
   const lastValue = sparklineData[sparklineData.length - 1]?.value || 0;
+  const trendPercentage = firstValue > 0 ? ((lastValue - firstValue) / firstValue) * 100 : 0;
   const trendPositive = lastValue >= firstValue;
   const sparklineColor = trendPositive
     ? theme.palette.success.main
     : theme.palette.error.main;
+
+  // Determine trend icon
+  const getTrendIcon = () => {
+    if (Math.abs(trendPercentage) < 0.5) return TrendingFlatIcon;
+    return trendPositive ? TrendingUpIcon : TrendingDownIcon;
+  };
+
+  const TrendIcon = getTrendIcon();
 
   const Icon = getAccountIcon(account.account_type, account.investment_category);
 
@@ -118,10 +142,24 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
         </Box>
       </Box>
 
-      {/* Value */}
-      <Typography variant="h6" fontWeight={700} sx={{ mt: 0.5 }}>
-        {maskAmounts ? '***' : formatCurrencyValue(account.current_value)}
-      </Typography>
+      {/* Value with Trend Icon */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+        <Typography variant="h6" fontWeight={700}>
+          {maskAmounts ? '***' : formatCurrencyValue(account.current_value)}
+        </Typography>
+        {sparklineData.length > 1 && (
+          <TrendIcon
+            sx={{
+              fontSize: 20,
+              color: Math.abs(trendPercentage) < 0.5
+                ? 'text.secondary'
+                : trendPositive
+                ? 'success.main'
+                : 'error.main',
+            }}
+          />
+        )}
+      </Box>
 
       {/* ROI */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -140,17 +178,86 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
         </Typography>
       </Box>
 
+      {/* Period High/Low */}
+      {sparklineData.length > 1 && (
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            mt: 0.5,
+            pt: 0.5,
+            borderTop: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+          }}
+        >
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+              High
+            </Typography>
+            <Typography variant="caption" fontWeight={600} display="block" sx={{ fontSize: '0.7rem' }}>
+              {maskAmounts ? '***' : `₪${(maxValue / 1000).toFixed(0)}k`}
+            </Typography>
+          </Box>
+          <Box sx={{ textAlign: 'right' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+              Low
+            </Typography>
+            <Typography variant="caption" fontWeight={600} display="block" sx={{ fontSize: '0.7rem' }}>
+              {maskAmounts ? '***' : `₪${(minValue / 1000).toFixed(0)}k`}
+            </Typography>
+          </Box>
+        </Box>
+      )}
+
       {/* Sparkline */}
       {sparklineData.length > 1 && (
         <Box sx={{ height: 40, mt: 1 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={sparklineData}>
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload || payload.length === 0) return null;
+
+                  const dataPoint = payload[0].payload;
+                  const items: TooltipDataItem[] = [
+                    {
+                      label: 'Value',
+                      value: dataPoint.value,
+                      type: 'currency',
+                      color: sparklineColor,
+                    },
+                    {
+                      label: 'Min',
+                      value: minValue,
+                      type: 'currency',
+                    },
+                    {
+                      label: 'Max',
+                      value: maxValue,
+                      type: 'currency',
+                    },
+                  ];
+
+                  return (
+                    <CustomTooltip
+                      active={active}
+                      items={items}
+                      title={dataPoint.displayDate}
+                    />
+                  );
+                }}
+              />
               <Line
                 type="monotone"
                 dataKey="value"
                 stroke={sparklineColor}
                 strokeWidth={2}
                 dot={false}
+                activeDot={{
+                  r: 4,
+                  fill: sparklineColor,
+                  stroke: theme.palette.background.paper,
+                  strokeWidth: 2,
+                }}
               />
             </LineChart>
           </ResponsiveContainer>

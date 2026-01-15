@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Box, Typography, Paper } from '@mui/material';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
+import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
+import AccountAllocationModal from './AccountAllocationModal';
 
 interface AllocationDonutChartProps {
   portfolioData: PortfolioSummary;
@@ -25,15 +27,21 @@ const CHART_COLORS = [
 const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioData }) => {
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
   const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.allocation' });
+  const [modalOpen, setModalOpen] = useState(false);
 
   const formatCurrencyValue = (value: number) =>
     formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
 
-  // Combine all accounts for the chart
-  const allAccounts = [
-    ...(portfolioData.restrictedAccounts || []),
-    ...(portfolioData.liquidAccounts || []),
-  ];
+  // Combine all accounts for the chart, tracking their type
+  const restrictedAccounts = portfolioData.restrictedAccounts || [];
+  const liquidAccounts = portfolioData.liquidAccounts || [];
+
+  // Create a map to track which accounts are liquid vs restricted
+  const accountTypeMap = new Map<string, 'liquid' | 'restricted'>();
+  restrictedAccounts.forEach(acc => accountTypeMap.set(acc.account_name, 'restricted'));
+  liquidAccounts.forEach(acc => accountTypeMap.set(acc.account_name, 'liquid'));
+
+  const allAccounts = [...restrictedAccounts, ...liquidAccounts];
 
   // Create data for the pie chart
   const chartData = allAccounts
@@ -42,6 +50,7 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
       name: account.account_name,
       value: account.current_value,
       color: CHART_COLORS[index % CHART_COLORS.length],
+      type: accountTypeMap.get(account.account_name) || 'liquid',
     }));
 
   const totalValue = portfolioData.summary.totalPortfolioValue;
@@ -63,6 +72,7 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
         </Typography>
         <Typography
           variant="caption"
+          onClick={() => setModalOpen(true)}
           sx={{
             color: 'primary.main',
             cursor: 'pointer',
@@ -85,12 +95,52 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
               outerRadius="85%"
               paddingAngle={2}
               dataKey="value"
-              stroke="none"
             >
               {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
+                <Cell
+                  key={`cell-${index}`}
+                  fill={entry.color}
+                  stroke={entry.type === 'liquid' ? '#10B981' : '#EF4444'}
+                  strokeWidth={1.5}
+                />
               ))}
             </Pie>
+            <Tooltip
+              content={({ active, payload }) => {
+                if (!active || !payload || payload.length === 0) return null;
+
+                const data = payload[0].payload;
+                const percentage = (data.value / totalValue) * 100;
+
+                const items: TooltipDataItem[] = [
+                  {
+                    label: t('tooltipType', 'Type'),
+                    value: data.type === 'liquid' ? t('tooltipLiquid', 'Liquid') : t('tooltipRestricted', 'Restricted'),
+                    type: 'text',
+                    color: data.type === 'liquid' ? '#10B981' : '#EF4444',
+                  },
+                  {
+                    label: t('tooltipValue', 'Value'),
+                    value: data.value,
+                    type: 'currency',
+                    color: data.color,
+                  },
+                  {
+                    label: t('tooltipPercentage', 'Percentage'),
+                    value: percentage.toFixed(1),
+                    type: 'percentage',
+                  },
+                ];
+
+                return (
+                  <CustomTooltip
+                    active={active}
+                    items={items}
+                    title={data.name}
+                  />
+                );
+              }}
+            />
           </PieChart>
         </ResponsiveContainer>
 
@@ -150,7 +200,55 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
             </Box>
           ))}
         </Box>
+
+        {/* Border color legend */}
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: 2,
+            mt: 1.5,
+            pt: 1.5,
+            borderTop: 1,
+            borderColor: 'divider',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box
+              sx={{
+                width: 12,
+                height: 3,
+                bgcolor: '#10B981',
+                borderRadius: 0.5,
+              }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+              {t('liquidBorder', 'Liquid')}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box
+              sx={{
+                width: 12,
+                height: 3,
+                bgcolor: '#EF4444',
+                borderRadius: 0.5,
+              }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+              {t('restrictedBorder', 'Restricted')}
+            </Typography>
+          </Box>
+        </Box>
       </Box>
+
+      {/* Account Allocation Modal */}
+      <AccountAllocationModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        portfolioData={portfolioData}
+        colors={CHART_COLORS}
+      />
     </Paper>
   );
 };

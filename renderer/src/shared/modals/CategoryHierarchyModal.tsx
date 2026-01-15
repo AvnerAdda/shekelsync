@@ -298,6 +298,24 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [transactionMoveMenuAnchor, setTransactionMoveMenuAnchor] = useState<HTMLElement | null>(null);
   const [movingFromCategory, setMovingFromCategory] = useState<CategoryDefinition | null>(null);
 
+  // Memoized grouped transactions by category ID -> grouped by name
+  const groupedTransactionsCache = useMemo(() => {
+    const cache = new Map<number, [string, TransactionMatch[]][]>();
+    categoryTransactionsMap.forEach((transactions, categoryId) => {
+      const grouped = new Map<string, TransactionMatch[]>();
+      transactions.forEach(txn => {
+        const name = txn.name || 'Unknown';
+        if (!grouped.has(name)) {
+          grouped.set(name, []);
+        }
+        grouped.get(name)!.push(txn);
+      });
+      // Sort by count (descending)
+      cache.set(categoryId, Array.from(grouped.entries()).sort((a, b) => b[1].length - a[1].length));
+    });
+    return cache;
+  }, [categoryTransactionsMap]);
+
   // Sorting State for Uncategorized Transactions
   const [sortBy, setSortBy] = useState<'name' | 'amount' | 'date'>('date');
 
@@ -1371,24 +1389,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
     // Check if this leaf category has its transactions expanded
     const hasTransactionsExpanded = isLeafCategory && expandedCategoryTransactions === category.id;
-    const transactions = categoryTransactionsMap.get(category.id) || [];
     const isLoadingTransactions = loadingCategoryTransactions === category.id;
 
-    // Group transactions by unique name (computed inline, no hooks)
-    const groupTransactionsByName = (txns: TransactionMatch[]): [string, TransactionMatch[]][] => {
-      const grouped = new Map<string, TransactionMatch[]>();
-      txns.forEach(txn => {
-        const name = txn.name || t('transactions.unknown');
-        if (!grouped.has(name)) {
-          grouped.set(name, []);
-        }
-        grouped.get(name)!.push(txn);
-      });
-      // Sort by count (descending) then by name
-      return Array.from(grouped.entries()).sort((a, b) => b[1].length - a[1].length);
-    };
-
-    const transactionsByName = hasTransactionsExpanded ? groupTransactionsByName(transactions) : [];
+    // Use cached grouped transactions (already memoized at component level)
+    const transactionsByName = hasTransactionsExpanded ? (groupedTransactionsCache.get(category.id) || []) : [];
 
     const toggleTransactionName = (name: string) => {
       setExpandedTransactionNames(prev => {
@@ -1677,180 +1681,256 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   {t('transactions.none')}
                 </Typography>
               ) : (
-                <List dense disablePadding sx={{ py: 1 }}>
+                <Box sx={{ py: 0.5 }}>
                   {transactionsByName.map(([txnName, txns]) => {
                     const isNameExpanded = expandedTransactionNames.has(txnName);
                     const totalAmount = txns.reduce((sum, t) => sum + t.price, 0);
                     const uniqueKey = `${category.id}-${txnName}`;
 
                     return (
-                      <Box key={uniqueKey}>
-                        {/* Transaction Name Row */}
-                        <ListItem
-                          disablePadding
+                      <Box key={uniqueKey} sx={{ mb: 0.5 }}>
+                        {/* Transaction Row - Always Collapsible */}
+                        <Box
+                          onClick={() => toggleTransactionName(txnName)}
                           sx={{
-                            borderRadius: 1.5,
-                            mb: 0.5,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1.5,
+                            py: 1,
+                            px: 1.5,
+                            borderRadius: 2,
+                            cursor: 'pointer',
+                            bgcolor: isNameExpanded 
+                              ? alpha(theme.palette.primary.main, 0.08)
+                              : alpha(theme.palette.background.paper, 0.4),
+                            border: `1px solid ${isNameExpanded 
+                              ? alpha(theme.palette.primary.main, 0.2) 
+                              : alpha(theme.palette.divider, 0.1)}`,
+                            transition: 'all 0.15s ease',
                             '&:hover': {
-                              bgcolor: alpha(theme.palette.text.primary, 0.03),
+                              bgcolor: isNameExpanded
+                                ? alpha(theme.palette.primary.main, 0.12)
+                                : alpha(theme.palette.background.paper, 0.8),
+                              borderColor: isNameExpanded
+                                ? alpha(theme.palette.primary.main, 0.3)
+                                : alpha(theme.palette.divider, 0.3),
                               '& .txn-actions': {
                                 opacity: 1,
                               }
                             },
                           }}
                         >
-                          <ListItemButton
-                            onClick={() => toggleTransactionName(txnName)}
-                            dense
+                          {/* Expand Icon */}
+                          <Box
                             sx={{
-                              borderRadius: 1.5,
-                              py: 0.75,
-                              pl: 1,
-                              pr: 0.5,
+                              width: 20,
+                              height: 20,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
                             }}
                           >
-                            <Box
+                            <ExpandMoreIcon
                               sx={{
-                                width: 20,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                mr: 1,
+                                fontSize: 18,
+                                transform: isNameExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                                transition: 'transform 0.2s ease',
+                                color: isNameExpanded ? 'primary.main' : 'text.secondary',
                               }}
-                            >
-                              {txns.length > 1 && (
-                                <ExpandMoreIcon
-                                  sx={{
-                                    fontSize: 16,
-                                    transform: isNameExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
-                                    transition: 'transform 0.2s ease',
-                                    color: 'text.secondary'
-                                  }}
-                                />
-                              )}
-                            </Box>
-                            <ListItemText
-                              primary={
-                                <Box display="flex" alignItems="center" gap={1}>
-                                  <Typography variant="body2" fontWeight={500} noWrap sx={{ maxWidth: 250 }}>
-                                    {txnName}
-                                  </Typography>
-                                  {txns.length > 1 && (
-                                    <Chip
-                                      label={`x${txns.length}`}
-                                      size="small"
-                                      sx={{
-                                        height: 16,
-                                        fontSize: '0.6rem',
-                                        bgcolor: alpha(theme.palette.info.main, 0.1),
-                                        color: 'info.main',
-                                        '& .MuiChip-label': { px: 0.5 }
-                                      }}
-                                    />
-                                  )}
-                                </Box>
-                              }
-                              secondary={txns.length === 1 ? formatDate(txns[0].date) : undefined}
-                              secondaryTypographyProps={{ variant: 'caption' }}
                             />
+                          </Box>
+
+                          {/* Transaction Info */}
+                          <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Typography
                               variant="body2"
-                              fontWeight={600}
+                              fontWeight={500}
+                              noWrap
+                              sx={{
+                                flex: 1,
+                                minWidth: 0,
+                                color: 'text.primary',
+                              }}
+                            >
+                              {txnName}
+                            </Typography>
+                            {/* Count Badge - Always Shown */}
+                            <Box
+                              sx={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                px: 0.75,
+                                py: 0.25,
+                                borderRadius: 1,
+                                bgcolor: txns.length > 1 
+                                  ? alpha(theme.palette.primary.main, 0.12)
+                                  : alpha(theme.palette.text.secondary, 0.1),
+                                minWidth: 28,
+                              }}
+                            >
+                              <Typography
+                                variant="caption"
+                                fontWeight={600}
+                                sx={{ 
+                                  color: txns.length > 1 ? 'primary.main' : 'text.secondary', 
+                                  fontSize: '0.7rem' 
+                                }}
+                              >
+                                {txns.length}x
+                              </Typography>
+                            </Box>
+                          </Box>
+
+                          {/* Amount */}
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.5,
+                              px: 1,
+                              py: 0.5,
+                              borderRadius: 1.5,
+                              bgcolor: totalAmount < 0
+                                ? alpha(theme.palette.error.main, 0.08)
+                                : alpha(theme.palette.success.main, 0.08),
+                            }}
+                          >
+                            <Typography
+                              variant="body2"
+                              fontWeight={700}
                               sx={{
                                 color: totalAmount < 0 ? 'error.main' : 'success.main',
-                                mr: 1,
-                                minWidth: 70,
-                                textAlign: 'right'
+                                fontVariantNumeric: 'tabular-nums',
                               }}
                             >
                               {formatCurrency(totalAmount)}
                             </Typography>
-                            {/* Actions for the transaction group */}
-                            <Box
-                              className="txn-actions"
-                              sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                opacity: 0,
-                                transition: 'opacity 0.2s ease',
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Tooltip title={t('transactions.createRule')}>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleCreateRuleFromTransaction(txns[0], category)}
-                                  sx={{ p: 0.25 }}
-                                >
-                                  <AutoAwesomeIcon sx={{ fontSize: 16 }} />
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          </ListItemButton>
-                        </ListItem>
+                          </Box>
 
-                        {/* Expanded Transaction Details */}
-                        <Collapse in={isNameExpanded || txns.length === 1} timeout="auto" unmountOnExit>
-                          <Box sx={{ pl: 4, pr: 1, pb: 1 }}>
+                          {/* Actions - Only Create Rule on header */}
+                          <Box
+                            className="txn-actions"
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.25,
+                              opacity: 0,
+                              transition: 'opacity 0.15s ease',
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Tooltip title={t('transactions.createRule')}>
+                              <IconButton
+                                size="small"
+                                sx={{
+                                  p: 0.5,
+                                  color: 'text.secondary',
+                                  '&:hover': { color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.1) }
+                                }}
+                                onClick={() => handleCreateRuleFromTransaction(txns[0], category)}
+                              >
+                                <AutoAwesomeIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </Box>
+
+                        {/* Expanded Transaction Details - Always available */}
+                        <Collapse in={isNameExpanded} timeout="auto" unmountOnExit>
+                          <Box
+                            sx={{
+                              ml: 3.5,
+                              mt: 0.5,
+                              pl: 2,
+                              borderLeft: `2px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                            }}
+                          >
                             {txns.map((txn, idx) => (
                               <Box
                                 key={`${txn.identifier}-${txn.vendor}-${idx}`}
                                 sx={{
                                   display: 'flex',
                                   alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  py: 0.5,
+                                  gap: 1.5,
+                                  py: 0.75,
                                   px: 1,
-                                  borderRadius: 1,
-                                  bgcolor: alpha(theme.palette.background.default, 0.5),
-                                  mb: 0.5,
+                                  mb: 0.25,
+                                  borderRadius: 1.5,
+                                  transition: 'all 0.15s ease',
                                   '&:hover': {
-                                    bgcolor: alpha(theme.palette.text.primary, 0.04),
+                                    bgcolor: alpha(theme.palette.background.paper, 0.6),
                                     '& .detail-actions': {
-                                      opacity: 1,
-                                    }
-                                  },
-                                }}
-                              >
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                                  <Typography variant="caption" color="text.secondary" sx={{ minWidth: 70 }}>
+                                        opacity: 1,
+                                      }
+                                    },
+                                  }}
+                                >
+                                  {/* Date */}
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      color: 'text.secondary',
+                                      fontWeight: 500,
+                                      minWidth: 75,
+                                      fontVariantNumeric: 'tabular-nums',
+                                    }}
+                                  >
                                     {formatDate(txn.date)}
                                   </Typography>
-                                  <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 100 }}>
+
+                                  {/* Vendor */}
+                                  <Typography
+                                    variant="caption"
+                                    noWrap
+                                    sx={{
+                                      flex: 1,
+                                      color: 'text.secondary',
+                                      opacity: 0.7,
+                                    }}
+                                  >
                                     {txn.vendor}
                                   </Typography>
-                                  {txn.accountNumber && (
-                                    <Typography variant="caption" color="text.disabled">
-                                      ****{txn.accountNumber}
-                                    </Typography>
-                                  )}
-                                </Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+
+                                  {/* Amount */}
                                   <Typography
                                     variant="caption"
                                     fontWeight={600}
-                                    sx={{ color: txn.price < 0 ? 'error.main' : 'success.main' }}
+                                    sx={{
+                                      color: txn.price < 0 ? 'error.main' : 'success.main',
+                                      fontVariantNumeric: 'tabular-nums',
+                                      minWidth: 60,
+                                      textAlign: 'right',
+                                    }}
                                   >
                                     {formatCurrency(txn.price)}
                                   </Typography>
+
+                                  {/* Actions */}
                                   <Box
                                     className="detail-actions"
                                     sx={{
                                       display: 'flex',
                                       alignItems: 'center',
+                                      gap: 0.25,
                                       opacity: 0,
-                                      transition: 'opacity 0.2s ease',
+                                      transition: 'opacity 0.15s ease',
                                     }}
                                   >
                                     <Tooltip title={t('transactions.move')}>
                                       <IconButton
                                         size="small"
+                                        sx={{
+                                          p: 0.5,
+                                          color: 'text.secondary',
+                                          '&:hover': { color: 'info.main', bgcolor: alpha(theme.palette.info.main, 0.1) }
+                                        }}
                                         onClick={(e) => {
                                           setTransactionToMove(txn);
                                           setMovingFromCategory(category);
                                           setTransactionMoveMenuAnchor(e.currentTarget);
                                         }}
-                                        sx={{ p: 0.25 }}
                                       >
                                         <SwapVertIcon sx={{ fontSize: 14 }} />
                                       </IconButton>
@@ -1858,22 +1938,25 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                                     <Tooltip title={t('transactions.remove')}>
                                       <IconButton
                                         size="small"
+                                        sx={{
+                                          p: 0.5,
+                                          color: 'text.secondary',
+                                          '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) }
+                                        }}
                                         onClick={() => handleRemoveTransactionFromCategory(txn, category.id)}
-                                        sx={{ p: 0.25, color: 'error.main' }}
                                       >
                                         <DeleteIcon sx={{ fontSize: 14 }} />
                                       </IconButton>
                                     </Tooltip>
                                   </Box>
                                 </Box>
-                              </Box>
-                            ))}
-                          </Box>
-                        </Collapse>
+                              ))}
+                            </Box>
+                          </Collapse>
                       </Box>
                     );
                   })}
-                </List>
+                </Box>
               )}
             </Box>
           </Collapse>

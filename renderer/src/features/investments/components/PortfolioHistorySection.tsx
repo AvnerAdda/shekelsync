@@ -45,6 +45,7 @@ import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioHistoryPoint, InvestmentData, PortfolioSummary, InvestmentAccountSummary } from '@renderer/types/investments';
 import { useInvestmentsFilters, HistoryTimeRangeOption } from '../InvestmentsFiltersContext';
 import { useTranslation } from 'react-i18next';
+import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
 
 interface PortfolioHistorySectionProps {
   overallHistory: PortfolioHistoryPoint[];
@@ -188,19 +189,57 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
               stroke={theme.palette.text.disabled}
             />
             <RechartsTooltip
-              formatter={(value: number | string, name: string) => {
-                if (name === 'date' || name === 'fullDate') return [value, name];
-                // Find account name by ID
-                const accountId = Number(name);
-                const account = orderedAccounts.find(a => a.id === accountId);
-                const accountName = account ? account.account_name : `Account ${accountId}`;
-                return [typeof value === 'number' ? formatCurrencyValue(value) : value, accountName];
-              }}
-              labelStyle={{ color: theme.palette.text.primary }}
-              contentStyle={{
-                backgroundColor: theme.palette.background.paper,
-                border: `1px solid ${theme.palette.divider}`,
-                borderRadius: theme.shape.borderRadius,
+              content={({ active, payload, label }) => {
+                if (!active || !payload || payload.length === 0) return null;
+
+                // Find the full date from the data point
+                const dataPoint = data.find(d => d.date === label);
+                const fullDate = dataPoint?.fullDate;
+
+                const items: TooltipDataItem[] = [];
+
+                // Calculate total portfolio value for this date
+                let totalValue = 0;
+                payload.forEach(entry => {
+                  if (typeof entry.value === 'number') {
+                    totalValue += entry.value;
+                  }
+                });
+
+                // Add total as first item
+                items.push({
+                  label: t('tooltipTotal', 'Total Portfolio'),
+                  value: totalValue,
+                  type: 'currency',
+                });
+
+                // Add individual account values
+                payload.forEach((entry, index) => {
+                  if (typeof entry.value === 'number' && entry.value > 0) {
+                    const accountId = Number(entry.dataKey);
+                    const account = orderedAccounts.find(a => a.id === accountId);
+                    const accountName = account ? account.account_name : `Account ${accountId}`;
+
+                    items.push({
+                      label: accountName,
+                      value: entry.value,
+                      type: 'currency',
+                      color: CHART_COLORS[index % CHART_COLORS.length],
+                    });
+                  }
+                });
+
+                return (
+                  <CustomTooltip
+                    active={active}
+                    items={items}
+                    title={fullDate ? new Date(fullDate).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    }) : label}
+                  />
+                );
               }}
             />
             <Legend 
