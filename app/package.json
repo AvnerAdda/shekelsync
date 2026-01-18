@@ -20,7 +20,7 @@
     "lint:renderer": "npm --prefix ../renderer run lint",
     "typecheck": "npm --prefix ../renderer run typecheck",
     "electron": "electron ../electron/main.js",
-    "electron-dev": "USE_VITE_RENDERER=true RENDERER_DEV_URL=http://localhost:5173 concurrently \"npm --prefix ../renderer run dev\" \"wait-on http://localhost:5173 && electron ../electron/main.js\"",
+    "electron-dev": "USE_VITE_RENDERER=true RENDERER_DEV_URL=http://localhost:5173 concurrently \"npm --prefix ../renderer run dev\" \"wait-on http://localhost:5173 && electron ../electron/main.js --no-sandbox\"",
     "dist": "npm run build:renderer:electron && electron-builder --publish=never",
     "pack": "npm run build:renderer:electron && electron-builder --dir",
     "release": "npm run build:renderer:electron && electron-builder --publish=always",
