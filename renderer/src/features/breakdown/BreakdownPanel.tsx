@@ -46,6 +46,7 @@ interface BreakdownPanelProps {
   categoryType: CategoryType;
   summary?: BreakdownSummary;
   transactions?: BreakdownTransaction[];
+  isVisible?: boolean;
 }
 
 const BreadcrumbTrail: React.FC<{
@@ -94,6 +95,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
   categoryType,
   summary,
   transactions = [],
+  isVisible = true,
 }) => {
   const { formatCurrency } = useFinancePrivacy();
   const theme = useTheme();
@@ -161,6 +163,10 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
     closeDetailsModal();
     resetDrilldown();
   };
+
+  if (!isVisible) {
+    return null;
+  }
 
   return (
     <>

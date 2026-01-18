@@ -4,16 +4,25 @@ const { app } = require('electron');
 const { resolveAppPath, requireFromApp } = require('./paths');
 
 let keytar;
-try {
-  // Try to load keytar from either the app bundle or root node_modules.
-  keytar = requireFromApp('keytar');
-} catch (appLoadError) {
+const keytarDisabled =
+  process.env.KEYTAR_DISABLE === 'true' ||
+  process.env.DBUS_SESSION_BUS_ADDRESS === 'disabled:';
+
+if (!keytarDisabled) {
   try {
-    keytar = require('keytar');
-  } catch (rootLoadError) {
-    console.warn('[SessionStore] keytar unavailable, falling back to encrypted file store.');
-    keytar = null;
+    // Try to load keytar from either the app bundle or root node_modules.
+    keytar = requireFromApp('keytar');
+  } catch (appLoadError) {
+    try {
+      keytar = require('keytar');
+    } catch (rootLoadError) {
+      console.warn('[SessionStore] keytar unavailable, falling back to encrypted file store.');
+      keytar = null;
+    }
   }
+} else {
+  console.warn('[SessionStore] keytar disabled via environment, using file store.');
+  keytar = null;
 }
 
 const { encrypt, decrypt } = require(resolveAppPath('lib', 'server', 'encryption.js'));

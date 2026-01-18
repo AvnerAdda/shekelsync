@@ -2,8 +2,10 @@ const { performance } = require('node:perf_hooks');
 const actualDatabase = require('../database.js');
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 const { recordWaterfallMetric } = require('./metrics-store.js');
+const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
 
 let database = actualDatabase;
+const waterfallCache = createTtlCache({ maxEntries: 20, defaultTtlMs: 60 * 1000 });
 
 function parseFloatSafe(value) {
   const parsed = Number.parseFloat(value);
@@ -27,21 +29,13 @@ async function getIncomeBreakdown(start, end) {
         COALESCE(cd.is_counted_as_income, 1) AS is_counted_as_income
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND cd.category_type = 'income'
         AND t.price > 0
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       GROUP BY cd.name, cd.name_en, t.vendor, cd.is_counted_as_income
       ORDER BY total DESC
     `,
@@ -70,21 +64,13 @@ async function getExpenseBreakdown(start, end) {
       FROM transactions t
       JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
       JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND cd_parent.category_type = 'expense'
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       GROUP BY cd_parent.name, cd_parent.name_en
       ORDER BY total DESC
     `,
@@ -109,20 +95,12 @@ async function getInvestmentBreakdown(start, end) {
         COUNT(*) AS count
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND cd.category_type = 'investment'
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       GROUP BY cd.name, cd.name_en
       ORDER BY outflow DESC
     `,
@@ -202,6 +180,22 @@ async function getWaterfallAnalytics(query = {}) {
   const { startDate, endDate, months = 3 } = query;
   const timerStart = performance.now();
   const { start, end } = resolveDateRange({ startDate, endDate, months });
+  const skipCache =
+    process.env.NODE_ENV === 'test' ||
+    query.noCache === true ||
+    query.noCache === 'true' ||
+    query.noCache === '1';
+  const cacheKey = JSON.stringify({
+    start: start.toISOString(),
+    end: end.toISOString(),
+    months,
+  });
+  if (!skipCache) {
+    const cached = waterfallCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
 
   const [incomeBreakdown, expenseBreakdown, investmentBreakdown] = await Promise.all([
     getIncomeBreakdown(start, end),
@@ -288,6 +282,9 @@ async function getWaterfallAnalytics(query = {}) {
   console.info('[analytics:waterfall]', JSON.stringify(metricPayload));
   recordWaterfallMetric(metricPayload);
 
+  if (!skipCache) {
+    waterfallCache.set(cacheKey, response);
+  }
   return response;
 }
 

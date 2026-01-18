@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS smart_action_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     action_type TEXT NOT NULL CHECK(action_type IN (
       'quest_reduce_spending', 'quest_savings_target', 'quest_budget_adherence', 
-      'quest_set_budget', 'quest_reduce_fixed_cost', 'quest_income_goal'
+      'quest_set_budget', 'quest_reduce_fixed_cost', 'quest_income_goal',
+      'quest_merchant_limit', 'quest_weekend_limit'
     )),
     trigger_category_id INTEGER,
     severity TEXT NOT NULL DEFAULT 'medium' CHECK(severity IN ('low', 'medium', 'high')),

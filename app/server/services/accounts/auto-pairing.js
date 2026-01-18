@@ -741,6 +741,58 @@ async function calculateDiscrepancy(params) {
   }
 }
 
+async function applyPairingToTransactions({
+  pairingId,
+  bankVendor,
+  bankAccountNumber = null,
+  matchPatterns = [],
+}) {
+  if (!bankVendor || !Array.isArray(matchPatterns) || matchPatterns.length === 0) {
+    return { transactionsUpdated: 0 };
+  }
+
+  const client = await getDatabase().getClient();
+
+  try {
+    const params = [bankVendor];
+    const conditions = matchPatterns.map((pattern, idx) => {
+      params.push(String(pattern).toLowerCase());
+      return `LOWER(name) LIKE '%' || $${idx + 2} || '%'`;
+    });
+
+    let query = `
+      UPDATE transactions
+         SET category_definition_id = CASE
+             WHEN price < 0 THEN 25
+             WHEN price > 0 THEN 75
+             ELSE category_definition_id
+           END
+       WHERE vendor = $1
+         AND (${conditions.join(' OR ')})
+    `;
+
+    if (bankAccountNumber) {
+      params.push(bankAccountNumber);
+      query += ` AND account_number = $${params.length}`;
+    }
+
+    const updateResult = await client.query(query, params);
+    const updated = updateResult?.rowCount || 0;
+
+    if (updated > 0 && pairingId) {
+      await client.query(
+        `INSERT INTO account_pairing_log (pairing_id, action, transaction_count)
+         VALUES ($1, $2, $3)`,
+        [pairingId, 'applied', updated],
+      );
+    }
+
+    return { transactionsUpdated: updated };
+  } finally {
+    client.release();
+  }
+}
+
 /**
  * Auto-pair a credit card to its bank account
  */
@@ -748,6 +800,7 @@ async function autoPairCreditCard(params) {
   const {
     creditCardVendor,
     creditCardAccountNumber = null,
+    applyTransactions = false,
   } = params;
 
   if (!creditCardVendor) {
@@ -780,6 +833,7 @@ async function autoPairCreditCard(params) {
 
   let pairingId;
   let wasCreated = false;
+  let appliedTransactions = null;
 
   if (existingPairing) {
     pairingId = existingPairing.id;
@@ -800,6 +854,19 @@ async function autoPairCreditCard(params) {
     });
     pairingId = createResult.pairingId;
     wasCreated = true;
+  }
+
+  if (applyTransactions) {
+    try {
+      appliedTransactions = await applyPairingToTransactions({
+        pairingId,
+        bankVendor: bankAccountResult.bankVendor,
+        bankAccountNumber: bankAccountResult.bankAccountNumber,
+        matchPatterns: bankAccountResult.matchPatterns,
+      });
+    } catch (error) {
+      console.warn('[auto-pairing] Failed to apply pairing to existing transactions', error);
+    }
   }
 
   // Step 4: Calculate discrepancy
@@ -828,6 +895,7 @@ async function autoPairCreditCard(params) {
       sampleTransactions: bankAccountResult.sampleTransactions,
     },
     discrepancy,
+    ...(appliedTransactions ? { appliedTransactions } : {}),
   };
 }
 

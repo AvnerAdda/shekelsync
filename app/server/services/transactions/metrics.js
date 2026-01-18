@@ -133,18 +133,10 @@ async function getCategoryExpenses(params = {}) {
         FROM transactions t
         LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
         LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-        LEFT JOIN account_pairings ap ON (
-          t.vendor = ap.bank_vendor
-          AND ap.is_active = 1
-          AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-          AND ap.match_patterns IS NOT NULL
-          AND EXISTS (
-            SELECT 1
-            FROM json_each(ap.match_patterns)
-            WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-          )
-        )
-        ${whereSql ? `${whereSql} AND ap.id IS NULL AND ${EXCLUDE_PIKADON}` : `WHERE ap.id IS NULL AND ${EXCLUDE_PIKADON}`}
+        LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+          ON t.identifier = tpe.transaction_identifier
+          AND t.vendor = tpe.transaction_vendor
+        ${whereSql ? `${whereSql} AND tpe.transaction_identifier IS NULL AND ${EXCLUDE_PIKADON}` : `WHERE tpe.transaction_identifier IS NULL AND ${EXCLUDE_PIKADON}`}
         ORDER BY t.date DESC
       `,
       parameters,
@@ -191,19 +183,11 @@ async function getCategoryExpenses(params = {}) {
       FROM transactions t
       LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
       LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.category_definition_id IN (SELECT id FROM category_tree)
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
         AND ${EXCLUDE_PIKADON}
       ${monthClause}
       ORDER BY t.date DESC
@@ -254,19 +238,11 @@ async function getCategorySpendingTimeline(params = {}) {
               ${yearExpr} AS year,
               ${yearTrunc} AS year_sort
             FROM transactions t
-            LEFT JOIN account_pairings ap ON (
-              t.vendor = ap.bank_vendor
-              AND ap.is_active = 1
-              AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-              AND ap.match_patterns IS NOT NULL
-              AND EXISTS (
-                SELECT 1
-                FROM json_each(ap.match_patterns)
-                WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-              )
-            )
+            LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+              ON t.identifier = tpe.transaction_identifier
+              AND t.vendor = tpe.transaction_vendor
             WHERE t.category_definition_id IN (SELECT id FROM category_tree)
-              AND ap.id IS NULL
+              AND tpe.transaction_identifier IS NULL
             GROUP BY ${yearExpr}, ${yearTrunc}
             ORDER BY year_sort DESC
             LIMIT $2
@@ -298,19 +274,11 @@ async function getCategorySpendingTimeline(params = {}) {
             ${yearMonthExpr} AS year_month,
             ${monthTrunc} AS month_sort
           FROM transactions t
-          LEFT JOIN account_pairings ap ON (
-            t.vendor = ap.bank_vendor
-            AND ap.is_active = 1
-            AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-            AND ap.match_patterns IS NOT NULL
-            AND EXISTS (
-              SELECT 1
-              FROM json_each(ap.match_patterns)
-              WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-            )
-          )
+          LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+            ON t.identifier = tpe.transaction_identifier
+            AND t.vendor = tpe.transaction_vendor
           WHERE t.category_definition_id IN (SELECT id FROM category_tree)
-            AND ap.id IS NULL
+            AND tpe.transaction_identifier IS NULL
           GROUP BY ${yearExpr}, ${monthExpr}, ${yearMonthExpr}, ${monthTrunc}
           ORDER BY month_sort DESC
           LIMIT $2
@@ -401,20 +369,12 @@ async function getExpensesByMonth(params = {}) {
           ${yearTrunc} AS year_sort
         FROM transactions t
         JOIN category_definitions cd ON cd.id = t.category_definition_id
-        LEFT JOIN account_pairings ap ON (
-          t.vendor = ap.bank_vendor
-          AND ap.is_active = 1
-          AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-          AND ap.match_patterns IS NOT NULL
-          AND EXISTS (
-            SELECT 1
-            FROM json_each(ap.match_patterns)
-            WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-          )
-        )
+        LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+          ON t.identifier = tpe.transaction_identifier
+          AND t.vendor = tpe.transaction_vendor
         WHERE cd.name != $2
           AND cd.category_type = 'expense'
-          AND ap.id IS NULL
+          AND tpe.transaction_identifier IS NULL
         GROUP BY ${yearExpr}, ${yearTrunc}
         ORDER BY year_sort DESC
         LIMIT $1
@@ -438,20 +398,12 @@ async function getExpensesByMonth(params = {}) {
         ${monthTrunc} AS year_sort
       FROM transactions t
       JOIN category_definitions cd ON cd.id = t.category_definition_id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE cd.name != $2
         AND cd.category_type = 'expense'
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       GROUP BY
         ${yearExpr},
         ${monthExpr},
@@ -498,20 +450,12 @@ async function getMonthByCategories(params = {}) {
         FROM transactions t
         LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
         LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-        LEFT JOIN account_pairings ap ON (
-          t.vendor = ap.bank_vendor
-          AND ap.is_active = 1
-          AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-          AND ap.match_patterns IS NOT NULL
-          AND EXISTS (
-            SELECT 1
-            FROM json_each(ap.match_patterns)
-            WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-          )
-        )
+        LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+          ON t.identifier = tpe.transaction_identifier
+          AND t.vendor = tpe.transaction_vendor
         WHERE ${dialect.toChar('t.date', 'YYYY-MM')} = $1
           AND t.category_definition_id IS NOT NULL
-          AND ap.id IS NULL
+          AND tpe.transaction_identifier IS NULL
       )
       SELECT
         COALESCE(parent_category_id, category_id) AS category_definition_id,

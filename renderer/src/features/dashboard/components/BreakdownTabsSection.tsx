@@ -269,6 +269,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
           endDate={effectiveEndDate}
           categoryType={type as any}
           transactions={breakdownData[type].transactions}
+          isVisible={selectedBreakdownType === type}
         />
       );
     }

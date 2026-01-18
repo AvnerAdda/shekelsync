@@ -13,6 +13,7 @@
     "build-electron": "npm run build:renderer:electron && electron-builder",
     "start": "electron .",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "rebuild:sqlite": "CC=gcc-11 CXX=g++-11 npm rebuild better-sqlite3 --build-from-source",
     "postinstall": "patch-package && electron-builder install-app-deps",
     "lint": "npm run lint:app && npm run lint:renderer",
     "lint:app": "eslint --ext .ts,.tsx,.js,.jsx .",

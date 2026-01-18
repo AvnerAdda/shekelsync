@@ -123,20 +123,12 @@ function createForecastRouter({ sqliteDb = null } = {}) {
             SUM(ABS(t.price)) AS spent
           FROM transactions t
           LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-          LEFT JOIN account_pairings ap ON (
-            t.vendor = ap.bank_vendor
-            AND ap.is_active = 1
-            AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-            AND ap.match_patterns IS NOT NULL
-            AND EXISTS (
-              SELECT 1
-              FROM json_each(ap.match_patterns)
-              WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-            )
-          )
+          LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+            ON t.identifier = tpe.transaction_identifier
+            AND t.vendor = tpe.transaction_vendor
           WHERE t.status = 'completed'
             AND t.category_type = 'expense'
-            AND ap.id IS NULL
+            AND tpe.transaction_identifier IS NULL
             AND t.date >= ? AND t.date <= ?
           GROUP BY cd.id, cd.name, cd.name_en, cd.name_fr, cd.icon, cd.color, cd.parent_id
         `;

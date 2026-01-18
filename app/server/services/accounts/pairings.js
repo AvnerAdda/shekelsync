@@ -1,9 +1,8 @@
 const actualDatabase = require('../database.js');
-const manualMatchingService = require('../investments/manual-matching.js');
 let database = actualDatabase;
 
 function normalizePairing(row) {
-  const pairing = {
+  return {
     id: row.id,
     creditCardVendor: row.credit_card_vendor,
     creditCardAccountNumber: row.credit_card_account_number,
@@ -15,32 +14,6 @@ function normalizePairing(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-
-  // Add credit card institution if available
-  if (row.cc_institution_id) {
-    pairing.creditCardInstitution = {
-      id: row.cc_institution_id,
-      vendor_code: row.cc_institution_vendor_code,
-      display_name_he: row.cc_institution_name_he,
-      display_name_en: row.cc_institution_name_en,
-      logo_url: row.cc_institution_logo,
-      institution_type: row.cc_institution_type,
-    };
-  }
-
-  // Add bank institution if available
-  if (row.bank_institution_id) {
-    pairing.bankInstitution = {
-      id: row.bank_institution_id,
-      vendor_code: row.bank_institution_vendor_code,
-      display_name_he: row.bank_institution_name_he,
-      display_name_en: row.bank_institution_name_en,
-      logo_url: row.bank_institution_logo,
-      institution_type: row.bank_institution_type,
-    };
-  }
-
-  return pairing;
 }
 
 function buildNullSafeEquality(column, placeholder) {
@@ -54,79 +27,29 @@ async function listPairings(params = {}) {
   const includeInactive = params.include_inactive !== undefined
     ? params.include_inactive === true || params.include_inactive === 'true'
     : false;
-  const includeStats = params.include_stats !== undefined
-    ? params.include_stats === true || params.include_stats === 'true'
-    : false;
-
   let query = `
     SELECT
-      ap.*,
-      COALESCE(fi_cc_cred.id, fi_cc_vendor.id) as cc_institution_id,
-      COALESCE(fi_cc_cred.vendor_code, fi_cc_vendor.vendor_code, ap.credit_card_vendor) as cc_institution_vendor_code,
-      COALESCE(fi_cc_cred.display_name_he, fi_cc_vendor.display_name_he, ap.credit_card_vendor) as cc_institution_name_he,
-      COALESCE(fi_cc_cred.display_name_en, fi_cc_vendor.display_name_en, ap.credit_card_vendor) as cc_institution_name_en,
-      COALESCE(fi_cc_cred.logo_url, fi_cc_vendor.logo_url) as cc_institution_logo,
-      COALESCE(fi_cc_cred.institution_type, fi_cc_vendor.institution_type) as cc_institution_type,
-      COALESCE(fi_bank_cred.id, fi_bank_vendor.id) as bank_institution_id,
-      COALESCE(fi_bank_cred.vendor_code, fi_bank_vendor.vendor_code, ap.bank_vendor) as bank_institution_vendor_code,
-      COALESCE(fi_bank_cred.display_name_he, fi_bank_vendor.display_name_he, ap.bank_vendor) as bank_institution_name_he,
-      COALESCE(fi_bank_cred.display_name_en, fi_bank_vendor.display_name_en, ap.bank_vendor) as bank_institution_name_en,
-      COALESCE(fi_bank_cred.logo_url, fi_bank_vendor.logo_url) as bank_institution_logo,
-      COALESCE(fi_bank_cred.institution_type, fi_bank_vendor.institution_type) as bank_institution_type
-    FROM account_pairings ap
-    LEFT JOIN vendor_credentials vc_cc
-      ON ap.credit_card_vendor = vc_cc.vendor
-      AND (ap.credit_card_account_number IS NULL OR ap.credit_card_account_number = vc_cc.bank_account_number)
-    LEFT JOIN institution_nodes fi_cc_cred
-      ON vc_cc.institution_id = fi_cc_cred.id
-     AND fi_cc_cred.node_type = 'institution'
-    LEFT JOIN institution_nodes fi_cc_vendor
-      ON ap.credit_card_vendor = fi_cc_vendor.vendor_code
-     AND fi_cc_vendor.node_type = 'institution'
-    LEFT JOIN vendor_credentials vc_bank
-      ON ap.bank_vendor = vc_bank.vendor
-      AND (ap.bank_account_number IS NULL OR ap.bank_account_number = vc_bank.bank_account_number)
-    LEFT JOIN institution_nodes fi_bank_cred
-      ON vc_bank.institution_id = fi_bank_cred.id
-     AND fi_bank_cred.node_type = 'institution'
-    LEFT JOIN institution_nodes fi_bank_vendor
-      ON ap.bank_vendor = fi_bank_vendor.vendor_code
-     AND fi_bank_vendor.node_type = 'institution'
+      id,
+      credit_card_vendor,
+      credit_card_account_number,
+      bank_vendor,
+      bank_account_number,
+      match_patterns,
+      is_active,
+      discrepancy_acknowledged,
+      created_at,
+      updated_at
+    FROM account_pairings
   `;
 
-  const predicates = [];
   if (!includeInactive) {
-    predicates.push('ap.is_active = 1');
+    query += ' WHERE is_active = 1';
   }
 
-  if (predicates.length > 0) {
-    query += ` WHERE ${predicates.join(' AND ')}`;
-  }
-
-  query += ' ORDER BY ap.created_at DESC';
+  query += ' ORDER BY created_at DESC';
 
   const result = await database.query(query);
-  const pairings = result.rows.map(normalizePairing);
-
-  // Fetch matching stats if requested
-  if (includeStats) {
-    for (const pairing of pairings) {
-      try {
-        const stats = await manualMatchingService.getMatchingStats({
-          bankVendor: pairing.bankVendor,
-          bankAccountNumber: pairing.bankAccountNumber,
-          matchPatterns: pairing.matchPatterns
-        });
-        pairing.matchingStats = stats;
-      } catch (error) {
-        console.error(`Error fetching stats for pairing ${pairing.id}:`, error);
-        // Set null stats on error instead of failing entire request
-        pairing.matchingStats = null;
-      }
-    }
-  }
-
-  return pairings;
+  return result.rows.map(normalizePairing);
 }
 
 async function createPairing(payload = {}) {
@@ -289,22 +212,30 @@ async function deletePairing({ id }) {
   const client = await database.getClient();
 
   try {
-    const result = await client.query(
-      'DELETE FROM account_pairings WHERE id = $1',
+    // First, verify the pairing exists
+    const existsResult = await client.query(
+      'SELECT id FROM account_pairings WHERE id = $1',
       [id],
     );
 
-    if (result.rowCount === 0) {
+    if (existsResult.rows.length === 0) {
       const error = new Error('Pairing not found');
       error.status = 404;
       throw error;
     }
 
+    // Insert log entry before deletion (since pairing_id still exists)
     await client.query(
       `
         INSERT INTO account_pairing_log (pairing_id, action, created_at)
         VALUES ($1, 'deleted', CURRENT_TIMESTAMP)
       `,
+      [id],
+    );
+
+    // Now delete the pairing (CASCADE will handle the log entries)
+    const result = await client.query(
+      'DELETE FROM account_pairings WHERE id = $1',
       [id],
     );
 
@@ -322,39 +253,14 @@ async function getActivePairings(clientInstance) {
     const result = await client.query(
       `
         SELECT
-          ap.*,
-          COALESCE(fi_cc_cred.id, fi_cc_vendor.id) as cc_institution_id,
-          COALESCE(fi_cc_cred.vendor_code, fi_cc_vendor.vendor_code, ap.credit_card_vendor) as cc_institution_vendor_code,
-          COALESCE(fi_cc_cred.display_name_he, fi_cc_vendor.display_name_he, ap.credit_card_vendor) as cc_institution_name_he,
-          COALESCE(fi_cc_cred.display_name_en, fi_cc_vendor.display_name_en, ap.credit_card_vendor) as cc_institution_name_en,
-          COALESCE(fi_cc_cred.logo_url, fi_cc_vendor.logo_url) as cc_institution_logo,
-          COALESCE(fi_cc_cred.institution_type, fi_cc_vendor.institution_type) as cc_institution_type,
-          COALESCE(fi_bank_cred.id, fi_bank_vendor.id) as bank_institution_id,
-          COALESCE(fi_bank_cred.vendor_code, fi_bank_vendor.vendor_code, ap.bank_vendor) as bank_institution_vendor_code,
-          COALESCE(fi_bank_cred.display_name_he, fi_bank_vendor.display_name_he, ap.bank_vendor) as bank_institution_name_he,
-          COALESCE(fi_bank_cred.display_name_en, fi_bank_vendor.display_name_en, ap.bank_vendor) as bank_institution_name_en,
-          COALESCE(fi_bank_cred.logo_url, fi_bank_vendor.logo_url) as bank_institution_logo,
-          COALESCE(fi_bank_cred.institution_type, fi_bank_vendor.institution_type) as bank_institution_type
-        FROM account_pairings ap
-        LEFT JOIN vendor_credentials vc_cc
-          ON ap.credit_card_vendor = vc_cc.vendor
-          AND (ap.credit_card_account_number IS NULL OR ap.credit_card_account_number = vc_cc.bank_account_number)
-        LEFT JOIN institution_nodes fi_cc_cred
-          ON vc_cc.institution_id = fi_cc_cred.id
-         AND fi_cc_cred.node_type = 'institution'
-        LEFT JOIN institution_nodes fi_cc_vendor
-          ON ap.credit_card_vendor = fi_cc_vendor.vendor_code
-         AND fi_cc_vendor.node_type = 'institution'
-        LEFT JOIN vendor_credentials vc_bank
-          ON ap.bank_vendor = vc_bank.vendor
-          AND (ap.bank_account_number IS NULL OR ap.bank_account_number = vc_bank.bank_account_number)
-        LEFT JOIN institution_nodes fi_bank_cred
-          ON vc_bank.institution_id = fi_bank_cred.id
-         AND fi_bank_cred.node_type = 'institution'
-        LEFT JOIN institution_nodes fi_bank_vendor
-          ON ap.bank_vendor = fi_bank_vendor.vendor_code
-         AND fi_bank_vendor.node_type = 'institution'
-        WHERE ap.is_active = 1
+          id,
+          credit_card_vendor,
+          credit_card_account_number,
+          bank_vendor,
+          bank_account_number,
+          match_patterns
+        FROM account_pairings
+        WHERE is_active = 1
       `,
     );
 

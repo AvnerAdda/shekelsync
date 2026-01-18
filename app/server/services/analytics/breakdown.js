@@ -4,6 +4,9 @@ const { recordBreakdownMetric } = require('./metrics-store.js');
 let database = actualDatabase;
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 const { resolveLocale, getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
+const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
+
+const breakdownCache = createTtlCache({ maxEntries: 30, defaultTtlMs: 60 * 1000 });
 
 const VALID_TYPES = new Set(['expense', 'income', 'investment']);
 
@@ -43,6 +46,7 @@ async function getBreakdownAnalytics(query = {}) {
     endDate,
     months = 3,
     locale: localeInput,
+    includeTransactions,
   } = query;
   const locale = resolveLocale(localeInput);
   const timerStart = performance.now();
@@ -51,6 +55,29 @@ async function getBreakdownAnalytics(query = {}) {
 
   const config = TYPE_CONFIG[type];
   const { start, end } = resolveDateRange({ startDate, endDate, months });
+  const includeTransactionsFlag =
+    includeTransactions === true ||
+    includeTransactions === 'true' ||
+    includeTransactions === '1';
+  const skipCache =
+    process.env.NODE_ENV === 'test' ||
+    query.noCache === true ||
+    query.noCache === 'true' ||
+    query.noCache === '1';
+  const cacheKey = JSON.stringify({
+    type,
+    start: start.toISOString(),
+    end: end.toISOString(),
+    months,
+    locale,
+    includeTransactions: includeTransactionsFlag,
+  });
+  if (!skipCache) {
+    const cached = breakdownCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
   const periodLengthMs = end.getTime() - start.getTime();
   const prevEnd = new Date(start.getTime() - 1);
   const prevStart = new Date(Math.max(start.getTime() - periodLengthMs, 0));
@@ -128,22 +155,14 @@ async function getBreakdownAnalytics(query = {}) {
       JOIN category_tree ct ON cd.id = ct.category_id
       LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
       LEFT JOIN institution_nodes fi ON vc.institution_id = fi.id AND fi.node_type = 'institution'
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND cd.category_type = $3
         AND cd.depth_level >= 1
         ${priceFilterClause}
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       ORDER BY t.date ASC`,
     [startStr, endStr, config.categoryType],
   );
@@ -185,22 +204,14 @@ async function getBreakdownAnalytics(query = {}) {
       FROM transactions t
       JOIN category_definitions cd ON t.category_definition_id = cd.id
       JOIN category_tree ct ON cd.id = ct.category_id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND cd.category_type = $3
         AND cd.depth_level >= 1
         ${priceFilterClause}
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       GROUP BY ct.level1_id, ct.level1_name`,
     [prevStartStr, prevEndStr, config.categoryType],
   );
@@ -212,21 +223,13 @@ async function getBreakdownAnalytics(query = {}) {
         SUM(${config.amountExpression}) as total_amount
       FROM transactions t
       JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND cd.category_type = $3
         ${priceFilterClause}
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       GROUP BY COALESCE(t.vendor, 'Unknown')`,
     [prevStartStr, prevEndStr, config.categoryType],
   );
@@ -303,9 +306,13 @@ async function getBreakdownAnalytics(query = {}) {
   const vendorHistoryMap = new Map();
   const monthMap = new Map();
 
+  const now = new Date();
+
   // Use all transactions (including pending) for breakdown calculations
   transactions.forEach((tx) => {
     const amount = config.amountFn(tx.price);
+    const processedDate = tx.processed_date || tx.processedDate;
+    const isPending = processedDate ? new Date(processedDate) > now : false;
 
     const monthKey = tx.date.toISOString().slice(0, 7);
 
@@ -319,12 +326,19 @@ async function getBreakdownAnalytics(query = {}) {
         description: tx.parent_description,
         count: 0,
         total: 0,
+        pendingCount: 0,
+        processedCount: 0,
         subcategories: new Map(),
       });
     }
     const parentEntry = categoryMap.get(parentKey);
     parentEntry.count += 1;
     parentEntry.total += amount;
+    if (isPending) {
+      parentEntry.pendingCount += 1;
+    } else {
+      parentEntry.processedCount += 1;
+    }
     if (!categoryHistoryMap.has(parentKey)) {
       categoryHistoryMap.set(parentKey, new Map());
     }
@@ -353,11 +367,18 @@ async function getBreakdownAnalytics(query = {}) {
         description: subDescription,
         count: 0,
         total: 0,
+        pendingCount: 0,
+        processedCount: 0,
       });
     }
     const subEntry = parentEntry.subcategories.get(subKey);
     subEntry.count += 1;
     subEntry.total += amount;
+    if (isPending) {
+      subEntry.pendingCount += 1;
+    } else {
+      subEntry.processedCount += 1;
+    }
 
     const vendorKey = tx.vendor || 'Unknown';
     if (!vendorMap.has(vendorKey)) {
@@ -406,6 +427,8 @@ async function getBreakdownAnalytics(query = {}) {
       description: entry.description,
       count: entry.count,
       total: entry.total,
+      pendingCount: entry.pendingCount || 0,
+      processedCount: entry.processedCount || 0,
       previousTotal: previousTotals ? previousTotals.total : 0,
       previousCount: previousTotals ? previousTotals.count : 0,
       history,
@@ -419,6 +442,8 @@ async function getBreakdownAnalytics(query = {}) {
           description: sub.description,
           count: sub.count,
           total: sub.total,
+          pendingCount: sub.pendingCount || 0,
+          processedCount: sub.processedCount || 0,
         })),
     };
   }).sort((a, b) => b.total - a.total);
@@ -467,11 +492,13 @@ async function getBreakdownAnalytics(query = {}) {
       byVendor,
       byMonth,
     },
-    transactions: transactions.map((tx) => ({
+  };
+  if (includeTransactionsFlag) {
+    response.transactions = transactions.map((tx) => ({
       ...tx,
       price: tx.price,
-    })),
-  };
+    }));
+  }
 
   const durationMs = Number((performance.now() - timerStart).toFixed(2));
   const metricPayload = {
@@ -488,6 +515,9 @@ async function getBreakdownAnalytics(query = {}) {
   console.info('[analytics:breakdown]', JSON.stringify(metricPayload));
   recordBreakdownMetric(metricPayload);
 
+  if (!skipCache) {
+    breakdownCache.set(cacheKey, response);
+  }
   return response;
 }
 

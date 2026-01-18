@@ -398,6 +398,18 @@ const TABLE_DEFINITIONS = [
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (pairing_id) REFERENCES account_pairings(id) ON DELETE CASCADE
     );`,
+  `CREATE TABLE IF NOT EXISTS transaction_pairing_exclusions (
+      transaction_identifier TEXT NOT NULL,
+      transaction_vendor TEXT NOT NULL,
+      pairing_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (transaction_identifier, transaction_vendor, pairing_id),
+      FOREIGN KEY (transaction_identifier, transaction_vendor)
+        REFERENCES transactions(identifier, vendor)
+        ON DELETE CASCADE,
+      FOREIGN KEY (pairing_id) REFERENCES account_pairings(id) ON DELETE CASCADE
+    );`,
   `CREATE TABLE IF NOT EXISTS credit_card_expense_matches (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       repayment_txn_id TEXT NOT NULL,
@@ -415,6 +427,125 @@ const TABLE_DEFINITIONS = [
       notes TEXT,
       UNIQUE(repayment_txn_id, repayment_vendor, expense_txn_id, expense_vendor)
     );`,
+  `CREATE TRIGGER IF NOT EXISTS trg_account_pairings_exclusions_insert
+    AFTER INSERT ON account_pairings
+    BEGIN
+      INSERT OR IGNORE INTO transaction_pairing_exclusions (
+        transaction_identifier,
+        transaction_vendor,
+        pairing_id,
+        created_at,
+        updated_at
+      )
+      SELECT
+        t.identifier,
+        t.vendor,
+        NEW.id,
+        datetime('now'),
+        datetime('now')
+      FROM transactions t
+      WHERE NEW.is_active = 1
+        AND t.vendor = NEW.bank_vendor
+        AND (NEW.bank_account_number IS NULL OR t.account_number = NEW.bank_account_number)
+        AND NEW.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(COALESCE(NEW.match_patterns, '[]'))
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        );
+    END;`,
+  `CREATE TRIGGER IF NOT EXISTS trg_account_pairings_exclusions_update
+    AFTER UPDATE OF is_active, bank_vendor, bank_account_number, match_patterns ON account_pairings
+    BEGIN
+      DELETE FROM transaction_pairing_exclusions
+        WHERE pairing_id = OLD.id;
+      INSERT OR IGNORE INTO transaction_pairing_exclusions (
+        transaction_identifier,
+        transaction_vendor,
+        pairing_id,
+        created_at,
+        updated_at
+      )
+      SELECT
+        t.identifier,
+        t.vendor,
+        NEW.id,
+        datetime('now'),
+        datetime('now')
+      FROM transactions t
+      WHERE NEW.is_active = 1
+        AND t.vendor = NEW.bank_vendor
+        AND (NEW.bank_account_number IS NULL OR t.account_number = NEW.bank_account_number)
+        AND NEW.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(COALESCE(NEW.match_patterns, '[]'))
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        );
+    END;`,
+  `CREATE TRIGGER IF NOT EXISTS trg_account_pairings_exclusions_delete
+    AFTER DELETE ON account_pairings
+    BEGIN
+      DELETE FROM transaction_pairing_exclusions
+        WHERE pairing_id = OLD.id;
+    END;`,
+  `CREATE TRIGGER IF NOT EXISTS trg_transactions_exclusions_insert
+    AFTER INSERT ON transactions
+    BEGIN
+      INSERT OR IGNORE INTO transaction_pairing_exclusions (
+        transaction_identifier,
+        transaction_vendor,
+        pairing_id,
+        created_at,
+        updated_at
+      )
+      SELECT
+        NEW.identifier,
+        NEW.vendor,
+        ap.id,
+        datetime('now'),
+        datetime('now')
+      FROM account_pairings ap
+      WHERE ap.is_active = 1
+        AND ap.bank_vendor = NEW.vendor
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = NEW.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(COALESCE(ap.match_patterns, '[]'))
+          WHERE LOWER(NEW.name) LIKE '%' || LOWER(json_each.value) || '%'
+        );
+    END;`,
+  `CREATE TRIGGER IF NOT EXISTS trg_transactions_exclusions_update
+    AFTER UPDATE OF vendor, account_number, name ON transactions
+    BEGIN
+      DELETE FROM transaction_pairing_exclusions
+        WHERE transaction_identifier = OLD.identifier
+          AND transaction_vendor = OLD.vendor;
+      INSERT OR IGNORE INTO transaction_pairing_exclusions (
+        transaction_identifier,
+        transaction_vendor,
+        pairing_id,
+        created_at,
+        updated_at
+      )
+      SELECT
+        NEW.identifier,
+        NEW.vendor,
+        ap.id,
+        datetime('now'),
+        datetime('now')
+      FROM account_pairings ap
+      WHERE ap.is_active = 1
+        AND ap.bank_vendor = NEW.vendor
+        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = NEW.account_number)
+        AND ap.match_patterns IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(COALESCE(ap.match_patterns, '[]'))
+          WHERE LOWER(NEW.name) LIKE '%' || LOWER(json_each.value) || '%'
+        );
+    END;`,
   `CREATE TABLE IF NOT EXISTS scrape_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       triggered_by TEXT,
@@ -453,7 +584,8 @@ const TABLE_DEFINITIONS = [
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       action_type TEXT NOT NULL CHECK(action_type IN (
         'quest_reduce_spending', 'quest_savings_target', 'quest_budget_adherence', 
-        'quest_set_budget', 'quest_reduce_fixed_cost', 'quest_income_goal'
+        'quest_set_budget', 'quest_reduce_fixed_cost', 'quest_income_goal',
+        'quest_merchant_limit', 'quest_weekend_limit'
       )),
       trigger_category_id INTEGER,
       severity TEXT NOT NULL DEFAULT 'medium' CHECK(severity IN ('low', 'medium', 'high')),
@@ -565,6 +697,8 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_transactions_date_vendor ON transactions (date, vendor);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_datetime ON transactions (transaction_datetime);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_price ON transactions (price);',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_processed_date ON transactions (processed_date);',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_status_date ON transactions (status, date);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor ON transactions (vendor);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_date ON transactions (vendor, date);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_datetime ON transactions (vendor, transaction_datetime DESC);',
@@ -578,6 +712,8 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_pairings_bank ON account_pairings(bank_vendor, bank_account_number);',
   'CREATE INDEX IF NOT EXISTS idx_pairing_log_pairing_id ON account_pairing_log(pairing_id);',
   'CREATE INDEX IF NOT EXISTS idx_pairing_log_created_at ON account_pairing_log(created_at);',
+  'CREATE INDEX IF NOT EXISTS idx_pairing_exclusions_pairing_id ON transaction_pairing_exclusions(pairing_id);',
+  'CREATE INDEX IF NOT EXISTS idx_pairing_exclusions_txn ON transaction_pairing_exclusions(transaction_identifier, transaction_vendor);',
   'CREATE INDEX IF NOT EXISTS idx_cc_matches_repayment ON credit_card_expense_matches(repayment_txn_id, repayment_vendor);',
   'CREATE INDEX IF NOT EXISTS idx_cc_matches_expense ON credit_card_expense_matches(expense_txn_id, expense_vendor);',
   'CREATE INDEX IF NOT EXISTS idx_cc_matches_dates ON credit_card_expense_matches(repayment_date, expense_date);',

@@ -88,23 +88,15 @@ async function getPersonalIntelligence(params = {}) {
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND (cd.category_type = 'expense' OR cd.category_type IS NULL)
         AND COALESCE(cd.name, '') != $3
         AND COALESCE(parent.name, '') != $3
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       ORDER BY t.date ASC
       `,
       [startStr, endStr, BANK_CATEGORY_NAME],
@@ -290,24 +282,16 @@ async function getPersonalIntelligence(params = {}) {
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
       AND t.price < 0
       AND cd.category_type = 'expense'
       AND parent.name IS NOT NULL
       AND COALESCE(cd.name, '') != $3
       AND COALESCE(parent.name, '') != $3
-      AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       GROUP BY parent.name
     `,
       [startStr, endStr, BANK_CATEGORY_NAME],

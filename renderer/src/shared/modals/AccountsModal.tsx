@@ -3643,7 +3643,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         isOpen={isPairingModalOpen}
         onClose={() => setIsPairingModalOpen(false)}
         creditCardAccounts={creditAccounts}
-        bankAccounts={bankAccounts}
       />
 
       {/* Confirmation Dialog for Delete Operations */}

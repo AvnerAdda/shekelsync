@@ -66,6 +66,15 @@ try {
   autoUpdater = null;
 }
 
+const AUTO_UPDATE_ENV_FLAG = 'ENABLE_AUTO_UPDATE';
+if (typeof process.env[AUTO_UPDATE_ENV_FLAG] === 'undefined') {
+  process.env[AUTO_UPDATE_ENV_FLAG] = 'false';
+}
+
+function shouldEnableAutoUpdate() {
+  return !isDev && autoUpdater && process.env[AUTO_UPDATE_ENV_FLAG] === 'true';
+}
+
 const MIGRATION_ENV_FLAG = 'ALLOW_DB_MIGRATE';
 if (typeof process.env[MIGRATION_ENV_FLAG] === 'undefined') {
   process.env[MIGRATION_ENV_FLAG] = 'false';
@@ -666,7 +675,7 @@ app.whenReady().then(async () => {
   setupTray();
 
   // Auto-updater setup (production only)
-  if (!isDev && autoUpdater) {
+  if (shouldEnableAutoUpdate()) {
     autoUpdater.checkForUpdatesAndNotify();
 
     autoUpdater.on('update-available', () => {
@@ -692,6 +701,8 @@ app.whenReady().then(async () => {
         }
       });
     });
+  } else if (!isDev && autoUpdater) {
+    logger.info(`Auto-updater disabled; set ${AUTO_UPDATE_ENV_FLAG}=true to enable.`);
   }
 });
 

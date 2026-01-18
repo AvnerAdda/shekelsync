@@ -39,20 +39,12 @@ async function getExtendedForecast() {
       SUM(CASE WHEN t.category_type = 'income' THEN t.price ELSE 0 END) as income,
       SUM(CASE WHEN t.category_type = 'expense' THEN ABS(t.price) ELSE 0 END) as expenses
     FROM transactions t
-    LEFT JOIN account_pairings ap ON (
-      t.vendor = ap.bank_vendor
-      AND ap.is_active = 1
-      AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-      AND ap.match_patterns IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM json_each(ap.match_patterns)
-        WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-      )
-    )
+    LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+      ON t.identifier = tpe.transaction_identifier
+      AND t.vendor = tpe.transaction_vendor
     LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
     WHERE t.status IN ('completed', 'pending')
-      AND ap.id IS NULL
+      AND tpe.transaction_identifier IS NULL
       AND cd.name NOT IN ('החזר קרן', 'ריבית מהשקעות', 'פיקדונות')
       AND t.date >= $1
     GROUP BY DATE(t.date)

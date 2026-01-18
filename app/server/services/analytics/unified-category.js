@@ -221,23 +221,15 @@ async function getUnifiedCategoryAnalytics(query = {}) {
     const whereClause = `
       LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
       LEFT JOIN institution_nodes fi ON vc.institution_id = fi.id AND fi.node_type = 'institution'
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $${categoryResolution.params.length + 1}
       AND t.date <= $${categoryResolution.params.length + 2}
       ${priceFilter ? `AND ${priceFilter}` : ''}
       ${categoryFilter ? `AND ${categoryFilter}` : ''}
       ${categoryResolution.clause ? `AND ${categoryResolution.clause}` : ''}
-      AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       AND ${dialect.excludePikadon('t')}
       ${additionalWhere}
     `;
