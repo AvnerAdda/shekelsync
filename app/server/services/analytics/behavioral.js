@@ -81,22 +81,14 @@ async function getBehavioralPatterns(locale = 'he') {
     FROM transactions t
     LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
     LEFT JOIN category_definitions parent_cd ON cd.parent_id = parent_cd.id
-    LEFT JOIN account_pairings ap ON (
-      t.vendor = ap.bank_vendor
-      AND ap.is_active = 1
-      AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-      AND ap.match_patterns IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM json_each(ap.match_patterns)
-        WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-      )
-    )
+    LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+      ON t.identifier = tpe.transaction_identifier
+      AND t.vendor = tpe.transaction_vendor
     WHERE t.status = 'completed'
       AND t.category_type = 'expense'
       AND t.price < 0
       AND t.date >= $1
-      AND ap.id IS NULL
+      AND tpe.transaction_identifier IS NULL
     ORDER BY t.date`,
     [threeMonthsAgo.toISOString()]
   );
@@ -148,6 +140,8 @@ async function getBehavioralPatterns(locale = 'he') {
       name: p.name,
       avgAmount: Math.round(p.avgAmount),
       occurrences: p.occurrences,
+      occurrencesPerMonth: p.occurrencesPerMonth,
+      monthsObserved: p.monthsObserved,
       frequency: p.frequency,
       frequencyColor: p.frequencyColor,
       isFixed: p.isFixed,
@@ -288,6 +282,8 @@ function detectRecurringTransactions(transactions) {
       name: group.displayName,
       avgAmount: avg,
       occurrences,
+      occurrencesPerMonth,
+      monthsObserved: monthCount,
       frequency: frequencyInfo.name,
       frequencyColor: frequencyInfo.color,
       isFixed: coefficientOfVariation < 0.1,

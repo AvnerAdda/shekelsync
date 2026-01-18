@@ -8,6 +8,8 @@ async function listAccountLastUpdates() {
         vc.id,
         vc.vendor,
         vc.nickname,
+        vc.card6_digits,
+        vc.bank_account_number,
         -- Use GREATEST to get the most recent of scrape_events or vendor_credentials
         COALESCE(
           (
@@ -58,22 +60,41 @@ async function listAccountLastUpdates() {
     `,
   );
 
-  return result.rows.map((row) => ({
-    id: row.id,
-    vendor: row.vendor,
-    nickname: row.nickname,
-    lastUpdate: toUTCISOString(row.last_update),
-    lastScrapeStatus: row.last_scrape_status || 'never',
-    accountNumbers: row.account_numbers ? row.account_numbers.split(',') : [],
-    institution: row.institution_id ? {
-      id: row.institution_id,
-      vendor_code: row.institution_vendor_code,
-      display_name_he: row.institution_name_he,
-      display_name_en: row.institution_name_en,
-      logo_url: row.institution_logo,
-      institution_type: row.institution_type,
-    } : null,
-  }));
+  return result.rows.map((row) => {
+    // Merge account numbers from transactions and card6_digits/bank_account_number
+    const transactionAccountNumbers = row.account_numbers ? row.account_numbers.split(',') : [];
+    const credentialAccountNumbers = [];
+    
+    // Add card6_digits (for credit cards) if present
+    if (row.card6_digits) {
+      credentialAccountNumbers.push(...row.card6_digits.split(';').filter(Boolean).map(num => num.trim()));
+    }
+    
+    // Add bank_account_number (for banks) if present  
+    if (row.bank_account_number) {
+      credentialAccountNumbers.push(row.bank_account_number.trim());
+    }
+    
+    // Combine and deduplicate account numbers
+    const allAccountNumbers = [...new Set([...transactionAccountNumbers, ...credentialAccountNumbers])];
+    
+    return {
+      id: row.id,
+      vendor: row.vendor,
+      nickname: row.nickname,
+      lastUpdate: toUTCISOString(row.last_update),
+      lastScrapeStatus: row.last_scrape_status || 'never',
+      accountNumbers: allAccountNumbers,
+      institution: row.institution_id ? {
+        id: row.institution_id,
+        vendor_code: row.institution_vendor_code,
+        display_name_he: row.institution_name_he,
+        display_name_en: row.institution_name_en,
+        logo_url: row.institution_logo,
+        institution_type: row.institution_type,
+      } : null,
+    };
+  });
 }
 
 module.exports = {

@@ -1,17 +1,12 @@
 const database = require('../database.js');
+const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
+
+const transactionsByDateCache = createTtlCache({ maxEntries: 60, defaultTtlMs: 30 * 1000 });
 
 const PAIRING_EXCLUSION = `
-  LEFT JOIN account_pairings ap ON (
-    t.vendor = ap.bank_vendor
-    AND ap.is_active = 1
-    AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-    AND ap.match_patterns IS NOT NULL
-    AND EXISTS (
-      SELECT 1
-      FROM json_each(ap.match_patterns)
-      WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-    )
-  )
+  LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+    ON t.identifier = tpe.transaction_identifier
+    AND t.vendor = tpe.transaction_vendor
 `;
 
 async function listTransactionsByDate(params = {}) {
@@ -21,6 +16,18 @@ async function listTransactionsByDate(params = {}) {
     const error = new Error('Date parameter is required');
     error.status = 400;
     throw error;
+  }
+  const skipCache =
+    process.env.NODE_ENV === 'test' ||
+    params.noCache === true ||
+    params.noCache === 'true' ||
+    params.noCache === '1';
+  const cacheKey = `date:${date}`;
+  if (!skipCache) {
+    const cached = transactionsByDateCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
   }
 
   const result = await database.query(
@@ -39,7 +46,7 @@ async function listTransactionsByDate(params = {}) {
       LEFT JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
       ${PAIRING_EXCLUSION}
       WHERE DATE(t.date) = DATE($1)
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       ORDER BY t.price DESC
     `,
     [date],
@@ -58,7 +65,11 @@ async function listTransactionsByDate(params = {}) {
     parent_name: row.parent_category,
   }));
 
-  return { transactions };
+  const response = { transactions };
+  if (!skipCache) {
+    transactionsByDateCache.set(cacheKey, response);
+  }
+  return response;
 }
 
 module.exports = {

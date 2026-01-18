@@ -8,6 +8,8 @@ export interface Subcategory {
   description?: string | null;
   count: number;
   total: number;
+  pendingCount?: number;
+  processedCount?: number;
 }
 
 export interface TrendHistoryPoint {
@@ -23,6 +25,8 @@ export interface CategoryBreakdownItem {
   description?: string | null;
   total: number;
   count: number;
+  pendingCount?: number;
+  processedCount?: number;
   previousTotal?: number;
   previousCount?: number;
   history?: TrendHistoryPoint[];

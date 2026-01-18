@@ -98,6 +98,24 @@ const useBreakdownDrilldown = ({
 
   const getCategoryTransactionCounts = useCallback(
     (categoryId: number, isSubcategory = false) => {
+      if (isSubcategory) {
+        for (const parent of categoryBreakdown) {
+          const sub = parent.subcategories?.find((item) => item.id === categoryId);
+          if (sub && (sub.pendingCount !== undefined || sub.processedCount !== undefined)) {
+            const pendingCount = sub.pendingCount ?? 0;
+            const processedCount = sub.processedCount ?? Math.max(0, (sub.count ?? 0) - pendingCount);
+            return { processedCount, pendingCount, total: sub.count ?? pendingCount + processedCount };
+          }
+        }
+      } else {
+        const parent = categoryBreakdown.find((item) => item.parentId === categoryId);
+        if (parent && (parent.pendingCount !== undefined || parent.processedCount !== undefined)) {
+          const pendingCount = parent.pendingCount ?? 0;
+          const processedCount = parent.processedCount ?? Math.max(0, (parent.count ?? 0) - pendingCount);
+          return { processedCount, pendingCount, total: parent.count ?? pendingCount + processedCount };
+        }
+      }
+
       const categoryTransactions = transactions.filter(tx => {
         if (isSubcategory) {
           return (tx.subcategory_id ?? tx.subcategoryId) === categoryId;
@@ -110,7 +128,7 @@ const useBreakdownDrilldown = ({
 
       return { processedCount, pendingCount, total: categoryTransactions.length };
     },
-    [transactions]
+    [categoryBreakdown, transactions]
   );
 
   const loadCategoryDetails = useCallback(

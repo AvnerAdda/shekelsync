@@ -4,8 +4,10 @@ const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
 const { recordDashboardMetric } = require('./metrics-store.js');
+const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
 
 let database = actualDatabase;
+const dashboardCache = createTtlCache({ maxEntries: 25, defaultTtlMs: 60 * 1000 });
 
 function buildCategoryBreakdown(rows) {
   const parentMap = new Map();
@@ -51,6 +53,23 @@ async function getDashboardAnalytics(query = {}) {
   const timerStart = performance.now();
   const { startDate, endDate, months = 3, aggregation = 'daily' } = query;
   const { start, end } = resolveDateRange({ startDate, endDate, months });
+  const skipCache =
+    process.env.NODE_ENV === 'test' ||
+    query.noCache === true ||
+    query.noCache === 'true' ||
+    query.noCache === '1';
+  const cacheKey = JSON.stringify({
+    start: start.toISOString(),
+    end: end.toISOString(),
+    aggregation,
+    months,
+  });
+  if (!skipCache) {
+    const cached = dashboardCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
 
   let dateGroupBy;
   let dateSelect;
@@ -87,19 +106,11 @@ async function getDashboardAnalytics(query = {}) {
         END) as expenses
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
         AND ${dialect.excludePikadon('t')}
       GROUP BY ${dateGroupBy}
       ORDER BY date ASC`,
@@ -117,21 +128,13 @@ async function getDashboardAnalytics(query = {}) {
       FROM transactions t
       JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
       JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND cd_parent.category_type = 'expense'
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
         AND ${dialect.excludePikadon('t')}
       GROUP BY cd_parent.id, cd_parent.name, cd_child.id, cd_child.name
       ORDER BY cd_parent.name, total DESC`,
@@ -151,20 +154,12 @@ async function getDashboardAnalytics(query = {}) {
       FROM transactions t
       LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
       LEFT JOIN institution_nodes fi ON vc.institution_id = fi.id AND fi.node_type = 'institution'
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
         AND ${dialect.excludePikadon('t')}
       GROUP BY t.vendor, fi.id, fi.display_name_he, fi.display_name_en, fi.logo_url, fi.institution_type
       ORDER BY total DESC`,
@@ -190,19 +185,11 @@ async function getDashboardAnalytics(query = {}) {
         END) as expenses
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
         AND ${dialect.excludePikadon('t')}
       GROUP BY ${monthExpr}
       ORDER BY month ASC`,
@@ -240,19 +227,11 @@ async function getDashboardAnalytics(query = {}) {
         COUNT(DISTINCT t.vendor) as total_accounts
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
         AND ${dialect.excludePikadon('t')}`,
     [start, end, BANK_CATEGORY_NAME],
   );
@@ -281,21 +260,13 @@ async function getDashboardAnalytics(query = {}) {
         END) as pending_count
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.processed_date IS NOT NULL
         AND DATE(t.processed_date) > DATE('now')
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
         AND ${dialect.excludePikadon('t')}`,
     [start, end],
   );
@@ -533,6 +504,9 @@ async function getDashboardAnalytics(query = {}) {
   console.info('[analytics:dashboard]', JSON.stringify(metricPayload));
   recordDashboardMetric(metricPayload);
 
+  if (!skipCache) {
+    dashboardCache.set(cacheKey, response);
+  }
   return response;
 }
 

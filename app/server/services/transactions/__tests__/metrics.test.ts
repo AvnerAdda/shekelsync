@@ -94,7 +94,7 @@ describe('transactions metrics service', () => {
     expect(queryMock).toHaveBeenCalledTimes(1);
     const [sql, params] = queryMock.mock.calls[0];
     expect(params).toEqual(['2025-03']);
-    expect(String(sql)).toContain('ap.id IS NULL');
+    expect(String(sql)).toContain('tpe.transaction_identifier IS NULL');
     expect(String(sql)).toMatch(/is_pikadon_related/i);
   });
 

@@ -156,6 +156,6 @@ describe('breakdown analytics trends', () => {
 
     expect(result.breakdowns.byCategory).toEqual([]);
     expect(result.breakdowns.byVendor).toEqual([]);
-    expect(result.transactions).toEqual([]);
+    expect(result.transactions).toBeUndefined();
   });
 });

@@ -81,6 +81,7 @@ export function useBreakdownData({
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
     });
+    params.append('includeTransactions', '0');
     if (locale) {
       params.append('locale', locale);
     }

@@ -1,6 +1,9 @@
 const database = require('../database.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
 const { resolveLocale, getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
+const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
+
+const categoryDetailsCache = createTtlCache({ maxEntries: 50, defaultTtlMs: 30 * 1000 });
 
 function buildCategoryFilter({ category, parentId, subcategoryId }) {
   if (subcategoryId) {
@@ -62,17 +65,9 @@ function buildPriceFilter(type) {
 }
 
 const PAIRING_EXCLUSION = `
-  LEFT JOIN account_pairings ap ON (
-    t.vendor = ap.bank_vendor
-    AND ap.is_active = 1
-    AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-    AND ap.match_patterns IS NOT NULL
-    AND EXISTS (
-      SELECT 1
-      FROM json_each(ap.match_patterns)
-      WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-    )
-  )
+  LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+    ON t.identifier = tpe.transaction_identifier
+    AND t.vendor = tpe.transaction_vendor
 `;
 
 async function getCategoryDetails(params = {}) {
@@ -104,6 +99,26 @@ async function getCategoryDetails(params = {}) {
 
   const start = startDate ? new Date(startDate) : new Date(0);
   const end = endDate ? new Date(endDate) : new Date();
+  const skipCache =
+    process.env.NODE_ENV === 'test' ||
+    params.noCache === true ||
+    params.noCache === 'true' ||
+    params.noCache === '1';
+  const cacheKey = JSON.stringify({
+    category: category || null,
+    parentId: parentId ?? null,
+    subcategoryId: subcategoryId ?? null,
+    type,
+    start: start.toISOString(),
+    end: end.toISOString(),
+    locale,
+  });
+  if (!skipCache) {
+    const cached = categoryDetailsCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
 
   const boundParams = [...categoryParams, start, end];
   const dateStartIdx = categoryParams.length + 1;
@@ -126,7 +141,7 @@ async function getCategoryDetails(params = {}) {
           ${priceFilterClause}
           AND t.date >= $${dateStartIdx}
           AND t.date <= $${dateEndIdx}
-          AND ap.id IS NULL
+  AND tpe.transaction_identifier IS NULL
       `,
       boundParams,
     );
@@ -143,7 +158,7 @@ async function getCategoryDetails(params = {}) {
           ${priceFilterClause}
           AND t.date >= $${dateStartIdx}
           AND t.date <= $${dateEndIdx}
-          AND ap.id IS NULL
+          AND tpe.transaction_identifier IS NULL
         GROUP BY t.vendor
         ORDER BY total DESC
       `,
@@ -164,7 +179,7 @@ async function getCategoryDetails(params = {}) {
           AND t.date >= $${dateStartIdx}
           AND t.date <= $${dateEndIdx}
           AND t.account_number IS NOT NULL
-          AND ap.id IS NULL
+          AND tpe.transaction_identifier IS NULL
         GROUP BY t.account_number, t.vendor
         ORDER BY total DESC
       `,
@@ -192,7 +207,7 @@ async function getCategoryDetails(params = {}) {
             ${priceFilterClause}
             AND t.date >= $2
             AND t.date <= $3
-            AND ap.id IS NULL
+            AND tpe.transaction_identifier IS NULL
           GROUP BY cd.id, cd.name, cd.name_en, cd.name_fr, cd.color, cd.icon, cd.description
           ORDER BY total DESC
         `,
@@ -224,7 +239,7 @@ async function getCategoryDetails(params = {}) {
           ${priceFilterClause}
           AND t.date >= $${dateStartIdx}
           AND t.date <= $${dateEndIdx}
-          AND ap.id IS NULL
+          AND tpe.transaction_identifier IS NULL
         ORDER BY t.date DESC
         LIMIT 20
       `,
@@ -244,7 +259,7 @@ async function getCategoryDetails(params = {}) {
           ${priceFilterClause}
           AND t.date >= $${dateStartIdx}
           AND t.date <= $${dateEndIdx}
-          AND ap.id IS NULL
+          AND tpe.transaction_identifier IS NULL
         GROUP BY ${monthExpr}
         ORDER BY month ASC
       `,
@@ -263,7 +278,7 @@ async function getCategoryDetails(params = {}) {
 
     const summary = summaryResult.rows[0] || {};
 
-    return {
+    const response = {
       category: category || null,
       parentId: parentId || null,
       subcategoryId: subcategoryId || null,
@@ -320,6 +335,11 @@ async function getCategoryDetails(params = {}) {
         count: Number.parseInt(row.count, 10),
       })),
     };
+
+    if (!skipCache) {
+      categoryDetailsCache.set(cacheKey, response);
+    }
+    return response;
   } finally {
     client.release();
   }

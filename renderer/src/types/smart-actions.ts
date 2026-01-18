@@ -17,7 +17,9 @@ export type SmartActionType =
   | 'quest_budget_adherence'
   | 'quest_set_budget'
   | 'quest_reduce_fixed_cost'
-  | 'quest_income_goal';
+  | 'quest_income_goal'
+  | 'quest_merchant_limit'
+  | 'quest_weekend_limit';
 
 export type SmartActionSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type SmartActionStatus = 'active' | 'dismissed' | 'resolved' | 'snoozed' | 'accepted' | 'failed';
@@ -121,13 +123,24 @@ export interface SmartAction {
 }
 
 export interface QuestCompletionCriteria {
-  type: 'spending_limit' | 'budget_adherence' | 'budget_exists' | 'fixed_cost_reduction' | 'savings_transfer';
+  type:
+    | 'spending_limit'
+    | 'budget_adherence'
+    | 'budget_exists'
+    | 'fixed_cost_reduction'
+    | 'savings_transfer'
+    | 'merchant_frequency_limit'
+    | 'weekend_spending_limit';
   category_definition_id?: number;
   budget_id?: number;
   target_amount?: number;
   target_limit?: number;
   baseline_amount?: number;
   comparison?: 'less_than' | 'less_than_or_equal' | 'greater_than' | 'greater_than_or_equal';
+  merchant_pattern?: string;
+  max_transactions?: number;
+  baseline_transactions?: number;
+  days_of_week?: number[];
 }
 
 export interface QuestCompletionResult {

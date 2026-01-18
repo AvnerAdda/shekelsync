@@ -65,6 +65,9 @@ const QUEST_ACTION_TYPES = [
   'quest_set_budget',
   'quest_reduce_fixed_cost',
   'quest_income_goal',
+  // Actionable quest types
+  'quest_merchant_limit',
+  'quest_weekend_limit',
 ];
 
 /**
@@ -124,21 +127,13 @@ async function getCategoryRollingAverage(client, categoryDefinitionId, endDate) 
       COUNT(*) as transaction_count,
       SUM(ABS(price)) as total_amount
     FROM transactions t
-    LEFT JOIN account_pairings ap ON (
-      t.vendor = ap.bank_vendor
-      AND ap.is_active = 1
-      AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-      AND ap.match_patterns IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM json_each(ap.match_patterns)
-        WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-      )
-    )
+    LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+      ON t.identifier = tpe.transaction_identifier
+      AND t.vendor = tpe.transaction_vendor
     WHERE t.category_definition_id = $1
       AND t.date >= $2 AND t.date <= $3
       AND t.price < 0
-      AND ap.id IS NULL
+      AND tpe.transaction_identifier IS NULL
   `, [categoryDefinitionId, threeMonthsAgo.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
 
   return result.rows[0];
@@ -155,21 +150,13 @@ async function getCategoryMonthlyAverage(client, categoryDefinitionId, endDate, 
     SELECT
       SUM(ABS(t.price)) as total_amount
     FROM transactions t
-    LEFT JOIN account_pairings ap ON (
-      t.vendor = ap.bank_vendor
-      AND ap.is_active = 1
-      AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-      AND ap.match_patterns IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM json_each(ap.match_patterns)
-        WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-      )
-    )
+    LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+      ON t.identifier = tpe.transaction_identifier
+      AND t.vendor = tpe.transaction_vendor
     WHERE t.category_definition_id = $1
       AND t.date >= $2 AND t.date <= $3
       AND t.price < 0
-      AND ap.id IS NULL
+      AND tpe.transaction_identifier IS NULL
   `, [categoryDefinitionId, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
 
   const total = parseFloat(result.rows[0]?.total_amount || 0);
@@ -193,21 +180,13 @@ async function getCategoryTreeMonthlyAverage(client, categoryDefinitionId, endDa
     )
     SELECT SUM(ABS(t.price)) as total_amount
     FROM transactions t
-    LEFT JOIN account_pairings ap ON (
-      t.vendor = ap.bank_vendor
-      AND ap.is_active = 1
-      AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-      AND ap.match_patterns IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM json_each(ap.match_patterns)
-        WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-      )
-    )
+    LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+      ON t.identifier = tpe.transaction_identifier
+      AND t.vendor = tpe.transaction_vendor
     WHERE t.category_definition_id IN (SELECT id FROM category_tree)
       AND t.date >= $2 AND t.date <= $3
       AND t.price < 0
-      AND ap.id IS NULL
+      AND tpe.transaction_identifier IS NULL
   `, [categoryDefinitionId, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
 
   const total = parseFloat(result.rows[0]?.total_amount || 0);
@@ -234,21 +213,13 @@ async function getCategoryTreeMonthlyStats(client, categoryDefinitionId, endDate
         strftime('%Y-%m', t.date) AS month,
         SUM(ABS(t.price)) AS total_amount
       FROM transactions t
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.category_definition_id IN (SELECT id FROM category_tree)
         AND t.date >= $2 AND t.date <= $3
         AND t.price < 0
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       GROUP BY strftime('%Y-%m', t.date)
     )
     SELECT AVG(total_amount) AS avg_amount, MAX(total_amount) AS max_amount
@@ -295,21 +266,13 @@ async function detectCategoryAnomalies(params = {}) {
         SUM(ABS(t.price)) as current_total
       FROM transactions t
       JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND cd.category_type = 'expense'
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       GROUP BY t.category_definition_id, cd.name, cd.name_en
     `, [start, end]);
 
@@ -442,22 +405,14 @@ async function detectFixedCategoryVariations(params = {}) {
       JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
       JOIN spending_category_mappings scm ON cd.id = scm.category_definition_id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND cd.category_type = 'expense'
         AND scm.variability_type = 'fixed'
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       GROUP BY t.category_definition_id, cd.name, cd.name_en, parent.name, scm.variability_type
     `, [start, end]);
 
@@ -532,21 +487,13 @@ async function detectUnusualPurchases(params = {}) {
         cd.name_en as category_name_en
       FROM transactions t
       JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND cd.category_type = 'expense'
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
       ORDER BY amount DESC
       LIMIT 100
     `, [start, end]);
@@ -659,22 +606,14 @@ async function detectFixedRecurringAnomalies(params = {}) {
           ABS(t.price) as amount,
           t.name
         FROM transactions t
-        LEFT JOIN account_pairings ap ON (
-          t.vendor = ap.bank_vendor
-          AND ap.is_active = 1
-          AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-          AND ap.match_patterns IS NOT NULL
-          AND EXISTS (
-            SELECT 1
-            FROM json_each(ap.match_patterns)
-            WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-          )
-        )
+        LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+          ON t.identifier = tpe.transaction_identifier
+          AND t.vendor = tpe.transaction_vendor
         WHERE t.category_definition_id IN (${placeholders})
           AND t.status = 'completed'
           AND t.category_type = 'expense'
           AND t.price < 0
-          AND ap.id IS NULL
+          AND tpe.transaction_identifier IS NULL
           AND t.date >= $${categoryIds.length + 1}
           AND t.date <= $${categoryIds.length + 2}
         ORDER BY t.date DESC

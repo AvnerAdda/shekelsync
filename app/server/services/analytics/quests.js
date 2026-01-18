@@ -73,6 +73,19 @@ const EXCLUDED_MERCHANT_PATTERNS = [
   /תחנת דלק/i,
 ];
 
+const DAYS_PER_WEEK = 7;
+const DAYS_PER_MONTH = 30;
+const AVG_WEEKS_PER_MONTH = 4.33;
+const MIN_BASELINE_WEEKLY = 150;
+const MIN_BASELINE_MONTHLY = 400;
+const MIN_FIXED_MONTHLY = 100;
+const MIN_DAYS_FOR_BUDGET_QUEST = 5;
+const STABILITY_LOOKBACK_WEEKS = 12;
+const STABILITY_LOOKBACK_MONTHS = 6;
+const STABLE_RELATIVE_SPREAD_THRESHOLD = 0.12;
+const STABLE_CV_THRESHOLD = 0.15;
+const STABLE_MIN_SPEND_SHARE = 0.6;
+
 function median(values) {
   if (!Array.isArray(values) || values.length === 0) return 0;
 
@@ -113,6 +126,212 @@ function computeWeeklyBaselineStats(weeklyTotals) {
     isSporadic,
     isStable,
   };
+}
+
+function resolveAvgOccurrencesPerWeek(pattern) {
+  const perWeek = coerceNumber(pattern?.avgOccurrencesPerWeek);
+  if (perWeek > 0) return perWeek;
+  const perMonth = coerceNumber(pattern?.avgOccurrencesPerMonth);
+  return perMonth > 0 ? perMonth / AVG_WEEKS_PER_MONTH : 0;
+}
+
+function resolveAvgOccurrencesPerMonth(pattern) {
+  const perMonth = coerceNumber(pattern?.avgOccurrencesPerMonth);
+  if (perMonth > 0) return perMonth;
+  const perWeek = coerceNumber(pattern?.avgOccurrencesPerWeek);
+  return perWeek > 0 ? perWeek * AVG_WEEKS_PER_MONTH : 0;
+}
+
+function resolveQuestDurationDays(pattern) {
+  const patternType = pattern?.patternType;
+  if (patternType === 'monthly' || patternType === 'bi-monthly') {
+    return DAYS_PER_MONTH;
+  }
+  return DAYS_PER_WEEK;
+}
+
+function getPeriodLabel(durationDays) {
+  return durationDays >= DAYS_PER_MONTH ? 'month' : 'week';
+}
+
+function estimateMonthlySpend(pattern) {
+  return resolveAvgOccurrencesPerMonth(pattern) * coerceNumber(pattern?.avgAmount);
+}
+
+function computeBaselineSpend(pattern, durationDays) {
+  const avgAmount = coerceNumber(pattern?.avgAmount);
+  const weeklySpend = resolveAvgOccurrencesPerWeek(pattern) * avgAmount;
+  const monthlySpend = resolveAvgOccurrencesPerMonth(pattern) * avgAmount;
+  return durationDays >= DAYS_PER_MONTH ? monthlySpend : weeklySpend;
+}
+
+function isBaselineMeaningful(baseline, durationDays) {
+  const threshold = durationDays >= DAYS_PER_MONTH ? MIN_BASELINE_MONTHLY : MIN_BASELINE_WEEKLY;
+  return baseline >= threshold;
+}
+
+function isPatternStale(pattern) {
+  const daysSince = coerceNumber(pattern?.daysSinceLastOccurrence);
+  if (!daysSince) return false;
+  const patternType = pattern?.patternType;
+  if (patternType === 'bi-monthly') return daysSince > 90;
+  if (patternType === 'monthly') return daysSince > 60;
+  return daysSince > 21;
+}
+
+function normalizeCategoryKey(value) {
+  if (!value) return '';
+  return String(value).trim().toLowerCase();
+}
+
+function resolveCategoryId(pattern, categoryIdByName) {
+  const directId = Number(pattern?.categoryDefinitionId);
+  if (Number.isFinite(directId) && directId > 0) {
+    return directId;
+  }
+
+  const candidates = [
+    pattern?.categoryName,
+    pattern?.categoryNameEn,
+    pattern?.categoryNameFr,
+    pattern?.category,
+  ];
+
+  for (const candidate of candidates) {
+    const key = normalizeCategoryKey(candidate);
+    if (key && categoryIdByName.has(key)) {
+      return categoryIdByName.get(key);
+    }
+  }
+
+  return null;
+}
+
+function computeReductionPct(pattern) {
+  const cv = coerceNumber(pattern?.coefficientOfVariation) || 0.35;
+  const confidence = coerceNumber(pattern?.confidence) || 0.7;
+  const monthsOfHistory = Math.max(1, coerceNumber(pattern?.monthsOfHistory));
+  let reductionPct = cv > 0.6 ? 18 : cv > 0.4 ? 12 : 8;
+  if (monthsOfHistory < 3) reductionPct -= 3;
+  if (confidence < 0.6) reductionPct -= 2;
+  if (pattern?.patternType === 'sporadic') reductionPct -= 2;
+  return Math.max(5, Math.min(20, Math.round(reductionPct)));
+}
+
+function getDaysRemainingInMonth(now = new Date()) {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const diffMs = endOfMonth - startOfToday;
+  const daysRemaining = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+  return Math.max(1, daysRemaining);
+}
+
+function computePeriodStability(periodTotals) {
+  const totals = Array.isArray(periodTotals) ? periodTotals.map(coerceNumber) : [];
+  if (totals.length === 0) {
+    return {
+      isStable: false,
+      medianRelativeSpread: 0,
+      coefficientOfVariation: 0,
+      spendShare: 0,
+      mean: 0,
+      stdDev: 0,
+    };
+  }
+
+  const mean = totals.reduce((sum, value) => sum + value, 0) / totals.length;
+  const variance = totals.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / totals.length;
+  const stdDev = Math.sqrt(variance);
+  const coefficientOfVariation = mean > 0 ? stdDev / mean : 0;
+
+  const weeklyStats = computeWeeklyBaselineStats(totals);
+  const spendShare = totals.length > 0 ? weeklyStats.weeksWithSpend / totals.length : 0;
+  const isStable = mean > 0 &&
+    spendShare >= STABLE_MIN_SPEND_SHARE &&
+    weeklyStats.medianRelativeSpread <= STABLE_RELATIVE_SPREAD_THRESHOLD &&
+    coefficientOfVariation <= STABLE_CV_THRESHOLD;
+
+  return {
+    isStable,
+    medianRelativeSpread: weeklyStats.medianRelativeSpread,
+    coefficientOfVariation,
+    spendShare,
+    mean,
+    stdDev,
+  };
+}
+
+function getWeekStart(dateInput) {
+  const date = dateInput instanceof Date ? new Date(dateInput) : new Date(dateInput);
+  if (Number.isNaN(date.getTime())) return null;
+  const day = date.getDay(); // 0=Sunday
+  const diff = (day + 6) % 7; // days since Monday
+  date.setDate(date.getDate() - diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function getWeekKey(dateInput) {
+  const weekStart = getWeekStart(dateInput);
+  if (!weekStart) return null;
+  return weekStart.toISOString().slice(0, 10);
+}
+
+function getMonthKey(dateInput) {
+  const date = dateInput instanceof Date ? new Date(dateInput) : new Date(dateInput);
+  if (Number.isNaN(date.getTime())) return null;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+function buildWeekKeys(weeks) {
+  const keys = [];
+  let cursor = getWeekStart(new Date());
+  if (!cursor) return keys;
+  for (let i = 0; i < weeks; i += 1) {
+    keys.push(getWeekKey(cursor));
+    const next = new Date(cursor);
+    next.setDate(next.getDate() - DAYS_PER_WEEK);
+    cursor = next;
+  }
+  return keys.reverse();
+}
+
+function buildMonthKeys(months) {
+  const keys = [];
+  const now = new Date();
+  let cursor = new Date(now.getFullYear(), now.getMonth(), 1);
+  for (let i = 0; i < months; i += 1) {
+    keys.push(getMonthKey(cursor));
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1);
+  }
+  return keys.reverse();
+}
+
+function buildTotalsByCategory(rows, periodKeys, periodKeyFn, categoryIds) {
+  const totalsByCategory = new Map();
+  const keySet = new Set(periodKeys);
+
+  for (const row of rows) {
+    const categoryId = Number(row.category_definition_id);
+    if (!Number.isFinite(categoryId)) continue;
+    const key = periodKeyFn(row.date);
+    if (!key || !keySet.has(key)) continue;
+    const amount = Math.abs(coerceNumber(row.price));
+    const categoryTotals = totalsByCategory.get(categoryId) || new Map();
+    categoryTotals.set(key, (categoryTotals.get(key) || 0) + amount);
+    totalsByCategory.set(categoryId, categoryTotals);
+  }
+
+  const result = new Map();
+  for (const categoryId of categoryIds) {
+    const categoryTotals = totalsByCategory.get(categoryId) || new Map();
+    const totals = periodKeys.map((key) => categoryTotals.get(key) || 0);
+    result.set(categoryId, totals);
+  }
+
+  return result;
 }
 
 function isExcludedCategoryName(name, nameEn) {
@@ -182,7 +401,14 @@ async function generateMerchantQuests(context, slotsAvailable, client) {
     for (const merchant of targetMerchants) {
       if (quests.length >= slotsAvailable) break;
 
-      const baselineVisits = merchant.occurrences || 4;
+      const rawOccurrences = coerceNumber(merchant.occurrences);
+      const monthsObserved = Math.max(1, Math.round(coerceNumber(merchant.monthsObserved) || 3));
+      const occurrencesPerMonth = coerceNumber(merchant.occurrencesPerMonth);
+      const visitsPerMonth = occurrencesPerMonth > 0 ? occurrencesPerMonth : (rawOccurrences > 0 ? rawOccurrences / monthsObserved : 0);
+      const baselineVisits = Math.max(1, Math.round(visitsPerMonth / AVG_WEEKS_PER_MONTH));
+      if (baselineVisits < 2) {
+        continue;
+      }
       const targetVisits = Math.max(1, Math.ceil(baselineVisits * 0.6)); // Reduce by ~40%
       const reductionPct = Math.round((1 - targetVisits / baselineVisits) * 100);
 
@@ -204,6 +430,8 @@ async function generateMerchantQuests(context, slotsAvailable, client) {
           merchant_frequency: merchant.frequency,
           baseline_visits: baselineVisits,
           target_visits: targetVisits,
+          occurrences_per_month: occurrencesPerMonth,
+          months_observed: monthsObserved,
           avg_transaction: merchant.avgAmount,
         }),
         completion_criteria: JSON.stringify({
@@ -400,36 +628,108 @@ async function generateQuests(params = {}) {
       WHERE cd.is_active = 1
     `);
     const variabilityMap = new Map();
+    const categoryIdByName = new Map();
+    const addCategoryLookup = (name, categoryId) => {
+      const key = normalizeCategoryKey(name);
+      if (key && Number.isFinite(categoryId)) {
+        categoryIdByName.set(key, categoryId);
+      }
+    };
     for (const row of mappingsResult.rows) {
       variabilityMap.set(row.category_definition_id, {
         variabilityType: row.variability_type,
         name: row.name,
         nameEn: row.name_en,
       });
+      addCategoryLookup(row.name, row.category_definition_id);
+      addCategoryLookup(row.name_en, row.category_definition_id);
+    }
+
+    const categoryIdsForStability = Array.from(new Set(
+      patterns
+        .map(pattern => resolveCategoryId(pattern, categoryIdByName))
+        .filter((id) => Number.isFinite(id))
+        .map((id) => Number(id))
+    ));
+    let weeklyStability = new Map();
+    let monthlyStability = new Map();
+
+    if (categoryIdsForStability.length > 0) {
+      const stabilityStart = new Date();
+      stabilityStart.setMonth(stabilityStart.getMonth() - STABILITY_LOOKBACK_MONTHS);
+      const stabilityQueryParams = [stabilityStart.toISOString(), ...categoryIdsForStability];
+      const placeholders = categoryIdsForStability.map((_, index) => `$${index + 2}`).join(', ');
+      const stabilityResult = await client.query(`
+        SELECT t.category_definition_id, t.date, t.price
+        FROM transactions t
+        LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+          ON t.identifier = tpe.transaction_identifier
+          AND t.vendor = tpe.transaction_vendor
+        WHERE t.status = 'completed'
+          AND t.category_type = 'expense'
+          AND t.price < 0
+          AND t.date >= $1
+          AND t.category_definition_id IN (${placeholders})
+          AND tpe.transaction_identifier IS NULL
+      `, stabilityQueryParams);
+
+      const weeklyKeys = buildWeekKeys(STABILITY_LOOKBACK_WEEKS);
+      const monthlyKeys = buildMonthKeys(STABILITY_LOOKBACK_MONTHS);
+      const rows = stabilityResult.rows || [];
+      const weeklyTotals = buildTotalsByCategory(rows, weeklyKeys, getWeekKey, categoryIdsForStability);
+      const monthlyTotals = buildTotalsByCategory(rows, monthlyKeys, getMonthKey, categoryIdsForStability);
+
+      for (const categoryId of categoryIdsForStability) {
+        weeklyStability.set(categoryId, computePeriodStability(weeklyTotals.get(categoryId) || []));
+        monthlyStability.set(categoryId, computePeriodStability(monthlyTotals.get(categoryId) || []));
+      }
     }
 
     // Quest Type 1: Reduce variable/seasonal spending
-    const variablePatterns = patterns.filter(p => {
-      const mapping = variabilityMap.get(p.categoryDefinitionId);
-      const isActionable = !p.isFixedRecurring && !p.isFixedAmount;
-      const hasEnoughHistory = (p.monthsOfHistory || 0) >= 2;
-      const meaningfulSpending = (p.avgAmount || 0) >= 100;
-      const isVariable = mapping?.variabilityType === 'variable' || mapping?.variabilityType === 'seasonal' || isActionable;
-      return isVariable && hasEnoughHistory && meaningfulSpending;
-    });
+    const variablePatterns = patterns
+      .map(pattern => {
+        const resolvedCategoryId = resolveCategoryId(pattern, categoryIdByName);
+        return { pattern, resolvedCategoryId };
+      })
+      .filter(({ pattern, resolvedCategoryId }) => {
+        if (!Number.isFinite(resolvedCategoryId)) {
+          return false;
+        }
+        const mapping = variabilityMap.get(resolvedCategoryId);
+        const isExpense = pattern.categoryType === 'expense' || Boolean(resolvedCategoryId);
+        const isActionable = !pattern.isFixedRecurring && !pattern.isFixedAmount;
+        const monthsOfHistory = coerceNumber(pattern.monthsOfHistory);
+        const avgOccurrencesPerWeek = resolveAvgOccurrencesPerWeek(pattern);
+        const hasEnoughHistory = monthsOfHistory >= 2 || (monthsOfHistory >= 1 && avgOccurrencesPerWeek >= 1);
+        const hasRecentActivity = !isPatternStale(pattern);
+        const categoryName = mapping?.name ?? pattern.categoryName;
+        const categoryNameEn = mapping?.nameEn ?? pattern.categoryNameEn;
+        const isExcluded = isExcludedCategoryName(categoryName, categoryNameEn);
+        const isVariable = mapping?.variabilityType === 'variable' || mapping?.variabilityType === 'seasonal' || isActionable;
+        const isMonthlyPattern = pattern.patternType === 'monthly' || pattern.patternType === 'bi-monthly';
+        const stabilityStats = isMonthlyPattern
+          ? monthlyStability.get(resolvedCategoryId)
+          : weeklyStability.get(resolvedCategoryId);
+        const isStable = stabilityStats?.isStable === true;
+        return isExpense && !isExcluded && hasEnoughHistory && hasRecentActivity && isVariable && !isStable;
+      });
     console.log('[Quests] Variable patterns after filtering:', variablePatterns.length);
 
     // Sort by potential impact (higher spending = more potential savings)
-    variablePatterns.sort((a, b) => (b.avgAmount || 0) - (a.avgAmount || 0));
+    variablePatterns.sort((a, b) => estimateMonthlySpend(b.pattern) - estimateMonthlySpend(a.pattern));
 
-    for (const pattern of variablePatterns.slice(0, 3)) {
+    for (const { pattern, resolvedCategoryId } of variablePatterns.slice(0, 3)) {
       if (quests.length >= slotsAvailable) break;
 
-      // Determine reduction target based on variance
-      const cv = pattern.coefficientOfVariation || 0.3;
-      const reductionPct = cv > 0.5 ? 20 : cv > 0.3 ? 15 : 10;
+      const durationDays = resolveQuestDurationDays(pattern);
+      const baselineSpend = computeBaselineSpend(pattern, durationDays);
+      if (!isBaselineMeaningful(baselineSpend, durationDays)) {
+        continue;
+      }
+
+      // Determine reduction target based on variance and history
+      const reductionPct = computeReductionPct(pattern);
       const difficulty = determineQuestDifficulty(reductionPct, pattern.confidence || 0.7);
-      const durationDays = reductionPct >= 20 ? 30 : 7; // Harder reductions get more time
       const points = calculateQuestPoints(durationDays, difficulty, reductionPct);
 
       const localizedName = getLocalizedCategoryName({
@@ -438,32 +738,40 @@ async function generateQuests(params = {}) {
         name_fr: null,
       }, locale) || pattern.categoryName;
 
-      const targetAmount = Math.round((pattern.avgAmount || 0) * (1 - reductionPct / 100));
+      const targetAmount = Math.max(0, Math.round(baselineSpend * (1 - reductionPct / 100)));
+      const baselineRounded = Math.round(baselineSpend);
+      const periodLabel = getPeriodLabel(durationDays);
+      const averageLabel = durationDays >= DAYS_PER_MONTH ? 'monthly average' : 'weekly average';
 
       quests.push({
         action_type: 'quest_reduce_spending',
-        trigger_category_id: pattern.categoryDefinitionId,
+        trigger_category_id: resolvedCategoryId,
         severity: 'low',
         title: `Reduce ${localizedName} spending by ${reductionPct}%`,
-        description: `Challenge: Keep your ${localizedName} spending under ₪${targetAmount} this ${durationDays === 7 ? 'week' : 'month'}. Your average is ₪${Math.round(pattern.avgAmount || 0)}.`,
+        description: `Your ${localizedName} ${averageLabel} is about ₪${baselineRounded}. Aim for ₪${targetAmount} or less this ${periodLabel}.`,
         metadata: JSON.stringify({
           quest_type: 'reduce_spending',
           target_amount: targetAmount,
-          current_average: pattern.avgAmount,
+          current_average: baselineRounded,
+          baseline_amount: baselineRounded,
+          baseline_period: periodLabel,
+          avg_transaction: pattern.avgAmount,
+          avg_occurrences_per_week: pattern.avgOccurrencesPerWeek,
+          avg_occurrences_per_month: pattern.avgOccurrencesPerMonth,
           reduction_pct: reductionPct,
           pattern_confidence: pattern.confidence,
-          variability_type: variabilityMap.get(pattern.categoryDefinitionId)?.variabilityType || 'variable',
+          variability_type: variabilityMap.get(resolvedCategoryId)?.variabilityType || 'variable',
         }),
         completion_criteria: JSON.stringify({
           type: 'spending_limit',
-          category_definition_id: pattern.categoryDefinitionId,
+          category_definition_id: resolvedCategoryId,
           target_amount: targetAmount,
           comparison: 'less_than',
         }),
         quest_difficulty: difficulty,
         quest_duration_days: durationDays,
         points_reward: points,
-        potential_impact: Math.round((pattern.avgAmount || 0) * reductionPct / 100),
+        potential_impact: Math.round(baselineSpend * reductionPct / 100),
         detection_confidence: pattern.confidence || 0.7,
       });
     }
@@ -482,7 +790,11 @@ async function generateQuests(params = {}) {
       if (quests.find(q => q.trigger_category_id === item.categoryDefinitionId)) continue;
 
       const difficulty = item.risk >= 0.8 ? 'hard' : item.risk >= 0.6 ? 'medium' : 'easy';
-      const durationDays = 7; // Weekly adherence check
+      const daysRemaining = getDaysRemainingInMonth();
+      if (daysRemaining < MIN_DAYS_FOR_BUDGET_QUEST) {
+        continue;
+      }
+      const durationDays = daysRemaining;
       const points = calculateQuestPoints(durationDays, difficulty, 15);
 
       const localizedName = getLocalizedCategoryName({
@@ -498,7 +810,7 @@ async function generateQuests(params = {}) {
         trigger_category_id: item.categoryDefinitionId,
         severity: 'medium',
         title: `Stay on budget: ${localizedName}`,
-        description: `Challenge: Keep ${localizedName} within your ₪${Math.round(item.limit)} budget this week. You have ₪${Math.round(remainingBudget)} remaining.`,
+        description: `Challenge: Keep ${localizedName} within your ₪${Math.round(item.limit)} budget until month-end (${daysRemaining} days left). You have ₪${Math.round(remainingBudget)} remaining.`,
         metadata: JSON.stringify({
           quest_type: 'budget_adherence',
           budget_id: item.budgetId,
@@ -523,16 +835,32 @@ async function generateQuests(params = {}) {
     }
 
     // Quest Type 3: Set budget for high-variance unbudgeted categories
-    const unbudgetedHighVariance = patterns.filter(p =>
-      p.monthsOfHistory >= 3 &&
-      p.coefficientOfVariation > 0.4 &&
-      (p.avgAmount || 0) > 100 &&
-      !budgetOutlook.find(b => b.categoryDefinitionId === p.categoryDefinitionId && b.budgetId)
-    );
+    const unbudgetedHighVariance = patterns
+      .map(pattern => {
+        const resolvedCategoryId = resolveCategoryId(pattern, categoryIdByName);
+        return { pattern, resolvedCategoryId };
+      })
+      .filter(({ pattern, resolvedCategoryId }) => {
+        if (!Number.isFinite(resolvedCategoryId)) {
+          return false;
+        }
+        const isExpense = pattern.categoryType === 'expense' || Boolean(resolvedCategoryId);
+        const categoryName = pattern.categoryName;
+        const categoryNameEn = pattern.categoryNameEn;
+        const isExcluded = isExcludedCategoryName(categoryName, categoryNameEn);
+        const monthlySpend = estimateMonthlySpend(pattern);
+        return isExpense &&
+          !isExcluded &&
+          !isPatternStale(pattern) &&
+          pattern.monthsOfHistory >= 3 &&
+          pattern.coefficientOfVariation > 0.4 &&
+          monthlySpend >= MIN_BASELINE_MONTHLY &&
+          !budgetOutlook.find(b => b.categoryDefinitionId === resolvedCategoryId && b.budgetId);
+      });
 
-    for (const pattern of unbudgetedHighVariance.slice(0, 2)) {
+    for (const { pattern, resolvedCategoryId } of unbudgetedHighVariance.slice(0, 2)) {
       if (quests.length >= slotsAvailable) break;
-      if (quests.find(q => q.trigger_category_id === pattern.categoryDefinitionId)) continue;
+      if (quests.find(q => q.trigger_category_id === resolvedCategoryId)) continue;
 
       const difficulty = 'easy'; // Setting a budget is easy
       const durationDays = 7;
@@ -544,25 +872,29 @@ async function generateQuests(params = {}) {
         name_fr: null,
       }, locale) || pattern.categoryName;
 
-      const suggestedBudget = Math.round((pattern.avgAmount || 0) * 1.1);
+      const avgMonthlySpend = estimateMonthlySpend(pattern);
+      if (!isBaselineMeaningful(avgMonthlySpend, DAYS_PER_MONTH)) {
+        continue;
+      }
+      const suggestedBudget = Math.round(avgMonthlySpend * 1.1);
 
       quests.push({
         action_type: 'quest_set_budget',
-        trigger_category_id: pattern.categoryDefinitionId,
+        trigger_category_id: resolvedCategoryId,
         severity: 'low',
         title: `Set a budget for ${localizedName}`,
-        description: `Your ${localizedName} spending varies a lot (₪${Math.round(pattern.minAmount || 0)}-₪${Math.round(pattern.maxAmount || 0)}). Set a budget around ₪${suggestedBudget} to gain control.`,
+        description: `Your ${localizedName} spending averages about ₪${Math.round(avgMonthlySpend)} per month and varies between ₪${Math.round(pattern.minAmount || 0)}-₪${Math.round(pattern.maxAmount || 0)} per purchase. Set a budget around ₪${suggestedBudget} to gain control.`,
         metadata: JSON.stringify({
           quest_type: 'set_budget',
           suggested_budget: suggestedBudget,
-          avg_monthly: pattern.avgAmount,
+          avg_monthly: avgMonthlySpend,
           min_amount: pattern.minAmount,
           max_amount: pattern.maxAmount,
           coefficient_of_variation: pattern.coefficientOfVariation,
         }),
         completion_criteria: JSON.stringify({
           type: 'budget_exists',
-          category_definition_id: pattern.categoryDefinitionId,
+          category_definition_id: resolvedCategoryId,
         }),
         quest_difficulty: difficulty,
         quest_duration_days: durationDays,
@@ -573,20 +905,34 @@ async function generateQuests(params = {}) {
     }
 
     // Quest Type 4: Reduce fixed costs (review subscriptions, insurance, etc.)
-    const fixedPatterns = patterns.filter(p => {
-      const mapping = variabilityMap.get(p.categoryDefinitionId);
-      const isFixed = p.isFixedRecurring || p.isFixedAmount || mapping?.variabilityType === 'fixed';
-      const meaningful = (p.avgAmount || 0) >= 50;
-      const hasHistory = (p.monthsOfHistory || 0) >= 3;
-      return isFixed && meaningful && hasHistory;
-    });
+    const fixedPatterns = patterns
+      .map(pattern => {
+        const resolvedCategoryId = resolveCategoryId(pattern, categoryIdByName);
+        return { pattern, resolvedCategoryId };
+      })
+      .filter(({ pattern, resolvedCategoryId }) => {
+        if (!Number.isFinite(resolvedCategoryId)) {
+          return false;
+        }
+        const mapping = variabilityMap.get(resolvedCategoryId);
+        const isExpense = pattern.categoryType === 'expense' || Boolean(resolvedCategoryId);
+        const isFixed = pattern.isFixedRecurring || pattern.isFixedAmount || mapping?.variabilityType === 'fixed';
+        const monthlySpend = estimateMonthlySpend(pattern);
+        const meaningful = monthlySpend >= MIN_FIXED_MONTHLY;
+        const hasHistory = (pattern.monthsOfHistory || 0) >= 3;
+        const hasRecentActivity = !isPatternStale(pattern);
+        const categoryName = mapping?.name ?? pattern.categoryName;
+        const categoryNameEn = mapping?.nameEn ?? pattern.categoryNameEn;
+        const isExcluded = isExcludedCategoryName(categoryName, categoryNameEn);
+        return isExpense && !isExcluded && isFixed && meaningful && hasHistory && hasRecentActivity;
+      });
 
     // Sort by amount (higher = more savings potential)
-    fixedPatterns.sort((a, b) => (b.avgAmount || 0) - (a.avgAmount || 0));
+    fixedPatterns.sort((a, b) => estimateMonthlySpend(b.pattern) - estimateMonthlySpend(a.pattern));
 
-    for (const pattern of fixedPatterns.slice(0, 2)) {
+    for (const { pattern, resolvedCategoryId } of fixedPatterns.slice(0, 2)) {
       if (quests.length >= slotsAvailable) break;
-      if (quests.find(q => q.trigger_category_id === pattern.categoryDefinitionId)) continue;
+      if (quests.find(q => q.trigger_category_id === resolvedCategoryId)) continue;
 
       const difficulty = 'medium'; // Requires negotiation/switching
       const durationDays = 30; // Give time to find alternatives
@@ -597,28 +943,30 @@ async function generateQuests(params = {}) {
         name_en: pattern.categoryNameEn,
         name_fr: null,
       }, locale) || pattern.categoryName;
+      const avgMonthlySpend = estimateMonthlySpend(pattern);
 
       quests.push({
         action_type: 'quest_reduce_fixed_cost',
-        trigger_category_id: pattern.categoryDefinitionId,
+        trigger_category_id: resolvedCategoryId,
         severity: 'low',
         title: `Review & reduce: ${localizedName}`,
-        description: `You pay ₪${Math.round(pattern.avgAmount || 0)}/month for ${localizedName}. Review if you can find a better deal or negotiate a lower rate.`,
+        description: `Your average ${localizedName} charge is ₪${Math.round(pattern.avgAmount || 0)}. Review if you can find a better deal or negotiate a lower rate.`,
         metadata: JSON.stringify({
           quest_type: 'reduce_fixed_cost',
           current_amount: pattern.avgAmount,
           is_fixed_recurring: pattern.isFixedRecurring,
+          avg_monthly_spend: avgMonthlySpend,
         }),
         completion_criteria: JSON.stringify({
           type: 'fixed_cost_reduction',
-          category_definition_id: pattern.categoryDefinitionId,
+          category_definition_id: resolvedCategoryId,
           baseline_amount: pattern.avgAmount,
           comparison: 'less_than',
         }),
         quest_difficulty: difficulty,
         quest_duration_days: durationDays,
         points_reward: points,
-        potential_impact: Math.round((pattern.avgAmount || 0) * 0.1), // Assume 10% savings potential
+        potential_impact: Math.round(avgMonthlySpend * 0.1), // Assume 10% savings potential
         detection_confidence: 0.7,
       });
     }

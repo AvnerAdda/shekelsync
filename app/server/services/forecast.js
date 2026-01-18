@@ -20,7 +20,8 @@ const forecastResultCache = new Map();
 
 // ==================== CONFIGURATION ====================
 const CONFIG = {
-  dbPath: path.join(__dirname, '../../dist/clarify.sqlite'),
+  // Prefer explicit DB path when provided (e.g., dev runs with SQLITE_DB_PATH)
+  dbPath: process.env.SQLITE_DB_PATH || path.join(__dirname, '../../dist/clarify.sqlite'),
   verbose: false,
   forecastDays: null, // null = use forecastMonths horizon
   forecastMonths: 6,
@@ -56,19 +57,11 @@ function getAllTransactions(db, sinceDate = null) {
     FROM transactions t
     LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
     LEFT JOIN category_definitions parent_cd ON cd.parent_id = parent_cd.id
-    LEFT JOIN account_pairings ap ON (
-      t.vendor = ap.bank_vendor
-      AND ap.is_active = 1
-      AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-      AND ap.match_patterns IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM json_each(ap.match_patterns)
-        WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-      )
-    )
+    LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+      ON t.identifier = tpe.transaction_identifier
+      AND t.vendor = tpe.transaction_vendor
     WHERE t.status = 'completed'
-      AND ap.id IS NULL
+      AND tpe.transaction_identifier IS NULL
       ${filter}
     ORDER BY t.date;
   `;
@@ -88,20 +81,12 @@ function getCurrentMonthTransactions(db, currentMonth) {
       CAST(strftime('%d', t.date) AS INTEGER) as day_of_month
     FROM transactions t
     LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-    LEFT JOIN account_pairings ap ON (
-      t.vendor = ap.bank_vendor
-      AND ap.is_active = 1
-      AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-      AND ap.match_patterns IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM json_each(ap.match_patterns)
-        WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-      )
-    )
+    LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+      ON t.identifier = tpe.transaction_identifier
+      AND t.vendor = tpe.transaction_vendor
     WHERE strftime('%Y-%m', t.date) = ?
       AND t.status = 'completed'
-      AND ap.id IS NULL
+      AND tpe.transaction_identifier IS NULL
     ORDER BY t.date;
   `;
   return db.prepare(query).all(currentMonth);
@@ -1265,20 +1250,12 @@ function buildBudgetOutlook(result) {
         SUM(ABS(t.price)) AS spent
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
       WHERE t.status = 'completed'
         AND t.category_type = 'expense'
-        AND ap.id IS NULL
+        AND tpe.transaction_identifier IS NULL
         AND strftime('%Y-%m', t.date) = ?
       GROUP BY cd.id, cd.name, cd.name_en, cd.name_fr, cd.icon, cd.color, cd.parent_id
     `;

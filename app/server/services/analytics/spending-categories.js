@@ -518,22 +518,14 @@ async function getSpendingCategoryBreakdown(params = {}) {
       FROM transactions t
       JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN spending_category_mappings scm ON cd.id = scm.category_definition_id
-      LEFT JOIN account_pairings ap ON (
-        t.vendor = ap.bank_vendor
-        AND ap.is_active = 1
-        AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-        AND ap.match_patterns IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM json_each(ap.match_patterns)
-          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-        )
-      )
+        LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+          ON t.identifier = tpe.transaction_identifier
+          AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
         AND cd.category_type IN ('expense', 'investment')
         AND cd.id NOT IN (${capitalReturnSubquery})
-        AND ap.id IS NULL
+          AND tpe.transaction_identifier IS NULL
       GROUP BY COALESCE(scm.spending_category, 'unallocated')
       ORDER BY total_amount DESC
     `, [start, end]);

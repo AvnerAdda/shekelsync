@@ -21,6 +21,8 @@ export interface QuestMetadata {
   quest_type?: string;
   target_amount?: number;
   current_average?: number;
+  baseline_amount?: number;
+  baseline_period?: string;
   reduction_pct?: number;
   pattern_confidence?: number;
   variability_type?: string;
@@ -31,6 +33,10 @@ export interface QuestMetadata {
   risk_score?: number;
   suggested_budget?: number;
   avg_monthly?: number;
+  avg_monthly_spend?: number;
+  avg_transaction?: number;
+  avg_occurrences_per_week?: number;
+  avg_occurrences_per_month?: number;
   min_amount?: number;
   max_amount?: number;
   coefficient_of_variation?: number;
@@ -47,6 +53,8 @@ export interface QuestMetadata {
   merchant_frequency?: string;
   baseline_visits?: number;
   target_visits?: number;
+  months_observed?: number;
+  occurrences_per_month?: number;
   // Weekend quest metadata
   avg_weekend_spend?: number;
   target_weekend_spend?: number;

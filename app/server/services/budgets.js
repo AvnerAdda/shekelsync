@@ -219,22 +219,14 @@ async function computeBudgetSpent(client, { categoryDefinitionId, categoryName }
         )
        SELECT COALESCE(SUM(ABS(price)), 0) AS spent
        FROM transactions t
-       LEFT JOIN account_pairings ap ON (
-         t.vendor = ap.bank_vendor
-         AND ap.is_active = 1
-         AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-         AND ap.match_patterns IS NOT NULL
-         AND EXISTS (
-           SELECT 1
-           FROM json_each(ap.match_patterns)
-           WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-         )
-       )
+       LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+         ON t.identifier = tpe.transaction_identifier
+         AND t.vendor = tpe.transaction_vendor
        WHERE t.category_definition_id IN (SELECT id FROM category_tree)
          AND t.price < 0
          AND t.date >= $2
          AND t.date <= $3
-         AND ap.id IS NULL`,
+         AND tpe.transaction_identifier IS NULL`,
       [categoryDefinitionId, start, end],
     );
 
@@ -257,22 +249,14 @@ async function computeBudgetSpent(client, { categoryDefinitionId, categoryName }
       )
      SELECT COALESCE(SUM(ABS(price)), 0) AS spent
      FROM transactions t
-     LEFT JOIN account_pairings ap ON (
-       t.vendor = ap.bank_vendor
-       AND ap.is_active = 1
-       AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
-       AND ap.match_patterns IS NOT NULL
-       AND EXISTS (
-         SELECT 1
-         FROM json_each(ap.match_patterns)
-         WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
-       )
-     )
+     LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+       ON t.identifier = tpe.transaction_identifier
+       AND t.vendor = tpe.transaction_vendor
      WHERE t.category_definition_id IN (SELECT id FROM category_tree)
        AND t.price < 0
        AND t.date >= $2
        AND t.date <= $3
-       AND ap.id IS NULL`,
+       AND tpe.transaction_identifier IS NULL`,
     [categoryName, start, end],
   );
 
