@@ -1,4 +1,4 @@
-import { defineConfig, Plugin } from 'vite';
+import { defineConfig, Plugin, normalizePath } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
@@ -22,12 +22,13 @@ const COMMONJS_EXPORTS = [
 ];
 
 function commonjsToEsm(): Plugin {
-  const constantsPath = path.resolve(__dirname, '../app/utils/constants.js');
+  const constantsPath = normalizePath(path.resolve(__dirname, '../app/utils/constants.js'));
 
   return {
     name: 'commonjs-to-esm',
     transform(code, id) {
-      if (id === constantsPath) {
+      const normalizedId = normalizePath(id.split('?')[0]);
+      if (normalizedId === constantsPath) {
         const exportList = COMMONJS_EXPORTS.join(',\n  ');
         const transformed = `
 const __cjs_module__ = { exports: {} };
