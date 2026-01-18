@@ -116,6 +116,10 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "../scripts/init_sqlite_db.js",
+        "to": "scripts/init_sqlite_db.js"
       }
     ],
     "extraResources": [],
