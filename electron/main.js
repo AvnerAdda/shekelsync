@@ -14,6 +14,7 @@ const {
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const {
   appRoot,
   rendererRoot,
@@ -131,6 +132,31 @@ function wireTelemetryMetricsReporter() {
   }
 }
 
+async function ensureEncryptionKey(config) {
+  if (process.env.CLARIFY_ENCRYPTION_KEY) {
+    return;
+  }
+
+  const existingKey = config?.encryption?.key;
+  if (existingKey) {
+    process.env.CLARIFY_ENCRYPTION_KEY = existingKey;
+    return;
+  }
+
+  const generatedKey = crypto.randomBytes(32).toString('hex');
+  process.env.CLARIFY_ENCRYPTION_KEY = generatedKey;
+  if (config) {
+    config.encryption = config.encryption || {};
+    config.encryption.key = generatedKey;
+  }
+
+  try {
+    await configManager.updateConfig({ encryption: { key: generatedKey } });
+  } catch (error) {
+    logger.warn('Failed to persist CLARIFY_ENCRYPTION_KEY', { error: error.message });
+  }
+}
+
 function initializeTelemetry() {
   const dsn = process.env.SENTRY_DSN;
   if (!dsn) {
@@ -229,6 +255,7 @@ async function initializeBackendServices({ skipEmbeddedApi }) {
     logger.info('Configuration initialised', {
       databaseMode: config?.database?.mode,
     });
+    await ensureEncryptionKey(config);
 
     const usingSqliteEnv =
       process.env.USE_SQLITE === 'true' ||

@@ -14,7 +14,23 @@ const path = require('path');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const APP_NODE_MODULES = path.join(PROJECT_ROOT, 'app', 'node_modules');
-const Database = require(path.join(APP_NODE_MODULES, 'better-sqlite3'));
+const ROOT_NODE_MODULES = path.join(PROJECT_ROOT, 'node_modules');
+let Database;
+
+function resolveDatabaseCtor(override) {
+  if (override) {
+    return override;
+  }
+
+  if (!Database) {
+    const baseNodeModules = fs.existsSync(APP_NODE_MODULES)
+      ? APP_NODE_MODULES
+      : ROOT_NODE_MODULES;
+    Database = require(path.join(baseNodeModules, 'better-sqlite3'));
+  }
+
+  return Database;
+}
 
 const DEFAULT_DB_PATH = path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite');
 
@@ -1547,12 +1563,19 @@ function ensureDestination(outputPath, force) {
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 }
 
-function main() {
-  const { output, force, withDemo } = parseArgs();
+function initializeSqliteDatabase(options = {}) {
+  const {
+    output = DEFAULT_DB_PATH,
+    force = false,
+    withDemo = false,
+    databaseCtor,
+  } = options;
+
   ensureDestination(output, force);
 
   console.log(`\n📦 Initialising SQLite database at ${output}\n`);
-  const db = new Database(output);
+  const DatabaseCtor = resolveDatabaseCtor(databaseCtor);
+  const db = new DatabaseCtor(output);
   let transactionStarted = false;
 
   try {
@@ -1608,10 +1631,21 @@ function main() {
   }
 }
 
-try {
-  main();
-} catch (error) {
-  console.error('\n❌ Failed to initialise database:');
-  console.error(error.message);
-  process.exit(1);
+function main() {
+  const { output, force, withDemo } = parseArgs();
+  initializeSqliteDatabase({ output, force, withDemo });
 }
+
+if (require.main === module) {
+  try {
+    main();
+  } catch (error) {
+    console.error('\n❌ Failed to initialise database:');
+    console.error(error.message);
+    process.exit(1);
+  }
+}
+
+module.exports = {
+  initializeSqliteDatabase,
+};
