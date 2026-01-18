@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const { app } = require('electron');
 const { resolveAppPath, requireFromApp } = require('./paths');
 
@@ -18,6 +19,37 @@ function shouldUseSqlite() {
   if (process.env.SQLITE_DB_PATH) return true;
   if (process.env.SQLCIPHER_DB_PATH) return true;
   return false;
+}
+
+function resolveSqliteInitPath() {
+  const packagedPath = resolveAppPath('scripts', 'init_sqlite_db.js');
+  if (fs.existsSync(packagedPath)) return packagedPath;
+
+  const devPath = resolveAppPath('..', 'scripts', 'init_sqlite_db.js');
+  if (fs.existsSync(devPath)) return devPath;
+
+  return null;
+}
+
+function initializeSqliteIfMissing(dbPath, databaseCtor) {
+  if (fs.existsSync(dbPath)) {
+    return;
+  }
+
+  const initPath = resolveSqliteInitPath();
+  if (!initPath) {
+    throw new Error('SQLite init script not found for database bootstrap.');
+  }
+
+  const initModule = require(initPath);
+  if (typeof initModule.initializeSqliteDatabase !== 'function') {
+    throw new Error('SQLite init script is missing initializeSqliteDatabase export.');
+  }
+
+  initModule.initializeSqliteDatabase({
+    output: dbPath,
+    databaseCtor,
+  });
 }
 
 function replacePlaceholders(sql) {
@@ -49,13 +81,15 @@ class DatabaseManager {
       if (this.mode === 'sqlite') {
         const dbPath =
           process.env.SQLITE_DB_PATH ||
-      process.env.SQLCIPHER_DB_PATH ||
-      path.join(app.getPath('userData'), 'clarify.sqlite');
+          process.env.SQLCIPHER_DB_PATH ||
+          path.join(app.getPath('userData'), 'clarify.sqlite');
 
         if (!SqliteDatabase) {
           const betterSqlite = requireFromApp('better-sqlite3');
           SqliteDatabase = typeof betterSqlite.default === 'function' ? betterSqlite.default : betterSqlite;
         }
+
+        initializeSqliteIfMissing(dbPath, SqliteDatabase);
 
         this.sqliteDb = new SqliteDatabase(dbPath, { fileMustExist: true });
         if (process.env.SQLCIPHER_KEY) {
