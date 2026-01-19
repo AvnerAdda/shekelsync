@@ -68,17 +68,17 @@ test('child add/edit/delete flows update payload', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Children Information' }).click();
 
-  await page.getByRole('button', { name: 'Edit child' }).click();
+  await page.getByRole('button', { name: 'Edit Child' }).click();
   const editDialog = page.getByRole('dialog', { name: /Edit Child Information/i });
   const childName = editDialog.getByLabel('Child Name');
   await childName.fill('Noa Updated');
-  await editDialog.getByRole('button', { name: 'Update Child' }).click();
+  await editDialog.getByRole('button', { name: 'Save Changes' }).click();
 
   await page.getByRole('button', { name: 'Save Profile' }).click();
   await expect(page.getByText(/updated successfully/i)).toBeVisible();
   expect(payloads.at(-1)?.children?.[0]?.name).toBe('Noa Updated');
 
-  await page.getByRole('button', { name: 'Add child' }).click();
+  await page.getByRole('button', { name: 'Add Child' }).click();
   const addDialog = page.getByRole('dialog', { name: /Add Child Information/i });
   await addDialog.getByLabel('Child Name').fill('Omer');
   await addDialog.getByLabel(/Birth Date/i).fill('2020-11-05');
@@ -90,7 +90,7 @@ test('child add/edit/delete flows update payload', async ({ page }) => {
   expect(latest?.children?.length).toBeGreaterThan(1);
   expect(latest?.children?.some((child: any) => child.name === 'Omer')).toBe(true);
 
-  await page.getByRole('button', { name: 'Delete child' }).first().click();
+  await page.getByRole('button', { name: 'Delete Child' }).first().click();
   await page.getByRole('button', { name: 'Save Profile' }).click();
   await expect(page.getByText(/updated successfully/i)).toBeVisible();
 

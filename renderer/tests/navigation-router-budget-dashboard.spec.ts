@@ -13,10 +13,10 @@ test('Router nav: Dashboard → Budgets → Analysis Budget health', async ({ pa
   await expect(page.getByRole('tab', { name: 'Budget' })).toBeVisible();
   await page.getByRole('tab', { name: 'Budget' }).click();
 
-  // Verify projected totals are displayed
-  await expect(page.getByText('Projected End of Month').first()).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Groceries' }).first()).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Transport' }).first()).toBeVisible();
+  // Verify budget outlook is displayed
+  await expect(page.getByRole('heading', { name: /Budget risk outlook/i })).toBeVisible();
+  await expect(page.getByText('Groceries').first()).toBeVisible();
+  await expect(page.getByText('Transport').first()).toBeVisible();
 
   // Navigate back to Dashboard
   await page.goto('/#/');

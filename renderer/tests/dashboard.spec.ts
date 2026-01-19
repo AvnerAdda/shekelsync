@@ -83,10 +83,12 @@ test('dashboard shows loading state then formatted summary values', async ({ pag
     // Loading indicators are optional; ignore when not rendered.
   }
 
-  await expect(page.getByText('Total Income', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('₪12,000', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Net Balance', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('₪5,200', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Net Investments')).toBeVisible();
-  await expect(page.getByText('₪1,000', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Current Month', { exact: true }).first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('Income', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('+₪12,000', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Expenses', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('-₪6,800', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Investments', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('-₪1,000', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('₪4,200', { exact: true }).first()).toBeVisible();
 });

@@ -5,22 +5,14 @@ test.beforeEach(async ({ page }) => {
   await setupRendererTest(page);
 });
 
-test('budgets page shows cards and create dialog fields', async ({ page }) => {
+test('budget forecast list shows categories and statuses', async ({ page }) => {
   await goHome(page);
 
-  await page.getByRole('button', { name: 'Budgets' }).click();
-  await expect(page.getByRole('heading', { name: 'Budget Management' })).toBeVisible();
-  await expect(page.getByText('Rent')).toBeVisible();
-
-  await page.getByRole('button', { name: 'Create Budget' }).click();
-  await expect(page.getByText('Create New Budget')).toBeVisible();
-
-  await expect(page.getByRole('button', { name: 'Create' })).toBeVisible();
-
-  const limitInput = page.getByLabel('Budget Limit (₪)');
-  await limitInput.fill('4500');
-  await expect(limitInput).toHaveValue('4500');
-
-  await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.getByText('Create New Budget')).not.toBeVisible();
+  await page.getByRole('button', { name: 'Analysis' }).click();
+  await page.getByRole('tab', { name: 'Budget' }).click();
+  await expect(page.getByRole('heading', { name: /Budget risk outlook/i })).toBeVisible();
+  await expect(page.getByText('Groceries').first()).toBeVisible();
+  await expect(page.getByText('Transport').first()).toBeVisible();
+  await expect(page.getByText(/At risk/i)).toBeVisible();
+  await expect(page.getByText(/Over Budget/i)).toBeVisible();
 });

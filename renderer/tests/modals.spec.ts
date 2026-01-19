@@ -21,8 +21,10 @@ test('Category hierarchy modal renders sample data', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Categories' }).click();
 
-  await expect(page.getByRole('heading', { name: 'Category Hierarchy' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Expenses' })).toBeVisible();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: 'Category Management' })).toBeVisible();
+  await dialog.getByRole('tab', { name: 'Categories' }).click();
+  await expect(dialog.getByText('Expenses', { exact: true }).first()).toBeVisible();
 });
 
 test('Scrape modal can be opened via custom event', async ({ page }) => {
