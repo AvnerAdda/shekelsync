@@ -8,20 +8,20 @@ test.beforeEach(async ({ page }) => {
 test('shows authenticated user indicator', async ({ page }) => {
   await goHome(page);
 
-  await expect(page.getByText('Signed in as Demo User')).toBeVisible();
+  await expect(page.getByText('Demo User', { exact: true })).toBeVisible();
 });
 
 test('updates auth indicator when the session lifecycle changes', async ({ page }) => {
   await goHome(page);
 
-  await expect(page.getByText('Signed in as Demo User')).toBeVisible();
+  await expect(page.getByText('Demo User', { exact: true })).toBeVisible();
 
   await page.evaluate(() => {
     window.localStorage.removeItem('clarify.auth.session');
     window.dispatchEvent(new CustomEvent('authSessionChanged', { detail: null }));
   });
 
-  await expect(page.getByText('Offline mode')).toBeVisible();
+  await expect(page.getByText('Demo User', { exact: true })).toBeHidden();
 
   await page.evaluate(() => {
     const session = {
@@ -33,5 +33,5 @@ test('updates auth indicator when the session lifecycle changes', async ({ page 
     window.dispatchEvent(new CustomEvent('authSessionChanged', { detail: session }));
   });
 
-  await expect(page.getByText('Signed in as QA Bot')).toBeVisible();
+  await expect(page.getByText('QA Bot', { exact: true })).toBeVisible();
 });

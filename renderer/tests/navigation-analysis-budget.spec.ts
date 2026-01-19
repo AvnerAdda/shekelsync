@@ -14,9 +14,9 @@ test('Sidebar navigation reaches Analysis and shows Budget health statuses', asy
 
   // Budget tab should surface health statuses
   await page.getByRole('tab', { name: 'Budget' }).click();
-  await expect(page.getByText('Budget Health Monitor')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Groceries' }).first()).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Transport' }).first()).toBeVisible();
-  await expect(page.getByText('On Track', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Warning', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Budget risk outlook/i })).toBeVisible();
+  await expect(page.getByText('Groceries').first()).toBeVisible();
+  await expect(page.getByText('Transport').first()).toBeVisible();
+  await expect(page.getByText(/At risk/i)).toBeVisible();
+  await expect(page.getByText(/Over Budget/i)).toBeVisible();
 });

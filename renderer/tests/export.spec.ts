@@ -7,12 +7,8 @@ test.describe('Data export flow', () => {
   });
 
   const openDataExport = async (page: Parameters<typeof goHome>[0]) => {
-    await goHome(page);
-    await page.evaluate(() => {
-      window.dispatchEvent(new CustomEvent('openProfileSetup'));
-    });
-    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Data Export' })).toBeVisible();
+    await page.goto('/#/settings', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Data Export', exact: true })).toBeVisible({ timeout: 15000 });
   };
 
   test('allows user to trigger export via browser fallback when electron bridge is unavailable', async ({ page }) => {

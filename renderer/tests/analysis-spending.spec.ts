@@ -13,7 +13,7 @@ test('Analysis Spending tab shows chart and targets', async ({ page }) => {
   // Spending tab
   await page.getByRole('tab', { name: 'Spending' }).click();
   await expect(page.getByText('Spending Categories')).toBeVisible();
-  await expect(page.getByText('Target vs Actual Allocation')).toBeVisible();
+  await expect(page.getByText(/Target vs Actual Allocation/i)).toBeVisible();
 
   // Targets section
   await expect(page.getByText('Essential', { exact: true }).first()).toBeVisible();

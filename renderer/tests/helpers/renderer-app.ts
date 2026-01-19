@@ -64,6 +64,67 @@ const investmentAccounts = [
   },
 ];
 
+const institutionTreeNodes = [
+  {
+    id: 1,
+    node_type: 'root',
+    display_name_he: 'מוסדות פיננסיים',
+    display_name_en: 'Financial Institutions',
+    display_name_fr: 'Institutions financières',
+    parent_id: null,
+    depth_level: 0,
+    hierarchy_path: '1',
+    institution_type: null,
+    is_scrapable: 0,
+  },
+  {
+    id: 2,
+    node_type: 'group',
+    display_name_he: 'בנקים וכרטיסי אשראי',
+    display_name_en: 'Banks & Cards',
+    display_name_fr: 'Banques et cartes',
+    parent_id: 1,
+    depth_level: 1,
+    hierarchy_path: '1>2',
+    institution_type: null,
+    is_scrapable: 0,
+  },
+  {
+    id: 10,
+    node_type: 'institution',
+    vendor_code: 'hapoalim',
+    display_name_he: 'בנק הפועלים',
+    display_name_en: 'Bank Hapoalim',
+    display_name_fr: 'Bank Hapoalim',
+    institution_type: 'bank',
+    parent_id: 2,
+    depth_level: 2,
+    hierarchy_path: '1>2>10',
+    is_scrapable: 1,
+    credential_fields: JSON.stringify(['username', 'password']),
+    logo_url: null,
+    display_order: 1,
+  },
+  {
+    id: 11,
+    node_type: 'institution',
+    vendor_code: 'isracard',
+    display_name_he: 'ישראכרט',
+    display_name_en: 'Isracard',
+    display_name_fr: 'Isracard',
+    institution_type: 'credit_card',
+    parent_id: 2,
+    depth_level: 2,
+    hierarchy_path: '1>2>11',
+    is_scrapable: 1,
+    credential_fields: JSON.stringify(['username', 'password']),
+    logo_url: null,
+    display_order: 2,
+  },
+];
+
+const institutions = institutionTreeNodes.filter((node) => node.node_type === 'institution');
+
 const categoryHierarchy = {
   categories: [
     {
@@ -235,6 +296,114 @@ const analyticsBreakdown = {
     average: 300,
     min: 50,
     max: 600,
+  },
+};
+
+const questStats = {
+  id: 1,
+  total_points: 0,
+  current_streak: 0,
+  best_streak: 0,
+  quests_completed: 0,
+  quests_failed: 0,
+  quests_declined: 0,
+  level: 1,
+  level_progress: {
+    current_level: 1,
+    next_level: 2,
+    points_for_next: 100,
+    points_needed: 100,
+    progress_pct: 0,
+    max_level_reached: false,
+  },
+  created_at: '2025-09-01T00:00:00.000Z',
+  updated_at: '2025-09-01T00:00:00.000Z',
+};
+
+const budgetOutlook = [
+  {
+    budgetId: 1,
+    categoryDefinitionId: 2,
+    categoryName: 'Groceries',
+    categoryNameEn: 'Groceries',
+    categoryNameFr: 'Groceries',
+    categoryIcon: 'ShoppingCart',
+    categoryColor: '#1e88e5',
+    parentCategoryId: null,
+    limit: 2500,
+    actualSpent: 2100,
+    forecasted: 400,
+    projectedTotal: 2500,
+    utilization: 84,
+    status: 'at_risk',
+    risk: 72,
+    alertThreshold: 0.85,
+  },
+  {
+    budgetId: 2,
+    categoryDefinitionId: 3,
+    categoryName: 'Transport',
+    categoryNameEn: 'Transport',
+    categoryNameFr: 'Transport',
+    categoryIcon: 'DirectionsCar',
+    categoryColor: '#fb8c00',
+    parentCategoryId: null,
+    limit: 1500,
+    actualSpent: 1700,
+    forecasted: 300,
+    projectedTotal: 2000,
+    utilization: 113,
+    status: 'exceeded',
+    risk: 92,
+    alertThreshold: 0.9,
+  },
+];
+
+const smartActionsResponse = {
+  actions: [
+    {
+      id: 1,
+      action_type: 'anomaly',
+      severity: 'high',
+      title: 'Unusual fuel spike',
+      description: 'Fuel spend jumped above the monthly average.',
+      detected_at: '2025-09-18T00:00:00.000Z',
+      user_status: 'active',
+      detection_confidence: 0.84,
+      is_recurring: false,
+      created_at: '2025-09-18T00:00:00.000Z',
+      updated_at: '2025-09-18T00:00:00.000Z',
+      category_name: 'Fuel',
+      category_name_en: 'Fuel',
+      metadata: { amount: 600 },
+    },
+    {
+      id: 2,
+      action_type: 'budget_overrun',
+      severity: 'critical',
+      title: 'Budget overrun risk',
+      description: 'Projected spend exceeds the budget limit.',
+      detected_at: '2025-09-19T00:00:00.000Z',
+      user_status: 'active',
+      detection_confidence: 0.92,
+      is_recurring: false,
+      created_at: '2025-09-19T00:00:00.000Z',
+      updated_at: '2025-09-19T00:00:00.000Z',
+      category_name: 'Groceries',
+      category_name_en: 'Groceries',
+      metadata: { projected_overage: 200 },
+    },
+  ],
+  summary: {
+    total: 2,
+    by_severity: { critical: 1, high: 1, medium: 0, low: 0 },
+    by_type: {
+      anomaly: 1,
+      budget_overrun: 1,
+      fixed_variation: 0,
+      unusual_purchase: 0,
+    },
+    total_potential_impact: -800,
   },
 };
 
@@ -423,8 +592,28 @@ const investmentsSummary = {
     { date: '2025-08-01', totalValue: 36000, totalCost: 32000, gainLoss: 4000 },
     { date: '2025-09-01', totalValue: 38000, totalCost: 33000, gainLoss: 5000 },
   ],
-  liquidAccounts: [],
-  restrictedAccounts: [],
+  liquidAccounts: [
+    {
+      id: 101,
+      account_name: 'Brokerage Demo',
+      account_type: 'brokerage',
+      institution: 'Demo Brokerage',
+      investment_category: 'liquid',
+      current_value: 24000,
+      cost_basis: 20000,
+    },
+  ],
+  restrictedAccounts: [
+    {
+      id: 202,
+      account_name: 'Pension Fund',
+      account_type: 'pension',
+      institution: 'Pension Authority',
+      investment_category: 'restricted',
+      current_value: 14000,
+      cost_basis: 13000,
+    },
+  ],
 };
 
 const defaultProfile = {
@@ -683,16 +872,53 @@ const defaultHandlers: Record<string, Handler> = {
   'GET /api/investments/history': respondWith({ history: [] }),
   'GET /api/investments/summary': respondWith(investmentsSummary),
   'GET /api/investments/patterns': respondWith([]),
+  'GET /api/investments/smart-suggestions': respondWith({ success: true, suggestions: [] }),
   'GET /api/investments/check-existing': respondWith({ exists: false }),
   'GET /api/analytics/dashboard': respondWith(analyticsDashboard),
   'GET /api/analytics/breakdown': respondWith(analyticsBreakdown),
   'GET /api/analytics/waterfall-flow': respondWith(waterfallFlow),
   'GET /api/analytics/unified-category': respondWith({ categories: [] }),
   'GET /api/analytics/investments': respondWith(analyticsInvestments),
+  'GET /api/smart-actions': respondWith(smartActionsResponse),
+  'POST /api/smart-actions/generate': respondWith({
+    success: true,
+    total_detected: smartActionsResponse.actions.length,
+    created: smartActionsResponse.actions.length,
+    skipped: 0,
+    breakdown: {
+      anomalies: 1,
+      fixed_variations: 0,
+      unusual_purchases: 0,
+      budget_overruns: 1,
+      optimization_opportunities: 0,
+    },
+  }),
+  'GET /api/analytics/quests/active': respondWith({ quests: [], count: 0 }),
+  'GET /api/analytics/quests/stats': respondWith(questStats),
+  'POST /api/analytics/quests/generate': respondWith({
+    success: true,
+    total_generated: 0,
+    created: 0,
+    active_count: 0,
+    slots_remaining: 5,
+  }),
+  'POST /api/analytics/quests/check-deadlines': respondWith({
+    verified: 0,
+    failed: 0,
+    checked: 0,
+    active_quests: 0,
+    new_quests_generated: 0,
+    errors: [],
+  }),
   'GET /api/analytics/personal-intelligence': respondWith(personalIntelligence),
   'GET /api/forecast/daily': respondWith({
-    budgetOutlook: [],
-    budgetSummary: { totalBudgets: 0, highRisk: 0, exceeded: 0, totalProjectedOverrun: 0 },
+    budgetOutlook,
+    budgetSummary: {
+      totalBudgets: budgetOutlook.length,
+      highRisk: budgetOutlook.filter((item) => item.status === 'at_risk').length,
+      exceeded: budgetOutlook.filter((item) => item.status === 'exceeded').length,
+      totalProjectedOverrun: 500,
+    },
   }),
   'GET /api/spending-categories/breakdown': respondWith(spendingBreakdown),
   'POST /api/spending-categories/initialize': respondWith({ success: true, created: 4, skipped: 0, total: 4 }),
@@ -702,6 +928,8 @@ const defaultHandlers: Record<string, Handler> = {
     summary: {},
     transactions: [],
   }),
+  'GET /api/institutions/tree': respondWith({ nodes: institutionTreeNodes }),
+  'GET /api/institutions': respondWith({ institutions }),
   'GET /api/analytics/transactions-by-date': respondWith({ transactions: [] }),
   'GET /api/budgets/usage': respondWith(budgetsUsage),
   'GET /api/budgets': respondWith(budgetsUsage),
@@ -741,6 +969,7 @@ export async function setupRendererTest(
 ) {
   await page.addInitScript((session) => {
     try {
+      window.localStorage.setItem('app-locale', 'en');
       window.localStorage.setItem('clarify.auth.session', JSON.stringify(session));
     } catch (error) {
       console.warn('[setupRendererTest] Failed to seed auth session:', error);
@@ -790,8 +1019,7 @@ export async function setupRendererTest(
 }
 
 export const goHome = async (page: Page) => {
-  await page.goto('/#/');
-  await page.waitForLoadState('networkidle');
+  await page.goto('/#/', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('banner').getByText('ShekelSync', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add Account' })).toBeVisible();
 };
