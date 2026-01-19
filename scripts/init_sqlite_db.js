@@ -51,7 +51,7 @@ function applySchemaUpgrades(db) {
   );
   db.exec(`
     UPDATE category_definitions
-    SET name_fr = name
+    SET name_fr = COALESCE(name_en, name)
     WHERE name_fr IS NULL
   `);
 

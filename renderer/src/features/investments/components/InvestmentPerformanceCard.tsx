@@ -9,6 +9,7 @@ import {
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { InvestmentAccountSummary, PortfolioHistoryPoint } from '@renderer/types/investments';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
+import { getInstitutionLabel, type InstitutionMetadata } from '@renderer/shared/components/InstitutionBadge';
 import {
   AccountBalance as BankIcon,
   TrendingUp as StockIcon,
@@ -136,7 +137,7 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
             <Typography variant="caption" color="text.secondary" noWrap>
               {typeof account.institution === 'string'
                 ? account.institution
-                : (account.institution as any).display_name_en || ''}
+                : (getInstitutionLabel(account.institution as InstitutionMetadata) || '')}
             </Typography>
           )}
         </Box>

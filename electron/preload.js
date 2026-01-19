@@ -106,6 +106,42 @@ const eventsBridge = Object.freeze({
 
     return () => ipcRenderer.removeListener('window:state-changed', wrappedCallback);
   },
+  onUpdateCheckingForUpdate: (callback) => {
+    const wrappedCallback = (event, ...args) => callback(...args);
+    ipcRenderer.on('updater:checking-for-update', wrappedCallback);
+
+    return () => ipcRenderer.removeListener('updater:checking-for-update', wrappedCallback);
+  },
+  onUpdateAvailable: (callback) => {
+    const wrappedCallback = (event, ...args) => callback(...args);
+    ipcRenderer.on('updater:update-available', wrappedCallback);
+
+    return () => ipcRenderer.removeListener('updater:update-available', wrappedCallback);
+  },
+  onUpdateNotAvailable: (callback) => {
+    const wrappedCallback = (event, ...args) => callback(...args);
+    ipcRenderer.on('updater:update-not-available', wrappedCallback);
+
+    return () => ipcRenderer.removeListener('updater:update-not-available', wrappedCallback);
+  },
+  onUpdateError: (callback) => {
+    const wrappedCallback = (event, ...args) => callback(...args);
+    ipcRenderer.on('updater:error', wrappedCallback);
+
+    return () => ipcRenderer.removeListener('updater:error', wrappedCallback);
+  },
+  onUpdateDownloadProgress: (callback) => {
+    const wrappedCallback = (event, ...args) => callback(...args);
+    ipcRenderer.on('updater:download-progress', wrappedCallback);
+
+    return () => ipcRenderer.removeListener('updater:download-progress', wrappedCallback);
+  },
+  onUpdateDownloaded: (callback) => {
+    const wrappedCallback = (event, ...args) => callback(...args);
+    ipcRenderer.on('updater:update-downloaded', wrappedCallback);
+
+    return () => ipcRenderer.removeListener('updater:update-downloaded', wrappedCallback);
+  },
 });
 
 // Expose protected methods that allow the renderer process to use
@@ -202,6 +238,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     isWindows: process.platform === 'win32',
     isMacOS: process.platform === 'darwin',
     isLinux: process.platform === 'linux'
+  },
+
+  // Update operations
+  updater: {
+    checkForUpdates: () => ipcRenderer.invoke('updater:checkForUpdates'),
+    downloadUpdate: () => ipcRenderer.invoke('updater:downloadUpdate'),
+    quitAndInstall: () => ipcRenderer.invoke('updater:quitAndInstall'),
+    getUpdateInfo: () => ipcRenderer.invoke('updater:getUpdateInfo'),
   },
 
   // Development utilities (only available in development)

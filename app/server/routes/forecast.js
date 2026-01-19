@@ -311,7 +311,7 @@ function createForecastRouter({ sqliteDb = null } = {}) {
             categoryDefinitionId: catDef?.id || categoryDefinitionId || null,
             categoryName: catDef?.name || categoryName || 'Unknown',
             categoryNameEn: catDef?.name_en || categoryName || 'Unknown',
-            categoryNameFr: catDef?.name_fr || categoryName || 'Unknown',
+            categoryNameFr: catDef?.name_fr || catDef?.name_en || categoryName || 'Unknown',
             categoryIcon: catDef?.icon || null,
             categoryColor: catDef?.color || null,
             parentCategoryId: catDef?.parent_id ?? null,
@@ -341,7 +341,7 @@ function createForecastRouter({ sqliteDb = null } = {}) {
           entry.parentCategoryId = row.parent_category_id;
         }
         entry.categoryNameEn = entry.categoryNameEn || row.category_name_en || entry.categoryName;
-        entry.categoryNameFr = entry.categoryNameFr || row.category_name_fr || entry.categoryName;
+        entry.categoryNameFr = entry.categoryNameFr || row.category_name_fr || row.category_name_en || entry.categoryName;
         entry.categoryIcon = entry.categoryIcon || row.category_icon || null;
         entry.categoryColor = entry.categoryColor || row.category_color || null;
       });
@@ -360,7 +360,7 @@ function createForecastRouter({ sqliteDb = null } = {}) {
           entry.parentCategoryId = row.parent_category_id;
         }
         entry.categoryNameEn = entry.categoryNameEn || row.category_name_en || entry.categoryName;
-        entry.categoryNameFr = entry.categoryNameFr || row.category_name_fr || entry.categoryName;
+        entry.categoryNameFr = entry.categoryNameFr || row.category_name_fr || row.category_name_en || entry.categoryName;
         entry.categoryIcon = entry.categoryIcon || row.category_icon || null;
         entry.categoryColor = entry.categoryColor || row.category_color || null;
       });

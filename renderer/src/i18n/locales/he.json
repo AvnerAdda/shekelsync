@@ -2,7 +2,8 @@
   "common": {
     "language": "שפה",
     "languages": { "he": "עברית", "en": "אנגלית", "fr": "צרפתית" },
-    "systemLanguageDetected": "זיהינו {{language}} לפי שפת המערכת. אפשר לשנות בכל רגע."
+    "systemLanguageDetected": "זיהינו {{language}} לפי שפת המערכת. אפשר לשנות בכל רגע.",
+    "or": "או"
   },
   "dashboard": {
     "summary": {
@@ -95,6 +96,8 @@
       "welcomeDescription": "בואו נסדר את הכספים שלכם. עקבו אחרי השלבים כדי להתחיל לעקוב אחרי הוצאות והכנסות.",
       "noTransactionsTitle": "אין עסקאות בחודש הנוכחי",
       "noTransactionsDescription": "יש לכם {{count}} עסקאות בסך הכל, אבל אין בחודש הנוכחי ({{month}}). נסו לגרד נתונים עדכניים או לצפות בניתוח היסטורי בעמוד הניתוח.",
+      "noTransactionsDisclaimer": "לא נרשמו עסקאות עבור {{month}}. הנתונים המוצגים להלן משקפים את התקופה הזמינה האחרונה.",
+      "showingPreviousMonth": "אין עסקאות עדיין עבור {{currentMonth}}. מציגים נתונים מ-{{displayedMonth}}.",
       "scrapeRecent": "סרקו עסקאות עדכניות",
       "viewHistory": "צפו בנתונים היסטוריים"
     },
@@ -608,8 +611,11 @@
         "runway": "אורך ריצת מזומן",
         "runwayDays": "{{count}} ימים",
         "burnRate": "קצב שריפה יומי",
+        "avgDaily": "הוצאה יומית ממוצעת",
+        "weekendShare": "נתח סופ\"ש",
         "peakHour": "שעת שיא",
         "peakHourValue": "{{hour}}:00",
+        "preciseTime": "חותמות זמן מדויקות",
         "na": "לא זמין",
         "paydayEffect": "השפעת יום המשכורת"
       },
@@ -618,10 +624,15 @@
         "spendingStyle": "סגנון הוצאה",
         "impulse": "{{value}}% אימפולסיבי",
         "planned": "{{value}}% מתוכנן",
+        "programmedSpend": "הוצאה מתוכננת",
+        "impulseSpend": "הוצאה אימפולסיבית",
+        "recurringPatterns": "דפוסים חוזרים",
+        "topCategoryWeekly": "{{category}} לשבוע",
         "avgTransaction": "עסקה ממוצעת",
         "smallPurchases": "קניות קטנות",
         "fomoScore": "מדד FOMO",
-        "fomoHint": "אינדיקטור להוצאות בידור/סופ\"ש"
+        "fomoHint": "אינדיקטור להוצאות בידור/סופ\"ש",
+        "na": "לא זמין"
       },
       "future": {
         "title": "העתיד הפיננסי שלך",
@@ -629,7 +640,11 @@
         "endOfMonth": "סוף חודש",
         "monthlySavings": "חיסכון חודשי",
         "dailyVelocity": "מהירות יומית",
-        "velocityValue": "{{value}} ליום"
+        "velocityValue": "{{value}} ליום",
+        "baseCase": "תרחיש בסיס",
+        "bestCase": "יתרה אופטימית",
+        "worstCase": "יתרה פסימית",
+        "na": "לא זמין"
       },
       "reality": {
         "title": "להפוך למציאות",
@@ -638,6 +653,8 @@
         "avgPurchase": "קנייה ממוצעת = {{hours}} שעות עבודה",
         "biggestPurchase": "הקנייה הגדולה החודש",
         "hoursOfWork": "{{hours}} שעות עבודה",
+        "expenseRatio": "ההוצאות הן {{ratio}}% מההכנסה",
+        "topCategoryHours": "הקטגוריה המובילה ≈ {{hours}} שעות",
         "na": "לא זמין"
       },
       "expandView": "הרחב תצוגה"
@@ -966,6 +983,13 @@
         "last3Months": "{{count}} חודשים אחרונים",
         "history": "כל ההיסטוריה"
       },
+      "viewToggle": {
+        "current": "הוצאה נוכחית",
+        "incomeIndexed": "מנורמל להכנסה",
+        "currentHint": "מציג את החלוקה כחלק מסך ההוצאות",
+        "incomeHint": "מנרמל את היעדים להכנסה ({{amount}} בתקופה זו)",
+        "noIncome": "אין הכנסה בתקופה זו"
+      },
       "empty": {
         "title": "אין נתוני הוצאה",
         "description": "התחילו לשייך עסקאות כדי לראות תובנות לפי קטגוריה."
@@ -980,11 +1004,14 @@
       },
       "labels": {
         "target": "יעד: {{value}}%",
+        "incomeTarget": "יעד להכנסה: {{value}}%",
         "transactions_one": "עסקה אחת",
         "transactions_other": "{{count}} עסקאות",
         "totalSpending_one": "סך הוצאות (חודש {{count}})",
         "totalSpending_other": "סך הוצאות ({{count}} חודשים)",
-        "totalSpendingRange": "סך הוצאות ({{range}})"
+        "totalSpendingRange": "סך הוצאות ({{range}})",
+        "currentSpend": "הוצאה נוכחית: {{amount}}",
+        "ofIncome": "מההכנסה"
       },
       "tooltips": {
         "overTarget": "חריגה מהיעד",
@@ -1453,8 +1480,26 @@
       "otpToken": "טוקן חד-פעמי",
       "identification_code": "קוד זיהוי"
     },
+    "credentials": {
+      "username": "שם משתמש",
+      "password": "סיסמה",
+      "userCode": "קוד משתמש",
+      "id": "מספר זהות",
+      "card6Digits": "6 ספרות אחרונות של הכרטיס",
+      "card6DigitsHelper": "6 הספרות כפי שמופיעות על הכרטיס",
+      "bankAccountNumber": "מספר חשבון בנק",
+      "nationalID": "תעודת זהות",
+      "num": "קוד זיהוי (num)",
+      "email": "כתובת אימייל",
+      "otpCode": "קוד חד-פעמי",
+      "otpToken": "טוקן חד-פעמי",
+      "identification_code": "קוד זיהוי"
+    },
     "actions": {
       "cancel": "ביטול"
+    },
+    "security": {
+      "localStorageWarning": "הפרטים שלך נשמרים מקומית על המכשיר שלך ומוצפנים. שום מידע לא נשלח לשרתים חיצוניים."
     }
   },
   "categoryHierarchy": {
@@ -1736,6 +1781,28 @@
       "restoreWindow": "שחזר חלון",
       "closeWindow": "סגור חלון"
     },
+    "update": {
+      "tooltip": {
+        "checkForUpdates": "בדוק עדכונים",
+        "checking": "בודק עדכונים...",
+        "available": "עדכון זמין (גירסה {{version}})",
+        "downloading": "מוריד עדכון... {{progress}}%",
+        "downloaded": "עדכון מוכן להתקנה",
+        "upToDate": "האפליקציה מעודכנת",
+        "error": "בדיקת עדכון נכשלה"
+      },
+      "menu": {
+        "title": "עדכוני אפליקציה",
+        "subtitle": "נהל עדכונים של ShekelSync",
+        "checkForUpdates": "בדוק עדכונים",
+        "downloadUpdate": "הורד עדכון",
+        "restartAndUpdate": "הפעל מחדש והתקן",
+        "downloading": "מוריד עדכון",
+        "version": "גירסה {{version}}",
+        "readyToInstall": "מוכן להתקנה",
+        "releaseNotes": "הערות גירסה"
+      }
+    },
     "search": {
       "placeholder": "חפש אזורים...",
       "options": {
@@ -1826,6 +1893,26 @@
       "selectInstitution": "בחרו מוסד כדי לראות אילו פרטי התחברות נדרשים.",
       "noSpecificCredentials": "אין דרישות התחברות ספציפיות. הזינו שם משתמש וסיסמה."
     },
+    "wizard": {
+      "chooseInstitutionTitle": "בחירת מוסד",
+      "loadingInstitutions": "טוען מוסדות…",
+      "labels": {
+        "category": "קטגוריה",
+        "next": "רמה הבאה"
+      },
+      "placeholders": {
+        "category": "בחרו קטגוריה",
+        "next": "בחרו…"
+      },
+      "actions": {
+        "reset": "איפוס"
+      },
+      "accountDetailsTitle": "פרטי חשבון",
+      "helpers": {
+        "selectLeaf": "בחרו מוסד ספציפי כדי להמשיך."
+      },
+      "selectedType": "{{type}}"
+    },
     "credentials": {
       "username": "שם משתמש",
       "password": "סיסמה",
@@ -1866,6 +1953,9 @@
       },
       "errors": {
         "saveFailed": "עדכון פרטי ההתחברות נכשל"
+      },
+      "security": {
+        "localStorageWarning": "הפרטים שלך נשמרים מקומית על המכשיר שלך ומוצפנים. שום מידע לא נשלח לשרתים חיצוניים."
       }
     },
     "valueModal": {
@@ -2001,8 +2091,5 @@
     "manualMode": "עבור למצב ידני",
     "autoMode": "עבור למצב אוטומטי",
     "sampleTransactions": "דוגמאות עסקאות תואמות"
-  },
-  "common": {
-    "or": "או"
   }
 }

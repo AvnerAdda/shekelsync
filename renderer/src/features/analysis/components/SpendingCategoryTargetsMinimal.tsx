@@ -72,12 +72,15 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
   const totalIncome = breakdown?.total_income || 0;
 
   const getCategoryName = (category: CategoryWithSpending) => {
-    const language = i18n.language || 'en';
-    const isHebrew = language.startsWith('he');
-    if (isHebrew) {
+    const language = (i18n.language || 'en').toLowerCase();
+    const locale = language.split('-')[0] || 'en';
+    if (locale === 'he') {
       return category.category_name;
     }
-    return category.category_name_en || category.category_name;
+    if (locale === 'fr') {
+      return category.category_name_fr || category.category_name_en || category.category_name;
+    }
+    return category.category_name_en || category.category_name_fr || category.category_name;
   };
 
   const renderCategoryTooltip = (category: CategoryWithSpending, color: string) => (

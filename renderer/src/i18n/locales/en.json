@@ -6,7 +6,8 @@
       "en": "English",
       "fr": "French"
     },
-    "systemLanguageDetected": "Detected {{language}} from your system locale. You can change it anytime."
+    "systemLanguageDetected": "Detected {{language}} from your system locale. You can change it anytime.",
+    "or": "or"
   },
   "dashboard": {
     "summary": {
@@ -611,8 +612,12 @@
         "title": "Your Financial Rhythm",
         "spendingByHour": "Spending by Hour of Day",
         "lowPrecision": "Only {{percentage}}% have times",
+        "runway": "Runway",
+        "runwayDays": "{{count}} days",
+        "burnRate": "Daily burn rate",
         "avgDaily": "Avg daily spend",
         "weekendShare": "Weekend share",
+        "paydayEffect": "Payday effect",
         "peakHour": "Peak Hour",
         "peakHourValue": "{{hour}}:00",
         "preciseTime": "Precise timestamps",
@@ -636,6 +641,10 @@
       "future": {
         "title": "Your Financial Future",
         "trajectory": "6-Month Savings Trajectory",
+        "endOfMonth": "End of month",
+        "monthlySavings": "Monthly savings",
+        "dailyVelocity": "Daily velocity",
+        "velocityValue": "{{value}}/day",
         "baseCase": "Base case",
         "bestCase": "Optimistic balance",
         "worstCase": "Pessimistic balance",
@@ -645,6 +654,7 @@
         "title": "Make It Real",
         "timeValue": "Your Time = Money",
         "hourlyRate": "{{value}}/hour",
+        "avgPurchase": "Avg purchase = {{hours}} hours of work",
         "biggestPurchase": "Biggest Purchase This Month",
         "hoursOfWork": "{{hours}} hours of work",
         "expenseRatio": "Expenses are {{ratio}}% of income",
@@ -1493,6 +1503,9 @@
     },
     "actions": {
       "cancel": "Cancel"
+    },
+    "security": {
+      "localStorageWarning": "Your credentials are stored locally on your device and encrypted. No data is sent to external servers."
     }
   },
   "investmentAccountsModal": {
@@ -1820,6 +1833,28 @@
       "restoreWindow": "Restore window",
       "closeWindow": "Close window"
     },
+    "update": {
+      "tooltip": {
+        "checkForUpdates": "Check for updates",
+        "checking": "Checking for updates...",
+        "available": "Update available (v{{version}})",
+        "downloading": "Downloading update... {{progress}}%",
+        "downloaded": "Update ready to install",
+        "upToDate": "App is up to date",
+        "error": "Update check failed"
+      },
+      "menu": {
+        "title": "App Updates",
+        "subtitle": "Manage ShekelSync updates",
+        "checkForUpdates": "Check for Updates",
+        "downloadUpdate": "Download Update",
+        "restartAndUpdate": "Restart & Install",
+        "downloading": "Downloading update",
+        "version": "Version {{version}}",
+        "readyToInstall": "Ready to install",
+        "releaseNotes": "Release Notes"
+      }
+    },
     "search": {
       "placeholder": "Search sections...",
       "options": {
@@ -1910,6 +1945,26 @@
       "selectInstitution": "Select an institution to see the required credentials.",
       "noSpecificCredentials": "No specific credential requirements configured. Please provide a username and password."
     },
+    "wizard": {
+      "chooseInstitutionTitle": "Choose institution",
+      "loadingInstitutions": "Loading institutions…",
+      "labels": {
+        "category": "Category",
+        "next": "Next level"
+      },
+      "placeholders": {
+        "category": "Select a category",
+        "next": "Select…"
+      },
+      "actions": {
+        "reset": "Reset"
+      },
+      "accountDetailsTitle": "Account details",
+      "helpers": {
+        "selectLeaf": "Select a specific institution to continue."
+      },
+      "selectedType": "{{type}}"
+    },
     "credentials": {
       "username": "Username",
       "password": "Password",
@@ -1950,6 +2005,9 @@
       },
       "errors": {
         "saveFailed": "Failed to update credentials"
+      },
+      "security": {
+        "localStorageWarning": "Your credentials are stored locally on your device and encrypted. No data is sent to external servers."
       }
     },
     "valueModal": {
@@ -2085,8 +2143,5 @@
     "manualMode": "Switch to Manual Mode",
     "autoMode": "Switch to Auto Mode",
     "sampleTransactions": "Sample matched transactions"
-  },
-  "common": {
-    "or": "or"
   }
 }

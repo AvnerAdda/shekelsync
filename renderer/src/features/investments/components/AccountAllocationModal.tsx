@@ -20,6 +20,7 @@ import { Close as CloseIcon } from '@mui/icons-material';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
+import { getInstitutionLabel, type InstitutionMetadata } from '@renderer/shared/components/InstitutionBadge';
 
 interface AccountAllocationModalProps {
   open: boolean;
@@ -39,7 +40,8 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
 }) => {
   const theme = useTheme();
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
-  const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.allocationModal' });
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'investmentsPage.allocationModal' });
+  const locale = i18n.language;
 
   const [sortField, setSortField] = useState<SortField>('value');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -262,7 +264,7 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
                       <Typography variant="caption" color="text.secondary">
                         {typeof account.institution === 'string'
                           ? account.institution
-                          : (account.institution as any).display_name_en || ''}
+                          : (getInstitutionLabel(account.institution as InstitutionMetadata, locale) || '')}
                       </Typography>
                     )}
                   </Box>

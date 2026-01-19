@@ -136,6 +136,9 @@ describe('accounts pairings service', () => {
   it('deletePairing removes record and logs deletion', async () => {
   getClientMock.mockResolvedValue({ query: clientQueryMock, release: releaseMock });
   clientQueryMock.mockImplementation(async (sql: string) => {
+    if (/SELECT\s+id\s+FROM\s+account_pairings/.test(sql)) {
+      return { rows: [{ id: 7 }] };
+    }
     if (sql.trim().startsWith('DELETE FROM account_pairings')) {
       return { rowCount: 1 };
     }
@@ -148,7 +151,7 @@ describe('accounts pairings service', () => {
     const result = await pairings.deletePairing({ id: 7 });
 
     expect(result).toEqual({ deleted: true });
-    expect(clientQueryMock).toHaveBeenCalledTimes(2);
+    expect(clientQueryMock).toHaveBeenCalledTimes(3);
     expect(releaseMock).toHaveBeenCalledTimes(1);
   });
 

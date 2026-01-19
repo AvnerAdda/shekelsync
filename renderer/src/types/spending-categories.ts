@@ -15,6 +15,7 @@ export interface CategoryWithSpending {
   category_definition_id: number;
   category_name: string;
   category_name_en?: string;
+  category_name_fr?: string;
   icon?: string | null;
   spending_category: SpendingCategory | null;
   total_amount: number;
@@ -36,9 +37,11 @@ export interface SpendingCategoryMapping {
   updated_at: string;
   category_name: string;
   category_name_en?: string;
+  category_name_fr?: string;
   category_type: string;
   parent_category_name?: string;
   parent_category_name_en?: string;
+  parent_category_name_fr?: string;
 }
 
 export interface SpendingCategoryTarget {
