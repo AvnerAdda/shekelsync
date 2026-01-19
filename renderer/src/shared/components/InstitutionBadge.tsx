@@ -1,10 +1,12 @@
 import { Chip, Tooltip } from '@mui/material';
+import i18n from '@renderer/i18n';
 
 export interface InstitutionMetadata {
   id: number;
   vendor_code: string;
   display_name_he: string;
   display_name_en: string;
+  display_name_fr?: string;
   institution_type: string;
   category?: string;
   subcategory?: string | null;
@@ -20,9 +22,18 @@ export interface InstitutionMetadata {
   credentialFieldList?: string[];
 }
 
-export function getInstitutionLabel(institution?: InstitutionMetadata | null) {
+const normalizeLocale = (value?: string) => value?.toLowerCase().split('-')[0];
+
+export function getInstitutionLabel(institution?: InstitutionMetadata | null, locale?: string) {
   if (!institution) return null;
-  return institution.display_name_he || institution.display_name_en || institution.vendor_code;
+  const normalized = normalizeLocale(locale || i18n.language) || 'he';
+  const heName = institution.display_name_he;
+  const enName = institution.display_name_en;
+  const frName = institution.display_name_fr;
+
+  if (normalized === 'he') return heName || enName || frName || institution.vendor_code;
+  if (normalized === 'fr') return frName || enName || heName || institution.vendor_code;
+  return enName || frName || heName || institution.vendor_code;
 }
 
 interface InstitutionBadgeProps {
@@ -38,9 +49,13 @@ export function InstitutionBadge({
   size = 'small',
   variant = 'outlined',
 }: InstitutionBadgeProps) {
-  const label = getInstitutionLabel(institution) ?? fallback ?? 'Unknown institution';
-  const tooltipTitle = institution?.display_name_en && institution?.display_name_en !== label
-    ? institution.display_name_en
+  const locale = normalizeLocale(i18n.language) || 'he';
+  const label = getInstitutionLabel(institution, locale) ?? fallback ?? 'Unknown institution';
+  const alternateLabel = locale === 'he'
+    ? (institution?.display_name_en || institution?.display_name_fr)
+    : institution?.display_name_he;
+  const tooltipTitle = alternateLabel && alternateLabel !== label
+    ? alternateLabel
     : institution?.vendor_code;
 
   const chip = (

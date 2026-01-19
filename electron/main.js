@@ -69,7 +69,7 @@ try {
 
 const AUTO_UPDATE_ENV_FLAG = 'ENABLE_AUTO_UPDATE';
 if (typeof process.env[AUTO_UPDATE_ENV_FLAG] === 'undefined') {
-  process.env[AUTO_UPDATE_ENV_FLAG] = 'false';
+  process.env[AUTO_UPDATE_ENV_FLAG] = 'true';
 }
 
 function shouldEnableAutoUpdate() {
@@ -703,30 +703,70 @@ app.whenReady().then(async () => {
 
   // Auto-updater setup (production only)
   if (shouldEnableAutoUpdate()) {
+    console.log('Auto-updater enabled, checking for updates...');
+    logger.info('Auto-updater enabled, checking for updates');
+    
+    // Start checking for updates
     autoUpdater.checkForUpdatesAndNotify();
 
-    autoUpdater.on('update-available', () => {
-      console.log('Update available');
-      dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: 'Update Available',
-        message: 'A new version is available. It will be downloaded in the background.',
-        buttons: ['OK']
-      });
+    autoUpdater.on('checking-for-update', () => {
+      console.log('Checking for update...');
+      if (mainWindow?.webContents) {
+        mainWindow.webContents.send('updater:checking-for-update');
+      }
     });
 
-    autoUpdater.on('update-downloaded', () => {
-      console.log('Update downloaded');
-      dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: 'Update Ready',
-        message: 'Update downloaded. The application will restart to apply the update.',
-        buttons: ['Restart', 'Later']
-      }).then((result) => {
-        if (result.response === 0) {
-          autoUpdater.quitAndInstall();
-        }
-      });
+    autoUpdater.on('update-available', (info) => {
+      console.log('Update available:', info);
+      if (mainWindow?.webContents) {
+        mainWindow.webContents.send('updater:update-available', {
+          version: info.version,
+          releaseDate: info.releaseDate,
+          releaseNotes: info.releaseNotes,
+        });
+      }
+    });
+
+    autoUpdater.on('update-not-available', (info) => {
+      console.log('Update not available:', info);
+      if (mainWindow?.webContents) {
+        mainWindow.webContents.send('updater:update-not-available', {
+          version: info.version,
+        });
+      }
+    });
+
+    autoUpdater.on('error', (error) => {
+      console.error('Auto-updater error:', error);
+      logger.error('Auto-updater error', { error: error.message });
+      if (mainWindow?.webContents) {
+        mainWindow.webContents.send('updater:error', {
+          message: error.message,
+        });
+      }
+    });
+
+    autoUpdater.on('download-progress', (progressObj) => {
+      const logMessage = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}% (${progressObj.transferred}/${progressObj.total})`;
+      console.log(logMessage);
+      if (mainWindow?.webContents) {
+        mainWindow.webContents.send('updater:download-progress', {
+          percent: Math.round(progressObj.percent),
+          bytesPerSecond: progressObj.bytesPerSecond,
+          transferred: progressObj.transferred,
+          total: progressObj.total,
+        });
+      }
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+      console.log('Update downloaded:', info);
+      if (mainWindow?.webContents) {
+        mainWindow.webContents.send('updater:update-downloaded', {
+          version: info.version,
+          releaseDate: info.releaseDate,
+        });
+      }
     });
   } else if (!isDev && autoUpdater) {
     logger.info(`Auto-updater disabled; set ${AUTO_UPDATE_ENV_FLAG}=true to enable.`);
@@ -1267,6 +1307,57 @@ ipcMain.handle('app:getName', () => {
 
 ipcMain.handle('app:isPackaged', () => {
   return app.isPackaged;
+});
+
+// Update-related handlers
+ipcMain.handle('updater:checkForUpdates', async () => {
+  if (!shouldEnableAutoUpdate() || !autoUpdater) {
+    return { success: false, error: 'Auto-updater not available' };
+  }
+  
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { success: true, updateInfo: result?.updateInfo || null };
+  } catch (error) {
+    console.error('Manual update check failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('updater:downloadUpdate', async () => {
+  if (!shouldEnableAutoUpdate() || !autoUpdater) {
+    return { success: false, error: 'Auto-updater not available' };
+  }
+  
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (error) {
+    console.error('Manual update download failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('updater:quitAndInstall', async () => {
+  if (!shouldEnableAutoUpdate() || !autoUpdater) {
+    return { success: false, error: 'Auto-updater not available' };
+  }
+  
+  try {
+    autoUpdater.quitAndInstall(false, true);
+    return { success: true };
+  } catch (error) {
+    console.error('Manual update install failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('updater:getUpdateInfo', async () => {
+  return {
+    autoUpdateEnabled: shouldEnableAutoUpdate(),
+    currentVersion: app.getVersion(),
+    platform: process.platform,
+  };
 });
 
 // Development helpers

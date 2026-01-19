@@ -2,12 +2,13 @@
   "common": {
     "language": "Langue",
     "languages": { "he": "Hébreu", "en": "Anglais", "fr": "Français" },
-    "systemLanguageDetected": "Langue détectée ({{language}}) depuis la configuration système. Vous pouvez changer à tout moment."
+    "systemLanguageDetected": "Langue détectée ({{language}}) depuis la configuration système. Vous pouvez changer à tout moment.",
+    "or": "ou"
   },
   "dashboard": {
     "summary": {
       "categories": { "essential": "Essentiel", "growth": "Croissance", "stability": "Stabilité", "reward": "Loisirs" },
-      "budgets": { "heading": "Budgets ({{count}} au total)", "onTrack": "Dans l'objectif", "warning": "Alerte", "exceeded": "Dépassé", "none": "Pas encore de budgets" },
+      "budgets": { "heading": "Budgets ({{count}} au total)", "utilization": "Utilisation du budget ({{count}} catégories)", "onTrack": "Dans l'objectif", "warning": "Alerte", "exceeded": "Dépassé", "none": "Pas encore de budgets" },
       "allocation": { "actual": "Répartition actuelle", "target": "Cible : {{targets}}%", "tooltip": "{{label}} : {{actual}}% (cible {{target}}%)" },
       "health": { "subtitle": "Score de santé financière", "savings": "Épargne", "diversity": "Diversification", "impulse": "Impulsivité", "runway": "Autonomie de trésorerie" },
       "cards": {
@@ -560,6 +561,44 @@
     "states": {
       "noData": "Aucune donnée disponible. Réessayez."
     },
+    "budgetForecast": {
+      "title": "Aperçu des risques budgétaires",
+      "subtitle": "Dépenses réelles + prévues vs budgets mensuels avec actions suggérées",
+      "chips": {
+        "highRisk": "Risque élevé",
+        "exceeded": "Dépassé",
+        "overrun": "Dépassement prévu"
+      },
+      "subtitleUnified": "Une liste minimale : dépenses actuelles, risque prévu, santé et prochaines étapes classées par risque.",
+      "status": {
+        "onTrack": "Dans l'objectif",
+        "atRisk": "À risque",
+        "exceeded": "Dépassé"
+      },
+      "sourceLabel": "Budget mensuel (Paramètres → Budgets)",
+      "projectedLabel": "Prévision {{projected}} / Limite {{limit}}",
+      "projectedTotal": "Prévision : {{value}}",
+      "projectedTotalLabel": "Total prévisionnel",
+      "limitLabel": "Limite : {{value}}",
+      "limitLabelShort": "Limite",
+      "actualLabel": "Réel",
+      "forecastedLabel": "Prévisionnel",
+      "setLimit": "Définir une limite",
+      "spentOf": "de",
+      "projected": "prévu",
+      "spent": "dépensé",
+      "noForecastedCategories": "Aucune catégorie avec des prévisions actives.",
+      "nextHit": "Probable dépassement le {{date}}",
+      "actionsTitle": "Actions suggérées",
+      "empty": "Aucun budget mensuel actif à prévoir pour l'instant.",
+      "riskLabel": "Risque {{value}} %",
+      "overUnder": {
+        "over": "Au-dessus de {{amount}}",
+        "under": "En dessous de {{amount}}",
+        "breakEven": "Dans le budget",
+        "noBudget": "Aucun budget défini"
+      }
+    },
     "header": {
       "title": "Analyse financière",
       "subtitle": "Insights intelligents, suivi budgétaire et indicateurs de santé financière"
@@ -572,8 +611,11 @@
         "runway": "Piste financière",
         "runwayDays": "{{count}} jours",
         "burnRate": "Burn rate quotidien",
+        "avgDaily": "Dépense quotidienne moyenne",
+        "weekendShare": "Part du week-end",
         "peakHour": "Heure de pointe",
         "peakHourValue": "{{hour}}:00",
+        "preciseTime": "Horodatages précis",
         "na": "N/D",
         "paydayEffect": "Effet jour de paie"
       },
@@ -582,10 +624,15 @@
         "spendingStyle": "Style de dépense",
         "impulse": "{{value}} % impulsif",
         "planned": "{{value}} % planifié",
+        "programmedSpend": "Dépense programmée",
+        "impulseSpend": "Dépense impulsive",
+        "recurringPatterns": "Modèles récurrents",
+        "topCategoryWeekly": "{{category}} par semaine",
         "avgTransaction": "Transaction moyenne",
         "smallPurchases": "Petits achats",
         "fomoScore": "Score FOMO",
-        "fomoHint": "Indicateur des dépenses de divertissement du week-end"
+        "fomoHint": "Indicateur des dépenses de divertissement du week-end",
+        "na": "N/D"
       },
       "future": {
         "title": "Votre avenir financier",
@@ -593,7 +640,11 @@
         "endOfMonth": "Fin du mois",
         "monthlySavings": "Épargne mensuelle",
         "dailyVelocity": "Vélocité quotidienne",
-        "velocityValue": "{{value}}/jour"
+        "velocityValue": "{{value}}/jour",
+        "baseCase": "Scénario de base",
+        "bestCase": "Solde optimiste",
+        "worstCase": "Solde pessimiste",
+        "na": "N/D"
       },
       "reality": {
         "title": "Concrétiser",
@@ -602,6 +653,8 @@
         "avgPurchase": "Achat moyen = {{hours}} heures de travail",
         "biggestPurchase": "Plus gros achat ce mois-ci",
         "hoursOfWork": "{{hours}} heures de travail",
+        "expenseRatio": "Les dépenses représentent {{ratio}} % du revenu",
+        "topCategoryHours": "Catégorie principale ≈ {{hours}} heures",
         "na": "N/D"
       },
       "expandView": "Agrandir la vue"
@@ -782,6 +835,13 @@
         "title": "Tendance du score",
         "subtitle": "Évolution quotidienne sur les {{days}} derniers jours (fenêtre glissante de {{windowDays}} jours)",
         "summary": "Variation : {{delta}} points (moy. 7 jours)",
+        "showBreakdown": "Afficher la répartition",
+        "breakdown": {
+          "savings": "Épargne",
+          "diversity": "Diversification",
+          "impulse": "Impulsivité",
+          "runway": "Autonomie"
+        },
         "trend": {
           "up": "Bonne tendance",
           "down": "Mauvaise tendance",
@@ -840,6 +900,78 @@
         "fallbackTooltip": "Indicateur clé de votre santé et stabilité financières"
       }
     },
+    "quests": {
+      "title": "Quêtes financières",
+      "subtitle": "Relevez des défis pour améliorer vos finances et gagner des récompenses",
+      "tabs": {
+        "proposed": "Disponibles",
+        "accepted": "En cours"
+      },
+      "actions": {
+        "generate": "Trouver des quêtes",
+        "generating": "Recherche...",
+        "accept": "Accepter la quête",
+        "decline": "Refuser",
+        "verify": "Vérifier la progression"
+      },
+      "stats": {
+        "level": "Niveau {{level}}",
+        "points": "{{points}} pts",
+        "streak": "Série de {{count}} quêtes",
+        "nextLevel": "{{points}} pts pour le niveau {{level}}",
+        "maxLevel": "Niveau max atteint !",
+        "completed": "Terminées",
+        "failed": "Échouées"
+      },
+      "difficulty": {
+        "easy": "Facile",
+        "medium": "Moyen",
+        "hard": "Difficile"
+      },
+      "duration": {
+        "days": "{{count}} jour",
+        "days_plural": "{{count}} jours",
+        "week": "1 semaine",
+        "month": "1 mois"
+      },
+      "progress": {
+        "daysLeft": "{{count}} jour restant",
+        "daysLeft_plural": "{{count}} jours restants",
+        "expired": "Date limite dépassée",
+        "onTrack": "Dans l'objectif",
+        "atRisk": "À risque",
+        "visits": "visites"
+      },
+      "rewards": {
+        "points": "+{{points}} pts",
+        "bonus": "Bonus : +25 %"
+      },
+      "empty": {
+        "proposed": {
+          "title": "Aucune quête disponible",
+          "description": "Cliquez sur « Trouver des quêtes » pour générer des défis personnalisés selon vos habitudes de dépense."
+        },
+        "accepted": {
+          "title": "Aucune quête en cours",
+          "description": "Acceptez des quêtes pour commencer à gagner des points !"
+        }
+      },
+      "types": {
+        "quest_reduce_spending": "Réduire les dépenses",
+        "quest_savings_target": "Objectif d'épargne",
+        "quest_budget_adherence": "Défi budget",
+        "quest_set_budget": "Créer un budget",
+        "quest_reduce_fixed_cost": "Réduire les coûts fixes",
+        "quest_income_goal": "Objectif de revenu",
+        "quest_merchant_limit": "Défi commerçant",
+        "quest_weekend_limit": "Défi week-end"
+      },
+      "verification": {
+        "success": "Quête terminée ! +{{points}} points",
+        "partial": "Bon effort ! +{{points}} points ({{pct}} % atteint)",
+        "failed": "Quête non terminée. Continuez !"
+      }
+    },
     "spendingChart": {
       "title": "Catégories de dépenses",
       "subtitle": "Répartition de vos dépenses par catégorie",
@@ -850,6 +982,13 @@
         "currentMonth": "Mois en cours",
         "last3Months": "Derniers {{count}} mois",
         "history": "Tout l'historique"
+      },
+      "viewToggle": {
+        "current": "Dépenses actuelles",
+        "incomeIndexed": "Indexé sur le revenu",
+        "currentHint": "Affiche la répartition comme part des dépenses totales",
+        "incomeHint": "Indexe les objectifs sur le revenu ({{amount}} sur la période)",
+        "noIncome": "Aucun revenu enregistré pour cette période"
       },
       "empty": {
         "title": "Aucune donnée de dépense",
@@ -865,11 +1004,14 @@
       },
       "labels": {
         "target": "Objectif : {{value}}%",
+        "incomeTarget": "Objectif de revenu : {{value}} %",
         "transactions_one": "1 transaction",
         "transactions_other": "{{count}} transactions",
         "totalSpending_one": "Dépenses totales ({{count}} mois)",
         "totalSpending_other": "Dépenses totales ({{count}} mois)",
-        "totalSpendingRange": "Dépenses totales ({{range}})"
+        "totalSpendingRange": "Dépenses totales ({{range}})",
+        "currentSpend": "Dépense actuelle : {{amount}}",
+        "ofIncome": "du revenu"
       },
       "tooltips": {
         "overTarget": "Au-dessus de l'objectif",
@@ -1023,6 +1165,27 @@
         "detailed": "Transactions"
       }
     },
+    "portfolio": {
+      "title": "Valeur du portefeuille",
+      "noData": "Aucune donnée",
+      "noChartData": "Aucune donnée historique disponible",
+      "modes": {
+        "value": "Valeur",
+        "performance": "Performance"
+      },
+      "tooltipValue": "Valeur",
+      "tooltipPerformance": "Variation"
+    },
+    "allocation": {
+      "title": "Répartition",
+      "total": "Total",
+      "viewMore": "Voir plus"
+    },
+    "performance": {
+      "title": "Ma performance",
+      "allCategories": "Toutes les catégories",
+      "noAccounts": "Aucun compte d'investissement trouvé"
+    },
     "empty": {
       "title": "Commencez votre portefeuille d'investissement",
       "description": "Suivez la performance de vos investissements sur plusieurs comptes. Connectez votre courtier, votre retraite et vos économies pour une vue complète.",
@@ -1054,6 +1217,40 @@
         "currentValue": "VALEUR ACTUELLE",
         "unrealized": "P&L LATENT"
       }
+    },
+    "balanceSheet": {
+      "title": "Bilan (suivi)",
+      "subtitle": "Actifs moins passifs connus",
+      "updated": "Mis à jour {{date}}",
+      "na": "N/D",
+      "error": "Échec du chargement du bilan.",
+      "headline": {
+        "netWorth": "PATRIMOINE NET",
+        "assets": "ACTIFS SUIVIS"
+      },
+      "buckets": {
+        "cash": "Liquidités",
+        "liquid": "Liquide",
+        "restricted": "Long terme",
+        "stability": "Assurance",
+        "other": "Autre"
+      },
+      "bucketMeta": "{{withValue}}/{{total}} valorisés",
+      "badges": {
+        "partial": "Partiel",
+        "multiCurrency": "Multi-devises",
+        "missingValues": "{{count}} valorisations manquantes"
+      },
+      "liabilities": {
+        "pendingCcDebt": "Dette de carte de crédit en attente",
+        "unavailable": "Indisponible",
+        "noBaseline": "Nécessite un remboursement catégorisé"
+      },
+      "hints": {
+        "multiCurrency": "Plusieurs devises détectées ({{currencies}}). Les totaux supposent que les valeurs sont déjà dans la même devise.",
+        "pendingDebt": "La dette de carte de crédit en attente est indisponible tant que vous n'avez pas configuré les appariements et catégorisé au moins un remboursement."
+      },
+      "footnote": "Exclut les prêts/hypothèque (non suivis pour l'instant)"
     },
     "history": {
       "title": "Performance du portefeuille",
@@ -1283,8 +1480,26 @@
       "otpToken": "Jeton OTP",
       "identification_code": "Code d'identification"
     },
+    "credentials": {
+      "username": "Nom d'utilisateur",
+      "password": "Mot de passe",
+      "userCode": "Code utilisateur",
+      "id": "Numéro d'identité",
+      "card6Digits": "6 derniers chiffres de la carte",
+      "card6DigitsHelper": "6 derniers chiffres imprimés sur la carte",
+      "bankAccountNumber": "Numéro de compte bancaire",
+      "nationalID": "Identifiant national",
+      "num": "Code d'identification (num)",
+      "email": "Adresse e-mail",
+      "otpCode": "Code OTP",
+      "otpToken": "Jeton OTP",
+      "identification_code": "Code d'identification"
+    },
     "actions": {
       "cancel": "Annuler"
+    },
+    "security": {
+      "localStorageWarning": "Vos identifiants sont stockés localement sur votre appareil et chiffrés. Aucune donnée n'est envoyée à des serveurs externes."
     }
   },
   "categoryHierarchy": {
@@ -1566,6 +1781,28 @@
       "restoreWindow": "Restaurer la fenêtre",
       "closeWindow": "Fermer la fenêtre"
     },
+    "update": {
+      "tooltip": {
+        "checkForUpdates": "Vérifier les mises à jour",
+        "checking": "Vérification des mises à jour...",
+        "available": "Mise à jour disponible (v{{version}})",
+        "downloading": "Téléchargement de la mise à jour... {{progress}}%",
+        "downloaded": "Mise à jour prête à installer",
+        "upToDate": "L'application est à jour",
+        "error": "Échec de la vérification de mise à jour"
+      },
+      "menu": {
+        "title": "Mises à jour de l'application",
+        "subtitle": "Gérer les mises à jour de ShekelSync",
+        "checkForUpdates": "Vérifier les mises à jour",
+        "downloadUpdate": "Télécharger la mise à jour",
+        "restartAndUpdate": "Redémarrer et installer",
+        "downloading": "Téléchargement de la mise à jour",
+        "version": "Version {{version}}",
+        "readyToInstall": "Prêt à installer",
+        "releaseNotes": "Notes de version"
+      }
+    },
     "search": {
       "placeholder": "Rechercher des sections...",
       "options": {
@@ -1656,6 +1893,26 @@
       "selectInstitution": "Sélectionnez une institution pour voir les identifiants requis.",
       "noSpecificCredentials": "Aucune exigence spécifique configurée. Fournissez un nom d'utilisateur et un mot de passe."
     },
+    "wizard": {
+      "chooseInstitutionTitle": "Choisir une institution",
+      "loadingInstitutions": "Chargement des institutions…",
+      "labels": {
+        "category": "Catégorie",
+        "next": "Niveau suivant"
+      },
+      "placeholders": {
+        "category": "Sélectionner une catégorie",
+        "next": "Sélectionner…"
+      },
+      "actions": {
+        "reset": "Réinitialiser"
+      },
+      "accountDetailsTitle": "Détails du compte",
+      "helpers": {
+        "selectLeaf": "Sélectionnez une institution précise pour continuer."
+      },
+      "selectedType": "{{type}}"
+    },
     "credentials": {
       "username": "Nom d'utilisateur",
       "password": "Mot de passe",
@@ -1696,6 +1953,9 @@
       },
       "errors": {
         "saveFailed": "Échec de la mise à jour des identifiants"
+      },
+      "security": {
+        "localStorageWarning": "Vos identifiants sont stockés localement sur votre appareil et chiffrés. Aucune donnée n'est envoyée à des serveurs externes."
       }
     },
     "valueModal": {
@@ -1831,8 +2091,5 @@
     "manualMode": "Passer en mode manuel",
     "autoMode": "Passer en mode automatique",
     "sampleTransactions": "Exemples de transactions correspondantes"
-  },
-  "common": {
-    "or": "ou"
   }
 }

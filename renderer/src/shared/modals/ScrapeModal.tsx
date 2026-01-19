@@ -11,6 +11,7 @@ import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import Box from '@mui/material/Box';
 import Alert from '@mui/material/Alert';
+import LockIcon from '@mui/icons-material/Lock';
 import Typography from '@mui/material/Typography';
 import ListSubheader from '@mui/material/ListSubheader';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -397,6 +398,13 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
             />
           );
         })}
+        <Alert
+          severity="info"
+          icon={<LockIcon fontSize="small" />}
+          sx={{ mt: 1 }}
+        >
+          {t('security.localStorageWarning')}
+        </Alert>
       </Box>
     );
   };
@@ -460,7 +468,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
           <InstitutionBadge institution={selectedInstitution} fallback={selectedInstitution.vendor_code} />
           <Typography variant="caption" color="text.secondary">
-            {selectedInstitution.display_name_en}
+            {getInstitutionLabel(selectedInstitution)}
           </Typography>
         </Box>
       )}
@@ -478,7 +486,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <InstitutionBadge institution={selectedInstitution} fallback={selectedInstitution.vendor_code} />
             <Typography variant="caption" color="text.secondary">
-              {selectedInstitution.display_name_en}
+              {getInstitutionLabel(selectedInstitution)}
             </Typography>
           </Box>
         )}

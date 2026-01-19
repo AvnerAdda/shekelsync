@@ -17,6 +17,7 @@ import {
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioSummary, PortfolioHistoryPoint, InvestmentAccountSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
+import { getInstitutionLabel, type InstitutionMetadata } from '@renderer/shared/components/InstitutionBadge';
 
 interface PortfolioBreakdownSectionProps {
   portfolioData: PortfolioSummary;
@@ -34,7 +35,8 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
 }) => {
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
-  const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.breakdown' });
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'investmentsPage.breakdown' });
+  const locale = i18n.language;
 
   const formatCurrencyValue = (value: number) =>
     formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
@@ -54,10 +56,10 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
     return CHART_COLORS[index % CHART_COLORS.length];
   };
 
-  const getInstitutionName = (institution: any) => {
+  const getInstitutionName = (institution: unknown) => {
     if (!institution) return '';
     if (typeof institution === 'string') return institution;
-    return institution.display_name_en || institution.display_name_he || institution.vendor_code || '';
+    return getInstitutionLabel(institution as InstitutionMetadata, locale) || (institution as InstitutionMetadata).vendor_code || '';
   };
 
   const renderAccountList = (accounts: InvestmentAccountSummary[], title: string) => {

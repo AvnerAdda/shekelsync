@@ -99,6 +99,7 @@ describe('analytics investments service', () => {
       {
         name: 'Investments',
         name_en: 'Investments',
+        name_fr: 'Investments',
         total: 2100,
         count: 2,
         outflow: 1000,

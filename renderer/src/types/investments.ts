@@ -34,6 +34,7 @@ export interface InvestmentData {
   byCategory: Array<{
     name: string;
     name_en: string;
+    name_fr?: string;
     total: number;
     count: number;
     outflow: number;
@@ -54,8 +55,10 @@ export interface InvestmentData {
     price: number;
     category_name?: string;
     category_name_en?: string;
+    category_name_fr?: string;
     parent_name?: string;
     parent_name_en?: string;
+    parent_name_fr?: string;
     account_number?: string;
   }>;
 }

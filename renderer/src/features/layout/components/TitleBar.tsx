@@ -61,6 +61,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import logoUrl from '@app/public/logo.svg?url';
 import SmartNotifications from '@renderer/features/notifications/components/SmartNotifications';
+import UpdateButton from './UpdateButton';
+import { useUpdateManager } from '../hooks/useUpdateManager';
 import { useThemeMode } from '@renderer/contexts/ThemeContext';
 import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
 import type { SupportedLocale } from '@renderer/i18n';
@@ -83,6 +85,9 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   // Theme and language hooks
   const { mode, setMode, actualTheme } = useThemeMode();
   const { locale, setLocale } = useLocaleSettings();
+  
+  // Update manager
+  const { updateState, checkForUpdates, downloadUpdate, installUpdate } = useUpdateManager();
 
   // Platform detection
   const isMacOS = window.electronAPI?.platform?.isMacOS;
@@ -799,6 +804,13 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
             {languageLabels.fr}
           </MenuItem>
         </Menu>
+
+        <UpdateButton
+          updateState={updateState}
+          onCheckForUpdates={checkForUpdates}
+          onDownloadUpdate={downloadUpdate}
+          onInstallUpdate={installUpdate}
+        />
 
         <SmartNotifications />
 

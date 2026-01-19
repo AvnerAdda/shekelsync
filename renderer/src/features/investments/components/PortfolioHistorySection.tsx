@@ -76,7 +76,8 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
     viewMode === 'detailed' ? 'table' : 'chart'
   );
   const [expanded, setExpanded] = useState(true);
-  const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.history' });
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'investmentsPage.history' });
+  const locale = (i18n.language || 'he').toLowerCase();
   const currentValueLabel = t('series.currentValue');
   const costBasisLabel = t('series.costBasis');
 
@@ -308,7 +309,13 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={txn.category_name_en || txn.category_name || t('table.investment')}
+                            label={
+                              locale.startsWith('fr')
+                                ? (txn.category_name_fr || txn.category_name_en || txn.category_name)
+                                : locale.startsWith('en')
+                                ? (txn.category_name_en || txn.category_name_fr || txn.category_name)
+                                : (txn.category_name || txn.category_name_fr || txn.category_name_en) || t('table.investment')
+                            }
                             size="small"
                             variant="outlined"
                           />

@@ -268,8 +268,10 @@ async function initializeSpendingCategories() {
         cd.id,
         cd.name,
         cd.name_en,
+        cd.name_fr,
         cd.category_type,
-        parent.name as parent_name
+        parent.name as parent_name,
+        parent.name_fr as parent_name_fr
       FROM category_definitions cd
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
       WHERE cd.is_active = 1
@@ -340,9 +342,11 @@ async function getSpendingCategoryMappings(params = {}) {
         scm.*,
         cd.name as category_name,
         cd.name_en as category_name_en,
+        cd.name_fr as category_name_fr,
         cd.category_type,
         parent.name as parent_category_name,
-        parent.name_en as parent_category_name_en
+        parent.name_en as parent_category_name_en,
+        parent.name_fr as parent_category_name_fr
       FROM spending_category_mappings scm
       JOIN category_definitions cd ON scm.category_definition_id = cd.id
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
@@ -576,6 +580,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
         cd.id as category_definition_id,
         cd.name as category_name,
         cd.name_en as category_name_en,
+        cd.name_fr as category_name_fr,
         cd.icon,
         scm.spending_category,
         COALESCE(SUM(ABS(t.price)), 0) as total_amount,
@@ -587,7 +592,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
         AND t.price < 0
       WHERE cd.category_type IN ('expense', 'investment') AND cd.is_active = 1
         AND cd.id NOT IN (${capitalReturnSubquery})
-      GROUP BY cd.id, cd.name, cd.name_en, cd.icon, scm.spending_category
+      GROUP BY cd.id, cd.name, cd.name_en, cd.name_fr, cd.icon, scm.spending_category
       ORDER BY scm.spending_category, total_amount DESC
     `, [start, end]);
 
@@ -607,6 +612,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
         category_definition_id: row.category_definition_id,
         category_name: row.category_name,
         category_name_en: row.category_name_en,
+        category_name_fr: row.category_name_fr,
         icon: row.icon,
         spending_category: mappedCategory,
         total_amount: parseFloat(row.total_amount || 0),

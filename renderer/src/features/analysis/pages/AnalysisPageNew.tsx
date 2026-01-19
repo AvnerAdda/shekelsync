@@ -97,6 +97,7 @@ interface BudgetOutlookItem {
   categoryDefinitionId: number;
   categoryName: string;
   categoryNameEn?: string | null;
+  categoryNameFr?: string | null;
   categoryIcon?: string | null;
   categoryColor?: string | null;
   parentCategoryId?: number | null;
@@ -159,6 +160,7 @@ const AnalysisPageNew: React.FC = () => {
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'analysisPage' });
   const isHebrew = i18n.language === 'he';
+  const locale = (i18n.language || 'he').toLowerCase();
   const [currentTab, setCurrentTab] = useState(0);
   const [loading, setLoading] = useState(false);
   const [intelligence, setIntelligence] = useState<PersonalIntelligence | null>(null);
@@ -1304,7 +1306,11 @@ const AnalysisPageNew: React.FC = () => {
                     // Display limit as target for budget categories, otherwise show projected total
                     const displayAmount = hasLimit ? item.limit : item.projectedTotal;
                     
-                    const categoryName = isHebrew ? item.categoryName : item.categoryNameEn || item.categoryName;
+                    const categoryName = locale.startsWith('he')
+                      ? item.categoryName
+                      : locale.startsWith('fr')
+                      ? item.categoryNameFr || item.categoryNameEn || item.categoryName
+                      : item.categoryNameEn || item.categoryNameFr || item.categoryName;
                     const statusColor = isExceeded ? '#dc2626' : isAtRisk ? '#d97706' : '#059669';
                     
                     const tooltipContent = item.scenarios ? (

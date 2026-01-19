@@ -132,8 +132,16 @@ type InstitutionTreeNode = {
   depth_level?: number;
 };
 
-const getInstitutionTreeNodeLabel = (node: InstitutionTreeNode): string =>
-  node.display_name_he || node.display_name_en || node.vendor_code || '';
+const normalizeLocale = (value?: string) => value?.toLowerCase().split('-')[0];
+
+const getInstitutionTreeNodeLabel = (node: InstitutionTreeNode, locale?: string): string => {
+  const normalized = normalizeLocale(locale) || 'he';
+  const heName = node.display_name_he;
+  const enName = node.display_name_en;
+
+  if (normalized === 'he') return heName || enName || node.vendor_code || '';
+  return enName || heName || node.vendor_code || '';
+};
 
 const mapInstitutionLeafToManualAccountType = (leaf: InstitutionTreeNode): string => {
   if (leaf.institution_type === 'broker') return 'brokerage';
@@ -336,7 +344,7 @@ export const getBankingAccountValidationError = (
       if (!mapping) continue;
       const value = account[mapping.key];
       if (!value || String(value).trim().length === 0) {
-        const institutionName = institution?.display_name_en || institution?.display_name_he || account.vendor;
+        const institutionName = getInstitutionLabel(institution) || account.vendor;
         return `${mapping.label} is required for ${institutionName}`;
       }
     }
@@ -520,15 +528,16 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     asOfDate: new Date().toISOString().split('T')[0],
   });
 
-  const { t } = useTranslation('translation', { keyPrefix: 'accountsModal' });
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'accountsModal' });
+  const locale = normalizeLocale(i18n.language) || 'he';
 
   const creditCardInstitutionOptions = useMemo(() => {
     const sorted = institutions
       .filter((institution) => institution.institution_type === 'credit_card')
       .sort((a, b) => {
-        const left = getInstitutionLabel(a) || a.vendor_code;
-        const right = getInstitutionLabel(b) || b.vendor_code;
-        return left.localeCompare(right, 'he', { sensitivity: 'base' });
+        const left = getInstitutionLabel(a, locale) || a.vendor_code;
+        const right = getInstitutionLabel(b, locale) || b.vendor_code;
+        return left.localeCompare(right, locale, { sensitivity: 'base' });
       });
 
     if (sorted.length > 0) {
@@ -536,15 +545,15 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
 
     return CREDIT_CARD_VENDORS.map((vendor) => toFallbackInstitution(vendor, 'credit_card'));
-  }, [institutions]);
+  }, [institutions, locale]);
 
   const bankInstitutionOptions = useMemo(() => {
     const sorted = institutions
       .filter((institution) => institution.institution_type === 'bank')
       .sort((a, b) => {
-        const left = getInstitutionLabel(a) || a.vendor_code;
-        const right = getInstitutionLabel(b) || b.vendor_code;
-        return left.localeCompare(right, 'he', { sensitivity: 'base' });
+        const left = getInstitutionLabel(a, locale) || a.vendor_code;
+        const right = getInstitutionLabel(b, locale) || b.vendor_code;
+        return left.localeCompare(right, locale, { sensitivity: 'base' });
       });
 
     if (sorted.length > 0) {
@@ -553,18 +562,18 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
     const fallbackVendors = [...BANK_VENDORS, ...SPECIAL_BANK_VENDORS, ...OTHER_BANK_VENDORS];
     return fallbackVendors.map((vendor) => toFallbackInstitution(vendor, 'bank'));
-  }, [institutions]);
+  }, [institutions, locale]);
 
   const investmentInstitutionOptions = useMemo(() => {
     const allowedTypes = new Set(['investment', 'insurance', 'broker', 'crypto']);
     return institutions
       .filter((institution) => allowedTypes.has(institution.institution_type))
       .sort((a, b) => {
-        const left = getInstitutionLabel(a) || a.vendor_code;
-        const right = getInstitutionLabel(b) || b.vendor_code;
-        return left.localeCompare(right, 'he', { sensitivity: 'base' });
+        const left = getInstitutionLabel(a, locale) || a.vendor_code;
+        const right = getInstitutionLabel(b, locale) || b.vendor_code;
+        return left.localeCompare(right, locale, { sensitivity: 'base' });
       });
-  }, [institutions]);
+  }, [institutions, locale]);
 
   const institutionNodeById = useMemo(() => {
     const map = new Map<number, InstitutionTreeNode>();
@@ -591,12 +600,13 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         const orderA = a.display_order ?? 0;
         const orderB = b.display_order ?? 0;
         if (orderA !== orderB) return orderA - orderB;
-        return getInstitutionTreeNodeLabel(a).localeCompare(getInstitutionTreeNodeLabel(b), 'he', { sensitivity: 'base' });
+        return getInstitutionTreeNodeLabel(a, locale)
+          .localeCompare(getInstitutionTreeNodeLabel(b, locale), locale, { sensitivity: 'base' });
       });
     }
 
     return map;
-  }, [institutionNodes]);
+  }, [institutionNodes, locale]);
 
   const addWizardSelectedNode = useMemo(() => {
     if (addInstitutionPath.length === 0) return null;
@@ -672,15 +682,16 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
     setCurrentAccountType('investment');
     const suggestedType = mapInstitutionLeafToManualAccountType(addWizardSelectedInstitution);
+    const localizedInstitutionName = getInstitutionTreeNodeLabel(addWizardSelectedInstitution, locale);
 
     setNewInvestmentAccount((prev) => ({
       ...prev,
       institution_id: addWizardSelectedInstitution.id,
       account_type: suggestedType,
-      institution: addWizardSelectedInstitution.display_name_he || addWizardSelectedInstitution.display_name_en || prev.institution,
-      account_name: prev.account_name || addWizardSelectedInstitution.display_name_en || addWizardSelectedInstitution.display_name_he || prev.account_name,
+      institution: localizedInstitutionName || prev.institution,
+      account_name: prev.account_name || localizedInstitutionName || prev.account_name,
     }));
-  }, [addWizardSelectedInstitution, isAdding]);
+  }, [addWizardSelectedInstitution, isAdding, locale]);
 
   useEffect(() => {
     if (isAdding) {
@@ -2222,7 +2233,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                             </MenuItem>
                             {level.options.map((node) => (
                               <MenuItem key={node.id} value={node.id}>
-                                {getInstitutionTreeNodeLabel(node)}
+                                {getInstitutionTreeNodeLabel(node, locale)}
                               </MenuItem>
                             ))}
                           </TextField>
@@ -2235,7 +2246,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                         {addWizardPathNodes.map((node) => (
                           <Chip
                             key={node.id}
-                            label={getInstitutionTreeNodeLabel(node)}
+                            label={getInstitutionTreeNodeLabel(node, locale)}
                             size="small"
                             variant={node.node_type === 'institution' ? 'filled' : 'outlined'}
                           />
@@ -2289,9 +2300,11 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                             <InstitutionBadge institution={addWizardSelectedBadgeInstitution} size="medium" />
                             <Typography variant="body2" color="text.secondary">
-                              {t('wizard.selectedType', {
-                                defaultValue: addWizardSelectedInstitution.institution_type,
-                              })}
+                              {(() => {
+                                const rawType = addWizardSelectedInstitution.institution_type || '';
+                                const typeLabel = rawType.replace(/_/g, ' ').trim();
+                                return t('wizard.selectedType', { type: typeLabel, defaultValue: typeLabel });
+                              })()}
                             </Typography>
                           </Box>
                         )}
@@ -2852,9 +2865,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                                 ? newInvestmentAccount.institution
                                 : '';
                             const updatedName = selectedInstitution
-                              ? (selectedInstitution.display_name_he ||
-                                  selectedInstitution.display_name_en ||
-                                  currentName)
+                              ? (getInstitutionLabel(selectedInstitution, locale) || currentName)
                               : currentName;
 
                             setNewInvestmentAccount({
@@ -2871,7 +2882,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                               </MenuItem>
                           {investmentInstitutionOptions.map((institution) => (
                             <MenuItem key={institution.id} value={institution.id}>
-                              {getInstitutionLabel(institution)} ({institution.institution_type})
+                              {getInstitutionLabel(institution, locale)} ({institution.institution_type})
                             </MenuItem>
                           ))}
                         </TextField>
@@ -3387,6 +3398,10 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
             <Alert severity="info" sx={{ mb: 2 }}>
               {t('credentialsUpdate.description')}
+            </Alert>
+
+            <Alert severity="info" icon={<LockIcon fontSize="small" />} sx={{ mb: 2 }}>
+              {t('credentialsUpdate.security.localStorageWarning')}
             </Alert>
 
             {(() => {

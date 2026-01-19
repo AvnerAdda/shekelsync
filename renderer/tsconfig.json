@@ -23,7 +23,7 @@
     "types": ["vite/client", "node"],
     "typeRoots": ["./node_modules/@types"]
   },
-  "include": ["src", "../app"],
+  "include": ["src", "../app", "src/types"],
   "exclude": ["dist", "node_modules", "src/features/**/__tests__", "../app/node_modules", "../app/**/__tests__"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

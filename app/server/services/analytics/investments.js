@@ -45,6 +45,7 @@ function buildSummary(transactions, pikadonReturns = new Map()) {
     let effectiveInflow = amount > 0 ? amount : 0;
     const categoryName = txn.category_name || 'Unknown';
     const categoryNameEn = txn.category_name_en || 'Unknown';
+    const categoryNameFr = txn.category_name_fr || categoryNameEn || 'Unknown';
 
     // Check if this is a pikadon return transaction
     const txnKey = `${txn.identifier}|${txn.vendor}`;
@@ -68,6 +69,7 @@ function buildSummary(transactions, pikadonReturns = new Map()) {
       byCategory.set(categoryName, {
         name: categoryName,
         name_en: categoryNameEn,
+        name_fr: categoryNameFr,
         total: 0,
         count: 0,
         outflow: 0,
@@ -108,9 +110,11 @@ async function getInvestmentsAnalytics(query = {}) {
       cd.id as category_definition_id,
       cd.name as category_name,
       cd.name_en as category_name_en,
+      cd.name_fr as category_name_fr,
       cd.parent_id,
       parent.name as parent_name,
-      parent.name_en as parent_name_en
+      parent.name_en as parent_name_en,
+      parent.name_fr as parent_name_fr
     FROM transactions t
     LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
     LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
