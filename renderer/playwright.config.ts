@@ -1,4 +1,9 @@
 import { defineConfig } from '@playwright/test';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default defineConfig({
   testDir: './tests',
@@ -13,6 +18,7 @@ export default defineConfig({
   },
   webServer: {
     command: 'npm run dev',
+    cwd: __dirname,
     port: 5173,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
