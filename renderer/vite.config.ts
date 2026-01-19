@@ -55,7 +55,8 @@ export default __cjs_module__.exports;
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? './' : '/',
   plugins: [
     react(),
     commonjsToEsm(),
@@ -123,4 +124,4 @@ export default defineConfig({
       ],
     },
   },
-});
+}));
