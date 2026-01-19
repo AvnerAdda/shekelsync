@@ -25,6 +25,20 @@ function resolveSqliteInitPath() {
   const packagedPath = resolveAppPath('scripts', 'init_sqlite_db.js');
   if (fs.existsSync(packagedPath)) return packagedPath;
 
+  const resourcesPath = process.resourcesPath;
+  if (resourcesPath) {
+    const resourcesCandidate = path.join(resourcesPath, 'scripts', 'init_sqlite_db.js');
+    if (fs.existsSync(resourcesCandidate)) return resourcesCandidate;
+
+    const unpackedCandidate = path.join(
+      resourcesPath,
+      'app.asar.unpacked',
+      'scripts',
+      'init_sqlite_db.js',
+    );
+    if (fs.existsSync(unpackedCandidate)) return unpackedCandidate;
+  }
+
   const devPath = resolveAppPath('..', 'scripts', 'init_sqlite_db.js');
   if (fs.existsSync(devPath)) return devPath;
 
