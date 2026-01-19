@@ -77,3 +77,4 @@ website/
 app/scripts/
 
 linux-gpg.key
+app/shekelsync.pfx
