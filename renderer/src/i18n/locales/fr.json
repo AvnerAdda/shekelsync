@@ -2109,5 +2109,71 @@
     "manualMode": "Passer en mode manuel",
     "autoMode": "Passer en mode automatique",
     "sampleTransactions": "Exemples de transactions correspondantes"
+  },
+  "insights": {
+    "title": "Aperçus financiers",
+    "tabs": {
+      "alerts": "Alertes",
+      "insights": "Aperçus"
+    },
+    "periods": {
+      "today": "Aujourd'hui",
+      "week": "Cette semaine",
+      "month": "Ce mois",
+      "allTime": "Tout le temps"
+    },
+    "daily": {
+      "spending": "Dépenses d'aujourd'hui",
+      "activity": "Activité",
+      "topCategory": "Catégorie principale",
+      "transactions": "{{count}} transaction",
+      "transactions_plural": "{{count}} transactions",
+      "today": "aujourd'hui",
+      "ofAverage": "{{percent}}% de la moyenne quotidienne ({{amount}})",
+      "velocity": {
+        "high": "Élevé",
+        "normal": "Normal",
+        "low": "Faible"
+      }
+    },
+    "weekly": {
+      "thisWeek": "Cette semaine",
+      "topCategories": "Catégories principales",
+      "spendingPattern": "Modèle de dépenses",
+      "weekdays": "Jours de semaine",
+      "weekend": "Week-end",
+      "vsLastWeek": "{{change}}% par rapport à la semaine dernière ({{amount}})"
+    },
+    "monthly": {
+      "progress": "Progression du mois",
+      "dayOf": "Jour {{current}} sur {{total}}",
+      "daysRemaining": "{{days}} jours restants",
+      "spendingThisMonth": "Dépenses ce mois",
+      "projected": "Projeté: {{amount}}",
+      "lastMonth": "Mois dernier: {{amount}}",
+      "savingsRate": "Taux d'épargne",
+      "ofIncome": "du revenu ce mois",
+      "budgetHealth": "Santé budgétaire",
+      "budgetsOnTrack": "{{count}} sur la bonne voie",
+      "budgetsAtRisk": "{{count}} à risque"
+    },
+    "lifetime": {
+      "trackingSince": "Suivi depuis",
+      "totalActivity": "Activité totale",
+      "transactionsAnalyzed": "transactions analysées",
+      "avgMonthlySpending": "Dépenses mensuelles moyennes",
+      "acrossAllMonths": "sur tous les mois",
+      "totalSpending": "Dépenses totales",
+      "sinceTracking": "depuis le début du suivi",
+      "healthTrend": "Tendance de santé financière",
+      "trend": {
+        "improving": "En amélioration",
+        "stable": "Stable",
+        "declining": "En baisse"
+      }
+    },
+    "loading": "Chargement des aperçus...",
+    "clickRefresh": "Cliquez sur actualiser pour charger vos aperçus financiers.",
+    "refresh": "Actualiser"
   }
 }

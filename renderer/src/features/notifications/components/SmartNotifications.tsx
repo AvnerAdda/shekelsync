@@ -15,6 +15,8 @@ import {
   Tooltip,
   Stack,
   Avatar,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
@@ -32,10 +34,12 @@ import {
   Sync as SyncIcon,
   Category as CategoryIcon,
   CloudDone as SyncSuccessIcon,
+  Lightbulb as LightbulbIcon,
 } from '@mui/icons-material';
 import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
 import { useNotification } from '../NotificationContext';
 import { apiClient } from '@/lib/api-client';
+import InsightsPanel from './InsightsPanel';
 
 interface Notification {
   id: string;
@@ -66,9 +70,14 @@ const SmartNotifications: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
   const [isBulkSyncing, setIsBulkSyncing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'alerts' | 'insights'>('alerts');
+  const [insights, setInsights] = useState<any>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsCacheTime, setInsightsCacheTime] = useState<Date | null>(null);
   const { showNotification } = useNotification();
 
   const open = Boolean(anchorEl);
+  const INSIGHTS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   useEffect(() => {
     fetchNotifications();
@@ -96,6 +105,33 @@ const SmartNotifications: React.FC = () => {
     }
   };
 
+  const fetchInsights = async (forceRefresh = false) => {
+    // Check if we have cached data and it's still valid
+    if (!forceRefresh && insights && insightsCacheTime) {
+      const now = new Date();
+      const cacheAge = now.getTime() - insightsCacheTime.getTime();
+      if (cacheAge < INSIGHTS_CACHE_DURATION) {
+        console.log('Using cached insights data');
+        return;
+      }
+    }
+
+    setInsightsLoading(true);
+    try {
+      const response = await apiClient.get('/api/insights?period=all');
+      const data = response.data as any;
+
+      if (response.ok && data?.success) {
+        setInsights(data.data);
+        setInsightsCacheTime(new Date());
+      }
+    } catch (error) {
+      console.error('Error fetching insights:', error);
+    } finally {
+      setInsightsLoading(false);
+    }
+  };
+
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget);
     if (notifications.length === 0) {
@@ -105,6 +141,13 @@ const SmartNotifications: React.FC = () => {
 
   const handleClose = () => {
     setAnchorEl(null);
+  };
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: 'alerts' | 'insights') => {
+    setActiveTab(newValue);
+    if (newValue === 'insights' && !insights) {
+      fetchInsights();
+    }
   };
 
   const getNotificationIcon = (type: string, severity: string) => {
@@ -267,11 +310,21 @@ const SmartNotifications: React.FC = () => {
       >
         <Box sx={{ p: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Smart Alerts</Typography>
+            <Typography variant="h6">
+              {activeTab === 'alerts' ? 'Smart Alerts' : 'Financial Insights'}
+            </Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Tooltip title="Refresh">
-                <IconButton size="small" onClick={fetchNotifications} disabled={loading}>
-                  {loading ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
+                <IconButton
+                  size="small"
+                  onClick={activeTab === 'alerts' ? fetchNotifications : () => fetchInsights(true)}
+                  disabled={activeTab === 'alerts' ? loading : insightsLoading}
+                >
+                  {(activeTab === 'alerts' ? loading : insightsLoading) ? (
+                    <CircularProgress size={16} />
+                  ) : (
+                    <RefreshIcon fontSize="small" />
+                  )}
                 </IconButton>
               </Tooltip>
               <IconButton size="small" onClick={handleClose}>
@@ -280,41 +333,63 @@ const SmartNotifications: React.FC = () => {
             </Box>
           </Box>
 
-          {summary && (
-            <Box sx={{ mb: 2 }}>
-              <Stack direction="row" spacing={1}>
-                {criticalCount > 0 && (
-                  <Chip
-                    size="small"
-                    icon={<CriticalIcon />}
-                    label={`${criticalCount} Critical`}
-                    color="error"
-                    variant="outlined"
-                  />
-                )}
-                {warningCount > 0 && (
-                  <Chip
-                    size="small"
-                    icon={<WarningIcon />}
-                    label={`${warningCount} Warning`}
-                    color="warning"
-                    variant="outlined"
-                  />
-                )}
-                {summary.by_severity.info > 0 && (
-                  <Chip
-                    size="small"
-                    icon={<InfoIcon />}
-                    label={`${summary.by_severity.info} Info`}
-                    color="info"
-                    variant="outlined"
-                  />
-                )}
-              </Stack>
-            </Box>
-          )}
+          <Tabs
+            value={activeTab}
+            onChange={handleTabChange}
+            variant="fullWidth"
+            sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+          >
+            <Tab
+              icon={<NotificationsIcon fontSize="small" />}
+              iconPosition="start"
+              label="Alerts"
+              value="alerts"
+            />
+            <Tab
+              icon={<LightbulbIcon fontSize="small" />}
+              iconPosition="start"
+              label="Insights"
+              value="insights"
+            />
+          </Tabs>
 
-          {notifications.length === 0 ? (
+          {activeTab === 'alerts' && (
+            <>
+              {summary && (
+                <Box sx={{ mb: 2 }}>
+                  <Stack direction="row" spacing={1}>
+                    {criticalCount > 0 && (
+                      <Chip
+                        size="small"
+                        icon={<CriticalIcon />}
+                        label={`${criticalCount} Critical`}
+                        color="error"
+                        variant="outlined"
+                      />
+                    )}
+                    {warningCount > 0 && (
+                      <Chip
+                        size="small"
+                        icon={<WarningIcon />}
+                        label={`${warningCount} Warning`}
+                        color="warning"
+                        variant="outlined"
+                      />
+                    )}
+                    {summary.by_severity.info > 0 && (
+                      <Chip
+                        size="small"
+                        icon={<InfoIcon />}
+                        label={`${summary.by_severity.info} Info`}
+                        color="info"
+                        variant="outlined"
+                      />
+                    )}
+                  </Stack>
+                </Box>
+              )}
+
+              {notifications.length === 0 ? (
             <Alert severity="success" sx={{ textAlign: 'center' }}>
               <Typography variant="body2">
                 🎉 All good! No alerts at the moment.
@@ -382,12 +457,32 @@ const SmartNotifications: React.FC = () => {
                 </React.Fragment>
               ))}
             </List>
+              )}
+
+              {lastFetch && (
+                <Typography variant="caption" color="text.disabled" sx={{ display: 'block', textAlign: 'center', mt: 2 }}>
+                  Last updated: {formatDistanceToNow(lastFetch, { addSuffix: true })}
+                </Typography>
+              )}
+            </>
           )}
 
-          {lastFetch && (
-            <Typography variant="caption" color="text.disabled" sx={{ display: 'block', textAlign: 'center', mt: 2 }}>
-              Last updated: {formatDistanceToNow(lastFetch, { addSuffix: true })}
-            </Typography>
+          {activeTab === 'insights' && (
+            <Box>
+              {insightsLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+                  <CircularProgress />
+                </Box>
+              ) : insights ? (
+                <InsightsPanel insights={insights} onClose={handleClose} />
+              ) : (
+                <Alert severity="info">
+                  <Typography variant="body2">
+                    Click refresh to load your financial insights.
+                  </Typography>
+                </Alert>
+              )}
+            </Box>
           )}
         </Box>
       </Popover>
