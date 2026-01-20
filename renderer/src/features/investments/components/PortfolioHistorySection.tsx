@@ -161,8 +161,8 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
     // Let's stick to 0 for now, assuming the backend provides consistent daily snapshots or we accept gaps.
 
     return (
-      <Box sx={{ p: 2, flexGrow: 1, minHeight: 0 }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <Box sx={{ p: 2, flexGrow: 1, minHeight: 300, height: '100%' }}>
+        <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={data}>
             <defs>
               {orderedAccounts.map((account, index) => (

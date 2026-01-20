@@ -434,7 +434,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
       color: portfolioGains !== undefined && portfolioGains >= 0 ? theme.palette.success.main : theme.palette.error.main,
       details: assetBreakdown.length > 0 ? (
         <Box sx={{ height: 200, width: '100%', mt: 1, position: 'relative' }}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={200}>
             <PieChart>
               <Pie
                 data={assetBreakdown}

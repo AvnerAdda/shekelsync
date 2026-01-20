@@ -70,7 +70,7 @@ const PortfolioPieChart: React.FC<PortfolioPieChartProps> = ({
       {data.length > 0 ? (
         <>
           <Box sx={{ height: 300, position: 'relative' }}>
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
                   data={data}

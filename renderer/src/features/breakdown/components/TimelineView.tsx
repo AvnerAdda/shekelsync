@@ -32,7 +32,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ data, categoryType, title, 
   const shouldFallbackToTotal = !hasInflow && !hasOutflow;
 
   return (
-    <ResponsiveContainer width="100%" height={400}>
+    <ResponsiveContainer width="100%" height={400} minHeight={400}>
       <LineChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis dataKey="month" />

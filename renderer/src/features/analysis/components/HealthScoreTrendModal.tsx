@@ -278,7 +278,7 @@ const HealthScoreTrendModal: React.FC<HealthScoreTrendModalProps> = ({ open, onC
             )}
 
             <Box sx={{ width: '100%', height: 320 }}>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.4)} />
                   <XAxis

@@ -124,7 +124,8 @@ async function processMessage(payload = {}) {
   }
 
   // Check if OpenAI is configured
-  if (!isConfigured()) {
+  const openai = getOpenAIClient();
+  if (!openai.isConfigured()) {
     throw serviceError(503, 'AI service not configured', 'OpenAI API key is missing');
   }
 
@@ -233,7 +234,7 @@ async function processMessage(payload = {}) {
     while (attempts < maxAttempts) {
       attempts++;
 
-      const result = await createCompletion(
+      const result = await openai.createCompletion(
         messages,
         availableTools.length > 0 ? availableTools : null,
         { model: 'gpt-4o-mini' }
@@ -418,6 +419,7 @@ async function deleteConversation(conversationId) {
 
 // Test helpers for dependency injection
 let testDatabase = null;
+let testOpenAI = null;
 
 function __setDatabase(db) {
   testDatabase = db;
@@ -427,8 +429,23 @@ function __resetDatabase() {
   testDatabase = null;
 }
 
+function __setOpenAI(openai) {
+  testOpenAI = openai;
+}
+
+function __resetOpenAI() {
+  testOpenAI = null;
+}
+
 function getDatabase() {
   return testDatabase || database;
+}
+
+function getOpenAIClient() {
+  if (testOpenAI) {
+    return testOpenAI;
+  }
+  return { createCompletion, isConfigured, estimateTokens };
 }
 
 module.exports = {
@@ -438,5 +455,7 @@ module.exports = {
   deleteConversation,
   __setDatabase,
   __resetDatabase,
+  __setOpenAI,
+  __resetOpenAI,
 };
 module.exports.default = module.exports;

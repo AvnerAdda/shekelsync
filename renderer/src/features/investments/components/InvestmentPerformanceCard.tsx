@@ -212,7 +212,7 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
       {/* Sparkline */}
       {sparklineData.length > 1 && (
         <Box sx={{ height: 40, mt: 1 }}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={40} minHeight={40}>
             <LineChart data={sparklineData}>
               <Tooltip
                 content={({ active, payload }) => {

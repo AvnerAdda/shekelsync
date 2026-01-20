@@ -84,8 +84,8 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
       </Box>
 
       {/* Donut Chart with Center Value */}
-      <Box sx={{ position: 'relative', flexGrow: 1, minHeight: 200 }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <Box sx={{ position: 'relative', flexGrow: 1, minHeight: 200, height: '100%' }}>
+        <ResponsiveContainer width="100%" height={200}>
           <PieChart>
             <Pie
               data={chartData}

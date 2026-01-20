@@ -227,7 +227,7 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
                   {t('netPosition.subtitle')}
                 </Typography>
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={300} minHeight={300}>
                   <ComposedChart data={data.combinedData || []} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                     <defs>
                       <linearGradient id="historicalGradient" x1="0" y1="0" x2="0" y2="1">

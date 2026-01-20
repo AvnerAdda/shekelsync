@@ -28,7 +28,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ data, categoryType, formatC
 
   return (
     <Box sx={{ height: 400, width: '100%', position: 'relative' }}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height={400}>
         <PieChart>
           <Pie
             data={data as any}

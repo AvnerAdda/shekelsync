@@ -158,7 +158,7 @@ export default function MatchingTimeSeriesChart({ pairing, compact = false }: Ma
         Weekly Expense Matching Progress
       </Typography>
 
-      <ResponsiveContainer width="100%" height={chartHeight}>
+      <ResponsiveContainer width="100%" height={chartHeight} minHeight={chartHeight}>
         <BarChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis
