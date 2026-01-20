@@ -655,7 +655,33 @@ const TABLE_DEFINITIONS = [
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );`,
   `INSERT OR IGNORE INTO user_quest_stats (id, total_points, current_streak, best_streak, quests_completed, quests_failed, quests_declined, level)
-    VALUES (1, 0, 0, 0, 0, 0, 0, 1);`
+    VALUES (1, 0, 0, 0, 0, 0, 0, 1);`,
+  // Chat Conversations Table
+  `CREATE TABLE IF NOT EXISTS chat_conversations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      external_id TEXT NOT NULL UNIQUE,
+      title TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_message_at TEXT,
+      message_count INTEGER NOT NULL DEFAULT 0,
+      total_tokens_used INTEGER NOT NULL DEFAULT 0,
+      is_archived INTEGER NOT NULL DEFAULT 0 CHECK (is_archived IN (0, 1)),
+      metadata TEXT
+    );`,
+  // Chat Messages Table
+  `CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_id INTEGER NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('system', 'user', 'assistant', 'tool')),
+      content TEXT NOT NULL,
+      tool_calls TEXT,
+      tool_call_id TEXT,
+      tokens_used INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      metadata TEXT,
+      FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE
+    );`
 ];
 
 const INDEX_STATEMENTS = [
@@ -750,7 +776,13 @@ const INDEX_STATEMENTS = [
   // Quest-specific indexes
   'CREATE INDEX IF NOT EXISTS idx_smart_action_items_deadline ON smart_action_items(deadline);',
   'CREATE INDEX IF NOT EXISTS idx_smart_action_items_accepted_at ON smart_action_items(accepted_at);',
-  'CREATE INDEX IF NOT EXISTS idx_smart_action_items_quest_difficulty ON smart_action_items(quest_difficulty);'
+  'CREATE INDEX IF NOT EXISTS idx_smart_action_items_quest_difficulty ON smart_action_items(quest_difficulty);',
+  // Chat conversation indexes
+  'CREATE INDEX IF NOT EXISTS idx_chat_conversations_external_id ON chat_conversations(external_id);',
+  'CREATE INDEX IF NOT EXISTS idx_chat_conversations_updated_at ON chat_conversations(updated_at DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_chat_conversations_archived ON chat_conversations(is_archived, updated_at DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id, created_at);',
+  'CREATE INDEX IF NOT EXISTS idx_chat_messages_role ON chat_messages(role);'
 ];
 
 const INSTITUTION_GROUPS = [

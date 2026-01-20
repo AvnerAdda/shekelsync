@@ -26,6 +26,7 @@ import {
   Settings as SettingsIcon,
   Menu as MenuIcon,
   ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
   Add as AddIcon,
   Sync as SyncIcon,
   Category as CategoryIcon,
@@ -420,6 +421,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             backgroundColor: theme.palette.mode === 'dark' ? 'rgba(10, 10, 10, 0.95)' : '#ffffff',
             borderRight: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
             backdropFilter: 'blur(12px)',
+            paddingTop: '64px', // Account for TitleBar height
+            borderBottomLeftRadius: 'inherit',
           },
         }}
       >
@@ -450,20 +453,24 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
               {/* ShekelSync */}
             </Typography>
           )}
-          <IconButton 
-            onClick={handleDrawerToggle}
-            sx={{
-              color: theme.palette.text.secondary,
-              transition: 'all 0.2s',
-              '&:hover': {
-                color: theme.palette.primary.main,
-                backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                transform: 'scale(1.1)',
-              }
-            }}
-          >
-            {open ? <ChevronLeftIcon /> : <MenuIcon />}
-          </IconButton>
+          <Tooltip title={open ? '' : t('tooltips.expandSidebar')} placement="right">
+            <IconButton
+              onClick={handleDrawerToggle}
+              size="small"
+              sx={{
+                color: theme.palette.text.secondary,
+                transition: 'all 0.2s',
+                backgroundColor: open ? 'transparent' : alpha(theme.palette.primary.main, 0.08),
+                '&:hover': {
+                  color: theme.palette.primary.main,
+                  backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                  transform: 'scale(1.1)',
+                }
+              }}
+            >
+              {open ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+            </IconButton>
+          </Tooltip>
         </Box>
 
         {/* Menu Items */}
@@ -833,11 +840,30 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         {!open && (
           <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
             <Divider sx={{ width: '100%', mb: 1 }} />
+
+            {/* Account count indicator */}
+            <Tooltip title={`${stats.totalAccounts} ${t('stats.accountsConnected')}`} placement="right">
+              <Box sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                backgroundColor: alpha(theme.palette.text.primary, 0.05),
+              }}>
+                <Typography variant="caption" fontWeight={600} color="text.secondary">
+                  {stats.totalAccounts}
+                </Typography>
+              </Box>
+            </Tooltip>
+
+            {/* Add Account Button */}
             <Tooltip title={t('tooltips.addAccount')} placement="right">
-              <IconButton 
-                size="small" 
+              <IconButton
+                size="small"
                 onClick={() => setAccountsModalOpen(true)}
-                sx={{ 
+                sx={{
                   backgroundColor: alpha(theme.palette.primary.main, 0.1),
                   color: theme.palette.primary.main,
                   '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.2) }
@@ -851,6 +877,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                 </Badge>
               </IconButton>
             </Tooltip>
+
+            {/* Categories Button */}
             <Tooltip title={t('tooltips.categories')} placement="right">
               <IconButton size="small" onClick={() => setCategoryModalOpen(true)}>
                 <Badge
@@ -861,9 +889,37 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                 </Badge>
               </IconButton>
             </Tooltip>
-            <Box sx={{ 
-              width: 10, 
-              height: 10, 
+
+            {/* Sync/Refresh Button */}
+            <Tooltip title={formatLastSync()} placement="right">
+              <IconButton
+                size="small"
+                onClick={handleBulkRefresh}
+                disabled={isBulkSyncing}
+                sx={{
+                  backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                  '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.1) }
+                }}
+              >
+                {isBulkSyncing ? (
+                  <CircularProgress size={18} />
+                ) : (
+                  <SyncIcon
+                    fontSize="small"
+                    color={
+                      stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS
+                        ? 'warning'
+                        : 'action'
+                    }
+                  />
+                )}
+              </IconButton>
+            </Tooltip>
+
+            {/* Database Status */}
+            <Box sx={{
+              width: 10,
+              height: 10,
               borderRadius: '50%',
               backgroundColor: stats.dbStatus === 'connected' ? 'success.main' : 'error.main',
               mt: 1,

@@ -10,7 +10,7 @@
  */
 
 const actualDatabase = require('../database.js');
-const { resolveLocale, getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
+const { resolveLocale, getLocalizedCategoryName, getQuestText, getLocalizedPeriodLabel, getLocalizedAverageLabel } = require('../../../lib/server/locale-utils.js');
 const forecastService = require('../forecast.js');
 const { getBehavioralPatterns } = require('./behavioral.js');
 
@@ -148,10 +148,6 @@ function resolveQuestDurationDays(pattern) {
     return DAYS_PER_MONTH;
   }
   return DAYS_PER_WEEK;
-}
-
-function getPeriodLabel(durationDays) {
-  return durationDays >= DAYS_PER_MONTH ? 'month' : 'week';
 }
 
 function estimateMonthlySpend(pattern) {
@@ -418,12 +414,19 @@ async function generateMerchantQuests(context, slotsAvailable, client) {
 
       const potentialSavings = Math.round((merchant.avgAmount || 0) * (baselineVisits - targetVisits));
 
+      const questText = getQuestText('quest_merchant_limit', {
+        merchantName: merchant.name,
+        targetVisits,
+        baselineVisits,
+        potentialSavings,
+      }, locale);
+
       quests.push({
         action_type: 'quest_merchant_limit',
         trigger_category_id: null,
         severity: 'low',
-        title: `Reduce ${merchant.name} visits`,
-        description: `Challenge: Visit ${merchant.name} max ${targetVisits} times this week (currently ~${baselineVisits}/week). Save up to ₪${potentialSavings}.`,
+        title: questText.title,
+        description: questText.description,
         metadata: JSON.stringify({
           quest_type: 'merchant_limit',
           merchant_name: merchant.name,
@@ -500,12 +503,17 @@ async function generateWeekendQuests(context, slotsAvailable, client) {
     const durationDays = 7;
     const points = calculateQuestPoints(durationDays, difficulty, reductionPct);
 
+    const questText = getQuestText('quest_weekend_limit', {
+      targetAmount,
+      avgWeekendSpend: Math.round(avgWeekendSpend),
+    }, context.locale);
+
     quests.push({
       action_type: 'quest_weekend_limit',
       trigger_category_id: null,
       severity: 'low',
-      title: 'Weekend Spending Challenge',
-      description: `Challenge: Keep your weekend spending under ₪${targetAmount} this week. Your average is ₪${Math.round(avgWeekendSpend)}.`,
+      title: questText.title,
+      description: questText.description,
       metadata: JSON.stringify({
         quest_type: 'weekend_limit',
         avg_weekend_spend: Math.round(avgWeekendSpend),
@@ -740,15 +748,24 @@ async function generateQuests(params = {}) {
 
       const targetAmount = Math.max(0, Math.round(baselineSpend * (1 - reductionPct / 100)));
       const baselineRounded = Math.round(baselineSpend);
-      const periodLabel = getPeriodLabel(durationDays);
-      const averageLabel = durationDays >= DAYS_PER_MONTH ? 'monthly average' : 'weekly average';
+      const periodLabel = getLocalizedPeriodLabel(durationDays, locale);
+      const averageLabel = getLocalizedAverageLabel(durationDays, locale);
+
+      const questText = getQuestText('quest_reduce_spending', {
+        categoryName: localizedName,
+        reductionPct,
+        averageLabel,
+        baseline: baselineRounded,
+        target: targetAmount,
+        period: periodLabel,
+      }, locale);
 
       quests.push({
         action_type: 'quest_reduce_spending',
         trigger_category_id: resolvedCategoryId,
         severity: 'low',
-        title: `Reduce ${localizedName} spending by ${reductionPct}%`,
-        description: `Your ${localizedName} ${averageLabel} is about ₪${baselineRounded}. Aim for ₪${targetAmount} or less this ${periodLabel}.`,
+        title: questText.title,
+        description: questText.description,
         metadata: JSON.stringify({
           quest_type: 'reduce_spending',
           target_amount: targetAmount,
@@ -805,12 +822,19 @@ async function generateQuests(params = {}) {
 
       const remainingBudget = Math.max(0, item.limit - item.actualSpent);
 
+      const questText = getQuestText('quest_budget_adherence', {
+        categoryName: localizedName,
+        limit: Math.round(item.limit),
+        daysRemaining,
+        remaining: Math.round(remainingBudget),
+      }, locale);
+
       quests.push({
         action_type: 'quest_budget_adherence',
         trigger_category_id: item.categoryDefinitionId,
         severity: 'medium',
-        title: `Stay on budget: ${localizedName}`,
-        description: `Challenge: Keep ${localizedName} within your ₪${Math.round(item.limit)} budget until month-end (${daysRemaining} days left). You have ₪${Math.round(remainingBudget)} remaining.`,
+        title: questText.title,
+        description: questText.description,
         metadata: JSON.stringify({
           quest_type: 'budget_adherence',
           budget_id: item.budgetId,
@@ -878,12 +902,20 @@ async function generateQuests(params = {}) {
       }
       const suggestedBudget = Math.round(avgMonthlySpend * 1.1);
 
+      const questText = getQuestText('quest_set_budget', {
+        categoryName: localizedName,
+        avgMonthly: Math.round(avgMonthlySpend),
+        minAmount: Math.round(pattern.minAmount || 0),
+        maxAmount: Math.round(pattern.maxAmount || 0),
+        suggestedBudget,
+      }, locale);
+
       quests.push({
         action_type: 'quest_set_budget',
         trigger_category_id: resolvedCategoryId,
         severity: 'low',
-        title: `Set a budget for ${localizedName}`,
-        description: `Your ${localizedName} spending averages about ₪${Math.round(avgMonthlySpend)} per month and varies between ₪${Math.round(pattern.minAmount || 0)}-₪${Math.round(pattern.maxAmount || 0)} per purchase. Set a budget around ₪${suggestedBudget} to gain control.`,
+        title: questText.title,
+        description: questText.description,
         metadata: JSON.stringify({
           quest_type: 'set_budget',
           suggested_budget: suggestedBudget,
@@ -945,12 +977,17 @@ async function generateQuests(params = {}) {
       }, locale) || pattern.categoryName;
       const avgMonthlySpend = estimateMonthlySpend(pattern);
 
+      const questText = getQuestText('quest_reduce_fixed_cost', {
+        categoryName: localizedName,
+        avgAmount: Math.round(pattern.avgAmount || 0),
+      }, locale);
+
       quests.push({
         action_type: 'quest_reduce_fixed_cost',
         trigger_category_id: resolvedCategoryId,
         severity: 'low',
-        title: `Review & reduce: ${localizedName}`,
-        description: `Your average ${localizedName} charge is ₪${Math.round(pattern.avgAmount || 0)}. Review if you can find a better deal or negotiate a lower rate.`,
+        title: questText.title,
+        description: questText.description,
         metadata: JSON.stringify({
           quest_type: 'reduce_fixed_cost',
           current_amount: pattern.avgAmount,
@@ -987,12 +1024,16 @@ async function generateQuests(params = {}) {
         const durationDays = 30;
         const points = calculateQuestPoints(durationDays, difficulty, 20);
 
+        const questText = getQuestText('quest_savings_target', {
+          savingsTarget,
+        }, locale);
+
         quests.push({
           action_type: 'quest_savings_target',
           trigger_category_id: null,
           severity: 'low',
-          title: `Save ₪${savingsTarget} this month`,
-          description: `Based on your under-budget categories, you could save an extra ₪${savingsTarget}. Transfer this to savings before month-end.`,
+          title: questText.title,
+          description: questText.description,
           metadata: JSON.stringify({
             quest_type: 'savings_target',
             target_amount: savingsTarget,
@@ -1430,6 +1471,69 @@ async function verifyQuestCompletion(questId, manualResult = null) {
 }
 
 /**
+ * Build quest text parameters from stored metadata for re-localization
+ */
+function buildQuestTextParams(actionType, metadata, localizedCategoryName, locale) {
+  switch (actionType) {
+    case 'quest_reduce_spending': {
+      const durationDays = metadata.baseline_period === 'month' ? 30 : 7;
+      return {
+        categoryName: localizedCategoryName || metadata.category_name || '',
+        reductionPct: metadata.reduction_pct || 0,
+        averageLabel: getLocalizedAverageLabel(durationDays, locale),
+        baseline: metadata.baseline_amount || metadata.current_average || 0,
+        target: metadata.target_amount || 0,
+        period: getLocalizedPeriodLabel(durationDays, locale),
+      };
+    }
+    case 'quest_budget_adherence': {
+      return {
+        categoryName: localizedCategoryName || metadata.category_name || '',
+        limit: Math.round(metadata.budget_limit || 0),
+        daysRemaining: metadata.days_remaining || getDaysRemainingInMonth(),
+        remaining: Math.round(metadata.remaining || 0),
+      };
+    }
+    case 'quest_set_budget': {
+      return {
+        categoryName: localizedCategoryName || metadata.category_name || '',
+        avgMonthly: Math.round(metadata.avg_monthly || 0),
+        minAmount: Math.round(metadata.min_amount || 0),
+        maxAmount: Math.round(metadata.max_amount || 0),
+        suggestedBudget: Math.round(metadata.suggested_budget || 0),
+      };
+    }
+    case 'quest_reduce_fixed_cost': {
+      return {
+        categoryName: localizedCategoryName || metadata.category_name || '',
+        avgAmount: Math.round(metadata.current_amount || 0),
+      };
+    }
+    case 'quest_savings_target': {
+      return {
+        savingsTarget: metadata.target_amount || 0,
+      };
+    }
+    case 'quest_merchant_limit': {
+      return {
+        merchantName: metadata.merchant_name || '',
+        targetVisits: metadata.target_visits || 0,
+        baselineVisits: metadata.baseline_visits || 0,
+        potentialSavings: Math.round((metadata.avg_transaction || 0) * ((metadata.baseline_visits || 0) - (metadata.target_visits || 0))),
+      };
+    }
+    case 'quest_weekend_limit': {
+      return {
+        targetAmount: metadata.target_weekend_spend || 0,
+        avgWeekendSpend: metadata.avg_weekend_spend || 0,
+      };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
  * Get active quests with progress calculation
  */
 async function getActiveQuests(params = {}) {
@@ -1537,10 +1641,27 @@ async function getActiveQuests(params = {}) {
         };
       }
 
+      // Re-localize title and description based on current locale
+      const metadata = row.metadata ? JSON.parse(row.metadata) : {};
+      let localizedTitle = row.title;
+      let localizedDescription = row.description;
+
+      // Rebuild localized text from stored metadata
+      if (row.action_type && metadata) {
+        const questTextParams = buildQuestTextParams(row.action_type, metadata, localizedName, locale);
+        if (questTextParams) {
+          const questText = getQuestText(row.action_type, questTextParams, locale);
+          localizedTitle = questText.title;
+          localizedDescription = questText.description;
+        }
+      }
+
       quests.push({
         ...row,
+        title: localizedTitle,
+        description: localizedDescription,
         category_name: localizedName || row.category_name,
-        metadata: row.metadata ? JSON.parse(row.metadata) : null,
+        metadata,
         completion_criteria: row.completion_criteria ? JSON.parse(row.completion_criteria) : null,
         progress,
         time_remaining: timeRemaining,

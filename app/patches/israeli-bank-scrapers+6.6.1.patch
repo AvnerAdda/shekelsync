@@ -1,0 +1,99 @@
+diff --git a/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js b/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js
+index 51c85ad..7456e48 100644
+--- a/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js
++++ b/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js
+@@ -80,9 +80,22 @@ async function fetchAccountData(page, options) {
+   return accountData;
+ }
+ async function navigateOrErrorLabel(page) {
++  const successUrls = [`${BASE_URL}/apollo/retail/#/MY_ACCOUNT_HOMEPAGE`, `${BASE_URL}/apollo/retail2/#/MY_ACCOUNT_HOMEPAGE`, `${BASE_URL}/apollo/retail2/`];
+   try {
+     await (0, _navigation.waitForNavigation)(page);
++    // Wait for SPA to fully route - the page may still be loading after initial navigation
++    // Wait up to 30 seconds for the URL to contain MY_ACCOUNT_HOMEPAGE
++    const startTime = Date.now();
++    const timeout = 30000;
++    while (Date.now() - startTime < timeout) {
++      const currentUrl = page.url();
++      if (successUrls.some(url => currentUrl.toLowerCase() === url.toLowerCase())) {
++        return;
++      }
++      await new Promise(resolve => setTimeout(resolve, 500));
++    }
+   } catch (e) {
++    // If navigation fails, check for error element
+     await (0, _elementsInteractions.waitUntilElementFound)(page, '#general-error', false, 100);
+   }
+ }
+diff --git a/node_modules/israeli-bank-scrapers/lib/scrapers/mizrahi.js b/node_modules/israeli-bank-scrapers/lib/scrapers/mizrahi.js
+index ebe0fa2..7108a0c 100644
+--- a/node_modules/israeli-bank-scrapers/lib/scrapers/mizrahi.js
++++ b/node_modules/israeli-bank-scrapers/lib/scrapers/mizrahi.js
+@@ -119,6 +119,51 @@ function createHeadersFromRequest(request) {
+     'Content-Type': request.headers()['content-type']
+   };
+ }
++function parseBalance(value) {
++  if (value === undefined || value === null) {
++    return undefined;
++  }
++  if (typeof value === 'number') {
++    return Number.isFinite(value) ? value : undefined;
++  }
++  if (typeof value !== 'string') {
++    const coerced = Number(value);
++    return Number.isFinite(coerced) ? coerced : undefined;
++  }
++  const cleaned = value.replace(/,/g, '').replace(/[^\d.-]/g, '');
++  if (!cleaned || cleaned === '-' || cleaned === '.' || cleaned === '-.') {
++    return undefined;
++  }
++  const parsed = Number(cleaned);
++  return Number.isFinite(parsed) ? parsed : undefined;
++}
++function isSentinelBalance(value) {
++  return Math.abs(value) >= 1e308;
++}
++function extractBalanceFromRows(rows) {
++  if (!Array.isArray(rows)) {
++    return undefined;
++  }
++  let bestBalance;
++  let bestDate;
++  for (const row of rows) {
++    if (!row || typeof row !== 'object') {
++      continue;
++    }
++    const parsed = parseBalance(row.MC02YitraEZ ?? row.MC02Yitra);
++    if (parsed === undefined || isSentinelBalance(parsed)) {
++      continue;
++    }
++    const rowDate = row.MC02PeulaTaaEZ ?? row.MC02ErehTaaEZ;
++    if (!bestDate || rowDate && rowDate > bestDate) {
++      bestBalance = parsed;
++      if (rowDate) {
++        bestDate = rowDate;
++      }
++    }
++  }
++  return bestBalance;
++}
+ async function convertTransactions(txns, getMoreDetails, pendingIfTodayTransaction = false, options) {
+   return Promise.all(txns.map(async row => {
+     const moreDetails = await getMoreDetails(row);
+@@ -247,10 +292,14 @@ class MizrahiScraper extends _baseScraperWithBrowser.BaseScraperWithBrowser {
+     const oshTxnAfterStartDate = oshTxn.filter(txn => (0, _moment.default)(txn.date).isSameOrAfter(startMoment));
+     const pendingTxn = await this.getPendingTransactions();
+     const allTxn = oshTxnAfterStartDate.concat(pendingTxn);
++    const balance = extractBalanceFromRows(relevantRows) ?? parseBalance(response.body?.fields?.Yitra ?? response.body?.fields?.yitra);
++    if (balance === undefined) {
++      debug('Balance value missing or invalid');
++    }
+     return {
+       accountNumber,
+       txns: allTxn,
+-      balance: +response.body.fields?.Yitra
++      balance
+     };
+   }
+   shouldMarkAsPending(txn) {

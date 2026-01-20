@@ -266,6 +266,43 @@ function createSqlitePool(options = {}) {
     // Ignore: table may not exist yet (e.g., before init_sqlite_db runs).
   }
 
+  // Chat tables migration
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS chat_conversations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        external_id TEXT NOT NULL UNIQUE,
+        title TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        last_message_at TEXT,
+        message_count INTEGER NOT NULL DEFAULT 0,
+        total_tokens_used INTEGER NOT NULL DEFAULT 0,
+        is_archived INTEGER NOT NULL DEFAULT 0 CHECK (is_archived IN (0, 1)),
+        metadata TEXT
+      );
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id INTEGER NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('system', 'user', 'assistant', 'tool')),
+        content TEXT NOT NULL,
+        tool_calls TEXT,
+        tool_call_id TEXT,
+        tokens_used INTEGER,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        metadata TEXT,
+        FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_chat_conversations_external_id ON chat_conversations(external_id);
+      CREATE INDEX IF NOT EXISTS idx_chat_conversations_updated_at ON chat_conversations(updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_chat_conversations_archived ON chat_conversations(is_archived, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_role ON chat_messages(role);
+    `);
+  } catch (_chatError) {
+    // Ignore: chat tables migration may fail on older DBs
+  }
+
   const prepareStatement = (sql, params) => {
     const indices = [];
     const convertedSql = sql.replace(PLACEHOLDER_REGEX, (_, index) => {

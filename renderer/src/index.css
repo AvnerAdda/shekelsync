@@ -14,8 +14,7 @@ html, body {
   min-height: 100vh;
   min-width: 100vw;
   box-sizing: border-box;
-  background: radial-gradient(circle at top, rgba(200, 250, 207, 0.15), rgba(10, 10, 10, 0.85)),
-    linear-gradient(135deg, #0a0a0a, #131a13);
+  background: transparent;
 }
 
 #root {
@@ -26,9 +25,11 @@ html, body {
   min-height: 100vh;
   min-width: 100vw;
   overflow: auto;
-  border-radius: 0;
-  transition: border-radius 0.2s ease, box-shadow 0.2s ease, width 0.2s ease, height 0.2s ease;
-  background: transparent;
+  border-radius: 12px;
+  transition: border-radius 0.2s ease, box-shadow 0.2s ease;
+  background: radial-gradient(circle at top, rgba(200, 250, 207, 0.15), rgba(10, 10, 10, 0.85)),
+    linear-gradient(135deg, #0a0a0a, #131a13);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 body.window-restored {
@@ -38,9 +39,9 @@ body.window-restored {
 body.window-restored #root {
   height: 100vh !important;
   width: 100vw !important;
-  box-shadow: none !important;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
   background-clip: border-box;
-  border-radius: 0;
 }
 
 body.window-maximized {

@@ -1432,8 +1432,24 @@
       "placeholderDisabled": "Enable permissions in Settings"
     },
     "hints": {
-      "enabled": "💡 The assistant analyzes your transactions and income",
-      "disabled": "🔒 Grant data access permissions in Settings to use this feature"
+      "enabled": "Powered by AI - analyzes your financial data",
+      "disabled": "Grant data access permissions in Settings to use this feature"
+    },
+    "actions": {
+      "newChat": "New conversation",
+      "history": "Conversation history",
+      "retry": "Retry"
+    },
+    "history": {
+      "empty": "No previous conversations",
+      "untitled": "Untitled conversation"
+    },
+    "status": {
+      "thinking": "Analyzing..."
+    },
+    "errors": {
+      "rateLimited": "I'm a bit busy right now. Please try again in a moment.",
+      "generic": "Sorry, I encountered an issue. Please try again."
     }
   },
   "scrapeModal": {
@@ -1761,7 +1777,8 @@
       "categories": "Categories"
     },
     "stats": {
-      "accounts": "{{count}} account{{count, plural, one {} other {s}}}"
+      "accounts": "{{count}} account{{count, plural, one {} other {s}}}",
+      "accountsConnected": "accounts connected"
     },
     "popover": {
       "title": "Account Sync Status",
@@ -1775,7 +1792,8 @@
     },
     "tooltips": {
       "addAccount": "Add Account",
-      "categories": "Categories"
+      "categories": "Categories",
+      "expandSidebar": "Expand sidebar"
     },
     "sync": {
       "never": "Never",

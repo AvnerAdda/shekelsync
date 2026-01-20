@@ -1426,8 +1426,24 @@
       "placeholderDisabled": "הפעילו הרשאות בהגדרות"
     },
     "hints": {
-      "enabled": "💡 העוזר מנתח את העסקאות וההכנסות שלכם",
-      "disabled": "🔒 העניקו הרשאות גישה לנתונים בהגדרות כדי להשתמש בפיצ'ר"
+      "enabled": "מופעל ב-AI - מנתח את הנתונים הפיננסיים שלך",
+      "disabled": "העניקו הרשאות גישה לנתונים בהגדרות כדי להשתמש בפיצ'ר"
+    },
+    "actions": {
+      "newChat": "שיחה חדשה",
+      "history": "היסטוריית שיחות",
+      "retry": "נסה שוב"
+    },
+    "history": {
+      "empty": "אין שיחות קודמות",
+      "untitled": "שיחה ללא כותרת"
+    },
+    "status": {
+      "thinking": "מנתח..."
+    },
+    "errors": {
+      "rateLimited": "אני קצת עסוק כרגע. אנא נסה שוב בעוד רגע.",
+      "generic": "סליחה, נתקלתי בבעיה. אנא נסה שוב."
     }
   },
   "scrapeModal": {
@@ -1709,7 +1725,8 @@
       "categories": "קטגוריות"
     },
     "stats": {
-      "accounts": "{{count}} חשבון{{count, plural, one {} other {ים}}}"
+      "accounts": "{{count}} חשבון{{count, plural, one {} other {ים}}}",
+      "accountsConnected": "חשבונות מחוברים"
     },
     "popover": {
       "title": "סטטוס סנכרון חשבונות",
@@ -1723,7 +1740,8 @@
     },
     "tooltips": {
       "addAccount": "הוסף חשבון",
-      "categories": "קטגוריות"
+      "categories": "קטגוריות",
+      "expandSidebar": "הרחב סרגל צד"
     },
     "sync": {
       "never": "מעולם לא",

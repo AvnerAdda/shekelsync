@@ -506,6 +506,8 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         WebkitBackdropFilter: 'blur(20px)',
         boxShadow: `0 4px 30px ${alpha(theme.palette.common.black, 0.1)}`,
         borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+        borderTopLeftRadius: 'inherit',
+        borderTopRightRadius: 'inherit',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',

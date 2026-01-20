@@ -1426,8 +1426,24 @@
       "placeholderDisabled": "Activez les autorisations dans Paramètres"
     },
     "hints": {
-      "enabled": "💡 L'assistant analyse vos transactions et vos revenus",
-      "disabled": "🔒 Autorisez l'accès aux données dans Paramètres pour utiliser cette fonctionnalité"
+      "enabled": "Propulsé par l'IA - analyse vos données financières",
+      "disabled": "Autorisez l'accès aux données dans Paramètres pour utiliser cette fonctionnalité"
+    },
+    "actions": {
+      "newChat": "Nouvelle conversation",
+      "history": "Historique des conversations",
+      "retry": "Réessayer"
+    },
+    "history": {
+      "empty": "Aucune conversation précédente",
+      "untitled": "Conversation sans titre"
+    },
+    "status": {
+      "thinking": "Analyse en cours..."
+    },
+    "errors": {
+      "rateLimited": "Je suis un peu occupé en ce moment. Veuillez réessayer dans un instant.",
+      "generic": "Désolé, j'ai rencontré un problème. Veuillez réessayer."
     }
   },
   "scrapeModal": {
@@ -1709,7 +1725,8 @@
       "categories": "Catégories"
     },
     "stats": {
-      "accounts": "{{count}} compte{{count, plural, one {} other {s}}}"
+      "accounts": "{{count}} compte{{count, plural, one {} other {s}}}",
+      "accountsConnected": "comptes connectés"
     },
     "popover": {
       "title": "Statut de synchronisation des comptes",
@@ -1723,7 +1740,8 @@
     },
     "tooltips": {
       "addAccount": "Ajouter un compte",
-      "categories": "Catégories"
+      "categories": "Catégories",
+      "expandSidebar": "Développer le menu"
     },
     "sync": {
       "never": "Jamais",
