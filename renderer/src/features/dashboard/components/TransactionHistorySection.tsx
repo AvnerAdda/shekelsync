@@ -604,7 +604,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               Switch to Daily view to see forecast predictions
             </Typography>
           )}
-          <ResponsiveContainer width="100%" height={350}>
+          <ResponsiveContainer width="100%" height={350} minHeight={350}>
             <ComposedChart
               data={getDailyIncomeExpenseData()}
               onClick={handleChartAreaClick}
@@ -861,7 +861,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   Switch to Daily view to see forecast predictions
                 </Typography>
               )}
-              <ResponsiveContainer width="100%" height={350}>
+              <ResponsiveContainer width="100%" height={350} minHeight={350}>
                 <ComposedChart 
                   data={getCombinedNetPositionData()}
                   margin={{ top: 10, right: 10, left: 0, bottom: 0 }}

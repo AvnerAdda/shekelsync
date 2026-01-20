@@ -108,7 +108,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
               {headerTitle}
             </Typography>
             <Box sx={{ position: 'relative', height: 300 }}>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
                     data={data as any}

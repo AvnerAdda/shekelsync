@@ -796,7 +796,7 @@ const AnalysisPageNew: React.FC = () => {
                           </Typography>
                         )}
                       </Box>
-                      <ResponsiveContainer width="100%" height={100}>
+                      <ResponsiveContainer width="100%" height={100} minHeight={100}>
                         <RechartsBarChart
                           data={rhythmBuckets}
                           margin={{ top: 10, bottom: 30, left: 40, right: 10 }}
@@ -1049,7 +1049,7 @@ const AnalysisPageNew: React.FC = () => {
                             {formatCurrencyValue(scenarioNetCash.base, { showSign: true })}
                           </Typography>
                           <Box sx={{ flex: 1, height: 30 }}>
-                            <ResponsiveContainer width="100%" height={30}>
+                            <ResponsiveContainer width="100%" height={30} minHeight={30}>
                               <LineChart data={futureSparklineData.length > 0 ? futureSparklineData : [{ month: 0, value: 0 }]} margin={{ top: 2, bottom: 2, left: 2, right: 2 }}>
                                 <Line
                                   type="monotone"

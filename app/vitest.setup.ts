@@ -13,6 +13,22 @@ vi.mock('better-sqlite3', () => {
   return FakeDatabase;
 });
 
+// Mock OpenAI to prevent browser environment detection error in tests
+vi.mock('openai', () => {
+  const MockOpenAI = vi.fn().mockImplementation(() => ({
+    chat: {
+      completions: {
+        create: vi.fn().mockResolvedValue({
+          choices: [{ message: { content: 'Test AI response' }, finish_reason: 'stop' }],
+          usage: { total_tokens: 100 },
+          model: 'gpt-4o-mini',
+        }),
+      },
+    },
+  }));
+  return MockOpenAI;
+});
+
 const originalConsoleError = console.error;
 const suppressedPatterns = [
   /Pairings list error:/,

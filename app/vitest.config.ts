@@ -18,6 +18,16 @@ export default defineConfig({
       tempDir: path.resolve(__dirname, 'coverage/tmp'),
       cleanOnRerun: true,
     },
+    // Enable mocking for server-side modules
+    deps: {
+      interopDefault: true,
+    },
+    server: {
+      deps: {
+        inline: [/server\/services\/chat/, 'openai'],
+        fallbackCJS: true,
+      },
+    },
   },
   resolve: {
     alias: {

@@ -205,7 +205,7 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
                   {t('hourOfDay.subtitle')}
                 </Typography>
-                <ResponsiveContainer width="100%" height={200}>
+                <ResponsiveContainer width="100%" height={200} minHeight={200}>
                   <RechartsBarChart
                     data={Array.from({ length: 24 }, (_, i) => ({
                       hour: `${i}:00`,
@@ -248,7 +248,7 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                   {t('dayOfWeek.title')}
                 </Typography>
-                <ResponsiveContainer width="100%" height={200}>
+                <ResponsiveContainer width="100%" height={200} minHeight={200}>
                   <RechartsBarChart
                     data={[
                       t('days.sun'), t('days.mon'), t('days.tue'),
@@ -330,7 +330,7 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
                   {t('weeklyTrend.subtitle')}
                 </Typography>
-                <ResponsiveContainer width="100%" height={250}>
+                <ResponsiveContainer width="100%" height={250} minHeight={250}>
                   <ComposedChart
                     data={(data.weeklyTrend || []).map((w: any) => ({
                       week: w.week,
@@ -392,7 +392,7 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                   </ToggleButtonGroup>
                 </Box>
 
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={300} minHeight={300}>
                   <ComposedChart data={getEvolutionData()} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                     <defs>
                       <linearGradient id="evolutionGradient" x1="0" y1="0" x2="1" y2="0">
