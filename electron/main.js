@@ -576,12 +576,12 @@ async function createWindow() {
     minWidth: 1200,
     minHeight: 700,
     title: 'ShekelSync - Personal Finance Tracker',
-    backgroundColor: isMac ? '#00000000' : '#0a0a0a', // Avoid transparent gaps on Windows/Linux
+    backgroundColor: '#00000000', // Transparent for rounded corners
     frame: false, // Frameless on all platforms
     titleBarStyle: 'hidden', // Custom title bar handling
     titleBarOverlay: isMac, // Only needed for macOS traffic lights
-    transparent: isMac, // Keep transparency only where rounded corners are native
-    roundedCorners: isMac,
+    transparent: true, // Enable transparency for rounded corners on all platforms
+    roundedCorners: true, // Enable rounded corners
     hasShadow: true,
     webPreferences: {
       nodeIntegration: false, // Security: disable node integration

@@ -285,7 +285,7 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
                   const isUnder = item.status === 'under';
 
                   return (
-                    <Grid key={item.spending_category} item xs={12} md={6}>
+                    <Grid key={item.spending_category} size={{ xs: 12, md: 6 }}>
                       <Box sx={{ 
                         p: 2, 
                         borderRadius: 3,

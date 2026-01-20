@@ -344,14 +344,20 @@ async function forwardFillMissingDates(client, accountId, today, logger = consol
  */
 async function syncBankBalanceToInvestments(client, credential, currentBalance, accountNumber, logger = console) {
   try {
-    logger?.info?.(`[Balance Sync] Starting for ${credential.vendor} (balance: ₪${currentBalance}, account: ${accountNumber || 'N/A'})`);
-    logger?.debug?.(`[Balance Sync] Credential details: id=${credential.id}, dbId=${credential.dbId}, institution_id=${credential.institution_id}`);
-
     // Validate inputs
     if (currentBalance === undefined || currentBalance === null) {
       logger?.warn?.(`[Balance Sync] Skipping sync - no balance provided for ${credential.vendor}`);
       return { success: true, skipped: true, reason: 'No balance provided' };
     }
+
+    const normalizedBalance = typeof currentBalance === 'number' ? currentBalance : Number(currentBalance);
+    if (!Number.isFinite(normalizedBalance)) {
+      logger?.warn?.(`[Balance Sync] Skipping sync - invalid balance provided for ${credential.vendor}: ${currentBalance}`);
+      return { success: true, skipped: true, reason: 'Invalid balance provided' };
+    }
+
+    logger?.info?.(`[Balance Sync] Starting for ${credential.vendor} (balance: ₪${normalizedBalance}, account: ${accountNumber || 'N/A'})`);
+    logger?.debug?.(`[Balance Sync] Credential details: id=${credential.id}, dbId=${credential.dbId}, institution_id=${credential.institution_id}`);
 
     // Step 1: Get or create investment account
     logger?.debug?.(`[Balance Sync] Step 1: Getting or creating investment account...`);
@@ -366,12 +372,12 @@ async function syncBankBalanceToInvestments(client, credential, currentBalance, 
     logger?.debug?.(`[Balance Sync] Investment asset: id=${investmentAsset.id}, name=${assetName}`);
 
     // Step 3: Update asset units to current balance
-    logger?.debug?.(`[Balance Sync] Step 3: Updating asset units to ${currentBalance}...`);
+    logger?.debug?.(`[Balance Sync] Step 3: Updating asset units to ${normalizedBalance}...`);
     await client.query(
       `UPDATE investment_assets
        SET units = $1, updated_at = CURRENT_TIMESTAMP
        WHERE id = $2`,
-      [currentBalance, investmentAsset.id]
+      [normalizedBalance, investmentAsset.id]
     );
 
     const today = new Date().toISOString().split('T')[0];
@@ -390,7 +396,7 @@ async function syncBankBalanceToInvestments(client, credential, currentBalance, 
         client,
         credential.vendor,
         accountNumber,
-        currentBalance,
+        normalizedBalance,
         monthStartDate,
         logger
       );
@@ -436,19 +442,19 @@ async function syncBankBalanceToInvestments(client, credential, currentBalance, 
         updated_at = CURRENT_TIMESTAMP`,
       [
         investmentAccount.id,
-        currentBalance,
+        normalizedBalance,
         today,
         'cash',
         'Current balance from scraper',
       ]
     );
 
-    logger?.info?.(`✓ Synced current balance: ${today} = ₪${currentBalance}`);
+    logger?.info?.(`✓ Synced current balance: ${today} = ₪${normalizedBalance}`);
 
     return {
       success: true,
       investmentAccountId: investmentAccount.id,
-      currentBalance,
+      currentBalance: normalizedBalance,
       monthStartSnapshot,
       snapshotDate: today,
       filledDates,

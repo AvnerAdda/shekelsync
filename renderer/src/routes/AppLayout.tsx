@@ -70,6 +70,8 @@ const AppLayout: React.FC = () => {
         flexDirection: 'column',
         minHeight: '100vh',
         position: 'relative',
+        borderRadius: 'inherit',
+        overflow: 'hidden',
         background: theme.palette.mode === 'dark'
           ? `
             radial-gradient(ellipse at 20% 20%, rgba(62,165,77,0.15) 0%, transparent 50%),

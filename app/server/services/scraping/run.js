@@ -67,6 +67,10 @@ async function resolveStartDate(input, credentials) {
   if (input?.startDate) {
     const date = new Date(input.startDate);
     if (!Number.isNaN(date.getTime())) {
+      const now = new Date();
+      if (date > now) {
+        return { date: now, reason: 'User-provided date (clamped to today)' };
+      }
       return { date, reason: 'User-provided date' };
     }
   }
@@ -125,6 +129,25 @@ function buildScraperOptions(options, isBank, executablePath, startDate) {
       '--disable-gpu',
     ],
   };
+}
+
+function normalizeBalance(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value !== 'string') {
+    const coerced = Number(value);
+    return Number.isFinite(coerced) ? coerced : null;
+  }
+  const cleaned = value.replace(/,/g, '').replace(/[^\d.-]/g, '');
+  if (!cleaned || cleaned === '-' || cleaned === '.' || cleaned === '-.') {
+    return null;
+  }
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function prepareScraperCredentials(companyId, options, credentials) {
@@ -690,12 +713,13 @@ async function updateVendorAccountNumbers(client, options, credentials, discover
 }
 
 async function updateVendorBalance(client, options, credentials, account, logger = console) {
-  if (account.balance === undefined || account.balance === null) {
-    logger?.debug?.(`No balance found for account ${account.accountNumber || 'unknown'}`);
+  const normalizedBalance = normalizeBalance(account.balance);
+  if (normalizedBalance === null) {
+    logger?.debug?.(`No valid balance found for account ${account.accountNumber || 'unknown'}`);
     return;
   }
 
-  logger?.info?.(`[Scrape:${options.companyId}] Captured balance for ${options.companyId}: ₪${account.balance} (account: ${account.accountNumber || 'N/A'})`);
+  logger?.info?.(`[Scrape:${options.companyId}] Captured balance for ${options.companyId}: ₪${normalizedBalance} (account: ${account.accountNumber || 'N/A'})`);
 
   // Find the credential record - credentials.id might be user ID number or database row ID
   // First, try to find by vendor + account number (most specific)
@@ -740,7 +764,7 @@ async function updateVendorBalance(client, options, credentials, account, logger
             last_scrape_success = CURRENT_TIMESTAMP,
             last_scrape_status = 'success'
       WHERE id = $2`,
-    [account.balance, dbCredentialId],
+    [normalizedBalance, dbCredentialId],
   );
 
   if (result.rowCount > 0) {
@@ -768,7 +792,7 @@ async function updateVendorBalance(client, options, credentials, account, logger
           vendor: options.companyId,
         };
         logger?.info?.(`[Scrape:${options.companyId}] Starting balance sync to investments...`);
-        const syncResult = await syncBankBalanceToInvestments(client, credentialForSync, account.balance, account.accountNumber, logger);
+        const syncResult = await syncBankBalanceToInvestments(client, credentialForSync, normalizedBalance, account.accountNumber, logger);
         
         if (syncResult.success) {
           if (syncResult.skipped) {
@@ -812,8 +836,9 @@ async function processScrapeResult(client, { options, credentials, result, isBan
 
   for (const account of result.accounts || []) {
     const txnCount = account.txns?.length || 0;
-    const hasBalance = account.balance !== undefined && account.balance !== null;
-    logger?.info?.(`[Scrape:${options.companyId}] Account ${account.accountNumber || 'N/A'}: ${txnCount} transactions, balance: ${hasBalance ? `₪${account.balance}` : 'N/A'}`);
+    const normalizedBalance = normalizeBalance(account.balance);
+    const hasBalance = normalizedBalance !== null;
+    logger?.info?.(`[Scrape:${options.companyId}] Account ${account.accountNumber || 'N/A'}: ${txnCount} transactions, balance: ${hasBalance ? `₪${normalizedBalance}` : 'N/A'}`);
 
     if (account.accountNumber) {
       discoveredAccountNumbers.add(account.accountNumber);
@@ -896,7 +921,9 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
     logger?.info?.(`[Scrape:${options.companyId}] Raw result: success=${result?.success}, accounts=${result?.accounts?.length || 0}`);
     if (result?.accounts) {
       result.accounts.forEach((acc, idx) => {
-        logger?.info?.(`[Scrape:${options.companyId}] Account ${idx + 1}: accountNumber=${acc.accountNumber}, txns=${acc.txns?.length || 0}, balance=${acc.balance}`);
+        const normalizedBalance = normalizeBalance(acc.balance);
+        const balanceLabel = normalizedBalance === null ? 'N/A' : normalizedBalance;
+        logger?.info?.(`[Scrape:${options.companyId}] Account ${idx + 1}: accountNumber=${acc.accountNumber}, txns=${acc.txns?.length || 0}, balance=${balanceLabel}`);
       });
     }
 

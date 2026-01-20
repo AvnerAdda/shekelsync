@@ -1,4 +1,47 @@
+/**
+ * Chat Service
+ * Main service for AI-powered financial chatbot using OpenAI GPT-4o-mini
+ */
+
 const database = require('./database.js');
+const { createCompletion, isConfigured, estimateTokens } = require('./chat/openai-client.js');
+const { createAnonymizer, anonymizeContext } = require('./chat/data-anonymizer.js');
+const { createSandbox, validateSQL } = require('./chat/code-sandbox.js');
+const {
+  createConversation,
+  getConversation,
+  addMessage,
+  getMessagesForAPI,
+  generateTitle,
+  updateTitle,
+} = require('./chat/conversation-store.js');
+const { buildContext, formatContextForPrompt, getSchemaDescription } = require('./chat/financial-context.js');
+const { TOOLS, getSystemPrompt, getErrorMessage } = require('./chat/prompts.js');
+
+// Rate limiting state
+const rateLimiter = {
+  requests: new Map(),
+  maxRequestsPerMinute: 20,
+
+  checkLimit() {
+    const key = 'global'; // Single user app
+    const now = Date.now();
+    const state = this.requests.get(key) || { count: 0, resetTime: now + 60000 };
+
+    if (now > state.resetTime) {
+      state.count = 0;
+      state.resetTime = now + 60000;
+    }
+
+    if (state.count >= this.maxRequestsPerMinute) {
+      return { allowed: false, retryAfter: Math.ceil((state.resetTime - now) / 1000) };
+    }
+
+    state.count++;
+    this.requests.set(key, state);
+    return { allowed: true };
+  },
+};
 
 function serviceError(status, message, details) {
   const error = new Error(message);
@@ -9,293 +52,365 @@ function serviceError(status, message, details) {
   return error;
 }
 
-async function getFinancialContext(client) {
-  const threeMonthsAgo = new Date();
-  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+/**
+ * Process a tool call from OpenAI
+ * @param {Object} toolCall - The tool call from OpenAI
+ * @param {Object} sandbox - The code sandbox instance
+ * @param {Object} context - Execution context with data
+ * @returns {Promise<Object>} Tool result
+ */
+async function processToolCall(toolCall, sandbox, context) {
+  const { name, arguments: argsStr } = toolCall.function;
 
-  const summaryResult = await client.query(
-    `
-      SELECT
-        COUNT(*) as transaction_count,
-        SUM(CASE WHEN price > 0 THEN price ELSE 0 END) as total_income,
-        SUM(CASE WHEN price < 0 THEN ABS(price) ELSE 0 END) as total_expenses
-      FROM transactions
-      WHERE date >= $1
-    `,
-    [threeMonthsAgo],
-  );
+  let args;
+  try {
+    args = JSON.parse(argsStr);
+  } catch {
+    return { success: false, error: 'Invalid tool arguments' };
+  }
 
-  const categoriesResult = await client.query(
-    `
-      SELECT
-        COALESCE(parent.name, cd.name) as category,
-        SUM(ABS(price)) as total,
-        COUNT(*) as count
-      FROM transactions t
-      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
-      WHERE t.date >= $1 AND t.price < 0
-      GROUP BY COALESCE(parent.name, cd.name)
-      ORDER BY total DESC
-      LIMIT 10
-    `,
-    [threeMonthsAgo],
-  );
+  if (name === 'execute_sql_query') {
+    const { query, explanation } = args;
 
-  const recentResult = await client.query(`
-    SELECT
-      t.name,
-      t.price,
-      t.date,
-      COALESCE(parent.name, cd.name) as parent_category
-    FROM transactions t
-    LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-    LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
-    ORDER BY t.date DESC
-    LIMIT 20
-  `);
+    // Validate SQL
+    const validation = validateSQL(query);
+    if (!validation.isValid) {
+      return {
+        success: false,
+        error: validation.error,
+        explanation,
+      };
+    }
 
-  const merchantsResult = await client.query(
-    `
-      SELECT
-        merchant_name,
-        COUNT(*) as visit_count,
-        SUM(ABS(price)) as total_spent
-      FROM transactions
-      WHERE date >= $1 AND price < 0 AND merchant_name IS NOT NULL
-      GROUP BY merchant_name
-      ORDER BY total_spent DESC
-      LIMIT 10
-    `,
-    [threeMonthsAgo],
-  );
+    // Execute query
+    const result = await sandbox.executeSQL(query);
+    return {
+      ...result,
+      explanation,
+      query,
+    };
+  }
 
-  const summary = summaryResult.rows[0] || {};
+  if (name === 'execute_calculation') {
+    const { code, explanation } = args;
 
-  return {
-    transactionCount: Number.parseInt(summary.transaction_count || 0, 10),
-    totalIncome: Number.parseFloat(summary.total_income || 0),
-    totalExpenses: Number.parseFloat(summary.total_expenses || 0),
-    categoryCount: categoriesResult.rows.length,
-    categories: categoriesResult.rows.map((c) => ({
-      name: c.category,
-      total: Number.parseFloat(c.total),
-      count: Number.parseInt(c.count, 10),
-    })),
-    recentTransactions: recentResult.rows.map((t) => ({
-      name: t.name,
-      price: Number.parseFloat(t.price),
-      date: t.date,
-      category: t.parent_category,
-    })),
-    topMerchants: merchantsResult.rows.map((m) => ({
-      name: m.merchant_name,
-      visits: Number.parseInt(m.visit_count, 10),
-      total: Number.parseFloat(m.total_spent),
-    })),
-  };
+    // Execute code with available data
+    const result = await sandbox.executeCode(code, context.calculationData || {});
+    return {
+      ...result,
+      explanation,
+    };
+  }
+
+  return { success: false, error: `Unknown tool: ${name}` };
 }
 
-async function generatePlaceholderResponse(message, context) {
-  const lowerMessage = message.toLowerCase();
-
-  const hebrewPatterns = {
-    monthlySpending: /כמה הוצאתי|סה"כ הוצאות|הוצאות החודש/,
-    topCategory: /קטגוריה|הכי הרבה|הוצאה הגדולה/,
-    savings: /חיסכון|לחסוך|המלצות/,
-    anomalies: /חריגה|חריגות|יוצא דופן/,
-    income: /הכנסה|משכורת|רווח/,
-    comparison: /השוואה|בהשוואה|לעומת/,
-    merchants: /חנויות|עסקים|איפה הוצאתי/,
-    trends: /מגמה|מגמות|דפוס/,
-  };
-
-  if (hebrewPatterns.monthlySpending.test(lowerMessage)) {
-    const monthlyExpenses = Math.round((context.totalExpenses || 0) / 3);
-    const savingsRate =
-      context.totalIncome > 0
-        ? Math.round(
-            ((context.totalIncome - context.totalExpenses) / context.totalIncome) * 100,
-          )
-        : 0;
-
-    const categoriesList = context.categories
-      .slice(0, 5)
-      .map(
-        (c, i) =>
-          `${i + 1}. ${c.name}: ₪${Math.round(c.total).toLocaleString()} (${c.count} עסקאות)`,
-      )
-      .join('\\n');
-
-    const savingsMessage =
-      savingsRate > 0
-        ? `✅ שיעור החיסכון שלך: **${savingsRate}%** - ${savingsRate > 20 ? 'מצוין!' : 'יש מקום לשיפור'}`
-        : '⚠️ כרגע אתה לא חוסך. בוא ננסה למצוא דרכים לחסוך יותר!';
-
-    return `📊 **סיכום ההוצאות שלך:**\\n\\nבממוצע, אתה מוציא **₪${monthlyExpenses.toLocaleString()}** לחודש ב-3 החודשים האחרונים.\\n\\n**פילוח לפי קטגוריות:**\\n${categoriesList}\\n\\n${savingsMessage}`;
-  }
-
-  if (hebrewPatterns.topCategory.test(lowerMessage)) {
-    if (context.categories.length === 0) {
-      return 'לא מצאתי מספיק נתונים כדי לנתח את ההוצאות שלך.';
-    }
-
-    const topCategory = context.categories[0];
-    const percentage =
-      context.totalExpenses > 0 ? Math.round((topCategory.total / context.totalExpenses) * 100) : 0;
-
-    const advisory =
-      percentage > 40
-        ? '💡 זה חלק גבוה מההוצאות שלך. שקול לבדוק אם יש מקום לייעול.'
-        : '✅ נראה סביר ומאוזן.';
-
-    return `🏆 **הקטגוריה עם ההוצאה הגבוהה ביותר:**\\n\\n**${topCategory.name}** - ₪${Math.round(topCategory.total).toLocaleString()} (${percentage}% מכלל ההוצאות)\\n\\nזה כולל ${topCategory.count} עסקאות.\\n\\n${advisory}`;
-  }
-
-  if (hebrewPatterns.savings.test(lowerMessage)) {
-    const highestCategory = context.categories[0];
-    const monthlyExpenses = Math.round((context.totalExpenses || 0) / 3);
-
-    const merchantsAdvice =
-      context.topMerchants.length > 0
-        ? `🛍️ **ספקים שכדאי לבדוק:**\\n${context.topMerchants
-            .slice(0, 5)
-            .map(
-              (m, i) =>
-                `${i + 1}. ${m.name}: ₪${Math.round(m.total).toLocaleString()} (${m.visits} ביקורים)`,
-            )
-            .join('\\n')}`
-        : '';
-
-    const expensesAdvice =
-      highestCategory && highestCategory.total > 0
-        ? `💡 שקול להפחית הוצאות בקטגוריית **${highestCategory.name}**. גם חיסכון של 5% יהפוך ל-₪${Math.round(
-            monthlyExpenses * 0.05,
-          ).toLocaleString()} פנויים לחודש.`
-        : '';
-
-    return `💰 **רעיונות לחיסכון חכם:**\\n\\n${expensesAdvice}\\n\\n${merchantsAdvice}\\n\\n🎯 הצבת יעד: נסה להפחית ₪${Math.round(
-      monthlyExpenses * 0.1,
-    ).toLocaleString()} בהוצאות החודשיות – זה מצטבר ל-₪${Math.round(monthlyExpenses * 1.2).toLocaleString()} בשנה!`;
-  }
-
-  if (hebrewPatterns.anomalies.test(lowerMessage)) {
-    const unusualExpenses = context.recentTransactions
-      .filter((t) => Math.abs(t.price) > 1000)
-      .slice(0, 3);
-
-    if (unusualExpenses.length === 0) {
-      return 'לא מצאתי הוצאות חריגות בחודשים האחרונים. הכל נראה רגיל!';
-    }
-
-    const expensesList = unusualExpenses
-      .map(
-        (t) =>
-          `- ${t.name} (${t.category || 'ללא קטגוריה'}) – ₪${Math.round(Math.abs(t.price)).toLocaleString()} בתאריך ${new Date(t.date).toLocaleDateString('he-IL')}`,
-      )
-      .join('\\n');
-
-    return `🚨 **הוצאות חריגות שמצאתי:**\\n\\n${expensesList}\\n\\n💡 כדאי לבדוק אם אלו הוצאות חד פעמיות או שניתן לצמצם אותן בעתיד.`;
-  }
-
-  if (hebrewPatterns.income.test(lowerMessage)) {
-    const months = context.totalIncome > 0 ? Math.round((context.totalExpenses / context.totalIncome) * 3) : 0;
-
-    const savingsRate =
-      context.totalIncome > 0
-        ? Math.round(((context.totalIncome - context.totalExpenses) / context.totalIncome) * 100)
-        : 0;
-
-    const trend =
-      savingsRate > 0
-        ? `✅ אתה חוסך בממוצע ${savingsRate}% מההכנסה שלך. מצוין!`
-        : '⚠️ כרגע ההוצאות שוות או עולות על ההכנסות. כדאי לבדוק איפה אפשר לצמצם.';
-
-    return `💼 **הכנסות מול הוצאות:**\\n\\n- הכנסות ב-3 חודשים: ₪${Math.round(
-      context.totalIncome,
-    ).toLocaleString()}\\n- הוצאות ב-3 חודשים: ₪${Math.round(
-      context.totalExpenses,
-    ).toLocaleString()}\\n- יחס הוצאה/הכנסה: ${months > 0 ? `${months * 33}%` : 'לא זמין'}\\n\\n${trend}`;
-  }
-
-  if (hebrewPatterns.comparison.test(lowerMessage)) {
-    const firstFive = context.categories.slice(0, 5);
-    if (firstFive.length === 0) {
-      return 'אין מספיק נתונים להשוואה כרגע. נסה לשאול שוב אחרי שנסרוק עוד עסקאות!';
-    }
-
-    const comparison = firstFive
-      .map(
-        (c, i) =>
-          `${i + 1}. ${c.name}: ₪${Math.round(c.total).toLocaleString()} (${Math.round((c.total / context.totalExpenses) * 100)}% מההוצאות)`,
-      )
-      .join('\\n');
-
-    return `⚖️ **השוואת הוצאות בין קטגוריות:**\\n\\n${comparison}\\n\\n💡 עצה: אם שתי קטגוריות גדולות נמצאות על אותה רמת הוצאה, שקול לבחור אחת לצמצום השבוע.`;
-  }
-
-  if (hebrewPatterns.merchants.test(lowerMessage)) {
-    if (context.topMerchants.length === 0) {
-      return 'לא מצאתי עסקאות משמעותיות אצל ספקים חוזרים.';
-    }
-
-    const merchantsList = context.topMerchants
-      .slice(0, 5)
-      .map(
-        (m, i) =>
-          `${i + 1}. ${m.name}: ₪${Math.round(m.total).toLocaleString()} (${m.visits} ביקורים)`,
-      )
-      .join('\\n');
-
-    return `🛍️ **הספקים שבהם הוצאת הכי הרבה:**\\n\\n${merchantsList}\\n\\n💡 טיפ: בדוק אם אפשר לעבור למוצרים מקוונים/זולים יותר עבור הספקים המובילים.`;
-  }
-
-  if (hebrewPatterns.trends.test(lowerMessage)) {
-    const months = context.categories
-      .slice(0, 3)
-      .map((c) => `${c.name}: ₪${Math.round(c.total).toLocaleString()} (ממוצע בחודש)`)
-      .join('\\n');
-
-    return `📈 **המגמות הכספיות שלך:**\\n\\n${months}\\n\\n🎯 המלצה: בחר קטגוריה אחת שאתה רוצה לשפר החודש, ונעקוב אחר ההתקדמות שלך בשבוע הבא.`;
-  }
-
-  const monthlyExpenses = Math.round((context.totalExpenses || 0) / 3);
-  const categoriesSummary = context.categories
-    .slice(0, 3)
-    .map((c) => `- ${c.name}: ₪${Math.round(c.total).toLocaleString()}`)
-    .join('\\n');
-
-  return `🤖 היי! הנה מה שאני יודע עליך מהחודשים האחרונים:\\n\\n- הוצאות חודשיות ממוצעות: ₪${monthlyExpenses.toLocaleString()}\\n- קטגוריות מובילות:\\n${categoriesSummary}\\n\\nאפשר לשאול אותי על חיסכון, קטגוריות הוצאה, מגמות, החריגות ועוד.`;
-}
-
+/**
+ * Process a chat message with OpenAI
+ * @param {Object} payload - Request payload
+ * @returns {Promise<Object>} Chat response
+ */
 async function processMessage(payload = {}) {
-  const { message, conversationHistory = [] } = payload;
+  const {
+    message,
+    conversationId,
+    permissions = {},
+    locale = 'en',
+  } = payload;
 
+  // Validate message
   if (!message || typeof message !== 'string') {
     throw serviceError(400, 'Message is required');
+  }
+
+  // Check if OpenAI is configured
+  if (!isConfigured()) {
+    throw serviceError(503, 'AI service not configured', 'OpenAI API key is missing');
+  }
+
+  // Rate limiting
+  const rateCheck = rateLimiter.checkLimit();
+  if (!rateCheck.allowed) {
+    throw serviceError(429, getErrorMessage('rate_limited', locale), { retryAfter: rateCheck.retryAfter });
+  }
+
+  // Default permissions (all off for safety)
+  const perms = {
+    allowTransactionAccess: permissions.allowTransactionAccess || false,
+    allowCategoryAccess: permissions.allowCategoryAccess || false,
+    allowAnalyticsAccess: permissions.allowAnalyticsAccess || false,
+  };
+
+  console.log('[chat] Processing message with permissions:', JSON.stringify(perms));
+
+  const client = await getDatabase().getClient();
+
+  try {
+    // Create or get conversation
+    let conversation;
+    let isNewConversation = false;
+
+    if (conversationId) {
+      conversation = await getConversation(client, conversationId, false);
+      if (!conversation) {
+        throw serviceError(404, 'Conversation not found');
+      }
+    } else {
+      conversation = await createConversation(client);
+      isNewConversation = true;
+    }
+
+    // Build financial context
+    let financialContext;
+    try {
+      financialContext = await buildContext(client, perms);
+      console.log('[chat] Financial context built:', {
+        hasData: financialContext.hasData,
+        transactionCount: financialContext.summary?.transactionCount,
+        categoriesCount: financialContext.categories?.length,
+        budgetsCount: financialContext.budgets?.length,
+      });
+    } catch (contextError) {
+      console.error('[chat] ERROR building financial context:', contextError);
+      // Use empty context on error
+      financialContext = { hasData: false, permissions: perms, summary: { transactionCount: 0 } };
+    }
+
+    // Create anonymizer for this conversation
+    const anonymizer = createAnonymizer();
+    const anonymizedContext = anonymizeContext(financialContext, anonymizer);
+
+    // Format context for prompt
+    const contextString = formatContextForPrompt(anonymizedContext);
+    const schemaDesc = perms.allowTransactionAccess ? getSchemaDescription() : '';
+
+    // Build system prompt
+    const systemPrompt = getSystemPrompt(locale, contextString, schemaDesc, perms);
+
+    console.log('[chat] Context string preview:', contextString.substring(0, 500));
+    console.log('[chat] System prompt length:', systemPrompt.length);
+
+    // Get conversation history
+    const historyMessages = conversationId
+      ? await getMessagesForAPI(client, conversationId, 20)
+      : [];
+
+    // Build messages array for OpenAI
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...historyMessages,
+      { role: 'user', content: message },
+    ];
+
+    // Create sandbox for tool execution
+    const sandbox = createSandbox(async (sql) => {
+      const result = await client.query(sql);
+      return result.rows;
+    });
+
+    // Determine which tools to provide based on permissions
+    const availableTools = [];
+    if (perms.allowTransactionAccess || perms.allowCategoryAccess) {
+      availableTools.push(TOOLS[0]); // execute_sql_query
+    }
+    if (perms.allowAnalyticsAccess) {
+      availableTools.push(TOOLS[1]); // execute_calculation
+    }
+
+    // Track tool execution data for calculations
+    const calculationData = {
+      queryResults: {},
+    };
+
+    let response;
+    let totalTokensUsed = 0;
+    let toolExecutions = [];
+
+    // Call OpenAI (with potential tool call loop)
+    let attempts = 0;
+    const maxAttempts = 5; // Prevent infinite loops
+
+    while (attempts < maxAttempts) {
+      attempts++;
+
+      const result = await createCompletion(
+        messages,
+        availableTools.length > 0 ? availableTools : null,
+        { model: 'gpt-4o-mini' }
+      );
+
+      if (!result.success) {
+        throw serviceError(502, result.userMessage || 'AI service error');
+      }
+
+      totalTokensUsed += result.usage?.total_tokens || 0;
+
+      // Check for tool calls
+      if (result.message.tool_calls && result.message.tool_calls.length > 0) {
+        // Add assistant message with tool calls (ensure content is not null)
+        messages.push({
+          ...result.message,
+          content: result.message.content || '',
+        });
+
+        // Process each tool call
+        for (const toolCall of result.message.tool_calls) {
+          const toolResult = await processToolCall(toolCall, sandbox, { calculationData });
+
+          // Store query results for subsequent calculations
+          if (toolResult.success && toolResult.data) {
+            calculationData.queryResults[toolCall.id] = toolResult.data;
+            calculationData.lastQueryResult = toolResult.data;
+          }
+
+          // Track tool execution for metadata
+          toolExecutions.push({
+            tool: toolCall.function.name,
+            explanation: toolResult.explanation,
+            success: toolResult.success,
+            rowCount: toolResult.rowCount,
+            error: toolResult.error,
+          });
+
+          // Add tool result to messages (ensure content is never null)
+          const toolContent = toolResult.success
+            ? (toolResult.data || toolResult.result || { success: true })
+            : { error: toolResult.error || 'Unknown error' };
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(toolContent),
+          });
+        }
+
+        // Continue loop to get final response
+        continue;
+      }
+
+      // No tool calls - we have the final response
+      response = result.message.content;
+      break;
+    }
+
+    // Clean up sandbox
+    sandbox.dispose();
+
+    if (!response) {
+      throw serviceError(500, 'Failed to generate response');
+    }
+
+    // Store messages in conversation
+    await addMessage(client, conversation.id, {
+      role: 'user',
+      content: message,
+      tokensUsed: estimateTokens(message),
+    });
+
+    await addMessage(client, conversation.id, {
+      role: 'assistant',
+      content: response,
+      tokensUsed: totalTokensUsed,
+      metadata: toolExecutions.length > 0 ? { toolExecutions } : null,
+    });
+
+    // Generate title for new conversations
+    if (isNewConversation) {
+      const title = generateTitle(message);
+      await updateTitle(client, conversation.externalId, title);
+    }
+
+    return {
+      response,
+      conversationId: conversation.externalId,
+      isNewConversation,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        model: 'gpt-4o-mini',
+        tokensUsed: totalTokensUsed,
+        toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined,
+        contextIncluded: {
+          transactions: perms.allowTransactionAccess,
+          categories: perms.allowCategoryAccess,
+          analytics: perms.allowAnalyticsAccess,
+        },
+      },
+    };
+
+  } catch (error) {
+    if (error.status) {
+      throw error;
+    }
+    console.error('Chat processing error:', error);
+    throw serviceError(500, 'Failed to process chat message', error.message);
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Get conversation history
+ * @param {string} conversationId - The conversation's external UUID
+ * @returns {Promise<Object>} Conversation with messages
+ */
+async function getConversationHistory(conversationId) {
+  if (!conversationId) {
+    throw serviceError(400, 'Conversation ID is required');
   }
 
   const client = await getDatabase().getClient();
 
   try {
-    const financialContext = await getFinancialContext(client);
-    const response = await generatePlaceholderResponse(message, financialContext, conversationHistory);
+    const conversation = await getConversation(client, conversationId, true);
 
-    return {
-      response,
-      timestamp: new Date().toISOString(),
-      metadata: {
-        model: 'placeholder-v1',
-        contextIncluded: {
-          transactions: financialContext.transactionCount,
-          categories: financialContext.categoryCount,
-          timeRange: '3 months',
-        },
-      },
-    };
-  } catch (error) {
-    const wrapped = error.status ? error : serviceError(500, 'Failed to process chat message', error.message);
-    throw wrapped;
+    if (!conversation) {
+      throw serviceError(404, 'Conversation not found');
+    }
+
+    return conversation;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * List all conversations
+ * @param {Object} options - List options
+ * @returns {Promise<Array>} Array of conversations
+ */
+async function listConversations(options = {}) {
+  const { listConversations: listConvs } = require('./chat/conversation-store.js');
+
+  const client = await getDatabase().getClient();
+
+  try {
+    return await listConvs(client, options);
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Delete a conversation
+ * @param {string} conversationId - The conversation's external UUID
+ * @returns {Promise<boolean>} True if deleted
+ */
+async function deleteConversation(conversationId) {
+  if (!conversationId) {
+    throw serviceError(400, 'Conversation ID is required');
+  }
+
+  const { deleteConversation: deleteConv } = require('./chat/conversation-store.js');
+
+  const client = await getDatabase().getClient();
+
+  try {
+    const deleted = await deleteConv(client, conversationId);
+
+    if (!deleted) {
+      throw serviceError(404, 'Conversation not found');
+    }
+
+    return true;
   } finally {
     client.release();
   }
@@ -318,6 +433,9 @@ function getDatabase() {
 
 module.exports = {
   processMessage,
+  getConversationHistory,
+  listConversations,
+  deleteConversation,
   __setDatabase,
   __resetDatabase,
 };

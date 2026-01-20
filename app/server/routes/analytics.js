@@ -1,4 +1,5 @@
 const express = require('express');
+const { resolveLocaleFromRequest } = require('../../lib/server/locale-utils.js');
 
 const breakdownService = require('../services/analytics/breakdown.js');
 const dashboardService = require('../services/analytics/dashboard.js');
@@ -211,8 +212,9 @@ function createAnalyticsRouter() {
   router.post('/quests/generate', async (req, res) => {
     try {
       const { force } = req.body || {};
+      const locale = resolveLocaleFromRequest(req);
       const result = await questsService.generateQuests({
-        locale: req.locale,
+        locale,
         force: Boolean(force),
       });
       res.json(result);
@@ -228,8 +230,9 @@ function createAnalyticsRouter() {
   // Get active quests with progress
   router.get('/quests/active', async (req, res) => {
     try {
+      const locale = resolveLocaleFromRequest(req);
       const result = await questsService.getActiveQuests({
-        locale: req.locale,
+        locale,
       });
       res.json(result);
     } catch (error) {
