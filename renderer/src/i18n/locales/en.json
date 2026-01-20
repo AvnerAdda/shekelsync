@@ -2161,5 +2161,71 @@
     "manualMode": "Switch to Manual Mode",
     "autoMode": "Switch to Auto Mode",
     "sampleTransactions": "Sample matched transactions"
+  },
+  "insights": {
+    "title": "Financial Insights",
+    "tabs": {
+      "alerts": "Alerts",
+      "insights": "Insights"
+    },
+    "periods": {
+      "today": "Today",
+      "week": "This Week",
+      "month": "This Month",
+      "allTime": "All Time"
+    },
+    "daily": {
+      "spending": "Today's Spending",
+      "activity": "Activity",
+      "topCategory": "Top Category",
+      "transactions": "{{count}} transaction",
+      "transactions_plural": "{{count}} transactions",
+      "today": "today",
+      "ofAverage": "{{percent}}% of daily average ({{amount}})",
+      "velocity": {
+        "high": "High",
+        "normal": "Normal",
+        "low": "Low"
+      }
+    },
+    "weekly": {
+      "thisWeek": "This Week",
+      "topCategories": "Top Categories",
+      "spendingPattern": "Spending Pattern",
+      "weekdays": "Weekdays",
+      "weekend": "Weekend",
+      "vsLastWeek": "{{change}}% vs last week ({{amount}})"
+    },
+    "monthly": {
+      "progress": "Month Progress",
+      "dayOf": "Day {{current}} of {{total}}",
+      "daysRemaining": "{{days}} days remaining",
+      "spendingThisMonth": "Spending This Month",
+      "projected": "Projected: {{amount}}",
+      "lastMonth": "Last month: {{amount}}",
+      "savingsRate": "Savings Rate",
+      "ofIncome": "of income this month",
+      "budgetHealth": "Budget Health",
+      "budgetsOnTrack": "{{count}} on track",
+      "budgetsAtRisk": "{{count}} at risk"
+    },
+    "lifetime": {
+      "trackingSince": "Tracking Since",
+      "totalActivity": "Total Activity",
+      "transactionsAnalyzed": "transactions analyzed",
+      "avgMonthlySpending": "Average Monthly Spending",
+      "acrossAllMonths": "across all months",
+      "totalSpending": "Total Spending",
+      "sinceTracking": "since you started tracking",
+      "healthTrend": "Financial Health Trend",
+      "trend": {
+        "improving": "Improving",
+        "stable": "Stable",
+        "declining": "Declining"
+      }
+    },
+    "loading": "Loading insights...",
+    "clickRefresh": "Click refresh to load your financial insights.",
+    "refresh": "Refresh"
   }
 }

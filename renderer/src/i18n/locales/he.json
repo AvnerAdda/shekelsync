@@ -2109,5 +2109,71 @@
     "manualMode": "עבור למצב ידני",
     "autoMode": "עבור למצב אוטומטי",
     "sampleTransactions": "דוגמאות עסקאות תואמות"
+  },
+  "insights": {
+    "title": "תובנות פיננסיות",
+    "tabs": {
+      "alerts": "התראות",
+      "insights": "תובנות"
+    },
+    "periods": {
+      "today": "היום",
+      "week": "השבוע",
+      "month": "החודש",
+      "allTime": "כל הזמן"
+    },
+    "daily": {
+      "spending": "הוצאות היום",
+      "activity": "פעילות",
+      "topCategory": "קטגוריה מובילה",
+      "transactions": "עסקה אחת",
+      "transactions_plural": "{{count}} עסקאות",
+      "today": "היום",
+      "ofAverage": "{{percent}}% מהממוצע היומי ({{amount}})",
+      "velocity": {
+        "high": "גבוה",
+        "normal": "רגיל",
+        "low": "נמוך"
+      }
+    },
+    "weekly": {
+      "thisWeek": "השבוע",
+      "topCategories": "קטגוריות מובילות",
+      "spendingPattern": "דפוס הוצאות",
+      "weekdays": "ימי חול",
+      "weekend": "סוף שבוע",
+      "vsLastWeek": "{{change}}% לעומת שבוע שעבר ({{amount}})"
+    },
+    "monthly": {
+      "progress": "התקדמות החודש",
+      "dayOf": "יום {{current}} מתוך {{total}}",
+      "daysRemaining": "{{days}} ימים נותרו",
+      "spendingThisMonth": "הוצאות החודש",
+      "projected": "תחזית: {{amount}}",
+      "lastMonth": "חודש שעבר: {{amount}}",
+      "savingsRate": "שיעור חיסכון",
+      "ofIncome": "מההכנסה החודשית",
+      "budgetHealth": "בריאות תקציבים",
+      "budgetsOnTrack": "{{count}} בדרך",
+      "budgetsAtRisk": "{{count}} בסיכון"
+    },
+    "lifetime": {
+      "trackingSince": "מעקב מאז",
+      "totalActivity": "פעילות כוללת",
+      "transactionsAnalyzed": "עסקאות נותחו",
+      "avgMonthlySpending": "הוצאה חודשית ממוצעת",
+      "acrossAllMonths": "לאורך כל החודשים",
+      "totalSpending": "הוצאות כוללות",
+      "sinceTracking": "מאז תחילת המעקב",
+      "healthTrend": "מגמת בריאות פיננסית",
+      "trend": {
+        "improving": "משתפר",
+        "stable": "יציב",
+        "declining": "יורד"
+      }
+    },
+    "loading": "טוען תובנות...",
+    "clickRefresh": "לחץ על רענן כדי לטעון את התובנות הפיננסיות שלך.",
+    "refresh": "רענן"
   }
 }

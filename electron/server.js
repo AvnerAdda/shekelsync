@@ -22,6 +22,7 @@ const { createOnboardingRouter } = require(resolveAppPath('server', 'routes', 'o
 const { createCredentialsRouter } = require(resolveAppPath('server', 'routes', 'credentials.js'));
 const { createCategoriesRouter } = require(resolveAppPath('server', 'routes', 'categories.js'));
 const { createNotificationsRouter } = require(resolveAppPath('server', 'routes', 'notifications.js'));
+const { createInsightsRouter } = require(resolveAppPath('server', 'routes', 'insights.js'));
 const institutionsService = require(resolveAppPath('server', 'services', 'institutions.js'));
 
 function lazyRouter(factory) {
@@ -161,6 +162,9 @@ async function setupAPIServer(mainWindow, options = {}) {
 
   // Notifications (migrated)
   app.use('/api/notifications', createNotificationsRouter());
+
+  // Insights (daily/weekly/monthly/lifetime financial insights)
+  app.use('/api/insights', createInsightsRouter());
 
   // Spending categories (new intelligent system) – lazy load
   app.use(
