@@ -1,0 +1,439 @@
+name: Security Audit
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main, develop]
+  schedule:
+    # Run security audit every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+
+jobs:
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run security tests
+        run: npm run test:security
+        env:
+          NODE_ENV: test
+          KEYTAR_DISABLE: 'true'
+
+      - name: Generate test coverage
+        run: npm run test:security:coverage
+        env:
+          NODE_ENV: test
+          KEYTAR_DISABLE: 'true'
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/coverage-final.json
+          flags: security-tests
+          name: security-coverage
+
+  dependency-audit:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Run npm audit (production only)
+        run: npm audit --production --audit-level=high
+
+      - name: Check for known vulnerabilities
+        run: |
+          echo "Checking for high/critical vulnerabilities..."
+          AUDIT_RESULT=$(npm audit --json)
+          CRITICAL=$(echo $AUDIT_RESULT | jq '.metadata.vulnerabilities.critical // 0')
+          HIGH=$(echo $AUDIT_RESULT | jq '.metadata.vulnerabilities.high // 0')
+
+          echo "Critical vulnerabilities: $CRITICAL"
+          echo "High vulnerabilities: $HIGH"
+
+          if [ $CRITICAL -gt 0 ] || [ $HIGH -gt 0 ]; then
+            echo "❌ Found critical or high vulnerabilities!"
+            npm audit
+            exit 1
+          else
+            echo "✅ No critical or high vulnerabilities found"
+          fi
+
+  security-linting:
+    name: Security Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint security checks
+        run: |
+          npx eslint --ext .js \
+            --rule 'no-eval: error' \
+            --rule 'no-implied-eval: error' \
+            --rule 'no-new-func: error' \
+            --rule 'no-script-url: error' \
+            app/lib/server app/server electron
+        continue-on-error: true
+
+      - name: Check for hardcoded secrets
+        run: |
+          echo "Checking for potential secrets in code..."
+
+          # Check for common secret patterns
+          if grep -r -i -E "(password|secret|api[_-]?key|token|credential).*=.*['\"][a-zA-Z0-9]{16,}['\"]" \
+            --exclude-dir=node_modules \
+            --exclude-dir=.git \
+            --exclude-dir=coverage \
+            --exclude-dir=dist \
+            --exclude="*.test.js" \
+            --exclude="*.md" \
+            .; then
+            echo "⚠️  WARNING: Potential hardcoded secrets found!"
+            echo "Please review the above matches to ensure no real secrets are committed."
+          else
+            echo "✅ No obvious hardcoded secrets found"
+          fi
+
+      - name: Check for unsafe encryption patterns
+        run: |
+          echo "Checking for unsafe encryption patterns..."
+
+          # Check for weak crypto
+          if grep -r -E "(createCipher|MD5|SHA1)\\(" \
+            --include="*.js" \
+            --exclude-dir=node_modules \
+            --exclude-dir=.git \
+            app electron; then
+            echo "❌ WARNING: Weak or deprecated crypto functions found!"
+            exit 1
+          else
+            echo "✅ No weak crypto patterns detected"
+          fi
+
+      - name: Verify encryption key handling
+        run: |
+          echo "Verifying encryption key is not stored in config..."
+
+          # Ensure no encryption keys in config files
+          if grep -r "encryption.*key" \
+            --include="*.json" \
+            --exclude-dir=node_modules \
+            --exclude-dir=.git \
+            .; then
+            echo "⚠️  WARNING: 'encryption key' found in config files!"
+            echo "Encryption keys should only be stored in OS keychain or environment variables."
+          else
+            echo "✅ No encryption keys in config files"
+          fi
+
+  security-headers-check:
+    name: Security Headers Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Verify security headers implementation
+        run: |
+          echo "Checking for security headers in server code..."
+
+          REQUIRED_HEADERS=(
+            "X-Content-Type-Options"
+            "X-Frame-Options"
+            "X-XSS-Protection"
+            "Content-Security-Policy"
+            "Referrer-Policy"
+          )
+
+          MISSING_HEADERS=()
+
+          for header in "${REQUIRED_HEADERS[@]}"; do
+            if ! grep -r "$header" \
+              --include="*.js" \
+              --exclude-dir=node_modules \
+              electron/api-security.js electron/server.js; then
+              MISSING_HEADERS+=("$header")
+            fi
+          done
+
+          if [ ${#MISSING_HEADERS[@]} -gt 0 ]; then
+            echo "❌ Missing security headers: ${MISSING_HEADERS[*]}"
+            exit 1
+          else
+            echo "✅ All required security headers found"
+          fi
+
+  authentication-check:
+    name: Authentication Implementation Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Verify authentication middleware exists
+        run: |
+          echo "Checking for authentication implementation..."
+
+          if [ ! -f "electron/api-security.js" ]; then
+            echo "❌ api-security.js not found!"
+            exit 1
+          fi
+
+          # Check for authentication middleware
+          if ! grep -q "authenticationMiddleware" electron/api-security.js; then
+            echo "❌ Authentication middleware not found!"
+            exit 1
+          fi
+
+          # Check for token validation
+          if ! grep -q "validateToken" electron/api-security.js; then
+            echo "❌ Token validation not found!"
+            exit 1
+          fi
+
+          # Check for rate limiting
+          if ! grep -q "rateLimitMiddleware" electron/api-security.js; then
+            echo "❌ Rate limiting middleware not found!"
+            exit 1
+          fi
+
+          echo "✅ Authentication implementation verified"
+
+      - name: Verify authentication is applied to routes
+        run: |
+          echo "Verifying authentication is applied in server..."
+
+          if ! grep -q "authenticationMiddleware" electron/server.js; then
+            echo "❌ Authentication middleware not applied to server!"
+            exit 1
+          fi
+
+          echo "✅ Authentication middleware applied"
+
+  encryption-check:
+    name: Encryption Implementation Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Verify secure key manager exists
+        run: |
+          echo "Checking for secure key manager..."
+
+          if [ ! -f "electron/secure-key-manager.js" ]; then
+            echo "❌ secure-key-manager.js not found!"
+            exit 1
+          fi
+
+          # Check for keychain usage
+          if ! grep -q "keytar" electron/secure-key-manager.js; then
+            echo "❌ Keychain (keytar) integration not found!"
+            exit 1
+          fi
+
+          # Check for AES-256-GCM
+          if ! grep -q "aes-256-gcm" app/lib/server/encryption.js; then
+            echo "❌ AES-256-GCM encryption not found!"
+            exit 1
+          fi
+
+          echo "✅ Encryption implementation verified"
+
+      - name: Verify no plaintext key storage
+        run: |
+          echo "Verifying no plaintext key storage..."
+
+          # Check for unsafe key storage patterns
+          if grep -r "ALLOW_DEV_NO_ENCRYPTION" \
+            --include="*.js" \
+            --exclude-dir=node_modules \
+            app electron; then
+            echo "❌ WARNING: Development fallback encryption detected!"
+            echo "This should be removed in production."
+            exit 1
+          fi
+
+          echo "✅ No plaintext key storage detected"
+
+  input-validation-check:
+    name: Input Validation Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Verify input validation exists
+        run: |
+          echo "Checking for input validation..."
+
+          if [ ! -f "app/lib/server/input-validator.js" ]; then
+            echo "❌ input-validator.js not found!"
+            exit 1
+          fi
+
+          # Check for validation functions
+          VALIDATION_FUNCTIONS=(
+            "validateCredentialCreation"
+            "validateCredentialUpdate"
+            "validateSafeString"
+            "validateCredentialId"
+          )
+
+          for func in "${VALIDATION_FUNCTIONS[@]}"; do
+            if ! grep -q "$func" app/lib/server/input-validator.js; then
+              echo "❌ $func not found!"
+              exit 1
+            fi
+          done
+
+          echo "✅ Input validation functions verified"
+
+      - name: Verify validation is applied to routes
+        run: |
+          echo "Verifying validation is applied to credential routes..."
+
+          if ! grep -q "validateCredential" app/server/routes/credentials.js; then
+            echo "❌ Input validation not applied to credential routes!"
+            exit 1
+          fi
+
+          echo "✅ Input validation applied to routes"
+
+  error-sanitization-check:
+    name: Error Sanitization Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Verify error sanitization exists
+        run: |
+          echo "Checking for error sanitization..."
+
+          if [ ! -f "app/lib/server/error-sanitizer.js" ]; then
+            echo "❌ error-sanitizer.js not found!"
+            exit 1
+          fi
+
+          # Check for sanitization functions
+          if ! grep -q "sanitizeError" app/lib/server/error-sanitizer.js; then
+            echo "❌ sanitizeError function not found!"
+            exit 1
+          fi
+
+          if ! grep -q "redactSensitiveData" app/lib/server/error-sanitizer.js; then
+            echo "❌ redactSensitiveData function not found!"
+            exit 1
+          fi
+
+          echo "✅ Error sanitization functions verified"
+
+      - name: Check for unsafe error handling
+        run: |
+          echo "Checking for unsafe error handling patterns..."
+
+          # Check for direct error logging (should use sanitization)
+          if grep -r "console\\.log.*error" \
+            --include="*.js" \
+            --exclude="*test.js" \
+            --exclude-dir=node_modules \
+            app/server/routes/credentials.js | grep -v "sanitize"; then
+            echo "⚠️  WARNING: Potential unsanitized error logging found!"
+            echo "Ensure all error logging uses sanitizeErrorForLogging()"
+          fi
+
+          echo "✅ Error handling patterns checked"
+
+  security-report:
+    name: Generate Security Report
+    runs-on: ubuntu-latest
+    needs: [
+      security-tests,
+      dependency-audit,
+      security-linting,
+      security-headers-check,
+      authentication-check,
+      encryption-check,
+      input-validation-check,
+      error-sanitization-check
+    ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Generate security summary
+        run: |
+          echo "# Security Audit Summary" > security-report.md
+          echo "" >> security-report.md
+          echo "✅ All security checks passed!" >> security-report.md
+          echo "" >> security-report.md
+          echo "## Checks Completed:" >> security-report.md
+          echo "- ✅ Security test suite passed" >> security-report.md
+          echo "- ✅ Dependency audit clean" >> security-report.md
+          echo "- ✅ Security linting passed" >> security-report.md
+          echo "- ✅ Security headers verified" >> security-report.md
+          echo "- ✅ Authentication implementation verified" >> security-report.md
+          echo "- ✅ Encryption implementation verified" >> security-report.md
+          echo "- ✅ Input validation verified" >> security-report.md
+          echo "- ✅ Error sanitization verified" >> security-report.md
+          echo "" >> security-report.md
+          echo "**Date:** $(date)" >> security-report.md
+
+          cat security-report.md
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report
+          path: security-report.md

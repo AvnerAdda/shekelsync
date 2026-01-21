@@ -26,9 +26,25 @@ function getCreditCardRepaymentCategoryCondition(alias = 'cd') {
   return predicates.length > 0 ? `(${predicates.join(' OR ')})` : '(0)';
 }
 
+/**
+ * Lookup the Credit Card Repayment category ID from the database
+ * @param {object} client - Database client
+ * @returns {Promise<number|null>} - Category ID or null if not found
+ */
+async function getCreditCardRepaymentCategoryId(client) {
+  const categoryCondition = getCreditCardRepaymentCategoryCondition('cd');
+
+  const result = await client.query(
+    `SELECT id FROM category_definitions cd WHERE ${categoryCondition} LIMIT 1`
+  );
+
+  return result.rows.length > 0 ? result.rows[0].id : null;
+}
+
 module.exports = {
   CREDIT_CARD_REPAYMENT_CATEGORY_MATCH,
   getCreditCardRepaymentCategoryCondition,
+  getCreditCardRepaymentCategoryId,
 };
 
 module.exports.default = module.exports;

@@ -217,35 +217,6 @@ async function createAutoRule(payload = {}) {
     throw serviceError(400, 'Missing required fields: transactionName, categoryDefinitionId');
   }
 
-  const existingRule = await database.query(
-    `SELECT id FROM categorization_rules WHERE LOWER(name_pattern) = LOWER($1)`,
-    [transactionName],
-  );
-
-  if (existingRule.rows.length > 0) {
-    const ruleId = existingRule.rows[0].id;
-
-    // Get full rule details to show user
-    const ruleDetails = await database.query(
-      `SELECT cr.id, cr.name_pattern, cr.target_category, cr.category_path,
-              cd.name as category_name
-       FROM categorization_rules cr
-       LEFT JOIN category_definitions cd ON cr.category_definition_id = cd.id
-       WHERE cr.id = $1`,
-      [ruleId],
-    );
-
-    const rule = ruleDetails.rows[0];
-    const categoryDisplay = rule.category_name || rule.target_category || 'Unknown';
-
-    return {
-      success: true,
-      alreadyExists: true,
-      rule: rule,
-      message: `Rule already exists for "${transactionName}" → categorizes to ${categoryDisplay}`,
-    };
-  }
-
   const categoryResult = await database.query(
     `SELECT cd.id, cd.name, cd.category_type, cd.parent_id, parent.name AS parent_name
        FROM category_definitions cd
@@ -263,10 +234,18 @@ async function createAutoRule(payload = {}) {
     ? `${category.parent_name} > ${category.name}`
     : category.name;
 
-  const insertResult = await database.query(
+  // Use UPSERT to create new rule or update existing one with the new category
+  const upsertResult = await database.query(
     `INSERT INTO categorization_rules
        (name_pattern, target_category, category_path, category_definition_id, category_type, is_active, priority)
      VALUES ($1, $2, $3, $4, $5, true, 50)
+     ON CONFLICT (name_pattern, target_category)
+     DO UPDATE SET
+       category_path = EXCLUDED.category_path,
+       category_definition_id = EXCLUDED.category_definition_id,
+       category_type = EXCLUDED.category_type,
+       is_active = true,
+       updated_at = CURRENT_TIMESTAMP
      RETURNING id, name_pattern, target_category, category_path, category_definition_id, category_type, is_active, priority`,
     [
       transactionName,
@@ -277,10 +256,68 @@ async function createAutoRule(payload = {}) {
     ],
   );
 
+  // Also check and update any existing rule with the same pattern but different target_category
+  await database.query(
+    `UPDATE categorization_rules
+     SET target_category = $2,
+         category_path = $3,
+         category_definition_id = $4,
+         category_type = $5,
+         is_active = true,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE LOWER(name_pattern) = LOWER($1)
+       AND id != $6`,
+    [
+      transactionName,
+      category.name,
+      categoryPath,
+      categoryDefinitionId,
+      categoryType || category.category_type,
+      upsertResult.rows[0].id,
+    ],
+  );
+
+  // Automatically apply the new rule to existing transactions
+  const appliedCategoryType = categoryType || category.category_type;
+  const pattern = `%${transactionName}%`;
+  const confidence = appliedCategoryType === 'income' ? 0.7 : 0.8;
+
+  // Build price condition based on category type
+  const priceCondition =
+    appliedCategoryType === 'income'
+      ? 'AND price > 0'
+      : appliedCategoryType === 'expense'
+        ? 'AND price < 0'
+        : '';
+
+  // When user explicitly creates a re-categorization rule, update ALL matching
+  // transactions regardless of their current categorization state
+  const updateResult = await database.query(
+    `
+      UPDATE transactions
+      SET
+        category_definition_id = $2,
+        category_type = $3,
+        auto_categorized = true,
+        confidence_score = CASE
+          WHEN COALESCE(confidence_score, 0) > $4 THEN confidence_score
+          ELSE $4
+        END
+      WHERE LOWER(name) LIKE LOWER($1)
+        ${priceCondition}
+    `,
+    [pattern, categoryDefinitionId, appliedCategoryType, confidence],
+  );
+
+  const transactionsUpdated = updateResult.rowCount || 0;
+
   return {
     success: true,
-    rule: insertResult.rows[0],
-    message: 'Rule created successfully',
+    rule: upsertResult.rows[0],
+    transactionsUpdated,
+    message: transactionsUpdated > 0
+      ? `Rule created and applied to ${transactionsUpdated} transaction${transactionsUpdated === 1 ? '' : 's'}`
+      : 'Rule created successfully',
   };
 }
 

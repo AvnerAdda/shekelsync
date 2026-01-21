@@ -104,6 +104,32 @@ export default defineConfig(({ command }) => ({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunks for better caching
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'mui-vendor': ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
+          'chart-vendor': ['recharts', 'd3', 'd3-sankey'],
+          // Feature-based code splitting
+          'dashboard': [
+            './src/features/dashboard/pages/HomePage.tsx',
+            './src/features/dashboard/components/SummaryCards.tsx',
+            './src/features/dashboard/components/TransactionHistorySection.tsx'
+          ].map(p => path.resolve(__dirname, p)),
+          'analysis': ['./src/features/analysis/pages/AnalysisPageNew.tsx'].map(p => path.resolve(__dirname, p)),
+          'investments': ['./src/features/investments/pages/InvestmentsPage.tsx'].map(p => path.resolve(__dirname, p)),
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1000, // Warn for chunks > 1MB
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove console.log in production
+        drop_debugger: true,
+      },
+    },
   },
   server: {
     port: 5173,

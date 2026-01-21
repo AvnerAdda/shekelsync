@@ -15,6 +15,7 @@ const {
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const { getInstitutionById, mapInstitutionToVendorCode } = require('../institutions.js');
 const { syncBankBalanceToInvestments, forwardFillForCredential } = require('../investments/balance-sync.js');
+const { getCreditCardRepaymentCategoryId } = require('../accounts/repayment-category.js');
 
 const DEFAULT_TIMEOUT = 120000; // 2 minutes
 const MAX_TIMEOUT = 300000; // 5 minutes for problematic scrapers
@@ -638,6 +639,14 @@ async function applyAccountPairings(client) {
     return { pairingsApplied: 0, transactionsUpdated: 0 };
   }
 
+  // Lookup the Credit Card Repayment category ID dynamically
+  const creditCardRepaymentCategoryId = await getCreditCardRepaymentCategoryId(client);
+
+  if (!creditCardRepaymentCategoryId) {
+    console.warn('Credit Card Repayment category not found - skipping account pairings categorization');
+    return { pairingsApplied: 0, transactionsUpdated: 0 };
+  }
+
   let totalUpdated = 0;
 
   for (const pairing of pairings) {
@@ -655,13 +664,13 @@ async function applyAccountPairings(client) {
       return `LOWER(name) LIKE '%' || $${idx + 2} || '%'`;
     });
 
+    // Add the category ID as a parameter
+    params.push(creditCardRepaymentCategoryId);
+    const categoryIdParamIndex = params.length;
+
     let query = `
       UPDATE transactions
-         SET category_definition_id = CASE
-             WHEN price < 0 THEN 25
-             WHEN price > 0 THEN 75
-             ELSE category_definition_id
-           END
+         SET category_definition_id = $${categoryIdParamIndex}
        WHERE vendor = $1
          AND (${conditions.join(' OR ')})
     `;

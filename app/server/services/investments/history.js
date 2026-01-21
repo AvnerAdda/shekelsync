@@ -5,6 +5,13 @@ const {
   getInstitutionByVendorCode,
 } = require('../institutions.js');
 
+// Helper to normalize date to UTC YYYY-MM-DD string
+const toDateStr = (date) => {
+  if (!date) return null;
+  if (typeof date === 'string') return date.split('T')[0];
+  return date.toISOString().split('T')[0];
+};
+
 /**
  * Forward-fill missing dates in history data
  * Takes sparse history data and fills in gaps using last known values
@@ -21,57 +28,45 @@ function forwardFillHistory(history, startDate = null, endDate = null) {
   // Sort by date ascending
   const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
   
-  // Determine date range
-  const firstDate = startDate ? new Date(startDate) : new Date(sorted[0].date);
-  const lastDate = endDate ? new Date(endDate) : new Date();
-  firstDate.setHours(0, 0, 0, 0);
-  lastDate.setHours(0, 0, 0, 0);
-  
-  // Build a map of existing dates
-  const dateMap = new Map();
-  sorted.forEach((point) => {
-    const dateKey = new Date(point.date).toISOString().split('T')[0];
-    dateMap.set(dateKey, point);
-  });
-  
-  const filled = [];
-  let lastKnownPoint = null;
+  // Determine date range in UTC
+  // We use strings YYYY-MM-DD as the canonical source
+  const firstDateStr = toDateStr(startDate) || sorted[0].date;
+  const lastDateStr = toDateStr(endDate) || toDateStr(new Date());
 
-  // Seed the initial value with the latest snapshot on or before the start date
-  if (startDate) {
-    const firstDateTime = firstDate.getTime();
-    for (let i = sorted.length - 1; i >= 0; i--) {
-      const pointDate = new Date(sorted[i].date);
-      pointDate.setHours(0, 0, 0, 0);
-      if (pointDate.getTime() <= firstDateTime) {
-        lastKnownPoint = { ...sorted[i], date: pointDate.toISOString().split('T')[0] };
-        break;
-      }
+  const filled = [];
+  
+  // Find initial state (latest point <= firstDateStr)
+  let lastKnownPoint = null;
+  // Check if we have data before or on start date
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    if (sorted[i].date <= firstDateStr) {
+      lastKnownPoint = { ...sorted[i] };
+      break;
     }
   }
+
+  const currentDate = new Date(firstDateStr + 'T00:00:00Z');
+  const lastDate = new Date(lastDateStr + 'T00:00:00Z');
   
-  // Iterate through each day in the range
-  const currentDate = new Date(firstDate);
-  currentDate.setHours(0, 0, 0, 0);
+  const dateMap = new Map();
+  sorted.forEach((point) => {
+    dateMap.set(point.date, point);
+  });
   
   while (currentDate <= lastDate) {
     const dateKey = currentDate.toISOString().split('T')[0];
     
     if (dateMap.has(dateKey)) {
-      // We have actual data for this date
       lastKnownPoint = dateMap.get(dateKey);
       filled.push(lastKnownPoint);
     } else if (lastKnownPoint) {
-      // No data for this date, forward-fill from last known point
       filled.push({
         ...lastKnownPoint,
         date: dateKey,
-        // Keep all other properties from last known point
       });
     }
-    // If no lastKnownPoint yet, skip this date (before first data point)
     
-    currentDate.setDate(currentDate.getDate() + 1);
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
   }
   
   return filled;
@@ -93,48 +88,35 @@ function forwardFillAggregatedHistory(history, startDate = null, endDate = null)
   // Sort by date ascending
   const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
   
-  // Determine date range
-  const firstDate = startDate ? new Date(startDate) : new Date(sorted[0].date);
-  const lastDate = endDate ? new Date(endDate) : new Date();
-  firstDate.setHours(0, 0, 0, 0);
-  lastDate.setHours(0, 0, 0, 0);
-  
-  // Build a map of existing dates
-  const dateMap = new Map();
-  sorted.forEach((point) => {
-    const dateKey = new Date(point.date).toISOString().split('T')[0];
-    dateMap.set(dateKey, point);
-  });
-  
-  const filled = [];
-  let lastKnownPoint = null;
+  const firstDateStr = toDateStr(startDate) || sorted[0].date;
+  const lastDateStr = toDateStr(endDate) || toDateStr(new Date());
 
-  // Seed the initial value with the latest snapshot on or before the start date
-  if (startDate) {
-    const firstDateTime = firstDate.getTime();
-    for (let i = sorted.length - 1; i >= 0; i--) {
-      const pointDate = new Date(sorted[i].date);
-      pointDate.setHours(0, 0, 0, 0);
-      if (pointDate.getTime() <= firstDateTime) {
-        lastKnownPoint = { ...sorted[i], date: pointDate.toISOString().split('T')[0] };
-        break;
-      }
-    }
+  const filled = [];
+  
+  let lastKnownPoint = null;
+  // Initialize from sorted history if available
+  for (let i = sorted.length - 1; i >= 0; i--) {
+     if (sorted[i].date <= firstDateStr) {
+       lastKnownPoint = { ...sorted[i] };
+       break;
+     }
   }
   
-  // Iterate through each day in the range
-  const currentDate = new Date(firstDate);
-  currentDate.setHours(0, 0, 0, 0);
+  const currentDate = new Date(firstDateStr + 'T00:00:00Z');
+  const lastDate = new Date(lastDateStr + 'T00:00:00Z');
+
+  const dateMap = new Map();
+  sorted.forEach((point) => {
+    dateMap.set(point.date, point);
+  });
   
   while (currentDate <= lastDate) {
     const dateKey = currentDate.toISOString().split('T')[0];
     
     if (dateMap.has(dateKey)) {
-      // We have actual data for this date
       lastKnownPoint = dateMap.get(dateKey);
       filled.push(lastKnownPoint);
     } else if (lastKnownPoint) {
-      // No data for this date, forward-fill from last known point
       const gainLoss = lastKnownPoint.currentValue - lastKnownPoint.costBasis;
       filled.push({
         date: dateKey,
@@ -151,7 +133,7 @@ function forwardFillAggregatedHistory(history, startDate = null, endDate = null)
       });
     }
     
-    currentDate.setDate(currentDate.getDate() + 1);
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
   }
   
   return filled;
@@ -159,24 +141,139 @@ function forwardFillAggregatedHistory(history, startDate = null, endDate = null)
 
 function calculateStartDate(timeRange) {
   const date = new Date();
+
+  const subMonths = (d, n) => {
+    d.setMonth(d.getMonth() - n);
+  };
+
   switch (timeRange) {
+    case '1d':
+      date.setDate(date.getDate() - 1);
+      break;
+    case '1w':
+      date.setDate(date.getDate() - 7);
+      break;
     case '1m':
-      date.setMonth(date.getMonth() - 1);
+      subMonths(date, 1);
+      break;
+    case '2m':
+      subMonths(date, 2);
       break;
     case '3m':
-    default:
-      date.setMonth(date.getMonth() - 3);
+      subMonths(date, 3);
       break;
     case '6m':
-      date.setMonth(date.getMonth() - 6);
+      subMonths(date, 6);
       break;
     case '1y':
       date.setFullYear(date.getFullYear() - 1);
       break;
+    case 'ytd':
+      date.setMonth(0);
+      date.setDate(1);
+      break;
     case 'all':
       return null;
+    default:
+      subMonths(date, 3);
+      break;
   }
   return date;
+}
+
+function normalizeAccountIds(accountId, accountIds) {
+  if (accountId) return [accountId];
+  if (!accountIds) return [];
+  return Array.isArray(accountIds) ? accountIds : [accountIds];
+}
+
+function buildAccountConditions(accountId, idsFilter, paramsList, accountConditions) {
+  if (accountId) {
+    paramsList.push(accountId);
+    accountConditions.push(`ih.account_id = $${paramsList.length}`);
+  } else if (idsFilter.length > 0) {
+    const startIndex = paramsList.length;
+    paramsList.push(...idsFilter);
+    const placeholders = idsFilter.map((_, idx) => `$${startIndex + idx + 1}`).join(',');
+    accountConditions.push(`ih.account_id IN (${placeholders})`);
+  }
+}
+
+async function buildHistoryPoint(row) {
+  const currentValue = row.current_value == null ? 0 : Number.parseFloat(row.current_value);
+  const costBasis = row.cost_basis == null ? 0 : Number.parseFloat(row.cost_basis);
+  const gainLoss = currentValue - costBasis;
+  const accountIdNumber = Number(row.account_id);
+
+  let institution = buildInstitutionFromRow(row);
+  if (!institution && row.account_type) {
+    institution = await getInstitutionByVendorCode(database, row.account_type);
+  }
+
+  return {
+    date: row.snapshot_date,
+    currentValue,
+    costBasis,
+    gainLoss,
+    roi: costBasis > 0 ? (gainLoss / costBasis) * 100 : 0,
+    accountId: accountIdNumber,
+    accountName: row.account_name,
+    accountType: row.account_type,
+    institution: institution || null,
+  };
+}
+
+function aggregateAccountHistories(filledPerAccount) {
+  const aggregatedMap = new Map();
+
+  filledPerAccount.forEach((points) => {
+    points.forEach((point) => {
+      const dateKey = point.date;
+      if (!aggregatedMap.has(dateKey)) {
+        aggregatedMap.set(dateKey, {
+          date: dateKey,
+          currentValue: 0,
+          costBasis: 0,
+          accounts: [],
+        });
+      }
+
+      const entry = aggregatedMap.get(dateKey);
+      entry.currentValue += point.currentValue;
+      entry.costBasis += point.costBasis;
+      entry.accounts.push({
+        account_id: point.accountId,
+        account_name: point.accountName,
+        account_type: point.accountType,
+        current_value: point.currentValue,
+        cost_basis: point.costBasis,
+        institution: point.institution,
+      });
+    });
+  });
+
+  return aggregatedMap;
+}
+
+function formatAggregatedHistory(aggregatedMap) {
+  return Array.from(aggregatedMap.values())
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .map((entry) => {
+      const gainLoss = entry.currentValue - entry.costBasis;
+      return {
+        date: entry.date,
+        currentValue: entry.currentValue,
+        costBasis: entry.costBasis,
+        gainLoss,
+        roi: entry.costBasis > 0 ? (gainLoss / entry.costBasis) * 100 : 0,
+        accountId: null,
+        accountName: null,
+        accountType: null,
+        accountCount: entry.accounts.length,
+        accounts: entry.accounts,
+        institution: null,
+      };
+    });
 }
 
 async function getInvestmentHistory(params = {}) {
@@ -189,23 +286,9 @@ async function getInvestmentHistory(params = {}) {
 
   const paramsList = [];
   const accountConditions = [];
-  const idsFilter = accountId
-    ? [accountId]
-    : accountIds
-      ? Array.isArray(accountIds)
-        ? accountIds
-        : [accountIds]
-      : [];
+  const idsFilter = normalizeAccountIds(accountId, accountIds);
 
-  if (accountId) {
-    paramsList.push(accountId);
-    accountConditions.push(`ih.account_id = $${paramsList.length}`);
-  } else if (idsFilter.length > 0) {
-    const startIndex = paramsList.length;
-    paramsList.push(...idsFilter);
-    const placeholders = idsFilter.map((_, idx) => `$${startIndex + idx + 1}`).join(',');
-    accountConditions.push(`ih.account_id IN (${placeholders})`);
-  }
+  buildAccountConditions(accountId, idsFilter, paramsList, accountConditions);
 
   const holdingsSelect = `
     SELECT 
@@ -284,42 +367,17 @@ async function getInvestmentHistory(params = {}) {
   // Build per-account histories
   const accountHistories = new Map();
   for (const row of uniqueRows.values()) {
-    const currentValue = row.current_value !== null && row.current_value !== undefined
-      ? parseFloat(row.current_value)
-      : 0;
-    const costBasis = row.cost_basis !== null && row.cost_basis !== undefined
-      ? parseFloat(row.cost_basis)
-      : 0;
-    const gainLoss = currentValue - costBasis;
-
-    const accountIdNumber = Number(row.account_id);
-    let institution = buildInstitutionFromRow(row);
-    if (!institution && row.account_type) {
-      institution = await getInstitutionByVendorCode(database, row.account_type);
+    const point = await buildHistoryPoint(row);
+    if (!accountHistories.has(point.accountId)) {
+      accountHistories.set(point.accountId, []);
     }
-
-    if (!accountHistories.has(accountIdNumber)) {
-      accountHistories.set(accountIdNumber, []);
-    }
-
-    accountHistories.get(accountIdNumber).push({
-      date: row.snapshot_date,
-      currentValue,
-      costBasis,
-      gainLoss,
-      roi: costBasis > 0 ? (gainLoss / costBasis) * 100 : 0,
-      accountId: accountIdNumber,
-      accountName: row.account_name,
-      accountType: row.account_type,
-      institution: institution || null,
-    });
+    accountHistories.get(point.accountId).push(point);
   }
 
   // Forward-fill each account individually
   const filledPerAccount = new Map();
   for (const [id, points] of accountHistories.entries()) {
-    const filled = forwardFillHistory(points, startDate, today);
-    filledPerAccount.set(id, filled);
+    filledPerAccount.set(id, forwardFillHistory(points, startDate, today));
   }
 
   // If a single account is requested, return its filled history
@@ -334,53 +392,9 @@ async function getInvestmentHistory(params = {}) {
     };
   }
 
-  // Aggregate across the requested accounts (or all accounts)
-  const aggregatedMap = new Map();
-  filledPerAccount.forEach((points) => {
-    points.forEach((point) => {
-      const dateKey = point.date;
-      if (!aggregatedMap.has(dateKey)) {
-        aggregatedMap.set(dateKey, {
-          date: dateKey,
-          currentValue: 0,
-          costBasis: 0,
-          accounts: [],
-        });
-      }
-
-      const entry = aggregatedMap.get(dateKey);
-      entry.currentValue += point.currentValue;
-      entry.costBasis += point.costBasis;
-      entry.accounts.push({
-        account_id: point.accountId,
-        account_name: point.accountName,
-        account_type: point.accountType,
-        current_value: point.currentValue,
-        cost_basis: point.costBasis,
-        institution: point.institution,
-      });
-    });
-  });
-
-  const aggregatedHistory = Array.from(aggregatedMap.values())
-    .sort((a, b) => new Date(a.date) - new Date(b.date))
-    .map((entry) => {
-      const gainLoss = entry.currentValue - entry.costBasis;
-      return {
-        date: entry.date,
-        currentValue: entry.currentValue,
-        costBasis: entry.costBasis,
-        gainLoss,
-        roi: entry.costBasis > 0 ? (gainLoss / entry.costBasis) * 100 : 0,
-        accountId: null,
-        accountName: null,
-        accountType: null,
-        accountCount: entry.accounts.length,
-        accounts: entry.accounts,
-        institution: null,
-      };
-    });
-
+  // Aggregate and format
+  const aggregatedMap = aggregateAccountHistories(filledPerAccount);
+  const aggregatedHistory = formatAggregatedHistory(aggregatedMap);
   const filledHistory = forwardFillAggregatedHistory(aggregatedHistory, startDate, today);
 
   return {

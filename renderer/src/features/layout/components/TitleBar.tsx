@@ -66,6 +66,8 @@ import { useUpdateManager } from '../hooks/useUpdateManager';
 import { useThemeMode } from '@renderer/contexts/ThemeContext';
 import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
 import type { SupportedLocale } from '@renderer/i18n';
+import SecurityIndicator from '@renderer/features/security/components/SecurityIndicator';
+import SecurityDetailsModal from '@renderer/features/security/components/SecurityDetailsModal';
 
 interface TitleBarProps {
   sessionDisplayName?: string | null;
@@ -81,6 +83,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   const [isMaximized, setIsMaximized] = useState(false);
   const [windowClassesApplied, setWindowClassesApplied] = useState(false);
   const [langMenuAnchor, setLangMenuAnchor] = useState<null | HTMLElement>(null);
+  const [securityDetailsOpen, setSecurityDetailsOpen] = useState(false);
 
   // Theme and language hooks
   const { mode, setMode, actualTheme } = useThemeMode();
@@ -816,6 +819,8 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
 
         <SmartNotifications />
 
+        <SecurityIndicator onClick={() => setSecurityDetailsOpen(true)} />
+
         {/* Window Controls - Hide on macOS as we use native traffic lights */}
         {!isMacOS && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 2, borderLeft: `1px solid ${alpha(theme.palette.divider, 0.1)}`, pl: 2 }}>
@@ -875,6 +880,11 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
           </Box>
         )}
       </Box>
+
+      <SecurityDetailsModal
+        open={securityDetailsOpen}
+        onClose={() => setSecurityDetailsOpen(false)}
+      />
     </Box>
   );
 };

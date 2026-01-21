@@ -1,6 +1,6 @@
 const database = require('../database.js');
 const pairingsService = require('./pairings.js');
-const { getCreditCardRepaymentCategoryCondition } = require('./repayment-category.js');
+const { getCreditCardRepaymentCategoryCondition, getCreditCardRepaymentCategoryId } = require('./repayment-category.js');
 
 // Credit card vendor keywords (Hebrew and English)
 const VENDOR_KEYWORDS = {
@@ -754,19 +754,27 @@ async function applyPairingToTransactions({
   const client = await getDatabase().getClient();
 
   try {
+    // Lookup the Credit Card Repayment category ID dynamically
+    const creditCardRepaymentCategoryId = await getCreditCardRepaymentCategoryId(client);
+
+    if (!creditCardRepaymentCategoryId) {
+      console.warn('Credit Card Repayment category not found - skipping pairing categorization');
+      return { transactionsUpdated: 0 };
+    }
+
     const params = [bankVendor];
     const conditions = matchPatterns.map((pattern, idx) => {
       params.push(String(pattern).toLowerCase());
       return `LOWER(name) LIKE '%' || $${idx + 2} || '%'`;
     });
 
+    // Add the category ID as a parameter
+    params.push(creditCardRepaymentCategoryId);
+    const categoryIdParamIndex = params.length;
+
     let query = `
       UPDATE transactions
-         SET category_definition_id = CASE
-             WHEN price < 0 THEN 25
-             WHEN price > 0 THEN 75
-             ELSE category_definition_id
-           END
+         SET category_definition_id = $${categoryIdParamIndex}
        WHERE vendor = $1
          AND (${conditions.join(' OR ')})
     `;
