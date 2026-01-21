@@ -11,10 +11,10 @@ function safeDecrypt(value) {
   try {
     return decrypt(value);
   } catch (error) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('[credentials] Failed to decrypt value, returning raw payload for dev data');
-    }
-    return value;
+    // SECURITY: Never return raw encrypted values
+    // If decryption fails, it means the key changed or data is corrupted
+    console.error('[credentials] SECURITY: Failed to decrypt credential field');
+    throw new Error('Failed to decrypt credential. The encryption key may have changed.');
   }
 }
 

@@ -12,26 +12,8 @@ import {
   TableCell,
   TableBody,
   Chip,
-  Button,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  ToggleButtonGroup,
-  ToggleButton,
 } from '@mui/material';
 import {
-  Timeline as TimelineIcon,
-  ExpandMore as ExpandMoreIcon,
-  TableChart as TableIcon,
-  ShowChart as ChartIcon,
-} from '@mui/icons-material';
-import {
-  LineChart,
-  Line,
   AreaChart,
   Area,
   XAxis,
@@ -42,8 +24,8 @@ import {
   Tooltip as RechartsTooltip,
 } from 'recharts';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
-import { PortfolioHistoryPoint, InvestmentData, PortfolioSummary, InvestmentAccountSummary } from '@renderer/types/investments';
-import { useInvestmentsFilters, HistoryTimeRangeOption } from '../InvestmentsFiltersContext';
+import { PortfolioHistoryPoint, InvestmentData, PortfolioSummary } from '@renderer/types/investments';
+import { useInvestmentsFilters } from '../InvestmentsFiltersContext';
 import { useTranslation } from 'react-i18next';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
 
@@ -61,6 +43,27 @@ const CHART_COLORS = [
   '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#a05195', '#d45087', '#f95d6a', '#ff7c43', '#ffa600'
 ];
 
+// Helper to get localized category label
+interface TransactionWithLocale {
+  category_name?: string;
+  category_name_en?: string;
+  category_name_fr?: string;
+}
+
+function getLocalizedCategoryLabel(
+  txn: TransactionWithLocale,
+  locale: string,
+  fallback: string
+): string {
+  if (locale.startsWith('fr')) {
+    return txn.category_name_fr || txn.category_name_en || txn.category_name || fallback;
+  }
+  if (locale.startsWith('en')) {
+    return txn.category_name_en || txn.category_name_fr || txn.category_name || fallback;
+  }
+  return txn.category_name || txn.category_name_fr || txn.category_name_en || fallback;
+}
+
 const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
   overallHistory,
   accountHistories,
@@ -71,15 +74,12 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
 }) => {
   const theme = useTheme();
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
-  const { historyTimeRange, setHistoryTimeRange, viewMode, setViewMode } = useInvestmentsFilters();
+  const { viewMode } = useInvestmentsFilters();
   const [displayMode, setDisplayMode] = useState<'chart' | 'table'>(
     viewMode === 'detailed' ? 'table' : 'chart'
   );
-  const [expanded, setExpanded] = useState(true);
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'investmentsPage.history' });
   const locale = (i18n.language || 'he').toLowerCase();
-  const currentValueLabel = t('series.currentValue');
-  const costBasisLabel = t('series.costBasis');
 
   useEffect(() => {
     setDisplayMode(viewMode === 'detailed' ? 'table' : 'chart');
@@ -121,7 +121,7 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
     Object.values(accountHistories).forEach(history => {
       history.forEach(point => allDates.add(point.date.split('T')[0]));
     });
-    const sortedDates = Array.from(allDates).sort();
+    const sortedDates = Array.from(allDates).sort((a, b) => a.localeCompare(b));
 
     // 3. Build data points
     const data = sortedDates.map(dateStr => {
@@ -238,7 +238,7 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
                       month: 'short',
                       day: 'numeric',
                       year: 'numeric'
-                    }) : label}
+                    }) : String(label)}
                   />
                 );
               }}
@@ -309,13 +309,7 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={
-                              locale.startsWith('fr')
-                                ? (txn.category_name_fr || txn.category_name_en || txn.category_name)
-                                : locale.startsWith('en')
-                                ? (txn.category_name_en || txn.category_name_fr || txn.category_name)
-                                : (txn.category_name || txn.category_name_fr || txn.category_name_en) || t('table.investment')
-                            }
+                            label={getLocalizedCategoryLabel(txn, locale, t('table.investment'))}
                             size="small"
                             variant="outlined"
                           />

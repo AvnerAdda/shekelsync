@@ -6,7 +6,11 @@
     "dev:api": "ELECTRON_API_PORT=44373 SQLITE_DB_PATH=$(pwd)/dist/clarify.sqlite USE_SQLITE=true node electron/dev-api-server.js",
     "dev:electron:anonymized": "SQLITE_DB_PATH=$(pwd)/dist/clarify-anonymized.sqlite USE_SQLITE=true npm --prefix app run electron-dev",
     "dev:electron:real": "SQLITE_DB_PATH=$(pwd)/dist/clarify.sqlite USE_SQLITE=true npm --prefix app run electron-dev",
-    "test": "ALLOW_DEV_NO_ENCRYPTION=true npm --prefix app run test:coverage && npm --prefix renderer run test:unit && npm --prefix renderer run test:e2e",
+    "test": "npm --prefix app run test:coverage && npm --prefix renderer run test:unit && npm --prefix renderer run test:e2e",
+    "test:security": "KEYTAR_DISABLE=true vitest run --config vitest.config.js",
+    "test:security:coverage": "KEYTAR_DISABLE=true vitest run --config vitest.config.js --coverage",
+    "test:security:watch": "KEYTAR_DISABLE=true vitest watch --config vitest.config.js",
+    "audit:security": "npm audit --audit-level=moderate && npm run test:security:coverage",
     "icons:icns": "node scripts/generate-icns.js",
     "logs:bundle": "node scripts/collect-logs.js",
     "benchmark:check": "node scripts/benchmarks/assert-benchmarks.js"

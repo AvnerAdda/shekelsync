@@ -23,6 +23,34 @@ import { useTranslation } from 'react-i18next';
 import { HistoryTimeRangeOption } from '../InvestmentsFiltersContext';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
 
+// Helper to calculate portfolio change values
+function calculatePortfolioChange(
+  firstPoint: PortfolioHistoryPoint | undefined,
+  lastPoint: PortfolioHistoryPoint | undefined
+) {
+  const valueChange = lastPoint && firstPoint
+    ? lastPoint.currentValue - firstPoint.currentValue
+    : 0;
+  const percentChange = firstPoint && firstPoint.currentValue > 0
+    ? ((lastPoint?.currentValue || 0) - firstPoint.currentValue) / firstPoint.currentValue * 100
+    : 0;
+  return { valueChange, percentChange, isPositive: valueChange >= 0 };
+}
+
+// Helper to calculate chart value based on view mode
+function calculateChartValue(
+  point: PortfolioHistoryPoint,
+  viewMode: 'value' | 'performance',
+  firstPointValue: number | undefined
+): number {
+  if (viewMode === 'value') {
+    return point.currentValue;
+  }
+  return firstPointValue && firstPointValue > 0
+    ? ((point.currentValue - firstPointValue) / firstPointValue) * 100
+    : 0;
+}
+
 interface PortfolioValuePanelProps {
   portfolioData: PortfolioSummary | null;
   overallHistory: PortfolioHistoryPoint[];
@@ -32,14 +60,6 @@ interface PortfolioValuePanelProps {
   onViewModeChange: (mode: 'value' | 'performance') => void;
   loading: boolean;
 }
-
-const TIME_RANGES: { value: HistoryTimeRangeOption; label: string }[] = [
-  { value: '1m', label: '1M' },
-  { value: '3m', label: '3M' },
-  { value: '6m', label: '6M' },
-  { value: '1y', label: '1Y' },
-  { value: 'all', label: 'ALL' },
-];
 
 const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
   portfolioData,
@@ -59,14 +79,8 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
 
   // Calculate change from history
   const firstPoint = overallHistory[0];
-  const lastPoint = overallHistory[overallHistory.length - 1];
-  const valueChange = lastPoint && firstPoint
-    ? lastPoint.currentValue - firstPoint.currentValue
-    : 0;
-  const percentChange = firstPoint && firstPoint.currentValue > 0
-    ? ((lastPoint?.currentValue || 0) - firstPoint.currentValue) / firstPoint.currentValue * 100
-    : 0;
-  const isPositive = valueChange >= 0;
+  const lastPoint = overallHistory.at(-1);
+  const { valueChange, percentChange, isPositive } = calculatePortfolioChange(firstPoint, lastPoint);
 
   // Format chart data based on view mode
   const chartData = overallHistory.map(point => {
@@ -77,11 +91,7 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
         day: 'numeric',
       }),
       fullDate: point.date,
-      value: viewMode === 'value'
-        ? point.currentValue
-        : firstPoint && firstPoint.currentValue > 0
-          ? ((point.currentValue - firstPoint.currentValue) / firstPoint.currentValue) * 100
-          : 0,
+      value: calculateChartValue(point, viewMode, firstPoint?.currentValue),
     };
   });
 
@@ -267,14 +277,14 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
 
                       items.push({
                         label: t('tooltipChangePercent', 'Change %'),
-                        value: changePercent.toFixed(2),
+                        value: changePercent,
                         type: 'percentage',
                       });
                     }
                   } else {
                     items.push({
                       label: t('tooltipPerformance', 'Performance'),
-                      value: `${value >= 0 ? '+' : ''}${value.toFixed(2)}`,
+                      value: value,
                       type: 'percentage',
                       color: chartColor,
                     });
@@ -288,7 +298,7 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric'
-                      }) : label}
+                      }) : String(label)}
                     />
                   );
                 }}
@@ -322,33 +332,6 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
             </Typography>
           </Box>
         )}
-      </Box>
-
-      {/* Time Range Selector */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-start', mt: 2, gap: 0.5 }}>
-        {TIME_RANGES.map(range => (
-          <Box
-            key={range.value}
-            onClick={() => onTimeRangeChange(range.value)}
-            sx={{
-              px: 1.5,
-              py: 0.5,
-              borderRadius: 1,
-              cursor: 'pointer',
-              fontSize: '0.75rem',
-              fontWeight: historyTimeRange === range.value ? 600 : 400,
-              color: historyTimeRange === range.value ? 'primary.main' : 'text.secondary',
-              bgcolor: historyTimeRange === range.value
-                ? alpha(theme.palette.primary.main, 0.1)
-                : 'transparent',
-              '&:hover': {
-                bgcolor: alpha(theme.palette.primary.main, 0.05),
-              },
-            }}
-          >
-            {range.label}
-          </Box>
-        ))}
       </Box>
     </Paper>
   );

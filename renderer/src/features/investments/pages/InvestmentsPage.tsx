@@ -36,6 +36,17 @@ import PortfolioValuePanel from '../components/PortfolioValuePanel';
 import AllocationDonutChart from '../components/AllocationDonutChart';
 import PerformanceCardsSection from '../components/PerformanceCardsSection';
 
+const TIME_RANGES: { value: HistoryTimeRangeOption; label: string }[] = [
+  { value: '1w', label: '1W' },
+  { value: '1m', label: '1M' },
+  { value: '2m', label: '2M' },
+  { value: '3m', label: '3M' },
+  { value: '6m', label: '6M' },
+  { value: 'ytd', label: 'YTD' },
+  { value: '1y', label: '1Y' },
+  { value: 'all', label: 'ALL' },
+];
+
 const InvestmentsPageContent: React.FC = () => {
   const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage' });
@@ -209,7 +220,36 @@ const InvestmentsPageContent: React.FC = () => {
         <Typography variant="h5" fontWeight={700}>
           {t('header.title')}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          {/* Time Range Selector */}
+          <Box sx={{ display: 'flex', gap: 0.5, mr: 2, bgcolor: alpha(theme.palette.background.paper, 0.5), p: 0.5, borderRadius: 1 }}>
+            {TIME_RANGES.map(range => (
+              <Box
+                key={range.value}
+                onClick={() => setHistoryTimeRange(range.value)}
+                sx={{
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: 1,
+                  cursor: 'pointer',
+                  fontSize: '0.75rem',
+                  fontWeight: historyTimeRange === range.value ? 600 : 400,
+                  color: historyTimeRange === range.value ? 'primary.main' : 'text.secondary',
+                  bgcolor: historyTimeRange === range.value
+                    ? alpha(theme.palette.primary.main, 0.1)
+                    : 'transparent',
+                  '&:hover': {
+                    bgcolor: alpha(theme.palette.primary.main, 0.05),
+                  },
+                  transition: 'all 0.2s',
+                }}
+              >
+                {range.label}
+              </Box>
+            ))}
+          </Box>
+
           <Tooltip title={t('actions.refreshTooltip')}>
             <IconButton
               onClick={handleRefreshAll}

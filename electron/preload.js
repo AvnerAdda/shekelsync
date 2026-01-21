@@ -63,6 +63,12 @@ const authBridge = Object.freeze({
   clearSession: () => ipcRenderer.invoke('auth:clearSession')
 });
 
+const biometricAuthBridge = Object.freeze({
+  isAvailable: () => ipcRenderer.invoke('biometric:isAvailable'),
+  authenticate: (reason) => ipcRenderer.invoke('biometric:authenticate', reason),
+  getStatus: () => ipcRenderer.invoke('biometric:getStatus'),
+});
+
 const eventsBridge = Object.freeze({
   onScrapeProgress: (callback) => {
     const wrappedCallback = (event, ...args) => callback(...args);
@@ -168,6 +174,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Core API operations (native IPC)
   api: {
+    // Get API authentication token
+    getToken: () => ipcRenderer.invoke('api:getToken'),
+
     // Core endpoints using direct IPC (faster)
     ping: () => ipcRenderer.invoke('api:ping'),
     credentials: () => ipcRenderer.invoke('api:credentials'),
@@ -219,6 +228,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Auth/session persistence
   auth: authBridge,
+  biometricAuth: biometricAuthBridge,
   log: logBridge,
   diagnostics: diagnosticsBridge,
   telemetry: telemetryBridge,

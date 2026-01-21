@@ -89,6 +89,7 @@ const { configManager } = require('./config');
 const { dbManager } = require('./database');
 const sessionStore = require('./session-store');
 const { describeTelemetryState } = require('./telemetry-utils');
+const secureKeyManager = require('./secure-key-manager');
 
 const telemetryState = {
   enabled: false,
@@ -133,27 +134,31 @@ function wireTelemetryMetricsReporter() {
 }
 
 async function ensureEncryptionKey(config) {
+  // Check if key is already set in environment
   if (process.env.CLARIFY_ENCRYPTION_KEY) {
+    logger.info('Using encryption key from environment variable');
     return;
   }
 
-  const existingKey = config?.encryption?.key;
-  if (existingKey) {
-    process.env.CLARIFY_ENCRYPTION_KEY = existingKey;
-    return;
-  }
-
-  const generatedKey = crypto.randomBytes(32).toString('hex');
-  process.env.CLARIFY_ENCRYPTION_KEY = generatedKey;
-  if (config) {
-    config.encryption = config.encryption || {};
-    config.encryption.key = generatedKey;
-  }
-
+  // Use secure key manager to get or generate key from OS keychain
   try {
-    await configManager.updateConfig({ encryption: { key: generatedKey } });
+    const masterKey = await secureKeyManager.getKey();
+    process.env.CLARIFY_ENCRYPTION_KEY = masterKey;
+    logger.info('Encryption key loaded from secure storage');
+
+    // SECURITY: Remove any old keys from config file if they exist
+    if (config?.encryption?.key) {
+      logger.warn('Removing legacy encryption key from config file for security');
+      delete config.encryption.key;
+      try {
+        await configManager.updateConfig({ encryption: {} });
+      } catch (error) {
+        logger.warn('Failed to remove legacy encryption key from config', { error: error.message });
+      }
+    }
   } catch (error) {
-    logger.warn('Failed to persist CLARIFY_ENCRYPTION_KEY', { error: error.message });
+    logger.error('CRITICAL: Failed to initialize encryption key', { error: error.message });
+    throw new Error(`Cannot initialize encryption: ${error.message}`);
   }
 }
 
@@ -328,6 +333,7 @@ async function initializeBackendServices({ skipEmbeddedApi }) {
         const serverResult = await setupAPIServer(mainWindow);
         apiServer = serverResult.server;
         apiPort = serverResult.port;
+        apiToken = serverResult.apiToken; // Store API token
         console.log(`API server started on port ${apiPort}`);
         logger.info('Embedded API server started', { port: apiPort });
       } catch (error) {
@@ -369,6 +375,7 @@ function getScrapingService() {
 let mainWindow;
 let apiServer;
 let apiPort;
+let apiToken; // API authentication token for internal API
 let appTray;
 
 // Development mode logging
@@ -698,6 +705,36 @@ async function createWindow() {
 // App event handlers
 app.whenReady().then(async () => {
   await loadInitialSettings();
+
+  // Touch ID authentication on macOS
+  if (isMac) {
+    try {
+      const biometricAuthManager = require('./auth/biometric-auth');
+      const isAvailable = await biometricAuthManager.isAvailable();
+
+      if (isAvailable) {
+        logger.info('[Main] Touch ID is available, prompting for authentication...');
+        try {
+          const result = await biometricAuthManager.authenticate('Authenticate to open ShekelSync');
+          if (result.success) {
+            logger.info('[Main] Touch ID authentication successful');
+          } else {
+            logger.warn('[Main] Touch ID authentication failed, proceeding anyway');
+          }
+        } catch (error) {
+          // If authentication fails or is cancelled, log it but don't block app launch
+          logger.warn('[Main] Touch ID authentication error:', error.message);
+          console.warn('Touch ID authentication failed:', error.message);
+        }
+      } else {
+        logger.info('[Main] Touch ID not available on this system');
+      }
+    } catch (error) {
+      logger.error('[Main] Error initializing Touch ID:', error.message);
+      console.error('Error initializing Touch ID:', error);
+    }
+  }
+
   await createWindow();
   setupTray();
 
@@ -846,6 +883,40 @@ ipcMain.handle('diagnostics:export', async (_event, outputPath) => {
     appVersion: app.getVersion(),
     telemetry: getTelemetryDiagnostics(),
   });
+});
+
+// Biometric authentication
+ipcMain.handle('biometric:isAvailable', async () => {
+  try {
+    const biometricAuthManager = require('./auth/biometric-auth');
+    const available = await biometricAuthManager.isAvailable();
+    return { success: true, available };
+  } catch (error) {
+    console.error('[IPC] Biometric availability check failed:', error);
+    return { success: false, available: false, error: error.message };
+  }
+});
+
+ipcMain.handle('biometric:authenticate', async (_event, reason) => {
+  try {
+    const biometricAuthManager = require('./auth/biometric-auth');
+    const result = await biometricAuthManager.authenticate(reason);
+    return result;
+  } catch (error) {
+    console.error('[IPC] Biometric authentication failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('biometric:getStatus', async () => {
+  try {
+    const biometricAuthManager = require('./auth/biometric-auth');
+    const status = biometricAuthManager.getStatus();
+    return { success: true, data: status };
+  } catch (error) {
+    console.error('[IPC] Biometric status check failed:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 // Database operations
@@ -1135,6 +1206,14 @@ ipcMain.handle('window:getZoomLevel', () => {
   return mainWindow ? mainWindow.webContents.getZoomLevel() : 0;
 });
 
+// Get API token (for authenticated requests)
+ipcMain.handle('api:getToken', () => {
+  if (!apiToken) {
+    return { success: false, error: 'API token not available' };
+  }
+  return { success: true, token: apiToken };
+});
+
 // API proxy handler
 ipcMain.handle('api:request', async (event, { method, endpoint, data, headers = {} }) => {
   try {
@@ -1149,6 +1228,11 @@ ipcMain.handle('api:request', async (event, { method, endpoint, data, headers = 
         ...headers
       }
     };
+
+    // Add authentication token if API server is running
+    if (apiToken) {
+      fetchOptions.headers['Authorization'] = `Bearer ${apiToken}`;
+    }
 
     if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
       fetchOptions.body = JSON.stringify(data);

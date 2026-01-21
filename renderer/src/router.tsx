@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { createHashRouter, useOutletContext } from 'react-router-dom';
 import AppLayout, { AppLayoutContext } from './routes/AppLayout';
+import LoadingFallback from './components/LoadingFallback';
 
 const HomePage = lazy(() => import('@renderer/features/dashboard/pages/HomePage'));
 const AnalysisPageNew = lazy(() => import('@renderer/features/analysis/pages/AnalysisPageNew'));
@@ -10,7 +11,7 @@ const SettingsPage = lazy(() => import('@renderer/features/settings/pages/Settin
 type OutletContext = AppLayoutContext;
 
 const withSuspense = (node: JSX.Element) => (
-  <Suspense fallback={null}>
+  <Suspense fallback={<LoadingFallback />}>
     {node}
   </Suspense>
 );

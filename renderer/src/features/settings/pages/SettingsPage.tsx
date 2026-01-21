@@ -29,6 +29,7 @@ import { useChatbotPermissions } from '@app/contexts/ChatbotPermissionsContext';
 import DataExportPanel from '../components/DataExportPanel';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
 import EnhancedProfileSection from '../components/EnhancedProfileSection';
+import SecuritySettingsPanel from '../components/SecuritySettingsPanel';
 import { useTelemetry } from '@app/contexts/TelemetryContext';
 import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
 import type { SupportedLocale } from '@renderer/i18n';
@@ -427,6 +428,11 @@ const SettingsPage: React.FC = () => {
             : tSettings('privacy.maskOff')}
         </Alert>
       </Paper>
+
+      <Divider sx={{ my: 4 }} />
+
+      {/* Security Settings */}
+      <SecuritySettingsPanel />
 
       <Divider sx={{ my: 4 }} />
 

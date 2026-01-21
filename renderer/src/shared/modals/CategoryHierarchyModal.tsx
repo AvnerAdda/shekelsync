@@ -97,6 +97,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
+import CategoryIconComponent from '@renderer/features/breakdown/components/CategoryIcon';
 
 interface CategoryDefinition {
   id: number;
@@ -194,47 +195,7 @@ type LocalizedCategoryInfo = {
   category_name_he?: string | null;
 };
 
-// Icon mapping for dynamic icon rendering
-const ICON_MAP: Record<string, React.ComponentType<any>> = {
-  Restaurant: RestaurantIcon,
-  DirectionsCar: DirectionsCarIcon,
-  LocalGroceryStore: LocalGroceryStoreIcon,
-  ShoppingCart: ExpenseIcon,
-  Home: HomeIcon,
-  Flight: FlightIcon,
-  LocalHospital: LocalHospitalIcon,
-  School: SchoolIcon,
-  FitnessCenter: FitnessCenterIcon,
-  Smartphone: SmartphoneIcon,
-  Checkroom: CheckroomIcon,
-  Pets: PetsIcon,
-  SportsEsports: SportsEsportsIcon,
-  Theaters: TheatersIcon,
-  LocalBar: LocalBarIcon,
-  LocalCafe: LocalCafeIcon,
-  AccountBalance: AccountBalanceIcon,
-  CreditCard: CreditCardIcon,
-  Savings: SavingsIcon,
-  Work: WorkIcon,
-  AttachMoney: AttachMoneyIcon,
-  TrendingUp: InvestmentIcon,
-  TrendingDown: TrendingDownIcon,
-  MonetizationOn: IncomeIcon,
-  LocalTaxi: LocalTaxiIcon,
-  Train: TrainIcon,
-  LocalGasStation: LocalGasStationIcon,
-  ElectricBolt: ElectricBoltIcon,
-  Water: WaterIcon,
-  Wifi: WifiIcon,
-  Phone: PhoneIcon,
-  LiveTv: LiveTvIcon,
-  MedicalServices: MedicalServicesIcon,
-  Cake: CakeIcon,
-  CardGiftcard: CardGiftcardIcon,
-  ChildCare: ChildCareIcon,
-  MenuBook: MenuBookIcon,
-  Category: CategoryIcon,
-};
+// Icon rendering is now handled by the CategoryIcon component which supports all Material-UI icons dynamically
 
 const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   open,
@@ -298,6 +259,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [transactionMoveMenuAnchor, setTransactionMoveMenuAnchor] = useState<HTMLElement | null>(null);
   const [movingFromCategory, setMovingFromCategory] = useState<CategoryDefinition | null>(null);
 
+  // Re-categorize by Rule Dialog State
+  const [recategorizeDialogOpen, setRecategorizeDialogOpen] = useState(false);
+  const [recategorizeTransaction, setRecategorizeTransaction] = useState<TransactionMatch | null>(null);
+  const [recategorizeTargetCategoryId, setRecategorizeTargetCategoryId] = useState<number | null>(null);
+  const [recategorizeCategoryType, setRecategorizeCategoryType] = useState<CategoryType>('expense');
+  const [isCreatingRecategorizeRule, setIsCreatingRecategorizeRule] = useState(false);
+
   // Memoized grouped transactions by category ID -> grouped by name
   const groupedTransactionsCache = useMemo(() => {
     const cache = new Map<number, [string, TransactionMatch[]][]>();
@@ -356,12 +324,15 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   };
 
   const getCategoryIcon = (category: CategoryDefinition) => {
-    if (category.icon && ICON_MAP[category.icon]) {
-      const IconComponent = ICON_MAP[category.icon];
-      return <IconComponent sx={{ mr: 1, color: category.color || 'text.secondary' }} />;
-    }
-    // Fallback to generic category icon
-    return <CategoryIcon sx={{ mr: 1, color: category.color || 'text.secondary' }} />;
+    return (
+      <Box sx={{ mr: 1, display: 'inline-flex', alignItems: 'center' }}>
+        <CategoryIconComponent
+          iconName={category.icon}
+          color={category.color || undefined}
+          size={20}
+        />
+      </Box>
+    );
   };
 
   const categoryLookup = useMemo(() => {
@@ -1228,35 +1199,79 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     }
   };
 
-  const handleCreateRuleFromTransaction = async (txn: TransactionMatch, category: CategoryDefinition) => {
+  // Opens the Re-categorize by Rule dialog
+  const handleCreateRuleFromTransaction = (txn: TransactionMatch, _category: CategoryDefinition) => {
+    setRecategorizeTransaction(txn);
+    setRecategorizeTargetCategoryId(null);
+    setRecategorizeCategoryType('expense');
+    setRecategorizeDialogOpen(true);
+  };
+
+  // Handles closing the Re-categorize dialog
+  const handleCloseRecategorizeDialog = () => {
+    setRecategorizeDialogOpen(false);
+    setRecategorizeTransaction(null);
+    setRecategorizeTargetCategoryId(null);
+    setIsCreatingRecategorizeRule(false);
+  };
+
+  // Creates the rule with the selected category
+  const handleConfirmRecategorize = async () => {
+    if (!recategorizeTransaction || !recategorizeTargetCategoryId) {
+      setError(t('errors.selectCategory'));
+      return;
+    }
+
+    const targetCategory = categoryLookup.get(recategorizeTargetCategoryId);
+    if (!targetCategory) {
+      setError(t('errors.targetCategoryNotFound'));
+      return;
+    }
+
+    setIsCreatingRecategorizeRule(true);
+
     try {
       setError(null);
 
       const response = await apiClient.post('/api/categorization_rules/auto-create', {
-        transactionName: txn.name,
-        categoryDefinitionId: category.id,
-        categoryType: category.category_type,
+        transactionName: recategorizeTransaction.name,
+        categoryDefinitionId: recategorizeTargetCategoryId,
+        categoryType: targetCategory.category_type,
       });
 
       const result = response.data as any;
 
       if (!response.ok) {
         if ((response.data as any).status === 409) {
-          setSuccess(t('notifications.ruleExistsForName', { name: txn.name }));
+          setSuccess(t('notifications.ruleExistsForName', { name: recategorizeTransaction.name }));
           setTimeout(() => setSuccess(null), 3000);
+          handleCloseRecategorizeDialog();
           return;
         } else {
           throw new Error(result.error || t('errors.createRule'));
         }
       }
 
-      setSuccess(t('notifications.ruleCreatedForName', { name: txn.name }));
+      const transactionsUpdated = result.transactionsUpdated || 0;
+      const successMessage = transactionsUpdated > 0
+        ? t('notifications.ruleCreatedAndApplied', {
+            name: recategorizeTransaction.name,
+            count: transactionsUpdated,
+            defaultValue: `Rule created for "${recategorizeTransaction.name}" and applied to ${transactionsUpdated} transaction${transactionsUpdated === 1 ? '' : 's'}`,
+          })
+        : t('notifications.ruleCreatedForName', { name: recategorizeTransaction.name });
+      setSuccess(successMessage);
       setTimeout(() => setSuccess(null), 5000);
 
+      handleCloseRecategorizeDialog();
       await fetchRules();
+      await fetchCategories(); // Refresh categories to show updated counts
+      onCategoriesUpdated();
     } catch (error) {
       console.error('Error creating rule:', error);
       setError(error instanceof Error && error.message ? error.message : t('errors.createRule'));
+    } finally {
+      setIsCreatingRecategorizeRule(false);
     }
   };
 
@@ -1714,9 +1729,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                               borderColor: isNameExpanded
                                 ? alpha(theme.palette.primary.main, 0.3)
                                 : alpha(theme.palette.divider, 0.3),
-                              '& .txn-actions': {
-                                opacity: 1,
-                              }
                             },
                           }}
                         >
@@ -1809,15 +1821,18 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                             </Typography>
                           </Box>
 
-                          {/* Actions - Only Create Rule on header */}
+                          {/* Actions - Create Rule button */}
                           <Box
                             className="txn-actions"
                             sx={{
                               display: 'flex',
                               alignItems: 'center',
                               gap: 0.25,
-                              opacity: 0,
+                              opacity: 0.7,
                               transition: 'opacity 0.15s ease',
+                              '&:hover': {
+                                opacity: 1,
+                              }
                             }}
                             onClick={(e) => e.stopPropagation()}
                           >
@@ -1826,8 +1841,14 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                                 size="small"
                                 sx={{
                                   p: 0.5,
-                                  color: 'text.secondary',
-                                  '&:hover': { color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.1) }
+                                  color: 'primary.main',
+                                  bgcolor: alpha(theme.palette.primary.main, 0.08),
+                                  '&:hover': {
+                                    color: 'primary.main',
+                                    bgcolor: alpha(theme.palette.primary.main, 0.15),
+                                    transform: 'scale(1.05)',
+                                  },
+                                  transition: 'all 0.15s ease',
                                 }}
                                 onClick={() => handleCreateRuleFromTransaction(txns[0], category)}
                               >
@@ -2002,29 +2023,35 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   // Helper function to filter categories by search query (returns matching categories with their children preserved)
   const filterCategoriesBySearch = useCallback((cats: CategoryDefinition[], query: string): CategoryDefinition[] => {
     if (!query.trim()) return cats;
-    
+
     const lowerQuery = query.toLowerCase();
-    
+
     const categoryMatches = (cat: CategoryDefinition): boolean => {
       // Search in all localized names
       const nameMatch = (cat.name || '').toLowerCase().includes(lowerQuery);
       const nameEnMatch = (cat.name_en || '').toLowerCase().includes(lowerQuery);
       const nameFrMatch = (cat.name_fr || '').toLowerCase().includes(lowerQuery);
       const nameHeMatch = (cat.name_he || '').toLowerCase().includes(lowerQuery);
-      
+
       // Search in description/notes
       const descMatch = (cat.description || '').toLowerCase().includes(lowerQuery);
-      
+
       // Search in tags
       const tagMatch = (cat.tags || []).some(tag => tag.toLowerCase().includes(lowerQuery));
-      
+
       // Search in icon name
       const iconMatch = (cat.icon || '').toLowerCase().includes(lowerQuery);
-      
+
       // Search in category type
       const typeMatch = (cat.category_type || '').toLowerCase().includes(lowerQuery);
-      
-      return nameMatch || nameEnMatch || nameFrMatch || nameHeMatch || descMatch || tagMatch || iconMatch || typeMatch;
+
+      // Search in transaction names within this category (if loaded)
+      const categoryTransactions = categoryTransactionsMap.get(cat.id);
+      const transactionMatch = categoryTransactions?.some(txn =>
+        (txn.name || '').toLowerCase().includes(lowerQuery)
+      ) || false;
+
+      return nameMatch || nameEnMatch || nameFrMatch || nameHeMatch || descMatch || tagMatch || iconMatch || typeMatch || transactionMatch;
     };
     
     const filterRecursive = (categories: CategoryDefinition[]): CategoryDefinition[] => {
@@ -2044,37 +2071,43 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     };
     
     return filterRecursive(cats);
-  }, []);
+  }, [categoryTransactionsMap]);
 
   // Get IDs of categories that match search (to auto-expand parents)
   const getMatchingCategoryIds = useCallback((cats: CategoryDefinition[], query: string): Set<number> => {
     if (!query.trim()) return new Set();
-    
+
     const lowerQuery = query.toLowerCase();
     const matchingIds = new Set<number>();
-    
+
     const categoryMatches = (cat: CategoryDefinition): boolean => {
       // Search in all localized names
       const nameMatch = (cat.name || '').toLowerCase().includes(lowerQuery);
       const nameEnMatch = (cat.name_en || '').toLowerCase().includes(lowerQuery);
       const nameFrMatch = (cat.name_fr || '').toLowerCase().includes(lowerQuery);
       const nameHeMatch = (cat.name_he || '').toLowerCase().includes(lowerQuery);
-      
+
       // Search in description/notes
       const descMatch = (cat.description || '').toLowerCase().includes(lowerQuery);
-      
+
       // Search in tags
       const tagMatch = (cat.tags || []).some(tag => tag.toLowerCase().includes(lowerQuery));
-      
+
       // Search in icon name
       const iconMatch = (cat.icon || '').toLowerCase().includes(lowerQuery);
-      
+
       // Search in category type
       const typeMatch = (cat.category_type || '').toLowerCase().includes(lowerQuery);
-      
-      return nameMatch || nameEnMatch || nameFrMatch || nameHeMatch || descMatch || tagMatch || iconMatch || typeMatch;
+
+      // Search in transaction names within this category (if loaded)
+      const categoryTransactions = categoryTransactionsMap.get(cat.id);
+      const transactionMatch = categoryTransactions?.some(txn =>
+        (txn.name || '').toLowerCase().includes(lowerQuery)
+      ) || false;
+
+      return nameMatch || nameEnMatch || nameFrMatch || nameHeMatch || descMatch || tagMatch || iconMatch || typeMatch || transactionMatch;
     };
-    
+
     const collectMatchingIds = (categories: CategoryDefinition[], parentIds: number[] = []) => {
       categories.forEach(cat => {
         const selfMatches = categoryMatches(cat);
@@ -2087,10 +2120,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         }
       });
     };
-    
+
     collectMatchingIds(cats);
     return matchingIds;
-  }, [getLocalizedCategoryName]);
+  }, [categoryTransactionsMap]);
 
   const renderCategorizationTab = () => {
     const allUncategorizedTxns = uncategorized?.recentTransactions ?? [];
@@ -2839,6 +2872,155 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               <Button onClick={() => { setEditingCategory(null); setEditingTags([]); setNewTagInput(''); }}>{t('actions.cancel')}</Button>
               <Button variant="contained" onClick={() => handleUpdateCategory(editingCategory)}>
                 {t('actions.save')}
+              </Button>
+            </DialogActions>
+          </Dialog>
+        )}
+
+        {/* Re-categorize by Rule Dialog */}
+        {recategorizeDialogOpen && recategorizeTransaction && (
+          <Dialog
+            open={recategorizeDialogOpen}
+            onClose={handleCloseRecategorizeDialog}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle sx={{ pb: 1 }}>
+              <Box display="flex" alignItems="center" gap={1}>
+                <AutoAwesomeIcon sx={{ color: 'primary.main' }} />
+                <Typography variant="h6" component="span">
+                  {t('recategorize.title', 'Re-categorize by Rule')}
+                </Typography>
+              </Box>
+            </DialogTitle>
+            <DialogContent>
+              <Box sx={{ pt: 1 }}>
+                {/* Transaction Name Display */}
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    {t('recategorize.transactionName', 'Transaction name')}
+                  </Typography>
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 1.5,
+                      bgcolor: alpha(theme.palette.background.default, 0.5),
+                    }}
+                  >
+                    <Typography variant="body1" fontWeight={500}>
+                      {recategorizeTransaction.name}
+                    </Typography>
+                  </Paper>
+                </Box>
+
+                {/* Category Type Selector */}
+                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel>{t('recategorize.categoryType', 'Category type')}</InputLabel>
+                  <Select
+                    value={recategorizeCategoryType}
+                    label={t('recategorize.categoryType', 'Category type')}
+                    onChange={(e) => {
+                      setRecategorizeCategoryType(e.target.value as CategoryType);
+                      setRecategorizeTargetCategoryId(null);
+                    }}
+                  >
+                    <MenuItem value="expense">
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <ExpenseIcon sx={{ fontSize: 20, color: '#ef5350' }} />
+                        {t('types.expense', 'Expense')}
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="investment">
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <InvestmentIcon sx={{ fontSize: 20, color: '#66bb6a' }} />
+                        {t('types.investment', 'Investment')}
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="income">
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <IncomeIcon sx={{ fontSize: 20, color: '#42a5f5' }} />
+                        {t('types.income', 'Income')}
+                      </Box>
+                    </MenuItem>
+                  </Select>
+                </FormControl>
+
+                {/* Category Selector */}
+                <FormControl fullWidth>
+                  <InputLabel>{t('recategorize.assignToCategory', 'Assign to category')}</InputLabel>
+                  <Select
+                    value={recategorizeTargetCategoryId ?? ''}
+                    label={t('recategorize.assignToCategory', 'Assign to category')}
+                    onChange={(e) => {
+                      const value = e.target.value as string | number;
+                      setRecategorizeTargetCategoryId(value === '' ? null : Number(value));
+                    }}
+                    MenuProps={{
+                      PaperProps: {
+                        style: { maxHeight: 350 },
+                      },
+                    }}
+                  >
+                    <MenuItem value="">
+                      <em>{t('recategorize.selectCategory', 'Select a category...')}</em>
+                    </MenuItem>
+                    {(() => {
+                      const filteredCategories = categories.filter(
+                        (cat) => cat.category_type === recategorizeCategoryType
+                      );
+                      const items: React.ReactElement[] = [];
+
+                      const renderOptions = (cats: CategoryDefinition[], depth: number = 0) => {
+                        cats.forEach((cat) => {
+                          items.push(
+                            <MenuItem
+                              key={cat.id}
+                              value={cat.id}
+                              sx={{ pl: 2 + depth * 2 }}
+                            >
+                              <Box display="flex" alignItems="center" gap={1}>
+                                {getCategoryIcon(cat)}
+                                <Typography
+                                  sx={{
+                                    fontWeight: depth === 0 ? 600 : 400,
+                                  }}
+                                >
+                                  {getLocalizedCategoryName(cat) || cat.name}
+                                </Typography>
+                              </Box>
+                            </MenuItem>
+                          );
+                          if (cat.children && cat.children.length > 0) {
+                            renderOptions(cat.children, depth + 1);
+                          }
+                        });
+                      };
+
+                      renderOptions(filteredCategories);
+                      return items;
+                    })()}
+                  </Select>
+                </FormControl>
+
+                {/* Helper text */}
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+                  {t('recategorize.helperText', 'This will create a rule that automatically categorizes all transactions with this name.')}
+                </Typography>
+              </Box>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button onClick={handleCloseRecategorizeDialog} disabled={isCreatingRecategorizeRule}>
+                {t('actions.cancel')}
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleConfirmRecategorize}
+                disabled={!recategorizeTargetCategoryId || isCreatingRecategorizeRule}
+                startIcon={isCreatingRecategorizeRule ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+              >
+                {isCreatingRecategorizeRule
+                  ? t('recategorize.creating', 'Creating...')
+                  : t('recategorize.createRule', 'Create Rule')}
               </Button>
             </DialogActions>
           </Dialog>

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useMemo, useState, useCallback } from 'react';
 
 export type DateRangeOption = 'all' | '3m' | '6m' | '1y';
-export type HistoryTimeRangeOption = '1m' | '3m' | '6m' | '1y' | 'all';
+export type HistoryTimeRangeOption = '1d' | '1w' | '1m' | '2m' | '3m' | '6m' | '1y' | 'ytd' | 'all';
 export type ViewModeOption = 'summary' | 'detailed';
 
 interface InvestmentsFiltersContextValue {

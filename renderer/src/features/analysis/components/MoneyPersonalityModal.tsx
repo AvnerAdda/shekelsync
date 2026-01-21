@@ -15,23 +15,17 @@ import {
   Alert,
   Button,
   alpha,
-  Tabs,
-  Tab,
-  Tooltip,
-  LinearProgress,
   Accordion,
   AccordionSummary,
   AccordionDetails,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import RepeatIcon from '@mui/icons-material/Repeat';
 import TodayIcon from '@mui/icons-material/Today';
 import DateRangeIcon from '@mui/icons-material/DateRange';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import ScheduleIcon from '@mui/icons-material/Schedule';
-import { PieChart } from '@mui/x-charts';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@renderer/lib/api-client';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
@@ -58,16 +52,23 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<number>(0);
-  const [activeFrequencyTab, setActiveFrequencyTab] = useState(0);
 
   const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+  const FREQUENCY_MULTIPLIERS: Record<string, number> = {
+    daily: 30,
+    weekly: 4,
+    biweekly: 2,
+    monthly: 1,
+    bimonthly: 0.5,
+  };
+
   const frequencyConfigs: FrequencyConfig[] = [
-    { name: 'daily', icon: <TodayIcon />, label: t('frequencies.daily'), color: '#e91e63', description: t('frequencies.dailyDesc') },
-    { name: 'weekly', icon: <DateRangeIcon />, label: t('frequencies.weekly'), color: '#9c27b0', description: t('frequencies.weeklyDesc') },
-    { name: 'biweekly', icon: <EventRepeatIcon />, label: t('frequencies.biweekly'), color: '#3f51b5', description: t('frequencies.biweeklyDesc') },
-    { name: 'monthly', icon: <CalendarMonthIcon />, label: t('frequencies.monthly'), color: '#2196f3', description: t('frequencies.monthlyDesc') },
-    { name: 'bimonthly', icon: <ScheduleIcon />, label: t('frequencies.bimonthly'), color: '#00bcd4', description: t('frequencies.bimonthlyDesc') },
+    { name: 'daily', icon: <TodayIcon sx={{ fontSize: 16 }} />, label: t('frequencies.daily'), color: '#e91e63', description: t('frequencies.dailyDesc') },
+    { name: 'weekly', icon: <DateRangeIcon sx={{ fontSize: 16 }} />, label: t('frequencies.weekly'), color: '#9c27b0', description: t('frequencies.weeklyDesc') },
+    { name: 'biweekly', icon: <EventRepeatIcon sx={{ fontSize: 16 }} />, label: t('frequencies.biweekly'), color: '#3f51b5', description: t('frequencies.biweeklyDesc') },
+    { name: 'monthly', icon: <CalendarMonthIcon sx={{ fontSize: 16 }} />, label: t('frequencies.monthly'), color: '#2196f3', description: t('frequencies.monthlyDesc') },
+    { name: 'bimonthly', icon: <ScheduleIcon sx={{ fontSize: 16 }} />, label: t('frequencies.bimonthly'), color: '#00bcd4', description: t('frequencies.bimonthlyDesc') },
   ];
 
   useEffect(() => {
@@ -112,13 +113,15 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
       onClose={onClose}
       maxWidth="lg"
       fullWidth
-      PaperProps={{
-        sx: {
-          bgcolor: alpha(theme.palette.background.paper, 0.8),
-          backdropFilter: 'blur(20px)',
-          backgroundImage: 'none',
-          boxShadow: theme.shadows[24],
-          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+      slotProps={{
+        paper: {
+          sx: {
+            bgcolor: alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(20px)',
+            backgroundImage: 'none',
+            boxShadow: theme.shadows[24],
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          }
         }
       }}
     >
@@ -147,83 +150,201 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
           </Alert>
         ) : data ? (
           <Grid container spacing={3}>
-            {/* Programmed vs Impulse */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
-                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+            {/* Spending Behavior - Clean card design */}
+            <Grid size={{ xs: 12, md: 3 }}>
+              <Paper sx={{ p: 2.5, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
+                <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2 }}>
                   {t('spendingBehavior.title')}
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 1 }}>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary">
+
+                {/* Programmed spending card */}
+                <Box sx={{
+                  p: 1.5,
+                  mb: 1.5,
+                  borderRadius: 1.5,
+                  bgcolor: alpha(theme.palette.success.main, 0.08),
+                  border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
+                }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="caption" fontWeight="medium" color="success.main">
                       {t('spendingBehavior.programmed')}
                     </Typography>
-                    <Typography variant="h6" color="success.main">
+                    <Typography variant="h6" fontWeight="bold" color="success.main">
                       {data.programmedPercentage?.toFixed(0)}%
                     </Typography>
-                    <Typography variant="caption">
-                      {formatCurrencyValue(data.programmedAmount || 0)}
-                    </Typography>
                   </Box>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary">
+                  <Box sx={{
+                    height: 6,
+                    bgcolor: alpha(theme.palette.success.main, 0.2),
+                    borderRadius: 3,
+                    overflow: 'hidden',
+                  }}>
+                    <Box sx={{
+                      height: '100%',
+                      width: `${data.programmedPercentage || 0}%`,
+                      bgcolor: theme.palette.success.main,
+                      borderRadius: 3,
+                    }} />
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                    {formatCurrencyValue(data.programmedAmount || 0)}
+                  </Typography>
+                </Box>
+
+                {/* Impulse spending card */}
+                <Box sx={{
+                  p: 1.5,
+                  borderRadius: 1.5,
+                  bgcolor: alpha(theme.palette.warning.main, 0.08),
+                  border: `1px solid ${alpha(theme.palette.warning.main, 0.2)}`,
+                }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="caption" fontWeight="medium" color="warning.main">
                       {t('spendingBehavior.impulse')}
                     </Typography>
-                    <Typography variant="h6" color="warning.main">
+                    <Typography variant="h6" fontWeight="bold" color="warning.main">
                       {data.impulsePercentage?.toFixed(0)}%
                     </Typography>
-                    <Typography variant="caption">
-                      {formatCurrencyValue(data.impulseAmount || 0)}
-                    </Typography>
                   </Box>
+                  <Box sx={{
+                    height: 6,
+                    bgcolor: alpha(theme.palette.warning.main, 0.2),
+                    borderRadius: 3,
+                    overflow: 'hidden',
+                  }}>
+                    <Box sx={{
+                      height: '100%',
+                      width: `${data.impulsePercentage || 0}%`,
+                      bgcolor: theme.palette.warning.main,
+                      borderRadius: 3,
+                    }} />
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                    {formatCurrencyValue(data.impulseAmount || 0)}
+                  </Typography>
                 </Box>
-                <PieChart
-                  series={[
-                    {
-                      data: [
-                        { id: 0, value: data.programmedAmount || 0, label: t('spendingBehavior.programmed'), color: theme.palette.success.main },
-                        { id: 1, value: data.impulseAmount || 0, label: t('spendingBehavior.impulse'), color: theme.palette.warning.main },
-                      ],
-                      innerRadius: 30,
-                      paddingAngle: 2,
-                      cornerRadius: 4,
-                    },
-                  ]}
-                  height={180}
-                  slotProps={{ legend: { hidden: true } }}
-                />
               </Paper>
             </Grid>
 
-            {/* Recurring Patterns */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
-                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                  {t('recurring.title')}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                  {t('recurring.subtitle')}
-                </Typography>
-                {data.recurringPatterns && data.recurringPatterns.length > 0 ? (
-                  <Box sx={{ maxHeight: 250, overflow: 'auto' }}>
-                    {data.recurringPatterns.slice(0, 6).map((pattern: any, index: number) => (
-                      <Box key={index} sx={{ mb: 1.5, pb: 1.5, borderBottom: index < 5 ? 1 : 0, borderColor: alpha(theme.palette.divider, 0.1) }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" fontWeight="medium">
-                            {pattern.name}
-                          </Typography>
-                          <Chip
-                            label={pattern.frequency}
-                            size="small"
-                            color={pattern.frequency === 'monthly' ? 'primary' : 'default'}
-                            variant="outlined"
-                          />
-                        </Box>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatCurrencyValue(pattern.avgAmount)} × {pattern.occurrences}
-                        </Typography>
-                      </Box>
-                    ))}
+            {/* Recurring Patterns - Clean accordion list */}
+            <Grid size={{ xs: 12, md: 9 }}>
+              <Paper sx={{ p: 2.5, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="subtitle2" fontWeight="bold">
+                    {t('recurring.title')}
+                  </Typography>
+                  {data.patternsByFrequency && (() => {
+                    const grandTotal = Object.keys(data.patternsByFrequency).reduce((total, key) => {
+                      const patterns = data.patternsByFrequency[key]?.transactions || [];
+                      const multiplier = FREQUENCY_MULTIPLIERS[key] || 1;
+                      return total + patterns.reduce((sum: number, p: any) => sum + (p.avgAmount || 0) * multiplier, 0);
+                    }, 0);
+                    return grandTotal > 0 ? (
+                      <Typography variant="body2" fontWeight="medium" color="primary.main">
+                        ~{formatCurrencyValue(grandTotal)}/mo
+                      </Typography>
+                    ) : null;
+                  })()}
+                </Box>
+
+                {data.patternsByFrequency && Object.keys(data.patternsByFrequency).some(
+                  (key) => data.patternsByFrequency[key]?.transactions?.length > 0
+                ) ? (
+                  <Box sx={{ maxHeight: 260, overflow: 'auto', pr: 0.5 }}>
+                    {frequencyConfigs.map((config) => {
+                      const frequencyData = data.patternsByFrequency[config.name];
+                      const patterns = frequencyData?.transactions || [];
+
+                      if (patterns.length === 0) return null;
+
+                      const multipliers: Record<string, number> = {
+                        daily: 30, weekly: 4, biweekly: 2, monthly: 1, bimonthly: 0.5,
+                      };
+                      const multiplier = multipliers[config.name] || 1;
+                      const totalMonthly = patterns.reduce(
+                        (sum: number, p: any) => sum + (p.avgAmount || 0) * multiplier, 0
+                      );
+
+                      return (
+                        <Accordion
+                          key={config.name}
+                          disableGutters
+                          sx={{
+                            bgcolor: 'transparent',
+                            boxShadow: 'none',
+                            '&:before': { display: 'none' },
+                            mb: 0.5,
+                          }}
+                        >
+                          <AccordionSummary
+                            expandIcon={<ExpandMoreIcon sx={{ color: config.color, fontSize: 20 }} />}
+                            sx={{
+                              minHeight: 44,
+                              px: 1.5,
+                              borderRadius: 1.5,
+                              bgcolor: alpha(config.color, 0.06),
+                              '&:hover': { bgcolor: alpha(config.color, 0.1) },
+                              '& .MuiAccordionSummary-content': { my: 0.75 },
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+                              <Avatar sx={{
+                                width: 28,
+                                height: 28,
+                                bgcolor: alpha(config.color, 0.15),
+                                color: config.color,
+                              }}>
+                                {config.icon}
+                              </Avatar>
+                              <Typography variant="body2" fontWeight="medium" sx={{ flex: 1 }}>
+                                {config.label}
+                              </Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                <Chip
+                                  label={`${patterns.length} items`}
+                                  size="small"
+                                  sx={{
+                                    height: 22,
+                                    fontSize: '0.7rem',
+                                    bgcolor: alpha(config.color, 0.12),
+                                    color: config.color,
+                                    fontWeight: 500,
+                                  }}
+                                />
+                                <Typography variant="body2" fontWeight="medium" sx={{ color: config.color, minWidth: 70, textAlign: 'right' }}>
+                                  {formatCurrencyValue(totalMonthly)}/mo
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </AccordionSummary>
+                          <AccordionDetails sx={{ pt: 1, pb: 0.5, px: 1 }}>
+                            <Grid container spacing={1}>
+                              {patterns.map((pattern: any) => (
+                                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={`${config.name}-${pattern.name}`}>
+                                  <Box sx={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    py: 0.75,
+                                    px: 1,
+                                    borderRadius: 1,
+                                    bgcolor: alpha(theme.palette.background.paper, 0.4),
+                                    border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+                                  }}>
+                                    <Typography variant="body2" noWrap sx={{ flex: 1, mr: 1 }}>
+                                      {pattern.name}
+                                    </Typography>
+                                    <Typography variant="body2" fontWeight="medium" sx={{ color: config.color }}>
+                                      {formatCurrencyValue(pattern.avgAmount)}
+                                    </Typography>
+                                  </Box>
+                                </Grid>
+                              ))}
+                            </Grid>
+                          </AccordionDetails>
+                        </Accordion>
+                      );
+                    })}
                   </Box>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
@@ -251,11 +372,11 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
 
                     return (
                       <Grid container spacing={2}>
-                        {data.categoryAverages.map((cat: any, index: number) => {
+                        {data.categoryAverages.map((cat: any) => {
                           const categoryColor = getCategoryColor(cat.avgPerWeek, minAmount, maxAmount);
 
                           return (
-                            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
+                            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={cat.category || cat.id}>
                               <Paper
                                 elevation={0}
                                 sx={{

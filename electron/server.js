@@ -10,6 +10,13 @@ const cors = requireFromApp('cors');
 // Import existing API routes from the Next.js app
 const isDev = process.env.NODE_ENV === 'development';
 const { dbManager } = require('./database');
+const {
+  authenticationMiddleware,
+  rateLimitMiddleware,
+  securityHeadersMiddleware,
+  createToken,
+} = require('./api-security');
+const { createErrorHandler } = require(resolveAppPath('lib', 'server', 'error-sanitizer.js'));
 
 // Import our core API routes
 const coreRoutes = require('./api-routes/core');
@@ -43,7 +50,17 @@ async function setupAPIServer(mainWindow, options = {}) {
   const app = express();
   const preferredPort = Number(process.env.ELECTRON_API_PORT || options.port || 0) || 0;
 
-  // Middleware
+  // Generate API token for this session
+  const apiToken = createToken();
+  console.log('[API Security] Generated session token for internal API');
+
+  // Store token so main process can provide it to renderer
+  app.locals.apiToken = apiToken;
+
+  // Security middleware (applied to all routes)
+  app.use(securityHeadersMiddleware);
+
+  // CORS middleware
   app.use(cors({
     origin: ['http://localhost:3000', 'file://', 'capacitor://localhost'],
     credentials: true
@@ -51,6 +68,14 @@ async function setupAPIServer(mainWindow, options = {}) {
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+  // Authentication middleware (validates API token)
+  app.use(authenticationMiddleware);
+
+  // Rate limiting middleware (must come after authentication)
+  app.use(rateLimitMiddleware);
+
+  // Request locale resolution
   app.use((req, _res, next) => {
     req.locale = resolveLocaleFromRequest(req);
     next();
@@ -166,6 +191,12 @@ async function setupAPIServer(mainWindow, options = {}) {
   // Insights (daily/weekly/monthly/lifetime financial insights)
   app.use('/api/insights', createInsightsRouter());
 
+  // Security status and monitoring – lazy load
+  app.use(
+    '/api/security',
+    lazyRouter(() => require(resolveAppPath('server', 'routes', 'security.js'))),
+  );
+
   // Spending categories (new intelligent system) – lazy load
   app.use(
     '/api/spending-categories',
@@ -193,17 +224,11 @@ async function setupAPIServer(mainWindow, options = {}) {
       .catch((error) => console.error('Institution backfill failed:', error));
   }, 10000);
 
-  // Error handling middleware
-  app.use((error, req, res, next) => {
-    console.error('Express error:', error);
-    if (!res.headersSent) {
-      res.status(500).json({
-        error: 'Internal Server Error',
-        message: error.message,
-        ...(isDev && { stack: error.stack })
-      });
-    }
-  });
+  // Error handling middleware (with sanitization)
+  app.use(createErrorHandler({
+    logger: console,
+    includeStack: isDev,
+  }));
 
   // 404 handler
   app.use((req, res) => {
@@ -227,11 +252,13 @@ async function setupAPIServer(mainWindow, options = {}) {
     const server = app.listen(preferredPort, 'localhost', () => {
       const port = server.address().port;
       console.log(`Electron API server running on http://localhost:${port}`);
+      console.log('[API Security] Authentication and rate limiting enabled');
 
       resolve({
         server,
         port,
-        app
+        app,
+        apiToken, // Return token so main process can provide to renderer
       });
     });
 

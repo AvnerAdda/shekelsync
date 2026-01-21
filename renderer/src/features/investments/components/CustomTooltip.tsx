@@ -109,9 +109,9 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({
 
       {/* Data Items */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-        {displayItems.map((item, index) => (
+        {displayItems.map((item) => (
           <Box
-            key={index}
+            key={item.label}
             sx={{
               display: 'flex',
               justifyContent: 'space-between',
