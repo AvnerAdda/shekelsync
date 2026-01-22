@@ -3,13 +3,14 @@ const express = require('express');
 const credentialsService = require('../services/credentials.js');
 const { sanitizeError, sanitizeErrorForLogging } = require('../../lib/server/error-sanitizer.js');
 const { validateCredentialCreation, validateCredentialUpdate, validateCredentialId } = require('../../lib/server/input-validator.js');
+const { resolveElectronPath } = require('../../lib/resolve-electron-path.js');
 const {
   logCredentialAccess,
   logCredentialCreate,
   logCredentialUpdate,
   logCredentialDelete,
   logInputValidationFailure,
-} = require('../../../electron/security-logger.js');
+} = require(resolveElectronPath('security-logger.js'));
 
 function createCredentialsRouter() {
   const router = express.Router();

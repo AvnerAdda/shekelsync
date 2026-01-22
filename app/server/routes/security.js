@@ -1,5 +1,6 @@
 const { Router } = require('express');
-const securityStatusManager = require('../../../electron/security/security-status.js');
+const { resolveElectronPath } = require('../../lib/resolve-electron-path.js');
+const securityStatusManager = require(resolveElectronPath('security', 'security-status.js'));
 
 const router = Router();
 
