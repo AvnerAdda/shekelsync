@@ -11,6 +11,12 @@
 
 const fs = require('fs');
 const path = require('path');
+const {
+  isSqlCipherEnabled,
+  resolveSqlCipherKey,
+  applySqlCipherKey,
+  verifySqlCipherKey,
+} = require('../app/lib/sqlcipher-utils.js');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const APP_NODE_MODULES = path.join(PROJECT_ROOT, 'app', 'node_modules');
@@ -1611,6 +1617,11 @@ function initializeSqliteDatabase(options = {}) {
   let transactionStarted = false;
 
   try {
+    if (isSqlCipherEnabled()) {
+      const keyInfo = resolveSqlCipherKey({ requireKey: true });
+      applySqlCipherKey(db, keyInfo);
+      verifySqlCipherKey(db);
+    }
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
 

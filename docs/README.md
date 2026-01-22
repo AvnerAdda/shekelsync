@@ -5,6 +5,7 @@
 ### Migration Documentation
 - **[Migration Complete Summary](./MIGRATION_COMPLETE_SUMMARY.md)** - Start here! Complete overview and next steps
 - **[Category Schema Migration Guide](./CATEGORY_SCHEMA_MIGRATION.md)** - Detailed technical guide
+- **[SQLCipher At-Rest Encryption](./SQLCIPHER.md)** - Enable encrypted SQLite and migrate existing data
 
 ### Scripts
 - **Migration Script:** `../scripts/deprecate_legacy_category_columns.js`

@@ -15,6 +15,12 @@
 
 const path = require('path');
 const fs = require('fs');
+const {
+  isSqlCipherEnabled,
+  resolveSqlCipherKey,
+  applySqlCipherKey,
+  verifySqlCipherKey,
+} = require('../../app/lib/sqlcipher-utils.js');
 
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
 const APP_NODE_MODULES = path.join(PROJECT_ROOT, 'app', 'node_modules');
@@ -26,7 +32,9 @@ const isDryRun = args.includes('--dry-run');
 const shouldDropColumns = args.includes('--drop-columns');
 
 // Get database path from environment or use default
-const dbPath = process.env.SQLITE_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite');
+const dbPath = isSqlCipherEnabled()
+  ? (process.env.SQLCIPHER_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlcipher'))
+  : (process.env.SQLITE_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite'));
 
 console.log('\n=== Bank Balance Migration Script ===\n');
 console.log(`Database: ${dbPath}`);
@@ -39,6 +47,11 @@ if (!fs.existsSync(dbPath)) {
 }
 
 const db = new Database(dbPath);
+if (isSqlCipherEnabled()) {
+  const keyInfo = resolveSqlCipherKey({ requireKey: true });
+  applySqlCipherKey(db, keyInfo);
+  verifySqlCipherKey(db);
+}
 
 try {
   db.pragma('foreign_keys = ON');

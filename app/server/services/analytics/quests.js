@@ -16,6 +16,157 @@ const { getBehavioralPatterns } = require('./behavioral.js');
 
 let database = actualDatabase;
 
+// Flag to track if trigger cleanup has been performed
+let triggerCleanupDone = false;
+
+/**
+ * Clean up orphaned triggers referencing smart_action_items_old
+ * This fixes an issue from a migration that renamed the table
+ */
+async function cleanupOrphanedTriggers(client) {
+  if (triggerCleanupDone) return;
+
+  try {
+    // Log ALL items in sqlite_master that reference smart_action_items
+    const allRefs = await client.query(`
+      SELECT name, type, sql, tbl_name FROM sqlite_master
+      WHERE sql LIKE '%smart_action_items%'
+    `);
+    console.log(`[Quests] Found ${allRefs.rows.length} sqlite_master items referencing smart_action_items:`);
+    for (const row of allRefs.rows) {
+      console.log(`[Quests]   - ${row.type}: ${row.name} (tbl_name: ${row.tbl_name})`);
+      if (row.sql && row.sql.includes('smart_action_items_old')) {
+        console.log(`[Quests]     *** CONTAINS smart_action_items_old ***`);
+        console.log(`[Quests]     SQL: ${row.sql.substring(0, 200)}...`);
+      }
+    }
+
+    // Check for orphaned triggers
+    const orphanedResult = await client.query(`
+      SELECT name, sql FROM sqlite_master
+      WHERE type = 'trigger'
+      AND (sql LIKE '%smart_action_items_old%' OR tbl_name = 'smart_action_items_old')
+    `);
+
+    console.log(`[Quests] Found ${orphanedResult.rows.length} orphaned triggers`);
+    for (const row of orphanedResult.rows) {
+      console.log(`[Quests] Dropping orphaned trigger: ${row.name}`);
+      console.log(`[Quests]   SQL: ${row.sql}`);
+      await client.query(`DROP TRIGGER IF EXISTS ${row.name}`);
+    }
+
+    // Drop and recreate ALL triggers on smart_action_items
+    const existingTriggers = await client.query(`
+      SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'smart_action_items'
+    `);
+    console.log(`[Quests] Found ${existingTriggers.rows.length} existing triggers on smart_action_items`);
+    for (const row of existingTriggers.rows) {
+      console.log(`[Quests] Dropping trigger: ${row.name}`);
+      await client.query(`DROP TRIGGER IF EXISTS ${row.name}`);
+    }
+
+    await client.query(`
+      CREATE TRIGGER IF NOT EXISTS update_smart_action_items_timestamp
+      AFTER UPDATE ON smart_action_items
+      BEGIN
+        UPDATE smart_action_items
+        SET updated_at = datetime('now')
+        WHERE id = NEW.id;
+      END
+    `);
+
+    await client.query(`
+      CREATE TRIGGER IF NOT EXISTS log_smart_action_item_status_change
+      AFTER UPDATE OF user_status ON smart_action_items
+      WHEN OLD.user_status != NEW.user_status
+      BEGIN
+        INSERT INTO action_item_history (smart_action_item_id, action, previous_status, new_status)
+        VALUES (
+          NEW.id,
+          CASE NEW.user_status
+            WHEN 'dismissed' THEN 'dismissed'
+            WHEN 'resolved' THEN 'resolved'
+            WHEN 'accepted' THEN 'accepted'
+            WHEN 'completed' THEN 'completed'
+            WHEN 'failed' THEN 'failed'
+            WHEN 'active' THEN 'reactivated'
+            ELSE 'updated'
+          END,
+          OLD.user_status,
+          NEW.user_status
+        );
+      END
+    `);
+
+    // Check if action_item_history has broken FK reference
+    const historyTableInfo = await client.query(`
+      SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'action_item_history'
+    `);
+    if (historyTableInfo.rows.length > 0 && historyTableInfo.rows[0].sql.includes('smart_action_items_old')) {
+      console.log('[Quests] Fixing broken FK in action_item_history table...');
+
+      // Disable foreign keys temporarily
+      await client.query('PRAGMA foreign_keys = OFF');
+
+      // Create new table with correct FK
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS action_item_history_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          smart_action_item_id INTEGER NOT NULL,
+          action TEXT NOT NULL CHECK(action IN ('created', 'dismissed', 'resolved', 'accepted', 'completed', 'failed')),
+          previous_status TEXT,
+          new_status TEXT,
+          user_note TEXT,
+          metadata TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (smart_action_item_id) REFERENCES smart_action_items(id) ON DELETE CASCADE
+        )
+      `);
+
+      // Copy data
+      await client.query(`
+        INSERT INTO action_item_history_new (id, smart_action_item_id, action, previous_status, new_status, user_note, metadata, created_at)
+        SELECT id, smart_action_item_id, action, previous_status, new_status, user_note, metadata, created_at
+        FROM action_item_history
+      `);
+
+      // Drop old table and rename new one
+      await client.query('DROP TABLE action_item_history');
+      await client.query('ALTER TABLE action_item_history_new RENAME TO action_item_history');
+
+      // Recreate index
+      await client.query('CREATE INDEX IF NOT EXISTS idx_action_item_history_item_id ON action_item_history(smart_action_item_id, created_at DESC)');
+
+      // Re-enable foreign keys
+      await client.query('PRAGMA foreign_keys = ON');
+
+      console.log('[Quests] Fixed action_item_history FK reference');
+    }
+
+    // Verify no more references to old table
+    const remainingRefs = await client.query(`
+      SELECT name, type, sql FROM sqlite_master WHERE sql LIKE '%smart_action_items_old%'
+    `);
+    if (remainingRefs.rows.length > 0) {
+      console.log(`[Quests] WARNING: Still found ${remainingRefs.rows.length} references to smart_action_items_old:`);
+      for (const row of remainingRefs.rows) {
+        console.log(`[Quests]   - ${row.type}: ${row.name}`);
+        console.log(`[Quests]     SQL: ${row.sql}`);
+      }
+    } else {
+      console.log('[Quests] No remaining references to smart_action_items_old');
+    }
+
+    console.log('[Quests] Trigger cleanup completed');
+    triggerCleanupDone = true;
+  } catch (error) {
+    console.error('[Quests] Trigger cleanup failed:', error.message);
+    console.error('[Quests] Stack:', error.stack);
+    // Set flag anyway to avoid repeated attempts
+    triggerCleanupDone = true;
+  }
+}
+
 // Quest System Configuration
 const MAX_ACTIVE_QUESTS = 5;
 const MIN_QUESTS_BEFORE_GENERATION = 3;
@@ -1131,6 +1282,9 @@ async function acceptQuest(questId) {
   const client = await database.getClient();
 
   try {
+    // Clean up orphaned triggers on first call
+    await cleanupOrphanedTriggers(client);
+
     // Get the quest
     const questResult = await client.query(`
       SELECT * FROM smart_action_items WHERE id = $1
@@ -1161,6 +1315,17 @@ async function acceptQuest(questId) {
     const deadline = new Date(now);
     deadline.setDate(deadline.getDate() + (quest.quest_duration_days || 7));
 
+    // Debug: check triggers right before UPDATE
+    const triggersBeforeUpdate = await client.query(`
+      SELECT name, tbl_name, sql FROM sqlite_master
+      WHERE type = 'trigger' AND tbl_name = 'smart_action_items'
+    `);
+    console.log(`[Quests] Triggers on smart_action_items before UPDATE: ${triggersBeforeUpdate.rows.length}`);
+    for (const t of triggersBeforeUpdate.rows) {
+      console.log(`[Quests]   - ${t.name}: ${t.sql.substring(0, 150)}...`);
+    }
+
+    console.log(`[Quests] Executing UPDATE for quest ${questId}...`);
     await client.query(`
       UPDATE smart_action_items
       SET user_status = 'accepted',
@@ -1168,6 +1333,7 @@ async function acceptQuest(questId) {
           deadline = $2
       WHERE id = $1
     `, [questId, deadline.toISOString()]);
+    console.log(`[Quests] UPDATE completed successfully`);
 
     // Add to history
     await client.query(`
@@ -1193,6 +1359,9 @@ async function declineQuest(questId) {
   const client = await database.getClient();
 
   try {
+    // Clean up orphaned triggers on first call
+    await cleanupOrphanedTriggers(client);
+
     const questResult = await client.query(`
       SELECT * FROM smart_action_items WHERE id = $1
     `, [questId]);

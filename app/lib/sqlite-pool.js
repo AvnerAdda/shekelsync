@@ -1,5 +1,11 @@
 const path = require('path');
 const resolveBetterSqlite = require('./better-sqlite3-wrapper.js');
+const {
+  isSqlCipherEnabled,
+  resolveSqlCipherKey,
+  applySqlCipherKey,
+  verifySqlCipherKey,
+} = require('./sqlcipher-utils.js');
 
 const PLACEHOLDER_REGEX = /\$(\d+)/g;
 const SELECT_LIKE_REGEX = /^\s*(WITH|SELECT|PRAGMA)/i;
@@ -35,8 +41,10 @@ function resolveDatabaseCtor(override) {
 }
 
 function createSqlitePool(options = {}) {
+  const useSqlCipher = isSqlCipherEnabled();
   const dbPath =
     options.databasePath ||
+    (useSqlCipher ? process.env.SQLCIPHER_DB_PATH : null) ||
     process.env.SQLITE_DB_PATH ||
     process.env.SQLCIPHER_DB_PATH ||
     path.join(process.cwd(), 'dist', 'clarify.sqlite');
@@ -54,6 +62,11 @@ function createSqlitePool(options = {}) {
 
   const Database = resolveDatabaseCtor(options.databaseCtor);
   const db = new Database(dbPath, { fileMustExist: true });
+  if (useSqlCipher) {
+    const keyInfo = resolveSqlCipherKey({ requireKey: true });
+    applySqlCipherKey(db, keyInfo);
+    verifySqlCipherKey(db);
+  }
   db.pragma('foreign_keys = ON');
   db.pragma('journal_mode = WAL');
 
@@ -301,6 +314,67 @@ function createSqlitePool(options = {}) {
     `);
   } catch (_chatError) {
     // Ignore: chat tables migration may fail on older DBs
+  }
+
+  // Fix orphaned triggers referencing smart_action_items_old
+  // This can happen if a migration renamed the table but didn't properly cleanup triggers
+  try {
+    // Check for any triggers referencing the old table name
+    const orphanedTriggers = db.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'trigger'
+      AND (sql LIKE '%smart_action_items_old%' OR tbl_name = 'smart_action_items_old')
+    `).all();
+
+    for (const trigger of orphanedTriggers) {
+      db.exec(`DROP TRIGGER IF EXISTS ${trigger.name}`);
+    }
+
+    // Ensure proper triggers exist on smart_action_items table
+    const tableExists = db.prepare(`
+      SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'smart_action_items'
+    `).get();
+
+    if (tableExists) {
+      // Drop and recreate triggers to ensure they reference the correct table
+      db.exec('DROP TRIGGER IF EXISTS update_smart_action_items_timestamp');
+      db.exec('DROP TRIGGER IF EXISTS log_smart_action_item_status_change');
+
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS update_smart_action_items_timestamp
+        AFTER UPDATE ON smart_action_items
+        BEGIN
+          UPDATE smart_action_items
+          SET updated_at = datetime('now')
+          WHERE id = NEW.id;
+        END
+      `);
+
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS log_smart_action_item_status_change
+        AFTER UPDATE OF user_status ON smart_action_items
+        WHEN OLD.user_status != NEW.user_status
+        BEGIN
+          INSERT INTO action_item_history (smart_action_item_id, action, previous_status, new_status)
+          VALUES (
+            NEW.id,
+            CASE NEW.user_status
+              WHEN 'dismissed' THEN 'dismissed'
+              WHEN 'resolved' THEN 'resolved'
+              WHEN 'accepted' THEN 'accepted'
+              WHEN 'completed' THEN 'completed'
+              WHEN 'failed' THEN 'failed'
+              WHEN 'active' THEN 'reactivated'
+              ELSE 'updated'
+            END,
+            OLD.user_status,
+            NEW.user_status
+          );
+        END
+      `);
+    }
+  } catch (_triggerError) {
+    // Ignore: smart_action_items table may not exist yet
   }
 
   const prepareStatement = (sql, params) => {

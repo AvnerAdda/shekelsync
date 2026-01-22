@@ -348,11 +348,66 @@ async function deleteCredential(params = {}) {
     throw error;
   }
 
+  // First, fetch the credential to get vendor, bank_account_number, and nickname
+  const credentialResult = await database.query(
+    `SELECT vendor, bank_account_number, nickname FROM vendor_credentials WHERE id = $1`,
+    [id],
+  );
+
+  if (!credentialResult.rows?.length) {
+    const error = new Error('Credential not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const credential = credentialResult.rows[0];
+  const { vendor, bank_account_number, nickname } = credential;
+
+  // Delete related scrape_events
   await database.query(
-    `
-      DELETE FROM vendor_credentials
-      WHERE id = $1
-    `,
+    `DELETE FROM scrape_events WHERE credential_id = $1`,
+    [id],
+  );
+
+  // Delete related investment_accounts (bank_balance type) that reference this credential
+  // investment_holdings will cascade delete due to FK constraint
+  await database.query(
+    `DELETE FROM investment_accounts WHERE notes LIKE $1`,
+    [`%credential_id:${id}%`],
+  );
+
+  // Delete related transactions
+  // Transactions are linked via vendor + account_number (for banks) or vendor + vendor_nickname
+  if (bank_account_number) {
+    // For bank accounts, match by vendor and account_number
+    await database.query(
+      `DELETE FROM transactions WHERE vendor = $1 AND account_number = $2`,
+      [vendor, bank_account_number],
+    );
+  } else if (nickname) {
+    // For credit cards or accounts without account_number, match by vendor and vendor_nickname
+    await database.query(
+      `DELETE FROM transactions WHERE vendor = $1 AND vendor_nickname = $2`,
+      [vendor, nickname],
+    );
+  } else {
+    // Fallback: if no account_number or nickname, delete all transactions for this vendor
+    // Only if this is the last credential for this vendor
+    const otherCredentials = await database.query(
+      `SELECT COUNT(*) as count FROM vendor_credentials WHERE vendor = $1 AND id != $2`,
+      [vendor, id],
+    );
+    if (otherCredentials.rows[0].count === 0) {
+      await database.query(
+        `DELETE FROM transactions WHERE vendor = $1`,
+        [vendor],
+      );
+    }
+  }
+
+  // Finally, delete the credential itself
+  await database.query(
+    `DELETE FROM vendor_credentials WHERE id = $1`,
     [id],
   );
 

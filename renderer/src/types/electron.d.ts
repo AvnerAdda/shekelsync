@@ -132,7 +132,7 @@ interface DevApi {
 
 interface ElectronAPI {
   window: WindowApi;
-  db: DatabaseApi;
+  db?: DatabaseApi;
   api: ApiClientApi;
   scraper: ScraperApi;
   file: FileApi;

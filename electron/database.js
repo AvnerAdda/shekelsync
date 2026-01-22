@@ -2,6 +2,12 @@ const path = require('path');
 const fs = require('fs');
 const { app } = require('electron');
 const { resolveAppPath, requireFromApp } = require('./paths');
+const {
+  isSqlCipherEnabled,
+  resolveSqlCipherKey,
+  applySqlCipherKey,
+  verifySqlCipherKey,
+} = require(resolveAppPath('lib', 'sqlcipher-utils.js'));
 
 // Add app directory to module search paths
 require('module').globalPaths.push(resolveAppPath('node_modules'));
@@ -93,7 +99,9 @@ class DatabaseManager {
       });
 
       if (this.mode === 'sqlite') {
+        const useSqlCipher = isSqlCipherEnabled();
         const dbPath =
+          (useSqlCipher ? process.env.SQLCIPHER_DB_PATH : null) ||
           process.env.SQLITE_DB_PATH ||
           process.env.SQLCIPHER_DB_PATH ||
           path.join(app.getPath('userData'), 'clarify.sqlite');
@@ -106,10 +114,10 @@ class DatabaseManager {
         initializeSqliteIfMissing(dbPath, SqliteDatabase);
 
         this.sqliteDb = new SqliteDatabase(dbPath, { fileMustExist: true });
-        if (process.env.SQLCIPHER_KEY) {
-          console.warn(
-            'SQLCIPHER_KEY is set but encryption is not enabled. Remove the key or switch back to SQLCipher.'
-          );
+        if (useSqlCipher) {
+          const keyInfo = resolveSqlCipherKey({ requireKey: true });
+          applySqlCipherKey(this.sqliteDb, keyInfo);
+          verifySqlCipherKey(this.sqliteDb);
         }
         this.sqliteDb.pragma('foreign_keys = ON');
         this.sqliteDb.pragma('journal_mode = WAL');
