@@ -31,9 +31,112 @@ const {
   openDiagnosticsLogDirectory,
   exportDiagnosticsToFile,
 } = require('./diagnostics');
+const {
+  isSqlCipherEnabled,
+  resolveSqlCipherKey,
+} = require(resolveAppPath('lib', 'sqlcipher-utils.js'));
+const { migrateSqliteToSqlcipher } = require(resolveAppPath('lib', 'sqlcipher-migrate.js'));
 const analyticsMetricsStore = require(resolveAppPath('server', 'services', 'analytics', 'metrics-store.js'));
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+const isPackaged = app.isPackaged;
+const isDev = process.env.NODE_ENV === 'development' || !isPackaged;
 const isMac = process.platform === 'darwin';
+const allowUnsafeIpc = process.env.ALLOW_UNSAFE_IPC === 'true';
+const allowInsecureEnvKey = process.env.ALLOW_INSECURE_ENV_KEY === 'true';
+const keytarDisabledByEnv =
+  process.env.KEYTAR_DISABLE === 'true' ||
+  process.env.DBUS_SESSION_BUS_ADDRESS === 'disabled:';
+const sandboxDisabledByEnv =
+  process.env.ELECTRON_DISABLE_SANDBOX === '1' ||
+  process.env.ELECTRON_DISABLE_SANDBOX === 'true';
+const sandboxDisabledByFlag =
+  typeof app.commandLine?.hasSwitch === 'function' && app.commandLine.hasSwitch('no-sandbox');
+
+if (isPackaged && (sandboxDisabledByEnv || sandboxDisabledByFlag)) {
+  const reason = sandboxDisabledByEnv ? 'ELECTRON_DISABLE_SANDBOX' : '--no-sandbox';
+  logger.error('Sandbox disabled in packaged build. Refusing to start.', { reason });
+  console.error('Sandbox disabled in packaged build. Refusing to start.', reason);
+  app.exit(1);
+}
+
+function abortForSecurity(message) {
+  logger.error('Security configuration error', { message });
+  console.error('Security configuration error:', message);
+  dialog.showErrorBox('Security Configuration Required', message);
+  app.exit(1);
+}
+
+const APPROVED_FILE_WRITE_TTL_MS = 5 * 60 * 1000;
+const approvedFileWrites = new Map();
+
+function getSenderUrl(event) {
+  const url = event?.senderFrame?.url || event?.sender?.getURL?.();
+  return typeof url === 'string' ? url : '';
+}
+
+function isTrustedIpcSender(event) {
+  const senderUrl = getSenderUrl(event);
+  if (!senderUrl) {
+    return false;
+  }
+  if (senderUrl.startsWith('file://')) {
+    return true;
+  }
+  if (!isDev) {
+    return false;
+  }
+  try {
+    const parsed = new URL(senderUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    const host = parsed.hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+  } catch (error) {
+    return false;
+  }
+}
+
+function requireTrustedIpcSender(event, action) {
+  if (isTrustedIpcSender(event)) {
+    return true;
+  }
+  logger.warn('Blocked IPC request from untrusted sender', {
+    action,
+    senderUrl: getSenderUrl(event) || 'unknown',
+  });
+  return false;
+}
+
+function approveFileWrite(filePath) {
+  if (!filePath || typeof filePath !== 'string') {
+    return;
+  }
+  const normalized = path.resolve(filePath);
+  const now = Date.now();
+  for (const [key, expiresAt] of approvedFileWrites.entries()) {
+    if (expiresAt <= now) {
+      approvedFileWrites.delete(key);
+    }
+  }
+  approvedFileWrites.set(normalized, now + APPROVED_FILE_WRITE_TTL_MS);
+}
+
+function consumeApprovedFileWrite(filePath) {
+  if (!filePath || typeof filePath !== 'string') {
+    return false;
+  }
+  const normalized = path.resolve(filePath);
+  const expiresAt = approvedFileWrites.get(normalized);
+  if (!expiresAt) {
+    return false;
+  }
+  if (Date.now() > expiresAt) {
+    approvedFileWrites.delete(normalized);
+    return false;
+  }
+  approvedFileWrites.delete(normalized);
+  return true;
+}
 
 // Load environment variables from the Next.js app if present (e.g., USE_SQLITE)
 try {
@@ -136,8 +239,30 @@ function wireTelemetryMetricsReporter() {
 async function ensureEncryptionKey(config) {
   // Check if key is already set in environment
   if (process.env.CLARIFY_ENCRYPTION_KEY) {
+    if (isPackaged && !allowInsecureEnvKey) {
+      abortForSecurity(
+        'CLARIFY_ENCRYPTION_KEY is not allowed in packaged builds. Remove the environment key and enable OS keychain storage. ' +
+        'On Linux, install libsecret and run within a desktop session. Set ALLOW_INSECURE_ENV_KEY=true only for testing.',
+      );
+      throw new Error('Environment encryption key blocked in packaged build.');
+    }
     logger.info('Using encryption key from environment variable');
     return;
+  }
+
+  if (isPackaged && keytarDisabledByEnv) {
+    abortForSecurity(
+      'OS keychain access is disabled by environment. Remove KEYTAR_DISABLE/DBUS_SESSION_BUS_ADDRESS overrides and restart. ' +
+      'On Linux, install libsecret and ensure a running secret service.',
+    );
+    throw new Error('Keychain disabled by environment.');
+  }
+
+  if (isPackaged && !secureKeyManager.keytarAvailable) {
+    abortForSecurity(
+      'OS keychain storage is required in packaged builds. Install and enable the system keychain (Credential Manager/Keychain/libsecret) and restart.',
+    );
+    throw new Error('Keychain unavailable in packaged build.');
   }
 
   // Use secure key manager to get or generate key from OS keychain
@@ -158,8 +283,63 @@ async function ensureEncryptionKey(config) {
     }
   } catch (error) {
     logger.error('CRITICAL: Failed to initialize encryption key', { error: error.message });
+    if (isPackaged) {
+      abortForSecurity(
+        `Cannot initialize encryption key. ${error.message}`,
+      );
+    }
     throw new Error(`Cannot initialize encryption: ${error.message}`);
   }
+}
+
+async function maybeMigrateSqlcipherDatabase(config) {
+  if (!isSqlCipherEnabled()) {
+    return;
+  }
+
+  const cipherPath = process.env.SQLCIPHER_DB_PATH;
+  const plaintextPath = config?.database?.plaintextPath || process.env.SQLITE_DB_PATH;
+
+  if (!cipherPath) {
+    throw new Error('SQLCIPHER_DB_PATH must be set when SQLCipher is enabled.');
+  }
+
+  if (fs.existsSync(cipherPath)) {
+    await configManager.updateConfig({
+      database: {
+        mode: 'sqlcipher',
+        path: cipherPath,
+        sqlcipherPath: cipherPath,
+        plaintextPath,
+      },
+    });
+    return;
+  }
+
+  if (!plaintextPath || !fs.existsSync(plaintextPath)) {
+    return;
+  }
+
+  const keyInfo = resolveSqlCipherKey({ requireKey: true });
+  logger.info('Migrating SQLite database to SQLCipher', {
+    sourcePath: plaintextPath,
+    targetPath: cipherPath,
+  });
+
+  migrateSqliteToSqlcipher({
+    sourcePath: plaintextPath,
+    targetPath: cipherPath,
+    keyInfo,
+  });
+
+  await configManager.updateConfig({
+    database: {
+      mode: 'sqlcipher',
+      path: cipherPath,
+      sqlcipherPath: cipherPath,
+      plaintextPath,
+    },
+  });
 }
 
 function initializeTelemetry() {
@@ -262,10 +442,15 @@ async function initializeBackendServices({ skipEmbeddedApi }) {
     });
     await ensureEncryptionKey(config);
 
+    const usingSqlCipher =
+      process.env.USE_SQLCIPHER === 'true' ||
+      Boolean(process.env.SQLCIPHER_DB_PATH) ||
+      config.database.mode === 'sqlcipher';
     const usingSqliteEnv =
       process.env.USE_SQLITE === 'true' ||
       Boolean(process.env.SQLITE_DB_PATH) ||
-      config.database.mode === 'sqlite';
+      config.database.mode === 'sqlite' ||
+      usingSqlCipher;
 
     if (!config.database) {
       config.database = {};
@@ -273,9 +458,13 @@ async function initializeBackendServices({ skipEmbeddedApi }) {
     if (!config.database.mode) {
       config.database.mode = usingSqliteEnv ? 'sqlite' : 'postgres';
     }
+    if (usingSqlCipher && config.database.mode !== 'postgres') {
+      config.database.mode = 'sqlcipher';
+    }
 
     if (config.database.mode === 'postgres') {
       process.env.USE_SQLITE = 'false';
+      process.env.USE_SQLCIPHER = 'false';
       delete process.env.SQLITE_DB_PATH;
       delete process.env.USE_SQLCIPHER;
       delete process.env.SQLCIPHER_DB_PATH;
@@ -287,16 +476,33 @@ async function initializeBackendServices({ skipEmbeddedApi }) {
       process.env.CLARIFY_DB_PORT = String(config.database.port ?? 5432);
     } else {
       process.env.USE_SQLITE = 'true';
-      const sqlitePath =
-        process.env.SQLITE_DB_PATH ||
-        config.database.path ||
-        path.join(app.getPath('userData'), 'clarify.sqlite');
-      process.env.SQLITE_DB_PATH = sqlitePath;
-      config.database.path = sqlitePath;
+      const defaultSqlitePath = path.join(app.getPath('userData'), 'clarify.sqlite');
+      const defaultSqlCipherPath = path.join(app.getPath('userData'), 'clarify.sqlcipher');
+      const basePath = process.env.SQLITE_DB_PATH || config.database.path || defaultSqlitePath;
+      if (usingSqlCipher) {
+        process.env.USE_SQLCIPHER = 'true';
+        const cipherPath =
+          process.env.SQLCIPHER_DB_PATH ||
+          config.database.sqlcipherPath ||
+          (basePath.endsWith('.sqlite')
+            ? basePath.replace(/\.sqlite$/i, '.sqlcipher')
+            : defaultSqlCipherPath);
+        process.env.SQLCIPHER_DB_PATH = cipherPath;
+        process.env.SQLITE_DB_PATH = basePath;
+        config.database.path = cipherPath;
+        config.database.sqlcipherPath = cipherPath;
+        config.database.plaintextPath = basePath;
+      } else {
+        process.env.USE_SQLCIPHER = 'false';
+        process.env.SQLITE_DB_PATH = basePath;
+        config.database.path = basePath;
+      }
     }
 
     // Ensure dbManager mode matches the resolved config (constructor runs before env is set)
-    dbManager.mode = config.database.mode;
+    dbManager.mode = config.database.mode === 'sqlcipher' ? 'sqlite' : config.database.mode;
+
+    await maybeMigrateSqlcipherDatabase(config);
 
     if (!skipEmbeddedApi && !setupAPIServer) {
       try {
@@ -875,9 +1081,15 @@ ipcMain.handle('diagnostics:openLogDirectory', async () => {
   return openDiagnosticsLogDirectory();
 });
 
-ipcMain.handle('diagnostics:export', async (_event, outputPath) => {
+ipcMain.handle('diagnostics:export', async (event, outputPath) => {
+  if (!requireTrustedIpcSender(event, 'diagnostics:export')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
   if (!outputPath) {
     return { success: false, error: 'No destination selected' };
+  }
+  if (!consumeApprovedFileWrite(outputPath)) {
+    return { success: false, error: 'File write not approved. Please choose a destination again.' };
   }
   return exportDiagnosticsToFile(outputPath, {
     appVersion: app.getVersion(),
@@ -921,6 +1133,12 @@ ipcMain.handle('biometric:getStatus', async () => {
 
 // Database operations
 ipcMain.handle('db:query', async (event, sql, params = []) => {
+  if (!requireTrustedIpcSender(event, 'db:query')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  if (!allowUnsafeIpc) {
+    return { success: false, error: 'Database query IPC is disabled.' };
+  }
   try {
     const result = await dbManager.query(sql, params);
     return { success: true, data: result.rows, rowCount: result.rowCount };
@@ -930,7 +1148,13 @@ ipcMain.handle('db:query', async (event, sql, params = []) => {
   }
 });
 
-ipcMain.handle('db:test', async () => {
+ipcMain.handle('db:test', async (event) => {
+  if (!requireTrustedIpcSender(event, 'db:test')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  if (!allowUnsafeIpc) {
+    return { success: false, error: 'Database IPC is disabled.' };
+  }
   try {
     const result = await dbManager.testConnection();
     return result;
@@ -939,7 +1163,13 @@ ipcMain.handle('db:test', async () => {
   }
 });
 
-ipcMain.handle('db:stats', async () => {
+ipcMain.handle('db:stats', async (event) => {
+  if (!requireTrustedIpcSender(event, 'db:stats')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  if (!allowUnsafeIpc) {
+    return { success: false, error: 'Database IPC is disabled.' };
+  }
   try {
     const stats = await dbManager.getStats();
     return { success: true, stats };
@@ -1348,7 +1578,13 @@ ipcMain.handle('auth:clearSession', async () => {
 // File system operations
 ipcMain.handle('file:showSaveDialog', async (event, options) => {
   try {
+    if (!requireTrustedIpcSender(event, 'file:showSaveDialog')) {
+      return { canceled: true };
+    }
     const result = await dialog.showSaveDialog(mainWindow, options);
+    if (result && result.filePath) {
+      approveFileWrite(result.filePath);
+    }
     return result;
   } catch (error) {
     console.error('Save dialog error:', error);
@@ -1358,6 +1594,9 @@ ipcMain.handle('file:showSaveDialog', async (event, options) => {
 
 ipcMain.handle('file:showOpenDialog', async (event, options) => {
   try {
+    if (!requireTrustedIpcSender(event, 'file:showOpenDialog')) {
+      return { canceled: true };
+    }
     const result = await dialog.showOpenDialog(mainWindow, options);
     return result;
   } catch (error) {
@@ -1368,8 +1607,14 @@ ipcMain.handle('file:showOpenDialog', async (event, options) => {
 
 ipcMain.handle('file:write', async (event, filePath, data, options = {}) => {
   try {
+    if (!requireTrustedIpcSender(event, 'file:write')) {
+      return { success: false, error: 'Untrusted IPC sender' };
+    }
     if (!filePath) {
       throw new Error('No file path provided');
+    }
+    if (!consumeApprovedFileWrite(filePath)) {
+      return { success: false, error: 'File write not approved. Use the save dialog first.' };
     }
     const encoding = options.encoding ?? 'utf8';
     await fs.promises.writeFile(filePath, data, encoding);

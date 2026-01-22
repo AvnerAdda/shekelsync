@@ -23,6 +23,8 @@ const sendLog = (level, message, data) => {
   }
 };
 
+const allowUnsafeIpc = process.env.ALLOW_UNSAFE_IPC === 'true';
+
 const logBridge = Object.freeze({
   info: (message, data) => sendLog('info', message, data),
   warn: (message, data) => sendLog('warn', message, data),
@@ -152,7 +154,7 @@ const eventsBridge = Object.freeze({
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
-contextBridge.exposeInMainWorld('electronAPI', {
+const electronAPI = {
   // Window controls
   window: {
     minimize: () => ipcRenderer.invoke('window:minimize'),
@@ -163,13 +165,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     zoomOut: () => ipcRenderer.invoke('window:zoomOut'),
     zoomReset: () => ipcRenderer.invoke('window:zoomReset'),
     getZoomLevel: () => ipcRenderer.invoke('window:getZoomLevel')
-  },
-
-  // Database operations
-  db: {
-    query: (sql, params) => ipcRenderer.invoke('db:query', sql, params),
-    test: () => ipcRenderer.invoke('db:test'),
-    stats: () => ipcRenderer.invoke('db:stats')
   },
 
   // Core API operations (native IPC)
@@ -264,7 +259,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     toggleDevTools: () => ipcRenderer.invoke('dev:toggleDevTools'),
     log: (...args) => console.log('[Renderer]', ...args)
   } : undefined
-});
+};
+
+if (allowUnsafeIpc) {
+  electronAPI.db = {
+    query: (sql, params) => ipcRenderer.invoke('db:query', sql, params),
+    test: () => ipcRenderer.invoke('db:test'),
+    stats: () => ipcRenderer.invoke('db:stats')
+  };
+}
+
+contextBridge.exposeInMainWorld('electronAPI', electronAPI);
 
 // Security: Remove any globals that could be used to break out of the sandbox
 delete global.Buffer;

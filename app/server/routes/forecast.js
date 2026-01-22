@@ -1,9 +1,17 @@
 const express = require('express');
 const path = require('path');
 const { generateDailyForecast } = require('../services/forecast.js');
+const {
+  isSqlCipherEnabled,
+  resolveSqlCipherKey,
+  applySqlCipherKey,
+  verifySqlCipherKey,
+} = require('../../lib/sqlcipher-utils.js');
 
 // Initialize database for category lookups
-const dbPath = path.join(__dirname, '../../dist/clarify.sqlite');
+const dbPath = isSqlCipherEnabled()
+  ? (process.env.SQLCIPHER_DB_PATH || process.env.SQLITE_DB_PATH || path.join(__dirname, '../../dist/clarify.sqlite'))
+  : (process.env.SQLITE_DB_PATH || path.join(__dirname, '../../dist/clarify.sqlite'));
 let dbInstance = null;
 let Database = null;
 
@@ -14,6 +22,11 @@ function getDatabase() {
   }
   if (!dbInstance) {
     dbInstance = new Database(dbPath);
+    if (isSqlCipherEnabled()) {
+      const keyInfo = resolveSqlCipherKey({ requireKey: true });
+      applySqlCipherKey(dbInstance, keyInfo);
+      verifySqlCipherKey(dbInstance);
+    }
   }
   return dbInstance;
 }

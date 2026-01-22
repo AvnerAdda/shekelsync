@@ -5,6 +5,12 @@
 
 const path = require('path');
 const Database = require('better-sqlite3');
+const {
+  isSqlCipherEnabled,
+  resolveSqlCipherKey,
+  applySqlCipherKey,
+  verifySqlCipherKey,
+} = require('../../lib/sqlcipher-utils.js');
 
 function parsePositiveInt(value, fallback) {
   const numberValue = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
@@ -18,10 +24,27 @@ const DEFAULT_FORECAST_CACHE_TTL_MS = parsePositiveInt(process.env.FORECAST_CACH
 
 const forecastResultCache = new Map();
 
+function resolveForecastDbPath() {
+  if (isSqlCipherEnabled()) {
+    return process.env.SQLCIPHER_DB_PATH || process.env.SQLITE_DB_PATH || path.join(__dirname, '../../dist/clarify.sqlite');
+  }
+  return process.env.SQLITE_DB_PATH || path.join(__dirname, '../../dist/clarify.sqlite');
+}
+
+function openForecastDb() {
+  const db = new Database(CONFIG.dbPath, { readonly: true });
+  if (isSqlCipherEnabled()) {
+    const keyInfo = resolveSqlCipherKey({ requireKey: true });
+    applySqlCipherKey(db, keyInfo);
+    verifySqlCipherKey(db);
+  }
+  return db;
+}
+
 // ==================== CONFIGURATION ====================
 const CONFIG = {
   // Prefer explicit DB path when provided (e.g., dev runs with SQLITE_DB_PATH)
-  dbPath: process.env.SQLITE_DB_PATH || path.join(__dirname, '../../dist/clarify.sqlite'),
+  dbPath: resolveForecastDbPath(),
   verbose: false,
   forecastDays: null, // null = use forecastMonths horizon
   forecastMonths: 6,
@@ -1089,7 +1112,7 @@ async function generateDailyForecast(options = {}) {
     }
   }
 
-  const db = new Database(CONFIG.dbPath, { readonly: true });
+  const db = openForecastDb();
 
   try {
     let historySince = null;
@@ -1232,7 +1255,7 @@ function buildBudgetOutlook(result) {
   const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
   const monthEndStr = formatDate(monthEnd);
 
-  const db = new Database(CONFIG.dbPath, { readonly: true });
+  const db = openForecastDb();
   const { categoryDefinitionsByName, categoryDefinitionsById } = loadCategoryDefinitions(db);
 
   // Actual spend this month by category

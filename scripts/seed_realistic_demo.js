@@ -4,9 +4,22 @@
  */
 const path = require('path');
 const Database = require(path.join(__dirname, '..', 'app', 'node_modules', 'better-sqlite3'));
+const {
+  isSqlCipherEnabled,
+  resolveSqlCipherKey,
+  applySqlCipherKey,
+  verifySqlCipherKey,
+} = require('../app/lib/sqlcipher-utils.js');
 
-const DB_PATH = path.join(__dirname, '..', 'dist', 'clarify-anonymized.sqlite');
+const DB_PATH = isSqlCipherEnabled()
+  ? (process.env.SQLCIPHER_DB_PATH || process.env.SQLITE_DB_PATH || path.join(__dirname, '..', 'dist', 'clarify-anonymized.sqlcipher'))
+  : (process.env.SQLITE_DB_PATH || path.join(__dirname, '..', 'dist', 'clarify-anonymized.sqlite'));
 const db = new Database(DB_PATH);
+if (isSqlCipherEnabled()) {
+  const keyInfo = resolveSqlCipherKey({ requireKey: true });
+  applySqlCipherKey(db, keyInfo);
+  verifySqlCipherKey(db);
+}
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 

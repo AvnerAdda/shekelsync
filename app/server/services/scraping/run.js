@@ -43,14 +43,23 @@ function isBankVendor(companyId) {
   );
 }
 
+function getCredentialAuditLabel(credentials) {
+  if (!credentials || typeof credentials !== 'object') {
+    return 'credential:unknown';
+  }
+  if (credentials.dbId) {
+    return `credential:${credentials.dbId}`;
+  }
+  const fallback = credentials.nickname || credentials.username || credentials.email || credentials.id;
+  if (!fallback) {
+    return 'credential:unknown';
+  }
+  const digest = crypto.createHash('sha256').update(String(fallback)).digest('hex').slice(0, 8);
+  return `credential:anon-${digest}`;
+}
+
 function resolveTriggeredBy(credentials) {
-  return (
-    credentials?.username ||
-    credentials?.id ||
-    credentials?.nickname ||
-    credentials?.email ||
-    'unknown'
-  );
+  return getCredentialAuditLabel(credentials);
 }
 
 async function getPuppeteerExecutable(logger = console) {
@@ -818,7 +827,8 @@ async function updateVendorBalance(client, options, credentials, account, logger
       }
     }
   } else {
-    logger?.warn?.(`[Scrape:${options.companyId}] ✗ Balance update failed - no matching credential found (vendor: ${options.companyId}, credID: ${credentials.id}, account: ${account.accountNumber || 'N/A'})`);
+    const credentialRef = getCredentialAuditLabel(credentials);
+    logger?.warn?.(`[Scrape:${options.companyId}] ✗ Balance update failed - no matching credential found (vendor: ${options.companyId}, credential: ${credentialRef}, account: ${account.accountNumber || 'N/A'})`);
   }
 }
 
@@ -827,7 +837,8 @@ async function processScrapeResult(client, { options, credentials, result, isBan
   const discoveredAccountNumbers = new Set();
 
   const accountCount = result.accounts?.length || 0;
-  logger?.info?.(`[Scrape:${options.companyId}] Processing ${accountCount} accounts for credential: ${credentials.nickname || credentials.id}`);
+  const credentialRef = getCredentialAuditLabel(credentials);
+  logger?.info?.(`[Scrape:${options.companyId}] Processing ${accountCount} accounts for credential: ${credentialRef}`);
 
   // Handle case where there are no accounts or no transactions
   if (!result.accounts || result.accounts.length === 0) {
@@ -898,7 +909,8 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
 
   // Log the determined scrape date range for transparency
   const endDate = new Date();
-  logger?.info?.(`[Scrape:${options.companyId}] Credential: ${credentials.nickname || credentials.id}`);
+  const auditLabel = getCredentialAuditLabel(credentials);
+  logger?.info?.(`[Scrape:${options.companyId}] Credential: ${auditLabel}`);
   logger?.info?.(`[Scrape:${options.companyId}] Date range: ${resolvedStartDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
   logger?.info?.(`[Scrape:${options.companyId}] Reason: ${startDateInfo.reason}`);
 
