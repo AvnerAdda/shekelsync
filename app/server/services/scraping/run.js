@@ -6,6 +6,7 @@ const {
   BANK_VENDORS,
   SPECIAL_BANK_VENDORS,
   OTHER_BANK_VENDORS,
+  SCRAPE_RATE_LIMIT_MS,
 } = require('../../../utils/constants.js');
 const {
   resolveCategory,
@@ -263,6 +264,28 @@ async function markCredentialScrapeStatus(client, credentialId, status) {
 
   const sql = status === 'success' ? queries.success : queries.failed;
   await client.query(sql, [credentialId]);
+}
+
+/**
+ * Check if a credential was scraped recently (within the rate limit threshold)
+ * @param {number} credentialId - The credential ID to check
+ * @param {number} thresholdMs - Time threshold in milliseconds (default: 24 hours)
+ * @returns {Promise<boolean>} True if scraped recently, false otherwise
+ */
+async function wasScrapedRecently(credentialId, thresholdMs = SCRAPE_RATE_LIMIT_MS) {
+  if (!credentialId) return false;
+  const client = await database.getClient();
+  try {
+    const result = await client.query(
+      `SELECT last_scrape_attempt FROM vendor_credentials WHERE id = $1`,
+      [credentialId],
+    );
+    if (!result.rows[0]?.last_scrape_attempt) return false;
+    const lastAttempt = new Date(result.rows[0].last_scrape_attempt);
+    return (Date.now() - lastAttempt.getTime()) < thresholdMs;
+  } finally {
+    client.release();
+  }
 }
 
 function normalizeComparableText(value) {
@@ -1111,6 +1134,7 @@ async function runScrape(params) {
 
 module.exports = {
   runScrape,
+  wasScrapedRecently,
 };
 
 module.exports.default = module.exports;

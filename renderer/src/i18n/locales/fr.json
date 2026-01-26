@@ -3,7 +3,29 @@
     "language": "Langue",
     "languages": { "he": "Hébreu", "en": "Anglais", "fr": "Français" },
     "systemLanguageDetected": "Langue détectée ({{language}}) depuis la configuration système. Vous pouvez changer à tout moment.",
-    "or": "ou"
+    "or": "ou",
+    "close": "Fermer"
+  },
+  "license": {
+    "trialActive": "Essai gratuit actif",
+    "trialExpiring": "Fin d'essai proche",
+    "trialExpired": "Essai expiré",
+    "daysRemaining": "{{days}} jours restants",
+    "readOnlyMode": "L'application est en mode lecture seule. Passez à Pro pour continuer à ajouter des transactions et synchroniser vos comptes.",
+    "upgradeToPro": "Passer à Pro",
+    "purchasePro": "Obtenir une licence Pro",
+    "offlineMode": "Mode hors ligne",
+    "offlineGraceRemaining": "{{days}} jours de grâce hors ligne restants. Connectez-vous à Internet pour valider votre licence.",
+    "trialProgress": "Progression de l'essai",
+    "days": "jours"
+  },
+  "licenseAlert": {
+    "readOnlyTitle": "Mode lecture seule",
+    "operationBlocked": "Cette opération ne peut pas être effectuée car votre licence est en mode lecture seule.",
+    "trialExpiredMessage": "Votre essai gratuit de 30 jours est terminé. Passez à Pro pour continuer à ajouter des transactions, créer des règles et synchroniser vos comptes.",
+    "offlineGraceExpiredMessage": "Votre période de grâce hors ligne a expiré. Veuillez vous connecter à Internet pour valider votre licence et restaurer toutes les fonctionnalités.",
+    "notRegisteredTitle": "Inscription requise",
+    "notRegisteredMessage": "Veuillez vous inscrire avec votre Teudat Zehut pour démarrer votre essai gratuit de 30 jours et activer toutes les fonctionnalités."
   },
   "dashboard": {
     "summary": {

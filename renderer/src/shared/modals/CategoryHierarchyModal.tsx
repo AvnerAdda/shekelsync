@@ -98,6 +98,7 @@ import { useTranslation } from 'react-i18next';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
 import CategoryIconComponent from '@renderer/features/breakdown/components/CategoryIcon';
+import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '../components/LicenseReadOnlyAlert';
 
 interface CategoryDefinition {
   id: number;
@@ -275,6 +276,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [recategorizeTargetCategoryId, setRecategorizeTargetCategoryId] = useState<number | null>(null);
   const [recategorizeCategoryType, setRecategorizeCategoryType] = useState<CategoryType>('expense');
   const [isCreatingRecategorizeRule, setIsCreatingRecategorizeRule] = useState(false);
+
+  // License Read-Only Alert State
+  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
+  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>(undefined);
 
   // Memoized grouped transactions by category ID -> grouped by name
   const groupedTransactionsCache = useMemo(() => {
@@ -692,6 +697,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorPayload = (response.data as any) || {};
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(errorPayload);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
+        }
         throw new Error(errorPayload?.error || t('errors.categorizeTransaction'));
       }
 
@@ -963,6 +975,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(errorData);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
+        }
         throw new Error(errorData.error || t('errors.createCategory'));
       }
 
@@ -996,6 +1015,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(errorData);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
+        }
         throw new Error(errorData.error || t('errors.updateCategory'));
       }
 
@@ -1027,6 +1053,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(errorData);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
+        }
         throw new Error(errorData.error || t('errors.deleteCategory'));
       }
 
@@ -1072,6 +1105,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(errorData);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
+        }
         throw new Error(errorData.error || t('errors.createRule'));
       }
 
@@ -1105,6 +1145,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(errorData);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
+        }
         throw new Error(errorData.error || t('errors.toggleRule'));
       }
 
@@ -1136,6 +1183,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(errorData);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
+        }
         throw new Error(errorData.error || t('errors.deleteRule'));
       }
 
@@ -1174,6 +1228,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorData = (response.data as any) || {};
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(errorData);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
+        }
         throw new Error(errorData.error || t('errors.applyRules'));
       }
 
@@ -1311,6 +1372,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       const result = response.data as any;
 
       if (!response.ok) {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(response.data);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
+        }
         if ((response.data as any).status === 409) {
           setSuccess(t('notifications.ruleExistsForName', { name: recategorizeTransaction.name }));
           setTimeout(() => setSuccess(null), 3000);
@@ -1364,6 +1432,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       if (!response.ok) {
         const errorPayload = (response.data as any) || {};
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(errorPayload);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
+        }
         throw new Error(errorPayload?.error || t('errors.moveTransaction'));
       }
 
@@ -3558,6 +3633,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
           {t('actions.close')}
         </Button>
       </DialogActions>
+
+      {/* License Read-Only Alert */}
+      <LicenseReadOnlyAlert
+        open={licenseAlertOpen}
+        onClose={() => setLicenseAlertOpen(false)}
+        reason={licenseAlertReason}
+      />
     </Dialog>
   );
 };

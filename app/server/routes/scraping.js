@@ -4,6 +4,7 @@ const runScrapeService = require('../services/scraping/run.js');
 const bulkScrapeService = require('../services/scraping/bulk.js');
 const scrapeEventsService = require('../services/scraping/events.js');
 const scrapeStatusService = require('../services/scraping/status.js');
+const { wasScrapedRecently } = require('../services/scraping/run.js');
 
 let CompanyTypes = {};
 try {
@@ -107,6 +108,23 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         } catch (lookupError) {
           logger.warn?.('Failed to lookup credential ID, scrape will proceed without it:', lookupError);
         }
+      }
+
+      // Check rate limit (skip if force override is enabled)
+      const forceOverride = options?.force === true;
+      if (dbId && !forceOverride) {
+        const isRateLimited = await wasScrapedRecently(dbId);
+        if (isRateLimited) {
+          return res.status(429).json({
+            success: false,
+            message: 'This account was already scraped in the last 24 hours. Please wait before trying again.',
+            rateLimited: true,
+          });
+        }
+      }
+
+      if (forceOverride) {
+        logger.warn?.('Force override used - bypassing rate limit. Use with caution!');
       }
 
       const result = await runScrapeFn({

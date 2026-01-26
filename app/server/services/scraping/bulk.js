@@ -1,6 +1,6 @@
 const database = require('../database.js');
 const { decrypt } = require('../../../lib/server/encryption.js');
-const { STALE_SYNC_THRESHOLD_MS } = require('../../../utils/constants.js');
+const { STALE_SYNC_THRESHOLD_MS, SCRAPE_RATE_LIMIT_MS } = require('../../../utils/constants.js');
 const scrapingService = require('./run.js');
 
 let databaseRef = database;
@@ -49,6 +49,7 @@ function toLogger(logger = console) {
 async function bulkScrape(options = {}) {
   const {
     thresholdMs = STALE_SYNC_THRESHOLD_MS,
+    rateLimitMs = SCRAPE_RATE_LIMIT_MS,
     logger = console,
     onAccountStart,
     onAccountComplete,
@@ -60,10 +61,11 @@ async function bulkScrape(options = {}) {
 
   try {
     const thresholdDate = new Date(Date.now() - thresholdMs);
+    const rateLimitDate = new Date(Date.now() - rateLimitMs);
 
     const staleAccountsResult = await client.query(
       `
-        SELECT 
+        SELECT
           vc.id,
           vc.vendor,
           vc.nickname,
@@ -77,7 +79,7 @@ async function bulkScrape(options = {}) {
           COALESCE(last_scrapes.last_successful_scrape, vc.created_at) AS last_update
         FROM vendor_credentials vc
         LEFT JOIN (
-          SELECT 
+          SELECT
             credential_id,
             MAX(CASE WHEN status = 'success' THEN created_at ELSE NULL END) AS last_successful_scrape
           FROM scrape_events
@@ -85,9 +87,10 @@ async function bulkScrape(options = {}) {
           GROUP BY credential_id
         ) last_scrapes ON vc.id = last_scrapes.credential_id
         WHERE COALESCE(last_scrapes.last_successful_scrape, vc.created_at) < $1
+          AND (vc.last_scrape_attempt IS NULL OR vc.last_scrape_attempt < $2)
         ORDER BY last_update ASC
       `,
-      [thresholdDate],
+      [thresholdDate, rateLimitDate],
     );
 
     const staleAccounts = staleAccountsResult.rows;
