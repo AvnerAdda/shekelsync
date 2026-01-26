@@ -122,6 +122,10 @@
       "!**/examples/**",
       "!**/*.test.*",
       "!**/*.spec.*",
+      "!**/.env",
+      "!**/.env.*",
+      "!**/.env.local",
+      "!**/.env.*.local",
       {
         "from": "../electron",
         "to": "electron",
