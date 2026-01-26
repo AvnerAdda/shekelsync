@@ -54,6 +54,7 @@
     "jsdom": "^27.4.0",
     "stylis": "^4.3.4",
     "stylis-plugin-rtl": "^2.1.1",
+    "terser": "^5.46.0",
     "typescript": "^5.6.3",
     "vite": "^7.3.1",
     "vitest": "^4.0.17"
