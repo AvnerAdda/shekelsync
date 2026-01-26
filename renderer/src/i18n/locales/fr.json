@@ -552,7 +552,8 @@
       "actions": "Actions",
       "spending": "Dépenses",
       "budget": "Budget",
-      "scoring": "Score"
+      "scoring": "Score",
+      "subscriptions": "Abonnements"
     },
     "errors": {
       "fetchFailed": "Impossible de récupérer les données d'analyse",
@@ -764,6 +765,7 @@
           "pattern": "Modèle",
           "recurring": "Récurrent",
           "variable": "Variable",
+          "subscriptionBadge": "Abo",
           "recurringBadge": "R",
           "variableBadge": "V",
           "noData": "Aucune donnée de catégorie disponible"
@@ -970,6 +972,123 @@
         "success": "Quête terminée ! +{{points}} points",
         "partial": "Bon effort ! +{{points}} points ({{pct}} % atteint)",
         "failed": "Quête non terminée. Continuez !"
+      }
+    },
+    "subscriptions": {
+      "title": "Abonnements & Récurrents",
+      "subtitle": "Suivez et gérez vos dépenses récurrentes",
+      "summary": {
+        "totalSubscriptions": "Total abonnements",
+        "monthlyTotal": "Coût mensuel",
+        "yearlyTotal": "Coût annuel",
+        "categories": "Catégories",
+        "active": "actifs",
+        "activeRatio": "Ratio actifs",
+        "perDay": "Par jour"
+      },
+      "frequency": {
+        "daily": "Quotidien",
+        "weekly": "Hebdomadaire",
+        "biweekly": "Bimensuel",
+        "monthly": "Mensuel",
+        "bimonthly": "Bimestriel",
+        "quarterly": "Trimestriel",
+        "yearly": "Annuel",
+        "variable": "Variable"
+      },
+      "status": {
+        "active": "Actif",
+        "paused": "En pause",
+        "cancelled": "Annulé",
+        "keep": "Conserver",
+        "review": "À revoir"
+      },
+      "actions": {
+        "add": "Ajouter un abonnement",
+        "refresh": "Actualiser",
+        "detecting": "Détection...",
+        "retry": "Réessayer",
+        "edit": "Modifier",
+        "delete": "Supprimer",
+        "pause": "Mettre en pause",
+        "resume": "Reprendre"
+      },
+      "list": {
+        "title": "Vos abonnements",
+        "searchPlaceholder": "Rechercher des abonnements...",
+        "filter": {
+          "all": "Tous",
+          "active": "Actifs",
+          "paused": "En pause",
+          "cancelled": "Annulés"
+        },
+        "sort": {
+          "name": "Nom",
+          "amount": "Montant",
+          "next_date": "Prochain prélèvement",
+          "category": "Catégorie"
+        },
+        "showing": "Affichage de {{count}} sur {{total}} abonnements",
+        "noResults": "Aucun abonnement ne correspond à vos filtres",
+        "noResultsHint": "Essayez de modifier votre recherche ou vos critères de filtre",
+        "empty": "Aucun abonnement détecté",
+        "emptyHint": "Les abonnements apparaîtront automatiquement lorsque des transactions récurrentes seront détectées, ou ajoutez-en manuellement",
+        "showMore": "Afficher {{count}} de plus",
+        "showLess": "Afficher moins"
+      },
+      "card": {
+        "consistent": "régulier",
+        "manual": "Manuel",
+        "overdue": "{{days}} jours de retard",
+        "overdueTooltip": "Le paiement est en retard",
+        "highConsistency": "Score de régularité élevé",
+        "today": "Échéance aujourd'hui",
+        "tomorrow": "Échéance demain",
+        "inDays": "Dans {{days}} jours"
+      },
+      "alerts": {
+        "title": "Alertes",
+        "dismiss": "Ignorer",
+        "showMore": "Afficher {{count}} de plus",
+        "showLess": "Afficher moins"
+      },
+      "creep": {
+        "title": "Croissance des abonnements",
+        "subtitle": "Évolution des coûts sur {{months}} mois",
+        "startingTotal": "Début",
+        "currentTotal": "Actuel",
+        "change": "Variation",
+        "tooltipTotal": "Total mensuel",
+        "legendMonthly": "Total mensuel",
+        "legendAverage": "Moyenne"
+      },
+      "modal": {
+        "titleAdd": "Ajouter un abonnement",
+        "titleEdit": "Modifier l'abonnement",
+        "fields": {
+          "name": "Nom",
+          "amount": "Montant",
+          "frequency": "Fréquence",
+          "billingDay": "Jour de facturation",
+          "status": "Statut",
+          "notes": "Notes",
+          "detectedAmount": "Montant détecté",
+          "detectedFrequency": "Fréquence détectée",
+          "consistency": "Régularité"
+        },
+        "hints": {
+          "nameReadonly": "Le nom ne peut pas être modifié pour les abonnements détectés automatiquement",
+          "billingDay": "Jour du mois (1-31)"
+        },
+        "detectedInfo": "Valeurs détectées automatiquement",
+        "errors": {
+          "nameRequired": "Le nom est requis",
+          "amountRequired": "Le montant doit être supérieur à 0",
+          "saveFailed": "Échec de l'enregistrement de l'abonnement"
+        },
+        "cancel": "Annuler",
+        "save": "Enregistrer",
+        "saving": "Enregistrement..."
       }
     },
     "spendingChart": {
@@ -1532,7 +1651,11 @@
       "cancel": "Annuler",
       "save": "Enregistrer",
       "edit": "Modifier",
-      "delete": "Supprimer"
+      "delete": "Supprimer",
+      "refreshAnalytics": "Rafraîchir les analyses"
+    },
+    "refresh": {
+      "pending": "Modifications enregistrées. Rafraîchissez les analyses pour mettre à jour les prévisions."
     },
     "tree": {
       "txnCount": "{{count}} txn"
@@ -1621,7 +1744,7 @@
     "search": {
       "categoryPlaceholder": "Rechercher des categories...",
       "resultsFound": "{{count}} categories trouvees pour \"{{query}}\"",
-      "searchHint": "Rechercher par nom, description, tags ou type",
+      "searchHint": "Rechercher par nom, notes, tags ou nom de transaction",
       "noResults": "Aucune categorie trouvee"
     },
     "transactions": {

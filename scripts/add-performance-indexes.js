@@ -9,17 +9,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const {
-  isSqlCipherEnabled,
-  resolveSqlCipherKey,
-  applySqlCipherKey,
-  verifySqlCipherKey,
-} = require('../app/lib/sqlcipher-utils.js');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const DEFAULT_DB_PATH = isSqlCipherEnabled()
-  ? (process.env.SQLCIPHER_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlcipher'))
-  : (process.env.SQLITE_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite'));
+const DEFAULT_DB_PATH = process.env.SQLITE_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -46,11 +38,6 @@ const baseNodeModules = fs.existsSync(APP_NODE_MODULES)
 const Database = require(path.join(baseNodeModules, 'better-sqlite3'));
 
 const db = new Database(dbPath);
-if (isSqlCipherEnabled()) {
-  const keyInfo = resolveSqlCipherKey({ requireKey: true });
-  applySqlCipherKey(db, keyInfo);
-  verifySqlCipherKey(db);
-}
 
 console.log(`📊 Adding performance indexes to: ${dbPath}`);
 

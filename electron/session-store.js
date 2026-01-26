@@ -4,9 +4,11 @@ const { app } = require('electron');
 const { resolveAppPath, requireFromApp } = require('./paths');
 
 let keytar;
-const keytarDisabled =
+const isLinux = process.platform === 'linux';
+const keytarDisabledByEnv =
   process.env.KEYTAR_DISABLE === 'true' ||
   process.env.DBUS_SESSION_BUS_ADDRESS === 'disabled:';
+const keytarDisabled = isLinux || keytarDisabledByEnv;
 
 if (!keytarDisabled) {
   try {
@@ -21,7 +23,11 @@ if (!keytarDisabled) {
     }
   }
 } else {
-  console.warn('[SessionStore] keytar disabled via environment, using file store.');
+  if (isLinux) {
+    console.warn('[SessionStore] keytar disabled on Linux, using file store.');
+  } else {
+    console.warn('[SessionStore] keytar disabled via environment, using file store.');
+  }
   keytar = null;
 }
 

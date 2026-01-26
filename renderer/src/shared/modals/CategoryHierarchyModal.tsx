@@ -209,6 +209,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [pendingRefresh, setPendingRefresh] = useState(false);
 
   // Category Hierarchy State
   const [categories, setCategories] = useState<CategoryDefinition[]>([]);
@@ -259,6 +260,15 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [transactionMoveMenuAnchor, setTransactionMoveMenuAnchor] = useState<HTMLElement | null>(null);
   const [movingFromCategory, setMovingFromCategory] = useState<CategoryDefinition | null>(null);
 
+  const queueDataRefresh = useCallback(() => {
+    setPendingRefresh(true);
+  }, []);
+
+  const handleRefreshNow = useCallback(() => {
+    onCategoriesUpdated();
+    setPendingRefresh(false);
+  }, [onCategoriesUpdated]);
+
   // Re-categorize by Rule Dialog State
   const [recategorizeDialogOpen, setRecategorizeDialogOpen] = useState(false);
   const [recategorizeTransaction, setRecategorizeTransaction] = useState<TransactionMatch | null>(null);
@@ -289,6 +299,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
   // Category Search State
   const [categorySearchQuery, setCategorySearchQuery] = useState<string>('');
+  const [transactionSearchCategoryIds, setTransactionSearchCategoryIds] = useState<Set<number>>(new Set());
   const [editingTags, setEditingTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState<string>('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -518,6 +529,64 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   }, [fetchCategories, fetchRules, open]);
 
   useEffect(() => {
+    const trimmedQuery = categorySearchQuery.trim();
+    if (!open || activeTab !== 1 || trimmedQuery.length < 2) {
+      setTransactionSearchCategoryIds(new Set());
+      return;
+    }
+
+    setTransactionSearchCategoryIds(new Set());
+
+    let isActive = true;
+    const timeoutId = setTimeout(async () => {
+      try {
+        const response = await apiClient.get(`/api/transactions/search?query=${encodeURIComponent(trimmedQuery)}&limit=200`);
+        if (!response.ok) {
+          throw new Error(response.statusText || 'Search failed');
+        }
+
+        const payload = response.data as any;
+        const transactions = Array.isArray(payload?.transactions) ? payload.transactions : [];
+        const nextIds = new Set<number>();
+
+        transactions.forEach((txn: any) => {
+          if (txn?.category_definition_id) {
+            const categoryId = Number.parseInt(txn.category_definition_id, 10);
+            if (!Number.isNaN(categoryId)) {
+              nextIds.add(categoryId);
+            }
+          }
+        });
+
+        if (isActive) {
+          setTransactionSearchCategoryIds(nextIds);
+        }
+      } catch (error) {
+        console.error('Error searching transactions for category filter:', error);
+        if (isActive) {
+          setTransactionSearchCategoryIds(new Set());
+        }
+      }
+    }, 350);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timeoutId);
+    };
+  }, [activeTab, categorySearchQuery, open]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleDataRefresh = () => setPendingRefresh(false);
+    window.addEventListener('dataRefresh', handleDataRefresh);
+
+    return () => window.removeEventListener('dataRefresh', handleDataRefresh);
+  }, []);
+
+  useEffect(() => {
     const hasUncategorized = uncategorized?.recentTransactions && uncategorized.recentTransactions.length > 0;
 
     if (!hasUncategorized) {
@@ -644,7 +713,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       }
 
       await fetchCategories();
-      onCategoriesUpdated();
+      queueDataRefresh();
     } catch (assignmentError) {
       console.error('Error categorizing transaction:', assignmentError);
       setError(assignmentError instanceof Error && assignmentError.message
@@ -697,7 +766,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         await handleApplyRules();
         await fetchCategories();
         await fetchRules();
-        onCategoriesUpdated();
+        queueDataRefresh();
         return;
       }
 
@@ -710,7 +779,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       await fetchCategories();
       await fetchRules();
-      onCategoriesUpdated();
+      queueDataRefresh();
     } catch (ruleError) {
       console.error('Error creating auto-assignment rule:', ruleError);
       setError(ruleError instanceof Error && ruleError.message ? ruleError.message : t('errors.createRule'));
@@ -905,7 +974,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         description: '',
       });
       await fetchCategories();
-      onCategoriesUpdated();
+      queueDataRefresh();
 
       setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
@@ -933,7 +1002,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setSuccess(t('notifications.categoryUpdated'));
       setEditingCategory(null);
       await fetchCategories();
-      onCategoriesUpdated();
+      queueDataRefresh();
 
       setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
@@ -963,7 +1032,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
       setSuccess(t('notifications.categoryDeleted'));
       await fetchCategories();
-      onCategoriesUpdated();
+      queueDataRefresh();
 
       setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
@@ -1115,7 +1184,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       }));
 
       await fetchCategories();
-      onCategoriesUpdated();
+      queueDataRefresh();
 
       setTimeout(() => setSuccess(null), 5000);
     } catch (error) {
@@ -1192,7 +1261,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         }, 100);
       }
       await fetchCategories();
-      onCategoriesUpdated();
+      queueDataRefresh();
     } catch (error) {
       console.error('Error removing transaction:', error);
       setError(error instanceof Error && error.message ? error.message : t('errors.removeTransaction'));
@@ -1266,7 +1335,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       handleCloseRecategorizeDialog();
       await fetchRules();
       await fetchCategories(); // Refresh categories to show updated counts
-      onCategoriesUpdated();
+      queueDataRefresh();
     } catch (error) {
       console.error('Error creating rule:', error);
       setError(error instanceof Error && error.message ? error.message : t('errors.createRule'));
@@ -1314,7 +1383,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         setMovingFromCategory(null);
       }
       await fetchCategories();
-      onCategoriesUpdated();
+      queueDataRefresh();
     } catch (error) {
       console.error('Error moving transaction:', error);
       setError(error instanceof Error && error.message ? error.message : t('errors.moveTransaction'));
@@ -1380,25 +1449,51 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     );
   };
 
+  const matchesCategorySearch = useCallback((category: CategoryDefinition, query: string) => {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return false;
+
+    const lowerQuery = trimmedQuery.toLowerCase();
+
+    const nameMatch = (category.name || '').toLowerCase().includes(lowerQuery);
+    const nameEnMatch = (category.name_en || '').toLowerCase().includes(lowerQuery);
+    const nameFrMatch = (category.name_fr || '').toLowerCase().includes(lowerQuery);
+    const nameHeMatch = (category.name_he || '').toLowerCase().includes(lowerQuery);
+    const descMatch = (category.description || '').toLowerCase().includes(lowerQuery);
+    const tagMatch = (category.tags || []).some(tag => tag.toLowerCase().includes(lowerQuery));
+    const iconMatch = (category.icon || '').toLowerCase().includes(lowerQuery);
+    const typeMatch = (category.category_type || '').toLowerCase().includes(lowerQuery);
+
+    const categoryTransactions = categoryTransactionsMap.get(category.id);
+    const transactionMatch = categoryTransactions?.some(txn => {
+      const name = (txn.name || '').toLowerCase();
+      const vendor = (txn.vendor || '').toLowerCase();
+      return name.includes(lowerQuery) || vendor.includes(lowerQuery);
+    }) || false;
+
+    const remoteTransactionMatch = transactionSearchCategoryIds.has(category.id);
+
+    return (
+      nameMatch ||
+      nameEnMatch ||
+      nameFrMatch ||
+      nameHeMatch ||
+      descMatch ||
+      tagMatch ||
+      iconMatch ||
+      typeMatch ||
+      transactionMatch ||
+      remoteTransactionMatch
+    );
+  }, [categoryTransactionsMap, transactionSearchCategoryIds]);
+
   const renderCategoryTree = (category: CategoryDefinition, level: number = 0, isSearching: boolean = false, matchingIds: Set<number> = new Set()) => {
     const hasChildren = category.children && category.children.length > 0;
     // Auto-expand if searching and this category or a child matches
     const isExpanded = isSearching ? matchingIds.has(category.id) : expandedCategories.has(category.id);
     const isLeafCategory = !hasChildren && level > 0; // Leaf categories are those without children and not at root level
 
-    // Check if this category text matches search query
-    // Check if this category matches search query across all fields
-    const lowerQuery = categorySearchQuery.toLowerCase();
-    const isMatch = isSearching && categorySearchQuery && (
-      (category.name || '').toLowerCase().includes(lowerQuery) ||
-      (category.name_en || '').toLowerCase().includes(lowerQuery) ||
-      (category.name_fr || '').toLowerCase().includes(lowerQuery) ||
-      (category.name_he || '').toLowerCase().includes(lowerQuery) ||
-      (category.description || '').toLowerCase().includes(lowerQuery) ||
-      (category.tags || []).some(tag => tag.toLowerCase().includes(lowerQuery)) ||
-      (category.icon || '').toLowerCase().includes(lowerQuery) ||
-      (category.category_type || '').toLowerCase().includes(lowerQuery)
-    );
+    const isMatch = isSearching && matchesCategorySearch(category, categorySearchQuery);
 
     const displayName = getLocalizedCategoryName(category) || category.name;
 
@@ -2024,35 +2119,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const filterCategoriesBySearch = useCallback((cats: CategoryDefinition[], query: string): CategoryDefinition[] => {
     if (!query.trim()) return cats;
 
-    const lowerQuery = query.toLowerCase();
-
-    const categoryMatches = (cat: CategoryDefinition): boolean => {
-      // Search in all localized names
-      const nameMatch = (cat.name || '').toLowerCase().includes(lowerQuery);
-      const nameEnMatch = (cat.name_en || '').toLowerCase().includes(lowerQuery);
-      const nameFrMatch = (cat.name_fr || '').toLowerCase().includes(lowerQuery);
-      const nameHeMatch = (cat.name_he || '').toLowerCase().includes(lowerQuery);
-
-      // Search in description/notes
-      const descMatch = (cat.description || '').toLowerCase().includes(lowerQuery);
-
-      // Search in tags
-      const tagMatch = (cat.tags || []).some(tag => tag.toLowerCase().includes(lowerQuery));
-
-      // Search in icon name
-      const iconMatch = (cat.icon || '').toLowerCase().includes(lowerQuery);
-
-      // Search in category type
-      const typeMatch = (cat.category_type || '').toLowerCase().includes(lowerQuery);
-
-      // Search in transaction names within this category (if loaded)
-      const categoryTransactions = categoryTransactionsMap.get(cat.id);
-      const transactionMatch = categoryTransactions?.some(txn =>
-        (txn.name || '').toLowerCase().includes(lowerQuery)
-      ) || false;
-
-      return nameMatch || nameEnMatch || nameFrMatch || nameHeMatch || descMatch || tagMatch || iconMatch || typeMatch || transactionMatch;
-    };
+    const categoryMatches = (cat: CategoryDefinition): boolean => matchesCategorySearch(cat, query);
     
     const filterRecursive = (categories: CategoryDefinition[]): CategoryDefinition[] => {
       return categories.reduce((acc: CategoryDefinition[], cat) => {
@@ -2071,41 +2138,15 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     };
     
     return filterRecursive(cats);
-  }, [categoryTransactionsMap]);
+  }, [matchesCategorySearch]);
 
   // Get IDs of categories that match search (to auto-expand parents)
   const getMatchingCategoryIds = useCallback((cats: CategoryDefinition[], query: string): Set<number> => {
     if (!query.trim()) return new Set();
-
-    const lowerQuery = query.toLowerCase();
     const matchingIds = new Set<number>();
 
     const categoryMatches = (cat: CategoryDefinition): boolean => {
-      // Search in all localized names
-      const nameMatch = (cat.name || '').toLowerCase().includes(lowerQuery);
-      const nameEnMatch = (cat.name_en || '').toLowerCase().includes(lowerQuery);
-      const nameFrMatch = (cat.name_fr || '').toLowerCase().includes(lowerQuery);
-      const nameHeMatch = (cat.name_he || '').toLowerCase().includes(lowerQuery);
-
-      // Search in description/notes
-      const descMatch = (cat.description || '').toLowerCase().includes(lowerQuery);
-
-      // Search in tags
-      const tagMatch = (cat.tags || []).some(tag => tag.toLowerCase().includes(lowerQuery));
-
-      // Search in icon name
-      const iconMatch = (cat.icon || '').toLowerCase().includes(lowerQuery);
-
-      // Search in category type
-      const typeMatch = (cat.category_type || '').toLowerCase().includes(lowerQuery);
-
-      // Search in transaction names within this category (if loaded)
-      const categoryTransactions = categoryTransactionsMap.get(cat.id);
-      const transactionMatch = categoryTransactions?.some(txn =>
-        (txn.name || '').toLowerCase().includes(lowerQuery)
-      ) || false;
-
-      return nameMatch || nameEnMatch || nameFrMatch || nameHeMatch || descMatch || tagMatch || iconMatch || typeMatch || transactionMatch;
+      return matchesCategorySearch(cat, query);
     };
 
     const collectMatchingIds = (categories: CategoryDefinition[], parentIds: number[] = []) => {
@@ -2123,7 +2164,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
     collectMatchingIds(cats);
     return matchingIds;
-  }, [categoryTransactionsMap]);
+  }, [matchesCategorySearch]);
 
   const renderCategorizationTab = () => {
     const allUncategorizedTxns = uncategorized?.recentTransactions ?? [];
@@ -3486,6 +3527,12 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
           </Alert>
         )}
 
+        {pendingRefresh && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {t('refresh.pending')}
+          </Alert>
+        )}
+
         <Tabs
           value={activeTab}
           onChange={(e, newValue) => setActiveTab(newValue)}
@@ -3502,6 +3549,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       </DialogContent>
 
       <DialogActions style={{ padding: '16px 24px 24px 24px' }}>
+        {pendingRefresh && (
+          <Button onClick={handleRefreshNow} variant="contained">
+            {t('actions.refreshAnalytics')}
+          </Button>
+        )}
         <Button onClick={handleClose} variant="outlined">
           {t('actions.close')}
         </Button>

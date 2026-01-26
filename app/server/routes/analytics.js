@@ -15,6 +15,7 @@ const behavioralService = require('../services/analytics/behavioral.js');
 const extendedForecastService = require('../services/analytics/extended-forecast.js');
 const timeValueService = require('../services/analytics/time-value.js');
 const questsService = require('../services/analytics/quests.js');
+const subscriptionsService = require('../services/analytics/subscriptions.js');
 
 function createAnalyticsRouter() {
   const router = express.Router();
@@ -329,6 +330,181 @@ function createAnalyticsRouter() {
       console.error('Check quest deadlines error:', error);
       res.status(500).json({
         error: 'Failed to check quest deadlines',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // ============================================================================
+  // SUBSCRIPTION MANAGEMENT ROUTES
+  // ============================================================================
+
+  // Get all subscriptions with optional filters
+  router.get('/subscriptions', async (req, res) => {
+    try {
+      const locale = resolveLocaleFromRequest(req);
+      const { status, frequency } = req.query;
+      const result = await subscriptionsService.getSubscriptions({
+        status,
+        frequency,
+        locale,
+      });
+      res.json(result);
+    } catch (error) {
+      console.error('Get subscriptions error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch subscriptions',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Get subscription cost summary
+  router.get('/subscriptions/summary', async (req, res) => {
+    try {
+      const locale = resolveLocaleFromRequest(req);
+      const result = await subscriptionsService.getSubscriptionSummary({ locale });
+      res.json(result);
+    } catch (error) {
+      console.error('Get subscription summary error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch subscription summary',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Get subscription creep (historical cost growth)
+  router.get('/subscriptions/creep', async (req, res) => {
+    try {
+      const months = parseInt(req.query.months, 10) || 12;
+      const result = await subscriptionsService.getSubscriptionCreep({ months });
+      res.json(result);
+    } catch (error) {
+      console.error('Get subscription creep error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch subscription creep data',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Get subscription alerts
+  router.get('/subscriptions/alerts', async (req, res) => {
+    try {
+      const locale = resolveLocaleFromRequest(req);
+      const includeDismissed = req.query.include_dismissed === 'true';
+      const result = await subscriptionsService.getSubscriptionAlerts({
+        locale,
+        include_dismissed: includeDismissed,
+      });
+      res.json(result);
+    } catch (error) {
+      console.error('Get subscription alerts error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch subscription alerts',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Get upcoming renewals
+  router.get('/subscriptions/renewals', async (req, res) => {
+    try {
+      const locale = resolveLocaleFromRequest(req);
+      const days = parseInt(req.query.days, 10) || 30;
+      const result = await subscriptionsService.getUpcomingRenewals({ days, locale });
+      res.json(result);
+    } catch (error) {
+      console.error('Get upcoming renewals error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch upcoming renewals',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Update a subscription
+  router.put('/subscriptions/:id', async (req, res) => {
+    try {
+      const subscriptionId = parseInt(req.params.id, 10);
+      if (isNaN(subscriptionId)) {
+        return res.status(400).json({ error: 'Invalid subscription ID' });
+      }
+      const result = await subscriptionsService.updateSubscription(subscriptionId, req.body);
+      res.json(result);
+    } catch (error) {
+      console.error('Update subscription error:', error);
+      const status = error.message.includes('not found') ? 404 : 500;
+      res.status(status).json({
+        error: 'Failed to update subscription',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Add a manual subscription
+  router.post('/subscriptions', async (req, res) => {
+    try {
+      const result = await subscriptionsService.addManualSubscription(req.body);
+      res.status(201).json(result);
+    } catch (error) {
+      console.error('Add subscription error:', error);
+      const status = error.message.includes('already exists') ? 409 : 500;
+      res.status(status).json({
+        error: 'Failed to add subscription',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Delete a subscription
+  router.delete('/subscriptions/:id', async (req, res) => {
+    try {
+      const subscriptionId = parseInt(req.params.id, 10);
+      if (isNaN(subscriptionId)) {
+        return res.status(400).json({ error: 'Invalid subscription ID' });
+      }
+      const result = await subscriptionsService.deleteSubscription(subscriptionId);
+      res.json(result);
+    } catch (error) {
+      console.error('Delete subscription error:', error);
+      const status = error.message.includes('not found') ? 404 : 500;
+      res.status(status).json({
+        error: 'Failed to delete subscription',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Dismiss an alert
+  router.post('/subscriptions/alerts/:id/dismiss', async (req, res) => {
+    try {
+      const alertId = parseInt(req.params.id, 10);
+      if (isNaN(alertId)) {
+        return res.status(400).json({ error: 'Invalid alert ID' });
+      }
+      const result = await subscriptionsService.dismissAlert(alertId);
+      res.json(result);
+    } catch (error) {
+      console.error('Dismiss alert error:', error);
+      res.status(500).json({
+        error: 'Failed to dismiss alert',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  // Refresh subscription detection
+  router.post('/subscriptions/detect', async (req, res) => {
+    try {
+      const locale = resolveLocaleFromRequest(req);
+      const result = await subscriptionsService.refreshDetection(locale);
+      res.json(result);
+    } catch (error) {
+      console.error('Refresh detection error:', error);
+      res.status(500).json({
+        error: 'Failed to refresh subscription detection',
         message: error?.message || 'Internal server error',
       });
     }

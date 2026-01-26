@@ -228,6 +228,17 @@ const electronAPI = {
   diagnostics: diagnosticsBridge,
   telemetry: telemetryBridge,
 
+  // License management
+  license: {
+    getStatus: () => ipcRenderer.invoke('license:getStatus'),
+    register: (teudatZehut) => ipcRenderer.invoke('license:register', teudatZehut),
+    validateTeudatZehut: (id) => ipcRenderer.invoke('license:validateTeudatZehut', id),
+    activatePro: (paymentRef) => ipcRenderer.invoke('license:activatePro', paymentRef),
+    canWrite: () => ipcRenderer.invoke('license:canWrite'),
+    validateOnline: () => ipcRenderer.invoke('license:validateOnline'),
+    getInfo: () => ipcRenderer.invoke('license:getInfo'),
+  },
+
   // App information
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),

@@ -8,20 +8,12 @@
 
 const path = require('path');
 const fs = require('fs');
-const {
-  isSqlCipherEnabled,
-  resolveSqlCipherKey,
-  applySqlCipherKey,
-  verifySqlCipherKey,
-} = require('../app/lib/sqlcipher-utils.js');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const APP_NODE_MODULES = path.join(PROJECT_ROOT, 'app', 'node_modules');
 const Database = require(path.join(APP_NODE_MODULES, 'better-sqlite3'));
 
-const DEFAULT_DB_PATH = isSqlCipherEnabled()
-  ? (process.env.SQLCIPHER_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlcipher'))
-  : (process.env.SQLITE_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite'));
+const DEFAULT_DB_PATH = process.env.SQLITE_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite');
 const EXPENSE_VENDOR_POOL = [
   { vendor: 'Shufersal', nickname: 'Shufersal', categoryHint: 'סופרמרקט' },
   { vendor: 'Rami Levy', nickname: 'RamiLevy', categoryHint: 'סופרמרקט' },
@@ -602,11 +594,6 @@ function main() {
   }
 
   const db = new Database(output);
-  if (isSqlCipherEnabled()) {
-    const keyInfo = resolveSqlCipherKey({ requireKey: true });
-    applySqlCipherKey(db, keyInfo);
-    verifySqlCipherKey(db);
-  }
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 

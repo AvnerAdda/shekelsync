@@ -3,9 +3,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 const loadDialect = (useSqliteValue) => {
   const originalEnv = { ...process.env };
   process.env.USE_SQLITE = useSqliteValue ? 'true' : 'false';
-  process.env.USE_SQLCIPHER = '';
   process.env.SQLITE_DB_PATH = '';
-  process.env.SQLCIPHER_DB_PATH = '';
   process.env.CLARIFY_DB_MODE = useSqliteValue ? 'sqlite' : 'postgres';
   const path = require.resolve('../sql-dialect.js');
   delete require.cache[path];
