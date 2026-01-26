@@ -7,31 +7,16 @@ const path = require('path');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const APP_NODE_MODULES = path.join(PROJECT_ROOT, 'app', 'node_modules');
 
-const {
-  isSqlCipherEnabled,
-  resolveSqlCipherKey,
-  formatKeyClause,
-} = require(path.join(PROJECT_ROOT, 'app', 'lib', 'sqlcipher-utils.js'));
-
-const useSqlCipher = isSqlCipherEnabled();
-const defaultDbPath = useSqlCipher
-  ? (process.env.SQLCIPHER_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlcipher'))
-  : (process.env.SQLITE_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite'));
+const defaultDbPath = process.env.SQLITE_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite');
 
 const dbPath = process.argv[2] || defaultDbPath;
 
 console.log('Diagnosing database triggers...');
 console.log('Database path:', dbPath);
-console.log('SQLCipher enabled:', useSqlCipher);
 console.log('');
 
 const Database = require(path.join(APP_NODE_MODULES, 'better-sqlite3'));
 const db = new Database(dbPath);
-
-if (useSqlCipher) {
-  const keyInfo = resolveSqlCipherKey({ requireKey: true });
-  db.pragma(formatKeyClause(keyInfo));
-}
 
 // Get all triggers
 console.log('=== ALL TRIGGERS ===');

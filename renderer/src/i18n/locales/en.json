@@ -9,6 +9,32 @@
     "systemLanguageDetected": "Detected {{language}} from your system locale. You can change it anytime.",
     "or": "or"
   },
+  "registration": {
+    "title": "Welcome to ShekelSync",
+    "description": "Enter your Teudat Zehut (Israeli ID) to start your free 30-day trial. One device per ID.",
+    "teudatZehut": "Teudat Zehut",
+    "digits": "9 digits",
+    "invalidId": "Invalid ID format",
+    "validationError": "Could not validate ID",
+    "startTrial": "Start 30-Day Free Trial",
+    "registrationFailed": "Registration failed. Please try again.",
+    "electronRequired": "Desktop app required for registration",
+    "privacyNotice": "Your ID is stored securely on your device and used only for license verification. We never share your personal data.",
+    "trialInfo": "30 days free, then ₪500 for lifetime Pro access"
+  },
+  "license": {
+    "trialActive": "Free Trial Active",
+    "trialExpiring": "Trial Ending Soon",
+    "trialExpired": "Trial Expired",
+    "daysRemaining": "{{days}} days remaining",
+    "readOnlyMode": "Your app is in read-only mode. Upgrade to Pro to continue adding transactions and syncing accounts.",
+    "upgradeToPro": "Upgrade to Pro",
+    "purchasePro": "Get Pro License",
+    "offlineMode": "Offline Mode",
+    "offlineGraceRemaining": "{{days}} days offline grace remaining. Connect to the internet to validate your license.",
+    "trialProgress": "Trial Progress",
+    "days": "days"
+  },
   "dashboard": {
     "summary": {
       "categories": {
@@ -556,7 +582,8 @@
       "actions": "Actions",
       "spending": "Spending",
       "budget": "Budget",
-      "scoring": "Scoring"
+      "scoring": "Scoring",
+      "subscriptions": "Subscriptions"
     },
     "errors": {
       "fetchFailed": "Failed to fetch intelligence data",
@@ -768,6 +795,7 @@
           "pattern": "Pattern",
           "recurring": "Recurring",
           "variable": "Variable",
+          "subscriptionBadge": "Sub",
           "recurringBadge": "R",
           "variableBadge": "V",
           "noData": "No category data available"
@@ -974,6 +1002,123 @@
         "success": "Quest completed! +{{points}} points",
         "partial": "Good effort! +{{points}} points ({{pct}}% achieved)",
         "failed": "Quest not completed. Keep trying!"
+      }
+    },
+    "subscriptions": {
+      "title": "Subscriptions & Recurring",
+      "subtitle": "Track and manage your recurring expenses",
+      "summary": {
+        "totalSubscriptions": "Total Subscriptions",
+        "monthlyTotal": "Monthly Cost",
+        "yearlyTotal": "Yearly Cost",
+        "categories": "Categories",
+        "active": "active",
+        "activeRatio": "Active ratio",
+        "perDay": "Per day"
+      },
+      "frequency": {
+        "daily": "Daily",
+        "weekly": "Weekly",
+        "biweekly": "Bi-weekly",
+        "monthly": "Monthly",
+        "bimonthly": "Bi-monthly",
+        "quarterly": "Quarterly",
+        "yearly": "Yearly",
+        "variable": "Variable"
+      },
+      "status": {
+        "active": "Active",
+        "paused": "Paused",
+        "cancelled": "Cancelled",
+        "keep": "Keep",
+        "review": "Review"
+      },
+      "actions": {
+        "add": "Add Subscription",
+        "refresh": "Refresh",
+        "detecting": "Detecting...",
+        "retry": "Retry",
+        "edit": "Edit",
+        "delete": "Delete",
+        "pause": "Pause",
+        "resume": "Resume"
+      },
+      "list": {
+        "title": "Your Subscriptions",
+        "searchPlaceholder": "Search subscriptions...",
+        "filter": {
+          "all": "All",
+          "active": "Active",
+          "paused": "Paused",
+          "cancelled": "Cancelled"
+        },
+        "sort": {
+          "name": "Name",
+          "amount": "Amount",
+          "next_date": "Next charge",
+          "category": "Category"
+        },
+        "showing": "Showing {{count}} of {{total}} subscriptions",
+        "noResults": "No subscriptions match your filters",
+        "noResultsHint": "Try adjusting your search or filter criteria",
+        "empty": "No subscriptions detected yet",
+        "emptyHint": "Subscriptions will appear automatically as recurring transactions are detected, or add one manually",
+        "showMore": "Show {{count}} more",
+        "showLess": "Show less"
+      },
+      "card": {
+        "consistent": "consistent",
+        "manual": "Manual",
+        "overdue": "{{days}} days overdue",
+        "overdueTooltip": "Payment is overdue",
+        "highConsistency": "High consistency score",
+        "today": "Due today",
+        "tomorrow": "Due tomorrow",
+        "inDays": "In {{days}} days"
+      },
+      "alerts": {
+        "title": "Alerts",
+        "dismiss": "Dismiss",
+        "showMore": "Show {{count}} more",
+        "showLess": "Show less"
+      },
+      "creep": {
+        "title": "Subscription Creep",
+        "subtitle": "Cost growth over {{months}} months",
+        "startingTotal": "Starting",
+        "currentTotal": "Current",
+        "change": "Change",
+        "tooltipTotal": "Monthly Total",
+        "legendMonthly": "Monthly total",
+        "legendAverage": "Average"
+      },
+      "modal": {
+        "titleAdd": "Add Subscription",
+        "titleEdit": "Edit Subscription",
+        "fields": {
+          "name": "Name",
+          "amount": "Amount",
+          "frequency": "Frequency",
+          "billingDay": "Billing Day",
+          "status": "Status",
+          "notes": "Notes",
+          "detectedAmount": "Detected Amount",
+          "detectedFrequency": "Detected Frequency",
+          "consistency": "Consistency"
+        },
+        "hints": {
+          "nameReadonly": "Name cannot be changed for auto-detected subscriptions",
+          "billingDay": "Day of month (1-31)"
+        },
+        "detectedInfo": "Auto-detected values",
+        "errors": {
+          "nameRequired": "Name is required",
+          "amountRequired": "Amount must be greater than 0",
+          "saveFailed": "Failed to save subscription"
+        },
+        "cancel": "Cancel",
+        "save": "Save",
+        "saving": "Saving..."
       }
     },
     "spendingChart": {
@@ -1584,7 +1729,11 @@
       "cancel": "Cancel",
       "save": "Save",
       "edit": "Edit",
-      "delete": "Delete"
+      "delete": "Delete",
+      "refreshAnalytics": "Refresh analytics"
+    },
+    "refresh": {
+      "pending": "Changes saved. Refresh analytics to update forecasts."
     },
     "tree": {
       "txnCount": "{{count}} txns"
@@ -1673,7 +1822,7 @@
     "search": {
       "categoryPlaceholder": "Search categories...",
       "resultsFound": "Found {{count}} matching categories for \"{{query}}\"",
-      "searchHint": "Search by name, description, tags, or type",
+      "searchHint": "Search by name, notes, tags, or transaction name",
       "noResults": "No categories found"
     },
     "transactions": {

@@ -43,6 +43,10 @@ interface SecurityStatus {
     available: boolean;
     type: string | null;
   };
+  platform: {
+    os: string;
+    osName: string;
+  };
 }
 
 interface SecurityStatusCardProps {
@@ -86,10 +90,15 @@ const SecurityStatusCard: React.FC<SecurityStatusCardProps> = ({ onViewDetails }
   const getSecurityLevel = () => {
     if (!status) return 'unknown';
 
+    const authRequired = status.biometric.available;
+    const authOk = !authRequired || status.authentication.isActive;
+    const keychainRequired = status.platform.os !== 'linux';
+    const keychainOk = keychainRequired ? status.keychain.status === 'connected' : true;
+
     const checks = {
       encryption: status.encryption.status === 'active',
-      keychain: status.keychain.status === 'connected',
-      authenticated: status.authentication.isActive,
+      keychain: keychainOk,
+      authenticated: authOk,
     };
 
     const passed = Object.values(checks).filter(Boolean).length;
@@ -178,6 +187,13 @@ const SecurityStatusCard: React.FC<SecurityStatusCardProps> = ({ onViewDetails }
   }
 
   if (!status) return null;
+
+  const keychainRequired = status.platform.os !== 'linux';
+  const keychainOk = keychainRequired ? status.keychain.status === 'connected' : true;
+  const usesEnvKey = status.encryption.keyStorage === 'environment';
+  const keychainLabel = status.keychain.status === 'connected'
+    ? status.keychain.type
+    : (keychainRequired ? 'Fallback' : (usesEnvKey ? 'Environment Key' : 'Optional'));
 
   return (
     <Paper
@@ -279,7 +295,7 @@ const SecurityStatusCard: React.FC<SecurityStatusCardProps> = ({ onViewDetails }
           >
             <KeyIcon
               fontSize="small"
-              color={status.keychain.status === 'connected' ? 'success' : 'warning'}
+              color={keychainOk ? 'success' : 'warning'}
             />
           </Box>
           <Box sx={{ flex: 1 }}>
@@ -287,7 +303,7 @@ const SecurityStatusCard: React.FC<SecurityStatusCardProps> = ({ onViewDetails }
               Key Storage
             </Typography>
             <Typography variant="body2" fontWeight={600} fontSize="0.85rem">
-              {status.keychain.status === 'connected' ? status.keychain.type : 'Fallback'}
+              {keychainLabel}
             </Typography>
           </Box>
         </Box>

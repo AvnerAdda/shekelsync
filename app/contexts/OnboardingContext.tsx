@@ -4,6 +4,7 @@ import { apiClient } from '@/lib/api-client';
 interface OnboardingStatus {
   isComplete: boolean;
   completedSteps: {
+    registration: boolean;
     profile: boolean;
     bankAccount: boolean;
     creditCard: boolean;
@@ -18,7 +19,7 @@ interface OnboardingStatus {
     lastScrapeDate: string | null;
     hasProfile: boolean;
   };
-  suggestedAction: 'profile' | 'bankAccount' | 'creditCard' | 'scrape' | 'explore' | null;
+  suggestedAction: 'registration' | 'profile' | 'bankAccount' | 'creditCard' | 'scrape' | 'explore' | null;
 }
 
 interface PageAccessStatus {
@@ -42,6 +43,7 @@ const OnboardingContext = createContext<OnboardingContextType | undefined>(undef
 const createDefaultStatus = (): OnboardingStatus => ({
   isComplete: false,
   completedSteps: {
+    registration: false,
     profile: false,
     bankAccount: false,
     creditCard: false,
@@ -56,7 +58,7 @@ const createDefaultStatus = (): OnboardingStatus => ({
     lastScrapeDate: null,
     hasProfile: false,
   },
-  suggestedAction: 'profile',
+  suggestedAction: 'registration',
 });
 
 const normalizeStatus = (raw: any): OnboardingStatus => {
@@ -64,6 +66,7 @@ const normalizeStatus = (raw: any): OnboardingStatus => {
     return {
       isComplete: Boolean(raw.isComplete),
       completedSteps: {
+        registration: Boolean(raw.completedSteps.registration),
         profile: Boolean(raw.completedSteps.profile),
         bankAccount: Boolean(raw.completedSteps.bankAccount),
         creditCard: Boolean(raw.completedSteps.creditCard),
@@ -78,7 +81,7 @@ const normalizeStatus = (raw: any): OnboardingStatus => {
         lastScrapeDate: raw.stats?.lastScrapeDate ?? null,
         hasProfile: Boolean(raw.stats?.hasProfile),
       },
-      suggestedAction: raw.suggestedAction ?? 'profile',
+      suggestedAction: raw.suggestedAction ?? 'registration',
     };
   }
 
@@ -142,7 +145,9 @@ export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       // Determine next suggested action
       let suggestedAction: OnboardingStatus['suggestedAction'] = null;
-      if (!updatedSteps.profile) {
+      if (!updatedSteps.registration) {
+        suggestedAction = 'registration';
+      } else if (!updatedSteps.profile) {
         suggestedAction = 'profile';
       } else if (!updatedSteps.bankAccount) {
         suggestedAction = 'bankAccount';

@@ -1,0 +1,19 @@
+Third-Party Notices
+===================
+
+This file lists third-party packages used by the ShekelSync desktop app
+(app + renderer). It is derived from:
+- app/package-lock.json
+- renderer/package-lock.json
+
+Full license texts and copyright notices for each dependency are included
+with the corresponding package under node_modules in the source tree.
+If you distribute a build without node_modules, include those license files
+alongside your distribution.
+
+Packages by license:
+
+License: MIT
+- string-width@4.2.3
+- strip-ansi@6.0.1
+- wrap-ansi@7.0.0

@@ -102,7 +102,7 @@ class CoreAPIRoutes {
           )
         : null;
 
-      const sqlitePath = process.env.SQLITE_DB_PATH || process.env.SQLCIPHER_DB_PATH || null;
+      const sqlitePath = process.env.SQLITE_DB_PATH || null;
 
       return res.json({
         status: 'ok',

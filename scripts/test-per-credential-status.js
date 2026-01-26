@@ -9,25 +9,12 @@
  */
 
 const path = require('path');
-const {
-  isSqlCipherEnabled,
-  resolveSqlCipherKey,
-  applySqlCipherKey,
-  verifySqlCipherKey,
-} = require('../app/lib/sqlcipher-utils.js');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const APP_NODE_MODULES = path.join(PROJECT_ROOT, 'app', 'node_modules');
 const Database = require(path.join(APP_NODE_MODULES, 'better-sqlite3'));
 
-const dbPath = isSqlCipherEnabled()
-  ? (process.env.SQLCIPHER_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlcipher'))
-  : (process.env.SQLITE_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite'));
+const dbPath = process.env.SQLITE_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite');
 const db = new Database(dbPath);
-if (isSqlCipherEnabled()) {
-  const keyInfo = resolveSqlCipherKey({ requireKey: true });
-  applySqlCipherKey(db, keyInfo);
-  verifySqlCipherKey(db);
-}
 
 console.log('Testing per-credential scrape status tracking...\n');
 

@@ -3,9 +3,16 @@ const { app } = require('electron');
 const { resolveAppPath, requireFromApp } = require('./paths');
 
 let keytar;
-const keytarDisabled =
+const isLinux = process.platform === 'linux';
+const keytarDisabledByEnv =
   process.env.KEYTAR_DISABLE === 'true' ||
   process.env.DBUS_SESSION_BUS_ADDRESS === 'disabled:';
+const keytarDisabled = isLinux || keytarDisabledByEnv;
+const allowEnvKey =
+  process.env.ALLOW_INSECURE_ENV_KEY === 'true' ||
+  process.env.NODE_ENV === 'test' ||
+  process.env.VITEST === 'true' ||
+  process.env.CI === 'true';
 
 if (!keytarDisabled) {
   try {
@@ -19,7 +26,11 @@ if (!keytarDisabled) {
     }
   }
 } else {
-  console.warn('[SecureKeyManager] keytar disabled via environment.');
+  if (isLinux) {
+    console.warn('[SecureKeyManager] keytar disabled on Linux; using environment key fallback.');
+  } else {
+    console.warn('[SecureKeyManager] keytar disabled via environment.');
+  }
   keytar = null;
 }
 
@@ -58,21 +69,28 @@ class SecureKeyManager {
   }
 
   /**
-   * Get the master encryption key from secure storage
-   * Priority:
-   * 1. Environment variable (CLARIFY_ENCRYPTION_KEY) - for CI/testing
-   * 2. OS keychain (via keytar) - secure production storage
-   * 3. Generate new key and store in keychain
-   */
+ * Get the master encryption key from secure storage
+ * Priority:
+ * 1. Environment variable (CLARIFY_ENCRYPTION_KEY) - only when ALLOW_INSECURE_ENV_KEY=true (tests/CI)
+ * 2. OS keychain (via keytar) - secure production storage
+ * 3. Generate new key and store in keychain
+ */
   async getKey() {
     // Return cached key if available
     if (this.cachedKey) {
       return this.cachedKey;
     }
 
-    // 1. Check environment variable (for CI/testing)
+    // 1. Check environment variable (tests/CI only)
     const envKey = process.env.CLARIFY_ENCRYPTION_KEY;
     if (envKey) {
+      const envKeyAllowed = allowEnvKey || isLinux;
+      if (!envKeyAllowed) {
+        throw new Error(
+          'CLARIFY_ENCRYPTION_KEY is set but environment keys are disabled. ' +
+          'Remove the env key and enable OS keychain storage.',
+        );
+      }
       if (!this.validateKey(envKey)) {
         throw new Error('CLARIFY_ENCRYPTION_KEY environment variable is invalid. Must be a 64-character hex string (32 bytes).');
       }
@@ -108,12 +126,10 @@ class SecureKeyManager {
         throw new Error('Cannot securely store encryption key. Keychain access required for security.');
       }
     } else {
-      // No keychain available and no env key - this is insecure
-      throw new Error(
-        'Cannot securely store encryption key. Either:\n' +
-        '1. Set CLARIFY_ENCRYPTION_KEY environment variable, or\n' +
-        '2. Enable keychain support (install libsecret on Linux)'
-      );
+      const message = isLinux
+        ? 'Cannot securely store encryption key. On Linux, set CLARIFY_ENCRYPTION_KEY or enable libsecret and a secret service.'
+        : 'Cannot securely store encryption key. Enable OS keychain support (install libsecret on Linux).';
+      throw new Error(message);
     }
 
     this.cachedKey = newKey;
@@ -162,7 +178,8 @@ class SecureKeyManager {
    * Check if secure key storage is available
    */
   isSecureStorageAvailable() {
-    return this.keytarAvailable || Boolean(process.env.CLARIFY_ENCRYPTION_KEY);
+    const envKeyAllowed = allowEnvKey || isLinux;
+    return this.keytarAvailable || (envKeyAllowed && Boolean(process.env.CLARIFY_ENCRYPTION_KEY));
   }
 
   /**

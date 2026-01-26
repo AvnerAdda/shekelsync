@@ -10,25 +10,14 @@ const path = require('path');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const APP_NODE_MODULES = path.join(PROJECT_ROOT, 'app', 'node_modules');
 
-// Load SQLCipher utilities
-const {
-  isSqlCipherEnabled,
-  resolveSqlCipherKey,
-  formatKeyClause,
-} = require(path.join(PROJECT_ROOT, 'app', 'lib', 'sqlcipher-utils.js'));
-
 async function fixQuestTriggers() {
   // Determine database path based on environment
-  const useSqlCipher = isSqlCipherEnabled();
-  const defaultDbPath = useSqlCipher
-    ? (process.env.SQLCIPHER_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlcipher'))
-    : (process.env.SQLITE_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite'));
+  const defaultDbPath = process.env.SQLITE_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite');
 
   const dbPath = process.argv[2] || defaultDbPath;
 
   console.log('Fixing quest triggers...');
   console.log('Database path:', dbPath);
-  console.log('SQLCipher enabled:', useSqlCipher);
 
   let Database;
   try {
@@ -39,12 +28,6 @@ async function fixQuestTriggers() {
   }
 
   const db = new Database(dbPath);
-
-  // Apply SQLCipher key if needed
-  if (useSqlCipher) {
-    const keyInfo = resolveSqlCipherKey({ requireKey: true });
-    db.pragma(formatKeyClause(keyInfo));
-  }
 
   try {
     // Get all triggers that reference smart_action_items_old

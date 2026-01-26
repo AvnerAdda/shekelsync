@@ -1,4 +1,6 @@
 const { systemPreferences } = require('electron');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
 const securityStatusManager = require('../security/security-status');
 const {
   logBiometricAuthSuccess,
@@ -7,7 +9,7 @@ const {
 
 /**
  * Biometric Authentication Manager
- * Handles biometric authentication (Touch ID on macOS, Windows Hello, etc.)
+ * Handles biometric authentication (Touch ID on macOS, Windows Hello on Windows)
  */
 class BiometricAuthManager {
   constructor() {
@@ -16,19 +18,142 @@ class BiometricAuthManager {
     this.lastAuthAttempt = null;
   }
 
+  async runPowerShell(script, env = {}) {
+    const execFileAsync = promisify(execFile);
+    const { stdout } = await execFileAsync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      {
+        env: { ...process.env, ...env },
+        windowsHide: true,
+        timeout: 60000,
+      },
+    );
+    return String(stdout || '').trim();
+  }
+
+  async getWindowsHelloAvailability() {
+    const script = [
+      'Add-Type -AssemblyName System.Runtime.WindowsRuntime;',
+      '$null = [Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime];',
+      '$availability = [Windows.Security.Credentials.UI.UserConsentVerifier]::CheckAvailabilityAsync().GetAwaiter().GetResult();',
+      'Write-Output $availability.ToString();',
+    ].join(' ');
+
+    try {
+      const output = await this.runPowerShell(script);
+      if (output === 'Available') {
+        return { available: true, type: 'windows-hello', reason: 'Windows Hello available' };
+      }
+      const reasons = {
+        DeviceNotPresent: 'No compatible biometric device found',
+        NotConfiguredForUser: 'Windows Hello not configured for this user',
+        DisabledByPolicy: 'Windows Hello disabled by policy',
+        DeviceBusy: 'Windows Hello device is busy',
+      };
+      return {
+        available: false,
+        type: 'windows-hello',
+        reason: reasons[output] || `Windows Hello unavailable (${output || 'unknown'})`,
+      };
+    } catch (error) {
+      return {
+        available: false,
+        type: 'windows-hello',
+        reason: `Windows Hello check failed: ${error.message}`,
+      };
+    }
+  }
+
+  async authenticateWindowsHello(reason) {
+    const script = [
+      'Add-Type -AssemblyName System.Runtime.WindowsRuntime;',
+      '$null = [Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime];',
+      '$result = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync($env:SHEKELSYNC_AUTH_REASON).GetAwaiter().GetResult();',
+      'Write-Output $result.ToString();',
+    ].join(' ');
+
+    try {
+      const output = await this.runPowerShell(script, { SHEKELSYNC_AUTH_REASON: reason });
+      if (output === 'Verified') {
+        logBiometricAuthSuccess({
+          platform: this.platform,
+          method: 'windows-hello',
+          reason,
+        });
+        securityStatusManager.setAuthenticationStatus('windows-hello', true);
+        return { success: true, method: 'windows-hello' };
+      }
+
+      const reasons = {
+        DeviceNotPresent: 'No compatible biometric device found',
+        NotConfiguredForUser: 'Windows Hello not configured for this user',
+        DisabledByPolicy: 'Windows Hello disabled by policy',
+        DeviceBusy: 'Windows Hello device is busy',
+        RetriesExhausted: 'Too many failed attempts',
+        Canceled: 'Authentication cancelled',
+      };
+      const errorMessage = reasons[output] || `Windows Hello authentication failed (${output || 'unknown'})`;
+      logBiometricAuthFailure({
+        platform: this.platform,
+        method: 'windows-hello',
+        error: errorMessage,
+        reason,
+      });
+      securityStatusManager.setAuthenticationStatus('windows-hello', false);
+      return { success: false, error: errorMessage, cancelled: output === 'Canceled' };
+    } catch (error) {
+      const errorMessage = error.message || 'Windows Hello authentication failed';
+      logBiometricAuthFailure({
+        platform: this.platform,
+        method: 'windows-hello',
+        error: errorMessage,
+        reason,
+      });
+      securityStatusManager.setAuthenticationStatus('windows-hello', false);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  async getAvailabilityDetails() {
+    if (this.platform === 'darwin') {
+      try {
+        if (systemPreferences && typeof systemPreferences.canPromptTouchID === 'function') {
+          const available = systemPreferences.canPromptTouchID();
+          return {
+            available,
+            type: 'touchid',
+            reason: available ? 'Touch ID available' : 'Touch ID not available on this device',
+          };
+        }
+        return { available: false, type: 'touchid', reason: 'Touch ID not supported' };
+      } catch (error) {
+        return { available: false, type: 'touchid', reason: `Touch ID check failed: ${error.message}` };
+      }
+    }
+
+    if (this.platform === 'win32') {
+      return this.getWindowsHelloAvailability();
+    }
+
+    if (this.platform === 'linux') {
+      return {
+        available: false,
+        type: 'none',
+        reason: 'Biometric authentication not supported on Linux',
+      };
+    }
+
+    return { available: false, type: 'none', reason: 'Unsupported platform' };
+  }
+
   /**
    * Check if biometric authentication is available on this platform
    */
   async isAvailable() {
     try {
-      if (this.platform === 'darwin') {
-        // macOS Touch ID
-        if (systemPreferences && typeof systemPreferences.canPromptTouchID === 'function') {
-          return systemPreferences.canPromptTouchID();
-        }
-      }
-      // Windows Hello and Linux not yet implemented
-      return false;
+      const availability = await this.getAvailabilityDetails();
+      return availability.available;
     } catch (error) {
       console.error('[BiometricAuth] Failed to check availability:', error);
       return false;
@@ -44,8 +169,6 @@ class BiometricAuthManager {
         return 'touchid';
       case 'win32':
         return 'windows-hello';
-      case 'linux':
-        return 'pam';
       default:
         return 'none';
     }
@@ -62,8 +185,15 @@ class BiometricAuthManager {
         return await this.authenticateTouchID(reason);
       }
 
-      // Other platforms not yet supported
-      console.warn(`[BiometricAuth] Platform ${this.platform} not yet supported`);
+      if (this.platform === 'win32') {
+        const availability = await this.getAvailabilityDetails();
+        if (!availability.available) {
+          return { success: false, error: availability.reason || 'Windows Hello not available' };
+        }
+        return await this.authenticateWindowsHello(reason);
+      }
+
+      console.warn(`[BiometricAuth] Platform ${this.platform} not supported`);
       return {
         success: false,
         error: `Biometric authentication not supported on ${this.platform}`,
@@ -137,37 +267,17 @@ class BiometricAuthManager {
   }
 
   /**
-   * Authenticate with Windows Hello (future implementation)
-   */
-  async authenticateWindowsHello(reason) {
-    console.warn('[BiometricAuth] Windows Hello not yet implemented');
-    return {
-      success: false,
-      error: 'Windows Hello authentication not yet implemented',
-    };
-  }
-
-  /**
-   * Authenticate with PAM (Linux, future implementation)
-   */
-  async authenticatePAM(reason) {
-    console.warn('[BiometricAuth] PAM authentication not yet implemented');
-    return {
-      success: false,
-      error: 'PAM authentication not yet implemented',
-    };
-  }
-
-  /**
    * Get authentication status
    */
-  getStatus() {
+  async getStatus() {
+    const availability = await this.getAvailabilityDetails();
     return {
       platform: this.platform,
       enabled: this.authEnabled,
-      available: this.isAvailable(),
+      available: availability.available,
+      reason: availability.reason || null,
       lastAttempt: this.lastAuthAttempt,
-      type: this.getBiometricType(),
+      type: availability.type || this.getBiometricType(),
     };
   }
 

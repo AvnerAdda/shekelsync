@@ -1,7 +1,7 @@
 {
+  "license": "MIT",
   "scripts": {
     "init:sqlite": "node scripts/init_sqlite_db.js",
-    "migrate:sqlcipher": "node scripts/migrate_sqlcipher_db.js",
     "scrape:last2m": "node scripts/scrape-last-2-months.js",
     "dev:electron": "npm --prefix app run electron-dev",
     "dev:api": "ELECTRON_API_PORT=44373 SQLITE_DB_PATH=$(pwd)/dist/clarify.sqlite USE_SQLITE=true node electron/dev-api-server.js",

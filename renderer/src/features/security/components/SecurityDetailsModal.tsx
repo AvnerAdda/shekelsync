@@ -91,12 +91,21 @@ const SecurityDetailsModal: React.FC<SecurityDetailsModalProps> = ({ open, onClo
     }
   };
 
-  const getStatusIcon = (isGood: boolean) => {
+  const getStatusIcon = (isGood: boolean, fallback: 'warning' | 'info' = 'warning') => {
     return isGood ? (
       <CheckIcon sx={{ color: theme.palette.success.main }} />
     ) : (
-      <WarningIcon sx={{ color: theme.palette.warning.main }} />
+      fallback === 'info'
+        ? <InfoIcon sx={{ color: theme.palette.info.main }} />
+        : <WarningIcon sx={{ color: theme.palette.warning.main }} />
     );
+  };
+
+  const getBiometricLabel = (type: string | null) => {
+    if (!type || type === 'none') return 'Biometric';
+    if (type === 'touchid') return 'Touch ID';
+    if (type === 'windows-hello') return 'Windows Hello';
+    return type;
   };
 
   const formatLastAuth = (lastAuth: string | null) => {
@@ -209,7 +218,7 @@ const SecurityDetailsModal: React.FC<SecurityDetailsModalProps> = ({ open, onClo
                     secondary={
                       status.keychain.status === 'connected'
                         ? 'Keys stored securely in OS keychain'
-                        : 'Using environment variable storage'
+                        : 'OS keychain unavailable. Enable system keychain support.'
                     }
                   />
                 </ListItem>
@@ -249,12 +258,12 @@ const SecurityDetailsModal: React.FC<SecurityDetailsModalProps> = ({ open, onClo
               <List dense disablePadding>
                 <ListItem disablePadding>
                   <ListItemIcon sx={{ minWidth: 36 }}>
-                    {getStatusIcon(status.biometric.available)}
+                    {getStatusIcon(status.biometric.available, 'info')}
                   </ListItemIcon>
                   <ListItemText
                     primary={
                       status.biometric.available
-                        ? `${status.biometric.type === 'touchid' ? 'Touch ID' : status.biometric.type} Available`
+                        ? `${getBiometricLabel(status.biometric.type)} Available`
                         : 'Not Available'
                     }
                     secondary={

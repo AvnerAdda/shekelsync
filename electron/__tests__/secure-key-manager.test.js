@@ -42,6 +42,7 @@ describe('SecureKeyManager', () => {
     vi.clearAllMocks();
     delete process.env.CLARIFY_ENCRYPTION_KEY;
     delete process.env.KEYTAR_DISABLE;
+    delete process.env.ALLOW_INSECURE_ENV_KEY;
 
     // Reset module cache to get fresh instance
     vi.resetModules();
@@ -115,6 +116,7 @@ describe('SecureKeyManager', () => {
     test('should use environment variable if set', async () => {
       const envKey = crypto.randomBytes(32).toString('hex');
       process.env.CLARIFY_ENCRYPTION_KEY = envKey;
+      process.env.ALLOW_INSECURE_ENV_KEY = 'true';
 
       const module = await import('../secure-key-manager.js');
       secureKeyManager = module.default || module;
@@ -127,6 +129,7 @@ describe('SecureKeyManager', () => {
     test('should cache key from environment', async () => {
       const envKey = crypto.randomBytes(32).toString('hex');
       process.env.CLARIFY_ENCRYPTION_KEY = envKey;
+      process.env.ALLOW_INSECURE_ENV_KEY = 'true';
 
       const module = await import('../secure-key-manager.js');
       secureKeyManager = module.default || module;
@@ -140,6 +143,7 @@ describe('SecureKeyManager', () => {
 
     test('should reject invalid environment key', async () => {
       process.env.CLARIFY_ENCRYPTION_KEY = 'invalid-key';
+      process.env.ALLOW_INSECURE_ENV_KEY = 'true';
 
       const module = await import('../secure-key-manager.js');
       secureKeyManager = module.default || module;
@@ -293,6 +297,7 @@ describe('SecureKeyManager', () => {
 
     test('should report available when env key is set', async () => {
       process.env.CLARIFY_ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
+      process.env.ALLOW_INSECURE_ENV_KEY = 'true';
       const module = await import('../secure-key-manager.js');
       secureKeyManager = module.default || module;
       expect(secureKeyManager.isSecureStorageAvailable()).toBe(true);

@@ -2,6 +2,7 @@ const database = require('../database.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const { validateDataQuality } = require('./data-quality-validation.js');
 const { computeEnhancedHealthScore } = require('./health-score-enhanced.js');
+const { analyzeRecurringPatterns } = require('./recurring-analyzer.js');
 
 let dateFnsPromise = null;
 
@@ -10,50 +11,6 @@ async function loadDateFns() {
     dateFnsPromise = import('date-fns');
   }
   return dateFnsPromise;
-}
-
-function average(values) {
-  if (!values || values.length === 0) return 0;
-  return values.reduce((sum, v) => sum + v, 0) / values.length;
-}
-
-function standardDeviation(values) {
-  if (!values || values.length === 0) return 0;
-  const mean = average(values);
-  const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
-  return Math.sqrt(variance);
-}
-
-function detectRecurringSubscriptions(transactions) {
-  const groups = new Map();
-
-  transactions.forEach((t) => {
-    const name = t.name?.trim();
-    if (!name) return;
-    const key = name.toLowerCase();
-    if (!groups.has(key)) {
-      groups.set(key, { name, amounts: [] });
-    }
-    groups.get(key).amounts.push(Math.abs(t.price));
-  });
-
-  const subscriptions = [];
-  groups.forEach(({ name, amounts }) => {
-    if (amounts.length < 2) return;
-    const stdDev = standardDeviation(amounts);
-    if (stdDev >= 10) return;
-    const avgAmount = average(amounts);
-    const totalSpent = amounts.reduce((sum, val) => sum + val, 0);
-    subscriptions.push({
-      name,
-      occurrences: amounts.length,
-      avg_amount: avgAmount,
-      total_spent: totalSpent,
-    });
-  });
-
-  subscriptions.sort((a, b) => b.total_spent - a.total_spent);
-  return subscriptions.slice(0, 10);
 }
 
 function safeDiv(numerator, denominator) {
@@ -254,7 +211,25 @@ async function getPersonalIntelligence(params = {}) {
     const coffeeSpend = coffeeTransactions.reduce((sum, t) => sum + Math.abs(t.price), 0);
     const coffeeYearly = Math.round((coffeeSpend / dayCount) * 365);
 
-    const recurringSubscriptions = detectRecurringSubscriptions(transactions);
+    const { patterns: recurringPatternRows } = await analyzeRecurringPatterns({
+      minOccurrences: 2,
+      minConsistency: 0.3,
+      minVariableAmount: 50,
+      aggregateBy: 'day',
+      excludeCreditCardRepayments: true,
+      excludePairingExclusions: true,
+      transactions,
+    });
+
+    const recurringSubscriptions = recurringPatternRows
+      .filter((pattern) => (pattern.amount_stddev || 0) < 10)
+      .slice(0, 10)
+      .map((pattern) => ({
+        name: pattern.display_name,
+        occurrences: pattern.occurrence_count,
+        avg_amount: pattern.detected_amount,
+        total_spent: pattern.total_spent,
+      }));
     const roundNumbers = transactions.filter((t) => Math.abs(t.price) % 10 === 0);
     const roundNumberPercentage =
       transactions.length > 0 ? Math.round((roundNumbers.length / transactions.length) * 100) : 0;

@@ -103,7 +103,7 @@ export default defineConfig(({ command }) => ({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: process.env.RENDERER_SOURCEMAP === 'true',
     rollupOptions: {
       output: {
         manualChunks: {
