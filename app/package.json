@@ -138,6 +138,11 @@
         "to": "scripts/init_sqlite_db.js"
       }
     ],
+    "asarUnpack": [
+      "node_modules/@supabase/**/*",
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/keytar/**/*"
+    ],
     "extraResources": [
       {
         "from": "../scripts/init_sqlite_db.js",
