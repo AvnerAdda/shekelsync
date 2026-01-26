@@ -41,10 +41,15 @@ class SecurityStatusManager {
   async getEncryptionStatus() {
     try {
       const hasKey = await secureKeyManager.getKey();
+      const usesEnvKey = Boolean(process.env.CLARIFY_ENCRYPTION_KEY) &&
+        (process.platform === 'linux' ||
+          !secureKeyManager.keytarAvailable ||
+          process.env.ALLOW_INSECURE_ENV_KEY === 'true');
+      const keyStorage = usesEnvKey ? 'environment' : (secureKeyManager.keytarAvailable ? 'keychain' : 'none');
       return {
         status: hasKey ? 'active' : 'inactive',
         algorithm: 'AES-256-GCM',
-        keyStorage: hasKey ? 'secure' : 'none',
+        keyStorage,
       };
     } catch (error) {
       return {
@@ -79,11 +84,16 @@ class SecurityStatusManager {
       }
     }
 
+    const status = isKeychainAvailable ? 'connected' : 'fallback';
+    const source = isKeychainAvailable ? 'keychain' : 'none';
+    const type = isKeychainAvailable ? keychainType : 'Unavailable';
+
     return {
-      status: isKeychainAvailable ? 'connected' : 'fallback',
-      type: keychainType,
+      status,
+      type,
       available: isKeychainAvailable,
-      fallbackMode: !isKeychainAvailable,
+      fallbackMode: status !== 'connected',
+      source,
     };
   }
 
@@ -130,37 +140,24 @@ class SecurityStatusManager {
    * Check biometric availability
    */
   async getBiometricAvailability() {
-    const availability = {
+    try {
+      const biometricAuthManager = require('../auth/biometric-auth');
+      if (biometricAuthManager?.getAvailabilityDetails) {
+        return await biometricAuthManager.getAvailabilityDetails();
+      }
+    } catch (error) {
+      return {
+        available: false,
+        type: null,
+        reason: `Biometric check failed: ${error.message}`,
+      };
+    }
+
+    return {
       available: false,
       type: null,
-      reason: null,
+      reason: 'Biometric authentication not available',
     };
-
-    // macOS Touch ID
-    if (process.platform === 'darwin') {
-      try {
-        const { systemPreferences } = require('electron');
-        if (systemPreferences && typeof systemPreferences.canPromptTouchID === 'function') {
-          availability.available = systemPreferences.canPromptTouchID();
-          availability.type = 'touchid';
-          availability.reason = availability.available ? 'Touch ID available' : 'Touch ID not available on this device';
-        }
-      } catch (error) {
-        availability.reason = `Touch ID check failed: ${error.message}`;
-      }
-    }
-    // Windows Hello (future implementation)
-    else if (process.platform === 'win32') {
-      availability.type = 'windows-hello';
-      availability.reason = 'Windows Hello support coming soon';
-    }
-    // Linux (future implementation)
-    else if (process.platform === 'linux') {
-      availability.type = 'pam';
-      availability.reason = 'Linux authentication support coming soon';
-    }
-
-    return availability;
   }
 
   /**
@@ -218,12 +215,17 @@ class SecurityStatusManager {
   async getSecuritySummary() {
     const status = await this.getSecurityStatus();
 
+    const authRequired = status.biometric.available;
+    const authOk = !authRequired || status.authentication.isActive;
+    const keychainRequired = status.platform.os !== 'linux';
+    const keychainOk = keychainRequired ? status.keychain.status === 'connected' : true;
+
     return {
       level: this.calculateSecurityLevel(status),
       checks: {
         encryptionActive: status.encryption.status === 'active',
-        keychainConnected: status.keychain.status === 'connected',
-        authenticated: status.authentication.isActive,
+        keychainConnected: keychainOk,
+        authenticated: authOk,
         biometricAvailable: status.biometric.available,
       },
       warnings: this.generateWarnings(status),
@@ -234,10 +236,15 @@ class SecurityStatusManager {
    * Calculate overall security level
    */
   calculateSecurityLevel(status) {
+    const authRequired = status.biometric.available;
+    const authOk = !authRequired || status.authentication.isActive;
+    const keychainRequired = status.platform.os !== 'linux';
+    const keychainOk = keychainRequired ? status.keychain.status === 'connected' : true;
+
     const checks = {
       encryption: status.encryption.status === 'active',
-      keychain: status.keychain.status === 'connected',
-      authenticated: status.authentication.isActive,
+      keychain: keychainOk,
+      authenticated: authOk,
     };
 
     const passed = Object.values(checks).filter(Boolean).length;
@@ -252,6 +259,7 @@ class SecurityStatusManager {
    */
   generateWarnings(status) {
     const warnings = [];
+    const keychainRequired = status.platform.os !== 'linux';
 
     if (status.encryption.status !== 'active') {
       warnings.push({
@@ -261,15 +269,15 @@ class SecurityStatusManager {
       });
     }
 
-    if (status.keychain.status !== 'connected') {
+    if (keychainRequired && status.keychain.status !== 'connected') {
       warnings.push({
         type: 'keychain',
         severity: 'medium',
-        message: 'Not using OS keychain. Falling back to environment variable storage.',
+        message: 'OS keychain unavailable. Enable system keychain support.',
       });
     }
 
-    if (!status.authentication.isActive) {
+    if (status.biometric.available && !status.authentication.isActive) {
       warnings.push({
         type: 'authentication',
         severity: 'low',
@@ -277,7 +285,7 @@ class SecurityStatusManager {
       });
     }
 
-    if (status.authentication.requiresReauth) {
+    if (status.authentication.isActive && status.authentication.requiresReauth) {
       warnings.push({
         type: 'session',
         severity: 'medium',

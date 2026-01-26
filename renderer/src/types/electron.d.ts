@@ -130,6 +130,35 @@ interface DevApi {
   log: (...args: any[]) => void;
 }
 
+interface LicenseStatus {
+  registered: boolean;
+  licenseType: 'trial' | 'pro' | 'expired' | 'none';
+  trialDaysRemaining?: number;
+  isReadOnly: boolean;
+  canWrite: boolean;
+  offlineMode: boolean;
+  offlineGraceDaysRemaining?: number | null;
+  syncedToCloud: boolean;
+  lastValidated?: string;
+  teudatZehut?: string;
+  error?: string;
+}
+
+interface TeudatZehutValidation {
+  valid: boolean;
+  error?: string;
+}
+
+interface LicenseApi {
+  getStatus: () => Promise<{ success: boolean; data?: LicenseStatus; error?: string }>;
+  register: (teudatZehut: string) => Promise<{ success: boolean; license?: any; error?: string }>;
+  validateTeudatZehut: (id: string) => Promise<{ success: boolean; data?: TeudatZehutValidation; error?: string }>;
+  activatePro: (paymentRef?: string) => Promise<{ success: boolean; error?: string }>;
+  canWrite: () => Promise<{ success: boolean; canWrite: boolean; error?: string }>;
+  validateOnline: () => Promise<{ success: boolean; status?: LicenseStatus; error?: string }>;
+  getInfo: () => Promise<{ success: boolean; data?: any; error?: string }>;
+}
+
 interface ElectronAPI {
   window: WindowApi;
   db?: DatabaseApi;
@@ -137,6 +166,7 @@ interface ElectronAPI {
   scraper: ScraperApi;
   file: FileApi;
   auth: AuthApi;
+  license: LicenseApi;
   log: LogApi;
   diagnostics: DiagnosticsApi;
   telemetry: TelemetryApi;

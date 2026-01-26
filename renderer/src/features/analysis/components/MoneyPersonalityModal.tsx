@@ -21,6 +21,7 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import AutorenewIcon from '@mui/icons-material/Autorenew';
 import TodayIcon from '@mui/icons-material/Today';
 import DateRangeIcon from '@mui/icons-material/DateRange';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -415,7 +416,16 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                                   </Box>
 
                                   <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
-                                    {cat.isRecurring && (
+                                    {cat.subscriptionCount > 0 ? (
+                                      <Chip
+                                        icon={<AutorenewIcon sx={{ fontSize: 14 }} />}
+                                        label={t('categoryAverages.subscriptionBadge')}
+                                        size="small"
+                                        color="primary"
+                                        variant="outlined"
+                                        sx={{ height: 20, fontSize: '0.6875rem' }}
+                                      />
+                                    ) : cat.isRecurring ? (
                                       <Chip
                                         label={t('categoryAverages.recurringBadge')}
                                         size="small"
@@ -423,7 +433,7 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                                         variant="outlined"
                                         sx={{ height: 20, fontSize: '0.6875rem' }}
                                       />
-                                    )}
+                                    ) : null}
                                     {cat.recurringPercentage !== undefined && (
                                       <Chip
                                         label={`${cat.recurringPercentage?.toFixed(0)}%`}

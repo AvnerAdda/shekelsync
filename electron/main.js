@@ -31,15 +31,11 @@ const {
   openDiagnosticsLogDirectory,
   exportDiagnosticsToFile,
 } = require('./diagnostics');
-const {
-  isSqlCipherEnabled,
-  resolveSqlCipherKey,
-} = require(resolveAppPath('lib', 'sqlcipher-utils.js'));
-const { migrateSqliteToSqlcipher } = require(resolveAppPath('lib', 'sqlcipher-migrate.js'));
 const analyticsMetricsStore = require(resolveAppPath('server', 'services', 'analytics', 'metrics-store.js'));
 const isPackaged = app.isPackaged;
 const isDev = process.env.NODE_ENV === 'development' || !isPackaged;
 const isMac = process.platform === 'darwin';
+const isLinux = process.platform === 'linux';
 const allowUnsafeIpc = process.env.ALLOW_UNSAFE_IPC === 'true';
 const allowInsecureEnvKey = process.env.ALLOW_INSECURE_ENV_KEY === 'true';
 const keytarDisabledByEnv =
@@ -193,6 +189,7 @@ const { dbManager } = require('./database');
 const sessionStore = require('./session-store');
 const { describeTelemetryState } = require('./telemetry-utils');
 const secureKeyManager = require('./secure-key-manager');
+const licenseService = require('./license-service');
 
 const telemetryState = {
   enabled: false,
@@ -239,18 +236,23 @@ function wireTelemetryMetricsReporter() {
 async function ensureEncryptionKey(config) {
   // Check if key is already set in environment
   if (process.env.CLARIFY_ENCRYPTION_KEY) {
-    if (isPackaged && !allowInsecureEnvKey) {
+    const envKeyAllowed = allowInsecureEnvKey || isLinux;
+    if (!envKeyAllowed) {
       abortForSecurity(
-        'CLARIFY_ENCRYPTION_KEY is not allowed in packaged builds. Remove the environment key and enable OS keychain storage. ' +
-        'On Linux, install libsecret and run within a desktop session. Set ALLOW_INSECURE_ENV_KEY=true only for testing.',
+        'CLARIFY_ENCRYPTION_KEY is not allowed. Remove the environment key and enable OS keychain storage. ' +
+        'On Linux, install libsecret and run within a desktop session. Set ALLOW_INSECURE_ENV_KEY=true only for tests.',
       );
-      throw new Error('Environment encryption key blocked in packaged build.');
+      throw new Error('Environment encryption key blocked.');
     }
-    logger.info('Using encryption key from environment variable');
+    if (allowInsecureEnvKey) {
+      logger.warn('Using encryption key from environment variable (ALLOW_INSECURE_ENV_KEY=true)');
+    } else if (isLinux) {
+      logger.warn('Using encryption key from environment variable on Linux');
+    }
     return;
   }
 
-  if (isPackaged && keytarDisabledByEnv) {
+  if (keytarDisabledByEnv && !allowInsecureEnvKey && !isLinux) {
     abortForSecurity(
       'OS keychain access is disabled by environment. Remove KEYTAR_DISABLE/DBUS_SESSION_BUS_ADDRESS overrides and restart. ' +
       'On Linux, install libsecret and ensure a running secret service.',
@@ -258,11 +260,11 @@ async function ensureEncryptionKey(config) {
     throw new Error('Keychain disabled by environment.');
   }
 
-  if (isPackaged && !secureKeyManager.keytarAvailable) {
+  if (!secureKeyManager.keytarAvailable && !allowInsecureEnvKey && !isLinux) {
     abortForSecurity(
-      'OS keychain storage is required in packaged builds. Install and enable the system keychain (Credential Manager/Keychain/libsecret) and restart.',
+      'OS keychain storage is required. Install and enable the system keychain (Credential Manager/Keychain/libsecret) and restart.',
     );
-    throw new Error('Keychain unavailable in packaged build.');
+    throw new Error('Keychain unavailable.');
   }
 
   // Use secure key manager to get or generate key from OS keychain
@@ -290,56 +292,6 @@ async function ensureEncryptionKey(config) {
     }
     throw new Error(`Cannot initialize encryption: ${error.message}`);
   }
-}
-
-async function maybeMigrateSqlcipherDatabase(config) {
-  if (!isSqlCipherEnabled()) {
-    return;
-  }
-
-  const cipherPath = process.env.SQLCIPHER_DB_PATH;
-  const plaintextPath = config?.database?.plaintextPath || process.env.SQLITE_DB_PATH;
-
-  if (!cipherPath) {
-    throw new Error('SQLCIPHER_DB_PATH must be set when SQLCipher is enabled.');
-  }
-
-  if (fs.existsSync(cipherPath)) {
-    await configManager.updateConfig({
-      database: {
-        mode: 'sqlcipher',
-        path: cipherPath,
-        sqlcipherPath: cipherPath,
-        plaintextPath,
-      },
-    });
-    return;
-  }
-
-  if (!plaintextPath || !fs.existsSync(plaintextPath)) {
-    return;
-  }
-
-  const keyInfo = resolveSqlCipherKey({ requireKey: true });
-  logger.info('Migrating SQLite database to SQLCipher', {
-    sourcePath: plaintextPath,
-    targetPath: cipherPath,
-  });
-
-  migrateSqliteToSqlcipher({
-    sourcePath: plaintextPath,
-    targetPath: cipherPath,
-    keyInfo,
-  });
-
-  await configManager.updateConfig({
-    database: {
-      mode: 'sqlcipher',
-      path: cipherPath,
-      sqlcipherPath: cipherPath,
-      plaintextPath,
-    },
-  });
 }
 
 function initializeTelemetry() {
@@ -436,38 +388,22 @@ async function initializeBackendServices({ skipEmbeddedApi }) {
   try {
     console.log('Initializing application configuration...');
     logger.info('Initializing configuration');
+    await ensureEncryptionKey();
     const config = await configManager.initializeConfig();
     logger.info('Configuration initialised', {
       databaseMode: config?.database?.mode,
     });
     await ensureEncryptionKey(config);
 
-    const usingSqlCipher =
-      process.env.USE_SQLCIPHER === 'true' ||
-      Boolean(process.env.SQLCIPHER_DB_PATH) ||
-      config.database.mode === 'sqlcipher';
-    const usingSqliteEnv =
-      process.env.USE_SQLITE === 'true' ||
-      Boolean(process.env.SQLITE_DB_PATH) ||
-      config.database.mode === 'sqlite' ||
-      usingSqlCipher;
-
     if (!config.database) {
       config.database = {};
     }
-    if (!config.database.mode) {
-      config.database.mode = usingSqliteEnv ? 'sqlite' : 'postgres';
-    }
-    if (usingSqlCipher && config.database.mode !== 'postgres') {
-      config.database.mode = 'sqlcipher';
-    }
+    const requestedMode = (config.database.mode || '').toLowerCase();
+    config.database.mode = requestedMode === 'postgres' ? 'postgres' : 'sqlite';
 
     if (config.database.mode === 'postgres') {
       process.env.USE_SQLITE = 'false';
-      process.env.USE_SQLCIPHER = 'false';
       delete process.env.SQLITE_DB_PATH;
-      delete process.env.USE_SQLCIPHER;
-      delete process.env.SQLCIPHER_DB_PATH;
 
       process.env.CLARIFY_DB_USER = config.database.user;
       process.env.CLARIFY_DB_HOST = config.database.host;
@@ -477,32 +413,13 @@ async function initializeBackendServices({ skipEmbeddedApi }) {
     } else {
       process.env.USE_SQLITE = 'true';
       const defaultSqlitePath = path.join(app.getPath('userData'), 'clarify.sqlite');
-      const defaultSqlCipherPath = path.join(app.getPath('userData'), 'clarify.sqlcipher');
       const basePath = process.env.SQLITE_DB_PATH || config.database.path || defaultSqlitePath;
-      if (usingSqlCipher) {
-        process.env.USE_SQLCIPHER = 'true';
-        const cipherPath =
-          process.env.SQLCIPHER_DB_PATH ||
-          config.database.sqlcipherPath ||
-          (basePath.endsWith('.sqlite')
-            ? basePath.replace(/\.sqlite$/i, '.sqlcipher')
-            : defaultSqlCipherPath);
-        process.env.SQLCIPHER_DB_PATH = cipherPath;
-        process.env.SQLITE_DB_PATH = basePath;
-        config.database.path = cipherPath;
-        config.database.sqlcipherPath = cipherPath;
-        config.database.plaintextPath = basePath;
-      } else {
-        process.env.USE_SQLCIPHER = 'false';
-        process.env.SQLITE_DB_PATH = basePath;
-        config.database.path = basePath;
-      }
+      process.env.SQLITE_DB_PATH = basePath;
+      config.database.path = basePath;
     }
 
     // Ensure dbManager mode matches the resolved config (constructor runs before env is set)
-    dbManager.mode = config.database.mode === 'sqlcipher' ? 'sqlite' : config.database.mode;
-
-    await maybeMigrateSqlcipherDatabase(config);
+    dbManager.mode = config.database.mode;
 
     if (!skipEmbeddedApi && !setupAPIServer) {
       try {
@@ -1101,8 +1018,13 @@ ipcMain.handle('diagnostics:export', async (event, outputPath) => {
 ipcMain.handle('biometric:isAvailable', async () => {
   try {
     const biometricAuthManager = require('./auth/biometric-auth');
-    const available = await biometricAuthManager.isAvailable();
-    return { success: true, available };
+    const availability = await biometricAuthManager.getAvailabilityDetails();
+    return {
+      success: true,
+      available: availability.available,
+      type: availability.type,
+      reason: availability.reason,
+    };
   } catch (error) {
     console.error('[IPC] Biometric availability check failed:', error);
     return { success: false, available: false, error: error.message };
@@ -1123,7 +1045,7 @@ ipcMain.handle('biometric:authenticate', async (_event, reason) => {
 ipcMain.handle('biometric:getStatus', async () => {
   try {
     const biometricAuthManager = require('./auth/biometric-auth');
-    const status = biometricAuthManager.getStatus();
+    const status = await biometricAuthManager.getStatus();
     return { success: true, data: status };
   } catch (error) {
     console.error('[IPC] Biometric status check failed:', error);
@@ -1571,6 +1493,77 @@ ipcMain.handle('auth:clearSession', async () => {
     return { success: true };
   } catch (error) {
     console.error('Failed to clear auth session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// License operations
+ipcMain.handle('license:getStatus', async () => {
+  try {
+    const status = await licenseService.checkLicenseStatus();
+    return { success: true, data: status };
+  } catch (error) {
+    console.error('Failed to get license status:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('license:register', async (event, teudatZehut) => {
+  try {
+    const result = await licenseService.registerLicense(teudatZehut);
+    return result;
+  } catch (error) {
+    console.error('Failed to register license:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('license:validateTeudatZehut', async (event, id) => {
+  try {
+    const result = licenseService.validateTeudatZehut(id);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('Failed to validate Teudat Zehut:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('license:activatePro', async (event, paymentRef) => {
+  try {
+    const result = await licenseService.activateProLicense(paymentRef);
+    return result;
+  } catch (error) {
+    console.error('Failed to activate Pro license:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('license:canWrite', async () => {
+  try {
+    const canWrite = await licenseService.isWriteOperationAllowed();
+    return { success: true, canWrite };
+  } catch (error) {
+    console.error('Failed to check write permission:', error);
+    return { success: true, canWrite: true }; // Fail-open to not block users
+  }
+});
+
+ipcMain.handle('license:validateOnline', async () => {
+  try {
+    const result = await licenseService.validateOnline();
+    return result;
+  } catch (error) {
+    console.error('Failed to validate license online:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('license:getInfo', async () => {
+  try {
+    const info = await licenseService.getLicenseInfo();
+    return { success: true, data: info };
+  } catch (error) {
+    console.error('Failed to get license info:', error);
     return { success: false, error: error.message };
   }
 });

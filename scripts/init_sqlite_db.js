@@ -11,12 +11,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const {
-  isSqlCipherEnabled,
-  resolveSqlCipherKey,
-  applySqlCipherKey,
-  verifySqlCipherKey,
-} = require('../app/lib/sqlcipher-utils.js');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const APP_NODE_MODULES = path.join(PROJECT_ROOT, 'app', 'node_modules');
@@ -191,6 +185,23 @@ const TABLE_DEFINITIONS = [
       onboarding_dismissed INTEGER NOT NULL DEFAULT 0 CHECK (onboarding_dismissed IN (0,1)),
       onboarding_dismissed_at TEXT,
       last_active_at TEXT
+    );`,
+  `CREATE TABLE IF NOT EXISTS license (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      unique_id TEXT NOT NULL UNIQUE,
+      teudat_zehut TEXT NOT NULL,
+      device_hash TEXT NOT NULL,
+      installation_date TEXT NOT NULL DEFAULT (datetime('now')),
+      trial_start_date TEXT NOT NULL DEFAULT (datetime('now')),
+      subscription_date TEXT,
+      license_type TEXT NOT NULL DEFAULT 'trial' CHECK (license_type IN ('trial', 'pro', 'expired')),
+      last_online_validation TEXT,
+      offline_grace_start TEXT,
+      is_synced_to_cloud INTEGER NOT NULL DEFAULT 0 CHECK (is_synced_to_cloud IN (0,1)),
+      sync_error_message TEXT,
+      app_version TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );`,
   `CREATE TABLE IF NOT EXISTS spouse_profile (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -687,6 +698,62 @@ const TABLE_DEFINITIONS = [
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       metadata TEXT,
       FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE
+    );`,
+  // Subscription Management Tables
+  `CREATE TABLE IF NOT EXISTS subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pattern_key TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      detected_frequency TEXT CHECK(detected_frequency IN ('daily', 'weekly', 'biweekly', 'monthly', 'bimonthly', 'quarterly', 'yearly', 'variable')),
+      detected_amount REAL,
+      amount_is_fixed INTEGER DEFAULT 0 CHECK(amount_is_fixed IN (0, 1)),
+      consistency_score REAL CHECK(consistency_score >= 0 AND consistency_score <= 1),
+      user_frequency TEXT CHECK(user_frequency IS NULL OR user_frequency IN ('daily', 'weekly', 'biweekly', 'monthly', 'bimonthly', 'quarterly', 'yearly', 'variable')),
+      user_amount REAL,
+      billing_day INTEGER CHECK(billing_day IS NULL OR (billing_day >= 1 AND billing_day <= 31)),
+      status TEXT DEFAULT 'active' CHECK(status IN ('active', 'paused', 'cancelled', 'keep', 'review')),
+      category_definition_id INTEGER,
+      first_detected_date TEXT,
+      last_charge_date TEXT,
+      next_expected_date TEXT,
+      is_manual INTEGER DEFAULT 0 CHECK(is_manual IN (0, 1)),
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE SET NULL
+    );`,
+  `CREATE TABLE IF NOT EXISTS subscription_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subscription_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL CHECK(event_type IN ('price_change', 'status_change', 'frequency_change', 'charge')),
+      old_value TEXT,
+      new_value TEXT,
+      amount REAL,
+      transaction_identifier TEXT,
+      transaction_vendor TEXT,
+      event_date TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+      FOREIGN KEY (transaction_identifier, transaction_vendor) REFERENCES transactions(identifier, vendor) ON DELETE SET NULL
+    );`,
+  `CREATE TABLE IF NOT EXISTS subscription_alerts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subscription_id INTEGER NOT NULL,
+      alert_type TEXT NOT NULL CHECK(alert_type IN ('price_increase', 'price_decrease', 'missed_charge', 'duplicate', 'unused', 'upcoming_renewal', 'cancelled_still_charging')),
+      severity TEXT DEFAULT 'info' CHECK(severity IN ('info', 'warning', 'critical')),
+      title TEXT NOT NULL,
+      description TEXT,
+      old_amount REAL,
+      new_amount REAL,
+      percentage_change REAL,
+      is_dismissed INTEGER DEFAULT 0 CHECK(is_dismissed IN (0, 1)),
+      dismissed_at TEXT,
+      is_actioned INTEGER DEFAULT 0 CHECK(is_actioned IN (0, 1)),
+      actioned_at TEXT,
+      action_taken TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at TEXT,
+      FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
     );`
 ];
 
@@ -788,7 +855,23 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_chat_conversations_updated_at ON chat_conversations(updated_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_chat_conversations_archived ON chat_conversations(is_archived, updated_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id, created_at);',
-  'CREATE INDEX IF NOT EXISTS idx_chat_messages_role ON chat_messages(role);'
+  'CREATE INDEX IF NOT EXISTS idx_chat_messages_role ON chat_messages(role);',
+  // Subscription Management Indexes
+  'CREATE INDEX IF NOT EXISTS idx_subscriptions_pattern_key ON subscriptions(pattern_key);',
+  'CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);',
+  'CREATE INDEX IF NOT EXISTS idx_subscriptions_frequency ON subscriptions(detected_frequency);',
+  'CREATE INDEX IF NOT EXISTS idx_subscriptions_category ON subscriptions(category_definition_id);',
+  'CREATE INDEX IF NOT EXISTS idx_subscriptions_next_expected ON subscriptions(next_expected_date);',
+  'CREATE INDEX IF NOT EXISTS idx_subscriptions_last_charge ON subscriptions(last_charge_date DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_subscriptions_is_manual ON subscriptions(is_manual);',
+  'CREATE INDEX IF NOT EXISTS idx_subscription_history_subscription_id ON subscription_history(subscription_id, event_date DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_subscription_history_event_type ON subscription_history(event_type);',
+  'CREATE INDEX IF NOT EXISTS idx_subscription_history_event_date ON subscription_history(event_date DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_subscription_id ON subscription_alerts(subscription_id);',
+  'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_type ON subscription_alerts(alert_type);',
+  'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_dismissed ON subscription_alerts(is_dismissed);',
+  'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_severity ON subscription_alerts(severity);',
+  'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_created ON subscription_alerts(created_at DESC);'
 ];
 
 const INSTITUTION_GROUPS = [
@@ -1617,11 +1700,6 @@ function initializeSqliteDatabase(options = {}) {
   let transactionStarted = false;
 
   try {
-    if (isSqlCipherEnabled()) {
-      const keyInfo = resolveSqlCipherKey({ requireKey: true });
-      applySqlCipherKey(db, keyInfo);
-      verifySqlCipherKey(db);
-    }
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
 

@@ -27,6 +27,7 @@ import {
   Timeline as TimelineIcon,
   Refresh as RefreshIcon,
   ZoomOutMap as ZoomOutMapIcon,
+  Autorenew as SubscriptionsIcon,
 } from '@mui/icons-material';
 import {
   BarChart as RechartsBarChart,
@@ -49,6 +50,7 @@ import FinancialRhythmModal from '../components/FinancialRhythmModal';
 import MoneyPersonalityModal from '../components/MoneyPersonalityModal';
 import PersonalizedFutureModal from '../components/PersonalizedFutureModal';
 import MakeItRealModal from '../components/MakeItRealModal';
+import SubscriptionsTab from '../components/SubscriptionsTab';
 import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@mui/material';
@@ -696,6 +698,13 @@ const AnalysisPageNew: React.FC = () => {
             label={t('tabs.scoring')}
             id="analysis-tab-4"
             aria-controls="analysis-tabpanel-4"
+          />
+          <Tab
+            icon={<SubscriptionsIcon />}
+            iconPosition="start"
+            label={t('tabs.subscriptions')}
+            id="analysis-tab-5"
+            aria-controls="analysis-tabpanel-5"
           />
         </Tabs>
       </Paper>
@@ -1423,7 +1432,7 @@ const AnalysisPageNew: React.FC = () => {
 
       <TabPanel value={currentTab} index={4}>
         {/* Scoring Tab */}
-        <Paper sx={{ 
+        <Paper sx={{
           p: 3,
           borderRadius: 4,
           bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
@@ -1438,6 +1447,21 @@ const AnalysisPageNew: React.FC = () => {
             error={error}
             onRefresh={fetchIntelligence}
           />
+        </Paper>
+      </TabPanel>
+
+      <TabPanel value={currentTab} index={5}>
+        {/* Subscriptions Tab */}
+        <Paper sx={{
+          p: 3,
+          borderRadius: 4,
+          bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+          backdropFilter: 'blur(20px)',
+          border: '1px solid',
+          borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+          boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+        }}>
+          <SubscriptionsTab />
         </Paper>
       </TabPanel>
 

@@ -1,5 +1,10 @@
 const database = require('../database.js');
 const { getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
+const { getSubscriptionSummary } = require('./subscriptions.js');
+const {
+  analyzeRecurringPatterns,
+  normalizePatternKey,
+} = require('./recurring-analyzer.js');
 
 // Frequency types with detection thresholds
 const FREQUENCY_TYPES = {
@@ -10,6 +15,11 @@ const FREQUENCY_TYPES = {
   BIMONTHLY: { name: 'bimonthly', minPerMonth: 0.4, maxPerMonth: 0.6, color: '#00bcd4' },
   VARIABLE: { name: 'variable', minPerMonth: 0, maxPerMonth: Infinity, color: '#607d8b' }
 };
+
+function normalizeCategoryKey(value) {
+  if (!value || typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
 
 /**
  * Detect frequency based on occurrences per month
@@ -111,7 +121,51 @@ async function getBehavioralPatterns(locale = 'he') {
   }));
 
   // Detect recurring patterns at transaction level
-  const recurringPatterns = detectRecurringTransactions(localizedTransactions);
+  const { patterns: recurringPatternRows } = await analyzeRecurringPatterns({
+    monthsBack: 3,
+    minOccurrences: 2,
+    minConsistency: 0.3,
+    minVariableAmount: 50,
+    aggregateBy: 'day',
+    excludeCreditCardRepayments: true,
+    excludePairingExclusions: true,
+    transactions,
+  });
+
+  const recurringPatterns = recurringPatternRows.map((pattern) => {
+    const localizedCategory = getLocalizedCategoryName({
+      name: pattern.category_name,
+      name_en: pattern.category_name_en,
+      name_fr: pattern.category_name_fr
+    }, locale);
+    const localizedParent = getLocalizedCategoryName({
+      name: pattern.parent_category_name,
+      name_en: pattern.parent_category_name_en,
+      name_fr: pattern.parent_category_name_fr
+    }, locale);
+    const frequency = Object.prototype.hasOwnProperty.call(
+      FREQUENCY_TYPES,
+      String(pattern.detected_frequency || '').toUpperCase()
+    ) ? pattern.detected_frequency : FREQUENCY_TYPES.VARIABLE.name;
+    const frequencyColor = FREQUENCY_TYPES[String(frequency || 'variable').toUpperCase()]?.color
+      || FREQUENCY_TYPES.VARIABLE.color;
+
+    return {
+      pattern_key: pattern.pattern_key,
+      name: pattern.display_name,
+      avgAmount: pattern.detected_amount,
+      occurrences: pattern.occurrence_count,
+      occurrencesPerMonth: pattern.occurrences_per_month,
+      monthsObserved: pattern.months_span,
+      frequency,
+      frequencyColor,
+      isFixed: pattern.amount_is_fixed === 1,
+      consistency: Math.round((pattern.consistency_score || 0) * 100),
+      category: localizedParent || localizedCategory || 'Uncategorized',
+      subcategory: localizedCategory || null,
+      iconName: pattern.category_icon || null
+    };
+  });
   
   // Detect patterns at category and subcategory levels
   const categoryPatterns = detectCategoryPatterns(localizedTransactions);
@@ -130,6 +184,23 @@ async function getBehavioralPatterns(locale = 'he') {
 
   // Calculate category averages (with recurring percentage)
   const categoryAverages = calculateCategoryAverages(localizedTransactions, recurringPatterns);
+  let subscriptionCategoryCounts = null;
+
+  try {
+    const summary = await getSubscriptionSummary({ locale });
+    subscriptionCategoryCounts = new Map(
+      (summary?.category_breakdown || [])
+        .filter((entry) => entry?.name)
+        .map((entry) => [normalizeCategoryKey(entry.name), Number(entry.count || 0)]),
+    );
+  } catch (error) {
+    console.warn('Behavioral patterns: failed to load subscription summary', error);
+  }
+
+  const categoryAveragesWithSubscriptions = categoryAverages.map((entry) => ({
+    ...entry,
+    subscriptionCount: subscriptionCategoryCounts?.get(normalizeCategoryKey(entry.category)) || 0,
+  }));
 
   return {
     programmedAmount: Math.round(programmedAmount),
@@ -171,7 +242,7 @@ async function getBehavioralPatterns(locale = 'he') {
       occurrences: p.occurrences,
       consistency: p.consistency
     })),
-    categoryAverages
+    categoryAverages: categoryAveragesWithSubscriptions
   };
 }
 
@@ -208,97 +279,6 @@ function groupPatternsByFrequency(transactionPatterns, categoryPatterns, subcate
   return result;
 }
 
-/**
- * Detect recurring transactions (subscriptions, fixed payments)
- * Enhanced with better frequency detection and interval analysis
- */
-function detectRecurringTransactions(transactions) {
-  const groups = new Map();
-
-  // Group transactions by name/vendor
-  transactions.forEach(txn => {
-    const name = (txn.name || txn.vendor || '').trim().toLowerCase();
-    if (!name) return;
-
-    if (!groups.has(name)) {
-      groups.set(name, {
-        displayName: txn.name || txn.vendor,
-        amounts: [],
-        dates: [],
-        months: new Set(),
-        category: txn.localizedParentCategory || txn.localizedCategory || 'Uncategorized',
-        subcategory: txn.localizedCategory || null,
-        iconName: txn.icon_name
-      });
-    }
-
-    const group = groups.get(name);
-    group.amounts.push(Math.abs(txn.price));
-    group.dates.push(txn.date);
-    group.months.add(txn.month);
-  });
-
-  const monthCount = new Set(transactions.map(t => t.month)).size || 1;
-  const recurring = [];
-
-  groups.forEach((group, key) => {
-    const amounts = group.amounts;
-    const occurrences = amounts.length;
-
-    // Must have at least 2 occurrences
-    if (occurrences < 2) return;
-
-    // Calculate average amount and variation
-    const avg = amounts.reduce((sum, a) => sum + a, 0) / amounts.length;
-    const n = amounts.length;
-    const variance = n > 1
-      ? amounts.reduce((sum, a) => sum + Math.pow(a - avg, 2), 0) / (n - 1)
-      : 0;
-    const stdDev = Math.sqrt(variance);
-    const coefficientOfVariation = avg > 0 ? stdDev / avg : 0;
-
-    // Determine frequency based on occurrences per month
-    const occurrencesPerMonth = occurrences / monthCount;
-    const frequencyInfo = detectFrequency(occurrencesPerMonth);
-
-    // Skip variable frequency items unless they have significant spending
-    if (frequencyInfo.name === 'variable' && avg < 50) return;
-
-    // Calculate interval consistency for recurring pattern confidence
-    const expectedIntervalDays = {
-      daily: 1,
-      weekly: 7,
-      biweekly: 14,
-      monthly: 30,
-      bimonthly: 60
-    }[frequencyInfo.name] || 30;
-
-    const consistency = calculateIntervalConsistency(group.dates, expectedIntervalDays);
-
-    // Only include if it shows recurring behavior (consistency > 0.3 or appears in multiple months)
-    if (consistency < 0.3 && group.months.size < 2) return;
-
-    recurring.push({
-      name: group.displayName,
-      avgAmount: avg,
-      occurrences,
-      occurrencesPerMonth,
-      monthsObserved: monthCount,
-      frequency: frequencyInfo.name,
-      frequencyColor: frequencyInfo.color,
-      isFixed: coefficientOfVariation < 0.1,
-      consistency: Math.round(consistency * 100),
-      category: group.category,
-      subcategory: group.subcategory,
-      iconName: group.iconName
-    });
-  });
-
-  // Sort by total spending
-  recurring.sort((a, b) => (b.avgAmount * b.occurrences) - (a.avgAmount * a.occurrences));
-
-  return recurring.slice(0, 30); // Top 30 patterns
-}
 
 /**
  * Detect patterns at category level
@@ -433,19 +413,21 @@ function calculateCategoryAverages(transactions, recurringPatterns) {
   })).size;
 
   // Create a map of recurring transaction names for easy lookup
-  const recurringNames = new Set(
-    recurringPatterns.map(p => p.name.toLowerCase())
+  const recurringKeys = new Set(
+    recurringPatterns.map(p => p.pattern_key).filter(Boolean)
   );
 
   // Group by category
   transactions.forEach(txn => {
-    const category = txn.localizedCategory || txn.localizedParentCategory || 'Uncategorized';
-    const txnName = (txn.name || txn.vendor || '').trim().toLowerCase();
+    const category = txn.localizedParentCategory || txn.localizedCategory || 'Uncategorized';
+    const iconName = txn.parent_icon || txn.icon_name || null;
+    const txnName = (txn.name || txn.vendor || '').trim();
+    const normalizedName = normalizePatternKey(txnName);
 
     if (!categoryData.has(category)) {
       categoryData.set(category, {
         category,
-        iconName: txn.icon_name || null,
+        iconName,
         amounts: [],
         transactions: 0,
         recurringTransactions: 0,
@@ -455,12 +437,12 @@ function calculateCategoryAverages(transactions, recurringPatterns) {
 
     const data = categoryData.get(category);
     // Update icon_name if current transaction has one and stored doesn't
-    if (txn.icon_name && !data.iconName) {
-      data.iconName = txn.icon_name;
+    if (iconName && !data.iconName) {
+      data.iconName = iconName;
     }
     data.amounts.push(Math.abs(txn.price));
     data.transactions++;
-    if (recurringNames.has(txnName)) {
+    if (normalizedName && recurringKeys.has(normalizedName)) {
       data.recurringTransactions++;
     }
     data.months.add(txn.month);

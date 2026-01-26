@@ -59,7 +59,7 @@ describe('transactions list service', () => {
 
     expect(queryMock).toHaveBeenCalledTimes(1);
     const [sql, params] = queryMock.mock.calls[0];
-    expect(String(sql)).toContain('WHERE memo ILIKE');
+    expect(String(sql)).toContain('LOWER(t.memo) LIKE LOWER($1)');
     expect(params).toEqual(['%chips%', 'Food', 'shop', '2025-02-01', '2025-02-28', 10]);
     expect(result.transactions[0].price).toBe(-5);
   });
@@ -100,7 +100,7 @@ describe('transactions list service', () => {
     expect(result.searchQuery).toBe('foo');
     expect(queryMock).toHaveBeenCalledTimes(1);
     const [sql, params] = queryMock.mock.calls[0];
-    expect(String(sql)).toContain('memo ILIKE');
+    expect(String(sql)).toContain('LOWER(t.memo) LIKE LOWER($1)');
     expect(params).toEqual(['%foo%', 100]);
   });
 
