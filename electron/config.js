@@ -6,7 +6,7 @@ const { app } = require('electron');
 class ConfigManager {
   constructor() {
     this.configPath = this.getConfigPath();
-    this.encryptionKey = this.getEncryptionKey();
+    this.needsReencrypt = false;
   }
 
   getConfigPath() {
@@ -16,15 +16,13 @@ class ConfigManager {
   }
 
   getEncryptionKey() {
-    // Use the same encryption key from the environment
+    // Use the same encryption key from the environment (set by secure key manager)
     const envKey = process.env.CLARIFY_ENCRYPTION_KEY;
     if (envKey) {
       return Buffer.from(envKey, 'hex');
     }
 
-    // Fallback: generate a key (not recommended for production)
-    console.warn('No encryption key found in environment, using fallback');
-    return crypto.scryptSync('electron-app-key', 'salt', 32);
+    throw new Error('CLARIFY_ENCRYPTION_KEY must be set before encrypting config.');
   }
 
   encrypt(text) {
@@ -32,16 +30,15 @@ class ConfigManager {
       // Simple but functional encryption for development
       const algorithm = 'aes-256-ctr';
       const iv = crypto.randomBytes(16);
-      const cipher = crypto.createCipher(algorithm, this.encryptionKey);
+      const cipher = crypto.createCipher(algorithm, this.getEncryptionKey());
 
       let encrypted = cipher.update(text, 'utf8', 'hex');
       encrypted += cipher.final('hex');
 
       return `${iv.toString('hex')}:${encrypted}`;
     } catch (error) {
-      console.warn('Encryption failed, using base64 fallback:', error.message);
-      // Fallback: just base64 encode for development
-      return Buffer.from(text).toString('base64');
+      console.error('Encryption failed:', error.message);
+      throw error;
     }
   }
 
@@ -59,18 +56,31 @@ class ConfigManager {
 
       const [ivHex, encrypted] = parts;
       const algorithm = 'aes-256-ctr';
-      const decipher = crypto.createDecipher(algorithm, this.encryptionKey);
+      const decipher = crypto.createDecipher(algorithm, this.getEncryptionKey());
 
       let decrypted = decipher.update(encrypted, 'hex', 'utf8');
       decrypted += decipher.final('utf8');
 
       return decrypted;
     } catch (error) {
-      console.warn('Decryption failed, trying base64 fallback:', error.message);
       try {
-        return Buffer.from(encryptedText, 'base64').toString('utf8');
-      } catch (fallbackError) {
-        throw new Error('Failed to decrypt data');
+        // Legacy fallback: pre-keychain config used a fixed scrypt key.
+        const legacyKey = crypto.scryptSync('electron-app-key', 'salt', 32);
+        const [ivHex, encrypted] = encryptedText.split(':');
+        const algorithm = 'aes-256-ctr';
+        const decipher = crypto.createDecipher(algorithm, legacyKey);
+        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        this.needsReencrypt = true;
+        console.warn('Config decrypted with legacy key; will re-encrypt with OS keychain.');
+        return decrypted;
+      } catch (legacyError) {
+        console.warn('Decryption failed, trying base64 fallback:', legacyError.message);
+        try {
+          return Buffer.from(encryptedText, 'base64').toString('utf8');
+        } catch (fallbackError) {
+          throw new Error('Failed to decrypt data');
+        }
       }
     }
   }
@@ -113,6 +123,16 @@ class ConfigManager {
       const configString = this.decrypt(encryptedConfig);
       const config = JSON.parse(configString);
 
+      if (this.needsReencrypt) {
+        this.needsReencrypt = false;
+        try {
+          await this.saveConfig(config);
+          console.log('Configuration re-encrypted with OS keychain.');
+        } catch (error) {
+          console.warn('Failed to re-encrypt config with OS keychain:', error.message);
+        }
+      }
+
       console.log('Configuration loaded successfully');
       return config;
     } catch (error) {
@@ -136,9 +156,6 @@ class ConfigManager {
         name: 'ShekelSync',
         version: '0.1.0',
         environment: process.env.NODE_ENV || 'development'
-      },
-      encryption: {
-        key: process.env.CLARIFY_ENCRYPTION_KEY
       }
     };
   }

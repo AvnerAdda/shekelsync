@@ -34,8 +34,14 @@ if (!global.__electronAliasRegistered) {
     return originalResolveFilename.call(this, request, parent, isMain, options);
   };
 
-  // Ensure app/node_modules is available for resolution
-  Module.globalPaths.unshift(path.join(appRoot, 'node_modules'));
+  // Ensure app/node_modules is available for resolution.
+  const appNodeModules = path.join(appRoot, 'node_modules');
+  Module.globalPaths.unshift(appNodeModules);
+  const existingNodePath = process.env.NODE_PATH ? process.env.NODE_PATH.split(path.delimiter) : [];
+  if (!existingNodePath.includes(appNodeModules)) {
+    process.env.NODE_PATH = [appNodeModules, ...existingNodePath].filter(Boolean).join(path.delimiter);
+    Module._initPaths();
+  }
 
   global.__electronAliasRegistered = true;
 }

@@ -77,31 +77,43 @@ async function searchTransactions(params = {}) {
 
   if (searchQuery) {
     values.push(`%${searchQuery}%`);
-    conditions.push(`memo ILIKE $${values.length}`);
+    const queryParam = `$${values.length}`;
+    conditions.push(`(${dialect.likeInsensitive('t.memo', queryParam)}
+      OR ${dialect.likeInsensitive('t.name', queryParam)}
+      OR ${dialect.likeInsensitive('t.vendor', queryParam)}
+      OR ${dialect.likeInsensitive('t.merchant_name', queryParam)}
+      OR ${dialect.likeInsensitive('cd.name', queryParam)}
+      OR ${dialect.likeInsensitive('parent.name', queryParam)})`);
   }
 
   if (category) {
-    values.push(category);
-    conditions.push(`category = $${values.length}`);
+    const parsedCategoryId = Number.parseInt(category, 10);
+    if (Number.isNaN(parsedCategoryId)) {
+      values.push(category);
+      conditions.push(`(cd.name = $${values.length} OR parent.name = $${values.length})`);
+    } else {
+      values.push(parsedCategoryId);
+      conditions.push(`t.category_definition_id = $${values.length}`);
+    }
   }
 
   if (vendor) {
     values.push(vendor);
-    conditions.push(`vendor = $${values.length}`);
+    conditions.push(`t.vendor = $${values.length}`);
   }
 
   if (startDate) {
     values.push(startDate);
-    conditions.push(`date >= $${values.length}`);
+    conditions.push(`t.date >= $${values.length}`);
   }
 
   if (endDate) {
     values.push(endDate);
-    conditions.push(`date <= $${values.length}`);
+    conditions.push(`t.date <= $${values.length}`);
   }
 
   // Always exclude pikadon transactions from search results
-  conditions.push(dialect.excludePikadon());
+  conditions.push(dialect.excludePikadon('t'));
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -111,20 +123,25 @@ async function searchTransactions(params = {}) {
   const result = await database.query(
     `
       SELECT
-        identifier,
-        vendor,
-        category,
-        parent_category,
-        memo,
-        price,
-        date,
-        processed_date,
-        account_number,
-        type,
-        status
-      FROM transactions
+        t.identifier,
+        t.vendor,
+        t.name,
+        cd.name AS category,
+        parent.name AS parent_category,
+        t.category_definition_id,
+        t.category_type,
+        t.memo,
+        t.price,
+        t.date,
+        t.processed_date,
+        t.account_number,
+        t.type,
+        t.status
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
       ${whereClause}
-      ORDER BY date DESC, processed_date DESC
+      ORDER BY t.date DESC, t.processed_date DESC
       LIMIT $${limitParam}
     `,
     values,

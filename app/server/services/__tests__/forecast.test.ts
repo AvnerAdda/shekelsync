@@ -87,4 +87,37 @@ describe('forecast service internals', () => {
     expect(tooSoonAcrossMonth).toBe(0);
     expect(okAcrossMonth).toBeGreaterThan(0);
   });
+
+  it('suppresses low-frequency expense patterns until enough spacing has passed', () => {
+    const { calculateDayProbability } = forecastModule._internal;
+    const jan30 = new Date(2026, 0, 30);
+
+    const lowFrequencyExpense = {
+      categoryType: 'expense',
+      patternType: 'sporadic',
+      avgOccurrencesPerMonth: 0.1,
+      dayOfWeekProb: { [jan30.getDay()]: 1 },
+      dayOfMonthProb: { 30: 1 },
+      mostLikelyDaysOfMonth: [{ day: 30, probability: 1 }],
+      lastOccurrence: '2025-12-30',
+    };
+
+    const probability = calculateDayProbability(lowFrequencyExpense, jan30, {}, 'rent');
+    expect(probability).toBe(0);
+  });
+
+  it('suppresses monthly expense patterns late in the current month when nothing has occurred', () => {
+    const { adjustProbabilitiesForCurrentMonth } = forecastModule._internal;
+    const patterns = {
+      rent: {
+        categoryType: 'expense',
+        patternType: 'monthly',
+        avgOccurrencesPerMonth: 1,
+        mostLikelyDaysOfMonth: [{ day: 6, probability: 1 }],
+      },
+    };
+
+    const adjustments = adjustProbabilitiesForCurrentMonth(patterns, [], 25);
+    expect(adjustments.rent.probabilityMultiplier).toBe(0);
+  });
 });

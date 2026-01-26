@@ -31,6 +31,7 @@ const { createCategoriesRouter } = require(resolveAppPath('server', 'routes', 'c
 const { createNotificationsRouter } = require(resolveAppPath('server', 'routes', 'notifications.js'));
 const { createInsightsRouter } = require(resolveAppPath('server', 'routes', 'insights.js'));
 const institutionsService = require(resolveAppPath('server', 'services', 'institutions.js'));
+const { licenseGuardMiddleware } = require(resolveAppPath('server', 'middleware', 'license-guard.js'));
 
 function lazyRouter(factory) {
   let router = null;
@@ -74,6 +75,9 @@ async function setupAPIServer(mainWindow, options = {}) {
 
   // Rate limiting middleware (must come after authentication)
   app.use(rateLimitMiddleware);
+
+  // License guard middleware (blocks writes in read-only mode)
+  app.use(licenseGuardMiddleware);
 
   // Request locale resolution
   app.use((req, _res, next) => {

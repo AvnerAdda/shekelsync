@@ -23,6 +23,7 @@ import {
   CheckCircle as CheckIcon,
   Warning as WarningIcon,
   Error as ErrorIcon,
+  Info as InfoIcon,
   Visibility as ViewIcon,
   TouchApp as TouchAppIcon,
 } from '@mui/icons-material';
@@ -128,10 +129,15 @@ const SecuritySettingsPanel: React.FC = () => {
   const getSecurityLevel = () => {
     if (!status) return 'unknown';
 
+    const authRequired = status.biometric.available;
+    const authOk = !authRequired || status.authentication.isActive;
+    const keychainRequired = status.platform.os !== 'linux';
+    const keychainOk = keychainRequired ? status.keychain.status === 'connected' : true;
+
     const checks = {
       encryption: status.encryption.status === 'active',
-      keychain: status.keychain.status === 'connected',
-      authenticated: status.authentication.isActive,
+      keychain: keychainOk,
+      authenticated: authOk,
     };
 
     const passed = Object.values(checks).filter(Boolean).length;
@@ -210,6 +216,24 @@ const SecuritySettingsPanel: React.FC = () => {
           </Alert>
         ) : status ? (
           <>
+            {(() => {
+              const keychainRequired = status.platform.os !== 'linux';
+              const keychainOk = keychainRequired ? status.keychain.status === 'connected' : true;
+              const keychainDetails = status.keychain.status === 'connected'
+                ? `${status.keychain.type} - Keys stored in OS keychain`
+                : (keychainRequired
+                  ? 'OS keychain unavailable. Enable system keychain support.'
+                  : 'OS keychain optional on Linux. Using environment key fallback.');
+              const biometricAvailable = status.biometric.available;
+              const biometricLabel = status.biometric.type === 'touchid'
+                ? 'Touch ID'
+                : status.biometric.type === 'windows-hello'
+                  ? 'Windows Hello'
+                  : status.biometric.type && status.biometric.type !== 'none'
+                    ? status.biometric.type
+                    : 'Biometric';
+              return (
+                <>
             {/* Security Status Overview */}
             <Box
               sx={{
@@ -264,7 +288,7 @@ const SecuritySettingsPanel: React.FC = () => {
 
               <ListItem>
                 <ListItemIcon>
-                  {status.keychain.status === 'connected' ? (
+                  {keychainOk ? (
                     <CheckIcon color="success" />
                   ) : (
                     <WarningIcon color="warning" />
@@ -272,27 +296,23 @@ const SecuritySettingsPanel: React.FC = () => {
                 </ListItemIcon>
                 <ListItemText
                   primary="Secure Key Storage"
-                  secondary={
-                    status.keychain.status === 'connected'
-                      ? `${status.keychain.type} - Keys stored in OS keychain`
-                      : 'Using fallback storage'
-                  }
+                  secondary={keychainDetails}
                 />
               </ListItem>
 
               <ListItem>
                 <ListItemIcon>
-                  {status.biometric.available ? (
+                  {biometricAvailable ? (
                     <CheckIcon color="success" />
                   ) : (
-                    <WarningIcon color="warning" />
+                    <InfoIcon color="info" />
                   )}
                 </ListItemIcon>
                 <ListItemText
                   primary="Biometric Authentication"
                   secondary={
-                    status.biometric.available
-                      ? `${status.biometric.type === 'touchid' ? 'Touch ID' : status.biometric.type} available`
+                    biometricAvailable
+                      ? `${biometricLabel} available`
                       : status.biometric.reason || 'Not available on this system'
                   }
                 />
@@ -345,15 +365,18 @@ const SecuritySettingsPanel: React.FC = () => {
                 • All credentials are encrypted at rest using AES-256-GCM
               </Typography>
               <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
-                • Encryption keys are stored securely in your OS keychain
+                • Encryption keys are stored in the OS keychain
               </Typography>
               <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
-                • Biometric authentication is used when available (macOS Touch ID)
+                • Biometric authentication is used when available (Touch ID / Windows Hello)
               </Typography>
               <Typography variant="caption" display="block">
                 • Security events are logged for audit purposes
               </Typography>
             </Alert>
+                </>
+              );
+            })()}
           </>
         ) : null}
       </Paper>

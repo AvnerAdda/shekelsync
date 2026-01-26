@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Personal finance tracker for Israeli banks and credit cards",
   "author": "ShekelSync",
+  "license": "MIT",
   "private": true,
   "main": "electron/main.js",
   "homepage": "./",
@@ -29,19 +30,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@emotion/react": "^11.13.3",
-    "@emotion/styled": "^11.13.0",
-    "@fontsource/roboto": "^5.1.0",
-    "@mui/icons-material": "^7.3.7",
-    "@mui/material": "^7.3.7",
-    "@mui/styled-engine-sc": "^7.3.7",
-    "@mui/x-charts": "^8.24.0",
-    "@mui/x-date-pickers": "^8.3.1",
     "@sentry/electron": "^7.5.0",
+    "@supabase/supabase-js": "^2.47.0",
     "better-sqlite3": "^12.6.0",
     "cors": "^2.8.5",
-    "d3": "^7.9.0",
-    "d3-sankey": "^0.12.3",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
     "electron-log": "^5.4.3",
@@ -50,17 +42,18 @@
     "israeli-bank-scrapers": "^6.6.1",
     "keytar": "^7.9.0",
     "openai": "^4.77.0",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "react-icons": "^5.5.0",
-    "recharts": "^3.2.1",
-    "styled-components": "^6.1.18",
-    "stylis": "^4.3.4",
-    "stylis-plugin-rtl": "^2.1.1",
     "uuid": "^11.0.3",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
+    "@emotion/react": "^11.13.3",
+    "@emotion/styled": "^11.13.0",
+    "@fontsource/roboto": "^5.1.0",
+    "@mui/icons-material": "^7.3.7",
+    "@mui/material": "^7.3.7",
+    "@mui/styled-engine-sc": "^7.3.7",
+    "@mui/x-charts": "^8.24.0",
+    "@mui/x-date-pickers": "^8.3.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.0.1",
     "@types/d3": "^7.4.3",
@@ -73,6 +66,8 @@
     "@vitest/coverage-v8": "^4.0.6",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.2.1",
+    "d3": "^7.9.0",
+    "d3-sankey": "^0.12.3",
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12",
     "electron-rebuild": "^3.2.9",
@@ -85,7 +80,13 @@
     "patch-package": "^8.0.1",
     "postcss": "^8.4.47",
     "prettier": "^3.5.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "react-router-dom": "^7.12.0",
+    "recharts": "^3.2.1",
+    "styled-components": "^6.1.18",
+    "stylis": "^4.3.4",
+    "stylis-plugin-rtl": "^2.1.1",
     "supertest": "^7.1.4",
     "tailwindcss": "^4.1.18",
     "ts-node": "^10.9.2",
@@ -96,6 +97,7 @@
   "build": {
     "appId": "com.shekelsync.finance",
     "productName": "ShekelSync",
+    "compression": "maximum",
     "directories": {
       "output": "../dist",
       "buildResources": "../build-resources"
@@ -107,6 +109,16 @@
       "config/**/*",
       "node_modules/**/*",
       "package.json",
+      "!**/*.map",
+      "!**/__tests__/**",
+      "!**/test/**",
+      "!**/tests/**",
+      "!**/docs/**",
+      "!**/doc/**",
+      "!**/example/**",
+      "!**/examples/**",
+      "!**/*.test.*",
+      "!**/*.spec.*",
       {
         "from": "../electron",
         "to": "electron",
@@ -130,6 +142,14 @@
       {
         "from": "../scripts/init_sqlite_db.js",
         "to": "scripts/init_sqlite_db.js"
+      },
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "../THIRD_PARTY_NOTICES.txt",
+        "to": "THIRD_PARTY_NOTICES.txt"
       }
     ],
     "win": {

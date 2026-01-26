@@ -1,9 +1,7 @@
 const dbMode = (process.env.CLARIFY_DB_MODE || '').toLowerCase();
 const explicitSqlite =
   process.env.USE_SQLITE === 'true' ||
-  process.env.USE_SQLCIPHER === 'true' ||
   Boolean(process.env.SQLITE_DB_PATH) ||
-  Boolean(process.env.SQLCIPHER_DB_PATH) ||
   dbMode === 'sqlite';
 const explicitPostgres = process.env.USE_SQLITE === 'false' || dbMode === 'postgres';
 

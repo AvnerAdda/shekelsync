@@ -1,11 +1,5 @@
 const path = require('path');
 const resolveBetterSqlite = require('./better-sqlite3-wrapper.js');
-const {
-  isSqlCipherEnabled,
-  resolveSqlCipherKey,
-  applySqlCipherKey,
-  verifySqlCipherKey,
-} = require('./sqlcipher-utils.js');
 
 const PLACEHOLDER_REGEX = /\$(\d+)/g;
 const SELECT_LIKE_REGEX = /^\s*(WITH|SELECT|PRAGMA)/i;
@@ -41,12 +35,9 @@ function resolveDatabaseCtor(override) {
 }
 
 function createSqlitePool(options = {}) {
-  const useSqlCipher = isSqlCipherEnabled();
   const dbPath =
     options.databasePath ||
-    (useSqlCipher ? process.env.SQLCIPHER_DB_PATH : null) ||
     process.env.SQLITE_DB_PATH ||
-    process.env.SQLCIPHER_DB_PATH ||
     path.join(process.cwd(), 'dist', 'clarify.sqlite');
 
   const fs = require('fs');
@@ -62,11 +53,6 @@ function createSqlitePool(options = {}) {
 
   const Database = resolveDatabaseCtor(options.databaseCtor);
   const db = new Database(dbPath, { fileMustExist: true });
-  if (useSqlCipher) {
-    const keyInfo = resolveSqlCipherKey({ requireKey: true });
-    applySqlCipherKey(db, keyInfo);
-    verifySqlCipherKey(db);
-  }
   db.pragma('foreign_keys = ON');
   db.pragma('journal_mode = WAL');
 

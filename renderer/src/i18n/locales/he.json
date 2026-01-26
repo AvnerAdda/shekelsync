@@ -5,6 +5,32 @@
     "systemLanguageDetected": "זיהינו {{language}} לפי שפת המערכת. אפשר לשנות בכל רגע.",
     "or": "או"
   },
+  "registration": {
+    "title": "ברוכים הבאים ל-ShekelSync",
+    "description": "הזינו את מספר תעודת הזהות שלכם כדי להתחיל תקופת ניסיון חינם של 30 יום. מכשיר אחד לכל ת.ז.",
+    "teudatZehut": "תעודת זהות",
+    "digits": "9 ספרות",
+    "invalidId": "מספר זהות לא תקין",
+    "validationError": "לא ניתן לאמת את מספר הזהות",
+    "startTrial": "התחל ניסיון חינם ל-30 יום",
+    "registrationFailed": "ההרשמה נכשלה. נסו שוב.",
+    "electronRequired": "נדרשת גרסת שולחן העבודה להרשמה",
+    "privacyNotice": "תעודת הזהות שלכם נשמרת באופן מאובטח במכשיר שלכם ומשמשת רק לאימות רישיון. איננו משתפים את המידע האישי שלכם.",
+    "trialInfo": "30 יום חינם, לאחר מכן ₪500 לגישת Pro לכל החיים"
+  },
+  "license": {
+    "trialActive": "תקופת ניסיון פעילה",
+    "trialExpiring": "תקופת הניסיון עומדת להסתיים",
+    "trialExpired": "תקופת הניסיון הסתיימה",
+    "daysRemaining": "נותרו {{days}} ימים",
+    "readOnlyMode": "האפליקציה במצב קריאה בלבד. שדרגו ל-Pro כדי להמשיך להוסיף עסקאות ולסנכרן חשבונות.",
+    "upgradeToPro": "שדרג ל-Pro",
+    "purchasePro": "רכוש רישיון Pro",
+    "offlineMode": "מצב לא מקוון",
+    "offlineGraceRemaining": "נותרו {{days}} ימי חסד במצב לא מקוון. התחברו לאינטרנט לאימות הרישיון.",
+    "trialProgress": "התקדמות תקופת ניסיון",
+    "days": "ימים"
+  },
   "dashboard": {
     "summary": {
       "categories": { "essential": "חיוני", "growth": "צמיחה", "stability": "יציבות", "reward": "פנאי" },
@@ -552,7 +578,8 @@
       "actions": "פעולות",
       "spending": "הוצאות",
       "budget": "תקציב",
-      "scoring": "ציון"
+      "scoring": "ציון",
+      "subscriptions": "מנויים"
     },
     "errors": {
       "fetchFailed": "טעינת נתוני הניתוח נכשלה",
@@ -764,6 +791,7 @@
           "pattern": "תבנית",
           "recurring": "קבוע",
           "variable": "משתנה",
+          "subscriptionBadge": "מנוי",
           "recurringBadge": "ק",
           "variableBadge": "מ",
           "noData": "אין נתוני קטגוריות זמינים"
@@ -970,6 +998,123 @@
         "success": "המשימה הושלמה! +{{points}} נקודות",
         "partial": "מאמץ טוב! +{{points}} נקודות ({{pct}}% הושג)",
         "failed": "המשימה לא הושלמה. המשך לנסות!"
+      }
+    },
+    "subscriptions": {
+      "title": "מנויים וחיובים חוזרים",
+      "subtitle": "עקוב ונהל את ההוצאות החוזרות שלך",
+      "summary": {
+        "totalSubscriptions": "סה\"כ מנויים",
+        "monthlyTotal": "עלות חודשית",
+        "yearlyTotal": "עלות שנתית",
+        "categories": "קטגוריות",
+        "active": "פעילים",
+        "activeRatio": "יחס פעילים",
+        "perDay": "ליום"
+      },
+      "frequency": {
+        "daily": "יומי",
+        "weekly": "שבועי",
+        "biweekly": "דו-שבועי",
+        "monthly": "חודשי",
+        "bimonthly": "דו-חודשי",
+        "quarterly": "רבעוני",
+        "yearly": "שנתי",
+        "variable": "משתנה"
+      },
+      "status": {
+        "active": "פעיל",
+        "paused": "מושהה",
+        "cancelled": "בוטל",
+        "keep": "שמור",
+        "review": "לבדיקה"
+      },
+      "actions": {
+        "add": "הוסף מנוי",
+        "refresh": "רענן",
+        "detecting": "מזהה...",
+        "retry": "נסה שוב",
+        "edit": "ערוך",
+        "delete": "מחק",
+        "pause": "השהה",
+        "resume": "המשך"
+      },
+      "list": {
+        "title": "המנויים שלך",
+        "searchPlaceholder": "חפש מנויים...",
+        "filter": {
+          "all": "הכל",
+          "active": "פעילים",
+          "paused": "מושהים",
+          "cancelled": "מבוטלים"
+        },
+        "sort": {
+          "name": "שם",
+          "amount": "סכום",
+          "next_date": "חיוב הבא",
+          "category": "קטגוריה"
+        },
+        "showing": "מציג {{count}} מתוך {{total}} מנויים",
+        "noResults": "לא נמצאו מנויים התואמים לסינון",
+        "noResultsHint": "נסה לשנות את החיפוש או קריטריוני הסינון",
+        "empty": "עדיין לא זוהו מנויים",
+        "emptyHint": "מנויים יופיעו אוטומטית כאשר יזוהו עסקאות חוזרות, או הוסף ידנית",
+        "showMore": "הצג עוד {{count}}",
+        "showLess": "הצג פחות"
+      },
+      "card": {
+        "consistent": "עקבי",
+        "manual": "ידני",
+        "overdue": "{{days}} ימים באיחור",
+        "overdueTooltip": "התשלום באיחור",
+        "highConsistency": "ציון עקביות גבוה",
+        "today": "מגיע היום",
+        "tomorrow": "מגיע מחר",
+        "inDays": "בעוד {{days}} ימים"
+      },
+      "alerts": {
+        "title": "התראות",
+        "dismiss": "התעלם",
+        "showMore": "הצג עוד {{count}}",
+        "showLess": "הצג פחות"
+      },
+      "creep": {
+        "title": "זחילת מנויים",
+        "subtitle": "צמיחת עלויות ב-{{months}} חודשים",
+        "startingTotal": "התחלתי",
+        "currentTotal": "נוכחי",
+        "change": "שינוי",
+        "tooltipTotal": "סה\"כ חודשי",
+        "legendMonthly": "סה\"כ חודשי",
+        "legendAverage": "ממוצע"
+      },
+      "modal": {
+        "titleAdd": "הוסף מנוי",
+        "titleEdit": "ערוך מנוי",
+        "fields": {
+          "name": "שם",
+          "amount": "סכום",
+          "frequency": "תדירות",
+          "billingDay": "יום חיוב",
+          "status": "סטטוס",
+          "notes": "הערות",
+          "detectedAmount": "סכום שזוהה",
+          "detectedFrequency": "תדירות שזוהתה",
+          "consistency": "עקביות"
+        },
+        "hints": {
+          "nameReadonly": "לא ניתן לשנות שם למנויים שזוהו אוטומטית",
+          "billingDay": "יום בחודש (1-31)"
+        },
+        "detectedInfo": "ערכים שזוהו אוטומטית",
+        "errors": {
+          "nameRequired": "נדרש שם",
+          "amountRequired": "הסכום חייב להיות גדול מ-0",
+          "saveFailed": "שמירת המנוי נכשלה"
+        },
+        "cancel": "ביטול",
+        "save": "שמור",
+        "saving": "שומר..."
       }
     },
     "spendingChart": {
@@ -1532,7 +1677,11 @@
       "cancel": "ביטול",
       "save": "שמירה",
       "edit": "עריכה",
-      "delete": "מחיקה"
+      "delete": "מחיקה",
+      "refreshAnalytics": "רענן ניתוחים"
+    },
+    "refresh": {
+      "pending": "השינויים נשמרו. רעננו את הניתוחים כדי לעדכן תחזיות."
     },
     "tree": {
       "txnCount": "{{count}} {{count, plural, one {עסקה} other {עסקאות}}}"
@@ -1621,7 +1770,7 @@
     "search": {
       "categoryPlaceholder": "חיפוש קטגוריות...",
       "resultsFound": "נמצאו {{count}} קטגוריות תואמות עבור \"{{query}}\"",
-      "searchHint": "חיפוש לפי שם, תיאור, תגיות או סוג",
+      "searchHint": "חיפוש לפי שם, הערות, תגיות או שם עסקה",
       "noResults": "לא נמצאו קטגוריות"
     },
     "transactions": {
