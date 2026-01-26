@@ -1,8 +1,8 @@
 diff --git a/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js b/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js
-index 51c85ad..7456e48 100644
+index 71d89de..2c3bb16 100644
 --- a/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js
 +++ b/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js
-@@ -80,9 +80,22 @@ async function fetchAccountData(page, options) {
+@@ -81,9 +81,22 @@ async function fetchAccountData(page, options) {
    return accountData;
  }
  async function navigateOrErrorLabel(page) {
@@ -26,10 +26,10 @@ index 51c85ad..7456e48 100644
    }
  }
 diff --git a/node_modules/israeli-bank-scrapers/lib/scrapers/mizrahi.js b/node_modules/israeli-bank-scrapers/lib/scrapers/mizrahi.js
-index ebe0fa2..7108a0c 100644
+index b744740..d34a763 100644
 --- a/node_modules/israeli-bank-scrapers/lib/scrapers/mizrahi.js
 +++ b/node_modules/israeli-bank-scrapers/lib/scrapers/mizrahi.js
-@@ -119,6 +119,51 @@ function createHeadersFromRequest(request) {
+@@ -120,6 +120,51 @@ function createHeadersFromRequest(request) {
      'Content-Type': request.headers()['content-type']
    };
  }
@@ -81,7 +81,7 @@ index ebe0fa2..7108a0c 100644
  async function convertTransactions(txns, getMoreDetails, pendingIfTodayTransaction = false, options) {
    return Promise.all(txns.map(async row => {
      const moreDetails = await getMoreDetails(row);
-@@ -247,10 +292,14 @@ class MizrahiScraper extends _baseScraperWithBrowser.BaseScraperWithBrowser {
+@@ -251,10 +296,14 @@ class MizrahiScraper extends _baseScraperWithBrowser.BaseScraperWithBrowser {
      const oshTxnAfterStartDate = oshTxn.filter(txn => (0, _moment.default)(txn.date).isSameOrAfter(startMoment));
      const pendingTxn = await this.getPendingTransactions();
      const allTxn = oshTxnAfterStartDate.concat(pendingTxn);
