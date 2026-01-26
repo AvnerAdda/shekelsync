@@ -135,14 +135,17 @@ function consumeApprovedFileWrite(filePath) {
 }
 
 // Load environment variables from the Next.js app if present (e.g., USE_SQLITE)
-try {
-  const dotenv = requireFromApp('dotenv');
-  const envFile = path.join(appRoot, '.env.local');
-  if (fs.existsSync(envFile)) {
-    dotenv.config({ path: envFile });
+// Only load .env.local in development (not in packaged app)
+if (!app.isPackaged) {
+  try {
+    const dotenv = requireFromApp('dotenv');
+    const envFile = path.join(appRoot, '.env.local');
+    if (fs.existsSync(envFile)) {
+      dotenv.config({ path: envFile });
+    }
+  } catch (error) {
+    console.warn('Unable to load dotenv configuration:', error.message);
   }
-} catch (error) {
-  console.warn('Unable to load dotenv configuration:', error.message);
 }
 
 // Reduce GPU-related crashes in certain Linux setups
