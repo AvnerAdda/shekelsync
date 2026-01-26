@@ -1,5 +1,16 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
+// Type declaration for the license API exposed by Electron preload
+interface LicenseApi {
+  getStatus: () => Promise<{ success: boolean; data?: LicenseStatus; error?: string }>;
+  register: (teudatZehut: string) => Promise<{ success: boolean; license?: unknown; error?: string }>;
+  validateTeudatZehut: (id: string) => Promise<{ success: boolean; data?: TeudatZehutValidation; error?: string }>;
+  activatePro: (paymentRef?: string) => Promise<{ success: boolean; error?: string }>;
+  canWrite: () => Promise<{ success: boolean; canWrite: boolean; error?: string }>;
+  validateOnline: () => Promise<{ success: boolean; status?: LicenseStatus; error?: string }>;
+  getInfo: () => Promise<{ success: boolean; data?: unknown; error?: string }>;
+}
+
 interface LicenseStatus {
   registered: boolean;
   licenseType: 'trial' | 'pro' | 'expired' | 'none';
@@ -45,8 +56,13 @@ const DEFAULT_STATUS: LicenseStatus = {
   syncedToCloud: false,
 };
 
-// Check if we're running in Electron
-const isElectron = typeof window !== 'undefined' && window.electronAPI;
+// Check if we're running in Electron with license API
+const isElectron = typeof window !== 'undefined' &&
+  (window as { electronAPI?: { license?: LicenseApi } }).electronAPI?.license;
+
+// Helper to get the license API
+const getLicenseApi = (): LicenseApi | undefined =>
+  (window as { electronAPI?: { license?: LicenseApi } }).electronAPI?.license;
 
 export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [status, setStatus] = useState<LicenseStatus | null>(null);
@@ -72,7 +88,7 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setLoading(true);
       setError(null);
 
-      const result = await window.electronAPI.license.getStatus();
+      const result = await getLicenseApi()!.getStatus();
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to get license status');
@@ -99,7 +115,7 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
-      const result = await window.electronAPI.license.register(teudatZehut);
+      const result = await getLicenseApi()!.register(teudatZehut);
 
       if (result.success) {
         // Refetch status after successful registration
@@ -127,7 +143,7 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
-      const result = await window.electronAPI.license.validateTeudatZehut(id);
+      const result = await getLicenseApi()!.validateTeudatZehut(id);
 
       if (!result.success) {
         return { valid: false, error: result.error };
@@ -149,7 +165,7 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
-      const result = await window.electronAPI.license.activatePro(paymentRef);
+      const result = await getLicenseApi()!.activatePro(paymentRef);
 
       if (result.success) {
         await fetchStatus();
@@ -171,7 +187,7 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
-      const result = await window.electronAPI.license.validateOnline();
+      const result = await getLicenseApi()!.validateOnline();
 
       if (result.success) {
         await fetchStatus();
