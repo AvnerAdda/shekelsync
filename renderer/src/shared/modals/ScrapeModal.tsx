@@ -22,6 +22,7 @@ import { useScrapeProgress } from '@/hooks/useScrapeProgress';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
 import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from '@renderer/shared/components/InstitutionBadge';
+import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '../components/LicenseReadOnlyAlert';
 
 interface ScraperConfig {
   options: {
@@ -140,6 +141,8 @@ const createDefaultConfig = (): ScraperConfig => ({
 export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onComplete, initialConfig }: SyncModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
+  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>(undefined);
   const { showNotification } = useNotification();
   const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'scrapeModal' });
@@ -333,6 +336,13 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
     try {
       const response = await apiClient.post('/api/scrape', config);
       if (!response.ok) {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(response.data);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
+        }
         throw new Error(response.statusText || t('errors.startFailed'));
       }
 
@@ -575,8 +585,9 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
   };
 
   return (
-    <Dialog 
-      open={isOpen} 
+    <>
+    <Dialog
+      open={isOpen}
       onClose={onClose}
       maxWidth="sm"
       fullWidth
@@ -584,8 +595,8 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         style: {
           backgroundColor: theme.palette.background.paper,
           borderRadius: '24px',
-          boxShadow: theme.palette.mode === 'dark' 
-            ? '0 8px 32px rgba(0, 0, 0, 0.5)' 
+          boxShadow: theme.palette.mode === 'dark'
+            ? '0 8px 32px rgba(0, 0, 0, 0.5)'
             : '0 8px 32px rgba(0, 0, 0, 0.1)'
         }
       }}
@@ -656,5 +667,13 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         </Button>
       </DialogActions>
     </Dialog>
+
+    {/* License Read-Only Alert */}
+    <LicenseReadOnlyAlert
+      open={licenseAlertOpen}
+      onClose={() => setLicenseAlertOpen(false)}
+      reason={licenseAlertReason}
+    />
+    </>
   );
 } 

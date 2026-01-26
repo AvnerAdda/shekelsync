@@ -40,6 +40,7 @@ import { useNotification } from '@renderer/features/notifications/NotificationCo
 import { apiClient } from '@/lib/api-client';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
 import { useTranslation } from 'react-i18next';
+import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 
 interface InvestmentAccountsModalProps {
   open: boolean;
@@ -75,9 +76,16 @@ const InvestmentAccountsModal: React.FC<InvestmentAccountsModalProps> = ({
 }) => {
   const { t } = useTranslation('translation', { keyPrefix: 'investmentAccountsModal' });
   const [activeTab, setActiveTab] = useState(defaultTab);
+  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
+  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>(undefined);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
+  };
+
+  const handleLicenseError = (reason?: string) => {
+    setLicenseAlertReason(reason);
+    setLicenseAlertOpen(true);
   };
 
   const handleRefresh = () => {
@@ -171,19 +179,26 @@ const InvestmentAccountsModal: React.FC<InvestmentAccountsModalProps> = ({
 
       <DialogContent sx={{ p: 3, overflow: 'auto' }}>
         <TabPanel value={activeTab} index={0}>
-          <TransactionLinksTabContent onRefresh={handleRefresh} />
+          <TransactionLinksTabContent onRefresh={handleRefresh} onLicenseError={handleLicenseError} />
         </TabPanel>
 
         <TabPanel value={activeTab} index={1}>
-          <PatternsTabContent onRefresh={handleRefresh} />
+          <PatternsTabContent onRefresh={handleRefresh} onLicenseError={handleLicenseError} />
         </TabPanel>
       </DialogContent>
+
+      {/* License Read-Only Alert */}
+      <LicenseReadOnlyAlert
+        open={licenseAlertOpen}
+        onClose={() => setLicenseAlertOpen(false)}
+        reason={licenseAlertReason}
+      />
     </Dialog>
   );
 };
 
 // Tab 1: Transaction Links
-const TransactionLinksTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
+const TransactionLinksTabContent: React.FC<{ onRefresh: () => void; onLicenseError?: (reason?: string) => void }> = ({ onRefresh, onLicenseError }) => {
   const { t } = useTranslation('translation', { keyPrefix: 'investmentAccountsModal.links' });
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -212,6 +227,14 @@ const TransactionLinksTabContent: React.FC<{ onRefresh: () => void }> = ({ onRef
     try {
       const res = await apiClient.post('/api/investments/pending-suggestions', { id, action });
       const data = res.data as any;
+      if (!res.ok) {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(data);
+        if (licenseCheck.isReadOnly) {
+          onLicenseError?.(licenseCheck.reason);
+          return;
+        }
+      }
       if (res.ok && data?.success) {
         showNotification(
           action === 'approve' ? t('notifications.approved') : t('notifications.rejected'),
@@ -365,7 +388,7 @@ const TransactionLinksTabContent: React.FC<{ onRefresh: () => void }> = ({ onRef
 };
 
 // Tab 2: Pattern Management
-const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
+const PatternsTabContent: React.FC<{ onRefresh: () => void; onLicenseError?: (reason?: string) => void }> = ({ onRefresh, onLicenseError }) => {
   const { t } = useTranslation('translation', { keyPrefix: 'investmentAccountsModal.patterns' });
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -416,6 +439,14 @@ const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) 
         pattern_type: 'substring',
       });
       const data = res.data as any;
+      if (!res.ok) {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(data);
+        if (licenseCheck.isReadOnly) {
+          onLicenseError?.(licenseCheck.reason);
+          return;
+        }
+      }
       if (res.ok && data?.success) {
         showNotification(t('notifications.added'), 'success');
         setNewPattern({ ...newPattern, [accountId]: '' });
@@ -433,6 +464,14 @@ const PatternsTabContent: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) 
     try {
       const res = await apiClient.delete(`/api/investments/patterns?id=${patternId}`);
       const data = res.data as any;
+      if (!res.ok) {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(data);
+        if (licenseCheck.isReadOnly) {
+          onLicenseError?.(licenseCheck.reason);
+          return;
+        }
+      }
       if (res.ok && data?.success) {
         showNotification(t('notifications.deleted'), 'success');
         loadPatterns();

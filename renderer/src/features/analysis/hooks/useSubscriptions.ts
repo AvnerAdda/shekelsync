@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
+import { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 import type {
   Subscription,
   SubscriptionSummary,
@@ -18,6 +19,11 @@ import type {
   SubscriptionStatus,
   SubscriptionFrequency,
 } from '@renderer/types/subscriptions';
+
+interface LicenseError {
+  isReadOnly: boolean;
+  reason?: string;
+}
 
 interface UseSubscriptionsOptions {
   autoLoad?: boolean;
@@ -44,6 +50,11 @@ export function useSubscriptions(options: UseSubscriptionsOptions = {}) {
   const [detecting, setDetecting] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+  const [licenseError, setLicenseError] = useState<LicenseError | null>(null);
+
+  const clearLicenseError = useCallback(() => {
+    setLicenseError(null);
+  }, []);
 
   // Fetch subscriptions list
   const fetchSubscriptions = useCallback(async () => {
@@ -170,6 +181,12 @@ export function useSubscriptions(options: UseSubscriptionsOptions = {}) {
         const response = await apiClient.put(`/api/analytics/subscriptions/${id}`, updates);
 
         if (!response.ok) {
+          // Check for license read-only error
+          const licenseCheck = isLicenseReadOnlyError(response.data);
+          if (licenseCheck.isReadOnly) {
+            setLicenseError({ isReadOnly: true, reason: licenseCheck.reason });
+            return null;
+          }
           throw new Error('Failed to update subscription');
         }
 
@@ -205,6 +222,12 @@ export function useSubscriptions(options: UseSubscriptionsOptions = {}) {
       const response = await apiClient.post('/api/analytics/subscriptions', subscription);
 
       if (!response.ok) {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(response.data);
+        if (licenseCheck.isReadOnly) {
+          setLicenseError({ isReadOnly: true, reason: licenseCheck.reason });
+          return null;
+        }
         throw new Error('Failed to add subscription');
       }
 
@@ -227,6 +250,12 @@ export function useSubscriptions(options: UseSubscriptionsOptions = {}) {
       const response = await apiClient.delete(`/api/analytics/subscriptions/${id}`);
 
       if (!response.ok) {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(response.data);
+        if (licenseCheck.isReadOnly) {
+          setLicenseError({ isReadOnly: true, reason: licenseCheck.reason });
+          return null;
+        }
         throw new Error('Failed to delete subscription');
       }
 
@@ -251,6 +280,12 @@ export function useSubscriptions(options: UseSubscriptionsOptions = {}) {
       );
 
       if (!response.ok) {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(response.data);
+        if (licenseCheck.isReadOnly) {
+          setLicenseError({ isReadOnly: true, reason: licenseCheck.reason });
+          return null;
+        }
         throw new Error('Failed to dismiss alert');
       }
 
@@ -278,6 +313,12 @@ export function useSubscriptions(options: UseSubscriptionsOptions = {}) {
       const response = await apiClient.post('/api/analytics/subscriptions/detect');
 
       if (!response.ok) {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(response.data);
+        if (licenseCheck.isReadOnly) {
+          setLicenseError({ isReadOnly: true, reason: licenseCheck.reason });
+          return null;
+        }
         throw new Error('Failed to refresh detection');
       }
 
@@ -337,6 +378,8 @@ export function useSubscriptions(options: UseSubscriptionsOptions = {}) {
     renewalsLoading,
     detecting,
     error,
+    licenseError,
+    clearLicenseError,
 
     // Fetch functions
     fetchSubscriptions,

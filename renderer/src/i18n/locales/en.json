@@ -7,7 +7,8 @@
       "fr": "French"
     },
     "systemLanguageDetected": "Detected {{language}} from your system locale. You can change it anytime.",
-    "or": "or"
+    "or": "or",
+    "close": "Close"
   },
   "registration": {
     "title": "Welcome to ShekelSync",
@@ -34,6 +35,14 @@
     "offlineGraceRemaining": "{{days}} days offline grace remaining. Connect to the internet to validate your license.",
     "trialProgress": "Trial Progress",
     "days": "days"
+  },
+  "licenseAlert": {
+    "readOnlyTitle": "Read-Only Mode",
+    "operationBlocked": "This operation cannot be completed because your license is in read-only mode.",
+    "trialExpiredMessage": "Your 30-day free trial has ended. Upgrade to Pro to continue adding transactions, creating rules, and syncing your accounts.",
+    "offlineGraceExpiredMessage": "Your offline grace period has expired. Please connect to the internet to validate your license and restore full functionality.",
+    "notRegisteredTitle": "Registration Required",
+    "notRegisteredMessage": "Please register with your Teudat Zehut to start your free 30-day trial and enable all features."
   },
   "dashboard": {
     "summary": {

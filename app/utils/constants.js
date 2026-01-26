@@ -16,6 +16,9 @@ const ALL_VENDORS = [...CREDIT_CARD_VENDORS, ...BANK_VENDORS, ...SPECIAL_BANK_VE
 // Sync threshold - accounts not synced in this time are considered stale
 const STALE_SYNC_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48 hours
 
+// Rate limit - prevent scraping the same credential more than once per 24 hours
+const SCRAPE_RATE_LIMIT_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 // Unified Account Type Taxonomy for enhanced AccountsModal
 // Updated with website color palette (primary green and secondary peach)
 const ACCOUNT_CATEGORIES = {
@@ -304,6 +307,7 @@ module.exports = {
   OTHER_BANK_VENDORS,
   ALL_VENDORS,
   STALE_SYNC_THRESHOLD_MS,
+  SCRAPE_RATE_LIMIT_MS,
   ACCOUNT_CATEGORIES,
   INVESTMENT_ACCOUNT_TYPES,
   getAccountCategory,
