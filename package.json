@@ -20,8 +20,5 @@
     "electron-is-dev": "^3.0.1",
     "electron-reload": "^2.0.0-alpha.1",
     "http-proxy-middleware": "^3.0.5"
-  },
-  "devDependencies": {
-    "electron-icon-builder": "^2.0.1"
   }
 }
