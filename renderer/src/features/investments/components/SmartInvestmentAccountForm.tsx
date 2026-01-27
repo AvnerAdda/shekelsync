@@ -25,6 +25,7 @@ import {
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from '@renderer/shared/components/InstitutionBadge';
 import { apiClient } from '@/lib/api-client';
+import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 
 interface Transaction {
   transactionIdentifier: string;
@@ -84,6 +85,8 @@ export default function SmartInvestmentAccountForm({
   const [institutions, setInstitutions] = useState<InstitutionMetadata[]>([]);
   const [institutionId, setInstitutionId] = useState<number | null>(null);
   const [institutionsLoading, setInstitutionsLoading] = useState(false);
+  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
+  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
 
   // Step 1: Account Details
   const [accountName, setAccountName] = useState('');
@@ -243,6 +246,14 @@ useEffect(() => {
       console.log('Response status:', response.status);
 
       if (!response.ok) {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(response.data);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          setLoading(false);
+          return;
+        }
         console.error('Error response:', response.data);
         throw new Error(`HTTP ${response.status}: ${response.statusText || 'Failed to create account'}`);
       }
@@ -564,6 +575,12 @@ useEffect(() => {
           {activeStep === steps.length - 1 ? 'Create Account & Link Transactions' : 'Next'}
         </Button>
       </DialogActions>
+
+      <LicenseReadOnlyAlert
+        open={licenseAlertOpen}
+        onClose={() => setLicenseAlertOpen(false)}
+        reason={licenseAlertReason}
+      />
     </Dialog>
   );
 }

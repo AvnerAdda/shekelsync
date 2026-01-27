@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
+import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 
 interface Account {
   id: number;
@@ -133,6 +134,8 @@ export default function AccountPairingModal({
   const [autoPairingBatchDone, setAutoPairingBatchDone] = useState(false);
   const [autoPairingBatchResults, setAutoPairingBatchResults] = useState<AutoPairingBatchResult[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
+  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
 
   const expandCreditCardAccounts = useCallback(() => {
     const expanded: Account[] = [];
@@ -234,6 +237,18 @@ export default function AccountPairingModal({
         });
 
         if (!response.ok || !response.data) {
+          // Check for license read-only error
+          const licenseCheck = isLicenseReadOnlyError(response.data);
+          if (licenseCheck.isReadOnly) {
+            setLicenseAlertReason(licenseCheck.reason);
+            setLicenseAlertOpen(true);
+            return {
+              key: `${account.vendor}::${accountNumber || 'all'}`,
+              account,
+              status: 'error',
+              reason: 'License is in read-only mode',
+            } satisfies AutoPairingBatchResult;
+          }
           return {
             key: `${account.vendor}::${accountNumber || 'all'}`,
             account,
@@ -367,6 +382,12 @@ export default function AccountPairingModal({
       <DialogActions>
         <Button onClick={handleClose}>Close</Button>
       </DialogActions>
+
+      <LicenseReadOnlyAlert
+        open={licenseAlertOpen}
+        onClose={() => setLicenseAlertOpen(false)}
+        reason={licenseAlertReason}
+      />
     </Dialog>
   );
 }

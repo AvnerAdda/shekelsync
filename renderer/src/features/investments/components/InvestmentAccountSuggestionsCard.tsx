@@ -28,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import { apiClient } from '@/lib/api-client';
+import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 
 interface Transaction {
   transactionIdentifier: string;
@@ -118,6 +119,8 @@ export default function InvestmentAccountSuggestionsCard({
   const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([]);
   const [linkMenuAnchor, setLinkMenuAnchor] = useState<{ element: HTMLElement; suggestionKey: string } | null>(null);
   const [linkingInProgress, setLinkingInProgress] = useState(false);
+  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
+  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
 
   useEffect(() => {
     fetchSuggestions();
@@ -197,13 +200,21 @@ export default function InvestmentAccountSuggestionsCard({
         vendor: t.transactionVendor
       }));
 
-      const response = await fetch('/api/investments/suggestions/dismiss', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactionIdentifiers })
-      });
+      const response = await apiClient.post('/api/investments/suggestions/dismiss', { transactionIdentifiers });
 
-      const data = await response.json();
+      if (!response.ok) {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(response.data);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
+        }
+        const data = response.data as any;
+        throw new Error(data?.error || 'Failed to dismiss suggestion');
+      }
+
+      const data = response.data as any;
 
       if (data.success) {
         const newDismissed = new Set(dismissedSuggestions);
@@ -259,6 +270,14 @@ export default function InvestmentAccountSuggestionsCard({
         if (response.ok) {
           successCount++;
         } else {
+          // Check for license read-only error
+          const licenseCheck = isLicenseReadOnlyError(response.data);
+          if (licenseCheck.isReadOnly) {
+            setLicenseAlertReason(licenseCheck.reason);
+            setLicenseAlertOpen(true);
+            setLinkingInProgress(false);
+            return;
+          }
           console.error('Failed to link transaction:', response);
         }
       }
@@ -502,6 +521,12 @@ export default function InvestmentAccountSuggestionsCard({
           ));
         })()}
       </Menu>
+
+      <LicenseReadOnlyAlert
+        open={licenseAlertOpen}
+        onClose={() => setLicenseAlertOpen(false)}
+        reason={licenseAlertReason}
+      />
     </>
   );
 }

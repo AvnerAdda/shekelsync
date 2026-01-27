@@ -9,6 +9,12 @@ import type {
   SmartActionType,
 } from '@renderer/types/smart-actions';
 import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
+import { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
+
+interface LicenseError {
+  isReadOnly: boolean;
+  reason?: string;
+}
 
 interface UseSmartActionsOptions {
   status?: SmartActionStatus;
@@ -26,6 +32,11 @@ export function useSmartActions(options: UseSmartActionsOptions = {}) {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [licenseError, setLicenseError] = useState<LicenseError | null>(null);
+
+  const clearLicenseError = useCallback(() => {
+    setLicenseError(null);
+  }, []);
 
   const fetchActions = useCallback(async () => {
     setLoading(true);
@@ -67,6 +78,12 @@ export function useSmartActions(options: UseSmartActionsOptions = {}) {
       const response = await apiClient.post(`/api/smart-actions/generate?${params.toString()}`);
 
       if (!response.ok) {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(response.data);
+        if (licenseCheck.isReadOnly) {
+          setLicenseError({ isReadOnly: true, reason: licenseCheck.reason });
+          return null;
+        }
         throw new Error('Failed to generate smart actions');
       }
 
@@ -99,6 +116,12 @@ export function useSmartActions(options: UseSmartActionsOptions = {}) {
       });
 
       if (!response.ok) {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(response.data);
+        if (licenseCheck.isReadOnly) {
+          setLicenseError({ isReadOnly: true, reason: licenseCheck.reason });
+          return null;
+        }
         throw new Error('Failed to update action status');
       }
 
@@ -144,6 +167,8 @@ export function useSmartActions(options: UseSmartActionsOptions = {}) {
     loading,
     generating,
     error,
+    licenseError,
+    clearLicenseError,
     fetchActions,
     generateActions,
     updateActionStatus,

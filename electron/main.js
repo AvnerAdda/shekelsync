@@ -236,14 +236,45 @@ function wireTelemetryMetricsReporter() {
   }
 }
 
+function getEnvKeyRemovalInstructions() {
+  if (process.platform === 'win32') {
+    return `
+
+HOW TO FIX:
+1. Press Win+R, type "sysdm.cpl" and press Enter
+2. Click "Environment Variables" button
+3. In BOTH "User variables" and "System variables" sections:
+   - Find CLARIFY_ENCRYPTION_KEY
+   - Select it and click "Delete"
+4. Click OK to close all dialogs
+5. Restart ShekelSync
+
+WHY: This variable was likely set during development. In production,
+ShekelSync securely stores encryption keys in Windows Credential Manager.`;
+  } else if (process.platform === 'darwin') {
+    return `
+
+HOW TO FIX:
+1. Open Terminal
+2. Run: launchctl unsetenv CLARIFY_ENCRYPTION_KEY
+3. Remove from ~/.zshrc or ~/.bash_profile if present
+4. Restart ShekelSync
+
+WHY: In production, ShekelSync stores encryption keys in macOS Keychain.`;
+  }
+  return '';
+}
+
 async function ensureEncryptionKey(config) {
   // Check if key is already set in environment
   if (process.env.CLARIFY_ENCRYPTION_KEY) {
     const envKeyAllowed = allowInsecureEnvKey || isLinux;
     if (!envKeyAllowed) {
+      const instructions = getEnvKeyRemovalInstructions();
       abortForSecurity(
-        'CLARIFY_ENCRYPTION_KEY is not allowed. Remove the environment key and enable OS keychain storage. ' +
-        'On Linux, install libsecret and run within a desktop session. Set ALLOW_INSECURE_ENV_KEY=true only for tests.',
+        `CLARIFY_ENCRYPTION_KEY environment variable detected.
+
+For security, ShekelSync cannot use encryption keys from environment variables on ${process.platform === 'win32' ? 'Windows' : 'macOS'}.${instructions}`
       );
       throw new Error('Environment encryption key blocked.');
     }

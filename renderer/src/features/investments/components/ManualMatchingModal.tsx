@@ -33,6 +33,7 @@ import ModalHeader from '@renderer/shared/modals/ModalHeader';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import { apiClient } from '@/lib/api-client';
 import MatchingTimeSeriesChart from './MatchingTimeSeriesChart';
+import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 import type {
   ProcessedDate,
   BankRepaymentsForDateResponse,
@@ -127,6 +128,8 @@ export default function ManualMatchingModal({
   const [showCombinations, setShowCombinations] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [diagnosticInfo, setDiagnosticInfo] = useState<any>(null);
+  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
+  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
   const { showNotification } = useNotification();
 
   // NEW: Smart matching state
@@ -405,6 +408,13 @@ export default function ManualMatchingModal({
         setExpenses([]);
         setSelectedExpenses(new Set());
       } else {
+        // Check for license read-only error
+        const licenseCheck = isLicenseReadOnlyError(response.data);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
+        }
         showNotification(response.data?.error || 'Failed to save match', 'error');
       }
     } catch (error) {
@@ -1046,6 +1056,12 @@ export default function ManualMatchingModal({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <LicenseReadOnlyAlert
+        open={licenseAlertOpen}
+        onClose={() => setLicenseAlertOpen(false)}
+        reason={licenseAlertReason}
+      />
     </Dialog>
   );
 }

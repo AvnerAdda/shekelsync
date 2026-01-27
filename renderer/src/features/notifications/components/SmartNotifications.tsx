@@ -40,6 +40,7 @@ import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
 import { useNotification } from '../NotificationContext';
 import { apiClient } from '@/lib/api-client';
 import InsightsPanel from './InsightsPanel';
+import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 
 interface Notification {
   id: string;
@@ -74,6 +75,8 @@ const SmartNotifications: React.FC = () => {
   const [insights, setInsights] = useState<any>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsCacheTime, setInsightsCacheTime] = useState<Date | null>(null);
+  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
+  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
   const { showNotification } = useNotification();
 
   const open = Boolean(anchorEl);
@@ -212,20 +215,31 @@ const SmartNotifications: React.FC = () => {
         try {
           const response = await apiClient.post('/api/scrape/bulk', { payload: {} });
           const result = response.data as any;
-          
+
+          if (!response.ok) {
+            // Check for license read-only error
+            const licenseCheck = isLicenseReadOnlyError(response.data);
+            if (licenseCheck.isReadOnly) {
+              setLicenseAlertReason(licenseCheck.reason);
+              setLicenseAlertOpen(true);
+              setIsBulkSyncing(false);
+              return;
+            }
+          }
+
           if (response.ok && result.success) {
-            const message = result.totalProcessed === 0 
+            const message = result.totalProcessed === 0
               ? 'All accounts are up to date'
               : `Synced ${result.successCount}/${result.totalProcessed} accounts (${result.totalTransactions || 0} transactions)`;
-            
+
             showNotification(
               message,
               result.successCount === result.totalProcessed ? 'success' : 'warning'
             );
-            
+
             // Refresh notifications to clear the stale sync alert
             await fetchNotifications();
-            
+
             // Trigger global data refresh
             window.dispatchEvent(new CustomEvent('dataRefresh'));
           } else {
@@ -486,6 +500,12 @@ const SmartNotifications: React.FC = () => {
           )}
         </Box>
       </Popover>
+
+      <LicenseReadOnlyAlert
+        open={licenseAlertOpen}
+        onClose={() => setLicenseAlertOpen(false)}
+        reason={licenseAlertReason}
+      />
     </>
   );
 };
