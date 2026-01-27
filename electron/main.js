@@ -1,13 +1,5 @@
-// DEBUG: Capture environment state BEFORE any modules load
-const originalEnvAtStart = { ...process.env };
+// Track if encryption key existed before our code ran (to detect external injection)
 const hadKeyAtStart = !!process.env.CLARIFY_ENCRYPTION_KEY;
-
-// Check if key appears after modules load
-process.nextTick(() => {
-  if (process.env.CLARIFY_ENCRYPTION_KEY && !originalEnvAtStart.CLARIFY_ENCRYPTION_KEY) {
-    console.log('[STARTUP DEBUG] Key was set AFTER script started by a module!');
-  }
-});
 
 require('./setup-module-alias');
 
@@ -44,28 +36,6 @@ const {
 } = require('./diagnostics');
 const analyticsMetricsStore = require(resolveAppPath('server', 'services', 'analytics', 'metrics-store.js'));
 const isPackaged = app.isPackaged;
-
-// DEBUG: Log environment key source at startup
-if (process.env.CLARIFY_ENCRYPTION_KEY) {
-  const keyValue = process.env.CLARIFY_ENCRYPTION_KEY;
-  const keyPreview = keyValue.length > 8
-    ? `${keyValue.substring(0, 4)}...${keyValue.substring(keyValue.length - 4)}`
-    : '(short key)';
-  console.log('[STARTUP DEBUG] CLARIFY_ENCRYPTION_KEY detected at startup!');
-  console.log('[STARTUP DEBUG] Key preview:', keyPreview);
-  console.log('[STARTUP DEBUG] Key length:', keyValue.length);
-  console.log('[STARTUP DEBUG] Had key at script start (before requires):', hadKeyAtStart);
-  console.log('[STARTUP DEBUG] Process argv:', process.argv);
-  console.log('[STARTUP DEBUG] app.isPackaged:', isPackaged);
-  console.log('[STARTUP DEBUG] NODE_ENV:', process.env.NODE_ENV);
-  console.log('[STARTUP DEBUG] execPath:', process.execPath);
-  console.log('[STARTUP DEBUG] cwd:', process.cwd());
-
-  // Log stack trace to see call context
-  console.log('[STARTUP DEBUG] Stack trace:');
-  console.trace();
-}
-
 const isDev = process.env.NODE_ENV === 'development' || !isPackaged;
 const isMac = process.platform === 'darwin';
 const isLinux = process.platform === 'linux';
@@ -299,8 +269,13 @@ WHY: In production, ShekelSync stores encryption keys in macOS Keychain.`;
 }
 
 async function ensureEncryptionKey(config) {
-  // Check if key is already set in environment
-  if (process.env.CLARIFY_ENCRYPTION_KEY) {
+  // If key exists but was set by US (not at script start), we're done
+  if (process.env.CLARIFY_ENCRYPTION_KEY && !hadKeyAtStart) {
+    return;
+  }
+
+  // Check if key was injected externally (existed before our script started)
+  if (process.env.CLARIFY_ENCRYPTION_KEY && hadKeyAtStart) {
     const envKeyAllowed = allowInsecureEnvKey || isLinux;
     if (!envKeyAllowed) {
       const keyValue = process.env.CLARIFY_ENCRYPTION_KEY;
