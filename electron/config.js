@@ -27,10 +27,9 @@ class ConfigManager {
 
   encrypt(text) {
     try {
-      // Simple but functional encryption for development
       const algorithm = 'aes-256-ctr';
       const iv = crypto.randomBytes(16);
-      const cipher = crypto.createCipher(algorithm, this.getEncryptionKey());
+      const cipher = crypto.createCipheriv(algorithm, this.getEncryptionKey(), iv);
 
       let encrypted = cipher.update(text, 'utf8', 'hex');
       encrypted += cipher.final('hex');
@@ -56,7 +55,8 @@ class ConfigManager {
 
       const [ivHex, encrypted] = parts;
       const algorithm = 'aes-256-ctr';
-      const decipher = crypto.createDecipher(algorithm, this.getEncryptionKey());
+      const iv = Buffer.from(ivHex, 'hex');
+      const decipher = crypto.createDecipheriv(algorithm, this.getEncryptionKey(), iv);
 
       let decrypted = decipher.update(encrypted, 'hex', 'utf8');
       decrypted += decipher.final('utf8');
@@ -68,7 +68,8 @@ class ConfigManager {
         const legacyKey = crypto.scryptSync('electron-app-key', 'salt', 32);
         const [ivHex, encrypted] = encryptedText.split(':');
         const algorithm = 'aes-256-ctr';
-        const decipher = crypto.createDecipher(algorithm, legacyKey);
+        const iv = Buffer.from(ivHex, 'hex');
+        const decipher = crypto.createDecipheriv(algorithm, legacyKey, iv);
         let decrypted = decipher.update(encrypted, 'hex', 'utf8');
         decrypted += decipher.final('utf8');
         this.needsReencrypt = true;
