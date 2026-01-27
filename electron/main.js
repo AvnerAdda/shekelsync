@@ -270,20 +270,51 @@ async function ensureEncryptionKey(config) {
   if (process.env.CLARIFY_ENCRYPTION_KEY) {
     const envKeyAllowed = allowInsecureEnvKey || isLinux;
     if (!envKeyAllowed) {
-      const instructions = getEnvKeyRemovalInstructions();
-      abortForSecurity(
-        `CLARIFY_ENCRYPTION_KEY environment variable detected.
+      const keyValue = process.env.CLARIFY_ENCRYPTION_KEY;
+      const keyPreview = keyValue.length > 8
+        ? `${keyValue.substring(0, 4)}...${keyValue.substring(keyValue.length - 4)}`
+        : '(short key)';
 
-For security, ShekelSync cannot use encryption keys from environment variables on ${process.platform === 'win32' ? 'Windows' : 'macOS'}.${instructions}`
-      );
-      throw new Error('Environment encryption key blocked.');
+      const instructions = getEnvKeyRemovalInstructions();
+      const platformName = process.platform === 'win32' ? 'Windows' : 'macOS';
+
+      const { response } = await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Security Configuration Required',
+        message: 'Environment encryption key detected',
+        detail: `For security, ShekelSync cannot use encryption keys from environment variables on ${platformName}.
+
+DETECTED KEY INFO:
+• Length: ${keyValue.length} characters
+• Preview: ${keyPreview}
+
+Click "Clear and Continue" to remove this key from the current session and use ${process.platform === 'win32' ? 'Windows Credential Manager' : 'macOS Keychain'} instead (recommended).
+
+Click "Exit" to close the app and manually remove the variable.${instructions}`,
+        buttons: ['Clear and Continue (Recommended)', 'Exit'],
+        defaultId: 0,
+        cancelId: 1,
+      });
+
+      if (response === 0) {
+        // User chose to clear and continue
+        logger.info('User chose to clear environment key and use Credential Manager');
+        delete process.env.CLARIFY_ENCRYPTION_KEY;
+        // Fall through to keychain initialization below
+      } else {
+        // User chose to exit
+        app.quit();
+        throw new Error('User chose to exit to remove environment key.');
+      }
+    } else {
+      // Env key is allowed (Linux or test mode)
+      if (allowInsecureEnvKey) {
+        logger.warn('Using encryption key from environment variable (ALLOW_INSECURE_ENV_KEY=true)');
+      } else if (isLinux) {
+        logger.warn('Using encryption key from environment variable on Linux');
+      }
+      return;
     }
-    if (allowInsecureEnvKey) {
-      logger.warn('Using encryption key from environment variable (ALLOW_INSECURE_ENV_KEY=true)');
-    } else if (isLinux) {
-      logger.warn('Using encryption key from environment variable on Linux');
-    }
-    return;
   }
 
   if (keytarDisabledByEnv && !allowInsecureEnvKey && !isLinux) {
