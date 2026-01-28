@@ -77,7 +77,6 @@ website/
 app/scripts/
 
 # Scripts - ignore demo/dev-only files, keep essential ones
-scripts/seed_realistic_demo.js
 scripts/secrets-map.json
 
 linux-gpg.key
