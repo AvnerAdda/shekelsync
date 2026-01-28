@@ -386,7 +386,8 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                           )}
                         </Box>
                       }
-                      secondaryTypographyProps={{ component: 'span' }}
+                      primaryTypographyProps={{ component: 'div' }}
+                      secondaryTypographyProps={{ component: 'div' }}
                     />
                     <Typography
                       variant="body2"
