@@ -75,6 +75,7 @@ website/
 *.md
 
 app/scripts/
+scripts/
 
 linux-gpg.key
 app/shekelsync.pfx
