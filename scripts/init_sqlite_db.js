@@ -754,40 +754,6 @@ const TABLE_DEFINITIONS = [
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       expires_at TEXT,
       FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
-    );`,
-  // Savings Goals Tables
-  `CREATE TABLE IF NOT EXISTS savings_goals (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      description TEXT,
-      target_amount REAL NOT NULL CHECK (target_amount > 0),
-      current_amount REAL NOT NULL DEFAULT 0,
-      currency TEXT NOT NULL DEFAULT 'ILS',
-      target_date TEXT,
-      start_date TEXT NOT NULL DEFAULT (date('now')),
-      category_definition_id INTEGER,
-      icon TEXT DEFAULT 'savings',
-      color TEXT DEFAULT '#4CAF50',
-      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'paused', 'cancelled')),
-      priority INTEGER NOT NULL DEFAULT 0,
-      is_recurring INTEGER NOT NULL DEFAULT 0 CHECK (is_recurring IN (0, 1)),
-      recurring_amount REAL,
-      completed_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE SET NULL
-    );`,
-  `CREATE TABLE IF NOT EXISTS savings_goal_contributions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      goal_id INTEGER NOT NULL,
-      amount REAL NOT NULL,
-      contribution_type TEXT NOT NULL DEFAULT 'manual' CHECK (contribution_type IN ('manual', 'auto', 'interest', 'adjustment')),
-      transaction_identifier TEXT,
-      transaction_vendor TEXT,
-      note TEXT,
-      date TEXT NOT NULL DEFAULT (date('now')),
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (goal_id) REFERENCES savings_goals(id) ON DELETE CASCADE
     );`
 ];
 
@@ -914,15 +880,7 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_type ON subscription_alerts(alert_type);',
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_dismissed ON subscription_alerts(is_dismissed);',
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_severity ON subscription_alerts(severity);',
-  'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_created ON subscription_alerts(created_at DESC);',
-  // Savings Goals Indexes
-  'CREATE INDEX IF NOT EXISTS idx_savings_goals_status ON savings_goals(status);',
-  'CREATE INDEX IF NOT EXISTS idx_savings_goals_target_date ON savings_goals(target_date);',
-  'CREATE INDEX IF NOT EXISTS idx_savings_goals_category ON savings_goals(category_definition_id);',
-  'CREATE INDEX IF NOT EXISTS idx_savings_goals_priority ON savings_goals(priority DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_goal_contributions_goal_id ON savings_goal_contributions(goal_id);',
-  'CREATE INDEX IF NOT EXISTS idx_goal_contributions_date ON savings_goal_contributions(date DESC);',
-  'CREATE INDEX IF NOT EXISTS idx_goal_contributions_type ON savings_goal_contributions(contribution_type);'
+  'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_created ON subscription_alerts(created_at DESC);'
 ];
 
 // FTS5 Full-Text Search Setup for SQLite
