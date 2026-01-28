@@ -1,5 +1,6 @@
 const database = require('../database.js');
 const { getCreditCardRepaymentCategoryCondition } = require('./repayment-category.js');
+const { dialect, useSqlite } = require('../../../lib/sql-dialect.js');
 
 // Keywords for credit card matching - includes Hebrew and English variants
 const VENDOR_KEYWORDS = {
@@ -94,14 +95,38 @@ async function findSmartMatches(params = {}) {
 };
     }
 
-    // Build dynamic query with multiple LIKE conditions on transaction name
-    const nameConditions = searchPatterns.map(
-      (_, idx) => `LOWER(t.name) LIKE '%' || LOWER($${idx + 2}) || '%'`
-    );
+    // Build dynamic query with search conditions
+    // Use FTS5 for SQLite when possible, fallback to LIKE for PostgreSQL
+    let nameConditions;
+    let queryParams;
+    
+    if (useSqlite && searchPatterns.length > 0) {
+      // For SQLite with FTS5, combine all patterns into a single FTS query
+      // Each pattern becomes an OR condition in FTS5
+      const ftsPatterns = searchPatterns.map(p => `"${p.replace(/"/g, '')}"`).join(' OR ');
+      nameConditions = [
+        `t.id IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH $2)`
+      ];
+      queryParams = [bankVendor, ftsPatterns];
+      
+      // Add nickname parameter if provided
+      if (nickname) {
+        queryParams.push(nickname);
+      }
+    } else {
+      // PostgreSQL fallback: use ILIKE conditions
+      nameConditions = searchPatterns.map(
+        (_, idx) => `t.name ILIKE '%' || $${idx + 2} || '%'`
+      );
+      queryParams = [bankVendor, ...searchPatterns];
+      if (nickname) {
+        queryParams.push(nickname);
+      }
+    }
 
     // Also match on vendor_nickname if nickname is provided
     const vendorNicknameCondition = nickname
-      ? `OR t.vendor_nickname = $${searchPatterns.length + 2}`
+      ? `OR t.vendor_nickname = $${queryParams.length}`
       : '';
 
     let query = `
@@ -130,13 +155,6 @@ async function findSmartMatches(params = {}) {
       WHERE t.vendor = $1
         AND ((${nameConditions.join(' OR ')}) ${vendorNicknameCondition})
     `;
-
-    const queryParams = [bankVendor, ...searchPatterns];
-
-    // Add nickname parameter if vendor_nickname condition was added
-    if (nickname) {
-      queryParams.push(nickname);
-    }
 
     if (bankAccountNumber && bankAccountNumber !== 'undefined') {
       queryParams.push(bankAccountNumber);

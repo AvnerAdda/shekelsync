@@ -413,11 +413,207 @@ function createSqlitePool(options = {}) {
     release: () => {},
   });
 
+  // Bulk mode state
+  let bulkModeActive = false;
+
+  /**
+   * Enable bulk mode by disabling expensive triggers.
+   * Call this before bulk insert operations to improve performance.
+   * Remember to call exitBulkMode() after the operation to re-enable triggers
+   * and rebuild any required data.
+   */
+  const enterBulkMode = () => {
+    if (bulkModeActive) return;
+    
+    try {
+      // Disable transaction exclusion triggers that scan account_pairings on each insert
+      db.exec('DROP TRIGGER IF EXISTS trg_transactions_exclusions_insert');
+      db.exec('DROP TRIGGER IF EXISTS trg_transactions_exclusions_update');
+      
+      // Disable FTS5 sync triggers for faster bulk inserts
+      db.exec('DROP TRIGGER IF EXISTS transactions_fts_insert');
+      db.exec('DROP TRIGGER IF EXISTS transactions_fts_update');
+      
+      bulkModeActive = true;
+    } catch (_error) {
+      // Ignore errors if triggers don't exist
+    }
+  };
+
+  /**
+   * Exit bulk mode by re-enabling triggers and rebuilding required data.
+   * Call this after bulk insert operations complete.
+   */
+  const exitBulkMode = () => {
+    if (!bulkModeActive) return;
+    
+    try {
+      // Re-create transaction exclusion triggers
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_transactions_exclusions_insert
+        AFTER INSERT ON transactions
+        BEGIN
+          INSERT OR IGNORE INTO transaction_pairing_exclusions (
+            transaction_identifier,
+            transaction_vendor,
+            pairing_id,
+            created_at,
+            updated_at
+          )
+          SELECT
+            NEW.identifier,
+            NEW.vendor,
+            ap.id,
+            datetime('now'),
+            datetime('now')
+          FROM account_pairings ap
+          WHERE ap.is_active = 1
+            AND ap.bank_vendor = NEW.vendor
+            AND (ap.bank_account_number IS NULL OR ap.bank_account_number = NEW.account_number)
+            AND ap.match_patterns IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+              FROM json_each(COALESCE(ap.match_patterns, '[]'))
+              WHERE LOWER(NEW.name) LIKE '%' || LOWER(json_each.value) || '%'
+            )
+          ;
+        END;
+      `);
+      
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_transactions_exclusions_update
+        AFTER UPDATE OF vendor, account_number, name ON transactions
+        BEGIN
+          DELETE FROM transaction_pairing_exclusions
+            WHERE transaction_identifier = OLD.identifier
+              AND transaction_vendor = OLD.vendor;
+          INSERT OR IGNORE INTO transaction_pairing_exclusions (
+            transaction_identifier,
+            transaction_vendor,
+            pairing_id,
+            created_at,
+            updated_at
+          )
+          SELECT
+            NEW.identifier,
+            NEW.vendor,
+            ap.id,
+            datetime('now'),
+            datetime('now')
+          FROM account_pairings ap
+          WHERE ap.is_active = 1
+            AND ap.bank_vendor = NEW.vendor
+            AND (ap.bank_account_number IS NULL OR ap.bank_account_number = NEW.account_number)
+            AND ap.match_patterns IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+              FROM json_each(COALESCE(ap.match_patterns, '[]'))
+              WHERE LOWER(NEW.name) LIKE '%' || LOWER(json_each.value) || '%'
+            )
+          ;
+        END;
+      `);
+      
+      // Re-create FTS5 sync triggers
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS transactions_fts_insert AFTER INSERT ON transactions BEGIN
+          INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
+          VALUES (NEW.id, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
+        END;
+      `);
+      
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS transactions_fts_update AFTER UPDATE ON transactions BEGIN
+          INSERT INTO transactions_fts(transactions_fts, rowid, name, memo, vendor, merchant_name)
+          VALUES ('delete', OLD.id, OLD.name, OLD.memo, OLD.vendor, OLD.merchant_name);
+          INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
+          VALUES (NEW.id, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
+        END;
+      `);
+      
+      bulkModeActive = false;
+    } catch (_error) {
+      // Ignore errors if triggers/tables don't exist
+      bulkModeActive = false;
+    }
+  };
+
+  /**
+   * Rebuild FTS5 index after bulk operations.
+   * This should be called after exitBulkMode() if FTS triggers were disabled.
+   */
+  const rebuildFtsIndex = () => {
+    try {
+      // Rebuild transactions FTS index
+      db.exec('DELETE FROM transactions_fts');
+      db.exec(`
+        INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
+        SELECT id, name, memo, vendor, merchant_name FROM transactions
+      `);
+    } catch (_error) {
+      // Ignore if FTS table doesn't exist
+    }
+  };
+
+  /**
+   * Rebuild pairing exclusions after bulk operations.
+   * This should be called after exitBulkMode() to ensure all exclusions are populated.
+   */
+  const rebuildPairingExclusions = () => {
+    try {
+      db.exec(`
+        INSERT OR IGNORE INTO transaction_pairing_exclusions (
+          transaction_identifier,
+          transaction_vendor,
+          pairing_id,
+          created_at,
+          updated_at
+        )
+        SELECT
+          t.identifier,
+          t.vendor,
+          ap.id,
+          datetime('now'),
+          datetime('now')
+        FROM transactions t
+        JOIN account_pairings ap
+          ON t.vendor = ap.bank_vendor
+          AND ap.is_active = 1
+          AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
+          AND ap.match_patterns IS NOT NULL
+        WHERE EXISTS (
+          SELECT 1
+          FROM json_each(COALESCE(ap.match_patterns, '[]'))
+          WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM transaction_pairing_exclusions tpe
+          WHERE tpe.transaction_identifier = t.identifier
+            AND tpe.transaction_vendor = t.vendor
+            AND tpe.pairing_id = ap.id
+        );
+      `);
+    } catch (_error) {
+      // Ignore if tables don't exist
+    }
+  };
+
+  /**
+   * Check if bulk mode is currently active
+   */
+  const isBulkModeActive = () => bulkModeActive;
+
   return {
     query,
     connect,
     close: () => db.close(),
     _db: db,
+    // Bulk mode functions for optimized insert operations
+    enterBulkMode,
+    exitBulkMode,
+    rebuildFtsIndex,
+    rebuildPairingExclusions,
+    isBulkModeActive,
   };
 }
 
