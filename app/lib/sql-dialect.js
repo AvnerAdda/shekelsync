@@ -82,6 +82,61 @@ const dialect = {
   excludePikadon(tableAlias = 't') {
     return `(${tableAlias}.is_pikadon_related IS NULL OR ${tableAlias}.is_pikadon_related = 0)`;
   },
+
+  /**
+   * Full-text search using FTS5 for transactions.
+   * Falls back to LIKE for PostgreSQL or when FTS5 is not available.
+   * @param {string} tableAlias - The alias for the transactions table (e.g., 't')
+   * @param {string} placeholder - The placeholder for the search term (e.g., '$1')
+   * @param {string[]} columns - Optional array of columns to search (default: all text columns)
+   * @returns {string} SQL condition for full-text search
+   */
+  ftsSearch(tableAlias, placeholder, columns = ['name', 'memo', 'vendor', 'merchant_name']) {
+    if (!useSqlite) {
+      // PostgreSQL fallback: use ILIKE on each column
+      const conditions = columns.map(
+        (col) => `${tableAlias}.${col} ILIKE '%' || ${placeholder} || '%'`
+      );
+      return `(${conditions.join(' OR ')})`;
+    }
+    // SQLite FTS5: use MATCH with transactions_fts virtual table
+    // The query must be transformed to FTS5 syntax (escape special chars, add *)
+    return `${tableAlias}.rowid IN (
+      SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${placeholder}
+    )`;
+  },
+
+  /**
+   * Check if a transaction name matches a pattern (for categorization rules).
+   * Uses FTS5 when available on SQLite, falls back to LIKE otherwise.
+   * @param {string} nameColumn - The column containing the transaction name
+   * @param {string} patternColumn - The column containing the pattern to match
+   * @returns {string} SQL condition for pattern matching
+   */
+  patternMatch(nameColumn, patternColumn) {
+    // For pattern matching, we need to use LIKE because patterns are substrings
+    // FTS5 is better for word-based search, LIKE is better for substring matching
+    return `LOWER(${nameColumn}) LIKE '%' || LOWER(${patternColumn}) || '%'`;
+  },
+
+  /**
+   * Transform a search query for FTS5 usage.
+   * Escapes special characters and adds prefix matching.
+   * @param {string} query - The raw search query
+   * @returns {string} FTS5-compatible search query
+   */
+  prepareFtsQuery(query) {
+    if (!query || typeof query !== 'string') return '';
+    // Escape FTS5 special characters: " * ( ) -
+    let escaped = query.trim();
+    // Remove special FTS5 operators for safety
+    escaped = escaped.replace(/["\*\(\)\-\+\:]/g, ' ');
+    // Split into words and add prefix matching
+    const words = escaped.split(/\s+/).filter((w) => w.length > 0);
+    if (words.length === 0) return '';
+    // Use prefix matching for partial word matches
+    return words.map((w) => `"${w}"*`).join(' ');
+  },
 };
 
 module.exports = { dialect, useSqlite };

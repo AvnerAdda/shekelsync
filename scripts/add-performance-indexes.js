@@ -102,6 +102,26 @@ if (createIndexIfNotExists('idx_transactions_type',
   'CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(transaction_type)'
 )) createdCount++;
 
+// Transactions - vendor + date + category composite (common filter combination for analytics)
+if (createIndexIfNotExists('idx_transactions_vendor_date_category',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_date_category ON transactions(vendor, date DESC, category_definition_id)'
+)) createdCount++;
+
+// Transactions - status + date + vendor composite (filtering pending/completed)
+if (createIndexIfNotExists('idx_transactions_status_date_vendor',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_status_date_vendor ON transactions(status, date DESC, vendor)'
+)) createdCount++;
+
+// Transactions - partial index for active/completed transactions only (most common queries)
+if (createIndexIfNotExists('idx_transactions_active_date',
+  `CREATE INDEX IF NOT EXISTS idx_transactions_active_date ON transactions(date DESC) WHERE status = 'completed'`
+)) createdCount++;
+
+// Transactions - category type + date composite (expense/income filtering)
+if (createIndexIfNotExists('idx_transactions_cattype_date',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_cattype_date ON transactions(category_type, date DESC)'
+)) createdCount++;
+
 console.log('\n🏦 Accounts table indexes:');
 
 // Accounts - institution lookups
@@ -146,6 +166,16 @@ if (createIndexIfNotExists('idx_holdings_date',
 // Investment holdings - composite for portfolio timeline
 if (createIndexIfNotExists('idx_holdings_account_date',
   'CREATE INDEX IF NOT EXISTS idx_holdings_account_date ON investment_holdings(account_id, as_of_date DESC)'
+)) createdCount++;
+
+// Investment holdings - account + date + type composite (portfolio queries with type filter)
+if (createIndexIfNotExists('idx_holdings_account_date_type',
+  'CREATE INDEX IF NOT EXISTS idx_holdings_account_date_type ON investment_holdings(account_id, as_of_date DESC, holding_type)'
+)) createdCount++;
+
+// Investment holdings - partial index for active holdings
+if (createIndexIfNotExists('idx_holdings_active_account_date',
+  `CREATE INDEX IF NOT EXISTS idx_holdings_active_account_date ON investment_holdings(account_id, as_of_date DESC) WHERE status = 'active'`
 )) createdCount++;
 
 console.log('\n🏷️  Category definitions indexes:');
