@@ -464,10 +464,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
               {/* ShekelSync */}
             </Typography>
           )}
-          <Tooltip title={open ? '' : t('tooltips.expandSidebar')} placement="right">
+          <Tooltip title={open ? t('tooltips.collapseSidebar', 'Collapse sidebar') : t('tooltips.expandSidebar')} placement="right">
             <IconButton
               onClick={handleDrawerToggle}
               size="small"
+              aria-label={open ? t('tooltips.collapseSidebar', 'Collapse sidebar') : t('tooltips.expandSidebar', 'Expand sidebar')}
+              aria-expanded={open}
               sx={{
                 color: theme.palette.text.secondary,
                 transition: 'all 0.2s',
@@ -581,6 +583,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     startIcon={<AddIcon />}
                     onClick={() => setAccountsModalOpen(true)}
                     fullWidth
+                    aria-label={t('actions.addAccount')}
                     sx={{
                       borderRadius: 3,
                       py: 1,
@@ -610,6 +613,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     startIcon={<CategoryIcon />}
                     onClick={() => setCategoryModalOpen(true)}
                     fullWidth
+                    aria-label={uncategorizedCount > 0 
+                      ? `${t('actions.categories')} (${uncategorizedCount} ${t('uncategorized', 'uncategorized')})` 
+                      : t('actions.categories')
+                    }
                     sx={{
                       borderRadius: 3,
                       py: 1,
@@ -660,6 +667,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                 <Divider sx={{ borderColor: alpha(theme.palette.divider, 0.1) }} />
 
                 <Box
+                  role="button"
+                  tabIndex={0}
+                  aria-label={isBulkSyncing 
+                    ? t('sync.syncing', 'Syncing...') 
+                    : t('sync.clickToSync', 'Click to sync accounts')
+                  }
                   sx={{
                     display: 'flex',
                     alignItems: 'center',
@@ -670,8 +683,19 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                         backgroundColor: alpha(theme.palette.primary.main, 0.1),
                       }
                     },
+                    '&:focus-visible': {
+                      outline: `2px solid ${theme.palette.primary.main}`,
+                      outlineOffset: 2,
+                      borderRadius: 1,
+                    },
                   }}
                   onClick={handleSyncIconClick}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSyncIconClick();
+                    }
+                  }}
                   onMouseEnter={handleSyncPopoverOpen}
                   onMouseLeave={handleSyncPopoverClose}
                 >
