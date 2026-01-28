@@ -570,7 +570,15 @@
       "worstCase": "מקרה גרוע ביותר"
     },
     "avgLabel": "ממוצע: {{amount}}",
-    "legend": { "income": "הכנסות", "expenses": "הוצאות" },
+    "legend": {
+      "income": "הכנסות",
+      "expenses": "הוצאות",
+      "projectedIncome": "הכנסות (אין נתונים)",
+      "projectedExpenses": "הוצאות (אין נתונים)",
+      "projectedNet": "מצב נטו (אין נתונים)",
+      "projected": "חזוי",
+      "noData": "אין נתונים"
+    },
     "patterns": {
       "title": "תבניות שזוהו",
       "avgByPeriod": "ממוצע {{period}}",

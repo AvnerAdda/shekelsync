@@ -557,7 +557,15 @@
       "worstCase": "Pire scénario"
     },
     "avgLabel": "Moy.: {{amount}}",
-    "legend": { "income": "Revenus", "expenses": "Dépenses" },
+    "legend": {
+      "income": "Revenus",
+      "expenses": "Dépenses",
+      "projectedIncome": "Revenus (Pas de données)",
+      "projectedExpenses": "Dépenses (Pas de données)",
+      "projectedNet": "Position nette (Pas de données)",
+      "projected": "projeté",
+      "noData": "Pas de données"
+    },
     "patterns": {
       "title": "Schémas détectés",
       "avgByPeriod": "Moyenne {{period}}",
