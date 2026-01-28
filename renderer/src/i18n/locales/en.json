@@ -17,25 +17,6 @@
     "startTyping": "Start typing to search transactions",
     "shortcut": "Cmd+K"
   },
-  "savingsGoals": {
-    "title": "Savings Goals",
-    "newGoal": "New Goal",
-    "createGoal": "Create Goal",
-    "noGoals": "No savings goals yet",
-    "createFirst": "Create your first goal to start tracking your savings",
-    "goalName": "Goal Name",
-    "goalNamePlaceholder": "e.g., Emergency Fund",
-    "targetAmount": "Target Amount",
-    "description": "Description",
-    "addContribution": "Add Contribution",
-    "amount": "Amount",
-    "note": "Note",
-    "saved": "saved",
-    "complete": "complete",
-    "completed": "Completed",
-    "daysLeft": "days left",
-    "progress": "Progress"
-  },
   "registration": {
     "title": "Welcome to ShekelSync",
     "description": "Enter your Teudat Zehut (Israeli ID) to start your free 30-day trial. One device per ID.",

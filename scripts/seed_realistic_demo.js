@@ -2,7 +2,7 @@
 /**
  * Seed realistic demo data matching real DB structure
  * This script creates a complete demo database with:
- * - All missing tables (chat, subscriptions, savings_goals, license, etc.)
+ * - All missing tables (chat, subscriptions, license, etc.)
  * - FTS5 full-text search tables and triggers
  * - Performance indexes
  * - Realistic transactions, scrape events, account pairings
@@ -27,8 +27,6 @@ db.exec("DELETE FROM transactions WHERE identifier LIKE 'demo-%' OR identifier L
 
 // Clear tables that we fully control (will be recreated)
 const TABLES_TO_CLEAR = [
-  'savings_goal_contributions',
-  'savings_goals',
   'subscription_alerts',
   'subscription_history',
   'subscriptions',
@@ -164,43 +162,6 @@ const MISSING_TABLES = [
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     expires_at TEXT,
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
-  )`,
-
-  // Savings goals table
-  `CREATE TABLE IF NOT EXISTS savings_goals (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    description TEXT,
-    target_amount REAL NOT NULL CHECK (target_amount > 0),
-    current_amount REAL NOT NULL DEFAULT 0,
-    currency TEXT NOT NULL DEFAULT 'ILS',
-    target_date TEXT,
-    start_date TEXT NOT NULL DEFAULT (date('now')),
-    category_definition_id INTEGER,
-    icon TEXT DEFAULT 'savings',
-    color TEXT DEFAULT '#4CAF50',
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'paused', 'cancelled')),
-    priority INTEGER NOT NULL DEFAULT 0,
-    is_recurring INTEGER NOT NULL DEFAULT 0 CHECK (is_recurring IN (0, 1)),
-    recurring_amount REAL,
-    completed_at TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE SET NULL
-  )`,
-
-  // Savings goal contributions table
-  `CREATE TABLE IF NOT EXISTS savings_goal_contributions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    goal_id INTEGER NOT NULL,
-    amount REAL NOT NULL,
-    contribution_type TEXT NOT NULL DEFAULT 'manual' CHECK (contribution_type IN ('manual', 'auto', 'interest', 'adjustment')),
-    transaction_identifier TEXT,
-    transaction_vendor TEXT,
-    note TEXT,
-    date TEXT NOT NULL DEFAULT (date('now')),
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (goal_id) REFERENCES savings_goals(id) ON DELETE CASCADE
   )`,
 
   // Transaction pairing exclusions table
@@ -351,13 +312,6 @@ const INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_subscription_history_subscription_id ON subscription_history(subscription_id)',
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_subscription_id ON subscription_alerts(subscription_id)',
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_dismissed ON subscription_alerts(is_dismissed)',
-
-  // Savings goals indexes
-  'CREATE INDEX IF NOT EXISTS idx_savings_goals_status ON savings_goals(status)',
-  'CREATE INDEX IF NOT EXISTS idx_savings_goals_target_date ON savings_goals(target_date)',
-  'CREATE INDEX IF NOT EXISTS idx_savings_goals_priority ON savings_goals(priority DESC)',
-  'CREATE INDEX IF NOT EXISTS idx_goal_contributions_goal_id ON savings_goal_contributions(goal_id)',
-  'CREATE INDEX IF NOT EXISTS idx_goal_contributions_date ON savings_goal_contributions(date DESC)',
 
   // Chat indexes
   'CREATE INDEX IF NOT EXISTS idx_chat_conversations_external_id ON chat_conversations(external_id)',
@@ -740,72 +694,7 @@ SUB_ALERTS.forEach((a) => {
 console.log(`  Inserted ${SUBSCRIPTIONS.length} subscriptions with history and alerts`);
 
 // ============================================
-// STEP 11: SEED SAVINGS GOALS
-// ============================================
-console.log('📋 Seeding savings goals...');
-
-const insertGoal = db.prepare(`
-  INSERT OR IGNORE INTO savings_goals (name, description, target_amount, current_amount, currency, target_date, start_date, icon, color, status, priority, is_recurring, recurring_amount)
-  VALUES (@name, @description, @targetAmount, @currentAmount, @currency, @targetDate, @startDate, @icon, @color, @status, @priority, @isRecurring, @recurringAmount)
-`);
-
-const SAVINGS_GOALS = [
-  { name: 'Emergency Fund', description: 'Build 6 months of expenses as safety net', targetAmount: 50000.00, currentAmount: 23500.00, currency: 'ILS', targetDate: '2026-06-01', startDate: '2025-09-01', icon: 'savings', color: '#4CAF50', status: 'active', priority: 1, isRecurring: 1, recurringAmount: 2500.00 },
-  { name: 'Summer Vacation', description: 'Trip to Europe with family', targetAmount: 15000.00, currentAmount: 8750.00, currency: 'ILS', targetDate: '2026-07-15', startDate: '2025-10-01', icon: 'flight', color: '#2196F3', status: 'active', priority: 2, isRecurring: 1, recurringAmount: 1250.00 },
-  { name: 'New Laptop', description: 'MacBook Pro for work', targetAmount: 8000.00, currentAmount: 8000.00, currency: 'ILS', targetDate: '2025-12-31', startDate: '2025-09-15', icon: 'laptop', color: '#9C27B0', status: 'completed', priority: 3, isRecurring: 0, recurringAmount: null },
-  { name: 'Home Renovation', description: 'Kitchen upgrade project', targetAmount: 35000.00, currentAmount: 5000.00, currency: 'ILS', targetDate: '2026-12-01', startDate: '2025-11-01', icon: 'home', color: '#FF9800', status: 'paused', priority: 4, isRecurring: 0, recurringAmount: null },
-];
-
-SAVINGS_GOALS.forEach((g) => {
-  insertGoal.run(g);
-});
-
-// Get actual goal IDs by name
-const getGoalId = db.prepare('SELECT id FROM savings_goals WHERE name = ?');
-const goalIds = {
-  emergency: getGoalId.get('Emergency Fund')?.id,
-  vacation: getGoalId.get('Summer Vacation')?.id,
-  laptop: getGoalId.get('New Laptop')?.id,
-  renovation: getGoalId.get('Home Renovation')?.id,
-};
-
-const insertContribution = db.prepare(`
-  INSERT INTO savings_goal_contributions (goal_id, amount, contribution_type, note, date)
-  VALUES (@goalId, @amount, @type, @note, @date)
-`);
-
-// Contributions that sum to match current_amount for each goal:
-// Emergency Fund: 5000 + 2500 + 2500 + 3000 + 2500 + 8000 = 23,500
-// Summer Vacation: 2500 + 1250 + 1250 + 3750 = 8,750
-// New Laptop: 3000 + 2500 + 2500 = 8,000
-// Home Renovation: 5000 = 5,000
-const CONTRIBUTIONS = [
-  { goalId: goalIds.emergency, amount: 5000.00, type: 'manual', note: 'Initial deposit', date: '2025-09-01' },
-  { goalId: goalIds.emergency, amount: 2500.00, type: 'auto', note: 'Monthly transfer', date: '2025-10-01' },
-  { goalId: goalIds.emergency, amount: 2500.00, type: 'auto', note: 'Monthly transfer', date: '2025-11-01' },
-  { goalId: goalIds.emergency, amount: 3000.00, type: 'manual', note: 'Bonus allocation', date: '2025-11-15' },
-  { goalId: goalIds.emergency, amount: 2500.00, type: 'auto', note: 'Monthly transfer', date: '2025-12-01' },
-  { goalId: goalIds.emergency, amount: 8000.00, type: 'manual', note: 'Year-end bonus', date: '2025-12-31' },
-  { goalId: goalIds.vacation, amount: 2500.00, type: 'manual', note: 'Initial deposit', date: '2025-10-01' },
-  { goalId: goalIds.vacation, amount: 1250.00, type: 'auto', note: 'Monthly transfer', date: '2025-11-01' },
-  { goalId: goalIds.vacation, amount: 1250.00, type: 'auto', note: 'Monthly transfer', date: '2025-12-01' },
-  { goalId: goalIds.vacation, amount: 3750.00, type: 'manual', note: 'Holiday gift money', date: '2025-12-25' },
-  { goalId: goalIds.laptop, amount: 3000.00, type: 'manual', note: 'Initial savings', date: '2025-09-15' },
-  { goalId: goalIds.laptop, amount: 2500.00, type: 'manual', note: 'From salary', date: '2025-10-15' },
-  { goalId: goalIds.laptop, amount: 2500.00, type: 'manual', note: 'Completed!', date: '2025-11-15' },
-  { goalId: goalIds.renovation, amount: 5000.00, type: 'manual', note: 'Started saving', date: '2025-11-01' },
-];
-
-CONTRIBUTIONS.forEach((c) => {
-  if (c.goalId) {
-    insertContribution.run(c);
-  }
-});
-
-console.log(`  Inserted ${SAVINGS_GOALS.length} savings goals with ${CONTRIBUTIONS.length} contributions`);
-
-// ============================================
-// STEP 12: SEED TRANSACTIONS (original logic)
+// STEP 11: SEED TRANSACTIONS (original logic)
 // ============================================
 console.log('📋 Seeding transactions...');
 
@@ -1129,7 +1018,6 @@ const summary = {
   scrape_events: db.prepare('SELECT COUNT(*) as cnt FROM scrape_events').get().cnt,
   account_pairings: db.prepare('SELECT COUNT(*) as cnt FROM account_pairings').get().cnt,
   subscriptions: db.prepare('SELECT COUNT(*) as cnt FROM subscriptions').get().cnt,
-  savings_goals: db.prepare('SELECT COUNT(*) as cnt FROM savings_goals').get().cnt,
   chat_conversations: db.prepare('SELECT COUNT(*) as cnt FROM chat_conversations').get().cnt,
 };
 

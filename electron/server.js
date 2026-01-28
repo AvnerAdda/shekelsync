@@ -219,25 +219,6 @@ async function setupAPIServer(mainWindow, options = {}) {
     lazyRouter(() => require(resolveAppPath('server', 'routes', 'data-export.js')).createDataExportRouter()),
   );
 
-  // Savings goals routes – lazy load
-  app.use(
-    '/api/savings-goals',
-    lazyRouter(() => {
-      const savingsGoalsHandlers = require(resolveAppPath('server', 'routes', 'savings-goals.js'));
-      const router = express.Router();
-      
-      router.get('/', savingsGoalsHandlers.getSavingsGoals);
-      router.get('/:id', savingsGoalsHandlers.getSavingsGoalById);
-      router.post('/', licenseGuardMiddleware, savingsGoalsHandlers.createSavingsGoal);
-      router.patch('/:id', licenseGuardMiddleware, savingsGoalsHandlers.updateSavingsGoal);
-      router.delete('/:id', licenseGuardMiddleware, savingsGoalsHandlers.deleteSavingsGoal);
-      router.post('/:id/contributions', licenseGuardMiddleware, savingsGoalsHandlers.addContribution);
-      router.delete('/contributions/:id', licenseGuardMiddleware, savingsGoalsHandlers.deleteContribution);
-      
-      return router;
-    }),
-  );
-
   // Budget alerts routes – lazy load
   app.use(
     '/api/budget-alerts',
