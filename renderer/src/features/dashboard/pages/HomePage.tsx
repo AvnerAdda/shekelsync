@@ -168,8 +168,18 @@ const DashboardHomeContent: React.FC = () => {
   const CustomDot = (props: any) => {
     const { cx, cy, payload, value } = props;
 
-    // Don't render dot if value is null (future dates with no data)
-    if (value === null || value === undefined) {
+    // Don't render dot if:
+    // - value is null/undefined
+    // - coordinates are invalid (NaN or not finite)
+    // - date is in gap period or forecast period (no actual data)
+    if (
+      value === null || 
+      value === undefined || 
+      !Number.isFinite(cx) || 
+      !Number.isFinite(cy) ||
+      payload?.isForecast ||
+      payload?.isInGap
+    ) {
       return null;
     }
 
