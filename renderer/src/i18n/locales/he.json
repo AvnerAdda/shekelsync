@@ -6,6 +6,32 @@
     "or": "או",
     "close": "סגור"
   },
+  "globalSearch": {
+    "placeholder": "חיפוש עסקאות...",
+    "hint": "Enter לבחירה, Escape לסגירה",
+    "noResults": "לא נמצאו עסקאות",
+    "startTyping": "התחילו להקליד לחיפוש עסקאות",
+    "shortcut": "Cmd+K"
+  },
+  "savingsGoals": {
+    "title": "יעדי חיסכון",
+    "newGoal": "יעד חדש",
+    "createGoal": "צור יעד",
+    "noGoals": "אין יעדי חיסכון עדיין",
+    "createFirst": "צור את היעד הראשון שלך כדי להתחיל לעקוב אחרי החיסכון",
+    "goalName": "שם היעד",
+    "goalNamePlaceholder": "לדוגמה: קרן חירום",
+    "targetAmount": "סכום יעד",
+    "description": "תיאור",
+    "addContribution": "הוסף הפקדה",
+    "amount": "סכום",
+    "note": "הערה",
+    "saved": "נחסכו",
+    "complete": "הושלמו",
+    "completed": "הושלם",
+    "daysLeft": "ימים נותרו",
+    "progress": "התקדמות"
+  },
   "registration": {
     "title": "ברוכים הבאים ל-ShekelSync",
     "description": "הזינו את מספר תעודת הזהות שלכם כדי להתחיל תקופת ניסיון חינם של 30 יום. מכשיר אחד לכל ת.ז.",
