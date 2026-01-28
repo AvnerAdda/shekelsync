@@ -6,6 +6,13 @@
     "or": "ou",
     "close": "Fermer"
   },
+  "globalSearch": {
+    "placeholder": "Rechercher des transactions...",
+    "hint": "Appuyez sur Entrée pour sélectionner, Échap pour fermer",
+    "noResults": "Aucune transaction trouvée",
+    "startTyping": "Commencez à taper pour rechercher des transactions",
+    "shortcut": "Cmd+K"
+  },
   "license": {
     "trialActive": "Essai gratuit actif",
     "trialExpiring": "Fin d'essai proche",
