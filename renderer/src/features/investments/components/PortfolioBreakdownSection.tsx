@@ -110,6 +110,8 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                     )}
                   </Box>
                 }
+                primaryTypographyProps={{ component: 'div' }}
+                secondaryTypographyProps={{ component: 'div' }}
               />
             </ListItem>
           );

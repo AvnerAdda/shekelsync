@@ -1,5 +1,5 @@
 const actualDatabase = require('../database.js');
-const { dialect } = require('../../../lib/sql-dialect.js');
+const { dialect, useSqlite } = require('../../../lib/sql-dialect.js');
 
 let database = actualDatabase;
 function __setDatabase(mock) {
@@ -7,6 +7,46 @@ function __setDatabase(mock) {
 }
 function __resetDatabase() {
   database = actualDatabase;
+}
+
+/**
+ * Build search condition using FTS5 when available, fallback to LIKE for PostgreSQL
+ * @param {string} searchTerm - The search term
+ * @param {number} paramIndex - The parameter index for placeholder
+ * @returns {{ condition: string, value: string }} The SQL condition and value
+ */
+function buildSearchCondition(searchTerm, paramIndex) {
+  const placeholder = `$${paramIndex}`;
+  
+  if (useSqlite) {
+    // Use FTS5 for SQLite - search transactions_fts virtual table
+    // Also search category names using regular LIKE as they're from joined tables
+    const ftsQuery = dialect.prepareFtsQuery(searchTerm);
+    return {
+      condition: `(
+        t.id IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${placeholder})
+        OR ${dialect.likeInsensitive('cd.name', placeholder)}
+        OR ${dialect.likeInsensitive('parent.name', placeholder)}
+      )`,
+      value: ftsQuery || `%${searchTerm}%`,
+      // For the LIKE fallback on category names, we need the original search term
+      useFts: Boolean(ftsQuery),
+    };
+  }
+  
+  // PostgreSQL fallback: use ILIKE
+  return {
+    condition: `(
+      t.memo ILIKE '%' || ${placeholder} || '%'
+      OR t.name ILIKE '%' || ${placeholder} || '%'
+      OR t.vendor ILIKE '%' || ${placeholder} || '%'
+      OR t.merchant_name ILIKE '%' || ${placeholder} || '%'
+      OR cd.name ILIKE '%' || ${placeholder} || '%'
+      OR parent.name ILIKE '%' || ${placeholder} || '%'
+    )`,
+    value: searchTerm,
+    useFts: false,
+  };
 }
 
 function toInteger(value, fallback, fieldName) {
@@ -76,14 +116,30 @@ async function searchTransactions(params = {}) {
   const values = [];
 
   if (searchQuery) {
-    values.push(`%${searchQuery}%`);
-    const queryParam = `$${values.length}`;
-    conditions.push(`(${dialect.likeInsensitive('t.memo', queryParam)}
-      OR ${dialect.likeInsensitive('t.name', queryParam)}
-      OR ${dialect.likeInsensitive('t.vendor', queryParam)}
-      OR ${dialect.likeInsensitive('t.merchant_name', queryParam)}
-      OR ${dialect.likeInsensitive('cd.name', queryParam)}
-      OR ${dialect.likeInsensitive('parent.name', queryParam)})`);
+    const searchResult = buildSearchCondition(searchQuery, values.length + 1);
+    
+    if (useSqlite && searchResult.useFts) {
+      // For FTS5, we need the prepared FTS query for MATCH and original term for LIKE
+      values.push(searchResult.value); // FTS query
+      values.push(`%${searchQuery}%`); // Original for category LIKE fallback
+      const ftsParam = `$${values.length - 1}`;
+      const likeParam = `$${values.length}`;
+      conditions.push(`(
+        t.id IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${ftsParam})
+        OR ${dialect.likeInsensitive('cd.name', likeParam)}
+        OR ${dialect.likeInsensitive('parent.name', likeParam)}
+      )`);
+    } else {
+      // Fallback to LIKE for PostgreSQL or when FTS query is empty
+      values.push(`%${searchQuery}%`);
+      const queryParam = `$${values.length}`;
+      conditions.push(`(${dialect.likeInsensitive('t.memo', queryParam)}
+        OR ${dialect.likeInsensitive('t.name', queryParam)}
+        OR ${dialect.likeInsensitive('t.vendor', queryParam)}
+        OR ${dialect.likeInsensitive('t.merchant_name', queryParam)}
+        OR ${dialect.likeInsensitive('cd.name', queryParam)}
+        OR ${dialect.likeInsensitive('parent.name', queryParam)})`);
+    }
   }
 
   if (category) {

@@ -6,6 +6,13 @@
     "or": "או",
     "close": "סגור"
   },
+  "globalSearch": {
+    "placeholder": "חיפוש עסקאות...",
+    "hint": "Enter לבחירה, Escape לסגירה",
+    "noResults": "לא נמצאו עסקאות",
+    "startTyping": "התחילו להקליד לחיפוש עסקאות",
+    "shortcut": "Cmd+K"
+  },
   "registration": {
     "title": "ברוכים הבאים ל-ShekelSync",
     "description": "הזינו את מספר תעודת הזהות שלכם כדי להתחיל תקופת ניסיון חינם של 30 יום. מכשיר אחד לכל ת.ז.",
@@ -563,7 +570,15 @@
       "worstCase": "מקרה גרוע ביותר"
     },
     "avgLabel": "ממוצע: {{amount}}",
-    "legend": { "income": "הכנסות", "expenses": "הוצאות" },
+    "legend": {
+      "income": "הכנסות",
+      "expenses": "הוצאות",
+      "projectedIncome": "הכנסות (אין נתונים)",
+      "projectedExpenses": "הוצאות (אין נתונים)",
+      "projectedNet": "מצב נטו (אין נתונים)",
+      "projected": "חזוי",
+      "noData": "אין נתונים"
+    },
     "patterns": {
       "title": "תבניות שזוהו",
       "avgByPeriod": "ממוצע {{period}}",

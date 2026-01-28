@@ -76,5 +76,8 @@ website/
 
 app/scripts/
 
+# Scripts - ignore demo/dev-only files, keep essential ones
+scripts/secrets-map.json
+
 linux-gpg.key
 app/shekelsync.pfx
