@@ -793,6 +793,9 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_investment_holdings_maturity ON investment_holdings (maturity_date);',
   'CREATE INDEX IF NOT EXISTS idx_investment_holdings_deposit_txn ON investment_holdings (deposit_transaction_id, deposit_transaction_vendor);',
   'CREATE INDEX IF NOT EXISTS idx_investment_holdings_parent_pikadon ON investment_holdings (parent_pikadon_id);',
+  // Investment holdings composite indexes for common query patterns
+  'CREATE INDEX IF NOT EXISTS idx_holdings_account_date_type ON investment_holdings (account_id, as_of_date DESC, holding_type);',
+  `CREATE INDEX IF NOT EXISTS idx_holdings_active_account_date ON investment_holdings (account_id, as_of_date DESC) WHERE status = 'active';`,
   'CREATE INDEX IF NOT EXISTS idx_patterns_account ON account_transaction_patterns (account_id);',
   'CREATE INDEX IF NOT EXISTS idx_pending_created ON pending_transaction_suggestions (created_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_transaction_suggestions (status);',
@@ -818,6 +821,12 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_date ON transactions (vendor, date);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_datetime ON transactions (vendor, transaction_datetime DESC);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_nickname ON transactions (vendor, vendor_nickname);',
+  // Composite indexes for common query patterns
+  'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_date_category ON transactions (vendor, date DESC, category_definition_id);',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_status_date_vendor ON transactions (status, date DESC, vendor);',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_cattype_date ON transactions (category_type, date DESC);',
+  // Partial index for completed transactions (most common queries)
+  `CREATE INDEX IF NOT EXISTS idx_transactions_active_date ON transactions (date DESC) WHERE status = 'completed';`,
   'CREATE INDEX IF NOT EXISTS idx_txn_links_account ON transaction_account_links (account_id);',
   'CREATE INDEX IF NOT EXISTS idx_txn_links_identifier ON transaction_account_links (transaction_identifier);',
   'CREATE INDEX IF NOT EXISTS idx_vendor_credentials_last_scrape ON vendor_credentials (vendor, last_scrape_success DESC);',
@@ -872,6 +881,93 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_dismissed ON subscription_alerts(is_dismissed);',
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_severity ON subscription_alerts(severity);',
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_created ON subscription_alerts(created_at DESC);'
+];
+
+// FTS5 Full-Text Search Setup for SQLite
+// These virtual tables enable fast text search without LIKE '%pattern%' scans
+const FTS5_STATEMENTS = [
+  // Main transactions FTS5 table for search functionality
+  `CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts USING fts5(
+    name,
+    memo,
+    vendor,
+    merchant_name,
+    content='transactions',
+    content_rowid='id',
+    tokenize='unicode61 remove_diacritics 2'
+  );`,
+
+  // Categorization rules FTS5 table for pattern matching
+  `CREATE VIRTUAL TABLE IF NOT EXISTS categorization_rules_fts USING fts5(
+    name_pattern,
+    content='categorization_rules',
+    content_rowid='id',
+    tokenize='unicode61 remove_diacritics 2'
+  );`,
+
+  // Category definitions FTS5 for category name search
+  `CREATE VIRTUAL TABLE IF NOT EXISTS category_definitions_fts USING fts5(
+    name,
+    name_en,
+    name_fr,
+    content='category_definitions',
+    content_rowid='id',
+    tokenize='unicode61 remove_diacritics 2'
+  );`,
+
+  // Triggers to keep transactions_fts in sync with transactions table
+  `CREATE TRIGGER IF NOT EXISTS transactions_fts_insert AFTER INSERT ON transactions BEGIN
+    INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
+    VALUES (NEW.id, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
+  END;`,
+
+  `CREATE TRIGGER IF NOT EXISTS transactions_fts_delete AFTER DELETE ON transactions BEGIN
+    INSERT INTO transactions_fts(transactions_fts, rowid, name, memo, vendor, merchant_name)
+    VALUES ('delete', OLD.id, OLD.name, OLD.memo, OLD.vendor, OLD.merchant_name);
+  END;`,
+
+  `CREATE TRIGGER IF NOT EXISTS transactions_fts_update AFTER UPDATE ON transactions BEGIN
+    INSERT INTO transactions_fts(transactions_fts, rowid, name, memo, vendor, merchant_name)
+    VALUES ('delete', OLD.id, OLD.name, OLD.memo, OLD.vendor, OLD.merchant_name);
+    INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
+    VALUES (NEW.id, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
+  END;`,
+
+  // Triggers to keep categorization_rules_fts in sync
+  `CREATE TRIGGER IF NOT EXISTS categorization_rules_fts_insert AFTER INSERT ON categorization_rules BEGIN
+    INSERT INTO categorization_rules_fts(rowid, name_pattern)
+    VALUES (NEW.id, NEW.name_pattern);
+  END;`,
+
+  `CREATE TRIGGER IF NOT EXISTS categorization_rules_fts_delete AFTER DELETE ON categorization_rules BEGIN
+    INSERT INTO categorization_rules_fts(categorization_rules_fts, rowid, name_pattern)
+    VALUES ('delete', OLD.id, OLD.name_pattern);
+  END;`,
+
+  `CREATE TRIGGER IF NOT EXISTS categorization_rules_fts_update AFTER UPDATE ON categorization_rules BEGIN
+    INSERT INTO categorization_rules_fts(categorization_rules_fts, rowid, name_pattern)
+    VALUES ('delete', OLD.id, OLD.name_pattern);
+    INSERT INTO categorization_rules_fts(rowid, name_pattern)
+    VALUES (NEW.id, NEW.name_pattern);
+  END;`,
+
+  // Triggers to keep category_definitions_fts in sync
+  `CREATE TRIGGER IF NOT EXISTS category_definitions_fts_insert AFTER INSERT ON category_definitions BEGIN
+    INSERT INTO category_definitions_fts(rowid, name, name_en, name_fr)
+    VALUES (NEW.id, NEW.name, NEW.name_en, NEW.name_fr);
+  END;`,
+
+  `CREATE TRIGGER IF NOT EXISTS category_definitions_fts_delete AFTER DELETE ON category_definitions BEGIN
+    INSERT INTO category_definitions_fts(category_definitions_fts, rowid, name, name_en, name_fr)
+    VALUES ('delete', OLD.id, OLD.name, OLD.name_en, OLD.name_fr);
+  END;`,
+
+  `CREATE TRIGGER IF NOT EXISTS category_definitions_fts_update AFTER UPDATE ON category_definitions BEGIN
+    INSERT INTO category_definitions_fts(category_definitions_fts, rowid, name, name_en, name_fr)
+    VALUES ('delete', OLD.id, OLD.name, OLD.name_en, OLD.name_fr);
+    INSERT INTO category_definitions_fts(rowid, name, name_en, name_fr)
+    VALUES (NEW.id, NEW.name, NEW.name_en, NEW.name_fr);
+  END;`
 ];
 
 const INSTITUTION_GROUPS = [
@@ -1711,6 +1807,11 @@ function initializeSqliteDatabase(options = {}) {
     }
     applySchemaUpgrades(db);
     for (const statement of INDEX_STATEMENTS) {
+      db.exec(statement);
+    }
+
+    // Create FTS5 virtual tables and triggers for full-text search
+    for (const statement of FTS5_STATEMENTS) {
       db.exec(statement);
     }
 

@@ -10,6 +10,13 @@
     "or": "or",
     "close": "Close"
   },
+  "globalSearch": {
+    "placeholder": "Search transactions...",
+    "hint": "Press Enter to select, Escape to close",
+    "noResults": "No transactions found",
+    "startTyping": "Start typing to search transactions",
+    "shortcut": "Cmd+K"
+  },
   "registration": {
     "title": "Welcome to ShekelSync",
     "description": "Enter your Teudat Zehut (Israeli ID) to start your free 30-day trial. One device per ID.",
@@ -566,7 +573,12 @@
     "avgLabel": "Avg: {{amount}}",
     "legend": {
       "income": "Income",
-      "expenses": "Expenses"
+      "expenses": "Expenses",
+      "projectedIncome": "Income (No Data)",
+      "projectedExpenses": "Expenses (No Data)",
+      "projectedNet": "Net Position (No Data)",
+      "projected": "projected",
+      "noData": "No Data"
     },
     "patterns": {
       "title": "Detected Patterns",

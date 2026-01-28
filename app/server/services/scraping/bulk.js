@@ -115,6 +115,15 @@ async function bulkScrape(options = {}) {
     // SQLite doesn't support concurrent transactions on the same connection
     const processedResults = [];
 
+    // Enter bulk mode to disable expensive triggers during bulk inserts
+    // This significantly improves performance for large scraping operations
+    const pool = databaseRef._pool || databaseRef;
+    const hasBulkMode = typeof pool.enterBulkMode === 'function';
+    if (hasBulkMode) {
+      log.info?.('[Bulk Scrape] Entering bulk mode - disabling triggers for performance');
+      pool.enterBulkMode();
+    }
+
     for (let index = 0; index < staleAccounts.length; index++) {
       const account = staleAccounts[index];
       onAccountStart?.({ account, index, total: totalAccounts });
@@ -206,6 +215,24 @@ async function bulkScrape(options = {}) {
       0,
     );
 
+    // Exit bulk mode and rebuild indexes/exclusions
+    if (hasBulkMode) {
+      log.info?.('[Bulk Scrape] Exiting bulk mode - rebuilding indexes and exclusions');
+      pool.exitBulkMode();
+      
+      // Rebuild FTS index for any new transactions
+      if (typeof pool.rebuildFtsIndex === 'function') {
+        log.info?.('[Bulk Scrape] Rebuilding FTS search index');
+        pool.rebuildFtsIndex();
+      }
+      
+      // Rebuild pairing exclusions for new transactions
+      if (typeof pool.rebuildPairingExclusions === 'function') {
+        log.info?.('[Bulk Scrape] Rebuilding pairing exclusions');
+        pool.rebuildPairingExclusions();
+      }
+    }
+
     log.info?.(
       `[Bulk Scrape] Completed: ${successCount} successful, ${failureCount} failed, ${totalTransactions} total transactions`,
     );
@@ -220,6 +247,18 @@ async function bulkScrape(options = {}) {
       results: processedResults,
     };
   } finally {
+    // Ensure bulk mode is exited even on error
+    const pool = databaseRef._pool || databaseRef;
+    if (typeof pool.exitBulkMode === 'function' && typeof pool.isBulkModeActive === 'function' && pool.isBulkModeActive()) {
+      pool.exitBulkMode();
+      if (typeof pool.rebuildFtsIndex === 'function') {
+        pool.rebuildFtsIndex();
+      }
+      if (typeof pool.rebuildPairingExclusions === 'function') {
+        pool.rebuildPairingExclusions();
+      }
+    }
+    
     if (client.release) {
       client.release();
     }

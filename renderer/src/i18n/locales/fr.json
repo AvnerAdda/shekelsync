@@ -6,6 +6,13 @@
     "or": "ou",
     "close": "Fermer"
   },
+  "globalSearch": {
+    "placeholder": "Rechercher des transactions...",
+    "hint": "Appuyez sur Entrée pour sélectionner, Échap pour fermer",
+    "noResults": "Aucune transaction trouvée",
+    "startTyping": "Commencez à taper pour rechercher des transactions",
+    "shortcut": "Cmd+K"
+  },
   "license": {
     "trialActive": "Essai gratuit actif",
     "trialExpiring": "Fin d'essai proche",
@@ -550,7 +557,15 @@
       "worstCase": "Pire scénario"
     },
     "avgLabel": "Moy.: {{amount}}",
-    "legend": { "income": "Revenus", "expenses": "Dépenses" },
+    "legend": {
+      "income": "Revenus",
+      "expenses": "Dépenses",
+      "projectedIncome": "Revenus (Pas de données)",
+      "projectedExpenses": "Dépenses (Pas de données)",
+      "projectedNet": "Position nette (Pas de données)",
+      "projected": "projeté",
+      "noData": "Pas de données"
+    },
     "patterns": {
       "title": "Schémas détectés",
       "avgByPeriod": "Moyenne {{period}}",

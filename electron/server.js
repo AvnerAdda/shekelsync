@@ -219,6 +219,20 @@ async function setupAPIServer(mainWindow, options = {}) {
     lazyRouter(() => require(resolveAppPath('server', 'routes', 'data-export.js')).createDataExportRouter()),
   );
 
+  // Budget alerts routes – lazy load
+  app.use(
+    '/api/budget-alerts',
+    lazyRouter(() => {
+      const budgetAlertsHandlers = require(resolveAppPath('server', 'routes', 'budget-alerts.js'));
+      const router = express.Router();
+      
+      router.get('/', budgetAlertsHandlers.getBudgetAlerts);
+      router.post('/check', budgetAlertsHandlers.checkAndStoreAlerts);
+      
+      return router;
+    }),
+  );
+
   // Scraping API routes (shared router)
   app.use('/api', createScrapingRouter({ mainWindow }));
 

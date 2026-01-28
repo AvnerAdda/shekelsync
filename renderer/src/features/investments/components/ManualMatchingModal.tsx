@@ -940,6 +940,7 @@ export default function ManualMatchingModal({
                       ))}
                     </Box>
                   }
+                  primaryTypographyProps={{ component: 'div' }}
                   secondaryTypographyProps={{ component: 'div' }}
                 />
               </ListItem>

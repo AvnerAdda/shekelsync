@@ -12,7 +12,7 @@ import {
   IconButton,
 } from '@mui/material';
 import MuiTooltip from '@mui/material/Tooltip';
-import { ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ComposedChart, Area } from 'recharts';
+import { ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ReferenceArea, ComposedChart, Area } from 'recharts';
 import { useTheme } from '@mui/material/styles';
 import { format, subDays, addDays } from 'date-fns';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
@@ -138,6 +138,36 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     });
   }, [data.history, periodDays]);
 
+  // Detect gap period (no data zone) - from last scraped data to today
+  const gapPeriodInfo = React.useMemo(() => {
+    const today = new Date();
+    const todayStr = format(today, 'yyyy-MM-dd');
+    const periodStartDate = format(subDays(today, periodDays), 'yyyy-MM-dd');
+    
+    const baseHistoricalData = (data.history || []).filter((item: any) => 
+      item.date >= periodStartDate && item.date <= todayStr
+    );
+    
+    // Find the last date with ACTUAL data (income or expenses > 0)
+    let lastRealDataDate: string | null = null;
+    for (let i = baseHistoricalData.length - 1; i >= 0; i--) {
+      const item = baseHistoricalData[i];
+      if (item.income !== null && item.expenses !== null && (item.income > 0 || item.expenses > 0)) {
+        lastRealDataDate = item.date;
+        break;
+      }
+    }
+    
+    // Gap exists if last real data is before today
+    const hasGap = lastRealDataDate && lastRealDataDate < todayStr;
+    
+    return {
+      hasGap,
+      gapStartDate: lastRealDataDate,
+      gapEndDate: todayStr,
+    };
+  }, [data.history, periodDays]);
+
   // Get combined data for Daily Income vs Expenses (historical + forecast)
   // Shows last X days of historical data + 30 days of forecast
   const getDailyIncomeExpenseData = useCallback(() => {
@@ -161,7 +191,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       hasDailyForecasts: !!forecastData?.dailyForecasts,
       forecastLength: forecastData?.dailyForecasts?.length,
       historicalLength: baseHistoricalData.length,
-      yAxisScale
+      yAxisScale,
+      gapPeriodInfo
     });
 
     // Only add forecast data in daily aggregation mode
@@ -173,6 +204,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         income: item.income || 0,
         expenses: item.expenses || 0,
         isForecast: false,
+        isInGap: false,
       }));
     }
     
@@ -185,35 +217,41 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     const actualHistoricalData = baseHistoricalData.filter((item: any) => item.date <= actualEndDate);
     const lastActualItem = actualHistoricalData.length > 0 ? actualHistoricalData[actualHistoricalData.length - 1] : null;
 
-    // Create combined data with both historical and forecast values
-    // Historical entries get their actual values for income/expenses
-    const historicalData = actualHistoricalData.map((item: any) => ({
-      ...item,
-      income: item.income || 0,
-      expenses: item.expenses || 0,
-      forecastIncome: undefined,
-      forecastExpenses: undefined,
-      isForecast: false,
-      // Store original values for log scale
-      originalIncome: item.income || 0,
-      originalExpenses: item.expenses || 0,
-    }));
+    // Create combined data - set income/expenses to undefined for gap period to hide dots
+    const historicalData = actualHistoricalData.map((item: any) => {
+      const isInGapPeriod = gapPeriodInfo.hasGap && gapPeriodInfo.gapStartDate && item.date > gapPeriodInfo.gapStartDate;
+      
+      return {
+        ...item,
+        // Set to undefined for gap period so Area dots don't render
+        income: isInGapPeriod ? undefined : (item.income || 0),
+        expenses: isInGapPeriod ? undefined : (item.expenses || 0),
+        forecastIncome: undefined,
+        forecastExpenses: undefined,
+        isForecast: false,
+        isInGap: isInGapPeriod,
+        // Store original values for log scale and tooltips
+        originalIncome: item.income || 0,
+        originalExpenses: item.expenses || 0,
+      };
+    });
 
-    // Bridge point - last actual date, but with FORECAST values starting
-    // This creates a connection between the solid and dashed lines
+    // Bridge point for forecast - last item starts the forecast line
     const lastIncome = lastActualItem?.income || 0;
     const lastExpenses = lastActualItem?.expenses || 0;
 
     // Update the last historical item to also have forecast values (to start the dashed line)
     if (historicalData.length > 0) {
-      historicalData[historicalData.length - 1] = {
-        ...historicalData[historicalData.length - 1],
+      const lastIdx = historicalData.length - 1;
+      const lastItem = historicalData[lastIdx];
+      historicalData[lastIdx] = {
+        ...lastItem,
         forecastIncome: lastIncome,
         forecastExpenses: lastExpenses,
       };
     }
 
-    // Forecast entries - have BOTH null historical values AND forecast values
+    // Forecast entries - future dates after today
     const forecastEntries = forecastData.dailyForecasts
       .filter((d: any) => d.date > actualEndDate && d.date <= chartEndDate)
       .map((d: any) => ({
@@ -223,6 +261,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         forecastIncome: d.income || 0,
         forecastExpenses: d.expenses || 0,
         isForecast: true,
+        isInGap: false,
         // Store original values for tooltips
         originalForecastIncome: d.income || 0,
         originalForecastExpenses: d.expenses || 0,
@@ -230,6 +269,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
     console.log('[getDailyIncomeExpenseData] Combining data:', {
       actualEndDate,
+      gapPeriodInfo,
       historicalCount: historicalData.length,
       forecastCount: forecastEntries.length,
       totalCount: historicalData.length + forecastEntries.length,
@@ -245,7 +285,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       return combinedData.map(item => {
         // Helper to safely transform to log scale
         // Treat values < 0.01 as zero to avoid floating point precision issues
-        const toLog = (val: number) => (val && val >= 0.01) ? Math.log10(val) : 0;
+        const toLog = (val: number | undefined) => (val && val >= 0.01) ? Math.log10(val) : 0;
 
         if (item.isForecast) {
           // Forecast items - transform forecast values
@@ -272,7 +312,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     }
 
     return combinedData;
-  }, [data.history, forecastData, yAxisScale, getLogScaleData, aggregationPeriod, periodDays]);
+  }, [data.history, forecastData, yAxisScale, getLogScaleData, aggregationPeriod, periodDays, gapPeriodInfo]);
 
   // Get combined net position data (historical + forecast with P10/P50/P90 scenarios)
   // Shows last X days historical + 30 days forecast
@@ -292,6 +332,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         p10Cumulative: undefined,
         p50Cumulative: undefined,
         p90Cumulative: undefined,
+        isInGap: false,
       }));
     }
 
@@ -308,6 +349,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         p10Cumulative: undefined,
         p50Cumulative: undefined,
         p90Cumulative: undefined,
+        isInGap: false,
       }));
     }
 
@@ -320,16 +362,23 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     const p50Daily = forecastData.scenarios?.p50?.daily || [];
     const p90Daily = forecastData.scenarios?.p90?.daily || [];
     
-    // Historical data - only historical values, no forecast
-    const historicalData = actualHistoricalData.map((item: any, idx: number) => ({
-      ...item,
-      forecastCumulative: undefined,
-      p10Cumulative: undefined,
-      p50Cumulative: undefined,
-      p90Cumulative: undefined,
-    }));
+    // Historical data - mark gap period items for tooltip
+    const historicalData = actualHistoricalData.map((item: any, idx: number) => {
+      const isInGapPeriod = gapPeriodInfo.hasGap && gapPeriodInfo.gapStartDate && item.date > gapPeriodInfo.gapStartDate;
+      
+      return {
+        ...item,
+        historicalCumulative: item.cumulative,
+        forecastCumulative: undefined,
+        p10Cumulative: undefined,
+        p50Cumulative: undefined,
+        p90Cumulative: undefined,
+        isInGap: isInGapPeriod,
+        isForecast: false,
+      };
+    });
     
-    // Add bridge point values to last historical item
+    // Add bridge point values to last historical item for forecast lines
     if (historicalData.length > 0) {
       historicalData[historicalData.length - 1] = {
         ...historicalData[historicalData.length - 1],
@@ -369,12 +418,14 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           p50Cumulative,
           p90Cumulative,
           isForecast: true,
+          isInGap: false,
         };
       });
 
     console.log('[getCombinedNetPositionData] Combined data:', {
       historicalCount: historicalData.length,
       forecastCount: forecastEntries.length,
+      gapPeriodInfo,
       lastHistoricalCumulative: startingCumulative,
       finalExpected: expectedCumulative,
       finalP10: p10Cumulative,
@@ -384,7 +435,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     });
 
     return [...historicalData, ...forecastEntries];
-  }, [getNetPositionData, forecastData, aggregationPeriod]);
+  }, [getNetPositionData, forecastData, aggregationPeriod, gapPeriodInfo]);
 
   return (
     <Paper
@@ -645,6 +696,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               if (!active || !payload || payload.length === 0) return null;
               const data = payload[0].payload;
               const isForecast = data.isForecast;
+              const isInGap = data.isInGap;
 
               // Use original values if available (for log scale), otherwise use displayed values
               const income = data.originalForecastIncome || data.originalIncome || data.forecastIncome || data.income || 0;
@@ -663,13 +715,14 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     <Typography variant="body2" fontWeight="bold">
                       {format(parseLocalDate(data.date), 'MMM dd, yyyy')}
                     </Typography>
+                    {isInGap && <Chip label={t('legend.noData')} size="small" color="default" />}
                     {isForecast && <Chip label="Forecast" size="small" color="warning" />}
                   </Box>
-                  <Typography variant="body2" color="success.main">
-                    Income: {formatCurrencyValue(income)}
+                  <Typography variant="body2" color={isInGap ? 'text.secondary' : 'success.main'}>
+                    Income: {formatCurrencyValue(income)}{isInGap ? ` (${t('legend.noData')})` : ''}
                   </Typography>
-                  <Typography variant="body2" color="error.main">
-                    Expenses: {formatCurrencyValue(expenses)}
+                  <Typography variant="body2" color={isInGap ? 'text.secondary' : 'error.main'}>
+                    Expenses: {formatCurrencyValue(expenses)}{isInGap ? ` (${t('legend.noData')})` : ''}
                   </Typography>
                 </Paper>
               );
@@ -737,6 +790,24 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             activeDot={{ r: 6, strokeWidth: 0 }}
             name={t('legend.expenses')} 
           />
+          {/* No data zone - grey shaded area for gap period where we don't have scraped data */}
+          {gapPeriodInfo.hasGap && gapPeriodInfo.gapStartDate && (
+            <ReferenceArea
+              x1={gapPeriodInfo.gapStartDate}
+              x2={gapPeriodInfo.gapEndDate}
+              fill={theme.palette.grey[500]}
+              fillOpacity={0.15}
+              strokeDasharray="4 4"
+              stroke={theme.palette.grey[500]}
+              strokeOpacity={0.5}
+              label={{
+                value: t('legend.noData'),
+                position: 'center',
+                fill: theme.palette.grey[600],
+                fontSize: 12,
+              }}
+            />
+          )}
           {/* Forecast lines (dashed) - connect through nulls to draw continuous line from bridge point */}
           <Line 
             type="monotone" 
@@ -744,7 +815,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             stroke={theme.palette.success.light} 
             strokeWidth={2} 
             strokeDasharray="5 5"
-            dot={{ r: 3, fill: theme.palette.success.light }}
+            dot={(props: any) => {
+              // Don't render dot if value is invalid or coordinates are NaN
+              if (props.value === null || props.value === undefined || !Number.isFinite(props.cx) || !Number.isFinite(props.cy)) return null;
+              return <circle cx={props.cx} cy={props.cy} r={3} fill={theme.palette.success.light} />;
+            }}
             name={`${t('forecast.income')} (${t('forecast.expected')})`}
             connectNulls={true}
           />
@@ -754,7 +829,10 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             stroke={theme.palette.error.light} 
             strokeWidth={2} 
             strokeDasharray="5 5"
-            dot={{ r: 3, fill: theme.palette.error.light }}
+            dot={(props: any) => {
+              if (props.value === null || props.value === undefined) return null;
+              return <circle cx={props.cx} cy={props.cy} r={3} fill={theme.palette.error.light} />;
+            }}
             name={`${t('forecast.expenses')} (${t('forecast.expected')})`}
             connectNulls={true}
           />
@@ -892,7 +970,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     tickLine={false}
                   />
                   <Tooltip 
-                    formatter={(value: number, name: string) => [formatCurrencyValue(value), name]}
+                    formatter={(value, name) => [formatCurrencyValue(typeof value === 'number' ? value : 0), name ?? '']}
                     labelFormatter={(label: string) => format(parseLocalDate(label), 'MMM dd, yyyy')}
                   />
                   <Legend />
@@ -916,6 +994,24 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     name={`${t('forecast.actualNet')}`}
                     connectNulls={true}
                   />
+                  {/* No data zone - grey shaded area for gap period (no scraped data) */}
+                  {gapPeriodInfo.hasGap && gapPeriodInfo.gapStartDate && (
+                    <ReferenceArea
+                      x1={gapPeriodInfo.gapStartDate}
+                      x2={gapPeriodInfo.gapEndDate}
+                      fill={theme.palette.grey[500]}
+                      fillOpacity={0.15}
+                      strokeDasharray="4 4"
+                      stroke={theme.palette.grey[500]}
+                      strokeOpacity={0.5}
+                      label={{
+                        value: t('legend.noData'),
+                        position: 'center',
+                        fill: theme.palette.grey[600],
+                        fontSize: 12,
+                      }}
+                    />
+                  )}
                   {/* Expected forecast - dashed orange line */}
                   <Line 
                     type="monotone" 
@@ -923,7 +1019,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     stroke={theme.palette.warning.main}
                     strokeWidth={2}
                     strokeDasharray="5 5"
-                    dot={{ r: 2, fill: theme.palette.warning.main }}
+                    dot={(props: any) => {
+                      // Don't render dot if value is invalid or coordinates are NaN
+                      if (props.value === null || props.value === undefined || !Number.isFinite(props.cx) || !Number.isFinite(props.cy)) return null;
+                      return <circle cx={props.cx} cy={props.cy} r={2} fill={theme.palette.warning.main} />;
+                    }}
                     name={t('forecast.expected')}
                     connectNulls={true}
                   />

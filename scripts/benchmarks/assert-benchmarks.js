@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Run analytics benchmarks against the synthetic dataset and assert thresholds.
+ * Run analytics benchmarks against the demo dataset and assert thresholds.
  * Mirrors the scenarios documented in docs/benchmarks.md (months=3, default dataset).
  */
 
@@ -29,7 +29,7 @@ function runNode(script, args = []) {
 function runSetup() {
   try {
     execFileSync('node', ['scripts/init_sqlite_db.js', '--force'], { cwd: ROOT, stdio: 'inherit' });
-    execFileSync('node', ['scripts/seed_synthetic_transactions.js'], { cwd: ROOT, stdio: 'inherit' });
+    execFileSync('node', ['scripts/seed_realistic_demo.js'], { cwd: ROOT, stdio: 'inherit' });
   } catch (error) {
     // Common pitfall: native better-sqlite3 built for a different Node version
     const hint =

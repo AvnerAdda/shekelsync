@@ -7,6 +7,7 @@ import {
 import Sidebar from '@renderer/features/layout/components/Sidebar';
 import FinancialChatbot from '@renderer/features/chatbot/components/FinancialChatbot';
 import TitleBar from '@renderer/features/layout/components/TitleBar';
+import GlobalTransactionSearch from '@renderer/features/search/components/GlobalTransactionSearch';
 import { useAuth } from '@app/contexts/AuthContext';
 
 const DRAWER_WIDTH_COLLAPSED = 65;
@@ -36,11 +37,58 @@ const AppLayout: React.FC = () => {
   const { session, loading: authLoading } = useAuth();
   const [currentPage, setCurrentPage] = useState<string>(() => pathToPage(location.pathname));
   const [dataRefreshKey, setDataRefreshKey] = useState<number>(0);
+  const [searchOpen, setSearchOpen] = useState(false);
   const sessionDisplayName = session?.user?.name || session?.user?.email || null;
 
   useEffect(() => {
     setCurrentPage(pathToPage(location.pathname));
   }, [location.pathname]);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Cmd/Ctrl + K: Open global transaction search
+      if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+      
+      // Cmd/Ctrl + 1-4: Navigate between pages
+      if (event.metaKey || event.ctrlKey) {
+        switch (event.key) {
+          case '1':
+            event.preventDefault();
+            navigate('/');
+            break;
+          case '2':
+            event.preventDefault();
+            navigate('/analysis');
+            break;
+          case '3':
+            event.preventDefault();
+            navigate('/investments');
+            break;
+          case '4':
+            event.preventDefault();
+            navigate('/settings');
+            break;
+        }
+      }
+      
+      // Cmd/Ctrl + R: Refresh data (prevent browser refresh)
+      if ((event.metaKey || event.ctrlKey) && event.key === 'r' && !event.shiftKey) {
+        // Only handle if not in a text input
+        const target = event.target as HTMLElement;
+        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+          event.preventDefault();
+          handleDataRefresh();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [navigate]);
 
   const handlePageChange = useCallback(
     (page: string) => {
@@ -130,6 +178,11 @@ const AppLayout: React.FC = () => {
       </Box>
 
       <FinancialChatbot />
+      
+      <GlobalTransactionSearch
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+      />
     </Box>
   );
 };
