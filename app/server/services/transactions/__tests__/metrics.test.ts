@@ -168,7 +168,7 @@ describe('transactions metrics service', () => {
     expect(queryMock).toHaveBeenCalledTimes(1);
     const [sql, params] = queryMock.mock.calls[0];
     expect(params).toEqual(['Groceries', 6]);
-    expect(String(sql)).toContain('WHERE t.category = $1');
+    expect(String(sql)).toContain('category_tree');
     expect(String(sql)).toContain('ORDER BY year ASC, month ASC');
   });
 

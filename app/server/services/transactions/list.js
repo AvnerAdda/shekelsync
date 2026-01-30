@@ -17,23 +17,26 @@ function __resetDatabase() {
  */
 function buildSearchCondition(searchTerm, paramIndex) {
   const placeholder = `$${paramIndex}`;
-  
+
   if (useSqlite) {
-    // Use FTS5 for SQLite - search transactions_fts virtual table
-    // Also search category names using regular LIKE as they're from joined tables
+    // Use FTS5 for SQLite with LIKE fallback for all text fields
+    // This ensures search works even if FTS index is out of sync
     const ftsQuery = dialect.prepareFtsQuery(searchTerm);
     return {
       condition: `(
-        t.id IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${placeholder})
+        t.rowid IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${placeholder})
+        OR ${dialect.likeInsensitive('t.name', placeholder)}
+        OR ${dialect.likeInsensitive('t.memo', placeholder)}
+        OR ${dialect.likeInsensitive('t.vendor', placeholder)}
+        OR ${dialect.likeInsensitive('t.merchant_name', placeholder)}
         OR ${dialect.likeInsensitive('cd.name', placeholder)}
         OR ${dialect.likeInsensitive('parent.name', placeholder)}
       )`,
       value: ftsQuery || `%${searchTerm}%`,
-      // For the LIKE fallback on category names, we need the original search term
       useFts: Boolean(ftsQuery),
     };
   }
-  
+
   // PostgreSQL fallback: use ILIKE
   return {
     condition: `(
@@ -70,18 +73,20 @@ async function listRecentTransactions(params = {}) {
   const result = await database.query(
     `
       SELECT
-        identifier,
-        vendor,
-        category,
-        parent_category,
-        memo,
-        price,
-        date,
-        processed_date,
-        account_number,
-        type,
-        status
+        t.identifier,
+        t.vendor,
+        cd.name AS category,
+        parent.name AS parent_category,
+        t.memo,
+        t.price,
+        t.date,
+        t.processed_date,
+        t.account_number,
+        t.type,
+        t.status
       FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
       WHERE ${dialect.excludePikadon('t')}
       ORDER BY t.date DESC, t.processed_date DESC
       LIMIT $1 OFFSET $2
@@ -117,15 +122,20 @@ async function searchTransactions(params = {}) {
 
   if (searchQuery) {
     const searchResult = buildSearchCondition(searchQuery, values.length + 1);
-    
+
     if (useSqlite && searchResult.useFts) {
       // For FTS5, we need the prepared FTS query for MATCH and original term for LIKE
+      // Also add LIKE fallback for transaction fields in case FTS index is out of sync
       values.push(searchResult.value); // FTS query
-      values.push(`%${searchQuery}%`); // Original for category LIKE fallback
+      values.push(`%${searchQuery}%`); // Original for LIKE fallback
       const ftsParam = `$${values.length - 1}`;
       const likeParam = `$${values.length}`;
       conditions.push(`(
-        t.id IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${ftsParam})
+        t.rowid IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${ftsParam})
+        OR ${dialect.likeInsensitive('t.name', likeParam)}
+        OR ${dialect.likeInsensitive('t.memo', likeParam)}
+        OR ${dialect.likeInsensitive('t.vendor', likeParam)}
+        OR ${dialect.likeInsensitive('t.merchant_name', likeParam)}
         OR ${dialect.likeInsensitive('cd.name', likeParam)}
         OR ${dialect.likeInsensitive('parent.name', likeParam)}
       )`);

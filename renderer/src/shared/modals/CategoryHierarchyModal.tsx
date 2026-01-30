@@ -32,7 +32,6 @@ import {
   FormControlLabel,
   Tooltip,
   Paper,
-  ButtonGroup,
   Menu,
   ListItemIcon,
   LinearProgress,
@@ -54,7 +53,6 @@ import {
   ToggleOff as ToggleOffIcon,
   Visibility as VisibilityIcon,
   AutoAwesome as AutoAwesomeIcon,
-  ArrowDropDown as ArrowDropDownIcon,
   Restaurant as RestaurantIcon,
   DirectionsCar as DirectionsCarIcon,
   LocalGroceryStore as LocalGroceryStoreIcon,
@@ -250,7 +248,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, TransactionAssignment>>({});
   const [savingAssignments, setSavingAssignments] = useState<Record<string, boolean>>({});
   const [creatingRules, setCreatingRules] = useState<Record<string, boolean>>({});
-  const [assignMenuAnchors, setAssignMenuAnchors] = useState<Record<string, HTMLElement | null>>({});
 
   // Inline Transaction Viewer State (within tree)
   const [expandedCategoryTransactions, setExpandedCategoryTransactions] = useState<number | null>(null);
@@ -2652,67 +2649,50 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
                         <Grid container spacing={1.5} alignItems="center">
                           {renderCategorySelectors(key, draft, rootOptions)}
-                          <Grid size={{ xs: 12, md: 3 }}>
-                            <ButtonGroup
-                              fullWidth
-                              variant="contained"
-                              size="small"
-                              sx={(theme) => ({
-                                '& .MuiButton-root': {
-                                  backgroundColor: draft?.categoryPath?.length
-                                    ? theme.palette.primary.main
-                                    : undefined,
-                                  color: draft?.categoryPath?.length
-                                    ? theme.palette.primary.contrastText
-                                    : undefined,
-                                  transition: 'all 0.3s ease',
-                                  fontWeight: 600,
-                                  '&:hover': {
-                                    backgroundColor: draft?.categoryPath?.length
-                                      ? theme.palette.primary.dark
-                                      : undefined,
-                                    transform: 'translateY(-2px)',
-                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                                  },
-                                  '&:disabled': {
-                                    opacity: 0.5,
-                                  },
-                                },
-                              })}
-                            >
+                          <Grid size={{ xs: 12, md: 4 }}>
+                            <Box sx={{ display: 'flex', gap: 1 }}>
                               <Button
+                                fullWidth
+                                variant="contained"
+                                size="small"
                                 onClick={() => handleSaveAssignment(txn)}
                                 disabled={!draft?.categoryPath?.length || isSaving}
                                 startIcon={isSaving ? <CircularProgress color="inherit" size={16} /> : undefined}
+                                sx={(theme) => ({
+                                  textTransform: 'none',
+                                  fontWeight: 600,
+                                  transition: 'all 0.3s ease',
+                                  backgroundColor: draft?.categoryPath?.length
+                                    ? theme.palette.primary.main
+                                    : undefined,
+                                  '&:hover': {
+                                    transform: 'translateY(-2px)',
+                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                                  },
+                                })}
                               >
                                 {isSaving ? t('uncategorized.assign.saving') : t('uncategorized.assign.cta')}
                               </Button>
                               <Button
+                                fullWidth
+                                variant="outlined"
                                 size="small"
-                                onClick={(e) => setAssignMenuAnchors({ ...assignMenuAnchors, [key]: e.currentTarget })}
-                                disabled={!draft?.categoryPath?.length || isSaving}
-                              >
-                                <ArrowDropDownIcon />
-                              </Button>
-                            </ButtonGroup>
-                            <Menu
-                              anchorEl={assignMenuAnchors[key]}
-                              open={Boolean(assignMenuAnchors[key])}
-                              onClose={() => setAssignMenuAnchors({ ...assignMenuAnchors, [key]: null })}
-                            >
-                              <MenuItem
-                                onClick={() => {
-                                  setAssignMenuAnchors({ ...assignMenuAnchors, [key]: null });
-                                  handleAutoAssignSimilar(txn);
-                                }}
+                                onClick={() => handleAutoAssignSimilar(txn)}
                                 disabled={!draft?.categoryPath?.length || creatingRules[key]}
+                                startIcon={creatingRules[key] ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+                                sx={{
+                                  textTransform: 'none',
+                                  fontWeight: 600,
+                                  transition: 'all 0.3s ease',
+                                  '&:hover': {
+                                    transform: 'translateY(-2px)',
+                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                                  },
+                                }}
                               >
-                                <ListItemIcon>
-                                  {creatingRules[key] ? <CircularProgress size={20} /> : <AutoAwesomeIcon fontSize="small" />}
-                                </ListItemIcon>
-                                <ListItemText primary={creatingRules[key] ? t('uncategorized.createRule.saving') : t('uncategorized.createRule.cta')} />
-                              </MenuItem>
-                            </Menu>
+                                {creatingRules[key] ? t('uncategorized.createRule.saving') : t('uncategorized.createRule.cta')}
+                              </Button>
+                            </Box>
                           </Grid>
                         </Grid>
                       </ListItem>

@@ -1243,15 +1243,20 @@ ipcMain.handle('api:credentials', async () => {
 ipcMain.handle('api:categories', async () => {
   try {
     const query = `
-      SELECT DISTINCT
-        category,
-        parent_category,
+      SELECT
+        COALESCE(parent.id, cd.id) AS category_definition_id,
+        COALESCE(parent.name, cd.name) AS category,
+        parent.name AS parent_category,
         COUNT(*) as transaction_count,
-        SUM(CASE WHEN price < 0 THEN ABS(price) ELSE 0 END) as total_spent
-      FROM transactions
-      WHERE category IS NOT NULL
-        AND category != ''
-      GROUP BY category, parent_category
+        SUM(CASE WHEN t.price < 0 THEN ABS(t.price) ELSE 0 END) as total_spent
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+      WHERE t.category_definition_id IS NOT NULL
+      GROUP BY
+        COALESCE(parent.id, cd.id),
+        COALESCE(parent.name, cd.name),
+        parent.name
       ORDER BY total_spent DESC
     `;
 

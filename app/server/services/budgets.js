@@ -178,10 +178,6 @@ async function deactivateBudget(query = {}) {
   return { success: true };
 }
 
-function isMissingCategoryIdColumnError(error) {
-  return Boolean(error?.message && error.message.includes('category_definition_id'));
-}
-
 function getPeriodRange(periodType, dateFns) {
   const now = new Date();
   const { startOfWeek, startOfMonth, startOfYear, endOfWeek, endOfMonth, endOfYear } = dateFns;
@@ -268,55 +264,22 @@ async function listBudgetUsage() {
   const client = await getDatabase().getClient();
 
   try {
-    let budgetsResult;
-    let legacyBudgetSchema = false;
-    let categoryLookupByName = null;
-    let categoryLookupById = null;
-
-    try {
-      budgetsResult = await client.query(
-        `SELECT
-           cb.id,
-           cb.category_definition_id,
-           cb.period_type,
-           cb.budget_limit,
-           cb.is_active,
-           cd.name AS category_name,
-           cd.name_en AS category_name_en,
-           parent.name AS parent_category_name,
-           parent.name_en AS parent_category_name_en
-         FROM category_budgets cb
-         JOIN category_definitions cd ON cd.id = cb.category_definition_id
-         LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-         WHERE cb.is_active = true`,
-      );
-    } catch (error) {
-      if (!isMissingCategoryIdColumnError(error)) {
-        throw error;
-      }
-
-      legacyBudgetSchema = true;
-      budgetsResult = await client.query(
-        `SELECT
-           cb.id,
-           cb.category,
-           cb.period_type,
-           cb.budget_limit,
-           cb.is_active
-         FROM category_budgets cb
-         WHERE cb.is_active = true`,
-      );
-
-      const categoryRows = await client.query(
-        `SELECT id, name, name_en, parent_id FROM category_definitions`,
-      );
-      categoryLookupByName = new Map();
-      categoryLookupById = new Map();
-      for (const row of categoryRows.rows) {
-        categoryLookupByName.set(row.name, row);
-        categoryLookupById.set(row.id, row);
-      }
-    }
+    const budgetsResult = await client.query(
+      `SELECT
+         cb.id,
+         cb.category_definition_id,
+         cb.period_type,
+         cb.budget_limit,
+         cb.is_active,
+         cd.name AS category_name,
+         cd.name_en AS category_name_en,
+         parent.name AS parent_category_name,
+         parent.name_en AS parent_category_name_en
+       FROM category_budgets cb
+       JOIN category_definitions cd ON cd.id = cb.category_definition_id
+       LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+       WHERE cb.is_active = true`,
+    );
 
     const budgets = budgetsResult.rows;
     const usageData = [];
@@ -334,20 +297,6 @@ async function listBudgetUsage() {
       let categoryNameEn = budget.category_name_en || null;
       let parentCategoryName = budget.parent_category_name || null;
       let parentCategoryNameEn = budget.parent_category_name_en || null;
-
-      if (legacyBudgetSchema) {
-        const legacyCategoryName = budget.category;
-        const mappedCategory = legacyCategoryName ? categoryLookupByName.get(legacyCategoryName) : null;
-        categoryDefinitionId = mappedCategory?.id || null;
-        categoryName = legacyCategoryName || mappedCategory?.name || null;
-        categoryNameEn = mappedCategory?.name_en || null;
-        const parentRow =
-          mappedCategory?.parent_id !== undefined && mappedCategory?.parent_id !== null
-            ? categoryLookupById.get(mappedCategory.parent_id)
-            : null;
-        parentCategoryName = parentRow?.name || null;
-        parentCategoryNameEn = parentRow?.name_en || null;
-      }
 
       const spent = await computeBudgetSpent(
         client,

@@ -58,8 +58,8 @@ async function getBoxPanelData() {
   const monthExpr = dialect.toChar('t.date', 'DD-MM-YYYY');
 
   const [categoriesResult, nonMappedResult, totalResult, lastMonthResult] = await Promise.all([
-    database.query('SELECT COUNT(DISTINCT category) AS count FROM transactions'),
-    database.query("SELECT COUNT(*) AS count FROM transactions WHERE category IS NULL OR category = 'N/A'"),
+    database.query('SELECT COUNT(DISTINCT category_definition_id) AS count FROM transactions WHERE category_definition_id IS NOT NULL'),
+    database.query('SELECT COUNT(*) AS count FROM transactions WHERE category_definition_id IS NULL'),
     database.query('SELECT COUNT(*) AS count FROM transactions'),
     database.query(
       `
@@ -298,13 +298,24 @@ async function getCategorySpendingTimeline(params = {}) {
   if (groupByYearFlag) {
     const result = await database.query(
       `
-        WITH temp AS (
+        WITH RECURSIVE category_tree AS (
+          SELECT id FROM category_definitions WHERE name = $1 OR name_en = $1
+          UNION ALL
+          SELECT cd.id
+          FROM category_definitions cd
+          JOIN category_tree ct ON cd.parent_id = ct.id
+        ),
+        temp AS (
           SELECT
             SUM(t.price) AS amount,
             ${yearExpr} AS year,
             ${yearTrunc} AS year_sort
           FROM transactions t
-          WHERE t.category = $1
+          LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+            ON t.identifier = tpe.transaction_identifier
+            AND t.vendor = tpe.transaction_vendor
+          WHERE t.category_definition_id IN (SELECT id FROM category_tree)
+            AND tpe.transaction_identifier IS NULL
           GROUP BY ${yearExpr}, ${yearTrunc}
           ORDER BY year_sort DESC
           LIMIT $2
@@ -321,7 +332,14 @@ async function getCategorySpendingTimeline(params = {}) {
 
   const result = await database.query(
     `
-      WITH temp AS (
+      WITH RECURSIVE category_tree AS (
+        SELECT id FROM category_definitions WHERE name = $1 OR name_en = $1
+        UNION ALL
+        SELECT cd.id
+        FROM category_definitions cd
+        JOIN category_tree ct ON cd.parent_id = ct.id
+      ),
+      temp AS (
         SELECT
           SUM(t.price) AS amount,
           ${yearExpr} AS year,
@@ -329,7 +347,11 @@ async function getCategorySpendingTimeline(params = {}) {
           ${yearMonthExpr} AS year_month,
           ${monthTrunc} AS month_sort
         FROM transactions t
-        WHERE t.category = $1
+        LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+          ON t.identifier = tpe.transaction_identifier
+          AND t.vendor = tpe.transaction_vendor
+        WHERE t.category_definition_id IN (SELECT id FROM category_tree)
+          AND tpe.transaction_identifier IS NULL
         GROUP BY ${yearExpr}, ${monthExpr}, ${yearMonthExpr}, ${monthTrunc}
         ORDER BY month_sort DESC
         LIMIT $2

@@ -68,6 +68,14 @@ import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
 import type { SupportedLocale } from '@renderer/i18n';
 import SecurityIndicator from '@renderer/features/security/components/SecurityIndicator';
 import SecurityDetailsModal from '@renderer/features/security/components/SecurityDetailsModal';
+import { useLicense, LicenseDetailsModal } from '@renderer/features/onboarding';
+import {
+  Star as StarIcon,
+  Warning as WarningIcon,
+  Block as BlockIcon,
+  CheckCircle as CheckCircleIcon,
+  Schedule as ScheduleIcon,
+} from '@mui/icons-material';
 
 interface TitleBarProps {
   sessionDisplayName?: string | null;
@@ -84,6 +92,8 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   const [windowClassesApplied, setWindowClassesApplied] = useState(false);
   const [langMenuAnchor, setLangMenuAnchor] = useState<null | HTMLElement>(null);
   const [securityDetailsOpen, setSecurityDetailsOpen] = useState(false);
+  const [licenseDetailsOpen, setLicenseDetailsOpen] = useState(false);
+  const { status: licenseStatus } = useLicense();
 
   // Theme and language hooks
   const { mode, setMode, actualTheme } = useThemeMode();
@@ -819,6 +829,75 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
 
         <SmartNotifications />
 
+        {/* License Status Indicator */}
+        <Tooltip
+          title={
+            licenseStatus?.licenseType === 'pro'
+              ? t('license.proActive', 'Pro License')
+              : licenseStatus?.licenseType === 'trial'
+                ? t('license.trialActive', 'Trial') + (licenseStatus?.trialDaysRemaining !== undefined ? ` - ${licenseStatus.trialDaysRemaining} ${t('license.daysLeft', 'days left')}` : '')
+                : licenseStatus?.licenseType === 'expired'
+                  ? t('license.trialExpired', 'Trial Expired')
+                  : t('license.registrationRequired', 'Registration Required')
+          }
+        >
+          <IconButton
+            size="small"
+            onClick={() => setLicenseDetailsOpen(true)}
+            sx={{
+              width: 36,
+              height: 36,
+              borderRadius: 2,
+              transition: 'all 0.2s',
+              color:
+                licenseStatus?.licenseType === 'pro'
+                  ? theme.palette.success.main
+                  : licenseStatus?.licenseType === 'expired' || licenseStatus?.isReadOnly
+                    ? theme.palette.error.main
+                    : licenseStatus?.licenseType === 'trial' && licenseStatus?.trialDaysRemaining !== undefined && licenseStatus.trialDaysRemaining <= 7
+                      ? theme.palette.warning.main
+                      : licenseStatus?.licenseType === 'trial'
+                        ? theme.palette.info.main
+                        : theme.palette.primary.main,
+              backgroundColor:
+                licenseStatus?.licenseType === 'pro'
+                  ? alpha(theme.palette.success.main, 0.1)
+                  : licenseStatus?.licenseType === 'expired' || licenseStatus?.isReadOnly
+                    ? alpha(theme.palette.error.main, 0.1)
+                    : licenseStatus?.licenseType === 'trial' && licenseStatus?.trialDaysRemaining !== undefined && licenseStatus.trialDaysRemaining <= 7
+                      ? alpha(theme.palette.warning.main, 0.1)
+                      : licenseStatus?.licenseType === 'trial'
+                        ? alpha(theme.palette.info.main, 0.1)
+                        : alpha(theme.palette.primary.main, 0.1),
+              '&:hover': {
+                backgroundColor:
+                  licenseStatus?.licenseType === 'pro'
+                    ? alpha(theme.palette.success.main, 0.2)
+                    : licenseStatus?.licenseType === 'expired' || licenseStatus?.isReadOnly
+                      ? alpha(theme.palette.error.main, 0.2)
+                      : licenseStatus?.licenseType === 'trial' && licenseStatus?.trialDaysRemaining !== undefined && licenseStatus.trialDaysRemaining <= 7
+                        ? alpha(theme.palette.warning.main, 0.2)
+                        : licenseStatus?.licenseType === 'trial'
+                          ? alpha(theme.palette.info.main, 0.2)
+                          : alpha(theme.palette.primary.main, 0.2),
+                transform: 'translateY(-2px)',
+              },
+            }}
+          >
+            {licenseStatus?.licenseType === 'pro' ? (
+              <CheckCircleIcon sx={{ fontSize: 20 }} />
+            ) : licenseStatus?.licenseType === 'expired' || licenseStatus?.isReadOnly ? (
+              <BlockIcon sx={{ fontSize: 20 }} />
+            ) : licenseStatus?.licenseType === 'trial' && licenseStatus?.trialDaysRemaining !== undefined && licenseStatus.trialDaysRemaining <= 7 ? (
+              <WarningIcon sx={{ fontSize: 20 }} />
+            ) : licenseStatus?.licenseType === 'trial' ? (
+              <ScheduleIcon sx={{ fontSize: 20 }} />
+            ) : (
+              <StarIcon sx={{ fontSize: 20 }} />
+            )}
+          </IconButton>
+        </Tooltip>
+
         <SecurityIndicator onClick={() => setSecurityDetailsOpen(true)} />
 
         {/* Window Controls - Hide on macOS as we use native traffic lights */}
@@ -884,6 +963,11 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
       <SecurityDetailsModal
         open={securityDetailsOpen}
         onClose={() => setSecurityDetailsOpen(false)}
+      />
+
+      <LicenseDetailsModal
+        open={licenseDetailsOpen}
+        onClose={() => setLicenseDetailsOpen(false)}
       />
     </Box>
   );

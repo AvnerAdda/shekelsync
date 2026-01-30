@@ -21,6 +21,7 @@ import {
   CloudDownload as CloudDownloadIcon,
   Explore as ExploreIcon
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
 
 interface OnboardingChecklistProps {
@@ -40,6 +41,7 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   onDismiss,
   compact = false
 }) => {
+  const { t } = useTranslation();
   const { status, dismissOnboarding } = useOnboarding();
 
   if (!status) return null;
@@ -59,8 +61,8 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   const steps = [
     {
       id: 'profile',
-      title: 'Set up your profile',
-      description: 'Tell us about yourself to get personalized insights',
+      title: t('onboarding.steps.profile.title'),
+      description: t('onboarding.steps.profile.description'),
       icon: PersonIcon,
       completed: completedSteps.profile,
       onClick: onProfileClick,
@@ -68,8 +70,10 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
     },
     {
       id: 'bankAccount',
-      title: 'Add bank account',
-      description: `Connect your Israeli bank account${stats?.bankAccountCount ? ` (${stats.bankAccountCount} added)` : ''}`,
+      title: t('onboarding.steps.bankAccount.title'),
+      description: stats?.bankAccountCount
+        ? t('onboarding.steps.bankAccount.descriptionWithCount', { count: stats.bankAccountCount })
+        : t('onboarding.steps.bankAccount.description'),
       icon: AccountBalanceIcon,
       completed: completedSteps.bankAccount,
       onClick: onBankAccountClick,
@@ -77,8 +81,10 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
     },
     {
       id: 'creditCard',
-      title: 'Add credit card',
-      description: `Add your credit card account${stats?.creditCardCount ? ` (${stats.creditCardCount} added)` : ''}`,
+      title: t('onboarding.steps.creditCard.title'),
+      description: stats?.creditCardCount
+        ? t('onboarding.steps.creditCard.descriptionWithCount', { count: stats.creditCardCount })
+        : t('onboarding.steps.creditCard.description'),
       icon: CreditCardIcon,
       completed: completedSteps.creditCard,
       onClick: onCreditCardClick,
@@ -86,8 +92,8 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
     },
     {
       id: 'firstScrape',
-      title: 'Auto-sync transactions',
-      description: 'Kick off your first sync from the sidebar once accounts are linked',
+      title: t('onboarding.steps.firstScrape.title'),
+      description: t('onboarding.steps.firstScrape.description'),
       icon: CloudDownloadIcon,
       completed: completedSteps.firstScrape,
       onClick: triggerScrape,
@@ -95,14 +101,26 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
     },
     {
       id: 'explored',
-      title: 'Explore your finances',
-      description: 'View analytics, set budgets, and track spending',
+      title: t('onboarding.steps.explored.title'),
+      description: t('onboarding.steps.explored.description'),
       icon: ExploreIcon,
       completed: completedSteps.explored,
-      onClick: null,
+      onClick: () => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('navigateToAnalysis'));
+        }
+      },
       locked: !completedSteps.firstScrape
     }
   ];
+
+  // Find the suggested action index and calculate which steps should show buttons
+  const suggestedActionIndex = steps.findIndex(s => s.id === suggestedAction);
+  const shouldShowButton = (stepIndex: number, step: typeof steps[0]) => {
+    if (step.completed || step.locked || !step.onClick) return false;
+    // Show button for current suggested step and the next step (if unlocked)
+    return stepIndex === suggestedActionIndex || stepIndex === suggestedActionIndex + 1;
+  };
 
   const completedCount = Object.values(completedSteps).filter(Boolean).length;
   const totalSteps = 5;
@@ -134,10 +152,10 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
       >
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
           <Typography variant="subtitle2" fontWeight={600}>
-            Getting Started ({completedCount}/{totalSteps})
+            {t('onboarding.gettingStarted')} ({completedCount}/{totalSteps})
           </Typography>
           <Button size="small" onClick={handleDismiss}>
-            Skip
+            {t('onboarding.skip')}
           </Button>
         </Box>
 
@@ -166,14 +184,14 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
                   fontWeight: step.id === suggestedAction ? 600 : 400
                 }}
               />
-              {step.id === suggestedAction && step.onClick && (
+              {shouldShowButton(steps.indexOf(step), step) && (
                 <Button
                   size="small"
-                  variant="contained"
+                  variant={step.id === suggestedAction ? 'contained' : 'outlined'}
                   onClick={step.onClick}
                   disabled={step.locked}
                 >
-                  Start
+                  {step.id === suggestedAction ? t('onboarding.start') : t('onboarding.next')}
                 </Button>
               )}
             </ListItem>
@@ -182,8 +200,7 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
 
         {!completedSteps.firstScrape && (
           <Alert severity="info" sx={{ mt: 2 }}>
-            Once you connect an account, start a sync from the sidebar or Accounts panel. Finished syncing?
-            Go to Settings → Data Export to download a CSV for taxes or backups.
+            {t('onboarding.syncHintCompact')}
           </Alert>
         )}
       </Paper>
@@ -206,10 +223,10 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
           <Typography variant="h6" fontWeight={600} gutterBottom>
-            Getting Started
+            {t('onboarding.gettingStarted')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Complete these steps to unlock all features
+            {t('onboarding.completeSteps')}
           </Typography>
         </Box>
         <Chip
@@ -281,15 +298,15 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
                     {step.description}
                   </Typography>
 
-                  {step.id === suggestedAction && step.onClick && (
+                  {shouldShowButton(index, step) && (
                     <Button
-                      variant="contained"
+                      variant={step.id === suggestedAction ? 'contained' : 'outlined'}
                       size="small"
                       onClick={step.onClick}
                       disabled={step.locked}
                       sx={{ ml: 4, mt: 1 }}
                     >
-                      Start Now
+                      {step.id === suggestedAction ? t('onboarding.startNow') : t('onboarding.upNext')}
                     </Button>
                   )}
                 </Box>
@@ -301,7 +318,7 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
 
       {!completedSteps.firstScrape && (
         <Alert severity="info" sx={{ mt: 3 }}>
-          Ready for reports? Kick off your first sync using the button above, then visit Settings → Data Export to grab a full backup once transactions arrive.
+          {t('onboarding.syncHint')}
         </Alert>
       )}
 
@@ -312,7 +329,7 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
           onClick={handleDismiss}
           sx={{ color: 'text.secondary' }}
         >
-          I&apos;ll do this later
+          {t('onboarding.doLater')}
         </Button>
       </Box>
     </Paper>

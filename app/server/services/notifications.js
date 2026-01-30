@@ -50,11 +50,6 @@ function formatShortMonthDay(date) {
   }).format(date);
 }
 
-function isMissingCategoryIdColumnError(error) {
-  if (!error || !error.message) return false;
-  return error.message.includes('category_definition_id');
-}
-
 async function calculateSpentForCategory(client, { categoryDefinitionId, categoryName }, startDate, endDate) {
   if (categoryDefinitionId) {
     const result = await client.query(
@@ -249,51 +244,19 @@ async function getNotifications(query = {}) {
       type === NOTIFICATION_TYPES.BUDGET_WARNING ||
       type === NOTIFICATION_TYPES.BUDGET_EXCEEDED
     ) {
-      let budgetsResult;
-      let legacyBudgetSchema = false;
-      let categoryLookupByName = null;
-      let categoryLookupById = null;
-
-      try {
-        budgetsResult = await client.query(
-          `SELECT
-             cb.id,
-             cb.category_definition_id,
-             cb.budget_limit,
-             cd.name AS category_name,
-             parent.name AS parent_category_name
-           FROM category_budgets cb
-           JOIN category_definitions cd ON cd.id = cb.category_definition_id
-           LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-           WHERE cb.is_active = true
-             AND cb.period_type = 'monthly'`,
-        );
-      } catch (error) {
-        if (!isMissingCategoryIdColumnError(error)) {
-          throw error;
-        }
-
-        legacyBudgetSchema = true;
-        budgetsResult = await client.query(
-          `SELECT
-             cb.id,
-             cb.category AS legacy_category,
-             cb.budget_limit
-           FROM category_budgets cb
-           WHERE cb.is_active = true
-             AND cb.period_type = 'monthly'`,
-        );
-
-        const categoryRows = await client.query(
-          `SELECT id, name, name_en, parent_id FROM category_definitions`,
-        );
-        categoryLookupByName = new Map();
-        categoryLookupById = new Map();
-        categoryRows.rows.forEach((row) => {
-          categoryLookupByName.set(row.name, row);
-          categoryLookupById.set(row.id, row);
-        });
-      }
+      const budgetsResult = await client.query(
+        `SELECT
+           cb.id,
+           cb.category_definition_id,
+           cb.budget_limit,
+           cd.name AS category_name,
+           parent.name AS parent_category_name
+         FROM category_budgets cb
+         JOIN category_definitions cd ON cd.id = cb.category_definition_id
+         LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+         WHERE cb.is_active = true
+           AND cb.period_type = 'monthly'`,
+      );
 
       for (const budget of budgetsResult.rows) {
         const budgetLimit = Number.parseFloat(budget.budget_limit || 0);
@@ -302,15 +265,6 @@ async function getNotifications(query = {}) {
         let categoryId = budget.category_definition_id || null;
         let categoryName = budget.category_name || null;
         let parentCategoryName = budget.parent_category_name || null;
-
-        if (legacyBudgetSchema) {
-          const legacyCategory = budget.legacy_category;
-          const mappedCategory = legacyCategory ? categoryLookupByName.get(legacyCategory) : null;
-          categoryId = mappedCategory?.id || null;
-          categoryName = legacyCategory || mappedCategory?.name || null;
-          const parentRow = mappedCategory?.parent_id ? categoryLookupById.get(mappedCategory.parent_id) : null;
-          parentCategoryName = parentRow?.name || null;
-        }
 
         const spent = await calculateSpentForCategory(
           client,

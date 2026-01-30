@@ -237,7 +237,7 @@ function createForecastRouter({ sqliteDb = null } = {}) {
       const p10Ratio = p50ScenarioExpenses > 0 ? forecastExpensesByScenario.p10 / p50ScenarioExpenses : 1;
       const p90Ratio = p50ScenarioExpenses > 0 ? forecastExpensesByScenario.p90 / p50ScenarioExpenses : 1;
 
-      // Load active monthly budgets (fallback to legacy schema if needed)
+      // Load active monthly budgets
       let budgetRows = [];
       try {
         const budgetsQuery = `
@@ -260,20 +260,7 @@ function createForecastRouter({ sqliteDb = null } = {}) {
         `;
         budgetRows = db.prepare(budgetsQuery).all();
       } catch (err) {
-        if (err?.message && err.message.includes('category_definition_id')) {
-          try {
-            const legacyBudgetQuery = `
-              SELECT id AS budget_id, category AS category_name, period_type, budget_limit, is_active
-              FROM category_budgets
-              WHERE is_active = 1 AND period_type = 'monthly'
-            `;
-            budgetRows = db.prepare(legacyBudgetQuery).all();
-          } catch (legacyErr) {
-            console.warn('[Forecast] Could not load budgets (legacy):', legacyErr.message);
-          }
-        } else {
-          console.warn('[Forecast] Could not load budgets:', err.message);
-        }
+        console.warn('[Forecast] Could not load budgets:', err.message);
       }
 
       // Forecasted remaining spend by category (p50 baseline) for the rest of this month

@@ -172,7 +172,7 @@ class CoreAPIRoutes {
         SELECT
           COUNT(*) as total_transactions,
           COUNT(DISTINCT vendor) as unique_vendors,
-          COUNT(DISTINCT category) as unique_categories,
+          COUNT(DISTINCT category_definition_id) as unique_categories,
           MIN(date) as earliest_transaction,
           MAX(date) as latest_transaction,
           SUM(CASE WHEN price > 0 THEN price ELSE 0 END) as total_income,

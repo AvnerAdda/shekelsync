@@ -13,6 +13,42 @@
     "startTyping": "Commencez à taper pour rechercher des transactions",
     "shortcut": "Cmd+K"
   },
+  "onboarding": {
+    "gettingStarted": "Premiers pas",
+    "completeSteps": "Complétez ces étapes pour débloquer toutes les fonctionnalités",
+    "skip": "Passer",
+    "start": "Démarrer",
+    "next": "Suivant",
+    "startNow": "Commencer maintenant",
+    "upNext": "À suivre",
+    "doLater": "Je ferai cela plus tard",
+    "syncHint": "Prêt pour les rapports ? Lancez votre première synchronisation avec le bouton ci-dessus, puis visitez Paramètres → Export de données pour télécharger une sauvegarde complète une fois les transactions arrivées.",
+    "syncHintCompact": "Une fois votre compte connecté, démarrez une synchronisation depuis la barre latérale ou le panneau Comptes. Synchronisation terminée ? Allez dans Paramètres → Export de données pour télécharger un CSV pour les impôts ou les sauvegardes.",
+    "steps": {
+      "profile": {
+        "title": "Configurer votre profil",
+        "description": "Parlez-nous de vous pour obtenir des conseils personnalisés"
+      },
+      "bankAccount": {
+        "title": "Ajouter un compte bancaire",
+        "description": "Connectez votre compte bancaire israélien",
+        "descriptionWithCount": "Connectez votre compte bancaire israélien ({{count}} ajouté(s))"
+      },
+      "creditCard": {
+        "title": "Ajouter une carte de crédit",
+        "description": "Ajoutez votre compte de carte de crédit",
+        "descriptionWithCount": "Ajoutez votre compte de carte de crédit ({{count}} ajouté(s))"
+      },
+      "firstScrape": {
+        "title": "Synchronisation automatique des transactions",
+        "description": "Lancez votre première synchronisation depuis la barre latérale une fois les comptes connectés"
+      },
+      "explored": {
+        "title": "Explorez vos finances",
+        "description": "Consultez les analyses, définissez des budgets et suivez vos dépenses"
+      }
+    }
+  },
   "license": {
     "trialActive": "Essai gratuit actif",
     "trialExpiring": "Fin d'essai proche",

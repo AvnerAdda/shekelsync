@@ -105,7 +105,7 @@ async function findSmartMatches(params = {}) {
       // Each pattern becomes an OR condition in FTS5
       const ftsPatterns = searchPatterns.map(p => `"${p.replace(/"/g, '')}"`).join(' OR ');
       nameConditions = [
-        `t.id IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH $2)`
+        `t.rowid IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH $2)`
       ];
       queryParams = [bankVendor, ftsPatterns];
       
