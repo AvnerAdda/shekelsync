@@ -63,7 +63,6 @@ jobs:
 
     env:
       ALLOW_DEV_NO_ENCRYPTION: 'true'
-      SKIP_EMBEDDED_API: 'true'
       USE_VITE_RENDERER: 'true'
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
@@ -74,7 +73,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22.12.0'
           cache: 'npm'
 
       - name: Install root dependencies

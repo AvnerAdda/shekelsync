@@ -30,6 +30,42 @@
     "privacyNotice": "Your ID is stored securely on your device and used only for license verification. We never share your personal data.",
     "trialInfo": "30 days free, then ₪500 for lifetime Pro access"
   },
+  "onboarding": {
+    "gettingStarted": "Getting Started",
+    "completeSteps": "Complete these steps to unlock all features",
+    "skip": "Skip",
+    "start": "Start",
+    "next": "Next",
+    "startNow": "Start Now",
+    "upNext": "Up Next",
+    "doLater": "I'll do this later",
+    "syncHint": "Ready for reports? Kick off your first sync using the button above, then visit Settings → Data Export to grab a full backup once transactions arrive.",
+    "syncHintCompact": "Once you connect an account, start a sync from the sidebar or Accounts panel. Finished syncing? Go to Settings → Data Export to download a CSV for taxes or backups.",
+    "steps": {
+      "profile": {
+        "title": "Set up your profile",
+        "description": "Tell us about yourself to get personalized insights"
+      },
+      "bankAccount": {
+        "title": "Add bank account",
+        "description": "Connect your Israeli bank account",
+        "descriptionWithCount": "Connect your Israeli bank account ({{count}} added)"
+      },
+      "creditCard": {
+        "title": "Add credit card",
+        "description": "Add your credit card account",
+        "descriptionWithCount": "Add your credit card account ({{count}} added)"
+      },
+      "firstScrape": {
+        "title": "Auto-sync transactions",
+        "description": "Kick off your first sync from the sidebar once accounts are linked"
+      },
+      "explored": {
+        "title": "Explore your finances",
+        "description": "View analytics, set budgets, and track spending"
+      }
+    }
+  },
   "license": {
     "trialActive": "Free Trial Active",
     "trialExpiring": "Trial Ending Soon",

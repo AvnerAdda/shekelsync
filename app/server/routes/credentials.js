@@ -131,8 +131,8 @@ function createCredentialsRouter() {
   router.patch('/:id', handleUpdate);
 
   const handleDelete = async (req, res) => {
+    const id = req.params?.id || req.query?.id;
     try {
-      const id = req.params?.id || req.query?.id;
 
       // Validate ID
       const idValidation = validateCredentialId(id, { required: true });

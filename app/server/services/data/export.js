@@ -340,8 +340,8 @@ async function exportData(params = {}) {
       `
           SELECT
             COALESCE(parent.id, cd.id) AS category_definition_id,
-            COALESCE(parent.name, cd.name, t.parent_category, t.category, 'Uncategorized') AS category,
-            COALESCE(parent.name_en, cd.name_en, t.parent_category, t.category, 'Uncategorized') AS category_name_en,
+            COALESCE(parent.name, cd.name, 'Uncategorized') AS category,
+            COALESCE(parent.name_en, cd.name_en, 'Uncategorized') AS category_name_en,
             parent.name AS parent_category,
             parent.name_en AS parent_category_name_en,
             COUNT(*) AS transaction_count,
@@ -357,8 +357,8 @@ async function exportData(params = {}) {
           ${vendorFilterClause}
           GROUP BY
             COALESCE(parent.id, cd.id),
-            COALESCE(parent.name, cd.name, t.parent_category, t.category, 'Uncategorized'),
-            COALESCE(parent.name_en, cd.name_en, t.parent_category, t.category, 'Uncategorized'),
+            COALESCE(parent.name, cd.name, 'Uncategorized'),
+            COALESCE(parent.name_en, cd.name_en, 'Uncategorized'),
             parent.name,
             parent.name_en
           ORDER BY total_amount DESC

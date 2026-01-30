@@ -15,6 +15,8 @@ import {
   Block as BlockIcon,
   Star as StarIcon,
   WifiOff as WifiOffIcon,
+  CheckCircle as CheckCircleIcon,
+  PersonAdd as PersonAddIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 
@@ -41,23 +43,31 @@ const LicenseStatusBanner: React.FC<LicenseStatusBannerProps> = ({
   const theme = useTheme();
   const { t } = useTranslation();
 
-  if (!status || status.licenseType === 'pro') {
+  if (!status) {
     return null;
   }
 
   const { licenseType, trialDaysRemaining, isReadOnly, offlineMode, offlineGraceDaysRemaining } = status;
 
   // Determine alert severity and content
-  let severity: 'info' | 'warning' | 'error' = 'info';
+  let severity: 'info' | 'warning' | 'error' | 'success' = 'info';
   let icon: React.ReactNode = <ScheduleIcon />;
   let title = '';
   let message = '';
+  let showUpgradeButton = true;
 
-  if (licenseType === 'none') {
-    return null; // Show registration step instead
-  }
-
-  if (licenseType === 'expired' || isReadOnly) {
+  if (licenseType === 'pro') {
+    severity = 'success';
+    icon = <CheckCircleIcon />;
+    title = t('license.proActive', 'Pro License Active');
+    message = t('license.proDescription', 'You have full access to all features');
+    showUpgradeButton = false;
+  } else if (licenseType === 'none') {
+    severity = 'info';
+    icon = <PersonAddIcon />;
+    title = t('license.registrationRequired', 'Registration Required');
+    message = t('license.registrationDescription', 'Register to start your 30-day free trial');
+  } else if (licenseType === 'expired' || isReadOnly) {
     severity = 'error';
     icon = <BlockIcon />;
     title = t('license.trialExpired');
@@ -88,24 +98,28 @@ const LicenseStatusBanner: React.FC<LicenseStatusBannerProps> = ({
       ? theme.palette.error.main
       : severity === 'warning'
         ? theme.palette.warning.main
-        : theme.palette.primary.main;
+        : severity === 'success'
+          ? theme.palette.success.main
+          : theme.palette.primary.main;
 
   if (compact) {
     return (
       <Collapse in={true}>
         <Alert
-          severity={severity}
+          severity={severity === 'success' ? 'success' : severity}
           icon={icon}
           action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={onUpgradeClick}
-              startIcon={<StarIcon />}
-              sx={{ whiteSpace: 'nowrap' }}
-            >
-              {t('license.upgradeToPro')}
-            </Button>
+            showUpgradeButton ? (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={onUpgradeClick}
+                startIcon={<StarIcon />}
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                {t('license.upgradeToPro')}
+              </Button>
+            ) : undefined
           }
           sx={{
             borderRadius: 0,
@@ -128,37 +142,48 @@ const LicenseStatusBanner: React.FC<LicenseStatusBannerProps> = ({
     );
   }
 
+  const getBackgroundColor = () => {
+    switch (severity) {
+      case 'error': return alpha(theme.palette.error.main, 0.08);
+      case 'warning': return alpha(theme.palette.warning.main, 0.08);
+      case 'success': return alpha(theme.palette.success.main, 0.08);
+      default: return alpha(theme.palette.primary.main, 0.08);
+    }
+  };
+
+  const getBorderColor = () => {
+    switch (severity) {
+      case 'error': return alpha(theme.palette.error.main, 0.2);
+      case 'warning': return alpha(theme.palette.warning.main, 0.2);
+      case 'success': return alpha(theme.palette.success.main, 0.2);
+      default: return alpha(theme.palette.primary.main, 0.2);
+    }
+  };
+
+  const getIconColor = () => {
+    switch (severity) {
+      case 'error': return theme.palette.error.main;
+      case 'warning': return theme.palette.warning.main;
+      case 'success': return theme.palette.success.main;
+      default: return theme.palette.primary.main;
+    }
+  };
+
   return (
     <Collapse in={true}>
       <Box
         sx={{
           p: 2,
           borderRadius: 2,
-          backgroundColor:
-            severity === 'error'
-              ? alpha(theme.palette.error.main, 0.08)
-              : severity === 'warning'
-                ? alpha(theme.palette.warning.main, 0.08)
-                : alpha(theme.palette.primary.main, 0.08),
-          border: `1px solid ${
-            severity === 'error'
-              ? alpha(theme.palette.error.main, 0.2)
-              : severity === 'warning'
-                ? alpha(theme.palette.warning.main, 0.2)
-                : alpha(theme.palette.primary.main, 0.2)
-          }`,
+          backgroundColor: getBackgroundColor(),
+          border: `1px solid ${getBorderColor()}`,
           mb: 2,
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
           <Box
             sx={{
-              color:
-                severity === 'error'
-                  ? theme.palette.error.main
-                  : severity === 'warning'
-                    ? theme.palette.warning.main
-                    : theme.palette.primary.main,
+              color: getIconColor(),
               mt: 0.25,
             }}
           >
@@ -199,18 +224,20 @@ const LicenseStatusBanner: React.FC<LicenseStatusBannerProps> = ({
               </Box>
             )}
 
-            <Button
-              variant={isReadOnly ? 'contained' : 'outlined'}
-              size="small"
-              onClick={onUpgradeClick}
-              startIcon={<StarIcon />}
-              sx={{
-                textTransform: 'none',
-                fontWeight: 500,
-              }}
-            >
-              {isReadOnly ? t('license.purchasePro') : t('license.upgradeToPro')}
-            </Button>
+            {showUpgradeButton && (
+              <Button
+                variant={isReadOnly ? 'contained' : 'outlined'}
+                size="small"
+                onClick={onUpgradeClick}
+                startIcon={<StarIcon />}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 500,
+                }}
+              >
+                {isReadOnly ? t('license.purchasePro') : t('license.upgradeToPro')}
+              </Button>
+            )}
           </Box>
         </Box>
       </Box>

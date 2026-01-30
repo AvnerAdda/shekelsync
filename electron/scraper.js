@@ -113,9 +113,6 @@ class ElectronScraper {
     txn.identifier = hash.digest('hex');
 
     let amount = txn.chargedAmount || txn.originalAmount || 0;
-    let category = txn.category;
-    let parentCategory = null;
-    let subcategory = null;
     let categoryDefinitionId = null;
     let categoryInfo = null;
 
@@ -150,36 +147,22 @@ class ElectronScraper {
               await this.findCategoryByName(categorisation.parentCategory, null)
             );
           }
-
-          if (!categoryInfo) {
-            parentCategory = categorisation.parentCategory || parentCategory;
-            subcategory = categorisation.subcategory || subcategory;
-            category = categorisation.subcategory || categorisation.parentCategory || category;
-          }
         }
       }
 
-      if (!categoryInfo && category && category !== 'N/A') {
+      if (!categoryInfo && txn.category && txn.category !== 'N/A') {
         categoryInfo = this.normalizeCategoryRecord(
-          await this.findCategoryByName(category, parentCategory)
+          await this.findCategoryByName(txn.category, null)
         );
       }
 
       if (categoryInfo && categoryInfo.id) {
         categoryDefinitionId = categoryInfo.id;
-        const hasParent = Boolean(categoryInfo.parentName);
-        category = categoryInfo.name || category;
-        parentCategory = hasParent ? (categoryInfo.parentName || category) : (categoryInfo.name || category);
-        subcategory = hasParent ? (categoryInfo.name || subcategory || category) : null;
       }
     } else {
       amount = txn.chargedAmount || txn.originalAmount || 0;
       const bankCategory = await resolveBankCategory(dbManager);
       categoryDefinitionId = bankCategory.id;
-      const hasParent = Boolean(bankCategory.parent_name);
-      category = bankCategory.name;
-      parentCategory = hasParent ? bankCategory.parent_name : bankCategory.name;
-      subcategory = hasParent ? bankCategory.name : null;
     }
 
     try {
@@ -190,9 +173,6 @@ class ElectronScraper {
           date,
           name,
           price,
-          category,
-          parent_category,
-          subcategory,
           category_definition_id,
           merchant_name,
           auto_categorized,
@@ -205,7 +185,7 @@ class ElectronScraper {
           memo,
           status,
           account_number
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         ON CONFLICT (identifier, vendor) DO NOTHING`,
         [
           txn.identifier,
@@ -213,13 +193,10 @@ class ElectronScraper {
           new Date(txn.date),
           txn.description,
           amount,
-          category || 'N/A',
-          parentCategory,
-          subcategory,
           categoryDefinitionId,
           txn.description,
-          Boolean(categoryDefinitionId || parentCategory),
-          categoryDefinitionId ? 0.8 : parentCategory ? 0.5 : 0.0,
+          Boolean(categoryDefinitionId),
+          categoryDefinitionId ? 0.8 : 0.0,
           txn.type,
           txn.processedDate,
           txn.originalAmount,
@@ -287,8 +264,6 @@ class ElectronScraper {
           cr.id,
           cr.name_pattern,
           cr.target_category,
-          cr.parent_category,
-          cr.subcategory,
           cr.category_definition_id,
           cd.name AS resolved_subcategory,
           parent.name AS resolved_parent_category,
@@ -307,10 +282,9 @@ class ElectronScraper {
       for (const rule of rules) {
         const pattern = `%${rule.name_pattern}%`;
         let categoryId = rule.category_definition_id;
-        let resolvedSub = rule.resolved_subcategory || rule.subcategory || null;
+        let resolvedSub = rule.resolved_subcategory || null;
         let resolvedParent =
           rule.resolved_parent_category ||
-          rule.parent_category ||
           (resolvedSub ? null : rule.target_category) ||
           null;
 
@@ -328,24 +302,20 @@ class ElectronScraper {
           }
         }
 
-        const categoryName = resolvedSub || resolvedParent || rule.target_category || rule.name_pattern;
         const confidence = categoryId ? 0.8 : 0.5;
 
         const updateResult = await dbManager.query(`
           UPDATE transactions
           SET
             category_definition_id = COALESCE($2, category_definition_id),
-            category = COALESCE($3, category),
-            parent_category = COALESCE($4, parent_category),
-            subcategory = COALESCE($5, subcategory),
             auto_categorized = true,
-            confidence_score = GREATEST(confidence_score, $6)
+            confidence_score = GREATEST(confidence_score, $3)
           WHERE LOWER(name) LIKE LOWER($1)
             AND category_definition_id NOT IN (
               SELECT id FROM category_definitions
-              WHERE name = $7 OR category_type = 'income'
+              WHERE name = $4 OR category_type = 'income'
             )
-        `, [pattern, categoryId, categoryName, resolvedParent, resolvedSub, confidence, BANK_CATEGORY_NAME]);
+        `, [pattern, categoryId, confidence, BANK_CATEGORY_NAME]);
 
         totalUpdated += updateResult.rowCount;
       }

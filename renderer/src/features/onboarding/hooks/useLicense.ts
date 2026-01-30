@@ -106,6 +106,8 @@ export function useLicense(): UseLicenseReturn {
 
       if (result.success) {
         await fetchStatus();
+        // Notify other components that license status changed
+        window.dispatchEvent(new CustomEvent('licenseStatusChanged'));
       }
 
       return result;
@@ -166,6 +168,8 @@ export function useLicense(): UseLicenseReturn {
 
       if (result.success) {
         await fetchStatus();
+        // Notify other components that license status changed
+        window.dispatchEvent(new CustomEvent('licenseStatusChanged'));
       }
 
       return result;
@@ -188,6 +192,8 @@ export function useLicense(): UseLicenseReturn {
 
       if (result.success) {
         await fetchStatus();
+        // Notify other components that license status changed
+        window.dispatchEvent(new CustomEvent('licenseStatusChanged'));
       }
 
       return result;
@@ -203,6 +209,15 @@ export function useLicense(): UseLicenseReturn {
   // Fetch status on mount
   useEffect(() => {
     fetchStatus();
+  }, [fetchStatus]);
+
+  // Listen for license status changes from other components
+  useEffect(() => {
+    const handleLicenseChange = () => {
+      fetchStatus();
+    };
+    window.addEventListener('licenseStatusChanged', handleLicenseChange);
+    return () => window.removeEventListener('licenseStatusChanged', handleLicenseChange);
   }, [fetchStatus]);
 
   // Periodically validate online (every 30 minutes)

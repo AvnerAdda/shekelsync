@@ -918,19 +918,19 @@ const FTS5_STATEMENTS = [
   // Triggers to keep transactions_fts in sync with transactions table
   `CREATE TRIGGER IF NOT EXISTS transactions_fts_insert AFTER INSERT ON transactions BEGIN
     INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
-    VALUES (NEW.id, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
+    VALUES (NEW.rowid, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
   END;`,
 
   `CREATE TRIGGER IF NOT EXISTS transactions_fts_delete AFTER DELETE ON transactions BEGIN
     INSERT INTO transactions_fts(transactions_fts, rowid, name, memo, vendor, merchant_name)
-    VALUES ('delete', OLD.id, OLD.name, OLD.memo, OLD.vendor, OLD.merchant_name);
+    VALUES ('delete', OLD.rowid, OLD.name, OLD.memo, OLD.vendor, OLD.merchant_name);
   END;`,
 
   `CREATE TRIGGER IF NOT EXISTS transactions_fts_update AFTER UPDATE ON transactions BEGIN
     INSERT INTO transactions_fts(transactions_fts, rowid, name, memo, vendor, merchant_name)
-    VALUES ('delete', OLD.id, OLD.name, OLD.memo, OLD.vendor, OLD.merchant_name);
+    VALUES ('delete', OLD.rowid, OLD.name, OLD.memo, OLD.vendor, OLD.merchant_name);
     INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
-    VALUES (NEW.id, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
+    VALUES (NEW.rowid, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
   END;`,
 
   // Triggers to keep categorization_rules_fts in sync

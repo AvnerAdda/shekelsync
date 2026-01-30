@@ -4,12 +4,12 @@ const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
 
 const CONFIDENCE_UPDATE_EXPR = dialect.useSqlite
-  ? 'CASE WHEN confidence_score IS NULL OR confidence_score < $6 THEN $6 ELSE confidence_score END'
-  : 'GREATEST(confidence_score, $6)';
+  ? 'CASE WHEN confidence_score IS NULL OR confidence_score < $3 THEN $3 ELSE confidence_score END'
+  : 'GREATEST(confidence_score, $3)';
 
 const CONFIDENCE_UPDATE_BULK_EXPR = dialect.useSqlite
-  ? 'CASE WHEN confidence_score IS NULL OR confidence_score < $6 THEN $6 ELSE confidence_score END'
-  : 'GREATEST(confidence_score, $6)';
+  ? 'CASE WHEN confidence_score IS NULL OR confidence_score < $3 THEN $3 ELSE confidence_score END'
+  : 'GREATEST(confidence_score, $3)';
 
 let database = actualDatabase;
 let resolveCategoryFn = actualResolveCategory;
@@ -85,24 +85,16 @@ async function categorizeTransaction(payload = {}) {
     }
 
     if (transactionId && vendor) {
-      const categoryLabel = subcategory || parentCategory || transactionName;
-
       const updateResult = await client.query(
         `UPDATE transactions
             SET category_definition_id = COALESCE($1, category_definition_id),
-                parent_category = COALESCE($2, parent_category),
-                subcategory = COALESCE($3, subcategory),
-                category = COALESCE($4, category),
-                merchant_name = $5,
+                merchant_name = $2,
                 auto_categorized = true,
                 confidence_score = ${CONFIDENCE_UPDATE_EXPR}
-          WHERE identifier = $7 AND vendor = $8
+          WHERE identifier = $4 AND vendor = $5
           RETURNING *`,
         [
           categoryDefinitionId,
-          parentCategory,
-          subcategory,
-          categoryLabel,
           transactionName,
           finalConfidence,
           transactionId,
@@ -199,34 +191,27 @@ async function bulkCategorizeTransactions(providedClient = null) {
         }
       }
 
-      const categoryLabel = subcategory || parentCategory || pattern.name_pattern;
       const confidence = categoryId ? 0.8 : 0.5;
 
       const updateResult = await client.query(
         `UPDATE transactions
             SET category_definition_id = COALESCE($2, category_definition_id),
-                parent_category = COALESCE($3, parent_category),
-                subcategory = COALESCE($4, subcategory),
-                category = COALESCE($5, category),
                 merchant_name = name,
                 auto_categorized = true,
                 confidence_score = ${CONFIDENCE_UPDATE_BULK_EXPR}
           WHERE LOWER(name) LIKE '%' || LOWER($1) || '%'
             AND category_definition_id NOT IN (
               SELECT id FROM category_definitions
-              WHERE name = $7 OR category_type = 'income'
+              WHERE name = $4 OR category_type = 'income'
             )
             AND (
               category_definition_id IS NULL
               OR auto_categorized = false
-              OR confidence_score < $6
+              OR confidence_score < $3
             )`,
         [
           pattern.name_pattern,
           categoryId,
-          parentCategory,
-          subcategory,
-          categoryLabel,
           confidence,
           BANK_CATEGORY_NAME,
         ],
