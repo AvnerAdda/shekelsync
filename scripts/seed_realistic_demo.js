@@ -15,12 +15,67 @@ const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
+const BASE_DATE = new Date(process.env.DEMO_BASE_DATE || '2026-01-27T12:00:00Z');
+const SEED = Number(process.env.DEMO_SEED || 42);
+const USD_ILS_RATE = Number(process.env.DEMO_USD_ILS_RATE || 3.7);
+const ID_BASE = BASE_DATE.getTime();
+function mulberry32(a) {
+  let t = a >>> 0;
+  return function () {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), t | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rng = mulberry32(Number.isFinite(SEED) ? SEED : 42);
+function randomBetween(min, max) { return rng() * (max - min) + min; }
+function randomInt(min, max) { return Math.floor(randomBetween(min, max + 1)); }
+function pick(list) { return list[randomInt(0, list.length - 1)]; }
+function money(amount) { return Math.round(amount * 100) / 100; }
+function variance(base, spread) { return money(randomBetween(base - spread, base + spread)); }
+function monthKeyFrom(dateObj) { return dateObj.toISOString().slice(0, 7); }
+function monthDateFromBase(offset) {
+  return new Date(Date.UTC(BASE_DATE.getUTCFullYear(), BASE_DATE.getUTCMonth() + offset, 1, 12, 0, 0));
+}
+function dateOnly(dateObj) { return dateObj.toISOString().slice(0, 10); }
+function addMonths(dateObj, months) {
+  const next = new Date(Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), 12, 0, 0));
+  next.setUTCMonth(next.getUTCMonth() + months);
+  return next;
+}
+function dateInMonth(monthDate, day, hourRange) {
+  const safeDay = Math.min(day, 28);
+  const [startHour, endHour] = hourRange || [8, 20];
+  const date = new Date(Date.UTC(monthDate.getUTCFullYear(), monthDate.getUTCMonth(), safeDay, 0, 0, 0));
+  date.setUTCHours(randomInt(startHour, endHour), randomInt(0, 59), 0, 0);
+  return date.toISOString();
+}
+function dateRandomInMonth(monthDate, dayRange, hourRange) {
+  const [dayStart, dayEnd] = dayRange || [1, 28];
+  return dateInMonth(monthDate, randomInt(dayStart, dayEnd), hourRange);
+}
+function generateId(i) { return `demo-${ID_BASE}-${i}`; }
+
 console.log(`\n🗄️  Seeding database: ${DB_PATH}\n`);
 
 // ============================================
 // STEP 0: CLEANUP EXISTING DEMO DATA
 // ============================================
 console.log('🧹 Cleaning up existing demo data...');
+
+// Guard against legacy FTS schema pointing to a non-existent transactions.id
+try {
+  const ftsSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='transactions_fts'").get();
+  if (ftsSql && /content_rowid\s*=\s*'id'/i.test(ftsSql.sql || '')) {
+    db.exec('DROP TRIGGER IF EXISTS transactions_fts_insert');
+    db.exec('DROP TRIGGER IF EXISTS transactions_fts_delete');
+    db.exec('DROP TRIGGER IF EXISTS transactions_fts_update');
+    db.exec('DROP TABLE IF EXISTS transactions_fts');
+  }
+} catch (e) {
+  // Ignore and proceed with cleanup
+}
 
 // Delete demo transactions (those with 'demo-' or 'txn_new_' prefix from seed scripts)
 db.exec("DELETE FROM transactions WHERE identifier LIKE 'demo-%' OR identifier LIKE 'txn_new_%'");
@@ -36,6 +91,7 @@ const TABLES_TO_CLEAR = [
   'account_pairings',
   'category_budgets',
   'investment_holdings',
+  'investment_assets',
   'investment_accounts',
   'vendor_credentials',
   'license',
@@ -338,10 +394,12 @@ console.log(`  Added ${INDEXES.length} indexes`);
 // ============================================
 console.log('📋 Seeding vendor credentials...');
 
+// Note: username, id_number, password, identification_code are encrypted fields
+// They must be NULL for demo data, otherwise decryption will fail at runtime
 const DEMO_CREDENTIALS = [
-  { vendor: 'max', nickname: 'Max - כרטיס ראשי', username: 'demo_max', institution_id: null },
-  { vendor: 'visaCal', nickname: 'Cal - כרטיס משני', username: 'demo_cal', institution_id: null },
-  { vendor: 'discount', nickname: 'דיסקונט - עו"ש', username: 'demo_discount', bank_account_number: '0123456789', institution_id: null },
+  { vendor: 'max', nickname: 'Max - כרטיס ראשי', username: null, institution_id: null },
+  { vendor: 'visaCal', nickname: 'Cal - כרטיס משני', username: null, institution_id: null },
+  { vendor: 'discount', nickname: 'דיסקונט - עו"ש', username: null, bank_account_number: '0123456789', institution_id: null },
 ];
 
 const insertCredential = db.prepare(`
@@ -600,19 +658,31 @@ CONVERSATIONS.forEach((c) => {
 });
 
 const MESSAGES = [
-  { conversationId: 1, role: 'user', content: 'How much did I spend on restaurants this month?', tokensUsed: 25, createdAt: '2025-11-15T10:00:00Z' },
-  { conversationId: 1, role: 'assistant', content: 'Based on your transactions, you spent 1,245 ILS on restaurants this month. This is 15% higher than last month.', tokensUsed: 180, createdAt: '2025-11-15T10:00:30Z' },
-  { conversationId: 1, role: 'user', content: 'What about supermarkets?', tokensUsed: 15, createdAt: '2025-11-15T10:10:00Z' },
-  { conversationId: 1, role: 'assistant', content: 'Your supermarket spending this month totals 2,890 ILS. Rami Levy accounts for 45% of that spending.', tokensUsed: 165, createdAt: '2025-11-15T10:10:25Z' },
-  { conversationId: 2, role: 'user', content: 'Can you help me plan my December budget?', tokensUsed: 20, createdAt: '2025-12-01T14:30:00Z' },
-  { conversationId: 2, role: 'assistant', content: 'Based on your spending patterns, here is a suggested budget for December: Food & Groceries: 4,500 ILS, Transportation: 800 ILS, Entertainment: 1,200 ILS.', tokensUsed: 250, createdAt: '2025-12-01T14:30:45Z' },
-  { conversationId: 3, role: 'user', content: 'How is my investment portfolio performing?', tokensUsed: 18, createdAt: '2025-12-10T09:00:00Z' },
-  { conversationId: 3, role: 'assistant', content: 'Your portfolio summary: Total Value: 125,000 ILS, Monthly Return: +2.3%, YTD Return: +12.5%.', tokensUsed: 180, createdAt: '2025-12-10T09:00:40Z' },
+  { externalId: 'conv-001', role: 'user', content: 'How much did I spend on restaurants this month?', tokensUsed: 25, createdAt: '2025-11-15T10:00:00Z' },
+  { externalId: 'conv-001', role: 'assistant', content: 'Based on your transactions, you spent 1,245 ILS on restaurants this month. This is 15% higher than last month.', tokensUsed: 180, createdAt: '2025-11-15T10:00:30Z' },
+  { externalId: 'conv-001', role: 'user', content: 'What about supermarkets?', tokensUsed: 15, createdAt: '2025-11-15T10:10:00Z' },
+  { externalId: 'conv-001', role: 'assistant', content: 'Your supermarket spending this month totals 2,890 ILS. Rami Levy accounts for 45% of that spending.', tokensUsed: 165, createdAt: '2025-11-15T10:10:25Z' },
+  { externalId: 'conv-002', role: 'user', content: 'Can you help me plan my December budget?', tokensUsed: 20, createdAt: '2025-12-01T14:30:00Z' },
+  { externalId: 'conv-002', role: 'assistant', content: 'Based on your spending patterns, here is a suggested budget for December: Food & Groceries: 4,500 ILS, Transportation: 800 ILS, Entertainment: 1,200 ILS.', tokensUsed: 250, createdAt: '2025-12-01T14:30:45Z' },
+  { externalId: 'conv-003', role: 'user', content: 'How is my investment portfolio performing?', tokensUsed: 18, createdAt: '2025-12-10T09:00:00Z' },
+  { externalId: 'conv-003', role: 'assistant', content: 'Your portfolio summary: Total Value: 125,000 ILS, Monthly Return: +2.3%, YTD Return: +12.5%.', tokensUsed: 180, createdAt: '2025-12-10T09:00:40Z' },
 ];
+
+const convoIdByExternal = new Map(
+  db.prepare('SELECT id, external_id FROM chat_conversations').all().map((row) => [row.external_id, row.id])
+);
 
 MESSAGES.forEach((m) => {
   try {
-    insertMessage.run(m);
+    const convoId = convoIdByExternal.get(m.externalId);
+    if (!convoId) return;
+    insertMessage.run({
+      conversationId: convoId,
+      role: m.role,
+      content: m.content,
+      tokensUsed: m.tokensUsed,
+      createdAt: m.createdAt,
+    });
   } catch (e) {
     // Ignore duplicates
   }
@@ -693,211 +763,352 @@ SUB_ALERTS.forEach((a) => {
 
 console.log(`  Inserted ${SUBSCRIPTIONS.length} subscriptions with history and alerts`);
 
+const BUDGETS = [
+  { categoryId: 3, limit: 2500, period: 'monthly' },   // Supermarket
+  { categoryId: 4, limit: 1200, period: 'monthly' },   // Restaurants
+  { categoryId: 5, limit: 400, period: 'monthly' },    // Coffee
+  { categoryId: 11, limit: 900, period: 'monthly' },   // Fuel
+  { categoryId: 56, limit: 800, period: 'monthly' },   // Clothing
+  { categoryId: 60, limit: 1200, period: 'monthly' },  // Electronics
+  { categoryId: 49, limit: 200, period: 'monthly' },   // Streaming
+];
+const BUDGET_LIMITS = new Map(BUDGETS.map((b) => [b.categoryId, b.limit]));
+
 // ============================================
-// STEP 11: SEED TRANSACTIONS (original logic)
+// STEP 11: SEED TRANSACTIONS (realistic household model)
 // ============================================
 console.log('📋 Seeding transactions...');
 
-const EXPENSE_TRANSACTIONS = [
-  // Supermarket (category 3)
-  { name: 'שופרסל דיל', vendor: 'max', account: '1234', category: 3, minAmount: 80, maxAmount: 450 },
-  { name: 'רמי לוי', vendor: 'max', account: '1234', category: 3, minAmount: 100, maxAmount: 600 },
-  { name: 'יינות ביתן', vendor: 'visaCal', account: '9012', category: 3, minAmount: 50, maxAmount: 300 },
-  { name: 'אושר עד', vendor: 'max', account: '5678', category: 3, minAmount: 60, maxAmount: 250 },
-  { name: 'ויקטורי', vendor: 'max', account: '1234', category: 3, minAmount: 40, maxAmount: 200 },
-  
-  // Restaurants (category 4)
-  { name: 'WOLT', vendor: 'max', account: '1234', category: 4, minAmount: 45, maxAmount: 180 },
-  { name: 'ארומה', vendor: 'visaCal', account: '9012', category: 4, minAmount: 25, maxAmount: 80 },
-  { name: 'מקדונלדס', vendor: 'max', account: '5678', category: 4, minAmount: 35, maxAmount: 120 },
-  { name: 'גרג קפה', vendor: 'max', account: '1234', category: 4, minAmount: 30, maxAmount: 90 },
-  { name: 'שיפודי התקווה', vendor: 'visaCal', account: '9012', category: 4, minAmount: 80, maxAmount: 250 },
-  
-  // Coffee & Bakery (category 5)
-  { name: 'קפה קפה', vendor: 'max', account: '1234', category: 5, minAmount: 20, maxAmount: 65 },
-  { name: 'רולדין', vendor: 'max', account: '5678', category: 5, minAmount: 25, maxAmount: 80 },
-  { name: 'לחמנינה', vendor: 'visaCal', account: '9012', category: 5, minAmount: 15, maxAmount: 50 },
-  
-  // Delivery (category 6)
-  { name: 'וולט משלוחים', vendor: 'max', account: '1234', category: 6, minAmount: 50, maxAmount: 150 },
-  { name: 'תן ביס', vendor: 'max', account: '5678', category: 6, minAmount: 40, maxAmount: 120 },
-  
-  // Fuel (category 11)
-  { name: 'פז', vendor: 'max', account: '1234', category: 11, minAmount: 150, maxAmount: 450 },
-  { name: 'דלק', vendor: 'visaCal', account: '9012', category: 11, minAmount: 120, maxAmount: 400 },
-  { name: 'סונול', vendor: 'max', account: '5678', category: 11, minAmount: 100, maxAmount: 350 },
-  
-  // Public Transport (category 12)
-  { name: 'רב קו', vendor: 'max', account: '1234', category: 12, minAmount: 50, maxAmount: 150 },
-  { name: 'אגד', vendor: 'visaCal', account: '9012', category: 12, minAmount: 10, maxAmount: 50 },
-  
-  // Parking (category 13)
-  { name: 'אחוזות החוף', vendor: 'max', account: '1234', category: 13, minAmount: 15, maxAmount: 60 },
-  { name: 'פנגו', vendor: 'max', account: '5678', category: 13, minAmount: 10, maxAmount: 40 },
-  
-  // Taxi (category 14)
-  { name: 'גט טקסי', vendor: 'max', account: '1234', category: 14, minAmount: 25, maxAmount: 120 },
-  { name: 'יאנגו', vendor: 'visaCal', account: '9012', category: 14, minAmount: 20, maxAmount: 100 },
-  
-  // Digital Wallets (category 30)
-  { name: 'BIT', vendor: 'max', account: '1234', category: 30, minAmount: 20, maxAmount: 500 },
-  { name: 'פייבוקס', vendor: 'max', account: '5678', category: 30, minAmount: 15, maxAmount: 300 },
-  
-  // Shopping - Clothing (category 56)
-  { name: 'H&M', vendor: 'max', account: '1234', category: 56, minAmount: 100, maxAmount: 500 },
-  { name: 'זארה', vendor: 'visaCal', account: '9012', category: 56, minAmount: 150, maxAmount: 600 },
-  { name: 'קסטרו', vendor: 'max', account: '5678', category: 56, minAmount: 80, maxAmount: 400 },
-  
-  // Shopping Electronics (category 60)
-  { name: 'KSP', vendor: 'max', account: '1234', category: 60, minAmount: 50, maxAmount: 800 },
-  { name: 'BUG', vendor: 'visaCal', account: '9012', category: 60, minAmount: 80, maxAmount: 600 },
-  { name: 'איביי', vendor: 'max', account: '5678', category: 60, minAmount: 30, maxAmount: 400 },
-  
-  // Home & Maintenance (category 79)
-  { name: 'איקאה', vendor: 'max', account: '1234', category: 79, minAmount: 100, maxAmount: 1500 },
-  { name: 'הום סנטר', vendor: 'visaCal', account: '9012', category: 79, minAmount: 50, maxAmount: 500 },
-  { name: 'ACE', vendor: 'max', account: '5678', category: 79, minAmount: 30, maxAmount: 300 },
-  
-  // Pharmacy (category 41)
-  { name: 'סופר פארם', vendor: 'max', account: '5678', category: 41, minAmount: 30, maxAmount: 200 },
-  { name: 'בי פארם', vendor: 'max', account: '1234', category: 41, minAmount: 20, maxAmount: 150 },
-  
-  // Health & Wellness - Medical (category 39)
-  { name: 'מכבי', vendor: 'discount', account: '0123456789', category: 39, minAmount: 25, maxAmount: 80 },
-  { name: 'כללית', vendor: 'discount', account: '0123456789', category: 39, minAmount: 30, maxAmount: 100 },
-  
-  // Mobile & Communications (category 25)
-  { name: 'פלאפון', vendor: 'discount', account: '0123456789', category: 25, minAmount: 60, maxAmount: 120 },
-  { name: 'הוט', vendor: 'discount', account: '0123456789', category: 25, minAmount: 150, maxAmount: 250 },
-  { name: 'פרטנר', vendor: 'discount', account: '0123456789', category: 25, minAmount: 50, maxAmount: 100 },
-  
-  // Utilities - Electricity (category 26)
-  { name: 'חברת החשמל', vendor: 'discount', account: '0123456789', category: 26, minAmount: 200, maxAmount: 600 },
-  
-  // Utilities - Water (category 27)
-  { name: 'מי אביבים', vendor: 'discount', account: '0123456789', category: 27, minAmount: 80, maxAmount: 200 },
-  
-  // Rent & Mortgage (category 23)
-  { name: 'שכירות', vendor: 'discount', account: '0123456789', category: 23, minAmount: 6500, maxAmount: 7500 },
-  
-  // Municipal Taxes / Arnona (category 36)
-  { name: 'עיריית תל אביב', vendor: 'discount', account: '0123456789', category: 36, minAmount: 400, maxAmount: 800 },
-  
-  // Kindergarten & Schools (category 75)
-  { name: 'מעון יום', vendor: 'discount', account: '0123456789', category: 75, minAmount: 2500, maxAmount: 3500 },
-  { name: 'משפחתון', vendor: 'discount', account: '0123456789', category: 75, minAmount: 2000, maxAmount: 3000 },
-  
-  // Streaming Services (category 49)
-  { name: 'נטפליקס', vendor: 'max', account: '1234', category: 49, minAmount: 35, maxAmount: 55 },
-  { name: 'ספוטיפיי', vendor: 'visaCal', account: '9012', category: 49, minAmount: 20, maxAmount: 35 },
-  
-  // Gym & Fitness (category 44)
-  { name: 'חוגי ספורט', vendor: 'discount', account: '0123456789', category: 44, minAmount: 200, maxAmount: 500 },
-  { name: 'חדר כושר', vendor: 'max', account: '1234', category: 44, minAmount: 150, maxAmount: 300 },
-  
-  // Insurance (category 35)
-  { name: 'ביטוח בריאות', vendor: 'discount', account: '0123456789', category: 35, minAmount: 150, maxAmount: 400 },
+const MERCHANTS = {
+  groceries: [
+    { name: 'רמי לוי', vendor: 'max', account: '1234', category: 3, minAmount: 110, maxAmount: 320 },
+    { name: 'רמי לוי', vendor: 'max', account: '1234', category: 3, minAmount: 110, maxAmount: 320 },
+    { name: 'שופרסל דיל', vendor: 'max', account: '1234', category: 3, minAmount: 90, maxAmount: 300 },
+    { name: 'אושר עד', vendor: 'max', account: '5678', category: 3, minAmount: 80, maxAmount: 260 },
+    { name: 'ויקטורי', vendor: 'max', account: '1234', category: 3, minAmount: 70, maxAmount: 240 },
+    { name: 'יינות ביתן', vendor: 'visaCal', account: '9012', category: 3, minAmount: 60, maxAmount: 220 },
+  ],
+  restaurants: [
+    { name: 'WOLT', vendor: 'max', account: '1234', category: 4, minAmount: 55, maxAmount: 160 },
+    { name: 'ארומה', vendor: 'visaCal', account: '9012', category: 4, minAmount: 30, maxAmount: 85 },
+    { name: 'מקדונלדס', vendor: 'max', account: '5678', category: 4, minAmount: 40, maxAmount: 120 },
+    { name: 'גרג קפה', vendor: 'max', account: '1234', category: 4, minAmount: 35, maxAmount: 95 },
+    { name: 'שיפודי התקווה', vendor: 'visaCal', account: '9012', category: 4, minAmount: 90, maxAmount: 220 },
+  ],
+  coffee: [
+    { name: 'קפה קפה', vendor: 'max', account: '1234', category: 5, minAmount: 20, maxAmount: 55 },
+    { name: 'רולדין', vendor: 'max', account: '5678', category: 5, minAmount: 25, maxAmount: 70 },
+    { name: 'לחמנינה', vendor: 'visaCal', account: '9012', category: 5, minAmount: 18, maxAmount: 50 },
+  ],
+  delivery: [
+    { name: 'וולט משלוחים', vendor: 'max', account: '1234', category: 6, minAmount: 70, maxAmount: 160 },
+    { name: 'תן ביס', vendor: 'max', account: '5678', category: 6, minAmount: 60, maxAmount: 140 },
+  ],
+  fuel: [
+    { name: 'פז', vendor: 'max', account: '1234', category: 11, minAmount: 140, maxAmount: 210 },
+    { name: 'דלק', vendor: 'visaCal', account: '9012', category: 11, minAmount: 130, maxAmount: 200 },
+    { name: 'סונול', vendor: 'max', account: '5678', category: 11, minAmount: 120, maxAmount: 190 },
+  ],
+  publicTransport: [
+    { name: 'רב קו', vendor: 'max', account: '1234', category: 12, minAmount: 15, maxAmount: 60 },
+    { name: 'אגד', vendor: 'visaCal', account: '9012', category: 12, minAmount: 10, maxAmount: 45 },
+  ],
+  parking: [
+    { name: 'אחוזות החוף', vendor: 'max', account: '1234', category: 13, minAmount: 15, maxAmount: 60 },
+    { name: 'פנגו', vendor: 'max', account: '5678', category: 13, minAmount: 12, maxAmount: 45 },
+  ],
+  taxi: [
+    { name: 'גט טקסי', vendor: 'max', account: '1234', category: 14, minAmount: 35, maxAmount: 120 },
+    { name: 'יאנגו', vendor: 'visaCal', account: '9012', category: 14, minAmount: 30, maxAmount: 110 },
+  ],
+  wallets: [
+    { name: 'BIT', vendor: 'max', account: '1234', category: 30, minAmount: 40, maxAmount: 220 },
+    { name: 'פייבוקס', vendor: 'max', account: '5678', category: 30, minAmount: 35, maxAmount: 200 },
+  ],
+  clothing: [
+    { name: 'H&M', vendor: 'max', account: '1234', category: 56, minAmount: 180, maxAmount: 550 },
+    { name: 'זארה', vendor: 'visaCal', account: '9012', category: 56, minAmount: 220, maxAmount: 650 },
+    { name: 'קסטרו', vendor: 'max', account: '5678', category: 56, minAmount: 160, maxAmount: 480 },
+  ],
+  electronics: [
+    { name: 'KSP', vendor: 'max', account: '1234', category: 60, minAmount: 400, maxAmount: 1200 },
+    { name: 'BUG', vendor: 'visaCal', account: '9012', category: 60, minAmount: 350, maxAmount: 1000 },
+    { name: 'איביי', vendor: 'max', account: '5678', category: 60, minAmount: 300, maxAmount: 900 },
+  ],
+  home: [
+    { name: 'איקאה', vendor: 'max', account: '1234', category: 79, minAmount: 250, maxAmount: 900 },
+    { name: 'הום סנטר', vendor: 'visaCal', account: '9012', category: 79, minAmount: 200, maxAmount: 700 },
+    { name: 'ACE', vendor: 'max', account: '5678', category: 79, minAmount: 180, maxAmount: 650 },
+  ],
+  pharmacy: [
+    { name: 'סופר פארם', vendor: 'max', account: '5678', category: 41, minAmount: 40, maxAmount: 160 },
+    { name: 'בי פארם', vendor: 'max', account: '1234', category: 41, minAmount: 35, maxAmount: 140 },
+  ],
+  health: [
+    { name: 'מכבי', vendor: 'discount', account: '0123456789', category: 39, minAmount: 60, maxAmount: 160 },
+    { name: 'כללית', vendor: 'discount', account: '0123456789', category: 39, minAmount: 50, maxAmount: 140 },
+  ],
+};
+
+const SUBSCRIPTION_CHARGES = [
+  { name: 'NETFLIX.COM', vendor: 'max', account: '1234', category: 49, amount: 49.90, day: 1 },
+  { name: 'SPOTIFY', vendor: 'visaCal', account: '9012', category: 49, amount: 29.90, day: 1 },
+  { name: 'APPLE.COM/BILL', vendor: 'max', account: '1234', category: 49, amount: 19.90, day: 5 },
+  { name: 'AMAZON PRIME', vendor: 'visaCal', account: '9012', category: 49, amount: 14.90, day: 10 },
+  { name: 'YOUTUBE PREMIUM', vendor: 'max', account: '1234', category: 49, amount: 29.90, day: 15 },
+  { name: 'HOT MOBILE', vendor: 'discount', account: '0123456789', category: 25, amount: 99.90, day: 25 },
+  { name: 'GYM_MEMBERSHIP', vendor: 'max', account: '1234', category: 44, amount: 189.00, day: 1 },
 ];
 
-const INCOME_TRANSACTIONS = [
-  { name: 'משכורת - חברת הייטק', vendor: 'discount', account: '0123456789', category: 90, minAmount: 25000, maxAmount: 30000 },
-  { name: 'משכורת - חברת הייטק', vendor: 'discount', account: '0123456789', category: 90, minAmount: 10000, maxAmount: 14000 },
-  { name: 'ביטוח לאומי - קצבת ילדים', vendor: 'discount', account: '0123456789', category: 94, minAmount: 150, maxAmount: 200 },
+const FIXED_BILLS = [
+  { name: 'שכירות', vendor: 'discount', account: '0123456789', category: 23, amount: 7000, variance: 150, day: 1, cadence: 'monthly' },
+  { name: 'מעון יום', vendor: 'discount', account: '0123456789', category: 75, amount: 2800, variance: 200, day: 5, cadence: 'monthly' },
+  { name: 'ביטוח בריאות', vendor: 'discount', account: '0123456789', category: 35, amount: 320, variance: 40, day: 2, cadence: 'monthly' },
+  { name: 'תקשורת ביתית', vendor: 'discount', account: '0123456789', category: 25, amount: 210, variance: 30, day: 8, cadence: 'monthly' },
+  { name: 'עיריית תל אביב', vendor: 'discount', account: '0123456789', category: 36, amount: 700, variance: 80, day: 15, cadence: 'bimonthly', offset: 0 },
+  { name: 'חברת החשמל', vendor: 'discount', account: '0123456789', category: 26, amount: 420, variance: 80, day: 12, cadence: 'bimonthly', offset: 0 },
+  { name: 'מי אביבים', vendor: 'discount', account: '0123456789', category: 27, amount: 160, variance: 30, day: 20, cadence: 'bimonthly', offset: 1 },
 ];
 
-const INVESTMENT_TRANSACTIONS = [
-  { name: 'העברה לקרן השתלמות', vendor: 'discount', account: '0123456789', category: 100, minAmount: 500, maxAmount: 2000 },
-  { name: 'הפרשה לפנסיה', vendor: 'discount', account: '0123456789', category: 100, minAmount: 1000, maxAmount: 3000 },
+const INCOME_SOURCES = [
+  { name: 'משכורת - חברת הייטק', vendor: 'discount', account: '0123456789', category: 90, amount: 28000, variance: 600, day: 10 },
+  { name: 'משכורת - חברת מוצר', vendor: 'discount', account: '0123456789', category: 90, amount: 22000, variance: 500, day: 25 },
+  { name: 'ביטוח לאומי - קצבת ילדים', vendor: 'discount', account: '0123456789', category: 94, amount: 400, variance: 40, day: 20 },
 ];
 
-function randomBetween(min, max) { return Math.random() * (max - min) + min; }
-function randomInt(min, max) { return Math.floor(randomBetween(min, max + 1)); }
-function generateId(i) { return 'demo-' + Date.now() + '-' + i + '-' + Math.random().toString(16).slice(2, 8); }
+const INVESTMENT_TRANSFERS = [
+  { name: 'הפרשה לפנסיה', vendor: 'discount', account: '0123456789', category: 100, amount: 2600, variance: 200, day: 16 },
+  { name: 'העברה לקרן השתלמות', vendor: 'discount', account: '0123456789', category: 100, amount: 1800, variance: 150, day: 16 },
+  { name: 'העברה לתיק השקעות', vendor: 'discount', account: '0123456789', category: 100, amount: 1500, variance: 300, day: 22 },
+];
+
+const VARIABLE_PLANS = [
+  { merchants: MERCHANTS.groceries, count: [9, 12], dayRange: [1, 28], hourRange: [9, 20] },
+  { merchants: MERCHANTS.restaurants, count: [4, 7], dayRange: [1, 28], hourRange: [11, 22] },
+  { merchants: MERCHANTS.coffee, count: [6, 10], dayRange: [1, 28], hourRange: [7, 18] },
+  { merchants: MERCHANTS.delivery, count: [2, 4], dayRange: [1, 28], hourRange: [18, 22] },
+  { merchants: MERCHANTS.fuel, count: [4, 5], dayRange: [1, 28], hourRange: [8, 20] },
+  { merchants: MERCHANTS.publicTransport, count: [4, 8], dayRange: [1, 28], hourRange: [6, 20] },
+  { merchants: MERCHANTS.parking, count: [2, 5], dayRange: [1, 28], hourRange: [7, 21] },
+  { merchants: MERCHANTS.taxi, count: [1, 3], dayRange: [1, 28], hourRange: [9, 23] },
+  { merchants: MERCHANTS.wallets, count: [3, 6], dayRange: [1, 28], hourRange: [9, 21] },
+  { merchants: MERCHANTS.pharmacy, count: [1, 3], dayRange: [1, 28], hourRange: [9, 20] },
+  { merchants: MERCHANTS.health, count: [1, 2], dayRange: [1, 28], hourRange: [9, 18] },
+  { merchants: MERCHANTS.clothing, count: [1, 1], probability: 0.6, dayRange: [5, 25], hourRange: [10, 20] },
+  { merchants: MERCHANTS.electronics, count: [1, 1], probability: 0.35, dayRange: [5, 25], hourRange: [10, 20] },
+  { merchants: MERCHANTS.home, count: [1, 1], probability: 0.3, dayRange: [5, 25], hourRange: [10, 20] },
+];
 
 const insertStmt = db.prepare(`
   INSERT INTO transactions (identifier, vendor, vendor_nickname, date, name, price, type, status, auto_categorized, confidence_score, account_number, category_definition_id, category_type, transaction_datetime)
   VALUES (@id, @vendor, @nickname, @date, @name, @price, @type, 'completed', 1, @confidence, @account, @categoryId, @categoryType, @datetime)
 `);
 
-const now = new Date();
 const txns = [];
+const monthlyBudgetSpend = new Map();
 
-// Generate 5 months of data
-for (let month = 0; month < 5; month++) {
-  const monthDate = new Date(now);
-  monthDate.setMonth(monthDate.getMonth() - month);
-  
-  // Income: 2 salaries + 1 child benefit per month
-  INCOME_TRANSACTIONS.forEach((t, i) => {
-    const txDate = new Date(monthDate);
-    txDate.setDate(i < 2 ? 10 : 1);
-    txDate.setHours(randomInt(8, 18), randomInt(1, 59), 0, 0);
-    txns.push({
-      ...t,
-      date: txDate.toISOString(),
-      amount: randomBetween(t.minAmount, t.maxAmount),
-      txType: 'income'
-    });
-  });
-  
-  // Investment: 2 per month
-  INVESTMENT_TRANSACTIONS.forEach((t) => {
-    const txDate = new Date(monthDate);
-    txDate.setDate(15);
-    txDate.setHours(randomInt(9, 17), randomInt(1, 59), 0, 0);
-    txns.push({
-      ...t,
-      date: txDate.toISOString(),
-      amount: -randomBetween(t.minAmount, t.maxAmount),
-      txType: 'investment'
-    });
-  });
-  
-  // Expenses: ~80-100 per month
-  const expenseCount = randomInt(80, 100);
-  for (let i = 0; i < expenseCount; i++) {
-    const t = EXPENSE_TRANSACTIONS[randomInt(0, EXPENSE_TRANSACTIONS.length - 1)];
-    const txDate = new Date(monthDate);
-    txDate.setDate(randomInt(1, 28));
-    txDate.setHours(randomInt(8, 22), randomInt(1, 59), 0, 0);
-    txns.push({
-      ...t,
-      date: txDate.toISOString(),
-      amount: -randomBetween(t.minAmount, t.maxAmount),
-      txType: 'expense'
-    });
-  }
+function getBudgetSpend(monthKey, categoryId) {
+  const monthMap = monthlyBudgetSpend.get(monthKey);
+  if (!monthMap) return 0;
+  return monthMap.get(categoryId) || 0;
 }
 
-// Insert all transactions
-const insertTxn = db.transaction(() => {
-  txns.forEach((t, i) => {
-    try {
-      insertStmt.run({
-        id: generateId(i),
-        vendor: t.vendor,
-        nickname: t.vendor === 'discount' ? 'Discount' : t.vendor === 'max' ? 'Max' : 'Cal',
-        date: t.date,
-        name: t.name,
-        price: t.amount,
-        type: t.txType === 'income' ? 'transfer' : 'card',
-        confidence: randomBetween(0.7, 0.99),
-        account: t.account,
-        categoryId: t.category,
-        categoryType: t.txType,
-        datetime: t.date
-      });
-    } catch (e) {
-      // Ignore duplicate key errors
+function addBudgetSpend(monthKey, categoryId, amount) {
+  let monthMap = monthlyBudgetSpend.get(monthKey);
+  if (!monthMap) {
+    monthMap = new Map();
+    monthlyBudgetSpend.set(monthKey, monthMap);
+  }
+  monthMap.set(categoryId, (monthMap.get(categoryId) || 0) + amount);
+}
+
+function addTransaction({ name, vendor, account, category, categoryType, amount, date, transactionType, confidence }) {
+  const signedAmount = categoryType === 'income' ? Math.abs(amount) : -Math.abs(amount);
+  txns.push({
+    name,
+    vendor,
+    account,
+    category,
+    amount: signedAmount,
+    txType: categoryType,
+    date,
+    transactionType: transactionType || (vendor === 'discount' ? 'transfer' : 'card'),
+    confidence: confidence || randomBetween(0.85, 0.98),
+  });
+}
+
+function addExpense(monthKey, item, amount, dateIso, options = {}) {
+  const categoryId = options.categoryId || item.category;
+  const minAmount = options.minAmount || item.minAmount || 0;
+  let finalAmount = amount;
+  if (!options.ignoreBudget) {
+    const budget = BUDGET_LIMITS.get(categoryId);
+    if (budget) {
+      const spent = getBudgetSpend(monthKey, categoryId);
+      const remaining = budget - spent;
+      if (remaining <= 0) return false;
+      finalAmount = Math.min(finalAmount, remaining);
+      if (minAmount && finalAmount < minAmount * 0.75) return false;
+    }
+  }
+  addTransaction({
+    name: item.name,
+    vendor: item.vendor,
+    account: item.account,
+    category: categoryId,
+    categoryType: 'expense',
+    amount: finalAmount,
+    date: dateIso,
+    transactionType: options.transactionType,
+    confidence: options.confidence,
+  });
+  if (!options.ignoreBudget) {
+    const budget = BUDGET_LIMITS.get(categoryId);
+    if (budget) addBudgetSpend(monthKey, categoryId, finalAmount);
+  }
+  return true;
+}
+
+for (let month = 0; month < 5; month++) {
+  const monthDate = monthDateFromBase(-month);
+  const monthKey = monthKeyFrom(monthDate);
+
+  INCOME_SOURCES.forEach((income) => {
+    const txDate = dateInMonth(monthDate, income.day, [8, 12]);
+    addTransaction({
+      name: income.name,
+      vendor: income.vendor,
+      account: income.account,
+      category: income.category,
+      categoryType: 'income',
+      amount: variance(income.amount, income.variance),
+      date: txDate,
+      transactionType: 'transfer',
+      confidence: randomBetween(0.9, 0.99),
+    });
+  });
+
+  INVESTMENT_TRANSFERS.forEach((investment) => {
+    const txDate = dateInMonth(monthDate, investment.day, [9, 16]);
+    addTransaction({
+      name: investment.name,
+      vendor: investment.vendor,
+      account: investment.account,
+      category: investment.category,
+      categoryType: 'investment',
+      amount: variance(investment.amount, investment.variance),
+      date: txDate,
+      transactionType: 'transfer',
+      confidence: randomBetween(0.9, 0.99),
+    });
+  });
+
+  FIXED_BILLS.forEach((bill) => {
+    const shouldAdd = bill.cadence === 'monthly' || (bill.cadence === 'bimonthly' && month % 2 === bill.offset);
+    if (!shouldAdd) return;
+    const txDate = dateInMonth(monthDate, bill.day, [8, 14]);
+    addExpense(monthKey, bill, variance(bill.amount, bill.variance), txDate, { confidence: randomBetween(0.9, 0.98) });
+  });
+
+  SUBSCRIPTION_CHARGES.forEach((sub) => {
+    const txDate = dateInMonth(monthDate, sub.day, [6, 12]);
+    addExpense(monthKey, sub, sub.amount, txDate, { confidence: randomBetween(0.93, 0.99) });
+  });
+
+  VARIABLE_PLANS.forEach((plan) => {
+    if (plan.probability && rng() > plan.probability) return;
+    const targetCount = randomInt(plan.count[0], plan.count[1]);
+    let added = 0;
+    let attempts = 0;
+    while (added < targetCount && attempts < targetCount * 3) {
+      attempts += 1;
+      const item = pick(plan.merchants);
+      const amount = money(randomBetween(item.minAmount, item.maxAmount));
+      const txDate = dateRandomInMonth(monthDate, plan.dayRange, plan.hourRange);
+      if (addExpense(monthKey, item, amount, txDate, { confidence: randomBetween(0.78, 0.95) })) {
+        added += 1;
+      }
     }
   });
-});
+}
 
+// Insert all transactions (avoid explicit BEGIN; WAL on this FS rejects manual transactions)
+let insertErrors = 0;
+let firstError = null;
+txns.forEach((t, i) => {
+  try {
+    insertStmt.run({
+      id: generateId(i),
+      vendor: t.vendor,
+      nickname: t.vendor === 'discount' ? 'Discount' : t.vendor === 'max' ? 'Max' : 'Cal',
+      date: t.date,
+      name: t.name,
+      price: t.amount,
+      type: t.transactionType,
+      confidence: t.confidence,
+      account: t.account,
+      categoryId: t.category,
+      categoryType: t.txType,
+      datetime: t.date
+    });
+  } catch (e) {
+    insertErrors += 1;
+    if (!firstError) firstError = e.message;
+  }
+});
+if (insertErrors > 0) {
+  console.log(`  Transaction insert warnings: ${insertErrors} failed (first: ${firstError})`);
+}
+console.log(`  Inserted ${txns.length - insertErrors} transactions`);
+
+// Align chat message insights with seeded transactions
 try {
-  insertTxn();
-  console.log(`  Inserted ${txns.length} transactions`);
+  const convo = db.prepare("SELECT id FROM chat_conversations WHERE external_id = ?").get('conv-001');
+  if (convo) {
+    const chatMonthKey = monthKeyFrom(monthDateFromBase(-2));
+    const prevMonthKey = monthKeyFrom(monthDateFromBase(-3));
+    const spendByCategory = db.prepare(`
+      SELECT COALESCE(-SUM(price), 0) AS total
+      FROM transactions
+      WHERE category_definition_id = ?
+        AND price < 0
+        AND date LIKE ?
+    `);
+    const spendByMerchant = db.prepare(`
+      SELECT COALESCE(-SUM(price), 0) AS total
+      FROM transactions
+      WHERE category_definition_id = ?
+        AND price < 0
+        AND date LIKE ?
+        AND name LIKE ?
+    `);
+    const restaurantsThis = spendByCategory.get(4, `${chatMonthKey}%`).total;
+    const restaurantsPrev = spendByCategory.get(4, `${prevMonthKey}%`).total;
+    const restaurantChange = restaurantsPrev > 0 ? ((restaurantsThis - restaurantsPrev) / restaurantsPrev) * 100 : 0;
+    const restaurantDirection = restaurantChange >= 0 ? 'higher' : 'lower';
+    const restaurantMsg = `Based on your transactions, you spent ${Math.round(restaurantsThis).toLocaleString('en-US')} ILS on restaurants this month. That's ${Math.round(Math.abs(restaurantChange))}% ${restaurantDirection} than last month.`;
+
+    const groceryTotal = spendByCategory.get(3, `${chatMonthKey}%`).total;
+    const ramiTotal = spendByMerchant.get(3, `${chatMonthKey}%`, 'רמי לוי%').total;
+    const ramiShare = groceryTotal > 0 ? Math.round((ramiTotal / groceryTotal) * 100) : 0;
+    const groceryMsg = `Your supermarket spending this month totals ${Math.round(groceryTotal).toLocaleString('en-US')} ILS. Rami Levy accounts for ${ramiShare}% of that spending.`;
+
+    const assistantMsgs = db.prepare(`
+      SELECT id FROM chat_messages
+      WHERE conversation_id = ?
+        AND role = 'assistant'
+      ORDER BY created_at
+    `).all(convo.id);
+
+    if (assistantMsgs[0]) {
+      db.prepare('UPDATE chat_messages SET content = ? WHERE id = ?').run(restaurantMsg, assistantMsgs[0].id);
+    }
+    if (assistantMsgs[1]) {
+      db.prepare('UPDATE chat_messages SET content = ? WHERE id = ?').run(groceryMsg, assistantMsgs[1].id);
+    }
+  }
 } catch (e) {
-  console.log('  Transactions already exist or error:', e.message);
+  console.log('  Chat message alignment skipped:', e.message);
 }
 
 // ============================================
@@ -907,16 +1118,41 @@ console.log('📋 Seeding user profile and investments...');
 
 db.prepare(`
   INSERT OR REPLACE INTO user_profile (id, username, marital_status, age, occupation, monthly_income, family_status, location, industry, birth_date, children_count, household_size, home_ownership, education_level, employment_status)
-  VALUES (1, 'Demo User', 'married', 35, 'Software Engineer', 40000, 'married_with_children', 'Tel Aviv', 'Technology', '1991-03-15', 2, 4, 'renting', 'masters', 'employed')
+  VALUES (1, 'Demo User', 'Married', 35, 'Software Engineer', 28000, 'married_with_children', 'Tel Aviv', 'Tech', '1991-03-15', 2, 4, 'rent', 'master', 'employed')
 `).run();
 
+// Seed spouse profile
+db.prepare(`DELETE FROM spouse_profile WHERE user_profile_id = 1`).run();
+db.prepare(`
+  INSERT INTO spouse_profile (user_profile_id, name, birth_date, occupation, industry, monthly_income, employment_status, education_level)
+  VALUES (1, 'שרה', '1993-07-22', 'Product Manager', 'Tech', 22000, 'employed', 'bachelor')
+`).run();
+console.log('  Inserted spouse profile');
+
+// Seed children profiles
+db.prepare(`DELETE FROM children_profile WHERE user_profile_id = 1`).run();
+const insertChild = db.prepare(`
+  INSERT INTO children_profile (user_profile_id, name, birth_date, gender, education_stage, special_needs)
+  VALUES (@userId, @name, @birthDate, @gender, @educationStage, @specialNeeds)
+`);
+
+const CHILDREN = [
+  { userId: 1, name: 'נועם', birthDate: '2019-04-10', gender: 'male', educationStage: 'preschool', specialNeeds: 0 },
+  { userId: 1, name: 'מיכל', birthDate: '2022-01-15', gender: 'female', educationStage: 'daycare', specialNeeds: 0 },
+];
+
+CHILDREN.forEach((child) => {
+  insertChild.run(child);
+});
+console.log(`  Inserted ${CHILDREN.length} children profiles`);
+
 const INVESTMENT_ACCOUNTS = [
-  { name: 'קרן השתלמות - מיטב', type: 'hishtalmut', institution: 'meitav', currency: 'ILS', is_liquid: 0, category: 'long_term' },
-  { name: 'פנסיה - הראל', type: 'pension', institution: 'harel', currency: 'ILS', is_liquid: 0, category: 'long_term' },
-  { name: 'קופת גמל - כלל', type: 'gemel', institution: 'clal', currency: 'ILS', is_liquid: 0, category: 'long_term' },
+  { name: 'קרן השתלמות - מיטב', type: 'hishtalmut', institution: 'meitav', currency: 'ILS', is_liquid: 0, category: 'restricted' },
+  { name: 'פנסיה - הראל', type: 'pension', institution: 'harel', currency: 'ILS', is_liquid: 0, category: 'restricted' },
+  { name: 'קופת גמל - כלל', type: 'gemel', institution: 'clal', currency: 'ILS', is_liquid: 0, category: 'restricted' },
   { name: 'תיק השקעות - IBI', type: 'brokerage', institution: 'ibi', currency: 'ILS', is_liquid: 1, category: 'liquid' },
   { name: 'Interactive Brokers', type: 'brokerage', institution: 'interactive_brokers', currency: 'USD', is_liquid: 1, category: 'liquid' },
-  { name: 'פיקדון בנקאי - דיסקונט', type: 'deposit', institution: 'discount', currency: 'ILS', is_liquid: 1, category: 'liquid' },
+  { name: 'פיקדון בנקאי - דיסקונט', type: 'deposit', institution: 'discount', currency: 'ILS', is_liquid: 1, category: 'stability' },
   { name: 'Bit2C - קריפטו', type: 'crypto', institution: 'bit2c', currency: 'ILS', is_liquid: 1, category: 'liquid' },
 ];
 
@@ -935,22 +1171,318 @@ INVESTMENT_ACCOUNTS.forEach((acc) => {
     category: acc.category,
   });
 });
-console.log(`  Inserted user profile and ${INVESTMENT_ACCOUNTS.length} investment accounts`);
+
+const insertBankAccount = db.prepare(`
+  INSERT OR IGNORE INTO investment_accounts (
+    account_name, account_type, institution, account_number, currency,
+    is_active, is_liquid, investment_category, notes
+  ) VALUES (@name, @type, @institution, @accountNumber, @currency, 1, @isLiquid, @category, @notes)
+`);
+
+const bankCredential = db.prepare('SELECT id, nickname, bank_account_number FROM vendor_credentials WHERE vendor = ?').get('discount');
+if (bankCredential) {
+  insertBankAccount.run({
+    name: bankCredential.nickname || 'דיסקונט - עו"ש',
+    type: 'bank_balance',
+    institution: 'discount',
+    accountNumber: bankCredential.bank_account_number || '0123456789',
+    currency: 'ILS',
+    isLiquid: 1,
+    category: 'cash',
+    notes: `Auto-created for bank balance tracking. credential_id:${bankCredential.id}`,
+  });
+}
+
+db.exec(`
+  UPDATE investment_accounts
+  SET institution_id = (
+    SELECT id FROM institution_nodes
+    WHERE vendor_code = investment_accounts.institution
+      AND node_type = 'institution'
+  )
+  WHERE institution_id IS NULL
+    AND institution IS NOT NULL
+`);
+
+console.log(`  Inserted user profile and ${INVESTMENT_ACCOUNTS.length + (bankCredential ? 1 : 0)} investment accounts`);
+
+// Seed investment values and assets
+console.log('📋 Seeding investment values...');
+
+const insertHolding = db.prepare(`
+  INSERT OR IGNORE INTO investment_holdings (
+    account_id, asset_name, asset_type, units, current_value, cost_basis, as_of_date,
+    notes, holding_type, interest_rate, maturity_date, status
+  ) VALUES (
+    @accountId, @assetName, @assetType, @units, @currentValue, @costBasis, @asOfDate,
+    @notes, @holdingType, @interestRate, @maturityDate, @status
+  )
+`);
+
+const insertAsset = db.prepare(`
+  INSERT OR IGNORE INTO investment_assets (
+    account_id, asset_symbol, asset_name, asset_type, units, average_cost, currency, notes
+  ) VALUES (
+    @accountId, @symbol, @name, @type, @units, @averageCost, @currency, @notes
+  )
+`);
+
+const monthlyDates = [];
+for (let i = 4; i >= 0; i -= 1) {
+  monthlyDates.push(dateOnly(monthDateFromBase(-i)));
+}
+const latestSnapshotDate = dateOnly(BASE_DATE);
+const includeLatestSnapshot = latestSnapshotDate !== monthlyDates[monthlyDates.length - 1];
+
+function generateHoldingsSeries(plan, count) {
+  const series = [];
+  let currentValue = plan.baseValue;
+  let currentCost = plan.baseCost;
+  for (let i = 0; i < count; i += 1) {
+    const costBasis = plan.costEqualsValue ? currentValue : currentCost;
+    series.push({ value: money(currentValue), cost: money(costBasis) });
+    const contribution = plan.monthlyContribution || 0;
+    const growth = plan.growth || 0;
+    const volatility = plan.volatility || 0;
+    const shock = volatility ? (rng() * 2 - 1) * volatility : 0;
+    const factor = 1 + growth + shock;
+    const previousValue = factor !== 0 ? (currentValue - contribution) / factor : currentValue - contribution;
+    currentValue = money(Math.max(previousValue, 0));
+    if (!plan.lockCost) {
+      currentCost = money(Math.max(currentCost - contribution, 0));
+    }
+  }
+  return series.reverse();
+}
+
+const accounts = db.prepare(`
+  SELECT id, account_name, account_type, institution, currency, investment_category, account_number
+  FROM investment_accounts
+  WHERE is_active = 1
+`).all();
+
+const plans = [
+  {
+    match: (acc) => acc.account_type === 'hishtalmut',
+    baseValue: 165000,
+    baseCost: 146000,
+    monthlyContribution: 1800,
+    growth: 0.0035,
+    assetName: 'קרן השתלמות',
+    assetType: 'fund',
+    assets: [{ symbol: null, name: 'מסלול מנייתי', type: 'fund', units: 1, averageCost: 146000, currency: 'ILS' }],
+  },
+  {
+    match: (acc) => acc.account_type === 'pension',
+    baseValue: 320000,
+    baseCost: 285000,
+    monthlyContribution: 2600,
+    growth: 0.003,
+    assetName: 'פנסיה מקיפה',
+    assetType: 'fund',
+    assets: [{ symbol: null, name: 'מסלול כללי', type: 'fund', units: 1, averageCost: 285000, currency: 'ILS' }],
+  },
+  {
+    match: (acc) => acc.account_type === 'gemel',
+    baseValue: 92000,
+    baseCost: 82000,
+    monthlyContribution: 0,
+    growth: 0.0032,
+    assetName: 'קופת גמל להשקעה',
+    assetType: 'fund',
+    assets: [{ symbol: null, name: 'מסלול כללי', type: 'fund', units: 1, averageCost: 82000, currency: 'ILS' }],
+  },
+  {
+    match: (acc) => acc.account_type === 'brokerage' && acc.institution === 'ibi',
+    baseValue: 98000,
+    baseCost: 90000,
+    monthlyContribution: 1500,
+    growth: 0.0045,
+    assetName: 'תיק השקעות - IBI',
+    assetType: 'portfolio',
+    assets: [
+      { symbol: 'TA125', name: 'ת"א 125 ETF', type: 'etf', units: 90, averageCost: 610, currency: 'ILS' },
+      { symbol: 'SP500', name: 'S&P 500 ETF', type: 'etf', units: 45, averageCost: 760, currency: 'ILS' },
+      { symbol: 'ILBOND', name: 'אג"ח ממשלתי', type: 'bond', units: 120, averageCost: 210, currency: 'ILS' },
+    ],
+  },
+  {
+    match: (acc) => acc.account_type === 'brokerage' && acc.institution === 'interactive_brokers',
+    baseValue: 25000,
+    baseCost: 22000,
+    monthlyContribution: 0,
+    growth: 0.005,
+    assetName: 'Interactive Brokers',
+    assetType: 'portfolio',
+    assets: [
+      { symbol: 'VTI', name: 'Vanguard Total Stock Market', type: 'etf', units: 45, averageCost: 210, currency: 'USD' },
+      { symbol: 'VXUS', name: 'Vanguard Total International', type: 'etf', units: 90, averageCost: 58, currency: 'USD' },
+      { symbol: 'BND', name: 'Vanguard Total Bond', type: 'etf', units: 80, averageCost: 70, currency: 'USD' },
+    ],
+  },
+  {
+    match: (acc) => acc.account_type === 'deposit',
+    baseValue: 61000,
+    baseCost: 60000,
+    monthlyContribution: 0,
+    growth: 0.0025,
+    assetName: 'פיקדון בנקאי',
+    assetType: 'deposit',
+    holdingType: 'pikadon',
+    interestRate: 3.4,
+    maturityMonths: 9,
+    lockCost: true,
+    assets: [{ symbol: null, name: 'פיקדון בנקאי', type: 'deposit', units: 1, averageCost: 60000, currency: 'ILS' }],
+  },
+  {
+    match: (acc) => acc.account_type === 'crypto',
+    baseValue: 18000,
+    baseCost: 20000,
+    monthlyContribution: 0,
+    growth: 0.0,
+    volatility: 0.06,
+    assetName: 'קריפטו',
+    assetType: 'crypto',
+    lockCost: true,
+    assets: [
+      { symbol: 'BTC', name: 'Bitcoin', type: 'crypto', units: 0.12, averageCost: 120000, currency: 'ILS' },
+      { symbol: 'ETH', name: 'Ethereum', type: 'crypto', units: 1.8, averageCost: 6500, currency: 'ILS' },
+    ],
+  },
+  {
+    match: (acc) => acc.account_type === 'bank_balance',
+    baseValue: 45000,
+    baseCost: 45000,
+    monthlyContribution: 0,
+    growth: 0.0,
+    volatility: 0.025,
+    assetName: 'עו"ש',
+    assetType: 'cash',
+    costEqualsValue: true,
+    lockCost: true,
+    assets: [{ symbol: null, name: 'Bank Balance', type: 'cash', units: 45000, averageCost: null, currency: 'ILS' }],
+  },
+];
+
+let holdingsCount = 0;
+let assetsCount = 0;
+
+plans.forEach((plan) => {
+  const account = accounts.find(plan.match);
+  if (!account) return;
+  const monthlySeries = generateHoldingsSeries(plan, monthlyDates.length);
+  monthlySeries.forEach((entry, idx) => {
+    insertHolding.run({
+      accountId: account.id,
+      assetName: plan.assetName,
+      assetType: plan.assetType,
+      units: null,
+      currentValue: entry.value,
+      costBasis: entry.cost,
+      asOfDate: monthlyDates[idx],
+      notes: 'Demo snapshot',
+      holdingType: plan.holdingType || 'standard',
+      interestRate: plan.interestRate || null,
+      maturityDate: plan.maturityMonths ? dateOnly(addMonths(BASE_DATE, plan.maturityMonths)) : null,
+      status: plan.holdingType === 'pikadon' ? 'active' : 'active',
+    });
+    holdingsCount += 1;
+  });
+
+  if (includeLatestSnapshot) {
+    const latestEntry = monthlySeries[monthlySeries.length - 1];
+    const drift = plan.dailyDrift || 0.001;
+    const driftFactor = 1 + (rng() * drift);
+    const driftedValue = money(latestEntry.value * driftFactor);
+    const driftedCost = plan.costEqualsValue ? driftedValue : latestEntry.cost;
+    insertHolding.run({
+      accountId: account.id,
+      assetName: plan.assetName,
+      assetType: plan.assetType,
+      units: null,
+      currentValue: driftedValue,
+      costBasis: driftedCost,
+      asOfDate: latestSnapshotDate,
+      notes: 'Demo snapshot',
+      holdingType: plan.holdingType || 'standard',
+      interestRate: plan.interestRate || null,
+      maturityDate: plan.maturityMonths ? dateOnly(addMonths(BASE_DATE, plan.maturityMonths)) : null,
+      status: plan.holdingType === 'pikadon' ? 'active' : 'active',
+    });
+    holdingsCount += 1;
+  }
+
+  (plan.assets || []).forEach((asset) => {
+    insertAsset.run({
+      accountId: account.id,
+      symbol: asset.symbol,
+      name: asset.name,
+      type: asset.type,
+      units: asset.units,
+      averageCost: asset.averageCost,
+      currency: asset.currency || account.currency,
+      notes: 'Demo holding',
+    });
+    assetsCount += 1;
+  });
+});
+
+console.log(`  Inserted ${holdingsCount} investment holdings and ${assetsCount} assets`);
+
+// Align investment chat summary with seeded holdings
+try {
+  const convo = db.prepare("SELECT id FROM chat_conversations WHERE external_id = ?").get('conv-003');
+  if (convo) {
+    const convoDateRow = db.prepare('SELECT created_at FROM chat_conversations WHERE id = ?').get(convo.id);
+    const snapshots = db.prepare('SELECT DISTINCT as_of_date FROM investment_holdings ORDER BY as_of_date').all();
+    if (snapshots.length > 0) {
+      const targetDate = convoDateRow?.created_at ? convoDateRow.created_at.slice(0, 10) : snapshots[snapshots.length - 1].as_of_date;
+      let latestIndex = -1;
+      snapshots.forEach((snap, idx) => {
+        if (snap.as_of_date <= targetDate) {
+          latestIndex = idx;
+        }
+      });
+      if (latestIndex === -1) latestIndex = snapshots.length - 1;
+      const latestDate = snapshots[latestIndex].as_of_date;
+      const prevDate = latestIndex > 0 ? snapshots[latestIndex - 1].as_of_date : latestDate;
+      const totalAtDate = (date) => {
+        const rows = db.prepare(`
+          SELECT ia.currency, SUM(ih.current_value) AS total
+          FROM investment_holdings ih
+          JOIN investment_accounts ia ON ih.account_id = ia.id
+          WHERE ih.as_of_date = ?
+          GROUP BY ia.currency
+        `).all(date);
+        return rows.reduce((sum, row) => {
+          if (row.currency === 'USD') return sum + Number(row.total || 0) * USD_ILS_RATE;
+          return sum + Number(row.total || 0);
+        }, 0);
+      };
+      const latestTotal = totalAtDate(latestDate);
+      const prevTotal = totalAtDate(prevDate);
+      const monthlyReturn = prevTotal > 0 ? ((latestTotal - prevTotal) / prevTotal) * 100 : 0;
+      const portfolioMsg = `Portfolio summary: Total value ≈ ${Math.round(latestTotal).toLocaleString('en-US')} ILS. Month-over-month change: ${monthlyReturn.toFixed(1)}%.`;
+      const assistantMsg = db.prepare(`
+        SELECT id FROM chat_messages
+        WHERE conversation_id = ?
+          AND role = 'assistant'
+        ORDER BY created_at
+        LIMIT 1
+      `).get(convo.id);
+      if (assistantMsg) {
+        db.prepare('UPDATE chat_messages SET content = ? WHERE id = ?').run(portfolioMsg, assistantMsg.id);
+      }
+    }
+  }
+} catch (e) {
+  console.log('  Investment chat alignment skipped:', e.message);
+}
 
 // ============================================
 // STEP 14: SEED CATEGORY BUDGETS
 // ============================================
 console.log('📋 Seeding category budgets...');
-
-const BUDGETS = [
-  { categoryId: 3, limit: 2500, period: 'monthly' },   // Supermarket
-  { categoryId: 4, limit: 1200, period: 'monthly' },   // Restaurants
-  { categoryId: 5, limit: 400, period: 'monthly' },    // Coffee
-  { categoryId: 11, limit: 800, period: 'monthly' },   // Fuel
-  { categoryId: 56, limit: 1000, period: 'monthly' },  // Clothing
-  { categoryId: 60, limit: 500, period: 'monthly' },   // Electronics
-  { categoryId: 49, limit: 150, period: 'monthly' },   // Streaming
-];
 
 const insertBudget = db.prepare(`
   INSERT OR IGNORE INTO category_budgets (category_definition_id, period_type, budget_limit, is_active)

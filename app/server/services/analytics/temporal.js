@@ -148,6 +148,8 @@ async function getTemporalAnalytics(params = {}) {
   // Initialize arrays
   const hourlySpending = Array(24).fill(0);
   const weekdaySpending = Array(7).fill(0);
+  const hourlyByDaySpending = Array.from({ length: 7 }, () => Array(24).fill(0));
+  const hourlyByDayCount = Array.from({ length: 7 }, () => Array(24).fill(0));
   const weeklyData = new Map();
   let weekdayTotal = 0;
   let weekendTotal = 0;
@@ -164,6 +166,10 @@ async function getTemporalAnalytics(params = {}) {
     if (hour !== null && !isNaN(hour)) {
       hourlySpending[hour] += amount;
       preciseTimeCount++;
+      if (!isNaN(dayOfWeek) && dayOfWeek >= 0 && dayOfWeek < 7) {
+        hourlyByDaySpending[dayOfWeek][hour] += amount;
+        hourlyByDayCount[dayOfWeek][hour] += 1;
+      }
     }
 
     // Day of week spending
@@ -245,6 +251,8 @@ async function getTemporalAnalytics(params = {}) {
   return {
     hourlySpending: hourlySpending.map(v => Math.round(v)),
     weekdaySpending: weekdaySpending.map(v => Math.round(v)),
+    hourlyByDaySpending: hourlyByDaySpending.map(row => row.map(v => Math.round(v))),
+    hourlyByDayCount,
     weekdayTotal: Math.round(weekdayTotal),
     weekendTotal: Math.round(weekendTotal),
     weekdayPercentage,

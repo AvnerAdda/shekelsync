@@ -14,13 +14,13 @@ import {
   useTheme,
   Alert,
   Button,
+  Tooltip as MuiTooltip,
   alpha,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import {
   BarChart as RechartsBarChart,
   Bar,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -128,6 +128,36 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
       date: item.date,
       daysAgo: item.daysAgo
     }));
+  };
+
+  const dayLabels = [
+    t('days.sun'),
+    t('days.mon'),
+    t('days.tue'),
+    t('days.wed'),
+    t('days.thu'),
+    t('days.fri'),
+    t('days.sat')
+  ];
+  const hourLabels = Array.from({ length: 24 }, (_, i) => i);
+  const heatmapMatrix = (
+    viewMode === 'amount'
+      ? data?.hourlyByDaySpending
+      : data?.hourlyByDayCount
+  ) ?? Array.from({ length: 7 }, () => Array(24).fill(0));
+  const heatmapValues = heatmapMatrix.flat();
+  const heatmapMax = heatmapValues.length > 0 ? Math.max(...heatmapValues) : 0;
+  const formatHeatmapValue = (value: number) => (
+    viewMode === 'amount'
+      ? formatCurrencyValue(value)
+      : value.toLocaleString(i18n.language)
+  );
+  const getHeatmapColor = (value: number) => {
+    if (heatmapMax <= 0) {
+      return alpha(theme.palette.primary.main, 0.08);
+    }
+    const intensity = Math.min(value / heatmapMax, 1);
+    return alpha(theme.palette.primary.main, 0.15 + intensity * 0.75);
   };
 
   return (
@@ -321,49 +351,94 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
               </Paper>
             </Grid>
 
-            {/* Week-by-Week Trend */}
+            {/* Hour/Day Heatmap */}
             <Grid size={{ xs: 12 }}>
               <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                  {t('weeklyTrend.title')}
+                  {t('heatmap.title')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                  {t('weeklyTrend.subtitle')}
+                  {t('heatmap.subtitle')}
                 </Typography>
-                <ResponsiveContainer width="100%" height={250} minHeight={250}>
-                  <ComposedChart
-                    data={(data.weeklyTrend || []).map((w: any) => ({
-                      week: w.week,
-                      value: w.total
-                    }))}
-                    margin={{ top: 5, right: 5, bottom: 5, left: 5 }}
-                  >
-                    <defs>
-                      <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={theme.palette.success.main} stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor={theme.palette.success.main} stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.1)} vertical={false} />
-                    <XAxis dataKey="week" stroke={theme.palette.text.secondary} style={{ fontSize: '0.75rem' }} tickLine={false} axisLine={false} />
-                    <YAxis
-                      stroke={theme.palette.text.secondary}
-                      tickFormatter={formatCurrencyValue}
-                      style={{ fontSize: '0.75rem' }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke={theme.palette.success.main}
-                      fill="url(#trendGradient)"
-                      strokeWidth={3}
-                      name={t('weeklyTrend.spending')}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
+                {heatmapMax > 0 ? (
+                  <Box sx={{ overflowX: 'auto', pb: 1 }}>
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: '48px repeat(24, minmax(10px, 1fr))',
+                        gap: 0.5,
+                        alignItems: 'center',
+                        minWidth: 500
+                      }}
+                    >
+                      <Box />
+                      {hourLabels.map((hour) => (
+                        <Typography
+                          key={`hour-label-${hour}`}
+                          variant="caption"
+                          color="text.secondary"
+                          align="center"
+                          sx={{ fontSize: '0.65rem', lineHeight: 1 }}
+                        >
+                          {hour % 3 === 0 ? hour : ''}
+                        </Typography>
+                      ))}
+                      {dayLabels.map((dayLabel, dayIndex) => (
+                        <React.Fragment key={`day-row-${dayLabel}`}>
+                          <Typography variant="caption" color="text.secondary" sx={{ pr: 1 }}>
+                            {dayLabel}
+                          </Typography>
+                          {hourLabels.map((hour) => {
+                            const value = heatmapMatrix?.[dayIndex]?.[hour] ?? 0;
+                            return (
+                              <MuiTooltip
+                                key={`cell-${dayIndex}-${hour}`}
+                                title={(
+                                  <Box sx={{ p: 0.5 }}>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {dayLabel} • {String(hour).padStart(2, '0')}:00
+                                    </Typography>
+                                    <Typography variant="body2" fontWeight="bold">
+                                      {formatHeatmapValue(value)}
+                                    </Typography>
+                                  </Box>
+                                )}
+                                arrow
+                                placement="top"
+                              >
+                                <Box
+                                  sx={{
+                                    height: 16,
+                                    borderRadius: 0.5,
+                                    bgcolor: getHeatmapColor(value),
+                                    border: `1px solid ${alpha(theme.palette.divider, 0.15)}`,
+                                    cursor: 'default'
+                                  }}
+                                />
+                              </MuiTooltip>
+                            );
+                          })}
+                        </React.Fragment>
+                      ))}
+                    </Box>
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    {t('noData')}
+                  </Typography>
+                )}
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1, mt: 1 }}>
+                  <Typography variant="caption" color="text.secondary">{t('heatmap.low')}</Typography>
+                  <Box
+                    sx={{
+                      width: 120,
+                      height: 8,
+                      borderRadius: 4,
+                      background: `linear-gradient(90deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.primary.main, 0.9)})`
+                    }}
+                  />
+                  <Typography variant="caption" color="text.secondary">{t('heatmap.high')}</Typography>
+                </Box>
               </Paper>
             </Grid>
 

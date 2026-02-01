@@ -10,6 +10,7 @@ export interface Subcategory {
   total: number;
   pendingCount?: number;
   processedCount?: number;
+  subcategories?: Subcategory[];
 }
 
 export interface TrendHistoryPoint {
@@ -128,4 +129,13 @@ export interface OverviewDataItem {
   previousValue?: number;
   history?: TrendHistoryPoint[];
   subcategories?: Subcategory[];
+}
+
+export type ChartDisplayMode = 'pie' | 'sunburst';
+
+export interface SunburstDataNode {
+  name: string;
+  value?: number;
+  fill?: string;
+  children?: SunburstDataNode[];
 }

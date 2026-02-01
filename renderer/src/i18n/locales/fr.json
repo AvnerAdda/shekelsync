@@ -767,6 +767,12 @@
           "subtitle": "Comment vos dépenses évoluent dans le temps",
           "spending": "Dépenses hebdomadaires"
         },
+        "heatmap": {
+          "title": "Carte de chaleur heures x jours",
+          "subtitle": "Quand vous dépensez au fil de la semaine",
+          "low": "Faible",
+          "high": "Élevé"
+        },
         "evolution": {
           "title": "Évolution des dépenses",
           "subtitle": "Suivez vos tendances de dépenses dans le temps",

@@ -23,6 +23,8 @@ interface GeneralBreakdownStrings {
   recentTransactions: string;
   pendingBadge: string;
   processedDatePrefix: string;
+  pieChart: string;
+  sunburstChart: string;
 }
 
 interface BreakdownStrings {
@@ -91,6 +93,8 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
       recentTransactions: 'Transactions récentes',
       pendingBadge: 'En attente',
       processedDatePrefix: 'Traitée',
+      pieChart: 'Secteurs',
+      sunburstChart: 'Hiérarchique',
     },
     overview: {
       pendingBreakdown: (processed, pending) => `${processed} + ${pending} en attente`,
@@ -154,6 +158,8 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
       recentTransactions: 'Recent Transactions',
       pendingBadge: 'Pending',
       processedDatePrefix: 'Processed',
+      pieChart: 'Pie',
+      sunburstChart: 'Sunburst',
     },
     overview: {
       pendingBreakdown: (processed, pending) => `${processed} + ${pending} pending`,
@@ -217,6 +223,8 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
       recentTransactions: 'עסקאות אחרונות',
       pendingBadge: 'ממתינה',
       processedDatePrefix: 'עובד',
+      pieChart: 'עוגה',
+      sunburstChart: 'היררכי',
     },
     overview: {
       pendingBreakdown: (processed, pending) => `${processed} + ${pending} ממתינות`,

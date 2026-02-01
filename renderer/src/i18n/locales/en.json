@@ -781,6 +781,12 @@
           "subtitle": "How your spending evolves over time",
           "spending": "Weekly Spending"
         },
+        "heatmap": {
+          "title": "Hour x Day Spending Heatmap",
+          "subtitle": "See when you spend across the week",
+          "low": "Low",
+          "high": "High"
+        },
         "evolution": {
           "title": "Spending Evolution",
           "subtitle": "Track your spending trends over time",
