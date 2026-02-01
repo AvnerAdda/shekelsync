@@ -61,6 +61,7 @@ function initializeSqliteIfMissing(dbPath, databaseCtor) {
   initModule.initializeSqliteDatabase({
     output: dbPath,
     databaseCtor,
+    withDemo: true,
   });
 }
 

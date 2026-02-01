@@ -1708,20 +1708,22 @@ function seedDemoCredentials(db) {
     )
   `);
 
+  // Note: id_number and username are encrypted fields - set to null for demo
+  // The app will decrypt these fields on read, so they must be null or properly encrypted
   const samples = [
     {
       vendor: 'hapoalim',
       nickname: 'Hapoalim Demo',
       bankAccountNumber: '12345678',
-      idNumber: '111111111',
-      username: 'demo-bank',
+      idNumber: null,
+      username: null,
     },
     {
       vendor: 'max',
       nickname: 'Max Demo',
       card6Digits: '123456',
-      idNumber: '222222222',
-      username: 'demo-cc',
+      idNumber: null,
+      username: null,
     },
   ];
 
