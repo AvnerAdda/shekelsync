@@ -231,8 +231,8 @@ const electronAPI = {
   // License management
   license: {
     getStatus: () => ipcRenderer.invoke('license:getStatus'),
-    register: (teudatZehut) => ipcRenderer.invoke('license:register', teudatZehut),
-    validateTeudatZehut: (id) => ipcRenderer.invoke('license:validateTeudatZehut', id),
+    register: (email) => ipcRenderer.invoke('license:register', email),
+    validateEmail: (email) => ipcRenderer.invoke('license:validateEmail', email),
     activatePro: (paymentRef) => ipcRenderer.invoke('license:activatePro', paymentRef),
     canWrite: () => ipcRenderer.invoke('license:canWrite'),
     validateOnline: () => ipcRenderer.invoke('license:validateOnline'),

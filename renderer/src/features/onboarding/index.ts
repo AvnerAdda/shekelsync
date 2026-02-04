@@ -5,4 +5,4 @@ export { default as LicenseDetailsModal } from './components/LicenseDetailsModal
 
 // Hooks
 export { useLicense } from './hooks/useLicense';
-export type { LicenseStatus, TeudatZehutValidation, UseLicenseReturn } from './hooks/useLicense';
+export type { LicenseStatus, EmailValidation, UseLicenseReturn } from './hooks/useLicense';

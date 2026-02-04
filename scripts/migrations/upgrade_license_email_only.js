@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 /**
- * Migration Script: Add license table for licensing system.
+ * Migration Script: Rebuild license table to be email-only.
  *
- * Creates the license table to store local license data including
- * email, device_hash, trial dates, and sync status.
+ * Drops legacy teudat_zehut column by rebuilding the table.
+ * Safely copies existing records, mapping email from email/teudat_zehut.
  *
  * Usage:
- *   node scripts/migrations/add_license_schema.js [--db dist/clarify.db]
+ *   node scripts/migrations/upgrade_license_email_only.js [--db dist/clarify.sqlite]
  */
 
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
 
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
 const APP_NODE_MODULES = path.join(PROJECT_ROOT, 'app', 'node_modules');
@@ -41,8 +40,8 @@ function resolveDatabaseCtor() {
 }
 
 const DEFAULT_DB_PATHS = [
-  path.join(PROJECT_ROOT, 'dist', 'clarify.db'),
   path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite'),
+  path.join(PROJECT_ROOT, 'dist', 'clarify.db'),
 ];
 
 function resolvePath(input) {
@@ -65,7 +64,7 @@ function parseArgs() {
       continue;
     }
     if (arg === '--help' || arg === '-h') {
-      console.log(`Usage: node scripts/migrations/add_license_schema.js [options]
+      console.log(`Usage: node scripts/migrations/upgrade_license_email_only.js [options]
 
 Options:
   -d, --db <path>   Path to SQLite database file
@@ -87,7 +86,7 @@ Options:
   return { dbPath };
 }
 
-const TABLE_STATEMENT = `CREATE TABLE IF NOT EXISTS license (
+const EMAIL_ONLY_SCHEMA = `CREATE TABLE license_new (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   unique_id TEXT NOT NULL UNIQUE,
   email TEXT NOT NULL,
@@ -113,66 +112,81 @@ function main() {
     process.exit(1);
   }
 
-  console.log(`\n=== License Schema Migration ===\n`);
+  console.log(`\n=== License Email-Only Migration ===\n`);
   console.log(`Database: ${dbPath}`);
 
   const Database = resolveDatabaseCtor();
   if (Database?.error) {
-    console.warn('WARN: better-sqlite3 unavailable; using sqlite3 CLI instead.');
-    if (Database.error?.message) {
-      console.warn(`WARN: ${Database.error.message}`);
-    }
-    try {
-      runWithSqliteCli(dbPath);
-      console.log('OK: License table is up to date.\n');
-    } catch (error) {
-      console.error('ERROR: Migration failed:', error.message);
-      process.exitCode = 1;
-    }
-    return;
+    console.error('ERROR: better-sqlite3 unavailable:', Database.error.message);
+    process.exit(1);
   }
 
   let db;
   try {
     db = new Database(dbPath, { fileMustExist: true });
   } catch (error) {
-    console.warn('WARN: better-sqlite3 failed to load; using sqlite3 CLI instead.');
-    if (error?.message) {
-      console.warn(`WARN: ${error.message}`);
-    }
-    try {
-      runWithSqliteCli(dbPath);
-      console.log('OK: License table is up to date.\n');
-    } catch (cliError) {
-      console.error('ERROR: Migration failed:', cliError.message);
-      process.exitCode = 1;
-    }
-    return;
+    console.error('ERROR: Failed to open database:', error.message);
+    process.exit(1);
   }
 
   try {
-    // Check if table already exists
     const tableExists = db.prepare(
       `SELECT name FROM sqlite_master WHERE type='table' AND name='license'`
     ).get();
 
-    if (tableExists) {
-      console.log('INFO: License table already exists, skipping creation.');
-    } else {
-      db.exec(TABLE_STATEMENT);
-      console.log('OK: License table created successfully.');
+    if (!tableExists) {
+      console.log('INFO: License table not found, creating email-only schema.');
+      db.exec(EMAIL_ONLY_SCHEMA);
+      console.log('OK: License table created.');
+      return;
     }
 
     const columns = db.prepare('PRAGMA table_info(license)').all();
-    const hasEmail = columns.some((col) => col.name === 'email');
-    if (!hasEmail) {
-      db.exec('ALTER TABLE license ADD COLUMN email TEXT');
-      db.exec('UPDATE license SET email = COALESCE(email, teudat_zehut)');
-      console.log('OK: Added email column to license table.');
+    const hasLegacy = columns.some((col) => col.name === 'teudat_zehut');
+    if (!hasLegacy) {
+      console.log('INFO: License table already email-only. Nothing to do.');
+      return;
     }
 
-    console.log('OK: License table is up to date.\n');
+    db.exec('BEGIN');
+    db.exec(EMAIL_ONLY_SCHEMA);
+    db.exec(`
+      INSERT INTO license_new (
+        id, unique_id, email, device_hash,
+        installation_date, trial_start_date, subscription_date,
+        license_type, last_online_validation, offline_grace_start,
+        is_synced_to_cloud, sync_error_message, app_version,
+        created_at, updated_at
+      )
+      SELECT
+        id,
+        unique_id,
+        COALESCE(email, teudat_zehut, ''),
+        device_hash,
+        installation_date,
+        trial_start_date,
+        subscription_date,
+        license_type,
+        last_online_validation,
+        offline_grace_start,
+        is_synced_to_cloud,
+        sync_error_message,
+        app_version,
+        created_at,
+        updated_at
+      FROM license
+    `);
+    db.exec('DROP TABLE license');
+    db.exec('ALTER TABLE license_new RENAME TO license');
+    db.exec('COMMIT');
+
+    console.log('OK: License table rebuilt without teudat_zehut.');
   } catch (error) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      // ignore rollback errors
+    }
     console.error('ERROR: Migration failed:', error.message);
     process.exitCode = 1;
   } finally {
@@ -180,26 +194,6 @@ function main() {
   }
 }
 
-main();
-
-function runWithSqliteCli(dbPath) {
-  const sqliteBin = process.env.SQLITE3_BIN || 'sqlite3';
-  const sql = TABLE_STATEMENT;
-
-  const result = spawnSync(sqliteBin, [dbPath], {
-    input: sql,
-    encoding: 'utf8',
-  });
-
-  if (result.error) {
-    if (result.error.code === 'ENOENT') {
-      throw new Error(`sqlite3 CLI not found. Set SQLITE3_BIN or install sqlite3.`);
-    }
-    throw result.error;
-  }
-
-  if (result.status !== 0) {
-    const stderr = (result.stderr || '').trim();
-    throw new Error(stderr || `sqlite3 exited with status ${result.status}`);
-  }
+if (require.main === module) {
+  main();
 }

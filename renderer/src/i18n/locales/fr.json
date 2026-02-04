@@ -13,6 +13,16 @@
     "startTyping": "Commencez à taper pour rechercher des transactions",
     "shortcut": "Cmd+K"
   },
+  "transactionDetail": {
+    "title": "Détails de la transaction",
+    "notes": "Notes",
+    "notesPlaceholder": "Ajoutez des notes sur cette transaction...",
+    "tags": "Tags",
+    "addTag": "Ajouter un tag...",
+    "tagHint": "Appuyez sur Entrée pour ajouter un tag",
+    "save": "Enregistrer",
+    "cancel": "Annuler"
+  },
   "onboarding": {
     "gettingStarted": "Premiers pas",
     "completeSteps": "Complétez ces étapes pour débloquer toutes les fonctionnalités",
@@ -50,6 +60,7 @@
     }
   },
   "license": {
+    "email": "Adresse e-mail",
     "trialActive": "Essai gratuit actif",
     "trialExpiring": "Fin d'essai proche",
     "trialExpired": "Essai expiré",
@@ -68,7 +79,7 @@
     "trialExpiredMessage": "Votre essai gratuit de 30 jours est terminé. Passez à Pro pour continuer à ajouter des transactions, créer des règles et synchroniser vos comptes.",
     "offlineGraceExpiredMessage": "Votre période de grâce hors ligne a expiré. Veuillez vous connecter à Internet pour valider votre licence et restaurer toutes les fonctionnalités.",
     "notRegisteredTitle": "Inscription requise",
-    "notRegisteredMessage": "Veuillez vous inscrire avec votre Teudat Zehut pour démarrer votre essai gratuit de 30 jours et activer toutes les fonctionnalités."
+    "notRegisteredMessage": "Veuillez vous inscrire avec votre adresse e-mail pour démarrer votre essai gratuit de 30 jours et activer toutes les fonctionnalités."
   },
   "dashboard": {
     "summary": {

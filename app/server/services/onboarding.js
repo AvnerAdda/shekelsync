@@ -98,7 +98,12 @@ async function getOnboardingStatus() {
     let isRegistered = false;
     try {
       const licenseResult = await client.query('SELECT * FROM license WHERE id = 1');
-      isRegistered = licenseResult.rows.length > 0 && Boolean(licenseResult.rows[0].teudat_zehut);
+      if (licenseResult.rows.length > 0) {
+        const record = licenseResult.rows[0];
+        isRegistered = Boolean(record.email || record.teudat_zehut);
+      } else {
+        isRegistered = false;
+      }
     } catch (err) {
       // License table might not exist in older databases - treat as registered to avoid blocking
       console.warn('[Onboarding] Failed to check license status:', err.message);

@@ -9,13 +9,14 @@
  * - Sample data for new features
  */
 const path = require('path');
+const { execSync } = require('child_process');
 const Database = require(path.join(__dirname, '..', 'app', 'node_modules', 'better-sqlite3'));
 const DB_PATH = process.env.SQLITE_DB_PATH || path.join(__dirname, '..', 'dist', 'clarify-anonymized.sqlite');
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
-const BASE_DATE = new Date(process.env.DEMO_BASE_DATE || '2026-01-27T12:00:00Z');
+const BASE_DATE = new Date(process.env.DEMO_BASE_DATE || '2026-02-01T12:00:00Z');
 const SEED = Number(process.env.DEMO_SEED || 42);
 const USD_ILS_RATE = Number(process.env.DEMO_USD_ILS_RATE || 3.7);
 const ID_BASE = BASE_DATE.getTime();
@@ -117,7 +118,7 @@ const MISSING_TABLES = [
   `CREATE TABLE IF NOT EXISTS license (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     unique_id TEXT NOT NULL UNIQUE,
-    teudat_zehut TEXT NOT NULL,
+    email TEXT NOT NULL,
     device_hash TEXT NOT NULL,
     installation_date TEXT NOT NULL DEFAULT (datetime('now')),
     trial_start_date TEXT NOT NULL DEFAULT (datetime('now')),
@@ -620,8 +621,8 @@ console.log('📋 Seeding license...');
 
 try {
   db.prepare(`
-    INSERT OR REPLACE INTO license (id, unique_id, teudat_zehut, device_hash, installation_date, trial_start_date, license_type, app_version)
-    VALUES (1, 'demo-user-12345-67890', '000000000', 'demo-device-hash-abc123', '2025-09-01T10:00:00Z', '2025-09-01T10:00:00Z', 'pro', '1.5.0')
+    INSERT OR REPLACE INTO license (id, unique_id, email, device_hash, installation_date, trial_start_date, license_type, app_version)
+    VALUES (1, 'demo-user-12345-67890', 'demo@example.com', 'demo-device-hash-abc123', '2025-09-01T10:00:00Z', '2025-09-01T10:00:00Z', 'pro', '1.5.0')
   `).run();
   console.log('  Inserted license record');
 } catch (e) {
@@ -1558,6 +1559,21 @@ console.table(summary);
 
 const dateRange = db.prepare('SELECT MIN(date) as min_date, MAX(date) as max_date FROM transactions').get();
 console.log(`\nDate range: ${dateRange.min_date} to ${dateRange.max_date}`);
+
+// Ensure spending category mappings exist so dashboard allocation renders immediately
+console.log('\n📋 Initializing spending category mappings...');
+try {
+  execSync(
+    "node -e \"const svc=require('./app/server/services/analytics/spending-categories.js'); const db=require('./app/server/services/database.js'); (async()=>{const res=await svc.initializeSpendingCategories(); console.log('  Spending categories initialized:', res); await db.close();})().catch(err=>{console.error(err); process.exit(1);});\"",
+    {
+      stdio: 'inherit',
+      cwd: path.join(__dirname, '..'),
+      env: { ...process.env, SQLITE_DB_PATH: DB_PATH },
+    }
+  );
+} catch (e) {
+  console.log('  Spending categories init skipped:', e.message);
+}
 
 db.close();
 console.log('\nDone!');

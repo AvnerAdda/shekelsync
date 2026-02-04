@@ -17,17 +17,27 @@
     "startTyping": "Start typing to search transactions",
     "shortcut": "Cmd+K"
   },
+  "transactionDetail": {
+    "title": "Transaction Details",
+    "notes": "Notes",
+    "notesPlaceholder": "Add notes about this transaction...",
+    "tags": "Tags",
+    "addTag": "Add a tag...",
+    "tagHint": "Press Enter to add a tag",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
   "registration": {
     "title": "Welcome to ShekelSync",
-    "description": "Enter your Teudat Zehut (Israeli ID) to start your free 30-day trial. One device per ID.",
-    "teudatZehut": "Teudat Zehut",
-    "digits": "9 digits",
-    "invalidId": "Invalid ID format",
-    "validationError": "Could not validate ID",
+    "description": "Enter your email to start your free 30-day trial. One device per email.",
+    "email": "Email",
+    "emailPlaceholder": "you@example.com",
+    "invalidEmail": "Invalid email address",
+    "validationError": "Could not validate email",
     "startTrial": "Start 30-Day Free Trial",
     "registrationFailed": "Registration failed. Please try again.",
     "electronRequired": "Desktop app required for registration",
-    "privacyNotice": "Your ID is stored securely on your device and used only for license verification. We never share your personal data.",
+    "privacyNotice": "Your email is stored securely on your device and used only for license verification. We never share your personal data.",
     "trialInfo": "30 days free, then ₪500 for lifetime Pro access"
   },
   "onboarding": {
@@ -67,6 +77,7 @@
     }
   },
   "license": {
+    "email": "Email",
     "trialActive": "Free Trial Active",
     "trialExpiring": "Trial Ending Soon",
     "trialExpired": "Trial Expired",
@@ -85,7 +96,7 @@
     "trialExpiredMessage": "Your 30-day free trial has ended. Upgrade to Pro to continue adding transactions, creating rules, and syncing your accounts.",
     "offlineGraceExpiredMessage": "Your offline grace period has expired. Please connect to the internet to validate your license and restore full functionality.",
     "notRegisteredTitle": "Registration Required",
-    "notRegisteredMessage": "Please register with your Teudat Zehut to start your free 30-day trial and enable all features."
+    "notRegisteredMessage": "Please register with your email to start your free 30-day trial and enable all features."
   },
   "dashboard": {
     "summary": {

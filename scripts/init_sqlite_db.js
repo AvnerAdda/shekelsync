@@ -42,6 +42,14 @@ function ensureColumnExists(db, tableName, columnName, definitionSql) {
   }
 }
 
+function getTableColumns(db, tableName) {
+  try {
+    return db.prepare(`PRAGMA table_info(${tableName})`).all();
+  } catch {
+    return [];
+  }
+}
+
 function applySchemaUpgrades(db) {
   ensureColumnExists(
     db,
@@ -62,6 +70,30 @@ function applySchemaUpgrades(db) {
     'tags',
     'tags TEXT'
   );
+
+  // Add tags column for transaction tagging (stores JSON array of strings)
+  ensureColumnExists(
+    db,
+    'transactions',
+    'tags',
+    'tags TEXT'
+  );
+
+  // Add email column for license registration (email replaces legacy teudat_zehut)
+  ensureColumnExists(
+    db,
+    'license',
+    'email',
+    'email TEXT'
+  );
+
+  const licenseColumns = getTableColumns(db, 'license');
+  if (licenseColumns.some((col) => col.name === 'teudat_zehut')) {
+    db.exec(`
+      UPDATE license
+      SET email = COALESCE(email, teudat_zehut)
+    `);
+  }
 }
 
 function parseArgs() {
@@ -189,7 +221,7 @@ const TABLE_DEFINITIONS = [
   `CREATE TABLE IF NOT EXISTS license (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       unique_id TEXT NOT NULL UNIQUE,
-      teudat_zehut TEXT NOT NULL,
+      email TEXT NOT NULL,
       device_hash TEXT NOT NULL,
       installation_date TEXT NOT NULL DEFAULT (datetime('now')),
       trial_start_date TEXT NOT NULL DEFAULT (datetime('now')),
@@ -1796,39 +1828,57 @@ function initializeSqliteDatabase(options = {}) {
   const DatabaseCtor = resolveDatabaseCtor(databaseCtor);
   const db = new DatabaseCtor(output);
   let transactionStarted = false;
+  const useTransaction = process.env.SQLITE_INIT_TRANSACTION === 'true';
+  const runStep = (label, fn) => {
+    try {
+      return fn();
+    } catch (error) {
+      error.message = `[init_sqlite_db] ${label} failed: ${error.message}`;
+      throw error;
+    }
+  };
 
   try {
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
 
-    db.exec('BEGIN');
-    transactionStarted = true;
-    
-    for (const statement of TABLE_DEFINITIONS) {
-      db.exec(statement);
-    }
-    applySchemaUpgrades(db);
-    for (const statement of INDEX_STATEMENTS) {
-      db.exec(statement);
+    if (useTransaction) {
+      db.exec('BEGIN');
+      transactionStarted = true;
     }
 
-    // Create FTS5 virtual tables and triggers for full-text search
-    for (const statement of FTS5_STATEMENTS) {
-      db.exec(statement);
-    }
+    runStep('create tables', () => {
+      for (const statement of TABLE_DEFINITIONS) {
+        db.exec(statement);
+      }
+    });
+    runStep('apply schema upgrades', () => applySchemaUpgrades(db));
+    runStep('create indexes', () => {
+      for (const statement of INDEX_STATEMENTS) {
+        db.exec(statement);
+      }
+    });
 
-    const institutionCount = seedFinancialInstitutions(db);
-    const helpers = seedCategories(db);
-    seedCategoryMapping(db, helpers);
-    seedCategorizationRules(db, helpers);
-    const spendingTargetCount = seedSpendingCategoryTargets(db);
-    const spendingMappingCount = seedSpendingCategoryMappings(db);
+    runStep('create FTS5 tables', () => {
+      for (const statement of FTS5_STATEMENTS) {
+        db.exec(statement);
+      }
+    });
+
+    const institutionCount = runStep('seed institutions', () => seedFinancialInstitutions(db));
+    const helpers = runStep('seed categories', () => seedCategories(db));
+    runStep('seed category mapping', () => seedCategoryMapping(db, helpers));
+    runStep('seed categorization rules', () => seedCategorizationRules(db, helpers));
+    const spendingTargetCount = runStep('seed spending targets', () => seedSpendingCategoryTargets(db));
+    const spendingMappingCount = runStep('seed spending mappings', () => seedSpendingCategoryMappings(db));
     if (withDemo) {
-      seedDemoCredentials(db);
+      runStep('seed demo credentials', () => seedDemoCredentials(db));
     }
 
-    db.exec('COMMIT');
-    transactionStarted = false;
+    if (useTransaction) {
+      db.exec('COMMIT');
+      transactionStarted = false;
+    }
 
     // Count income rules
     const incomeRulesCount = db.prepare('SELECT COUNT(*) as count FROM categorization_rules WHERE category_type = ?').get('income').count;
@@ -1866,6 +1916,9 @@ if (require.main === module) {
   } catch (error) {
     console.error('\n❌ Failed to initialise database:');
     console.error(error.message);
+    if (error.stack) {
+      console.error(error.stack.split('\n').slice(1).join('\n'));
+    }
     process.exit(1);
   }
 }

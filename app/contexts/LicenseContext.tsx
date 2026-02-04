@@ -3,8 +3,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 // Type declaration for the license API exposed by Electron preload
 interface LicenseApi {
   getStatus: () => Promise<{ success: boolean; data?: LicenseStatus; error?: string }>;
-  register: (teudatZehut: string) => Promise<{ success: boolean; license?: unknown; error?: string }>;
-  validateTeudatZehut: (id: string) => Promise<{ success: boolean; data?: TeudatZehutValidation; error?: string }>;
+  register: (email: string) => Promise<{ success: boolean; license?: unknown; error?: string }>;
+  validateEmail: (email: string) => Promise<{ success: boolean; data?: EmailValidation; error?: string }>;
   activatePro: (paymentRef?: string) => Promise<{ success: boolean; error?: string }>;
   canWrite: () => Promise<{ success: boolean; canWrite: boolean; error?: string }>;
   validateOnline: () => Promise<{ success: boolean; status?: LicenseStatus; error?: string }>;
@@ -21,11 +21,11 @@ interface LicenseStatus {
   offlineGraceDaysRemaining?: number | null;
   syncedToCloud: boolean;
   lastValidated?: string;
-  teudatZehut?: string;
+  email?: string;
   error?: string;
 }
 
-interface TeudatZehutValidation {
+interface EmailValidation {
   valid: boolean;
   error?: string;
 }
@@ -35,8 +35,8 @@ interface LicenseContextType {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  register: (teudatZehut: string) => Promise<{ success: boolean; error?: string }>;
-  validateTeudatZehut: (id: string) => Promise<TeudatZehutValidation>;
+  register: (email: string) => Promise<{ success: boolean; error?: string }>;
+  validateEmail: (email: string) => Promise<EmailValidation>;
   activatePro: (paymentRef?: string) => Promise<{ success: boolean; error?: string }>;
   validateOnline: () => Promise<{ success: boolean; error?: string }>;
   requiresRegistration: boolean;
@@ -55,6 +55,8 @@ const DEFAULT_STATUS: LicenseStatus = {
   offlineMode: false,
   syncedToCloud: false,
 };
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 // Check if we're running in Electron with license API
 const isElectron = typeof window !== 'undefined' &&
@@ -109,13 +111,13 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, []);
 
-  const register = useCallback(async (teudatZehut: string) => {
+  const register = useCallback(async (email: string) => {
     if (!isElectron) {
       return { success: false, error: 'Not running in Electron' };
     }
 
     try {
-      const result = await getLicenseApi()!.register(teudatZehut);
+      const result = await getLicenseApi()!.register(email);
 
       if (result.success) {
         // Refetch status after successful registration
@@ -132,26 +134,26 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [fetchStatus]);
 
-  const validateTeudatZehut = useCallback(async (id: string): Promise<TeudatZehutValidation> => {
+  const validateEmail = useCallback(async (email: string): Promise<EmailValidation> => {
     if (!isElectron) {
       // Basic validation without Electron
-      const cleanId = id.replace(/[\s-]/g, '');
-      if (!/^\d{9}$/.test(cleanId)) {
-        return { valid: false, error: 'ID must be exactly 9 digits' };
+      const normalized = email.trim().toLowerCase();
+      if (!EMAIL_REGEX.test(normalized)) {
+        return { valid: false, error: 'Email must be a valid address' };
       }
       return { valid: true };
     }
 
     try {
-      const result = await getLicenseApi()!.validateTeudatZehut(id);
+      const result = await getLicenseApi()!.validateEmail(email);
 
       if (!result.success) {
         return { valid: false, error: result.error };
       }
 
-      return result.data as TeudatZehutValidation;
+      return result.data as EmailValidation;
     } catch (err) {
-      console.error('Error validating Teudat Zehut:', err);
+      console.error('Error validating email:', err);
       return {
         valid: false,
         error: err instanceof Error ? err.message : 'Validation failed',
@@ -231,7 +233,7 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     error,
     refetch: fetchStatus,
     register,
-    validateTeudatZehut,
+    validateEmail,
     activatePro,
     validateOnline,
     requiresRegistration,
@@ -255,5 +257,5 @@ export const useLicense = (): LicenseContextType => {
   return context;
 };
 
-export type { LicenseStatus, TeudatZehutValidation, LicenseContextType };
+export type { LicenseStatus, EmailValidation, LicenseContextType };
 export default LicenseContext;

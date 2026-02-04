@@ -105,6 +105,7 @@ async function setupAPIServer(mainWindow, options = {}) {
   app.get('/api/month_by_categories', transactionHandlers.getMonthByCategories);
   app.get('/api/transactions/recent', transactionHandlers.getRecentTransactions);
   app.get('/api/transactions/search', transactionHandlers.searchTransactions);
+  app.get('/api/transactions/tags', transactionHandlers.getAllTags);
 
   // Account management routes (shared router)
   app.use('/api/accounts', createAccountsRouter());

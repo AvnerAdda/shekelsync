@@ -13,14 +13,17 @@ import {
 } from '@mui/material';
 import MuiTooltip from '@mui/material/Tooltip';
 import { ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ReferenceArea, ComposedChart, Area } from 'recharts';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import { format, subDays, addDays } from 'date-fns';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import TimelineIcon from '@mui/icons-material/Timeline';
+import NotesIcon from '@mui/icons-material/Notes';
+import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
 import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';
+import TransactionDetailModal, { TransactionForModal } from '@renderer/shared/modals/TransactionDetailModal';
 
 interface TransactionHistorySectionProps {
   data: any;
@@ -77,6 +80,31 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const [forecastData, setForecastData] = useState<any>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
   const [forecastError, setForecastError] = useState<string | null>(null);
+
+  // Transaction Detail Modal state
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<TransactionForModal | null>(null);
+
+  const handleOpenTransactionDetail = (txn: any) => {
+    setSelectedTransaction({
+      identifier: txn.identifier,
+      vendor: txn.vendor,
+      name: txn.description || txn.vendor,
+      category: txn.category_name || txn.category || null,
+      parent_category: txn.parent_name || null,
+      category_definition_id: txn.category_definition_id || null,
+      category_type: txn.category_type || null,
+      memo: txn.memo || null,
+      tags: txn.tags || [],
+      price: txn.price,
+      date: txn.date,
+      processed_date: txn.processed_date || null,
+      account_number: txn.account_number || null,
+      type: txn.type || null,
+      status: txn.status || null,
+    });
+    setDetailModalOpen(true);
+  };
 
   // Fetch forecast data - always 30 days ahead
   const fetchForecast = useCallback(async () => {
@@ -1169,12 +1197,14 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   {dateTransactions.map((txn, idx) => (
                     <Box
                       key={`${txn.identifier}-${txn.vendor}-${idx}`}
+                      onClick={() => handleOpenTransactionDetail(txn)}
                       sx={(theme) => ({
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         py: 1.5,
                         px: 2,
+                        cursor: 'pointer',
                         borderBottom: idx < dateTransactions.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
                         transition: 'all 0.2s',
                         '&:hover': {
@@ -1185,9 +1215,16 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                       })}
                     >
                       <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                          {txn.description || txn.vendor}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                          <Typography variant="body2" fontWeight="medium">
+                            {txn.description || txn.vendor}
+                          </Typography>
+                          {txn.memo && (
+                            <MuiTooltip title={txn.memo}>
+                              <NotesIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                            </MuiTooltip>
+                          )}
+                        </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                           <Typography variant="caption" color="text.secondary">
                             {format(new Date(txn.date), 'HH:mm')}
@@ -1202,6 +1239,32 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                                   ? `${txn.parent_name} > ${txn.category_name}`
                                   : txn.category_name || txn.parent_name || txn.category}
                               </Typography>
+                            </>
+                          )}
+                          {txn.tags?.length > 0 && (
+                            <>
+                              {txn.tags.slice(0, 2).map((tag: string) => (
+                                <Chip
+                                  key={tag}
+                                  label={tag}
+                                  size="small"
+                                  icon={<LocalOfferIcon sx={{ fontSize: '12px !important' }} />}
+                                  sx={{
+                                    height: 18,
+                                    fontSize: '0.65rem',
+                                    backgroundColor: alpha(theme.palette.secondary.main, 0.1),
+                                    color: theme.palette.secondary.main,
+                                    '& .MuiChip-icon': {
+                                      color: theme.palette.secondary.main,
+                                    },
+                                  }}
+                                />
+                              ))}
+                              {txn.tags.length > 2 && (
+                                <Typography variant="caption" color="text.secondary">
+                                  +{txn.tags.length - 2}
+                                </Typography>
+                              )}
                             </>
                           )}
                           {(txn.institution?.display_name_he || txn.vendor) && (
@@ -1230,6 +1293,18 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           </Box>
         );
       })()}
+
+      <TransactionDetailModal
+        open={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        transaction={selectedTransaction}
+        onSave={() => {
+          // Optionally refresh the date transactions here
+          if (hoveredDate) {
+            fetchTransactionsByDate(hoveredDate);
+          }
+        }}
+      />
     </Paper>
   );
 };

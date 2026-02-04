@@ -8,6 +8,8 @@ const UPDATABLE_FIELDS = [
   'category_type',
   'auto_categorized',
   'confidence_score',
+  'memo',
+  'tags',
 ];
 
 function sendError(res, error, fallbackMessage) {
@@ -151,6 +153,16 @@ async function deleteTransaction(req, res) {
   }
 }
 
+async function getAllTags(_req, res) {
+  try {
+    const tags = await transactionsList.getAllTags();
+    res.json(tags);
+  } catch (error) {
+    console.error('Get all tags error:', error);
+    sendError(res, error, 'Failed to fetch tags');
+  }
+}
+
 module.exports = {
   getAvailableMonths,
   getBoxPanelData,
@@ -163,4 +175,5 @@ module.exports = {
   createManualTransaction,
   updateTransaction,
   deleteTransaction,
+  getAllTags,
 };

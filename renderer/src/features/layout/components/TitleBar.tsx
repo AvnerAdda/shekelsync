@@ -521,6 +521,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
         borderTopLeftRadius: 'inherit',
         borderTopRightRadius: 'inherit',
+        overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as transactionsList from '../list.js';
+import { useSqlite } from '../../../../lib/sql-dialect.js';
 
 const queryMock = vi.fn();
 const mockDb = { query: queryMock };
@@ -59,8 +60,16 @@ describe('transactions list service', () => {
 
     expect(queryMock).toHaveBeenCalledTimes(1);
     const [sql, params] = queryMock.mock.calls[0];
-    expect(String(sql)).toContain('LOWER(t.memo) LIKE LOWER($1)');
-    expect(params).toEqual(['%chips%', 'Food', 'shop', '2025-02-01', '2025-02-28', 10]);
+    if (useSqlite) {
+      expect(String(sql)).toContain('transactions_fts MATCH $1');
+      expect(String(sql)).toContain('LOWER(t.memo) LIKE LOWER($2)');
+      expect(params[0]).toContain('chips');
+      expect(params[1]).toBe('%chips%');
+      expect(params.slice(2)).toEqual(['Food', 'shop', '2025-02-01', '2025-02-28', 10]);
+    } else {
+      expect(String(sql)).toContain('LOWER(t.memo) LIKE LOWER($1)');
+      expect(params).toEqual(['%chips%', 'Food', 'shop', '2025-02-01', '2025-02-28', 10]);
+    }
     expect(result.transactions[0].price).toBe(-5);
   });
 
@@ -100,8 +109,16 @@ describe('transactions list service', () => {
     expect(result.searchQuery).toBe('foo');
     expect(queryMock).toHaveBeenCalledTimes(1);
     const [sql, params] = queryMock.mock.calls[0];
-    expect(String(sql)).toContain('LOWER(t.memo) LIKE LOWER($1)');
-    expect(params).toEqual(['%foo%', 100]);
+    if (useSqlite) {
+      expect(String(sql)).toContain('transactions_fts MATCH $1');
+      expect(String(sql)).toContain('LOWER(t.memo) LIKE LOWER($2)');
+      expect(params[0]).toContain('foo');
+      expect(params[1]).toBe('%foo%');
+      expect(params[2]).toBe(100);
+    } else {
+      expect(String(sql)).toContain('LOWER(t.memo) LIKE LOWER($1)');
+      expect(params).toEqual(['%foo%', 100]);
+    }
   });
 
   it('throws when limit is invalid', async () => {

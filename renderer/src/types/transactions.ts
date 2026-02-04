@@ -9,6 +9,8 @@ export interface TransactionDetail {
   categoryType: string;
   parent_name?: string;
   category_name?: string;
+  memo?: string;
+  tags?: string[];
   institution?: {
     id: number;
     vendor_code: string;

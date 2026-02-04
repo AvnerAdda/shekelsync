@@ -1,17 +1,27 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { getAuthorizationHeader } from '@/lib/session-store';
 import { apiClient } from '../api-client';
+
+vi.mock('@/lib/session-store', () => ({
+  getAuthorizationHeader: vi.fn(),
+}));
 
 describe('api-client', () => {
   const originalFetch = global.fetch;
-  const originalElectron = (global as any).window?.electronAPI;
+  const originalWindow = (global as any).window;
+  const originalDocument = (global as any).document;
+  const getAuthorizationHeaderMock = vi.mocked(getAuthorizationHeader);
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    getAuthorizationHeaderMock.mockResolvedValue({});
+    (global as any).document = undefined;
   });
 
   afterEach(() => {
     global.fetch = originalFetch as any;
-    (global as any).window = { electronAPI: originalElectron };
+    (global as any).window = originalWindow;
+    (global as any).document = originalDocument;
   });
 
   it('uses electron bridge when available', async () => {
@@ -73,6 +83,26 @@ describe('api-client', () => {
     expect(res.ok).toBe(false);
   });
 
+  it('appends query params for GET requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      ok: true,
+      text: async () => JSON.stringify({ ok: true }),
+    });
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    await apiClient.get('/api/transactions/search', {
+      params: { query: 'chips', limit: 20 },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/transactions/search?query=chips&limit=20',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
   it('supports sending raw bodies without JSON stringification', async () => {
     const requestMock = vi.fn().mockResolvedValue({
       status: 200,
@@ -90,5 +120,154 @@ describe('api-client', () => {
     await apiClient.patch('/api/raw', payload, { rawBody: true });
 
     expect(requestMock).toHaveBeenCalledWith('PATCH', '/api/raw', payload, {});
+  });
+
+  it('adds authorization headers when provided by session store', async () => {
+    getAuthorizationHeaderMock.mockResolvedValue({ Authorization: 'Bearer token-123' });
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      ok: true,
+      text: async () => JSON.stringify({ ok: true }),
+    });
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    await apiClient.post('/api/secure', { ok: true });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/secure',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer token-123' }),
+      }),
+    );
+  });
+
+  it('does not override authorization header set by the caller', async () => {
+    getAuthorizationHeaderMock.mockResolvedValue({ Authorization: 'Bearer token-123' });
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      ok: true,
+      text: async () => JSON.stringify({ ok: true }),
+    });
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    await apiClient.post('/api/secure', { ok: true }, { headers: { Authorization: 'Token custom' } });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/secure',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Token custom' }),
+      }),
+    );
+  });
+
+  it('sets Accept-Language based on stored locale when not provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      ok: true,
+      text: async () => JSON.stringify({ ok: true }),
+    });
+    global.fetch = fetchMock as any;
+    (global as any).window = {
+      localStorage: {
+        getItem: vi.fn().mockReturnValue('fr-FR'),
+      },
+    };
+    (global as any).document = {};
+
+    await apiClient.get('/api/locale');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/locale',
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Accept-Language': 'fr' }),
+      }),
+    );
+  });
+
+  it('keeps Accept-Language when explicitly set', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      ok: true,
+      text: async () => JSON.stringify({ ok: true }),
+    });
+    global.fetch = fetchMock as any;
+    (global as any).window = {
+      localStorage: {
+        getItem: vi.fn().mockReturnValue('fr-FR'),
+      },
+    };
+    (global as any).document = {};
+
+    await apiClient.get('/api/locale', { headers: { 'Accept-Language': 'he' } });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/locale',
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Accept-Language': 'he' }),
+      }),
+    );
+  });
+
+  it('merges query params with existing query and hash', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      ok: true,
+      text: async () => JSON.stringify({ ok: true }),
+    });
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    await apiClient.get('/api/items?sort=asc#top', {
+      params: {
+        query: 'chips',
+        limit: 20,
+        empty: null,
+        skip: undefined,
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/items?sort=asc&query=chips&limit=20#top',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('does not send a body for GET requests even when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      ok: true,
+      text: async () => JSON.stringify({ ok: true }),
+    });
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    await apiClient.get('/api/no-body', { body: { ok: true } } as any);
+
+    const options = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(options?.body).toBeUndefined();
+  });
+
+  it('sends raw bodies through fetch without JSON stringification', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      ok: true,
+      text: async () => JSON.stringify({ ok: true }),
+    });
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    await apiClient.post('/api/raw', 'plain-body', { rawBody: true });
+
+    const options = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(options?.body).toBe('plain-body');
   });
 });

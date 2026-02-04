@@ -78,6 +78,7 @@ async function listRecentTransactions(params = {}) {
         cd.name AS category,
         parent.name AS parent_category,
         t.memo,
+        t.tags,
         t.price,
         t.date,
         t.processed_date,
@@ -97,6 +98,7 @@ async function listRecentTransactions(params = {}) {
   const transactions = result.rows.map((row) => ({
     ...row,
     price: parseFloat(row.price) || 0,
+    tags: row.tags ? JSON.parse(row.tags) : [],
   }));
 
   return {
@@ -134,6 +136,7 @@ async function searchTransactions(params = {}) {
         t.rowid IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${ftsParam})
         OR ${dialect.likeInsensitive('t.name', likeParam)}
         OR ${dialect.likeInsensitive('t.memo', likeParam)}
+        OR ${dialect.likeInsensitive('t.tags', likeParam)}
         OR ${dialect.likeInsensitive('t.vendor', likeParam)}
         OR ${dialect.likeInsensitive('t.merchant_name', likeParam)}
         OR ${dialect.likeInsensitive('cd.name', likeParam)}
@@ -145,6 +148,7 @@ async function searchTransactions(params = {}) {
       const queryParam = `$${values.length}`;
       conditions.push(`(${dialect.likeInsensitive('t.memo', queryParam)}
         OR ${dialect.likeInsensitive('t.name', queryParam)}
+        OR ${dialect.likeInsensitive('t.tags', queryParam)}
         OR ${dialect.likeInsensitive('t.vendor', queryParam)}
         OR ${dialect.likeInsensitive('t.merchant_name', queryParam)}
         OR ${dialect.likeInsensitive('cd.name', queryParam)}
@@ -197,6 +201,7 @@ async function searchTransactions(params = {}) {
         t.category_definition_id,
         t.category_type,
         t.memo,
+        t.tags,
         t.price,
         t.date,
         t.processed_date,
@@ -216,6 +221,7 @@ async function searchTransactions(params = {}) {
   const transactions = result.rows.map((row) => ({
     ...row,
     price: parseFloat(row.price) || 0,
+    tags: row.tags ? JSON.parse(row.tags) : [],
   }));
 
   return {
@@ -226,9 +232,36 @@ async function searchTransactions(params = {}) {
   };
 }
 
+async function getAllTags() {
+  const result = await database.query(
+    `
+      SELECT DISTINCT tags
+      FROM transactions
+      WHERE tags IS NOT NULL AND tags != '' AND tags != '[]'
+    `,
+    [],
+  );
+
+  // Parse and dedupe all tags across transactions
+  const tagSet = new Set();
+  result.rows.forEach((row) => {
+    try {
+      const tags = JSON.parse(row.tags);
+      if (Array.isArray(tags)) {
+        tags.forEach((tag) => tagSet.add(tag));
+      }
+    } catch {
+      // Skip invalid JSON
+    }
+  });
+
+  return Array.from(tagSet).sort();
+}
+
 module.exports = {
   listRecentTransactions,
   searchTransactions,
+  getAllTags,
   __setDatabase,
   __resetDatabase,
 };

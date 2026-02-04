@@ -1,8 +1,32 @@
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
 const { requireFromApp } = require('./paths');
-const electronLog = requireFromApp('electron-log/main');
+
+let app;
+try {
+  ({ app } = require('electron'));
+} catch {
+  app = { getPath: () => process.cwd() };
+}
+
+let electronLog;
+try {
+  electronLog = requireFromApp('electron-log/main');
+} catch {
+  try {
+    electronLog = require('electron-log/main');
+  } catch {
+    const fallback = (level) => (message) => console[level]?.(message);
+    electronLog = {
+      initialize: () => {},
+      transports: { file: {}, console: {} },
+      info: fallback('info'),
+      warn: fallback('warn'),
+      error: fallback('error'),
+      debug: fallback('debug'),
+    };
+  }
+}
 
 electronLog.initialize();
 

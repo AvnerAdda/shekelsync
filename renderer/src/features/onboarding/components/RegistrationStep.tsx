@@ -28,11 +28,13 @@ interface RegistrationStepProps {
 // Check if we're running in Electron
 const isElectron = typeof window !== 'undefined' && window.electronAPI;
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+
 const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip }) => {
   const theme = useTheme();
   const { t } = useTranslation();
 
-  const [teudatZehut, setTeudatZehut] = useState('');
+  const [email, setEmail] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [validation, setValidation] = useState<{ valid: boolean; error?: string } | null>(null);
@@ -40,7 +42,8 @@ const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip 
 
   // Debounced validation
   useEffect(() => {
-    if (!teudatZehut || teudatZehut.length < 9) {
+    const normalized = email.trim();
+    if (!normalized || normalized.length < 5 || !normalized.includes('@')) {
       setValidation(null);
       return;
     }
@@ -49,7 +52,7 @@ const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip 
       setIsValidating(true);
       try {
         if (isElectron) {
-          const result = await window.electronAPI.license.validateTeudatZehut(teudatZehut);
+          const result = await window.electronAPI.license.validateEmail(normalized);
           if (result.success) {
             setValidation(result.data);
           } else {
@@ -57,9 +60,9 @@ const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip 
           }
         } else {
           // Basic client-side validation
-          const cleanId = teudatZehut.replace(/[\s-]/g, '');
-          if (!/^\d{9}$/.test(cleanId)) {
-            setValidation({ valid: false, error: t('registration.invalidId') });
+          const lower = normalized.toLowerCase();
+          if (!EMAIL_REGEX.test(lower)) {
+            setValidation({ valid: false, error: t('registration.invalidEmail') });
           } else {
             setValidation({ valid: true });
           }
@@ -73,12 +76,11 @@ const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip 
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [teudatZehut, t]);
+  }, [email, t]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    // Only allow digits, max 9 characters
-    const value = e.target.value.replace(/\D/g, '').slice(0, 9);
-    setTeudatZehut(value);
+    const value = e.target.value;
+    setEmail(value);
     setRegistrationError(null);
   }, []);
 
@@ -90,7 +92,7 @@ const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip 
 
     try {
       if (isElectron) {
-        const result = await window.electronAPI.license.register(teudatZehut);
+        const result = await window.electronAPI.license.register(email.trim());
         if (result.success) {
           onComplete?.();
         } else {
@@ -106,7 +108,7 @@ const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip 
     } finally {
       setIsRegistering(false);
     }
-  }, [validation, isRegistering, teudatZehut, onComplete, t]);
+  }, [validation, isRegistering, email, onComplete, t]);
 
   const getInputEndAdornment = () => {
     if (isValidating) {
@@ -187,25 +189,17 @@ const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip 
           {/* Input field */}
           <TextField
             fullWidth
-            label={t('registration.teudatZehut')}
-            placeholder={t('registration.digits')}
-            value={teudatZehut}
+            label={t('registration.email')}
+            placeholder={t('registration.emailPlaceholder')}
+            value={email}
             onChange={handleInputChange}
             error={Boolean(validation && !validation.valid)}
             helperText={validation && !validation.valid ? validation.error : ' '}
             InputProps={{
               endAdornment: getInputEndAdornment(),
-              inputProps: {
-                maxLength: 9,
-                inputMode: 'numeric',
-                pattern: '[0-9]*',
-                style: {
-                  letterSpacing: '0.3em',
-                  fontWeight: 500,
-                  fontSize: '1.1rem',
-                },
-              },
+              inputProps: { autoComplete: 'email' },
             }}
+            type="email"
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,

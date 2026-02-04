@@ -1,5 +1,4 @@
 const crypto = require('crypto');
-const { app } = require('electron');
 const { resolveAppPath, requireFromApp } = require('./paths');
 
 let keytar;
@@ -7,30 +6,43 @@ const isLinux = process.platform === 'linux';
 const keytarDisabledByEnv =
   process.env.KEYTAR_DISABLE === 'true' ||
   process.env.DBUS_SESSION_BUS_ADDRESS === 'disabled:';
-const keytarDisabled = isLinux || keytarDisabledByEnv;
+const keytarDisabled = keytarDisabledByEnv;
 const allowEnvKey =
   process.env.ALLOW_INSECURE_ENV_KEY === 'true' ||
   process.env.NODE_ENV === 'test' ||
   process.env.VITEST === 'true' ||
   process.env.CI === 'true';
+const preferRootKeytar = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
+const injectedKeytar = globalThis.__SHEKELSYNC_KEYTAR__;
 
-if (!keytarDisabled) {
-  try {
-    keytar = requireFromApp('keytar');
-  } catch (appLoadError) {
+if (injectedKeytar && !keytarDisabled) {
+  keytar = injectedKeytar;
+} else if (!keytarDisabled) {
+  if (preferRootKeytar) {
     try {
       keytar = require('keytar');
     } catch (rootLoadError) {
-      console.warn('[SecureKeyManager] keytar unavailable, will use environment key only.');
-      keytar = null;
+      try {
+        keytar = requireFromApp('keytar');
+      } catch (appLoadError) {
+        console.warn('[SecureKeyManager] keytar unavailable, will use environment key only.');
+        keytar = null;
+      }
+    }
+  } else {
+    try {
+      keytar = requireFromApp('keytar');
+    } catch (appLoadError) {
+      try {
+        keytar = require('keytar');
+      } catch (rootLoadError) {
+        console.warn('[SecureKeyManager] keytar unavailable, will use environment key only.');
+        keytar = null;
+      }
     }
   }
 } else {
-  if (isLinux) {
-    console.warn('[SecureKeyManager] keytar disabled on Linux; using environment key fallback.');
-  } else {
-    console.warn('[SecureKeyManager] keytar disabled via environment.');
-  }
+  console.warn('[SecureKeyManager] keytar disabled via environment.');
   keytar = null;
 }
 
