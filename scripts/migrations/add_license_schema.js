@@ -3,7 +3,7 @@
  * Migration Script: Add license table for licensing system.
  *
  * Creates the license table to store local license data including
- * teudat_zehut, device_hash, trial dates, and sync status.
+ * email, device_hash, trial dates, and sync status.
  *
  * Usage:
  *   node scripts/migrations/add_license_schema.js [--db dist/clarify.db]
@@ -90,7 +90,7 @@ Options:
 const TABLE_STATEMENT = `CREATE TABLE IF NOT EXISTS license (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   unique_id TEXT NOT NULL UNIQUE,
-  teudat_zehut TEXT NOT NULL,
+  email TEXT NOT NULL,
   device_hash TEXT NOT NULL,
   installation_date TEXT NOT NULL DEFAULT (datetime('now')),
   trial_start_date TEXT NOT NULL DEFAULT (datetime('now')),
@@ -161,6 +161,14 @@ function main() {
     } else {
       db.exec(TABLE_STATEMENT);
       console.log('OK: License table created successfully.');
+    }
+
+    const columns = db.prepare('PRAGMA table_info(license)').all();
+    const hasEmail = columns.some((col) => col.name === 'email');
+    if (!hasEmail) {
+      db.exec('ALTER TABLE license ADD COLUMN email TEXT');
+      db.exec('UPDATE license SET email = COALESCE(email, teudat_zehut)');
+      console.log('OK: Added email column to license table.');
     }
 
     console.log('OK: License table is up to date.\n');

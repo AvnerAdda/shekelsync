@@ -197,6 +197,94 @@ const { describeTelemetryState } = require('./telemetry-utils');
 const secureKeyManager = require('./secure-key-manager');
 const licenseService = require('./license-service');
 
+async function runLicenseSmokeTest(email) {
+  if (!email) return;
+
+  try {
+    const validation = licenseService.validateEmail(email);
+    logger.info('[LicenseSmokeTest] Validation result', {
+      email,
+      valid: validation.valid,
+      error: validation.error,
+    });
+
+    if (!validation.valid) {
+      return;
+    }
+
+    const status = await licenseService.checkLicenseStatus();
+    if (status.registered) {
+      logger.info('[LicenseSmokeTest] Skipping registration, already registered', {
+        licenseType: status.licenseType,
+      });
+      return;
+    }
+
+    const result = await licenseService.registerLicense(email);
+    logger.info('[LicenseSmokeTest] Registration result', {
+      success: result.success,
+      error: result.error,
+    });
+  } catch (error) {
+    logger.error('[LicenseSmokeTest] Failed', { error: error.message });
+  }
+}
+
+async function runLicenseIpcSmokeTest(email) {
+  if (!email) return;
+
+  const testWindow = new BrowserWindow({
+    width: 400,
+    height: 300,
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      enableRemoteModule: false,
+      sandbox: true,
+      preload: path.join(__dirname, 'preload.js'),
+      webSecurity: true,
+      backgroundThrottling: false,
+    },
+  });
+
+  try {
+    await testWindow.loadURL('about:blank');
+    const emailLiteral = JSON.stringify(email);
+    const validation = await testWindow.webContents.executeJavaScript(
+      `window.electronAPI.license.validateEmail(${emailLiteral})`,
+    );
+    logger.info('[LicenseIpcSmokeTest] Validation result', {
+      email,
+      valid: validation?.data?.valid ?? validation?.valid,
+      error: validation?.data?.error ?? validation?.error,
+    });
+
+    const registration = await testWindow.webContents.executeJavaScript(
+      `window.electronAPI.license.register(${emailLiteral})`,
+    );
+    logger.info('[LicenseIpcSmokeTest] Registration result', {
+      success: registration?.success,
+      error: registration?.error,
+    });
+
+    const status = await testWindow.webContents.executeJavaScript(
+      'window.electronAPI.license.getStatus()',
+    );
+    logger.info('[LicenseIpcSmokeTest] Status result', {
+      registered: status?.data?.registered,
+      licenseType: status?.data?.licenseType,
+      error: status?.error,
+    });
+  } catch (error) {
+    logger.error('[LicenseIpcSmokeTest] Failed', { error: error.message });
+  } finally {
+    if (!testWindow.isDestroyed()) {
+      testWindow.destroy();
+    }
+  }
+}
+
 const telemetryState = {
   enabled: false,
   initialized: false,
@@ -457,7 +545,8 @@ let healthService = null;
 let scrapingService = null;
 let setupAPIServer = null;
 
-async function initializeBackendServices({ skipEmbeddedApi }) {
+async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit } = {}) {
+  const shouldSkipDbInit = typeof skipDbInit === 'boolean' ? skipDbInit : skipEmbeddedApi;
   try {
     console.log('Initializing application configuration...');
     logger.info('Initializing configuration');
@@ -504,8 +593,8 @@ async function initializeBackendServices({ skipEmbeddedApi }) {
     }
 
     let dbResult = { success: true };
-    if (skipEmbeddedApi) {
-      console.log('Skipping main-process database initialization (SKIP_EMBEDDED_API=true).');
+    if (shouldSkipDbInit) {
+      console.log('Skipping main-process database initialization (SKIP_DB_INIT=true).');
     } else {
       console.log('Initializing database connection...');
       logger.info('Connecting to database', { mode: config.database.mode });
@@ -931,8 +1020,25 @@ app.whenReady().then(async () => {
     }
   }
 
+  const isIpcSmokeTest = process.env.LICENSE_IPC_SMOKE_TEST === 'true';
+  if (isIpcSmokeTest) {
+    try {
+      await initializeBackendServices({ skipEmbeddedApi: true, skipDbInit: false });
+      await runLicenseIpcSmokeTest(process.env.LICENSE_SMOKE_TEST_EMAIL);
+    } finally {
+      app.quit();
+    }
+    return;
+  }
+
   await createWindow();
   setupTray();
+
+  if (process.env.LICENSE_SMOKE_TEST_EMAIL) {
+    setTimeout(() => {
+      runLicenseSmokeTest(process.env.LICENSE_SMOKE_TEST_EMAIL);
+    }, 2000);
+  }
 
   // Auto-updater setup (production only)
   if (shouldEnableAutoUpdate()) {
@@ -1586,9 +1692,9 @@ ipcMain.handle('license:getStatus', async () => {
   }
 });
 
-ipcMain.handle('license:register', async (event, teudatZehut) => {
+ipcMain.handle('license:register', async (event, email) => {
   try {
-    const result = await licenseService.registerLicense(teudatZehut);
+    const result = await licenseService.registerLicense(email);
     return result;
   } catch (error) {
     console.error('Failed to register license:', error);
@@ -1596,12 +1702,12 @@ ipcMain.handle('license:register', async (event, teudatZehut) => {
   }
 });
 
-ipcMain.handle('license:validateTeudatZehut', async (event, id) => {
+ipcMain.handle('license:validateEmail', async (event, email) => {
   try {
-    const result = licenseService.validateTeudatZehut(id);
+    const result = licenseService.validateEmail(email);
     return { success: true, data: result };
   } catch (error) {
-    console.error('Failed to validate Teudat Zehut:', error);
+    console.error('Failed to validate email:', error);
     return { success: false, error: error.message };
   }
 });

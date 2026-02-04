@@ -43,6 +43,7 @@ export default defineConfig({
       'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
       'react-router-dom': path.resolve(__dirname, 'node_modules/react-router-dom'),
     },
+    extensions: ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.json'],
   },
   server: {
     fs: {

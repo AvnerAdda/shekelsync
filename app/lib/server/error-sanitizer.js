@@ -58,7 +58,11 @@ function redactSensitiveData(obj, depth = 0) {
   const redacted = {};
   for (const [key, value] of Object.entries(obj)) {
     if (isSensitiveKey(key)) {
-      redacted[key] = '[REDACTED]';
+      if (typeof value === 'object' && value !== null) {
+        redacted[key] = redactSensitiveData(value, depth + 1);
+      } else {
+        redacted[key] = '[REDACTED]';
+      }
     } else if (typeof value === 'object' && value !== null) {
       redacted[key] = redactSensitiveData(value, depth + 1);
     } else {

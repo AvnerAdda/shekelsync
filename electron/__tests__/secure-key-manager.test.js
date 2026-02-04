@@ -43,6 +43,7 @@ describe('SecureKeyManager', () => {
     delete process.env.CLARIFY_ENCRYPTION_KEY;
     delete process.env.KEYTAR_DISABLE;
     delete process.env.ALLOW_INSECURE_ENV_KEY;
+    globalThis.__SHEKELSYNC_KEYTAR__ = mockKeytar;
 
     // Reset module cache to get fresh instance
     vi.resetModules();

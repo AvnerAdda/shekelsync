@@ -54,7 +54,7 @@ describe('Shared /api/credentials routes', () => {
     const res = await request(app).delete('/api/credentials/123').expect(200);
 
     expect(res.body).toEqual({ success: true });
-    expect(spy).toHaveBeenCalledWith({ id: '123' });
+    expect(spy).toHaveBeenCalledWith({ id: 123 });
   });
 
   it('updates a credential', async () => {
@@ -67,7 +67,7 @@ describe('Shared /api/credentials routes', () => {
       .expect(200);
 
     expect(res.body).toEqual(payload);
-    expect(spy).toHaveBeenCalledWith({ id: '42', password: 'new-secret' });
+    expect(spy).toHaveBeenCalledWith({ id: 42, password: 'new-secret' });
   });
 
   it('handles credential creation errors', async () => {

@@ -123,49 +123,46 @@ describe('smart-match service', () => {
     it('extracts patterns from nickname', async () => {
       mockClient.query.mockResolvedValue({ rows: [] });
 
-      await smartMatchService.findSmartMatches({
+      const result = await smartMatchService.findSmartMatches({
         creditCardVendor: 'isracard',
         bankVendor: 'hapoalim',
         nickname: 'My Card',
       });
 
       expect(mockClient.query).toHaveBeenCalled();
-      const queryParams = mockClient.query.mock.calls[0][1];
       // Should include nickname words "Card" (filters out words < 3 chars)
-      expect(queryParams).toContain('Card');
+      expect(result.searchPatterns).toContain('Card');
     });
 
     it('extracts patterns from card6_digits', async () => {
       mockClient.query.mockResolvedValue({ rows: [] });
 
-      await smartMatchService.findSmartMatches({
+      const result = await smartMatchService.findSmartMatches({
         creditCardVendor: 'isracard',
         bankVendor: 'hapoalim',
         card6_digits: '123456;789012',
       });
 
       expect(mockClient.query).toHaveBeenCalled();
-      const queryParams = mockClient.query.mock.calls[0][1];
-      expect(queryParams).toContain('123456');
-      expect(queryParams).toContain('789012');
+      expect(result.searchPatterns).toContain('123456');
+      expect(result.searchPatterns).toContain('789012');
       // Also last 4 digits
-      expect(queryParams).toContain('3456');
-      expect(queryParams).toContain('9012');
+      expect(result.searchPatterns).toContain('3456');
+      expect(result.searchPatterns).toContain('9012');
     });
 
     it('includes vendor keywords in search patterns', async () => {
       mockClient.query.mockResolvedValue({ rows: [] });
 
-      await smartMatchService.findSmartMatches({
+      const result = await smartMatchService.findSmartMatches({
         creditCardVendor: 'isracard',
         bankVendor: 'hapoalim',
         creditCardAccountNumber: '1234',
       });
 
-      const queryParams = mockClient.query.mock.calls[0][1];
       // Should include isracard keywords
-      expect(queryParams).toContain('ישראכרט');
-      expect(queryParams).toContain('isracard');
+      expect(result.searchPatterns).toContain('ישראכרט');
+      expect(result.searchPatterns).toContain('isracard');
     });
 
     it('boosts confidence for vendor_nickname matches', async () => {
@@ -371,64 +368,60 @@ describe('smart-match service', () => {
     it('filters out short nickname words', async () => {
       mockClient.query.mockResolvedValue({ rows: [] });
 
-      await smartMatchService.findSmartMatches({
+      const result = await smartMatchService.findSmartMatches({
         creditCardVendor: 'isracard',
         bankVendor: 'hapoalim',
         nickname: 'My CC Card',
       });
 
-      const queryParams = mockClient.query.mock.calls[0][1];
       // "My" and "CC" are <=2 chars and should be filtered out
-      expect(queryParams).not.toContain('My');
-      expect(queryParams).not.toContain('CC');
+      expect(result.searchPatterns).not.toContain('My');
+      expect(result.searchPatterns).not.toContain('CC');
       // "Card" is >2 chars and should be included
-      expect(queryParams).toContain('Card');
+      expect(result.searchPatterns).toContain('Card');
     });
 
     it('handles card6_digits with empty strings and semicolons', async () => {
       mockClient.query.mockResolvedValue({ rows: [] });
 
-      await smartMatchService.findSmartMatches({
+      const result = await smartMatchService.findSmartMatches({
         creditCardVendor: 'isracard',
         bankVendor: 'hapoalim',
         card6_digits: '123456;;789012;  ;',
       });
 
-      const queryParams = mockClient.query.mock.calls[0][1];
-      expect(queryParams).toContain('123456');
-      expect(queryParams).toContain('789012');
+      expect(result.searchPatterns).toContain('123456');
+      expect(result.searchPatterns).toContain('789012');
       // Empty strings and whitespace-only should be filtered out
-      expect(queryParams.filter((p: any) => p === '' || p?.trim() === '')).toHaveLength(0);
+      expect(result.searchPatterns.filter((p: any) => p === '' || p?.trim() === '')).toHaveLength(0);
     });
 
     it('deduplicates patterns from multiple sources', async () => {
       mockClient.query.mockResolvedValue({ rows: [] });
 
-      await smartMatchService.findSmartMatches({
+      const result = await smartMatchService.findSmartMatches({
         creditCardVendor: 'isracard',
         bankVendor: 'hapoalim',
         creditCardAccountNumber: '123456789',
         card6_digits: '123456789;987654321',
       });
 
-      const queryParams = mockClient.query.mock.calls[0][1];
       // Full number appears in both creditCardAccountNumber and card6_digits
-      const fullNumberOccurrences = queryParams.filter((p: any) => p === '123456789').length;
+      const fullNumberOccurrences = result.searchPatterns.filter((p: any) => p === '123456789').length;
       expect(fullNumberOccurrences).toBe(1); // Should be deduplicated
     });
 
     it('extracts last 4 digits from long creditCardAccountNumber', async () => {
       mockClient.query.mockResolvedValue({ rows: [] });
 
-      await smartMatchService.findSmartMatches({
+      const result = await smartMatchService.findSmartMatches({
         creditCardVendor: 'isracard',
         bankVendor: 'hapoalim',
         creditCardAccountNumber: '1234567890',
       });
 
-      const queryParams = mockClient.query.mock.calls[0][1];
-      expect(queryParams).toContain('1234567890'); // Full number
-      expect(queryParams).toContain('7890'); // Last 4 digits
+      expect(result.searchPatterns).toContain('1234567890'); // Full number
+      expect(result.searchPatterns).toContain('7890'); // Last 4 digits
     });
 
     it('calculates higher confidence for longer patterns', async () => {
@@ -581,14 +574,13 @@ describe('smart-match service', () => {
     it('works with different credit card vendors', async () => {
       mockClient.query.mockResolvedValue({ rows: [] });
 
-      await smartMatchService.findSmartMatches({
+      const result = await smartMatchService.findSmartMatches({
         creditCardVendor: 'max',
         bankVendor: 'hapoalim',
       });
 
-      const queryParams = mockClient.query.mock.calls[0][1];
-      expect(queryParams).toContain('מקס');
-      expect(queryParams).toContain('max');
+      expect(result.searchPatterns).toContain('מקס');
+      expect(result.searchPatterns).toContain('max');
     });
 
     it('handles null institution_id correctly', async () => {

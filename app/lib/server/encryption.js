@@ -20,6 +20,12 @@ function ensureKeyBuffer() {
     return encryptionKeyBuffer;
   }
 
+  if (process.env.ALLOW_DEV_NO_ENCRYPTION === 'true') {
+    console.warn('[encryption] Using insecure development key (ALLOW_DEV_NO_ENCRYPTION=true).');
+    encryptionKeyBuffer = Buffer.from('0'.repeat(64), 'hex');
+    return encryptionKeyBuffer;
+  }
+
   throw new Error(
     'CLARIFY_ENCRYPTION_KEY is required. The master encryption key must be set in the environment by the secure key manager.',
   );

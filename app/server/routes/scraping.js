@@ -29,6 +29,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
     bulkScrape: bulkScrapeFn = bulkScrapeService.bulkScrape,
     listScrapeEvents: listScrapeEventsFn = scrapeEventsService.listScrapeEvents,
     getScrapeStatusById: getScrapeStatusByIdFn = scrapeStatusService.getScrapeStatusById,
+    wasScrapedRecently: wasScrapedRecentlyFn = wasScrapedRecently,
   } = services;
 
   const router = express.Router();
@@ -113,7 +114,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
       // Check rate limit (skip if force override is enabled)
       const forceOverride = options?.force === true;
       if (dbId && !forceOverride) {
-        const isRateLimited = await wasScrapedRecently(dbId);
+        const isRateLimited = await wasScrapedRecentlyFn(dbId);
         if (isRateLimited) {
           return res.status(429).json({
             success: false,

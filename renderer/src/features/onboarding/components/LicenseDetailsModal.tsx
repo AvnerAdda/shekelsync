@@ -35,6 +35,7 @@ interface LicenseDetailsModalProps {
 }
 
 const TRIAL_DAYS = 30;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose }) => {
   const theme = useTheme();
@@ -44,52 +45,53 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
     loading,
     refetch,
     register,
-    validateTeudatZehut,
+    validateEmail,
     activatePro,
     isRegistered,
     isReadOnly,
   } = useLicense();
 
-  const [teudatZehut, setTeudatZehut] = useState('');
+  const [email, setEmail] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
 
-  const handleTeudatZehutChange = async (value: string) => {
-    // Only allow digits
-    const cleanValue = value.replace(/\D/g, '').slice(0, 9);
-    setTeudatZehut(cleanValue);
+  const handleEmailChange = async (value: string) => {
+    const cleanValue = value.trimStart();
+    setEmail(cleanValue);
     setValidationError(null);
     setRegistrationError(null);
 
-    if (cleanValue.length === 9) {
+    const normalized = cleanValue.trim();
+    if (normalized.length >= 5 && normalized.includes('@')) {
       setIsValidating(true);
-      const result = await validateTeudatZehut(cleanValue);
+      const result = await validateEmail(normalized);
       setIsValidating(false);
       if (!result.valid) {
-        setValidationError(result.error || 'Invalid ID');
+        setValidationError(result.error || t('registration.invalidEmail'));
       }
     }
   };
 
   const handleRegister = async () => {
-    if (teudatZehut.length !== 9) {
-      setValidationError('ID must be exactly 9 digits');
+    const normalized = email.trim();
+    if (!EMAIL_REGEX.test(normalized.toLowerCase())) {
+      setValidationError(t('registration.invalidEmail'));
       return;
     }
 
     setIsRegistering(true);
     setRegistrationError(null);
 
-    const result = await register(teudatZehut);
+    const result = await register(normalized);
 
     setIsRegistering(false);
 
     if (result.success) {
       setRegistrationSuccess(true);
-      setTeudatZehut('');
+      setEmail('');
     } else {
       setRegistrationError(result.error || 'Registration failed');
     }
@@ -146,6 +148,8 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
   const progress = status?.trialDaysRemaining !== undefined
     ? ((TRIAL_DAYS - status.trialDaysRemaining) / TRIAL_DAYS) * 100
     : 0;
+  const normalizedEmail = email.trim();
+  const isEmailValid = EMAIL_REGEX.test(normalizedEmail.toLowerCase());
 
   return (
     <Dialog
@@ -271,7 +275,7 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
                   {t('license.registerTitle', 'Start Your Free Trial')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  {t('license.registerDescription', 'Enter your Israeli ID (Teudat Zehut) to start a 30-day free trial with full access to all features.')}
+                  {t('license.registerDescription', 'Enter your email to start a 30-day free trial with full access to all features.')}
                 </Typography>
 
                 {registrationSuccess ? (
@@ -282,13 +286,14 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
                   <>
                     <TextField
                       fullWidth
-                      label={t('license.teudatZehut', 'Teudat Zehut (Israeli ID)')}
-                      value={teudatZehut}
-                      onChange={(e) => handleTeudatZehutChange(e.target.value)}
+                      label={t('license.email', 'Email')}
+                      value={email}
+                      onChange={(e) => handleEmailChange(e.target.value)}
                       error={!!validationError}
                       helperText={validationError || (isValidating ? t('license.validating', 'Validating...') : ' ')}
-                      placeholder="123456789"
-                      inputProps={{ maxLength: 9, inputMode: 'numeric' }}
+                      placeholder="you@example.com"
+                      type="email"
+                      inputProps={{ autoComplete: 'email' }}
                       sx={{ mb: 2 }}
                     />
 
@@ -302,7 +307,7 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
                       variant="contained"
                       fullWidth
                       onClick={handleRegister}
-                      disabled={teudatZehut.length !== 9 || !!validationError || isRegistering}
+                      disabled={!isEmailValid || !!validationError || isRegistering || isValidating}
                       startIcon={isRegistering ? <CircularProgress size={20} color="inherit" /> : <PersonAddIcon />}
                     >
                       {isRegistering ? t('license.registering', 'Registering...') : t('license.register', 'Start Free Trial')}
@@ -311,7 +316,7 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
                 )}
 
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, textAlign: 'center' }}>
-                  {t('license.privacyNote', 'Your ID is used only for license verification and is stored securely.')}
+                  {t('license.privacyNote', 'Your email is used only for license verification and is stored securely.')}
                 </Typography>
               </Paper>
             )}

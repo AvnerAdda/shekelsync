@@ -2,7 +2,7 @@
  * License Service for ShekelSync
  *
  * Manages license registration, validation, and enforcement.
- * Supports Teudat Zehut-based licensing with 30-day trial,
+ * Supports email-based licensing with 30-day trial,
  * single-device enforcement, and offline grace periods.
  */
 
@@ -18,45 +18,94 @@ const { logger } = require('./logger');
 const TRIAL_DAYS = 30;
 const OFFLINE_GRACE_DAYS = 7;
 
+let licenseSchemaChecked = false;
+let licenseSchemaInfo = { emailAvailable: false, teudatZehutNullable: false };
+
+function getLicenseIdentifier(license) {
+  if (!license) return '';
+  return license.email || license.teudat_zehut || '';
+}
+
+function isMissingColumnError(error, columnName) {
+  if (!error || !error.message) return false;
+  const message = String(error.message).toLowerCase();
+  const needle = columnName.toLowerCase();
+  return (
+    (message.includes(`column "${needle}"`) && message.includes('does not exist')) ||
+    message.includes(`'${needle}' column`) ||
+    message.includes(`"${needle}" column`) ||
+    message.includes(`could not find the '${needle}' column`) ||
+    message.includes(`could not find the "${needle}" column`)
+  );
+}
+
+async function ensureEmailColumn() {
+  if (licenseSchemaChecked) return licenseSchemaInfo;
+
+  try {
+    if (dbManager.mode === 'sqlite') {
+      const result = await dbManager.query('PRAGMA table_info(license)');
+      const columns = result.rows || [];
+      const emailAvailable = columns.some((col) => col.name === 'email');
+      const teudatZehutCol = columns.find((col) => col.name === 'teudat_zehut');
+      const teudatZehutNullable = !teudatZehutCol || teudatZehutCol.notnull === 0;
+
+      if (!emailAvailable) {
+        await dbManager.query('ALTER TABLE license ADD COLUMN email TEXT');
+        await dbManager.query('UPDATE license SET email = teudat_zehut WHERE email IS NULL');
+        licenseSchemaInfo = { emailAvailable: true, teudatZehutNullable };
+        logger.info('Added email column to license table (sqlite)');
+      } else {
+        licenseSchemaInfo = { emailAvailable, teudatZehutNullable };
+      }
+    } else {
+      const result = await dbManager.query(
+        "SELECT column_name, is_nullable FROM information_schema.columns WHERE table_name = 'license'",
+      );
+      const columns = result.rows || [];
+      const emailAvailable = columns.some((col) => col.column_name === 'email');
+      const teudatZehutCol = columns.find((col) => col.column_name === 'teudat_zehut');
+      const teudatZehutNullable = !teudatZehutCol || teudatZehutCol.is_nullable === 'YES';
+
+      if (!emailAvailable) {
+        await dbManager.query('ALTER TABLE license ADD COLUMN IF NOT EXISTS email TEXT');
+        await dbManager.query('UPDATE license SET email = teudat_zehut WHERE email IS NULL');
+        licenseSchemaInfo = { emailAvailable: true, teudatZehutNullable };
+        logger.info('Added email column to license table (postgres)');
+      } else {
+        licenseSchemaInfo = { emailAvailable, teudatZehutNullable };
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to ensure email column for license table', { error: error.message });
+  } finally {
+    licenseSchemaChecked = true;
+  }
+
+  return licenseSchemaInfo;
+}
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+
+function normalizeEmail(value) {
+  if (!value || typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
 /**
- * Validate Israeli Teudat Zehut (ID number).
- * Uses the standard check digit algorithm.
+ * Validate email for license registration.
  *
- * @param {string} id - The 9-digit ID number
+ * @param {string} email - User email
  * @returns {{valid: boolean, error?: string}}
  */
-function validateTeudatZehut(id) {
-  if (!id || typeof id !== 'string') {
-    return { valid: false, error: 'ID is required' };
+function validateEmail(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) {
+    return { valid: false, error: 'Email is required' };
   }
 
-  // Remove any spaces or dashes
-  const cleanId = id.replace(/[\s-]/g, '');
-
-  // Must be exactly 9 digits
-  if (!/^\d{9}$/.test(cleanId)) {
-    return { valid: false, error: 'ID must be exactly 9 digits' };
-  }
-
-  // Israeli ID validation using Luhn-like algorithm
-  // Each digit is multiplied by 1 or 2 alternately
-  // If result > 9, sum the digits (or subtract 9)
-  // Total sum must be divisible by 10
-  let sum = 0;
-  for (let i = 0; i < 9; i++) {
-    let digit = parseInt(cleanId[i], 10);
-    let multiplier = (i % 2) + 1; // 1, 2, 1, 2, ...
-    let product = digit * multiplier;
-
-    // If product > 9, sum the digits (equivalent to subtracting 9)
-    if (product > 9) {
-      product -= 9;
-    }
-    sum += product;
-  }
-
-  if (sum % 10 !== 0) {
-    return { valid: false, error: 'Invalid ID check digit' };
+  if (!EMAIL_REGEX.test(normalized)) {
+    return { valid: false, error: 'Email must be a valid address' };
   }
 
   return { valid: true };
@@ -147,19 +196,21 @@ function isOfflineGraceExpired(offlineGraceStart) {
 }
 
 /**
- * Register a new license with Teudat Zehut.
+ * Register a new license with email.
  *
- * @param {string} teudatZehut - The 9-digit Israeli ID
+ * @param {string} email - User email
  * @returns {Promise<{success: boolean, error?: string, license?: Object}>}
  */
-async function registerLicense(teudatZehut) {
-  // Validate the ID
-  const validation = validateTeudatZehut(teudatZehut);
+async function registerLicense(email) {
+  // Validate the email
+  const validation = validateEmail(email);
   if (!validation.valid) {
     return { success: false, error: validation.error };
   }
 
-  const cleanId = teudatZehut.replace(/[\s-]/g, '');
+  const cleanEmail = normalizeEmail(email);
+  const schemaInfo = await ensureEmailColumn();
+  const includeLegacyId = !schemaInfo.teudatZehutNullable;
   const deviceHash = generateDeviceHash();
   const uniqueId = uuidv4();
   const now = new Date().toISOString();
@@ -182,9 +233,8 @@ async function registerLicense(teudatZehut) {
     const supabase = getSupabaseClient();
     if (supabase) {
       try {
-        const { error } = await supabase.from('licenses').insert({
+        const basePayload = {
           unique_id: uniqueId,
-          teudat_zehut: cleanId,
           device_hash: deviceHash,
           device_name: getDeviceName(),
           installation_date: now,
@@ -193,14 +243,27 @@ async function registerLicense(teudatZehut) {
           last_validated_at: now,
           app_version: appVersion,
           os_platform: os.platform(),
+        };
+
+        let { error } = await supabase.from('licenses').insert({
+          ...basePayload,
+          email: cleanEmail,
         });
+
+        if (error && isMissingColumnError(error, 'email')) {
+          const retry = await supabase.from('licenses').insert({
+            ...basePayload,
+            teudat_zehut: cleanEmail,
+          });
+          error = retry.error;
+        }
 
         if (error) {
           // Check for single-device constraint violation
           if (error.message.includes('already registered')) {
             return {
               success: false,
-              error: 'This Teudat Zehut is already registered on another device. Each license is limited to a single device.',
+              error: 'This email is already registered on another device. Each license is limited to a single device.',
             };
           }
           syncError = error.message;
@@ -218,26 +281,54 @@ async function registerLicense(teudatZehut) {
 
   // Save locally
   try {
-    await dbManager.query(
-      `INSERT INTO license (
-        id, unique_id, teudat_zehut, device_hash,
+    const insertColumns = includeLegacyId
+      ? `id, unique_id, email, teudat_zehut, device_hash,
         installation_date, trial_start_date, license_type,
         last_online_validation, is_synced_to_cloud, sync_error_message,
-        app_version, created_at, updated_at
-      ) VALUES (1, ?, ?, ?, ?, ?, 'trial', ?, ?, ?, ?, ?, ?)`,
-      [
-        uniqueId,
-        cleanId,
-        deviceHash,
-        now,
-        now,
-        syncedToCloud ? now : null,
-        syncedToCloud ? 1 : 0,
-        syncError,
-        appVersion,
-        now,
-        now,
-      ]
+        app_version, created_at, updated_at`
+      : `id, unique_id, email, device_hash,
+        installation_date, trial_start_date, license_type,
+        last_online_validation, is_synced_to_cloud, sync_error_message,
+        app_version, created_at, updated_at`;
+
+    const insertValues = includeLegacyId
+      ? [
+          uniqueId,
+          cleanEmail,
+          cleanEmail,
+          deviceHash,
+          now,
+          now,
+          syncedToCloud ? now : null,
+          syncedToCloud ? 1 : 0,
+          syncError,
+          appVersion,
+          now,
+          now,
+        ]
+      : [
+          uniqueId,
+          cleanEmail,
+          deviceHash,
+          now,
+          now,
+          syncedToCloud ? now : null,
+          syncedToCloud ? 1 : 0,
+          syncError,
+          appVersion,
+          now,
+          now,
+        ];
+
+    const insertPlaceholders = includeLegacyId
+      ? "1, ?, ?, ?, ?, ?, ?, 'trial', ?, ?, ?, ?, ?, ?"
+      : "1, ?, ?, ?, ?, ?, 'trial', ?, ?, ?, ?, ?, ?";
+
+    await dbManager.query(
+      `INSERT INTO license (
+        ${insertColumns}
+      ) VALUES (${insertPlaceholders})`,
+      insertValues,
     );
 
     const license = await getLocalLicense();
@@ -273,10 +364,11 @@ async function registerLicense(teudatZehut) {
  *   offlineGraceDaysRemaining?: number,
  *   syncedToCloud: boolean,
  *   lastValidated?: string,
- *   teudatZehut?: string
+ *   email?: string
  * }>}
  */
 async function checkLicenseStatus() {
+  await ensureEmailColumn();
   const license = await getLocalLicense();
 
   // No license registered
@@ -320,7 +412,7 @@ async function checkLicenseStatus() {
       offlineMode: !license.is_synced_to_cloud,
       syncedToCloud: Boolean(license.is_synced_to_cloud),
       lastValidated: license.last_online_validation,
-      teudatZehut: maskTeudatZehut(license.teudat_zehut),
+      email: maskLicenseIdentifier(getLicenseIdentifier(license)),
     };
   }
 
@@ -362,19 +454,26 @@ async function checkLicenseStatus() {
     offlineGraceDaysRemaining: offlineGraceDaysRemaining !== null ? Math.max(0, offlineGraceDaysRemaining) : null,
     syncedToCloud: Boolean(license.is_synced_to_cloud),
     lastValidated: license.last_online_validation,
-    teudatZehut: maskTeudatZehut(license.teudat_zehut),
+    email: maskLicenseIdentifier(getLicenseIdentifier(license)),
   };
 }
 
 /**
- * Mask Teudat Zehut for display (show last 4 digits only).
+ * Mask license identifier (email preferred, fallback to ID-style masking).
  *
- * @param {string} tz - Full Teudat Zehut
- * @returns {string} Masked ID like "*****1234"
+ * @param {string} value - Email or legacy ID
+ * @returns {string} Masked identifier
  */
-function maskTeudatZehut(tz) {
-  if (!tz || tz.length < 4) return '****';
-  return '*****' + tz.slice(-4);
+function maskLicenseIdentifier(value) {
+  if (!value || typeof value !== 'string') return '****';
+  if (value.includes('@')) {
+    const [local, domain] = value.split('@');
+    if (!domain) return '****';
+    const maskedLocal = local.length <= 1 ? '*' : `${local[0]}***`;
+    return `${maskedLocal}@${domain}`;
+  }
+  if (value.length < 4) return '****';
+  return '*****' + value.slice(-4);
 }
 
 /**
@@ -559,7 +658,7 @@ async function getLicenseInfo() {
 }
 
 module.exports = {
-  validateTeudatZehut,
+  validateEmail,
   generateDeviceHash,
   getDeviceName,
   registerLicense,

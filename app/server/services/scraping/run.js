@@ -232,7 +232,8 @@ function prepareScraperCredentials(companyId, options, credentials) {
 }
 
 async function insertScrapeEvent(client, { triggeredBy, vendor, startDate, credentialId }) {
-  const result = await client.query(
+  const executor = client && typeof client.query === 'function' ? client : database;
+  const result = await executor.query(
     `INSERT INTO scrape_events (triggered_by, vendor, start_date, status, message, credential_id)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id`,
@@ -243,10 +244,39 @@ async function insertScrapeEvent(client, { triggeredBy, vendor, startDate, crede
 
 async function updateScrapeEventStatus(client, auditId, status, message) {
   if (!auditId) return;
-  await client.query(
+  const executor = client && typeof client.query === 'function' ? client : database;
+  await executor.query(
     `UPDATE scrape_events SET status = $1, message = $2 WHERE id = $3`,
     [status, message, auditId],
   );
+}
+
+async function safeUpdateScrapeEventStatus(auditId, status, message, logger) {
+  if (!auditId) return;
+  try {
+    await updateScrapeEventStatus(database, auditId, status, message);
+  } catch (error) {
+    logger?.warn?.(`[Scrape] Failed to update scrape_events: ${error?.message || 'Unknown error'}`);
+  }
+}
+
+const MAX_SCRAPE_EVENT_MESSAGE_LENGTH = 2000;
+
+function truncateMessage(message, maxLength = MAX_SCRAPE_EVENT_MESSAGE_LENGTH) {
+  if (!message || typeof message !== 'string') return message;
+  if (message.length <= maxLength) return message;
+  return `${message.slice(0, maxLength - 3)}...`;
+}
+
+function buildScrapeFailureMessage({ vendor, errorType, errorMessage, statusCode, details }) {
+  const base = `${errorType || 'ScrapeError'}: ${errorMessage || 'Unknown error'}`;
+  const payload = {
+    vendor,
+    ...(statusCode ? { statusCode } : {}),
+    ...(details && Object.keys(details).length ? { details } : {}),
+  };
+  const extra = Object.keys(payload).length ? ` | ${JSON.stringify(payload)}` : '';
+  return truncateMessage(`${base}${extra}`);
 }
 
 async function markCredentialScrapeStatus(client, credentialId, status) {
@@ -929,6 +959,7 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
   const resolvedStartDate = startDateInfo.date;
   const client = await database.getClient();
   let auditId = null;
+  let failureMessage = null;
 
   // Log the determined scrape date range for transparency
   const endDate = new Date();
@@ -938,15 +969,19 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
   logger?.info?.(`[Scrape:${options.companyId}] Reason: ${startDateInfo.reason}`);
 
   try {
-    await client.query('BEGIN');
-
     const triggeredBy = resolveTriggeredBy(credentials);
-    auditId = await insertScrapeEvent(client, {
-      triggeredBy,
-      vendor: options.companyId,
-      startDate: resolvedStartDate,
-      credentialId: credentials.dbId || null,
-    });
+    try {
+      auditId = await insertScrapeEvent(database, {
+        triggeredBy,
+        vendor: options.companyId,
+        startDate: resolvedStartDate,
+        credentialId: credentials.dbId || null,
+      });
+    } catch (error) {
+      logger?.warn?.(`[Scrape:${options.companyId}] Failed to write scrape_events start record: ${error?.message || 'Unknown error'}`);
+    }
+
+    await client.query('BEGIN');
 
     const executablePath = await getPuppeteerExecutable(logger);
     const scraperOptions = buildScraperOptions(options, isBank, executablePath, resolvedStartDate);
@@ -1002,12 +1037,13 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
             logger,
           });
           
-          await updateScrapeEventStatus(client, auditId, 'success', 'No new transactions (balance updated)');
+          const successMessage = 'No new transactions (balance updated)';
           if (credentials.dbId) {
             await markCredentialScrapeStatus(client, credentials.dbId, 'success');
           }
-          
+
           await client.query('COMMIT');
+          await safeUpdateScrapeEventStatus(auditId, 'success', successMessage, logger);
           
           return {
             success: true,
@@ -1030,12 +1066,13 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
           logger?.warn?.(`[Scrape:${options.companyId}] Forward-fill failed (non-critical): ${forwardFillError.message}`);
         }
         
-        await updateScrapeEventStatus(client, auditId, 'success', 'No new transactions (portfolio history updated)');
+        const successMessage = 'No new transactions (portfolio history updated)';
         if (credentials.dbId) {
           await markCredentialScrapeStatus(client, credentials.dbId, 'success');
         }
-        
+
         await client.query('COMMIT');
+        await safeUpdateScrapeEventStatus(auditId, 'success', successMessage, logger);
         
         return {
           success: true,
@@ -1058,12 +1095,18 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
         ...(result?.error && { error: String(result.error) }),
       })}`);
 
-      const message = `${result?.errorType || 'ScrapeError'}: ${result?.errorMessage || 'Unknown error'}`;
-      await updateScrapeEventStatus(client, auditId, 'failed', message);
-      if (credentials.dbId) {
-        await markCredentialScrapeStatus(client, credentials.dbId, 'failed');
-      }
-      throw createHttpError(400, message, { errorType: result?.errorType });
+      const baseMessage = `${result?.errorType || 'ScrapeError'}: ${result?.errorMessage || 'Unknown error'}`;
+      failureMessage = buildScrapeFailureMessage({
+        vendor: options.companyId,
+        errorType: result?.errorType,
+        errorMessage: result?.errorMessage,
+        statusCode: 400,
+        details: {
+          accounts: Array.isArray(result?.accounts) ? result.accounts.length : 0,
+          hasAccounts: Array.isArray(result?.accounts) && result.accounts.length > 0,
+        },
+      });
+      throw createHttpError(400, baseMessage, { errorType: result?.errorType });
     }
 
     const summary = await processScrapeResult(client, {
@@ -1082,9 +1125,9 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
 
     const accountsCount = Array.isArray(result.accounts) ? result.accounts.length : 0;
     const message = `Success: accounts=${accountsCount}, bankTxns=${summary.bankTransactions}`;
-    await updateScrapeEventStatus(client, auditId, 'success', message);
 
     await client.query('COMMIT');
+    await safeUpdateScrapeEventStatus(auditId, 'success', message, logger);
 
     return {
       success: true,
@@ -1094,14 +1137,13 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
     };
   } catch (error) {
     await client.query('ROLLBACK');
-    if (auditId) {
-      await updateScrapeEventStatus(
-        client,
-        auditId,
-        'failed',
-        error?.message || 'Unknown error',
-      );
-    }
+    const failureDetails = failureMessage || buildScrapeFailureMessage({
+      vendor: options.companyId,
+      errorType: error?.errorType || error?.name,
+      errorMessage: error?.message,
+      statusCode: error?.statusCode,
+    });
+    await safeUpdateScrapeEventStatus(auditId, 'failed', failureDetails, logger);
     if (credentials.dbId) {
       await markCredentialScrapeStatus(client, credentials.dbId, 'failed');
     }

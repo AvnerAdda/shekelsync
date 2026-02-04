@@ -147,37 +147,48 @@ describe('categorization rules service', () => {
       await expect(rulesService.createAutoRule({})).rejects.toMatchObject({ status: 400 });
     });
 
-    it('returns existing rule metadata when pattern already exists', async () => {
-      queryMock
-        .mockImplementationOnce(async () => ({ rows: [{ id: 99 }] }))
-        .mockImplementationOnce(async () => ({
+    it('returns rule metadata when pattern already exists', async () => {
+      querySequence(
+        {
+          rows: [
+            {
+              id: 10,
+              name: 'Subscriptions',
+              category_type: 'expense',
+              parent_name: 'Entertainment',
+            },
+          ],
+        },
+        {
           rows: [
             {
               id: 99,
               name_pattern: 'SPOTIFY',
               target_category: 'Subscriptions',
               category_path: 'Entertainment > Subscriptions',
-              category_definition_id: 55,
+              category_definition_id: 10,
               category_type: 'expense',
+              is_active: true,
+              priority: 50,
             },
           ],
-        }));
+        },
+        { rowCount: 0 },
+        { rowCount: 2 },
+      );
 
-      await expect(
-        rulesService.createAutoRule({
-          transactionName: 'SPOTIFY',
-          categoryDefinitionId: 10,
-        }),
-      ).resolves.toMatchObject({
-        success: true,
-        alreadyExists: true,
-        rule: expect.objectContaining({ id: 99 }),
+      const result = await rulesService.createAutoRule({
+        transactionName: 'SPOTIFY',
+        categoryDefinitionId: 10,
       });
+
+      expect(result.success).toBe(true);
+      expect(result.rule).toMatchObject({ id: 99, target_category: 'Subscriptions' });
+      expect(result.transactionsUpdated).toBe(2);
     });
 
     it('creates rule using category metadata', async () => {
       querySequence(
-        { rows: [] }, // existing rule check
         {
           rows: [
             {
@@ -202,6 +213,8 @@ describe('categorization rules service', () => {
             },
           ],
         },
+        { rowCount: 0 },
+        { rowCount: 1 },
       );
 
       const result = await rulesService.createAutoRule({

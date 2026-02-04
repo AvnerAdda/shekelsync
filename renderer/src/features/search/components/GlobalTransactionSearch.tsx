@@ -16,6 +16,7 @@ import {
   useTheme,
   Divider,
   IconButton,
+  Tooltip,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -25,10 +26,13 @@ import {
   ArrowUpward as IncomeIcon,
   ArrowDownward as ExpenseIcon,
   TrendingUp as InvestmentIcon,
+  Notes as NotesIcon,
+  LocalOffer as TagIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
+import TransactionDetailModal, { TransactionForModal } from '@renderer/shared/modals/TransactionDetailModal';
 
 interface Transaction {
   identifier: string;
@@ -39,6 +43,7 @@ interface Transaction {
   category_definition_id: number | null;
   category_type: string | null;
   memo: string | null;
+  tags: string[];
   price: number;
   date: string;
   processed_date: string | null;
@@ -64,11 +69,13 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
   const navigate = useNavigate();
   const { t } = useTranslation('translation');
   const inputRef = useRef<HTMLInputElement>(null);
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<TransactionForModal | null>(null);
 
   // Focus input when dialog opens
   useEffect(() => {
@@ -135,15 +142,26 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
   }, [results, selectedIndex, onClose]);
 
   const handleSelectTransaction = useCallback((transaction: Transaction) => {
-    // Navigate to home page with transaction filter
-    navigate('/', { 
-      state: { 
-        highlightTransaction: transaction.identifier,
-        searchQuery: searchQuery,
-      } 
-    });
-    onClose();
-  }, [navigate, onClose, searchQuery]);
+    // Open detail modal instead of navigating
+    setSelectedTransaction(transaction as TransactionForModal);
+    setDetailModalOpen(true);
+  }, []);
+
+  const handleDetailModalClose = useCallback(() => {
+    setDetailModalOpen(false);
+    setSelectedTransaction(null);
+  }, []);
+
+  const handleTransactionSave = useCallback((updatedTransaction: TransactionForModal) => {
+    // Update the transaction in results list
+    setResults((prev) =>
+      prev.map((t) =>
+        t.identifier === updatedTransaction.identifier && t.vendor === updatedTransaction.vendor
+          ? { ...t, ...updatedTransaction }
+          : t
+      )
+    );
+  }, []);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('he-IL', {
@@ -173,6 +191,7 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
   };
 
   return (
+    <>
     <Dialog
       open={open}
       onClose={onClose}
@@ -302,7 +321,7 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
                         </Box>
                       }
                       secondary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
                           <Typography variant="caption" color="text.secondary">
                             {formatDate(transaction.date)}
                           </Typography>
@@ -317,6 +336,37 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
                                 color: theme.palette.primary.main,
                               }}
                             />
+                          )}
+                          {transaction.memo && (
+                            <Tooltip title={transaction.memo}>
+                              <NotesIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                            </Tooltip>
+                          )}
+                          {transaction.tags?.length > 0 && (
+                            <>
+                              {transaction.tags.slice(0, 2).map((tag) => (
+                                <Chip
+                                  key={tag}
+                                  label={tag}
+                                  size="small"
+                                  icon={<TagIcon sx={{ fontSize: '12px !important' }} />}
+                                  sx={{
+                                    height: 18,
+                                    fontSize: '0.65rem',
+                                    backgroundColor: alpha(theme.palette.secondary.main, 0.1),
+                                    color: theme.palette.secondary.main,
+                                    '& .MuiChip-icon': {
+                                      color: theme.palette.secondary.main,
+                                    },
+                                  }}
+                                />
+                              ))}
+                              {transaction.tags.length > 2 && (
+                                <Typography variant="caption" color="text.secondary">
+                                  +{transaction.tags.length - 2}
+                                </Typography>
+                              )}
+                            </>
                           )}
                           <Typography variant="caption" color="text.secondary" noWrap>
                             {transaction.vendor}
@@ -351,6 +401,14 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
         ) : null}
       </DialogContent>
     </Dialog>
+
+    <TransactionDetailModal
+      open={detailModalOpen}
+      onClose={handleDetailModalClose}
+      transaction={selectedTransaction}
+      onSave={handleTransactionSave}
+    />
+  </>
   );
 };
 

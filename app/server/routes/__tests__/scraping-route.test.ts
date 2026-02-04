@@ -6,6 +6,7 @@ const mockRunScrape = vi.fn();
 const mockBulkScrape = vi.fn();
 const mockListScrapeEvents = vi.fn();
 const mockGetScrapeStatusById = vi.fn();
+const mockWasScrapedRecently = vi.fn();
 
 vi.mock('israeli-bank-scrapers', () => ({
   CompanyTypes: {
@@ -29,6 +30,7 @@ function buildApp() {
     bulkScrape: mockBulkScrape,
     listScrapeEvents: mockListScrapeEvents,
     getScrapeStatusById: mockGetScrapeStatusById,
+    wasScrapedRecently: mockWasScrapedRecently,
   };
 
   const app = express();
@@ -53,11 +55,13 @@ describe('Shared /api/scrape routes', () => {
     mockBulkScrape.mockReset();
     mockListScrapeEvents.mockReset();
     mockGetScrapeStatusById.mockReset();
+    mockWasScrapedRecently.mockReset();
   });
 
   it('triggers a single scrape job and streams updates', async () => {
     const scrapeResult = { success: true, accounts: [] };
     mockRunScrape.mockResolvedValue(scrapeResult);
+    mockWasScrapedRecently.mockResolvedValue(false);
 
     const response = await request(app)
       .post('/api/scrape')
@@ -91,6 +95,7 @@ describe('Shared /api/scrape routes', () => {
 
   it('accepts missing startDate and preserves provided dbId', async () => {
     mockRunScrape.mockResolvedValue({ success: true, accounts: [] });
+    mockWasScrapedRecently.mockResolvedValue(false);
 
     await request(app)
       .post('/api/scrape')

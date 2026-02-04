@@ -204,18 +204,33 @@ function validateCredentialCreation(payload) {
   const validated = {};
 
   // Vendor or institution_id required
-  const vendorResult = validateVendorCode(payload.vendor);
-  const institutionResult = validateInstitutionId(payload.institution_id, { required: false });
+  const vendorProvided = payload.vendor !== undefined && payload.vendor !== null && payload.vendor !== '';
+  const institutionProvided =
+    payload.institution_id !== undefined && payload.institution_id !== null && payload.institution_id !== '';
 
-  if (!vendorResult.valid && !institutionResult.valid) {
+  const vendorResult = vendorProvided ? validateVendorCode(payload.vendor) : null;
+  const institutionResult = institutionProvided
+    ? validateInstitutionId(payload.institution_id, { required: true })
+    : null;
+
+  const hasVendor = vendorResult?.valid;
+  const hasInstitution = institutionResult?.valid;
+
+  if (!hasVendor && !hasInstitution) {
     errors.push('Either vendor or institution_id is required');
   } else {
-    if (vendorResult.valid) {
+    if (hasVendor) {
       validated.vendor = vendorResult.value;
     }
-    if (institutionResult.valid && institutionResult.value) {
+    if (hasInstitution) {
       validated.institution_id = institutionResult.value;
     }
+  }
+  if (vendorProvided && vendorResult && !vendorResult.valid) {
+    errors.push(vendorResult.error);
+  }
+  if (institutionProvided && institutionResult && !institutionResult.valid) {
+    errors.push(institutionResult.error);
   }
 
   // Username (or email/userCode alternatives)

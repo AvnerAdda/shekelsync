@@ -14,7 +14,9 @@
     "audit:security": "npm audit --audit-level=moderate && npm run test:security:coverage",
     "icons:icns": "node scripts/generate-icns.js",
     "logs:bundle": "node scripts/collect-logs.js",
-    "benchmark:check": "node scripts/benchmarks/assert-benchmarks.js"
+    "benchmark:check": "node scripts/benchmarks/assert-benchmarks.js",
+    "smoke:license:ipc": "node scripts/license-ipc-smoke.js",
+    "migrate:license:email-only": "node scripts/migrations/upgrade_license_email_only.js"
   },
   "dependencies": {
     "electron-is-dev": "^3.0.1",

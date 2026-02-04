@@ -97,6 +97,7 @@ import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
 import CategoryIconComponent from '@renderer/features/breakdown/components/CategoryIcon';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '../components/LicenseReadOnlyAlert';
+import TransactionDetailModal, { TransactionForModal } from './TransactionDetailModal';
 
 interface CategoryDefinition {
   id: number;
@@ -140,6 +141,12 @@ interface TransactionMatch {
   name: string;
   price: number;
   accountNumber?: string;
+  memo?: string | null;
+  tags?: string[];
+  category?: string | null;
+  parent_category?: string | null;
+  category_definition_id?: number | null;
+  category_type?: string | null;
 }
 
 interface PatternPreview {
@@ -277,6 +284,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   // License Read-Only Alert State
   const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
   const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>(undefined);
+
+  // Transaction Detail Modal State
+  const [transactionDetailModalOpen, setTransactionDetailModalOpen] = useState(false);
+  const [selectedTransactionForDetail, setSelectedTransactionForDetail] = useState<TransactionForModal | null>(null);
 
   // Memoized grouped transactions by category ID -> grouped by name
   const groupedTransactionsCache = useMemo(() => {
@@ -1474,6 +1485,44 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     });
   };
 
+  // Handle opening transaction detail modal
+  const handleOpenTransactionDetail = (txn: TransactionMatch, category?: CategoryDefinition) => {
+    setSelectedTransactionForDetail({
+      identifier: txn.identifier,
+      vendor: txn.vendor,
+      name: txn.name,
+      category: category?.name || txn.category || null,
+      parent_category: txn.parent_category || null,
+      category_definition_id: category?.id || txn.category_definition_id || null,
+      category_type: category?.category_type || txn.category_type || null,
+      memo: txn.memo || null,
+      tags: txn.tags || [],
+      price: txn.price,
+      date: txn.date,
+      processed_date: null,
+      account_number: txn.accountNumber || null,
+      type: null,
+      status: null,
+    });
+    setTransactionDetailModalOpen(true);
+  };
+
+  const handleTransactionDetailSave = (updatedTransaction: TransactionForModal) => {
+    // Update the transaction in categoryTransactionsMap
+    setCategoryTransactionsMap(prev => {
+      const updated = new Map(prev);
+      updated.forEach((transactions, categoryId) => {
+        const updatedTransactions = transactions.map(txn =>
+          txn.identifier === updatedTransaction.identifier && txn.vendor === updatedTransaction.vendor
+            ? { ...txn, memo: updatedTransaction.memo, tags: updatedTransaction.tags }
+            : txn
+        );
+        updated.set(categoryId, updatedTransactions);
+      });
+      return updated;
+    });
+  };
+
   const getCategoryTypeIcon = (type: 'expense' | 'investment' | 'income') => {
     switch (type) {
       case 'expense': return <ExpenseIcon />;
@@ -2038,6 +2087,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                             {txns.map((txn, idx) => (
                               <Box
                                 key={`${txn.identifier}-${txn.vendor}-${idx}`}
+                                onClick={() => handleOpenTransactionDetail(txn, category)}
                                 sx={{
                                   display: 'flex',
                                   alignItems: 'center',
@@ -2046,6 +2096,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                                   px: 1,
                                   mb: 0.25,
                                   borderRadius: 1.5,
+                                  cursor: 'pointer',
                                   transition: 'all 0.15s ease',
                                   '&:hover': {
                                     bgcolor: alpha(theme.palette.background.paper, 0.6),
@@ -3619,6 +3670,14 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         open={licenseAlertOpen}
         onClose={() => setLicenseAlertOpen(false)}
         reason={licenseAlertReason}
+      />
+
+      {/* Transaction Detail Modal */}
+      <TransactionDetailModal
+        open={transactionDetailModalOpen}
+        onClose={() => setTransactionDetailModalOpen(false)}
+        transaction={selectedTransactionForDetail}
+        onSave={handleTransactionDetailSave}
       />
     </Dialog>
   );

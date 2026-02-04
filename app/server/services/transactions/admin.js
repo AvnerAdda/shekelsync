@@ -144,6 +144,8 @@ async function updateTransaction(id, updates = {}) {
     'category_type',
     'auto_categorized',
     'confidence_score',
+    'memo',
+    'tags',
   ];
 
   const setClauses = [];
@@ -153,7 +155,12 @@ async function updateTransaction(id, updates = {}) {
   fields.forEach((field) => {
     if (Object.prototype.hasOwnProperty.call(updates, field)) {
       setClauses.push(`${field} = $${paramIndex}`);
-      params.push(updates[field]);
+      let value = updates[field];
+      // Serialize tags array to JSON string
+      if (field === 'tags' && Array.isArray(value)) {
+        value = JSON.stringify(value);
+      }
+      params.push(value);
       paramIndex += 1;
     }
   });

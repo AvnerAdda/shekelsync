@@ -4,29 +4,37 @@
  */
 
 import { describe, test, expect, beforeEach, vi } from 'vitest';
-import {
-  createToken,
-  validateToken,
-  revokeToken,
-  revokeAllTokens,
-  authenticationMiddleware,
-  rateLimitMiddleware,
-  securityHeadersMiddleware,
-  getTokenStats,
-} from '../api-security.js';
 
-// Mock security logger
-vi.mock('../security-logger.js', () => ({
+const securityLogger = {
   logAuthSuccess: vi.fn(),
   logAuthFailure: vi.fn(),
   logRateLimitExceeded: vi.fn(),
-}));
-
-import * as securityLogger from '../security-logger.js';
+};
 
 describe('API Security', () => {
-  beforeEach(() => {
+  let createToken;
+  let validateToken;
+  let revokeToken;
+  let revokeAllTokens;
+  let authenticationMiddleware;
+  let rateLimitMiddleware;
+  let securityHeadersMiddleware;
+  let getTokenStats;
+
+  beforeEach(async () => {
     vi.clearAllMocks();
+    globalThis.__SHEKELSYNC_SECURITY_LOGGER__ = securityLogger;
+    const apiSecurity = await import('../api-security.js');
+    ({
+      createToken,
+      validateToken,
+      revokeToken,
+      revokeAllTokens,
+      authenticationMiddleware,
+      rateLimitMiddleware,
+      securityHeadersMiddleware,
+      getTokenStats,
+    } = apiSecurity);
     revokeAllTokens(); // Clear tokens between tests
   });
 

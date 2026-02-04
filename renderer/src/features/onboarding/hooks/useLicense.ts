@@ -10,11 +10,11 @@ interface LicenseStatus {
   offlineGraceDaysRemaining?: number | null;
   syncedToCloud: boolean;
   lastValidated?: string;
-  teudatZehut?: string;
+  email?: string;
   error?: string;
 }
 
-interface TeudatZehutValidation {
+interface EmailValidation {
   valid: boolean;
   error?: string;
 }
@@ -24,8 +24,8 @@ interface UseLicenseReturn {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  register: (teudatZehut: string) => Promise<{ success: boolean; error?: string }>;
-  validateTeudatZehut: (id: string) => Promise<TeudatZehutValidation>;
+  register: (email: string) => Promise<{ success: boolean; error?: string }>;
+  validateEmail: (email: string) => Promise<EmailValidation>;
   activatePro: (paymentRef?: string) => Promise<{ success: boolean; error?: string }>;
   validateOnline: () => Promise<{ success: boolean; error?: string }>;
   isRegistered: boolean;
@@ -46,6 +46,8 @@ const DEFAULT_STATUS: LicenseStatus = {
   offlineMode: false,
   syncedToCloud: false,
 };
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 /**
  * Hook for managing license state in the renderer process.
@@ -96,13 +98,13 @@ export function useLicense(): UseLicenseReturn {
     }
   }, []);
 
-  const register = useCallback(async (teudatZehut: string) => {
+  const register = useCallback(async (email: string) => {
     if (!isElectron) {
       return { success: false, error: 'Not running in Electron' };
     }
 
     try {
-      const result = await window.electronAPI.license.register(teudatZehut);
+      const result = await window.electronAPI.license.register(email);
 
       if (result.success) {
         await fetchStatus();
@@ -120,35 +122,24 @@ export function useLicense(): UseLicenseReturn {
     }
   }, [fetchStatus]);
 
-  const validateTeudatZehut = useCallback(async (id: string): Promise<TeudatZehutValidation> => {
+  const validateEmail = useCallback(async (email: string): Promise<EmailValidation> => {
     if (!isElectron) {
       // Basic validation without Electron
-      const cleanId = id.replace(/[\s-]/g, '');
-      if (!/^\d{9}$/.test(cleanId)) {
-        return { valid: false, error: 'ID must be exactly 9 digits' };
-      }
-      // Perform check digit validation
-      let sum = 0;
-      for (let i = 0; i < 9; i++) {
-        let digit = parseInt(cleanId[i], 10);
-        let product = digit * ((i % 2) + 1);
-        if (product > 9) product -= 9;
-        sum += product;
-      }
-      if (sum % 10 !== 0) {
-        return { valid: false, error: 'Invalid ID check digit' };
+      const normalized = email.trim().toLowerCase();
+      if (!EMAIL_REGEX.test(normalized)) {
+        return { valid: false, error: 'Email must be a valid address' };
       }
       return { valid: true };
     }
 
     try {
-      const result = await window.electronAPI.license.validateTeudatZehut(id);
+      const result = await window.electronAPI.license.validateEmail(email);
 
       if (!result.success) {
         return { valid: false, error: result.error };
       }
 
-      return result.data as TeudatZehutValidation;
+      return result.data as EmailValidation;
     } catch (err) {
       console.error('[useLicense] Validation error:', err);
       return {
@@ -244,7 +235,7 @@ export function useLicense(): UseLicenseReturn {
     error,
     refetch: fetchStatus,
     register,
-    validateTeudatZehut,
+    validateEmail,
     activatePro,
     validateOnline,
     isRegistered,
@@ -255,5 +246,5 @@ export function useLicense(): UseLicenseReturn {
   };
 }
 
-export type { LicenseStatus, TeudatZehutValidation, UseLicenseReturn };
+export type { LicenseStatus, EmailValidation, UseLicenseReturn };
 export default useLicense;

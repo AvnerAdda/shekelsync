@@ -1,9 +1,6 @@
 const crypto = require('crypto');
-const {
-  logAuthSuccess,
-  logAuthFailure,
-  logRateLimitExceeded,
-} = require('./security-logger');
+const securityLogger = globalThis.__SHEKELSYNC_SECURITY_LOGGER__ || require('./security-logger');
+const { logAuthSuccess, logAuthFailure, logRateLimitExceeded } = securityLogger;
 
 /**
  * API Security Middleware

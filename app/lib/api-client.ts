@@ -2,9 +2,12 @@ import { getAuthorizationHeader } from '@/lib/session-store';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
+type QueryParams = Record<string, string | number | boolean | null | undefined>;
+
 interface ApiRequestOptions<TBody = unknown> {
   body?: TBody;
   headers?: Record<string, string>;
+  params?: QueryParams;
   /** When true, skips automatic JSON serialisation for the request body. */
   rawBody?: boolean;
 }
@@ -69,6 +72,23 @@ function serializeBody(body: unknown, rawBody?: boolean): string | undefined {
   return JSON.stringify(body);
 }
 
+function appendQueryParams(endpoint: string, params?: QueryParams): string {
+  if (!params || Object.keys(params).length === 0) return endpoint;
+
+  const [pathAndQuery, hash = ''] = endpoint.split('#');
+  const [path, existingQuery = ''] = pathAndQuery.split('?');
+  const searchParams = new URLSearchParams(existingQuery);
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    searchParams.set(key, String(value));
+  });
+
+  const query = searchParams.toString();
+  const hashSuffix = hash ? `#${hash}` : '';
+  return query ? `${path}?${query}${hashSuffix}` : `${path}${hashSuffix}`;
+}
+
 function deserializeData<T>(payload: unknown): T {
   return payload as T;
 }
@@ -78,7 +98,8 @@ async function request<TResponse = unknown, TBody = unknown>(
   endpoint: string,
   options: ApiRequestOptions<TBody> = {},
 ): Promise<ApiResponse<TResponse>> {
-  const { body, headers = {}, rawBody } = options;
+  const { body, headers = {}, rawBody, params } = options;
+  const url = appendQueryParams(endpoint, params);
   const normalizedHeaders = normalizeHeaders(headers);
   const locale = detectClientLocale();
   if (locale && !normalizedHeaders['accept-language'] && !normalizedHeaders['Accept-Language']) {
@@ -106,12 +127,7 @@ async function request<TResponse = unknown, TBody = unknown>(
             ? body
             : body ?? undefined;
 
-    const response = await requestFn(
-      method,
-      endpoint,
-      payload,
-      finalHeaders,
-    );
+    const response = await requestFn(method, url, payload, finalHeaders);
 
     return {
       status: response.status,
@@ -134,7 +150,7 @@ async function request<TResponse = unknown, TBody = unknown>(
     fetchOptions.body = serializedBody;
   }
 
-  const response = await fetch(endpoint, fetchOptions);
+  const response = await fetch(url, fetchOptions);
   const text = await response.text();
   let parsed: unknown = text;
 
@@ -154,11 +170,33 @@ async function request<TResponse = unknown, TBody = unknown>(
 
 export const apiClient = {
   request,
-  get<TResponse = unknown>(endpoint: string, headers?: Record<string, string>) {
-    return request<TResponse>('GET', endpoint, { headers });
+  get<TResponse = unknown>(
+    endpoint: string,
+    options?: ApiRequestOptions<never> | Record<string, string>,
+  ) {
+    if (!options) {
+      return request<TResponse>('GET', endpoint);
+    }
+
+    if ('headers' in options || 'params' in options || 'rawBody' in options || 'body' in options) {
+      return request<TResponse>('GET', endpoint, options as ApiRequestOptions<never>);
+    }
+
+    return request<TResponse>('GET', endpoint, { headers: options });
   },
-  delete<TResponse = unknown>(endpoint: string, headers?: Record<string, string>) {
-    return request<TResponse>('DELETE', endpoint, { headers });
+  delete<TResponse = unknown>(
+    endpoint: string,
+    options?: ApiRequestOptions<never> | Record<string, string>,
+  ) {
+    if (!options) {
+      return request<TResponse>('DELETE', endpoint);
+    }
+
+    if ('headers' in options || 'params' in options || 'rawBody' in options || 'body' in options) {
+      return request<TResponse>('DELETE', endpoint, options as ApiRequestOptions<never>);
+    }
+
+    return request<TResponse>('DELETE', endpoint, { headers: options });
   },
   post<TResponse = unknown, TBody = unknown>(
     endpoint: string,
