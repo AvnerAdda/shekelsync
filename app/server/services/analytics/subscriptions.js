@@ -676,7 +676,22 @@ async function dismissAlert(alertId) {
  * Refresh subscription detection
  * Syncs detected patterns with subscriptions table
  */
-async function refreshDetection(locale = 'he') {
+let lastAutoDetectionAt = 0;
+
+async function refreshDetection(input = {}) {
+  let locale = 'he';
+  let defaultStatus = 'active';
+  if (typeof input === 'string') {
+    locale = input;
+  } else if (input && typeof input === 'object') {
+    locale = input.locale || locale;
+    defaultStatus = input.defaultStatus || defaultStatus;
+  }
+  const allowedStatuses = new Set(['active', 'paused', 'cancelled', 'keep', 'review']);
+  if (!allowedStatuses.has(defaultStatus)) {
+    defaultStatus = 'active';
+  }
+
   const { subscriptions } = await getSubscriptions({ locale });
 
   let created = 0;
@@ -712,13 +727,13 @@ async function refreshDetection(locale = 'he') {
           amount_is_fixed, consistency_score, status, category_definition_id,
           first_detected_date, last_charge_date, next_expected_date,
           is_manual, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, $8, $9, $10, 0, datetime('now'), datetime('now'))
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, datetime('now'), datetime('now'))
         ON CONFLICT(pattern_key) DO UPDATE SET
           detected_frequency = $3,
           detected_amount = $4,
           consistency_score = $6,
-          last_charge_date = $9,
-          next_expected_date = $10,
+          last_charge_date = $10,
+          next_expected_date = $11,
           updated_at = datetime('now')`,
         [
           sub.pattern_key,
@@ -727,6 +742,7 @@ async function refreshDetection(locale = 'he') {
           sub.detected_amount,
           sub.amount_is_fixed,
           sub.consistency_score,
+          defaultStatus,
           sub.category_definition_id,
           sub.first_detected_date,
           sub.last_charge_date,
@@ -740,6 +756,15 @@ async function refreshDetection(locale = 'he') {
   return { success: true, created, updated };
 }
 
+async function maybeRunAutoDetection({ locale = 'he', defaultStatus = 'review', debounceMs = 30 * 60 * 1000 } = {}) {
+  const now = Date.now();
+  if (now - lastAutoDetectionAt < debounceMs) {
+    return { success: false, skipped: true, reason: 'debounced' };
+  }
+  lastAutoDetectionAt = now;
+  return refreshDetection({ locale, defaultStatus });
+}
+
 module.exports = {
   getSubscriptions,
   getSubscriptionSummary,
@@ -750,5 +775,6 @@ module.exports = {
   addManualSubscription,
   deleteSubscription,
   dismissAlert,
-  refreshDetection
+  refreshDetection,
+  maybeRunAutoDetection
 };

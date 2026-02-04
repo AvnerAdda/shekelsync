@@ -104,6 +104,7 @@ interface DiagnosticsApi {
   getInfo: () => Promise<any>;
   openLogDirectory: () => Promise<{ success: boolean; error?: string }>;
   exportDiagnostics: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+  copyDiagnostics: () => Promise<{ success: boolean; error?: string }>;
 }
 
 interface TelemetryApi {
@@ -112,10 +113,52 @@ interface TelemetryApi {
   triggerRendererSmoke: () => Promise<{ success: boolean }>;
 }
 
+interface BackgroundSyncSettings {
+  enabled: boolean;
+  intervalHours: 24 | 48 | 168;
+  runOnStartup: boolean;
+  keepRunningInTray: boolean;
+  headless: boolean;
+  lastRunAt?: string;
+  lastResult?: {
+    status: 'success' | 'failed' | 'skipped' | 'blocked';
+    message?: string;
+    totals?: {
+      totalProcessed: number;
+      successCount: number;
+      failureCount: number;
+      totalTransactions: number;
+    };
+  };
+}
+
+interface ElectronTelemetryPreferences {
+  crashReportsEnabled?: boolean;
+  lastUpdatedAt?: string | null;
+}
+
+interface ElectronAppSettings {
+  telemetry?: ElectronTelemetryPreferences;
+  backgroundSync?: BackgroundSyncSettings;
+  [key: string]: unknown;
+}
+
+interface SettingsApi {
+  get: () => Promise<{ success: boolean; settings?: ElectronAppSettings; error?: string }>;
+  update: (patch: Partial<ElectronAppSettings>) => Promise<{ success: boolean; settings?: ElectronAppSettings; error?: string }>;
+  onChange: (callback: (settings: ElectronAppSettings) => void) => () => void;
+}
+
 interface AppApi {
   getVersion: () => Promise<string>;
   getName: () => Promise<string>;
   isPackaged: () => Promise<boolean>;
+  relaunch: () => Promise<{ success: boolean; error?: string }>;
+}
+
+interface DatabaseMaintenanceApi {
+  backup: (targetPath: string) => Promise<{ success: boolean; error?: string; path?: string }>;
+  restore: (sourcePath: string) => Promise<{ success: boolean; error?: string; path?: string; restartRecommended?: boolean }>;
 }
 
 interface PlatformApi {
@@ -170,7 +213,9 @@ interface ElectronAPI {
   log: LogApi;
   diagnostics: DiagnosticsApi;
   telemetry: TelemetryApi;
+  settings: SettingsApi;
   app: AppApi;
+  database: DatabaseMaintenanceApi;
   events: ElectronEventsApi;
   platform: PlatformApi;
   updater: UpdaterApi;

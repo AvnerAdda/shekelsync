@@ -75,6 +75,7 @@ class DatabaseManager {
     this.isConnected = false;
     this.mode = shouldUseSqlite() ? 'sqlite' : 'postgres';
     this.sqliteDb = null;
+    this.sqlitePath = null;
   }
 
   async initialize(config = null) {
@@ -104,6 +105,7 @@ class DatabaseManager {
         initializeSqliteIfMissing(dbPath, SqliteDatabase);
 
         this.sqliteDb = new SqliteDatabase(dbPath, { fileMustExist: true });
+        this.sqlitePath = dbPath;
         this.sqliteDb.pragma('foreign_keys = ON');
         this.sqliteDb.pragma('journal_mode = WAL');
 
@@ -235,6 +237,7 @@ class DatabaseManager {
         this.sqliteDb.close();
       }
       this.sqliteDb = null;
+      this.sqlitePath = null;
       this.isConnected = false;
       return;
     }
@@ -277,6 +280,13 @@ class DatabaseManager {
       return null;
     }
     return this.sqliteDb;
+  }
+
+  getSqlitePath() {
+    if (this.mode !== 'sqlite') {
+      return null;
+    }
+    return this.sqlitePath;
   }
 }
 

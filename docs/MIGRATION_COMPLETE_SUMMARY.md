@@ -1,8 +1,10 @@
 # Category Schema Migration - COMPLETE SUMMARY
 
-## 🎉 Status: READY FOR SCHEMA CLEANUP
+## 🎉 Status: SCHEMA CLEANUP APPLIED
 
 The database optimization work is **complete**! All backend APIs and most frontend components now use the normalized `category_definitions` schema.
+
+> NOTE (2026-02-04): The current schema snapshot already omits legacy category columns in `transactions`. The prior cleanup script referenced below was removed after cleanup was applied. If you need to clean an older database, use the migration guide to craft a one-off migration and validate against a backup first.
 
 ---
 
@@ -21,9 +23,8 @@ The database optimization work is **complete**! All backend APIs and most fronte
 - **Status:** ✅ **90% COMPLETE** (sufficient for schema cleanup)
 
 ### Database Scripts
-- **Migration Script:** ✅ Created (`scripts/deprecate_legacy_category_columns.js`)
-- **Features:** Analyze mode, drop mode, automatic backups, rollback support
-- **Status:** ✅ **READY TO RUN**
+- **Legacy Cleanup Script:** ⚠️ Removed after cleanup was applied in the current schema snapshot
+- **Status:** ✅ **No cleanup required for current `dist/clarify.sqlite`**
 
 ---
 
@@ -117,65 +118,16 @@ All endpoints now properly:
 
 ---
 
-## 🚀 Next Steps: Schema Cleanup
+## 🚀 Schema Cleanup (Already Applied)
 
-You're now ready to clean up the database schema!
+The current SQLite schema already excludes legacy category columns.
 
-### Step 1: Analyze Current State (Safe, No Changes)
+### Verify locally
 ```bash
-cd /home/aadda/projects/personal/finance-israel
-node scripts/deprecate_legacy_category_columns.js
+sqlite3 dist/clarify.sqlite ".schema transactions"
 ```
 
-**Expected Output:**
-```
-=== Analyzing Legacy Column Usage ===
-  transactions.category: 0/404 non-null rows
-  transactions.parent_category: 0/404 non-null rows
-  transactions.subcategory: 0/404 non-null rows
-  categorization_rules.target_category: 0/N non-null rows
-  ...
-```
-
-If all show **0 non-null rows**, you're ready for Step 2!
-
-### Step 2: Drop Legacy Columns (With Automatic Backup)
-```bash
-node scripts/deprecate_legacy_category_columns.js --drop
-```
-
-**What Happens:**
-1. ✅ Automatic backup created: `dist/clarify.sqlite.bak-TIMESTAMP`
-2. ✅ Legacy columns dropped from `transactions` table
-3. ✅ Legacy columns dropped from `categorization_rules` table
-4. ✅ Indexes recreated automatically
-5. ✅ Transaction wrapped (rollback on error)
-
-### Step 3: Test Application
-```bash
-cd app
-npm run dev
-```
-
-**Test These Features:**
-- ✅ Category Dashboard loads and displays data
-- ✅ Budget creation/editing works
-- ✅ Transaction categorization works
-- ✅ Analytics pages render correctly
-- ✅ Manual transaction entry works
-
-### Step 4: Rollback (If Needed)
-If anything breaks:
-```bash
-# Find your backup
-ls -la dist/*.bak-*
-
-# Restore it
-cp dist/clarify.sqlite.bak-YYYYMMDDHHMMSS dist/clarify.sqlite
-
-# Restart app
-cd app && npm run dev
-```
+If you're working with an older database that still has legacy columns, create a one-off migration following the patterns in `docs/CATEGORY_SCHEMA_MIGRATION.md`, take a backup first, and validate by running the app and key dashboards.
 
 ---
 
@@ -188,14 +140,7 @@ cd app && npm run dev
    - Testing checklist
    - Troubleshooting guide
 
-2. **Migration Script** (`scripts/deprecate_legacy_category_columns.js`)
-   - Analyze mode (dry run)
-   - Drop mode (with backup)
-   - Column existence verification
-   - Usage statistics
-   - Comprehensive error handling
-
-3. **This Summary** (`docs/MIGRATION_COMPLETE_SUMMARY.md`)
+2. **This Summary** (`docs/MIGRATION_COMPLETE_SUMMARY.md`)
    - Complete status overview
    - File modification list
    - Next steps guide
@@ -256,13 +201,8 @@ cd app && npm run dev
 
 ## ⚠️ Important Notes
 
-### Safe to Run
-The schema cleanup is **safe to run** because:
-1. All APIs already use `category_definition_id`
-2. All major frontend components updated
-3. Legacy columns are no longer written to
-4. Automatic backups created before any changes
-5. Easy rollback if issues discovered
+### Cleanup Already Applied
+Legacy category columns are already removed in the current schema snapshot. If you are migrating an older database, take a backup first and validate critical dashboards after the migration.
 
 ### Remaining Work (Optional)
 These minor frontend components can be updated later (non-blocking):
@@ -282,20 +222,13 @@ They currently use legacy fields but don't break functionality since:
 
 ## 🎊 Conclusion
 
-**The migration is COMPLETE and ready for cleanup!**
+**The migration is COMPLETE and schema cleanup is already applied for the current DB snapshot.**
 
 You've successfully:
 1. ✅ Migrated all backend APIs to normalized schema
 2. ✅ Updated all major frontend components
-3. ✅ Created safe migration scripts with backups
-4. ✅ Documented everything comprehensively
-5. ✅ Verified zero legacy query usage
-
-**Ready to run:** `node scripts/deprecate_legacy_category_columns.js --drop`
-
-**Estimated time:** ~30 seconds
-**Risk level:** Low (full backup + rollback available)
-**Recommended:** Run during low-traffic period
+3. ✅ Documented everything comprehensively
+4. ✅ Verified zero legacy query usage
 
 ---
 
@@ -303,8 +236,7 @@ You've successfully:
 
 Refer to:
 - **Full Guide:** `docs/CATEGORY_SCHEMA_MIGRATION.md`
-- **Script Help:** `node scripts/deprecate_legacy_category_columns.js --help`
-- **Git History:** `git log --oneline app/pages/api app/components`
-- **Backup Location:** `dist/clarify.sqlite.bak-*`
+  - **Git History:** `git log --oneline app/pages/api app/components`
+ - **Backup Location:** `dist/clarify.sqlite.bak-*` (if you created one)
 
 **Success! 🚀**

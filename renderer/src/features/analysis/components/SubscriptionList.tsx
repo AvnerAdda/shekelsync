@@ -73,6 +73,8 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({
     { value: 'active', color: theme.palette.success.main },
     { value: 'paused', color: theme.palette.warning.main },
     { value: 'cancelled', color: theme.palette.error.main },
+    { value: 'review', color: theme.palette.info.main },
+    { value: 'keep', color: theme.palette.secondary.main },
   ];
 
   const sortOptions: Array<{ field: SortField; icon: React.ReactNode }> = [

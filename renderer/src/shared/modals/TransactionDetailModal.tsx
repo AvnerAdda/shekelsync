@@ -32,8 +32,8 @@ export interface TransactionForModal {
   identifier: string;
   vendor: string;
   name: string;
-  category: string | null;
-  parent_category: string | null;
+  category_name: string | null;
+  parent_name: string | null;
   category_definition_id: number | null;
   category_type: string | null;
   memo: string | null;
@@ -176,6 +176,11 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
 
   if (!transaction) return null;
 
+  const categoryLabel =
+    transaction.category_name && transaction.parent_name
+      ? `${transaction.parent_name} › ${transaction.category_name}`
+      : transaction.category_name || transaction.parent_name;
+
   return (
     <>
       <Dialog
@@ -236,11 +241,11 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 {formatDate(transaction.date)}
               </Typography>
             </Box>
-            {transaction.category && (
+            {categoryLabel && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CategoryIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
                 <Chip
-                  label={transaction.category}
+                  label={categoryLabel}
                   size="small"
                   sx={{
                     backgroundColor: alpha(theme.palette.primary.main, 0.1),

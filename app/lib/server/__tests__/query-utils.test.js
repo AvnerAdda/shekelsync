@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const {
   resolveDateRange,
@@ -8,25 +8,17 @@ const {
 } = require('../query-utils.js');
 
 describe('query-utils', () => {
-  // TODO: Re-enable once this stops timing out under full suite/coverage runs.
-  it.skip('falls back to months window when dates are missing', () => {
-    const now = new Date('2025-01-31T12:00:00Z');
-    const realDate = global.Date;
-    global.Date = class MockDate extends Date {
-      constructor(input) {
-        if (input) {
-          super(input);
-        } else {
-          super(now);
-        }
-      }
-    };
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('falls back to months window when dates are missing', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-01-31T12:00:00Z'));
 
     const { start, end } = resolveDateRange({ months: 2 });
     expect(end.toISOString()).toContain('2025-01-31');
     expect(start.getMonth()).toBe(10); // two months back from January lands in November/December crossover
-
-    global.Date = realDate;
   });
 
   it('builds filters for known types and defaults to expense', () => {

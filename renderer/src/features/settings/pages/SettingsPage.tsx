@@ -30,6 +30,7 @@ import DataExportPanel from '../components/DataExportPanel';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
 import EnhancedProfileSection from '../components/EnhancedProfileSection';
 import SecuritySettingsPanel from '../components/SecuritySettingsPanel';
+import AutoSyncPanel from '../components/AutoSyncPanel';
 import { useTelemetry } from '@app/contexts/TelemetryContext';
 import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
 import type { SupportedLocale } from '@renderer/i18n';
@@ -204,6 +205,13 @@ const SettingsPage: React.FC = () => {
           {tSettings('language.detectedLabel', { language: detectedLanguageLabel })}
         </Alert>
       </Paper>
+
+      <Divider sx={{ my: 4 }} />
+
+      {/* Auto Sync */}
+      <Box sx={{ mb: 4 }}>
+        <AutoSyncPanel />
+      </Box>
 
       <Divider sx={{ my: 4 }} />
 

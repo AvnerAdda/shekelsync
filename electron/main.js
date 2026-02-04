@@ -14,6 +14,7 @@ const {
   Menu,
   nativeImage,
   crashReporter,
+  clipboard,
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -33,6 +34,7 @@ const {
   getDiagnosticsInfo,
   openDiagnosticsLogDirectory,
   exportDiagnosticsToFile,
+  buildDiagnosticsPayload,
 } = require('./diagnostics');
 const analyticsMetricsStore = require(resolveAppPath('server', 'services', 'analytics', 'metrics-store.js'));
 const isPackaged = app.isPackaged;
@@ -66,6 +68,7 @@ function abortForSecurity(message) {
 
 const APPROVED_FILE_WRITE_TTL_MS = 5 * 60 * 1000;
 const approvedFileWrites = new Map();
+const approvedFileReads = new Map();
 
 function getSenderUrl(event) {
   const url = event?.senderFrame?.url || event?.sender?.getURL?.();
@@ -137,6 +140,103 @@ function consumeApprovedFileWrite(filePath) {
   return true;
 }
 
+function approveFileRead(filePath) {
+  if (!filePath || typeof filePath !== 'string') {
+    return;
+  }
+  const normalized = path.resolve(filePath);
+  const now = Date.now();
+  for (const [key, expiresAt] of approvedFileReads.entries()) {
+    if (expiresAt <= now) {
+      approvedFileReads.delete(key);
+    }
+  }
+  approvedFileReads.set(normalized, now + APPROVED_FILE_WRITE_TTL_MS);
+}
+
+function consumeApprovedFileRead(filePath) {
+  if (!filePath || typeof filePath !== 'string') {
+    return false;
+  }
+  const normalized = path.resolve(filePath);
+  const expiresAt = approvedFileReads.get(normalized);
+  if (!expiresAt) {
+    return false;
+  }
+  if (expiresAt <= Date.now()) {
+    approvedFileReads.delete(normalized);
+    return false;
+  }
+  approvedFileReads.delete(normalized);
+  return true;
+}
+
+function resolveSqlitePath() {
+  return (
+    dbManager.getSqlitePath?.() ||
+    process.env.SQLITE_DB_PATH ||
+    path.join(app.getPath('userData'), 'clarify.sqlite')
+  );
+}
+
+async function backupSqliteDatabase(targetPath, { reason = 'manual' } = {}) {
+  if (dbManager.mode !== 'sqlite') {
+    return { success: false, error: 'Database backup is supported only for SQLite mode.' };
+  }
+  if (!targetPath) {
+    return { success: false, error: 'No destination provided.' };
+  }
+
+  try {
+    await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+    const sqliteDb = dbManager.getSqliteDatabase?.();
+    if (sqliteDb && typeof sqliteDb.backup === 'function') {
+      await sqliteDb.backup(targetPath);
+    } else {
+      const sourcePath = resolveSqlitePath();
+      if (!sourcePath) {
+        throw new Error('SQLite database path is unavailable.');
+      }
+      await fs.promises.copyFile(sourcePath, targetPath);
+    }
+    logger.info('SQLite backup completed', { targetPath, reason });
+    return { success: true, path: targetPath };
+  } catch (error) {
+    logger.error('SQLite backup failed', { error: error.message, reason });
+    return { success: false, error: error.message };
+  }
+}
+
+async function restoreSqliteDatabase(sourcePath) {
+  if (dbManager.mode !== 'sqlite') {
+    return { success: false, error: 'Database restore is supported only for SQLite mode.' };
+  }
+  if (!sourcePath) {
+    return { success: false, error: 'No source file provided.' };
+  }
+  if (!consumeApprovedFileRead(sourcePath)) {
+    return { success: false, error: 'File read not approved. Please choose a file again.' };
+  }
+
+  const targetPath = resolveSqlitePath();
+  if (!targetPath) {
+    return { success: false, error: 'SQLite database path is unavailable.' };
+  }
+
+  try {
+    await dbManager.close();
+    await fs.promises.copyFile(sourcePath, targetPath);
+    await fs.promises.rm(`${targetPath}-wal`, { force: true });
+    await fs.promises.rm(`${targetPath}-shm`, { force: true });
+    await dbManager.initialize();
+    logger.info('SQLite restore completed', { sourcePath, targetPath });
+    return { success: true, path: targetPath, restartRecommended: true };
+  } catch (error) {
+    logger.error('SQLite restore failed', { error: error.message });
+    return { success: false, error: error.message };
+  }
+}
+
 // Load environment variables from the Next.js app if present (e.g., USE_SQLITE)
 // Only load .env.local in development (not in packaged app)
 if (!app.isPackaged) {
@@ -161,6 +261,7 @@ try {
 
 // Handle module resolution for development vs production
 let autoUpdater;
+let lastUpdateBackupVersion = null;
 try {
   if (isDev) {
     autoUpdater = requireFromApp('electron-updater').autoUpdater;
@@ -196,6 +297,7 @@ const sessionStore = require('./session-store');
 const { describeTelemetryState } = require('./telemetry-utils');
 const secureKeyManager = require('./secure-key-manager');
 const licenseService = require('./license-service');
+const { createSyncScheduler, normalizeBackgroundSettings } = require('./sync-scheduler');
 
 async function runLicenseSmokeTest(email) {
   if (!email) return;
@@ -514,13 +616,63 @@ async function applyTelemetryPreference(settings = {}) {
   // The beforeSend hook will filter out events when telemetryState.enabled is false
 }
 
+function applySettingsDefaults(settings = {}) {
+  const normalizedBackground = normalizeBackgroundSettings(settings?.backgroundSync || {});
+  return {
+    ...settings,
+    backgroundSync: normalizedBackground,
+  };
+}
+
 async function loadInitialSettings() {
   try {
-    const initialSettings = await sessionStore.getSettings();
+    const initialSettings = applySettingsDefaults(await sessionStore.getSettings());
+    appSettingsCache = initialSettings;
     await applyTelemetryPreference(initialSettings);
   } catch (error) {
     logger.warn('Failed to load user settings', { error: error.message });
   }
+}
+
+async function getAppSettings() {
+  const settings = applySettingsDefaults(await sessionStore.getSettings());
+  appSettingsCache = settings;
+  return settings;
+}
+
+async function updateAppSettings(patch = {}) {
+  const current = await sessionStore.getSettings();
+  const merged = {
+    ...current,
+    ...patch,
+    telemetry: {
+      ...(current?.telemetry || {}),
+      ...(patch?.telemetry || {}),
+    },
+    backgroundSync: {
+      ...(current?.backgroundSync || {}),
+      ...(patch?.backgroundSync || {}),
+    },
+  };
+  const updated = await sessionStore.updateSettings(merged);
+  const normalized = applySettingsDefaults(updated);
+  appSettingsCache = normalized;
+  await applyTelemetryPreference(normalized);
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.webContents.send('settings:changed', normalized);
+  });
+  if (syncScheduler) {
+    syncScheduler.updateSettings(normalized);
+  }
+  return normalized;
+}
+
+function shouldKeepRunningInTray() {
+  if (process.platform === 'darwin') {
+    return false;
+  }
+  const keepRunning = appSettingsCache?.backgroundSync?.keepRunningInTray;
+  return keepRunning !== false;
 }
 
 function getTelemetryDiagnostics() {
@@ -631,6 +783,8 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
     } else {
       console.log('Running without internal API server - relying on external dev renderer');
     }
+
+    getSyncScheduler().start();
   } catch (error) {
     console.error('Initialization error:', error);
     logger.error('Fatal initialization error', { error: error.message });
@@ -662,6 +816,9 @@ let apiServer;
 let apiPort;
 let apiToken; // API authentication token for internal API
 let appTray;
+let syncScheduler;
+let appSettingsCache = null;
+let isQuitting = false;
 
 // Development mode logging
 if (isDev) {
@@ -687,6 +844,18 @@ function sendScrapeProgress(payload) {
   if (mainWindow?.webContents) {
     mainWindow.webContents.send('scrape:progress', payload);
   }
+}
+
+function getSyncScheduler() {
+  if (!syncScheduler) {
+    syncScheduler = createSyncScheduler({
+      getSettings: getAppSettings,
+      updateSettings: async (patch) => updateAppSettings(patch),
+      emitProgress: sendScrapeProgress,
+      logger,
+    });
+  }
+  return syncScheduler;
 }
 
 function emitSessionChanged(session) {
@@ -933,6 +1102,16 @@ async function createWindow() {
   mainWindow.on('maximize', emitWindowState);
   mainWindow.on('unmaximize', emitWindowState);
 
+  mainWindow.on('close', (event) => {
+    if (isQuitting) {
+      return;
+    }
+    if (shouldKeepRunningInTray()) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
+
   // Kick off heavy initialization in the background so the window can appear sooner
   setImmediate(() => {
     initializeBackendServices({ skipEmbeddedApi }).catch((error) => {
@@ -1100,6 +1279,16 @@ app.whenReady().then(async () => {
 
     autoUpdater.on('update-downloaded', (info) => {
       console.log('Update downloaded:', info);
+      if (dbManager.mode === 'sqlite' && info?.version && info.version !== lastUpdateBackupVersion) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupDir = path.join(app.getPath('userData'), 'backups');
+        const backupPath = path.join(backupDir, `clarify-update-${info.version}-${timestamp}.sqlite`);
+        backupSqliteDatabase(backupPath, { reason: 'auto-update' }).then((result) => {
+          if (result.success) {
+            lastUpdateBackupVersion = info.version;
+          }
+        });
+      }
       if (mainWindow?.webContents) {
         mainWindow.webContents.send('updater:update-downloaded', {
           version: info.version,
@@ -1139,6 +1328,7 @@ app.on('activate', () => {
 });
 
 app.on('before-quit', () => {
+  isQuitting = true;
   if (appTray) {
     appTray.destroy();
   }
@@ -1191,6 +1381,43 @@ ipcMain.handle('diagnostics:export', async (event, outputPath) => {
     appVersion: app.getVersion(),
     telemetry: getTelemetryDiagnostics(),
   });
+});
+
+ipcMain.handle('diagnostics:copy', async (event) => {
+  if (!requireTrustedIpcSender(event, 'diagnostics:copy')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  try {
+    const payload = await buildDiagnosticsPayload({
+      appVersion: app.getVersion(),
+      telemetry: getTelemetryDiagnostics(),
+    });
+    clipboard.writeText(JSON.stringify(payload, null, 2));
+    return { success: true };
+  } catch (error) {
+    console.error('Diagnostics copy failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('database:backup', async (event, targetPath) => {
+  if (!requireTrustedIpcSender(event, 'database:backup')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  if (!targetPath) {
+    return { success: false, error: 'No destination selected' };
+  }
+  if (!consumeApprovedFileWrite(targetPath)) {
+    return { success: false, error: 'File write not approved. Please choose a destination again.' };
+  }
+  return backupSqliteDatabase(targetPath, { reason: 'manual' });
+});
+
+ipcMain.handle('database:restore', async (event, sourcePath) => {
+  if (!requireTrustedIpcSender(event, 'database:restore')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  return restoreSqliteDatabase(sourcePath);
 });
 
 // Biometric authentication
@@ -1603,7 +1830,7 @@ ipcMain.handle('api:request', async (event, { method, endpoint, data, headers = 
 
 ipcMain.handle('settings:get', async () => {
   try {
-    const settings = await sessionStore.getSettings();
+    const settings = await getAppSettings();
     return { success: true, settings };
   } catch (error) {
     logger.error('Failed to load application settings', { error: error.message });
@@ -1613,11 +1840,7 @@ ipcMain.handle('settings:get', async () => {
 
 ipcMain.handle('settings:update', async (event, patch = {}) => {
   try {
-    const updated = await sessionStore.updateSettings(patch);
-    await applyTelemetryPreference(updated);
-    BrowserWindow.getAllWindows().forEach((win) => {
-      win.webContents.send('settings:changed', updated);
-    });
+    const updated = await updateAppSettings(patch);
     return { success: true, settings: updated };
   } catch (error) {
     logger.error('Failed to update application settings', { error: error.message });
@@ -1775,6 +1998,9 @@ ipcMain.handle('file:showOpenDialog', async (event, options) => {
       return { canceled: true };
     }
     const result = await dialog.showOpenDialog(mainWindow, options);
+    if (result && Array.isArray(result.filePaths)) {
+      result.filePaths.forEach((filePath) => approveFileRead(filePath));
+    }
     return result;
   } catch (error) {
     console.error('Open dialog error:', error);
@@ -1813,6 +2039,20 @@ ipcMain.handle('app:getName', () => {
 
 ipcMain.handle('app:isPackaged', () => {
   return app.isPackaged;
+});
+
+ipcMain.handle('app:relaunch', (event) => {
+  try {
+    if (!requireTrustedIpcSender(event, 'app:relaunch')) {
+      return { success: false, error: 'Untrusted IPC sender' };
+    }
+    app.relaunch();
+    app.exit(0);
+    return { success: true };
+  } catch (error) {
+    console.error('App relaunch failed:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 // Update-related handlers

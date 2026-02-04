@@ -230,6 +230,48 @@
         "large": "(110% מהברירת מחדל)"
       }
     },
+    "autoSync": {
+      "title": "סנכרון אוטומטי",
+      "description": "שמרו על החשבונות שלכם מעודכנים עם סנכרון רקע מתוזמן.",
+      "enableLabel": "הפעל סנכרון אוטומטי",
+      "intervalLabel": "תדירות סנכרון",
+      "intervals": {
+        "daily": "כל יום",
+        "twoDays": "כל יומיים",
+        "weekly": "שבועי"
+      },
+      "keepRunningLabel": "השאר פועל במגש כאשר החלון נסגר",
+      "headlessLabel": "הרץ בשקט (ללא חלון)",
+      "actions": {
+        "syncNow": "סנכרן עכשיו"
+      },
+      "status": {
+        "lastRun": "ריצה אחרונה {{timeAgo}}",
+        "never": "לא סונכרן מעולם",
+        "syncing": "מסנכרן...",
+        "syncStarted": "הסנכרון התחיל",
+        "enabled": "סנכרון אוטומטי מופעל",
+        "disabled": "סנכרון אוטומטי מושבת",
+        "active": "פעיל",
+        "paused": "מושהה",
+        "nextSync": "סנכרון הבא מתוכנן",
+        "pending": "ממתין לריצה ראשונה"
+      },
+      "advancedSettings": "הגדרות מתקדמות",
+      "keepRunningHint": "האפליקציה נשארת במגש המערכת כאשר נסגרת",
+      "headlessHint": "הסנכרון רץ ללא פתיחת חלונות דפדפן",
+      "results": {
+        "success": "{{count}} הצליחו",
+        "failed": "{{count}} נכשלו"
+      },
+      "errors": {
+        "notSupported": "ההגדרות זמינות רק באפליקציית הדסקטופ.",
+        "loadFailed": "טעינת הגדרות הסנכרון נכשלה.",
+        "saveFailed": "שמירת הגדרות הסנכרון נכשלה.",
+        "syncFailed": "הסנכרון נכשל.",
+        "readOnly": "הסנכרון מושבת במצב קריאה בלבד."
+      }
+    },
     "diagnostics": {
       "title": "דיאגנוסטיקה ודיווח קריסות",
       "description": "שתפו דוחות קריסה אנונימיים כדי לעזור לנו לפתור בעיות יציבות מהר יותר. פרטי חשבון ומזהים אישיים אינם נכללים.",
@@ -500,14 +542,52 @@
       "notSupported": "כלי דיאגנוסטיקה זמינים רק באפליקציית הדסקטופ הארוזה.",
       "openLogs": "פתח תיקיית לוגים",
       "export": "ייצוא דיאגנוסטיקה",
+      "copy": "העתקת דיאגנוסטיקה",
       "logDirectory": "תיקיית לוגים",
       "version": "גרסה: {{version}}",
       "platform": "פלטפורמה: {{platform}}",
+      "restoreConfirm": "שחזור גיבוי יחליף את מסד הנתונים המקומי. להמשיך?",
+      "backupDialogLabel": "גיבוי SQLite",
+      "config": {
+        "databaseMode": "מצב מסד נתונים",
+        "sqlitePath": "נתיב SQLite"
+      },
+      "backup": {
+        "title": "גיבוי מסד נתונים",
+        "description": "צרו גיבוי מקומי לפני מיגרציה או עדכון משמעותי. שחזור ידרוס את המסד הנוכחי.",
+        "action": "גיבוי מסד הנתונים",
+        "restore": "שחזור גיבוי",
+        "restart": "הפעלת האפליקציה מחדש"
+      },
+      "warnings": {
+        "database": {
+          "sqliteMissing": "קובץ מסד הנתונים SQLite חסר. ייתכן שהאפליקציה רצה ללא נתונים מתמידים.",
+          "sqliteUnreadable": "קובץ ה‑SQLite אינו קריא.",
+          "sqliteNotWritable": "תיקיית ה‑SQLite אינה ניתנת לכתיבה.",
+          "postgresMissing": "הגדרות PostgreSQL אינן מלאות."
+        },
+        "encryption": {
+          "invalidEnvKey": "CLARIFY_ENCRYPTION_KEY אינו תקין (נדרשים 64 תווי hex).",
+          "allowDevNoEncryption": "ALLOW_DEV_NO_ENCRYPTION מופעל. יש לבטל בסביבת פרודקשן."
+        },
+        "security": {
+          "sandboxDisabled": "הסנדבוקס של Electron מושבת. יש להפעיל בפרודקשן."
+        },
+        "updates": {
+          "disabled": "עדכונים אוטומטיים מושבתים. הגדירו ENABLE_AUTO_UPDATE=true."
+        }
+      },
       "errors": {
         "logUnavailable": "גישה לתיקיית הלוגים אינה זמינה בסביבה זו.",
         "openFailed": "נכשלה פתיחת תיקיית הלוגים.",
         "exportUnsupported": "ייצוא דיאגנוסטיקה אינו נתמך בסביבה זו.",
-        "exportFailed": "נכשלה יצוא חבילת הדיאגנוסטיקה."
+        "exportFailed": "נכשלה יצוא חבילת הדיאגנוסטיקה.",
+        "copyUnsupported": "העתקת דיאגנוסטיקה אינה נתמכת בסביבה זו.",
+        "copyFailed": "נכשלה העתקת חבילת הדיאגנוסטיקה.",
+        "backupUnsupported": "גיבוי מסד נתונים אינו זמין בסביבה זו.",
+        "backupFailed": "גיבוי מסד הנתונים נכשל.",
+        "restoreUnsupported": "שחזור מסד נתונים אינו זמין בסביבה זו.",
+        "restoreFailed": "שחזור מסד הנתונים נכשל."
       },
       "saveDialogLabel": "חבילת דיאגנוסטיקה",
       "telemetry": {
@@ -1114,7 +1194,9 @@
         "edit": "ערוך",
         "delete": "מחק",
         "pause": "השהה",
-        "resume": "המשך"
+        "resume": "המשך",
+        "approve": "אשר",
+        "ignore": "התעלם"
       },
       "list": {
         "title": "המנויים שלך",
@@ -1123,7 +1205,9 @@
           "all": "הכל",
           "active": "פעילים",
           "paused": "מושהים",
-          "cancelled": "מבוטלים"
+          "cancelled": "מבוטלים",
+          "review": "לבדיקה",
+          "keep": "שמור"
         },
         "sort": {
           "name": "שם",
@@ -1147,7 +1231,8 @@
         "highConsistency": "ציון עקביות גבוה",
         "today": "מגיע היום",
         "tomorrow": "מגיע מחר",
-        "inDays": "בעוד {{days}} ימים"
+        "inDays": "בעוד {{days}} ימים",
+        "cycleProgress": "{{percent}}% מתקופת החיוב"
       },
       "alerts": {
         "title": "התראות",

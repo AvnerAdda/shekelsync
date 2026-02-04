@@ -5,6 +5,7 @@ const bulkScrapeService = require('../services/scraping/bulk.js');
 const scrapeEventsService = require('../services/scraping/events.js');
 const scrapeStatusService = require('../services/scraping/status.js');
 const { wasScrapedRecently } = require('../services/scraping/run.js');
+const { maybeRunAutoDetection } = require('../services/analytics/subscriptions.js');
 
 let CompanyTypes = {};
 try {
@@ -150,6 +151,11 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         transactions: transactionCount,
       });
 
+      maybeRunAutoDetection({ locale: req.locale, defaultStatus: 'review' })
+        .catch((detectError) => {
+          console.warn('[Scrape] Auto-detection failed:', detectError?.message || detectError);
+        });
+
       res.status(200).json({
         ...result,
         transactionCount,
@@ -219,6 +225,11 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
           transactions: result.totalTransactions,
         },
       });
+
+      maybeRunAutoDetection({ locale: req.locale, defaultStatus: 'review' })
+        .catch((detectError) => {
+          console.warn('[Bulk Scrape] Auto-detection failed:', detectError?.message || detectError);
+        });
 
       res.status(200).json(result);
     } catch (error) {

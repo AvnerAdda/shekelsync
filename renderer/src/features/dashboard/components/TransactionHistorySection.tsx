@@ -90,8 +90,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       identifier: txn.identifier,
       vendor: txn.vendor,
       name: txn.description || txn.vendor,
-      category: txn.category_name || txn.category || null,
-      parent_category: txn.parent_name || null,
+      category_name: txn.category_name || null,
+      parent_name: txn.parent_name || null,
       category_definition_id: txn.category_definition_id || null,
       category_type: txn.category_type || null,
       memo: txn.memo || null,
@@ -1229,7 +1229,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                           <Typography variant="caption" color="text.secondary">
                             {format(new Date(txn.date), 'HH:mm')}
                           </Typography>
-                          {(txn.parent_name || txn.category_name || txn.category) && (
+                          {(txn.parent_name || txn.category_name) && (
                             <>
                               <Typography variant="caption" color="text.secondary">
                                 •
@@ -1237,7 +1237,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                               <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 500 }}>
                                 {txn.parent_name && txn.category_name
                                   ? `${txn.parent_name} > ${txn.category_name}`
-                                  : txn.category_name || txn.parent_name || txn.category}
+                                  : txn.category_name || txn.parent_name}
                               </Typography>
                             </>
                           )}

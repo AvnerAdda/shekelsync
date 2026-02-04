@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -9,6 +9,11 @@ import {
   LinearProgress,
   alpha,
   useTheme,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Button,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -17,6 +22,8 @@ import {
   PlayArrow as ResumeIcon,
   MoreVert as MoreIcon,
   NotificationsActive as AlertIcon,
+  CheckCircle as ApproveIcon,
+  VisibilityOff as IgnoreIcon,
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useTranslation } from 'react-i18next';
@@ -40,11 +47,13 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'analysisPage.subscriptions' });
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
 
   const amount = subscription.user_amount || subscription.detected_amount || 0;
   const frequency = subscription.user_frequency || subscription.detected_frequency || 'monthly';
   const statusColor = STATUS_COLORS[subscription.status] || theme.palette.grey[500];
   const isActive = subscription.status === 'active';
+  const isReview = subscription.status === 'review';
   const categoryColor = subscription.category_color || theme.palette.primary.main;
 
   // Calculate days until next charge and progress
@@ -102,6 +111,67 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
     return categoryColor;
   }, [isOverdue, daysUntil, categoryColor, theme]);
 
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setMenuAnchor(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchor(null);
+  };
+
+  const handlePauseResume = () => {
+    if (subscription.id) {
+      onStatusChange(subscription.id, isActive ? 'paused' : 'active');
+    }
+    handleMenuClose();
+  };
+
+  const handleDelete = () => {
+    if (subscription.id) {
+      onDelete(subscription.id);
+    }
+    handleMenuClose();
+  };
+
+  // Build menu items for overflow menu
+  const menuItems = useMemo(() => {
+    const items: Array<{
+      key: string;
+      label: string;
+      icon: React.ReactNode;
+      onClick: () => void;
+      color?: string;
+    }> = [];
+
+    if (isActive) {
+      items.push({
+        key: 'pause',
+        label: t('actions.pause'),
+        icon: <PauseIcon sx={{ color: theme.palette.warning.main }} />,
+        onClick: handlePauseResume,
+      });
+    } else if (subscription.status === 'paused') {
+      items.push({
+        key: 'resume',
+        label: t('actions.resume'),
+        icon: <ResumeIcon sx={{ color: theme.palette.success.main }} />,
+        onClick: handlePauseResume,
+      });
+    }
+
+    if (subscription.is_manual === 1 && subscription.id) {
+      items.push({
+        key: 'delete',
+        label: t('actions.delete'),
+        icon: <DeleteIcon sx={{ color: theme.palette.error.main }} />,
+        onClick: handleDelete,
+        color: theme.palette.error.main,
+      });
+    }
+
+    return items;
+  }, [isActive, subscription.status, subscription.is_manual, subscription.id, t, theme]);
+
   return (
     <Box
       sx={{
@@ -118,26 +188,40 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
           bgcolor: alpha(theme.palette.background.paper, 0.8),
           borderColor: alpha(categoryColor, 0.3),
           boxShadow: `0 8px 32px -8px ${alpha(categoryColor, 0.2)}`,
+          transform: 'translateY(-2px) scale(1.005)',
+        },
+        '&:active': {
+          transform: 'translateY(0) scale(1)',
+        },
+        // Touch-friendly: always show actions on touch devices
+        '@media (hover: none)': {
           '& .subscription-actions': {
             opacity: 1,
           },
         },
       }}
     >
-      {/* Progress bar at top */}
+      {/* Progress bar at top with tooltip */}
       {isActive && subscription.next_expected_date && (
-        <LinearProgress
-          variant="determinate"
-          value={progressPercent}
-          sx={{
-            height: 3,
-            bgcolor: alpha(progressColor, 0.1),
-            '& .MuiLinearProgress-bar': {
-              bgcolor: progressColor,
-              transition: 'none',
-            },
-          }}
-        />
+        <Tooltip
+          title={t('card.cycleProgress', { percent: Math.round(progressPercent) })}
+          placement="top"
+          arrow
+        >
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 3,
+              bgcolor: alpha(progressColor, 0.1),
+              cursor: 'help',
+              '& .MuiLinearProgress-bar': {
+                bgcolor: progressColor,
+                transition: 'none',
+              },
+            }}
+          />
+        </Tooltip>
       )}
 
       {/* Left accent border */}
@@ -294,17 +378,17 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
             </Stack>
           </Box>
 
-          {/* Actions - visible on hover */}
+          {/* Actions - Always visible Edit + Overflow Menu */}
           <Stack
             className="subscription-actions"
             direction="row"
             spacing={0.25}
             sx={{
-              opacity: 0,
-              transition: 'opacity 0.2s',
               flexShrink: 0,
+              transition: 'opacity 0.2s',
             }}
           >
+            {/* Edit button - always visible */}
             <Tooltip title={t('actions.edit')}>
               <IconButton
                 size="small"
@@ -317,49 +401,101 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
                 <EditIcon sx={{ fontSize: 18 }} />
               </IconButton>
             </Tooltip>
-            {isActive ? (
-              <Tooltip title={t('actions.pause')}>
+
+            {/* Overflow menu for secondary actions */}
+            {menuItems.length > 0 && (
+              <>
                 <IconButton
                   size="small"
-                  onClick={() => subscription.id && onStatusChange(subscription.id, 'paused')}
+                  onClick={handleMenuOpen}
                   sx={{
-                    bgcolor: alpha(theme.palette.warning.main, 0.05),
-                    '&:hover': { bgcolor: alpha(theme.palette.warning.main, 0.1) },
+                    bgcolor: alpha(theme.palette.action.active, 0.05),
+                    '&:hover': { bgcolor: alpha(theme.palette.action.active, 0.1) },
                   }}
                 >
-                  <PauseIcon sx={{ fontSize: 18, color: theme.palette.warning.main }} />
+                  <MoreIcon sx={{ fontSize: 18 }} />
                 </IconButton>
-              </Tooltip>
-            ) : subscription.status === 'paused' ? (
-              <Tooltip title={t('actions.resume')}>
-                <IconButton
-                  size="small"
-                  onClick={() => subscription.id && onStatusChange(subscription.id, 'active')}
-                  sx={{
-                    bgcolor: alpha(theme.palette.success.main, 0.05),
-                    '&:hover': { bgcolor: alpha(theme.palette.success.main, 0.1) },
+                <Menu
+                  anchorEl={menuAnchor}
+                  open={Boolean(menuAnchor)}
+                  onClose={handleMenuClose}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                  PaperProps={{
+                    sx: {
+                      minWidth: 160,
+                      borderRadius: 2,
+                      boxShadow: `0 8px 32px -8px ${alpha(theme.palette.common.black, 0.2)}`,
+                    },
                   }}
                 >
-                  <ResumeIcon sx={{ fontSize: 18, color: theme.palette.success.main }} />
-                </IconButton>
-              </Tooltip>
-            ) : null}
-            {subscription.is_manual === 1 && subscription.id && (
-              <Tooltip title={t('actions.delete')}>
-                <IconButton
-                  size="small"
-                  onClick={() => onDelete(subscription.id!)}
-                  sx={{
-                    bgcolor: alpha(theme.palette.error.main, 0.05),
-                    '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.1) },
-                  }}
-                >
-                  <DeleteIcon sx={{ fontSize: 18, color: theme.palette.error.main }} />
-                </IconButton>
-              </Tooltip>
+                  {menuItems.map((item) => (
+                    <MenuItem
+                      key={item.key}
+                      onClick={item.onClick}
+                      sx={{
+                        color: item.color,
+                        '&:hover': {
+                          bgcolor: alpha(item.color || theme.palette.action.hover, 0.08),
+                        },
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
+                      <ListItemText>{item.label}</ListItemText>
+                    </MenuItem>
+                  ))}
+                </Menu>
+              </>
             )}
           </Stack>
         </Stack>
+
+        {/* Review Status Quick Actions */}
+        {isReview && subscription.id && (
+          <Box
+            sx={{
+              mt: 2,
+              p: 1.5,
+              borderRadius: 2,
+              bgcolor: alpha(theme.palette.info.main, 0.05),
+              border: '1px solid',
+              borderColor: alpha(theme.palette.info.main, 0.15),
+            }}
+          >
+            <Stack direction="row" spacing={1.5}>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<ApproveIcon />}
+                onClick={() => onStatusChange(subscription.id!, 'active')}
+                sx={{
+                  flex: 1,
+                  bgcolor: theme.palette.success.main,
+                  '&:hover': { bgcolor: theme.palette.success.dark },
+                }}
+              >
+                {t('actions.approve')}
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<IgnoreIcon />}
+                onClick={() => onStatusChange(subscription.id!, 'keep')}
+                sx={{
+                  flex: 1,
+                  borderColor: alpha(theme.palette.info.main, 0.3),
+                  color: theme.palette.info.main,
+                  '&:hover': {
+                    borderColor: theme.palette.info.main,
+                    bgcolor: alpha(theme.palette.info.main, 0.08),
+                  },
+                }}
+              >
+                {t('actions.ignore')}
+              </Button>
+            </Stack>
+          </Box>
+        )}
       </Box>
     </Box>
   );

@@ -38,8 +38,8 @@ interface Transaction {
   identifier: string;
   vendor: string;
   name: string;
-  category: string | null;
-  parent_category: string | null;
+  category_name: string | null;
+  parent_name: string | null;
   category_definition_id: number | null;
   category_type: string | null;
   memo: string | null;
@@ -176,6 +176,13 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
       month: 'short',
       year: 'numeric',
     });
+  };
+
+  const formatCategoryLabel = (transaction: Transaction) => {
+    if (transaction.category_name && transaction.parent_name) {
+      return `${transaction.parent_name} › ${transaction.category_name}`;
+    }
+    return transaction.category_name || transaction.parent_name || null;
   };
 
   const getTransactionIcon = (transaction: Transaction) => {
@@ -325,9 +332,9 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
                           <Typography variant="caption" color="text.secondary">
                             {formatDate(transaction.date)}
                           </Typography>
-                          {transaction.category && (
+                          {formatCategoryLabel(transaction) && (
                             <Chip
-                              label={transaction.category}
+                              label={formatCategoryLabel(transaction)}
                               size="small"
                               sx={{
                                 height: 20,

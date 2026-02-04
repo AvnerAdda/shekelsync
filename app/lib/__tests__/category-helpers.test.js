@@ -1,7 +1,6 @@
-const {
-  normalizeCategoryPath,
-  resolveCategory,
-} = require('../category-helpers.js');
+const { describe, expect, it, vi } = require('vitest');
+
+const { normalizeCategoryPath, resolveCategory } = require('../category-helpers.js');
 
 describe('category-helpers', () => {
   it('normalizes category paths by trimming segments', () => {
@@ -9,8 +8,7 @@ describe('category-helpers', () => {
     expect(normalizeCategoryPath(null)).toBeNull();
   });
 
-  // TODO: Re-enable once this stops timing out under full suite/coverage runs.
-  it.skip('resolves category via mapping then enriches via category definition', async () => {
+  it('resolves category via mapping then enriches via category definition', async () => {
     const query = vi.fn()
       // resolveCategoryFromMapping
       .mockResolvedValueOnce({

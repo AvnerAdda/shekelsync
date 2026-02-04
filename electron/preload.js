@@ -41,6 +41,7 @@ const diagnosticsBridge = Object.freeze({
     }
     return ipcRenderer.invoke('diagnostics:export', filePath);
   },
+  copyDiagnostics: () => ipcRenderer.invoke('diagnostics:copy'),
 });
 
 const telemetryBridge = Object.freeze({
@@ -51,6 +52,16 @@ const telemetryBridge = Object.freeze({
       throw new Error('Telemetry smoke test (renderer process)');
     }, 0);
     return Promise.resolve({ success: true });
+  },
+});
+
+const settingsBridge = Object.freeze({
+  get: () => ipcRenderer.invoke('settings:get'),
+  update: (patch) => ipcRenderer.invoke('settings:update', patch),
+  onChange: (callback) => {
+    const wrappedCallback = (_event, settings) => callback(settings);
+    ipcRenderer.on('settings:changed', wrappedCallback);
+    return () => ipcRenderer.removeListener('settings:changed', wrappedCallback);
   },
 });
 
@@ -227,6 +238,7 @@ const electronAPI = {
   log: logBridge,
   diagnostics: diagnosticsBridge,
   telemetry: telemetryBridge,
+  settings: settingsBridge,
 
   // License management
   license: {
@@ -243,7 +255,14 @@ const electronAPI = {
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
     getName: () => ipcRenderer.invoke('app:getName'),
-    isPackaged: () => ipcRenderer.invoke('app:isPackaged')
+    isPackaged: () => ipcRenderer.invoke('app:isPackaged'),
+    relaunch: () => ipcRenderer.invoke('app:relaunch'),
+  },
+
+  // Database maintenance
+  database: {
+    backup: (targetPath) => ipcRenderer.invoke('database:backup', targetPath),
+    restore: (sourcePath) => ipcRenderer.invoke('database:restore', sourcePath),
   },
 
   // Event listeners for real-time updates
