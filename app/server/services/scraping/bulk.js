@@ -51,6 +51,7 @@ async function bulkScrape(options = {}) {
     thresholdMs = STALE_SYNC_THRESHOLD_MS,
     rateLimitMs = SCRAPE_RATE_LIMIT_MS,
     logger = console,
+    showBrowser = true,
     onAccountStart,
     onAccountComplete,
     createLogger,
@@ -153,7 +154,7 @@ async function bulkScrape(options = {}) {
         const scrapeOptions = {
           companyId: account.vendor,
           combineInstallments: false,
-          showBrowser: true,
+          showBrowser: Boolean(showBrowser),
           additionalTransactionInformation: true,
         };
 

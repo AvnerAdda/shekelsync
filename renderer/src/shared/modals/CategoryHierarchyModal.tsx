@@ -143,8 +143,8 @@ interface TransactionMatch {
   accountNumber?: string;
   memo?: string | null;
   tags?: string[];
-  category?: string | null;
-  parent_category?: string | null;
+  category_name?: string | null;
+  parent_name?: string | null;
   category_definition_id?: number | null;
   category_type?: string | null;
 }
@@ -1491,8 +1491,8 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       identifier: txn.identifier,
       vendor: txn.vendor,
       name: txn.name,
-      category: category?.name || txn.category || null,
-      parent_category: txn.parent_category || null,
+      category_name: category?.name || txn.category_name || null,
+      parent_name: txn.parent_name || null,
       category_definition_id: category?.id || txn.category_definition_id || null,
       category_type: category?.category_type || txn.category_type || null,
       memo: txn.memo || null,

@@ -120,14 +120,13 @@ describe('TelemetryContext', () => {
     await waitFor(() => expect(screen.getByTestId('error').textContent).toContain('load-fail'));
   });
 
-  // TODO: Re-enable once this stops timing out under full suite/coverage runs.
-  it.skip(
-    'throws when useTelemetry is called outside provider',
-    () => {
-      expect(() => renderHook(() => useTelemetry())).toThrow();
-    },
-    5000,
-  );
+  it('throws when useTelemetry is called outside provider', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = renderHook(() => useTelemetry());
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error?.message).toContain('useTelemetry must be used within a TelemetryProvider');
+    consoleError.mockRestore();
+  });
 
   it('marks unsupported when electron bridge is missing and toggles locally', async () => {
     // Remove electron bridge

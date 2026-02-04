@@ -7,9 +7,8 @@
 - **[Category Schema Migration Guide](./CATEGORY_SCHEMA_MIGRATION.md)** - Detailed technical guide
 
 ### Scripts
-- **Migration Script:** `../scripts/deprecate_legacy_category_columns.js`
 - **Database Init:** `../scripts/init_sqlite_db.js`
-- **Schema Migration V2:** `../scripts/migrate_schema_v2.js`
+- **Migrations:** `../scripts/migrations/`
 
 ---
 
@@ -17,12 +16,12 @@
 
 ### Category Schema Normalization ✅ COMPLETE
 
-**Status:** Ready for database cleanup
+**Status:** Schema cleanup already applied in current DB snapshot
 
 **What Changed:**
 - All backend APIs migrated from string-based categories to normalized `category_definitions` schema
 - 15+ frontend components updated to use `category_definition_id`
-- Created safe migration script to drop legacy columns
+- Legacy columns removed from `transactions` in current schema
 - Comprehensive documentation and testing guides
 
 **Impact:**
@@ -33,8 +32,8 @@
 
 **Next Steps:**
 1. Read: `MIGRATION_COMPLETE_SUMMARY.md`
-2. Run: `node scripts/deprecate_legacy_category_columns.js` (analyze)
-3. Run: `node scripts/deprecate_legacy_category_columns.js --drop` (execute)
+2. Verify your local schema with `sqlite3 dist/clarify.sqlite ".schema transactions"`
+3. If you have an older database, follow the migration guide to create a one-off migration
 
 ---
 
@@ -47,7 +46,7 @@
 - [Migration Complete Summary](./MIGRATION_COMPLETE_SUMMARY.md) - Status, statistics, next steps
 
 #### Architecture
-- [CLAUDE.md](../CLAUDE.md) - Project overview, tech stack, architecture patterns
+- [Project README](../README.md) - Project overview, tech stack, architecture patterns
 - Category Helpers: `../app/lib/category-helpers.js`
 - Category Constants: `../app/lib/category-constants.js`
 - SQL Dialect: `../app/lib/sql-dialect.js`
@@ -381,10 +380,10 @@ When making changes:
 
 ## License
 
-[Your License Here]
+MIT (see `../LICENSE`)
 
 ---
 
 ## Contact
 
-[Your Contact Info Here]
+Open an issue in the repository.

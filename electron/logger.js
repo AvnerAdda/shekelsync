@@ -48,6 +48,16 @@ ensureLogDirectory();
 electronLog.transports.file.level = 'info';
 electronLog.transports.file.format = '{text}\n';
 electronLog.transports.console.format = '{text}';
+electronLog.transports.file.maxSize = 5 * 1024 * 1024;
+electronLog.transports.file.archiveLog = (filePath) => {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const archivePath = `${filePath}.${timestamp}.log`;
+    fs.renameSync(filePath, archivePath);
+  } catch (error) {
+    console.warn('Failed to archive log file:', error.message);
+  }
+};
 
 function toPayload(level, message, meta = {}) {
   return JSON.stringify({

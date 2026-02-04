@@ -40,8 +40,28 @@ declare global {
     lastUpdatedAt?: string | null;
   }
 
+  interface BackgroundSyncSettings {
+    enabled?: boolean;
+    intervalHours?: 24 | 48 | 168;
+    runOnStartup?: boolean;
+    keepRunningInTray?: boolean;
+    headless?: boolean;
+    lastRunAt?: string;
+    lastResult?: {
+      status: 'success' | 'failed' | 'skipped' | 'blocked';
+      message?: string;
+      totals?: {
+        totalProcessed: number;
+        successCount: number;
+        failureCount: number;
+        totalTransactions: number;
+      };
+    };
+  }
+
   interface ElectronAppSettings {
     telemetry?: ElectronTelemetryPreferences;
+    backgroundSync?: BackgroundSyncSettings;
     [key: string]: unknown;
   }
 

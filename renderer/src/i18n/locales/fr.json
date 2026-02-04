@@ -217,6 +217,48 @@
         "large": "(110 % de la taille par défaut)"
       }
     },
+    "autoSync": {
+      "title": "Synchronisation automatique",
+      "description": "Gardez vos comptes à jour grâce à des synchronisations planifiées en arrière-plan.",
+      "enableLabel": "Activer la synchronisation automatique",
+      "intervalLabel": "Fréquence de synchronisation",
+      "intervals": {
+        "daily": "Chaque jour",
+        "twoDays": "Tous les 2 jours",
+        "weekly": "Hebdomadaire"
+      },
+      "keepRunningLabel": "Continuer à fonctionner dans le tray lorsque la fenêtre est fermée",
+      "headlessLabel": "Exécuter silencieusement (sans interface)",
+      "actions": {
+        "syncNow": "Synchroniser maintenant"
+      },
+      "status": {
+        "lastRun": "Dernière exécution {{timeAgo}}",
+        "never": "Jamais synchronisé",
+        "syncing": "Synchronisation...",
+        "syncStarted": "Synchronisation démarrée",
+        "enabled": "Synchronisation auto activée",
+        "disabled": "Synchronisation auto désactivée",
+        "active": "Actif",
+        "paused": "En pause",
+        "nextSync": "Prochaine synchronisation prévue",
+        "pending": "En attente de la première exécution"
+      },
+      "advancedSettings": "Paramètres avancés",
+      "keepRunningHint": "L'application reste dans la barre système après fermeture",
+      "headlessHint": "La synchronisation s'exécute sans ouvrir de fenêtre navigateur",
+      "results": {
+        "success": "{{count}} réussis",
+        "failed": "{{count}} échoués"
+      },
+      "errors": {
+        "notSupported": "Les paramètres sont disponibles uniquement dans l'application desktop.",
+        "loadFailed": "Impossible de charger les paramètres de synchronisation.",
+        "saveFailed": "Impossible d'enregistrer les paramètres de synchronisation.",
+        "syncFailed": "La synchronisation a échoué.",
+        "readOnly": "La synchronisation est désactivée en mode lecture seule."
+      }
+    },
     "diagnostics": {
       "title": "Diagnostics et rapports de crash",
       "description": "Partagez des rapports de crash anonymisés pour nous aider à résoudre les problèmes plus rapidement. Aucun identifiant ou donnée sensible n'est inclus.",
@@ -487,14 +529,52 @@
       "notSupported": "Les outils de diagnostic sont disponibles uniquement dans l'app desktop packagée.",
       "openLogs": "Ouvrir le dossier des logs",
       "export": "Exporter les diagnostics",
+      "copy": "Copier les diagnostics",
       "logDirectory": "Dossier des logs",
       "version": "Version : {{version}}",
       "platform": "Plateforme : {{platform}}",
+      "restoreConfirm": "Restaurer une sauvegarde écrasera la base locale. Continuer ?",
+      "backupDialogLabel": "Sauvegarde SQLite",
+      "config": {
+        "databaseMode": "Mode de base de données",
+        "sqlitePath": "Chemin SQLite"
+      },
+      "backup": {
+        "title": "Sauvegarde de la base",
+        "description": "Créez une sauvegarde locale avant une migration ou une mise à jour majeure. La restauration écrase la base actuelle.",
+        "action": "Sauvegarder la base",
+        "restore": "Restaurer une sauvegarde",
+        "restart": "Redémarrer l’application"
+      },
+      "warnings": {
+        "database": {
+          "sqliteMissing": "Le fichier SQLite est introuvable. L’application peut fonctionner sans données persistantes.",
+          "sqliteUnreadable": "Le fichier SQLite n’est pas lisible.",
+          "sqliteNotWritable": "Le dossier SQLite n’est pas accessible en écriture.",
+          "postgresMissing": "La configuration PostgreSQL est incomplète."
+        },
+        "encryption": {
+          "invalidEnvKey": "CLARIFY_ENCRYPTION_KEY est invalide (64 caractères hexadécimaux requis).",
+          "allowDevNoEncryption": "ALLOW_DEV_NO_ENCRYPTION est activé. Désactivez-le en production."
+        },
+        "security": {
+          "sandboxDisabled": "Le sandbox Electron est désactivé. Réactivez-le en production."
+        },
+        "updates": {
+          "disabled": "Les mises à jour automatiques sont désactivées. Définissez ENABLE_AUTO_UPDATE=true."
+        }
+      },
       "errors": {
         "logUnavailable": "L'accès au dossier des logs n'est pas disponible dans cet environnement.",
         "openFailed": "Impossible d'ouvrir le dossier des logs.",
         "exportUnsupported": "L'export de diagnostics n'est pas supporté dans cet environnement.",
-        "exportFailed": "Échec de l'export du bundle de diagnostics."
+        "exportFailed": "Échec de l'export du bundle de diagnostics.",
+        "copyUnsupported": "La copie du diagnostic n’est pas disponible dans cet environnement.",
+        "copyFailed": "Échec de la copie du diagnostic.",
+        "backupUnsupported": "La sauvegarde de la base n’est pas disponible dans cet environnement.",
+        "backupFailed": "Échec de la sauvegarde de la base.",
+        "restoreUnsupported": "La restauration de la base n’est pas disponible dans cet environnement.",
+        "restoreFailed": "Échec de la restauration de la base."
       },
       "saveDialogLabel": "Bundle de diagnostics",
       "telemetry": {
@@ -1101,7 +1181,9 @@
         "edit": "Modifier",
         "delete": "Supprimer",
         "pause": "Mettre en pause",
-        "resume": "Reprendre"
+        "resume": "Reprendre",
+        "approve": "Approuver",
+        "ignore": "Ignorer"
       },
       "list": {
         "title": "Vos abonnements",
@@ -1110,7 +1192,9 @@
           "all": "Tous",
           "active": "Actifs",
           "paused": "En pause",
-          "cancelled": "Annulés"
+          "cancelled": "Annulés",
+          "review": "À revoir",
+          "keep": "Conserver"
         },
         "sort": {
           "name": "Nom",
@@ -1134,7 +1218,8 @@
         "highConsistency": "Score de régularité élevé",
         "today": "Échéance aujourd'hui",
         "tomorrow": "Échéance demain",
-        "inDays": "Dans {{days}} jours"
+        "inDays": "Dans {{days}} jours",
+        "cycleProgress": "{{percent}}% du cycle de facturation"
       },
       "alerts": {
         "title": "Alertes",

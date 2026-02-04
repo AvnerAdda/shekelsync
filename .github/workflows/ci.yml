@@ -31,6 +31,12 @@ jobs:
       - name: Install Playwright browsers
         run: npx --yes playwright install --with-deps
 
+      - name: Lint
+        run: npm --prefix app run lint
+
+      - name: Typecheck
+        run: npm --prefix app run typecheck
+
       - name: Run test suite
         run: npm run test
 

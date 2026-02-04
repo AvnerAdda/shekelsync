@@ -4,11 +4,9 @@ export interface TransactionDetail {
   price: number;
   description: string;
   date: string;
-  category: string;
-  parentCategory: string;
-  categoryType: string;
-  parent_name?: string;
-  category_name?: string;
+  category_name?: string | null;
+  parent_name?: string | null;
+  categoryType?: string | null;
   memo?: string;
   tags?: string[];
   institution?: {

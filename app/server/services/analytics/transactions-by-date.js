@@ -38,8 +38,8 @@ async function listTransactionsByDate(params = {}) {
         t.price,
         t.name AS description,
         t.date,
-        cd_child.name AS category,
-        cd_parent.name AS parent_category,
+        cd_child.name AS category_name,
+        cd_parent.name AS parent_name,
         cd_parent.category_type
       FROM transactions t
       LEFT JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
@@ -58,11 +58,9 @@ async function listTransactionsByDate(params = {}) {
     price: Number.parseFloat(row.price),
     description: row.description,
     date: row.date,
-    category: row.category,
-    parentCategory: row.parent_category,
     categoryType: row.category_type,
-    category_name: row.category,
-    parent_name: row.parent_category,
+    category_name: row.category_name,
+    parent_name: row.parent_name,
   }));
 
   const response = { transactions };

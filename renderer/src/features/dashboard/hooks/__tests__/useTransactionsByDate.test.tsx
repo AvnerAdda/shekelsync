@@ -18,8 +18,8 @@ const sampleTxns: TransactionDetail[] = [
     price: -42,
     description: 'Latte',
     date: '2025-01-05',
-    category: 'Food',
-    parentCategory: 'Food & Dining',
+    category_name: 'Food',
+    parent_name: 'Food & Dining',
     categoryType: 'expense',
   },
 ];

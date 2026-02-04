@@ -220,6 +220,48 @@
         "large": "(110% of default)"
       }
     },
+    "autoSync": {
+      "title": "Automatic Sync",
+      "description": "Keep your accounts up to date with scheduled background syncs.",
+      "enableLabel": "Enable automatic sync",
+      "intervalLabel": "Sync frequency",
+      "intervals": {
+        "daily": "Every day",
+        "twoDays": "Every 2 days",
+        "weekly": "Weekly"
+      },
+      "keepRunningLabel": "Keep running in tray when window closes",
+      "headlessLabel": "Run silently (headless)",
+      "actions": {
+        "syncNow": "Sync now"
+      },
+      "status": {
+        "lastRun": "Last run {{timeAgo}}",
+        "never": "Never synced",
+        "syncing": "Syncing...",
+        "syncStarted": "Sync started",
+        "enabled": "Auto-sync is enabled",
+        "disabled": "Auto-sync is disabled",
+        "active": "Active",
+        "paused": "Paused",
+        "nextSync": "Next scheduled sync",
+        "pending": "Waiting for first run"
+      },
+      "advancedSettings": "Advanced Settings",
+      "keepRunningHint": "App stays in system tray when closed",
+      "headlessHint": "Sync runs without opening browser windows",
+      "results": {
+        "success": "{{count}} succeeded",
+        "failed": "{{count}} failed"
+      },
+      "errors": {
+        "notSupported": "Settings are only available in the desktop app.",
+        "loadFailed": "Failed to load sync settings.",
+        "saveFailed": "Failed to save sync settings.",
+        "syncFailed": "Sync failed.",
+        "readOnly": "Sync is disabled in read-only mode."
+      }
+    },
     "diagnostics": {
       "title": "Diagnostics & Crash Reports",
       "description": "Share anonymized crash reports to help us resolve stability issues faster. Sensitive data such as account credentials and personal identifiers are never included in crash payloads.",
@@ -490,14 +532,52 @@
       "notSupported": "Diagnostics tooling is only available in the packaged Electron app.",
       "openLogs": "Open Log Folder",
       "export": "Export Diagnostics",
+      "copy": "Copy Diagnostics",
       "logDirectory": "Log directory",
       "version": "Version: {{version}}",
       "platform": "Platform: {{platform}}",
+      "restoreConfirm": "Restoring a backup will overwrite your local database. Continue?",
+      "backupDialogLabel": "SQLite Backup",
+      "config": {
+        "databaseMode": "Database mode",
+        "sqlitePath": "SQLite path"
+      },
+      "backup": {
+        "title": "Database backup",
+        "description": "Create a local backup before migrations or major updates. Restoring will overwrite the current database.",
+        "action": "Backup database",
+        "restore": "Restore backup",
+        "restart": "Restart app"
+      },
+      "warnings": {
+        "database": {
+          "sqliteMissing": "SQLite database file is missing. The app may be running without persistent data.",
+          "sqliteUnreadable": "SQLite database file is not readable.",
+          "sqliteNotWritable": "SQLite database folder is not writable.",
+          "postgresMissing": "PostgreSQL configuration is incomplete."
+        },
+        "encryption": {
+          "invalidEnvKey": "CLARIFY_ENCRYPTION_KEY is invalid. It must be a 64-character hex string.",
+          "allowDevNoEncryption": "ALLOW_DEV_NO_ENCRYPTION is enabled. Disable this for production."
+        },
+        "security": {
+          "sandboxDisabled": "Electron sandbox is disabled. Re-enable for production builds."
+        },
+        "updates": {
+          "disabled": "Auto-updates are disabled. Set ENABLE_AUTO_UPDATE=true to enable."
+        }
+      },
       "errors": {
         "logUnavailable": "Log directory access is unavailable in this environment.",
         "openFailed": "Failed to open log directory.",
         "exportUnsupported": "Diagnostics export is not supported in this environment.",
-        "exportFailed": "Failed to export diagnostics bundle."
+        "exportFailed": "Failed to export diagnostics bundle.",
+        "copyUnsupported": "Copying diagnostics is not supported in this environment.",
+        "copyFailed": "Failed to copy diagnostics bundle.",
+        "backupUnsupported": "Database backup is unavailable in this environment.",
+        "backupFailed": "Database backup failed.",
+        "restoreUnsupported": "Database restore is unavailable in this environment.",
+        "restoreFailed": "Database restore failed."
       },
       "saveDialogLabel": "Diagnostics Bundle",
       "telemetry": {
@@ -1115,7 +1195,9 @@
         "edit": "Edit",
         "delete": "Delete",
         "pause": "Pause",
-        "resume": "Resume"
+        "resume": "Resume",
+        "approve": "Approve",
+        "ignore": "Ignore"
       },
       "list": {
         "title": "Your Subscriptions",
@@ -1124,7 +1206,9 @@
           "all": "All",
           "active": "Active",
           "paused": "Paused",
-          "cancelled": "Cancelled"
+          "cancelled": "Cancelled",
+          "review": "Review",
+          "keep": "Keep"
         },
         "sort": {
           "name": "Name",
@@ -1148,7 +1232,8 @@
         "highConsistency": "High consistency score",
         "today": "Due today",
         "tomorrow": "Due tomorrow",
-        "inDays": "In {{days}} days"
+        "inDays": "In {{days}} days",
+        "cycleProgress": "{{percent}}% through billing cycle"
       },
       "alerts": {
         "title": "Alerts",

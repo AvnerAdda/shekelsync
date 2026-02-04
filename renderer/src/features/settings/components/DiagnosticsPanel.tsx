@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   CircularProgress,
+  Divider,
   Grid,
   Paper,
   Stack,
@@ -41,6 +42,22 @@ type TelemetryDiagnosticsInfo = {
   debug?: boolean;
 };
 
+type ConfigWarning = {
+  code?: string;
+  severity?: 'info' | 'warning' | 'error';
+  message?: string;
+};
+
+type ConfigHealth = {
+  database?: {
+    mode?: string;
+    sqlitePath?: string | null;
+    sqliteExists?: boolean | null;
+  };
+  autoUpdateEnabled?: boolean;
+  warnings?: ConfigWarning[];
+};
+
 type DiagnosticsInfo = {
   logDirectory?: string;
   logFile?: string;
@@ -48,6 +65,7 @@ type DiagnosticsInfo = {
   platform?: string;
   telemetry?: TelemetryDiagnosticsInfo | null;
   analyticsMetrics?: AnalyticsMetricsSnapshot;
+  configHealth?: ConfigHealth | null;
 };
 
 type Status = 'idle' | 'loading' | 'success' | 'error';
@@ -59,6 +77,7 @@ const defaultInfo: DiagnosticsInfo = {
   platform: undefined,
   telemetry: null,
   analyticsMetrics: null,
+  configHealth: null,
 };
 
 const METRIC_LABELS: Record<string, string> = {
@@ -91,9 +110,15 @@ export const DiagnosticsPanel: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [exportStatus, setExportStatus] = useState<Status>('idle');
   const [openStatus, setOpenStatus] = useState<Status>('idle');
+  const [copyStatus, setCopyStatus] = useState<Status>('idle');
+  const [backupStatus, setBackupStatus] = useState<Status>('idle');
+  const [restoreStatus, setRestoreStatus] = useState<Status>('idle');
+  const [restartRecommended, setRestartRecommended] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const diagnosticsApi = typeof window !== 'undefined' ? window.electronAPI?.diagnostics : undefined;
   const fileApi = typeof window !== 'undefined' ? window.electronAPI?.file : undefined;
+  const databaseApi = typeof window !== 'undefined' ? window.electronAPI?.database : undefined;
+  const appApi = typeof window !== 'undefined' ? window.electronAPI?.app : undefined;
 
   const supportsDiagnostics = Boolean(diagnosticsApi);
 
@@ -114,6 +139,7 @@ export const DiagnosticsPanel: React.FC = () => {
             platform: result.platform,
             telemetry: result.telemetry ?? null,
             analyticsMetrics: result.analyticsMetrics ?? null,
+            configHealth: result.configHealth ?? null,
           });
         }
       })
@@ -131,7 +157,7 @@ export const DiagnosticsPanel: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [diagnosticsApi]);
+  }, [diagnosticsApi, t]);
 
   const handleOpenLogs = useCallback(async () => {
     if (!diagnosticsApi?.openLogDirectory) {
@@ -179,9 +205,105 @@ export const DiagnosticsPanel: React.FC = () => {
     setErrorMessage(null);
     setExportStatus('success');
     setTimeout(() => setExportStatus('idle'), 2500);
-  }, [diagnosticsApi, fileApi]);
+  }, [diagnosticsApi, fileApi, t]);
+
+  const handleCopyDiagnostics = useCallback(async () => {
+    if (!diagnosticsApi?.copyDiagnostics) {
+      setCopyStatus('error');
+      setErrorMessage(t('errors.copyUnsupported'));
+      return;
+    }
+
+    setCopyStatus('loading');
+    const result = await diagnosticsApi.copyDiagnostics();
+    if (!result.success) {
+      setCopyStatus('error');
+      setErrorMessage(result.error ?? t('errors.copyFailed'));
+      return;
+    }
+    setErrorMessage(null);
+    setCopyStatus('success');
+    setTimeout(() => setCopyStatus('idle'), 2500);
+  }, [diagnosticsApi, t]);
+
+  const handleBackupDatabase = useCallback(async () => {
+    if (!databaseApi?.backup || !fileApi?.showSaveDialog) {
+      setBackupStatus('error');
+      setErrorMessage(t('errors.backupUnsupported'));
+      return;
+    }
+
+    const defaultFilename = `shekelsync-backup-${new Date()
+      .toISOString()
+      .replace(/[:.]/g, '-')}.sqlite`;
+    const saveResult = await fileApi.showSaveDialog({
+      defaultPath: defaultFilename,
+      filters: [{ name: t('backupDialogLabel'), extensions: ['sqlite', 'db'] }],
+    });
+    if (saveResult.canceled || !saveResult.filePath) {
+      return;
+    }
+
+    setBackupStatus('loading');
+    const result = await databaseApi.backup(saveResult.filePath);
+    if (!result.success) {
+      setBackupStatus('error');
+      setErrorMessage(result.error ?? t('errors.backupFailed'));
+      return;
+    }
+    setErrorMessage(null);
+    setBackupStatus('success');
+    setTimeout(() => setBackupStatus('idle'), 2500);
+  }, [databaseApi, fileApi, t]);
+
+  const handleRestoreDatabase = useCallback(async () => {
+    if (!databaseApi?.restore || !fileApi?.showOpenDialog) {
+      setRestoreStatus('error');
+      setErrorMessage(t('errors.restoreUnsupported'));
+      return;
+    }
+
+    const confirm = typeof window !== 'undefined'
+      ? window.confirm(t('restoreConfirm'))
+      : true;
+    if (!confirm) {
+      return;
+    }
+
+    const openResult = await fileApi.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: t('backupDialogLabel'), extensions: ['sqlite', 'db'] }],
+    });
+    if (openResult.canceled || !openResult.filePaths?.length) {
+      return;
+    }
+
+    setRestartRecommended(false);
+    setRestoreStatus('loading');
+    const result = await databaseApi.restore(openResult.filePaths[0]);
+    if (!result.success) {
+      setRestoreStatus('error');
+      setErrorMessage(result.error ?? t('errors.restoreFailed'));
+      return;
+    }
+    setRestartRecommended(Boolean(result.restartRecommended));
+    setErrorMessage(null);
+    setRestoreStatus('success');
+    setTimeout(() => setRestoreStatus('idle'), 2500);
+  }, [databaseApi, fileApi, t]);
+
+  const handleRestart = useCallback(async () => {
+    if (!appApi?.relaunch) {
+      return;
+    }
+    await appApi.relaunch();
+  }, [appApi]);
 
   const actionDisabled = useMemo(() => !supportsDiagnostics || loading, [loading, supportsDiagnostics]);
+  const databaseActionsDisabled = useMemo(
+    () => loading || !databaseApi,
+    [loading, databaseApi],
+  );
   const metricsSummary = useMemo(() => {
     if (!info.analyticsMetrics) {
       return [];
@@ -222,6 +344,42 @@ export const DiagnosticsPanel: React.FC = () => {
         {t('description')}
       </Typography>
 
+      {info.configHealth?.warnings?.length ? (
+        <Stack spacing={1} mb={2}>
+          {info.configHealth.warnings.map((warning, index) => (
+            <Alert
+              key={`${warning.code || 'warning'}-${index}`}
+              severity={warning.severity || 'warning'}
+            >
+              {warning.code
+                ? t(`warnings.${warning.code}`, { defaultValue: warning.message })
+                : warning.message}
+            </Alert>
+          ))}
+        </Stack>
+      ) : null}
+
+      {info.configHealth?.database?.mode && (
+        <Box mb={2}>
+          <Typography variant="caption" color="text.secondary" display="block">
+            {t('config.databaseMode')}
+          </Typography>
+          <Typography variant="body2">
+            {info.configHealth.database.mode}
+          </Typography>
+          {info.configHealth.database.sqlitePath && (
+            <>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                {t('config.sqlitePath')}
+              </Typography>
+              <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                {info.configHealth.database.sqlitePath}
+              </Typography>
+            </>
+          )}
+        </Box>
+      )}
+
       {!supportsDiagnostics && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           {t('notSupported')}
@@ -252,6 +410,49 @@ export const DiagnosticsPanel: React.FC = () => {
         >
           {t('export')}
         </Button>
+
+        <Button
+          startIcon={copyStatus === 'loading' ? <CircularProgress size={16} /> : <FileDownloadIcon />}
+          variant="outlined"
+          onClick={handleCopyDiagnostics}
+          disabled={actionDisabled}
+        >
+          {t('copy')}
+        </Button>
+      </Stack>
+
+      <Divider sx={{ my: 2 }} />
+
+      <Typography variant="subtitle2" gutterBottom>
+        {t('backup.title')}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        {t('backup.description')}
+      </Typography>
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} mb={2}>
+        <Button
+          startIcon={backupStatus === 'loading' ? <CircularProgress size={16} /> : <FileDownloadIcon />}
+          variant="contained"
+          onClick={handleBackupDatabase}
+          disabled={databaseActionsDisabled}
+        >
+          {t('backup.action')}
+        </Button>
+        <Button
+          startIcon={restoreStatus === 'loading' ? <CircularProgress size={16} /> : <FileDownloadIcon />}
+          variant="outlined"
+          color="warning"
+          onClick={handleRestoreDatabase}
+          disabled={databaseActionsDisabled}
+        >
+          {t('backup.restore')}
+        </Button>
+        {restartRecommended && (
+          <Button variant="text" onClick={handleRestart}>
+            {t('backup.restart')}
+          </Button>
+        )}
       </Stack>
 
       {info.logDirectory && (
