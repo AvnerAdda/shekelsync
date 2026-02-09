@@ -56,6 +56,7 @@ import {
   Home as HomeIcon,
   AccountBalance as AccountsIcon,
   Category as CategoryIcon,
+  LocalCafe as CoffeeIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -68,14 +69,11 @@ import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
 import type { SupportedLocale } from '@renderer/i18n';
 import SecurityIndicator from '@renderer/features/security/components/SecurityIndicator';
 import SecurityDetailsModal from '@renderer/features/security/components/SecurityDetailsModal';
-import { useLicense, LicenseDetailsModal } from '@renderer/features/onboarding';
 import {
-  Star as StarIcon,
-  Warning as WarningIcon,
-  Block as BlockIcon,
-  CheckCircle as CheckCircleIcon,
-  Schedule as ScheduleIcon,
-} from '@mui/icons-material';
+  DONATION_OPEN_MODAL_EVENT,
+  DonationModal,
+  useDonationStatus,
+} from '@renderer/features/support';
 
 interface TitleBarProps {
   sessionDisplayName?: string | null;
@@ -92,8 +90,8 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   const [windowClassesApplied, setWindowClassesApplied] = useState(false);
   const [langMenuAnchor, setLangMenuAnchor] = useState<null | HTMLElement>(null);
   const [securityDetailsOpen, setSecurityDetailsOpen] = useState(false);
-  const [licenseDetailsOpen, setLicenseDetailsOpen] = useState(false);
-  const { status: licenseStatus } = useLicense();
+  const [donationModalOpen, setDonationModalOpen] = useState(false);
+  const { status: donationStatus } = useDonationStatus();
 
   // Theme and language hooks
   const { mode, setMode, actualTheme } = useThemeMode();
@@ -329,6 +327,21 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
     };
   }, [windowClassesApplied]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return () => {};
+    }
+
+    const handleDonationModalRequest = () => {
+      setDonationModalOpen(true);
+    };
+
+    window.addEventListener(DONATION_OPEN_MODAL_EVENT, handleDonationModalRequest as EventListener);
+    return () => {
+      window.removeEventListener(DONATION_OPEN_MODAL_EVENT, handleDonationModalRequest as EventListener);
+    };
+  }, []);
+
   const handleMenuAction = (action: string) => {
     handleMenuClose();
 
@@ -499,6 +512,25 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         return null;
     }
   };
+
+  const currentSupportTierLabel = donationStatus?.tier && donationStatus.tier !== 'none'
+    ? t(`support.tiers.${donationStatus.tier}`, { defaultValue: donationStatus.tier })
+    : null;
+  const buyMeCoffeeTooltip = donationStatus?.supportStatus === 'verified' && currentSupportTierLabel
+    ? t('support.titleBar.buyMeCoffeeVerified', {
+        defaultValue: '{{tier}} supporter',
+        tier: currentSupportTierLabel,
+      })
+    : donationStatus?.supportStatus === 'pending'
+      ? t('support.titleBar.buyMeCoffeePending', {
+          defaultValue: 'Support plan pending validation',
+        })
+      : t('support.titleBar.buyMeCoffee');
+  const supportButtonColor = donationStatus?.supportStatus === 'verified'
+    ? '#2e7d32'
+    : donationStatus?.supportStatus === 'pending'
+      ? '#ed6c02'
+      : '#6f4e37';
 
   return (
     <Box
@@ -830,72 +862,24 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
 
         <SmartNotifications />
 
-        {/* License Status Indicator */}
-        <Tooltip
-          title={
-            licenseStatus?.licenseType === 'pro'
-              ? t('license.proActive', 'Pro License')
-              : licenseStatus?.licenseType === 'trial'
-                ? t('license.trialActive', 'Trial') + (licenseStatus?.trialDaysRemaining !== undefined ? ` - ${licenseStatus.trialDaysRemaining} ${t('license.daysLeft', 'days left')}` : '')
-                : licenseStatus?.licenseType === 'expired'
-                  ? t('license.trialExpired', 'Trial Expired')
-                  : t('license.registrationRequired', 'Registration Required')
-          }
-        >
+        <Tooltip title={buyMeCoffeeTooltip}>
           <IconButton
             size="small"
-            onClick={() => setLicenseDetailsOpen(true)}
+            onClick={() => setDonationModalOpen(true)}
             sx={{
               width: 36,
               height: 36,
               borderRadius: 2,
               transition: 'all 0.2s',
-              color:
-                licenseStatus?.licenseType === 'pro'
-                  ? theme.palette.success.main
-                  : licenseStatus?.licenseType === 'expired' || licenseStatus?.isReadOnly
-                    ? theme.palette.error.main
-                    : licenseStatus?.licenseType === 'trial' && licenseStatus?.trialDaysRemaining !== undefined && licenseStatus.trialDaysRemaining <= 7
-                      ? theme.palette.warning.main
-                      : licenseStatus?.licenseType === 'trial'
-                        ? theme.palette.info.main
-                        : theme.palette.primary.main,
-              backgroundColor:
-                licenseStatus?.licenseType === 'pro'
-                  ? alpha(theme.palette.success.main, 0.1)
-                  : licenseStatus?.licenseType === 'expired' || licenseStatus?.isReadOnly
-                    ? alpha(theme.palette.error.main, 0.1)
-                    : licenseStatus?.licenseType === 'trial' && licenseStatus?.trialDaysRemaining !== undefined && licenseStatus.trialDaysRemaining <= 7
-                      ? alpha(theme.palette.warning.main, 0.1)
-                      : licenseStatus?.licenseType === 'trial'
-                        ? alpha(theme.palette.info.main, 0.1)
-                        : alpha(theme.palette.primary.main, 0.1),
+              color: supportButtonColor,
+              backgroundColor: alpha(supportButtonColor, 0.18),
               '&:hover': {
-                backgroundColor:
-                  licenseStatus?.licenseType === 'pro'
-                    ? alpha(theme.palette.success.main, 0.2)
-                    : licenseStatus?.licenseType === 'expired' || licenseStatus?.isReadOnly
-                      ? alpha(theme.palette.error.main, 0.2)
-                      : licenseStatus?.licenseType === 'trial' && licenseStatus?.trialDaysRemaining !== undefined && licenseStatus.trialDaysRemaining <= 7
-                        ? alpha(theme.palette.warning.main, 0.2)
-                        : licenseStatus?.licenseType === 'trial'
-                          ? alpha(theme.palette.info.main, 0.2)
-                          : alpha(theme.palette.primary.main, 0.2),
+                backgroundColor: alpha(supportButtonColor, 0.28),
                 transform: 'translateY(-2px)',
               },
             }}
           >
-            {licenseStatus?.licenseType === 'pro' ? (
-              <CheckCircleIcon sx={{ fontSize: 20 }} />
-            ) : licenseStatus?.licenseType === 'expired' || licenseStatus?.isReadOnly ? (
-              <BlockIcon sx={{ fontSize: 20 }} />
-            ) : licenseStatus?.licenseType === 'trial' && licenseStatus?.trialDaysRemaining !== undefined && licenseStatus.trialDaysRemaining <= 7 ? (
-              <WarningIcon sx={{ fontSize: 20 }} />
-            ) : licenseStatus?.licenseType === 'trial' ? (
-              <ScheduleIcon sx={{ fontSize: 20 }} />
-            ) : (
-              <StarIcon sx={{ fontSize: 20 }} />
-            )}
+            <CoffeeIcon sx={{ fontSize: 20 }} />
           </IconButton>
         </Tooltip>
 
@@ -966,9 +950,9 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         onClose={() => setSecurityDetailsOpen(false)}
       />
 
-      <LicenseDetailsModal
-        open={licenseDetailsOpen}
-        onClose={() => setLicenseDetailsOpen(false)}
+      <DonationModal
+        open={donationModalOpen}
+        onClose={() => setDonationModalOpen(false)}
       />
     </Box>
   );

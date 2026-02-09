@@ -94,6 +94,82 @@
     "notRegisteredTitle": "נדרשת הרשמה",
     "notRegisteredMessage": "נא להירשם עם כתובת האימייל שלכם כדי להתחיל את תקופת הניסיון החינמית של 30 יום ולהפעיל את כל התכונות."
   },
+  "support": {
+    "tiers": {
+      "none": "תומך",
+      "one_time": "תומך חד-פעמי",
+      "bronze": "תומך ברונזה",
+      "silver": "תומך כסף",
+      "gold": "תומך זהב",
+      "lifetime": "תומך לכל החיים"
+    },
+    "status": {
+      "none": "לא אומת",
+      "pending": "ממתין לאימות",
+      "verified": "מאומת",
+      "rejected": "דורש בדיקה"
+    },
+    "titleBar": {
+      "tooltipNoDonation": "אפשר לתמוך ב‑ShekelSync באמצעות תרומה",
+      "tooltipWithTier": "{{tier}} · סך תרומות ₪{{amount}}",
+      "buyMeCoffee": "קנו לי קפה",
+      "buyMeCoffeeVerified": "תומך ברמת {{tier}}",
+      "buyMeCoffeePending": "תוכנית התמיכה ממתינה לאימות"
+    },
+    "program": {
+      "title": "תוכנית התמיכה ב‑Buy Me a Coffee",
+      "validationHint": "תמיכה באפליקציה מופעלת לאחר אימות התשלום ב‑Supabase.",
+      "currentPlan": "תוכנית נוכחית: {{plan}}",
+      "intentSaved": "בחירת התוכנית נשמרה ונפתח Buy Me a Coffee. הגישה תתעדכן לאחר אימות.",
+      "intentFailed": "שמירת בחירת התוכנית נכשלה.",
+      "currentButton": "תוכנית נוכחית",
+      "pendingButton": "ממתין לאימות",
+      "chooseButton": "בחר ב‑Buy Me a Coffee",
+      "actions": {
+        "close": "סגור"
+      }
+    },
+    "reminder": {
+      "title": "תמיכה ב‑ShekelSync",
+      "message": "אם האפליקציה עוזרת לכם, נשמח לתרומה שתאפשר להמשיך לפתח אותה.",
+      "monthlyHint": "למשתמשים שלא תרמו תופיע תזכורת פעם אחת בכל חודש.",
+      "actions": {
+        "later": "אולי אחר כך",
+        "iDonated": "כבר תרמתי",
+        "choosePlan": "בחירת תוכנית",
+        "donateNow": "לתרומה עכשיו"
+      }
+    },
+    "donation": {
+      "title": "תמיכה ותרומות",
+      "currentTier": "דרגת התמיכה שלכם",
+      "totalDonated": "סך תרומות: ₪{{amount}}",
+      "recordTitle": "דיווח ידני על תרומה",
+      "fields": {
+        "amount": "סכום (₪)",
+        "date": "תאריך תרומה (אופציונלי)",
+        "note": "הערה (אופציונלי)"
+      },
+      "thresholds": {
+        "bronze": "ברונזה: ₪{{amount}}+",
+        "silver": "כסף: ₪{{amount}}+",
+        "gold": "זהב: ₪{{amount}}+"
+      },
+      "actions": {
+        "donateNow": "פתח דף תרומה",
+        "recordDonation": "שמור תרומה",
+        "saving": "שומר...",
+        "close": "סגור"
+      },
+      "messages": {
+        "saved": "התרומה נשמרה. תודה על התמיכה.",
+        "saveFailed": "שמירת התרומה נכשלה."
+      },
+      "validation": {
+        "amountPositive": "יש להזין סכום גדול מ־0."
+      }
+    }
+  },
   "dashboard": {
     "summary": {
       "categories": { "essential": "חיוני", "growth": "צמיחה", "stability": "יציבות", "reward": "פנאי" },

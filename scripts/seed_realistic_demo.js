@@ -2,7 +2,7 @@
 /**
  * Seed realistic demo data matching real DB structure
  * This script creates a complete demo database with:
- * - All missing tables (chat, subscriptions, license, etc.)
+ * - All missing tables (chat, subscriptions, license, donations, etc.)
  * - FTS5 full-text search tables and triggers
  * - Performance indexes
  * - Realistic transactions, scrape events, account pairings
@@ -117,6 +117,8 @@ const TABLES_TO_CLEAR = [
   'investment_accounts',
   'vendor_credentials',
   'license',
+  'donation_events',
+  'donation_meta',
 ];
 
 TABLES_TO_CLEAR.forEach((table) => {
@@ -150,6 +152,23 @@ const MISSING_TABLES = [
     is_synced_to_cloud INTEGER NOT NULL DEFAULT 0 CHECK (is_synced_to_cloud IN (0,1)),
     sync_error_message TEXT,
     app_version TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+
+  // Donations tables
+  `CREATE TABLE IF NOT EXISTS donation_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    amount_ils REAL NOT NULL CHECK (amount_ils > 0),
+    donated_at TEXT NOT NULL,
+    note TEXT,
+    source TEXT NOT NULL DEFAULT 'manual',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS donation_meta (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    last_reminder_month_key TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
@@ -272,7 +291,7 @@ try {
   // Column already exists
 }
 
-console.log('  Created 9 missing tables');
+console.log(`  Created ${MISSING_TABLES.length} missing tables`);
 
 // ============================================
 // STEP 2: CREATE FTS5 TABLES AND TRIGGERS
@@ -399,6 +418,9 @@ const INDEXES = [
 
   // Pairing exclusions index
   'CREATE INDEX IF NOT EXISTS idx_pairing_exclusions_pairing_id ON transaction_pairing_exclusions(pairing_id)',
+
+  // Donation indexes
+  'CREATE INDEX IF NOT EXISTS idx_donation_events_donated_at ON donation_events(donated_at DESC)',
 ];
 
 INDEXES.forEach((sql) => {
@@ -657,6 +679,39 @@ try {
   console.log('  Inserted license record');
 } catch (e) {
   console.log('  License already exists');
+}
+
+// ============================================
+// STEP 8B: SEED DONATION DEFAULTS
+// ============================================
+console.log('📋 Seeding donation defaults...');
+
+const DONATION_DEMO_MONTH_KEY = monthKeyFrom(BASE_DATE);
+const DONATION_META_DEFAULT_MONTH =
+  process.env.DEMO_DONATION_MARK_REMINDER === 'true' ? DONATION_DEMO_MONTH_KEY : null;
+
+db.prepare(`
+  INSERT OR REPLACE INTO donation_meta (id, last_reminder_month_key, created_at, updated_at)
+  VALUES (1, @lastReminderMonthKey, datetime('now'), datetime('now'))
+`).run({
+  lastReminderMonthKey: DONATION_META_DEFAULT_MONTH,
+});
+
+if (process.env.DEMO_DONOR === 'true') {
+  const donorAmount = Number(process.env.DEMO_DONATION_AMOUNT_ILS || 60);
+  const safeAmount = Number.isFinite(donorAmount) && donorAmount > 0 ? money(donorAmount) : 60;
+  db.prepare(`
+    INSERT INTO donation_events (amount_ils, donated_at, note, source, created_at)
+    VALUES (@amount, @donatedAt, @note, 'manual', @createdAt)
+  `).run({
+    amount: safeAmount,
+    donatedAt: BASE_DATE.toISOString(),
+    note: 'Demo donor fixture',
+    createdAt: BASE_DATE.toISOString(),
+  });
+  console.log(`  Inserted donor fixture (₪${safeAmount})`);
+} else {
+  console.log('  Non-donor default seeded');
 }
 
 // ============================================
@@ -1582,6 +1637,7 @@ const summary = {
   account_pairings: db.prepare('SELECT COUNT(*) as cnt FROM account_pairings').get().cnt,
   subscriptions: db.prepare('SELECT COUNT(*) as cnt FROM subscriptions').get().cnt,
   chat_conversations: db.prepare('SELECT COUNT(*) as cnt FROM chat_conversations').get().cnt,
+  donation_events: db.prepare('SELECT COUNT(*) as cnt FROM donation_events').get().cnt,
 };
 
 console.log('\nData summary:');

@@ -81,6 +81,82 @@
     "notRegisteredTitle": "Inscription requise",
     "notRegisteredMessage": "Veuillez vous inscrire avec votre adresse e-mail pour démarrer votre essai gratuit de 30 jours et activer toutes les fonctionnalités."
   },
+  "support": {
+    "tiers": {
+      "none": "Soutien",
+      "one_time": "Soutien ponctuel",
+      "bronze": "Soutien Bronze",
+      "silver": "Soutien Argent",
+      "gold": "Soutien Or",
+      "lifetime": "Soutien à vie"
+    },
+    "status": {
+      "none": "Non vérifié",
+      "pending": "Validation en attente",
+      "verified": "Vérifié",
+      "rejected": "À revoir"
+    },
+    "titleBar": {
+      "tooltipNoDonation": "Soutenez ShekelSync avec un don",
+      "tooltipWithTier": "{{tier}} · Total des dons ₪{{amount}}",
+      "buyMeCoffee": "Offrez-moi un café",
+      "buyMeCoffeeVerified": "Soutien {{tier}}",
+      "buyMeCoffeePending": "Plan de soutien en attente de validation"
+    },
+    "program": {
+      "title": "Programme de soutien Buy Me a Coffee",
+      "validationHint": "L'accès des soutiens est appliqué après validation du paiement dans Supabase.",
+      "currentPlan": "Plan actuel : {{plan}}",
+      "intentSaved": "Votre choix de plan est enregistré. Buy Me a Coffee est ouvert. L'accès sera mis à jour après validation.",
+      "intentFailed": "Échec de l'enregistrement du plan.",
+      "currentButton": "Plan actuel",
+      "pendingButton": "Validation en attente",
+      "chooseButton": "Choisir sur Buy Me a Coffee",
+      "actions": {
+        "close": "Fermer"
+      }
+    },
+    "reminder": {
+      "title": "Soutenir ShekelSync",
+      "message": "Si ShekelSync vous aide, vous pouvez faire un don pour soutenir le développement.",
+      "monthlyHint": "Pour les non-donateurs, ce rappel s'affiche une fois par mois.",
+      "actions": {
+        "later": "Plus tard",
+        "iDonated": "J'ai donné",
+        "choosePlan": "Choisir un plan",
+        "donateNow": "Faire un don"
+      }
+    },
+    "donation": {
+      "title": "Soutien & Dons",
+      "currentTier": "Votre niveau de soutien",
+      "totalDonated": "Total donné : ₪{{amount}}",
+      "recordTitle": "Enregistrer un don manuellement",
+      "fields": {
+        "amount": "Montant (₪)",
+        "date": "Date du don (optionnel)",
+        "note": "Note (optionnel)"
+      },
+      "thresholds": {
+        "bronze": "Bronze : ₪{{amount}}+",
+        "silver": "Argent : ₪{{amount}}+",
+        "gold": "Or : ₪{{amount}}+"
+      },
+      "actions": {
+        "donateNow": "Ouvrir la page de don",
+        "recordDonation": "Enregistrer le don",
+        "saving": "Enregistrement...",
+        "close": "Fermer"
+      },
+      "messages": {
+        "saved": "Don enregistré. Merci pour votre soutien.",
+        "saveFailed": "Échec de l'enregistrement du don."
+      },
+      "validation": {
+        "amountPositive": "Saisissez un montant supérieur à 0."
+      }
+    }
+  },
   "dashboard": {
     "summary": {
       "categories": { "essential": "Essentiel", "growth": "Croissance", "stability": "Stabilité", "reward": "Loisirs" },

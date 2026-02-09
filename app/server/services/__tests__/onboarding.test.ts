@@ -96,6 +96,7 @@ describe('onboarding service', () => {
       expect(result.completedSteps.creditCard).toBe(true);
       expect(result.completedSteps.firstScrape).toBe(true);
       expect(result.completedSteps.explored).toBe(true);
+      expect((result.completedSteps as any).registration).toBeUndefined();
       expect(result.suggestedAction).toBeNull();
       expect(mockClient.release).toHaveBeenCalled();
     });

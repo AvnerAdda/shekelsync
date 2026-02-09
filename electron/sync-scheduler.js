@@ -1,5 +1,4 @@
 const { resolveAppPath } = require('./paths');
-const licenseService = require('./license-service');
 
 const { SCRAPE_RATE_LIMIT_MS } = require(resolveAppPath('utils', 'constants.js'));
 const { bulkScrape } = require(resolveAppPath('server', 'services', 'scraping', 'bulk.js'));
@@ -139,13 +138,6 @@ function createSyncScheduler({
     const intervalMs = currentBackground.intervalHours * 60 * 60 * 1000;
 
     try {
-      const canWrite = await licenseService.isWriteOperationAllowed();
-      if (!canWrite) {
-        const result = { status: 'blocked', message: 'License is in read-only mode' };
-        await recordResult(result);
-        return { success: false, ...result };
-      }
-
       emit({
         vendor: 'bulk',
         status: 'starting',

@@ -94,6 +94,14 @@ function applySchemaUpgrades(db) {
       SET email = COALESCE(email, teudat_zehut)
     `);
   }
+
+  const donationMetaColumns = getTableColumns(db, 'donation_meta');
+  if (donationMetaColumns.length > 0) {
+    db.exec(`
+      INSERT OR IGNORE INTO donation_meta (id, last_reminder_month_key, created_at, updated_at)
+      VALUES (1, NULL, datetime('now'), datetime('now'))
+    `);
+  }
 }
 
 function parseArgs() {
@@ -232,6 +240,20 @@ const TABLE_DEFINITIONS = [
       is_synced_to_cloud INTEGER NOT NULL DEFAULT 0 CHECK (is_synced_to_cloud IN (0,1)),
       sync_error_message TEXT,
       app_version TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`,
+  `CREATE TABLE IF NOT EXISTS donation_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      amount_ils REAL NOT NULL CHECK (amount_ils > 0),
+      donated_at TEXT NOT NULL,
+      note TEXT,
+      source TEXT NOT NULL DEFAULT 'manual',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`,
+  `CREATE TABLE IF NOT EXISTS donation_meta (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      last_reminder_month_key TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );`,
@@ -838,6 +860,7 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_vendor ON scrape_events (vendor);',
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_credential_id ON scrape_events (credential_id);',
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_cred_date ON scrape_events (credential_id, created_at DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_donation_events_donated_at ON donation_events (donated_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_spouse_profile_user_id ON spouse_profile (user_profile_id);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_account_number ON transactions (account_number);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_category_def ON transactions (category_definition_id);',
