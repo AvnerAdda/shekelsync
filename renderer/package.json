@@ -1,7 +1,7 @@
 {
   "name": "shekelsync-renderer",
   "version": "0.1.0",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "private": true,
   "type": "module",
   "scripts": {

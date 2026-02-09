@@ -53,7 +53,9 @@ npm run init:sqlite
 
 ## Configuration
 
-Copy `.env.example` and set values for your environment. For production, set a strong `CLARIFY_ENCRYPTION_KEY` and disable `ALLOW_DEV_NO_ENCRYPTION`.
+Local desktop runs use `app/.env.local`.
+Use `.env.example` as the template, then place real values in `app/.env.local`.
+For production, set a strong `CLARIFY_ENCRYPTION_KEY` and keep `ALLOW_DEV_NO_ENCRYPTION=false`.
 
 ## Scraping and Compliance
 
@@ -77,4 +79,8 @@ You are responsible for lawful and compliant use in your jurisdiction.
 
 ## License
 
-MIT (see `LICENSE`)
+This project uses an open + commercial licensing model:
+
+- Open-source license: `AGPL-3.0-or-later` (see `LICENSE`)
+- Commercial license: available for proprietary/commercial usage without AGPL obligations (see `LICENSE-COMMERCIAL.md`)
+- Trademarks/branding: see `TRADEMARKS.md`
