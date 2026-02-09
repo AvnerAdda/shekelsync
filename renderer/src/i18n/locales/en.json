@@ -98,6 +98,82 @@
     "notRegisteredTitle": "Registration Required",
     "notRegisteredMessage": "Please register with your email to start your free 30-day trial and enable all features."
   },
+  "support": {
+    "tiers": {
+      "none": "Supporter",
+      "one_time": "One-Time Supporter",
+      "bronze": "Bronze Supporter",
+      "silver": "Silver Supporter",
+      "gold": "Gold Supporter",
+      "lifetime": "Lifetime Supporter"
+    },
+    "status": {
+      "none": "Not Verified",
+      "pending": "Pending Validation",
+      "verified": "Verified",
+      "rejected": "Needs Review"
+    },
+    "titleBar": {
+      "tooltipNoDonation": "Support ShekelSync with a donation",
+      "tooltipWithTier": "{{tier}} · Total donated ₪{{amount}}",
+      "buyMeCoffee": "Buy me a coffee",
+      "buyMeCoffeeVerified": "{{tier}} supporter",
+      "buyMeCoffeePending": "Support plan pending validation"
+    },
+    "program": {
+      "title": "Buy Me a Coffee Support Program",
+      "validationHint": "Support access is applied after payment validation in Supabase.",
+      "currentPlan": "Current plan: {{plan}}",
+      "intentSaved": "Plan selection recorded. We opened Buy Me a Coffee. Access updates after validation.",
+      "intentFailed": "Failed to record plan selection.",
+      "currentButton": "Current Plan",
+      "pendingButton": "Pending Validation",
+      "chooseButton": "Choose on Buy Me a Coffee",
+      "actions": {
+        "close": "Close"
+      }
+    },
+    "reminder": {
+      "title": "Support ShekelSync",
+      "message": "If ShekelSync helps you, consider a donation to keep development moving.",
+      "monthlyHint": "For non-donors, this reminder appears once per month.",
+      "actions": {
+        "later": "Maybe later",
+        "iDonated": "I donated",
+        "choosePlan": "Choose plan",
+        "donateNow": "Donate now"
+      }
+    },
+    "donation": {
+      "title": "Support & Donations",
+      "currentTier": "Your supporter tier",
+      "totalDonated": "Total donated: ₪{{amount}}",
+      "recordTitle": "Record a donation manually",
+      "fields": {
+        "amount": "Amount (₪)",
+        "date": "Donation date (optional)",
+        "note": "Note (optional)"
+      },
+      "thresholds": {
+        "bronze": "Bronze: ₪{{amount}}+",
+        "silver": "Silver: ₪{{amount}}+",
+        "gold": "Gold: ₪{{amount}}+"
+      },
+      "actions": {
+        "donateNow": "Open donation page",
+        "recordDonation": "Save donation",
+        "saving": "Saving...",
+        "close": "Close"
+      },
+      "messages": {
+        "saved": "Donation saved. Thank you for your support.",
+        "saveFailed": "Failed to save donation."
+      },
+      "validation": {
+        "amountPositive": "Enter an amount greater than 0."
+      }
+    }
+  },
   "dashboard": {
     "summary": {
       "categories": {

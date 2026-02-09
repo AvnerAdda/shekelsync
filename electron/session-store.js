@@ -33,6 +33,20 @@ const { mkdir, readFile, unlink, writeFile } = fs.promises;
 const SERVICE_NAME = 'ShekelSync';
 const ACCOUNT_NAME = 'auth-session';
 
+function shouldDisableKeytar(error) {
+  const message = String(error?.message || '').toLowerCase();
+  if (!message) {
+    return false;
+  }
+
+  return (
+    message.includes('could not connect') ||
+    message.includes('no such file or directory') ||
+    message.includes('org.freedesktop.secrets') ||
+    message.includes('secret service')
+  );
+}
+
 class SessionStore {
   constructor() {
     this.filePath = null;
@@ -113,6 +127,9 @@ class SessionStore {
         return session;
       } catch (error) {
         console.warn('[SessionStore] Failed to persist session to keytar, falling back to file:', error.message);
+        if (shouldDisableKeytar(error)) {
+          this.keytarAvailable = false;
+        }
       }
     }
 
@@ -130,6 +147,9 @@ class SessionStore {
         await keytar.deletePassword(SERVICE_NAME, ACCOUNT_NAME);
       } catch (error) {
         console.warn('[SessionStore] Failed to clear keytar entry:', error.message);
+        if (shouldDisableKeytar(error)) {
+          this.keytarAvailable = false;
+        }
       }
     }
 
@@ -157,6 +177,9 @@ class SessionStore {
         }
       } catch (error) {
         console.warn('[SessionStore] Failed to load session from keytar:', error.message);
+        if (shouldDisableKeytar(error)) {
+          this.keytarAvailable = false;
+        }
       }
     }
 

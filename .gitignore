@@ -72,8 +72,6 @@ website/
 /analysis/
 .venv/
 
-*.md
-
 app/scripts/
 
 # Scripts - ignore demo/dev-only files, keep essential ones

@@ -8,6 +8,7 @@ import Sidebar from '@renderer/features/layout/components/Sidebar';
 import FinancialChatbot from '@renderer/features/chatbot/components/FinancialChatbot';
 import TitleBar from '@renderer/features/layout/components/TitleBar';
 import GlobalTransactionSearch from '@renderer/features/search/components/GlobalTransactionSearch';
+import { DonationReminderDialog, useDonationStatus } from '@renderer/features/support';
 import { useAuth } from '@app/contexts/AuthContext';
 
 const DRAWER_WIDTH_COLLAPSED = 65;
@@ -36,11 +37,27 @@ const AppLayout: React.FC = () => {
   const { session, loading: authLoading } = useAuth();
   const [currentPage, setCurrentPage] = useState<string>(() => pathToPage(location.pathname));
   const [searchOpen, setSearchOpen] = useState(false);
+  const [donationReminderOpen, setDonationReminderOpen] = useState(false);
+  const [donationReminderBusy, setDonationReminderBusy] = useState(false);
   const sessionDisplayName = session?.user?.name || session?.user?.email || null;
+  const { status: donationStatus, loading: donationStatusLoading, markReminderShown } = useDonationStatus();
 
   useEffect(() => {
     setCurrentPage(pathToPage(location.pathname));
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (donationStatusLoading || !donationStatus) {
+      return;
+    }
+
+    if (donationStatus.shouldShowMonthlyReminder) {
+      setDonationReminderOpen(true);
+      return;
+    }
+
+    setDonationReminderOpen(false);
+  }, [donationStatus, donationStatusLoading]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -102,6 +119,23 @@ const AppLayout: React.FC = () => {
   const handleDataRefresh = useCallback(() => {
     window.dispatchEvent(new Event('dataRefresh'));
   }, []);
+
+  const handleDismissDonationReminder = useCallback(async () => {
+    if (!donationStatus) {
+      setDonationReminderOpen(false);
+      return;
+    }
+
+    try {
+      setDonationReminderBusy(true);
+      await markReminderShown({ monthKey: donationStatus.currentMonthKey });
+    } catch (error) {
+      console.error('Failed to mark donation reminder as shown:', error);
+    } finally {
+      setDonationReminderBusy(false);
+      setDonationReminderOpen(false);
+    }
+  }, [donationStatus, markReminderShown]);
 
   const outletContext = useMemo<AppLayoutContext>(
     () => ({ triggerDataRefresh: handleDataRefresh }),
@@ -179,6 +213,13 @@ const AppLayout: React.FC = () => {
       <GlobalTransactionSearch
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
+      />
+
+      <DonationReminderDialog
+        open={donationReminderOpen}
+        status={donationStatus}
+        busy={donationReminderBusy}
+        onDismissForMonth={handleDismissDonationReminder}
       />
     </Box>
   );

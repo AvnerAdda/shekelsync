@@ -94,24 +94,7 @@ async function getOnboardingStatus() {
     );
     const lastScrapeDate = lastScrapeResult.rows[0]?.last_scrape || null;
 
-    // Check license registration status
-    let isRegistered = false;
-    try {
-      const licenseResult = await client.query('SELECT * FROM license WHERE id = 1');
-      if (licenseResult.rows.length > 0) {
-        const record = licenseResult.rows[0];
-        isRegistered = Boolean(record.email || record.teudat_zehut);
-      } else {
-        isRegistered = false;
-      }
-    } catch (err) {
-      // License table might not exist in older databases - treat as registered to avoid blocking
-      console.warn('[Onboarding] Failed to check license status:', err.message);
-      isRegistered = true;
-    }
-
     const completedSteps = {
-      registration: isRegistered,
       profile: hasProfile && profile.username !== null,
       bankAccount: bankAccountCount > 0,
       creditCard: creditCardCount > 0,
@@ -122,9 +105,7 @@ async function getOnboardingStatus() {
     const isComplete = Object.values(completedSteps).every(Boolean);
 
     let suggestedAction = null;
-    if (!completedSteps.registration) {
-      suggestedAction = 'registration';
-    } else if (!completedSteps.profile) {
+    if (!completedSteps.profile) {
       suggestedAction = 'profile';
     } else if (!completedSteps.bankAccount) {
       suggestedAction = 'bankAccount';

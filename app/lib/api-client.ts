@@ -1,4 +1,4 @@
-import { getAuthorizationHeader } from '@/lib/session-store';
+import { getAuthorizationHeader, getSession } from '@/lib/session-store';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -93,6 +93,12 @@ function deserializeData<T>(payload: unknown): T {
   return payload as T;
 }
 
+function isStructuredOptions(
+  options: ApiRequestOptions<never> | Record<string, string>,
+): options is ApiRequestOptions<never> {
+  return 'headers' in options || 'params' in options || 'rawBody' in options || 'body' in options;
+}
+
 async function request<TResponse = unknown, TBody = unknown>(
   method: HttpMethod,
   endpoint: string,
@@ -106,10 +112,23 @@ async function request<TResponse = unknown, TBody = unknown>(
     normalizedHeaders['Accept-Language'] = locale;
   }
   const authHeaders = await getAuthorizationHeader();
+  const session = await getSession();
   const finalHeaders: Record<string, string> = { ...normalizedHeaders };
 
   if (authHeaders.Authorization && !finalHeaders.Authorization) {
     finalHeaders.Authorization = authHeaders.Authorization;
+  }
+  if (session?.accessToken && !finalHeaders['X-Auth-Access-Token']) {
+    finalHeaders['X-Auth-Access-Token'] = session.accessToken;
+  }
+  if (session?.user?.id && !finalHeaders['X-Auth-User-Id']) {
+    finalHeaders['X-Auth-User-Id'] = session.user.id;
+  }
+  if (session?.user?.email && !finalHeaders['X-Auth-User-Email']) {
+    finalHeaders['X-Auth-User-Email'] = session.user.email;
+  }
+  if (session?.user?.name && !finalHeaders['X-Auth-User-Name']) {
+    finalHeaders['X-Auth-User-Name'] = session.user.name;
   }
 
   if (isElectronApiAvailable()) {
@@ -178,11 +197,11 @@ export const apiClient = {
       return request<TResponse>('GET', endpoint);
     }
 
-    if ('headers' in options || 'params' in options || 'rawBody' in options || 'body' in options) {
-      return request<TResponse>('GET', endpoint, options as ApiRequestOptions<never>);
+    if (isStructuredOptions(options)) {
+      return request<TResponse>('GET', endpoint, options);
     }
 
-    return request<TResponse>('GET', endpoint, { headers: options });
+    return request<TResponse>('GET', endpoint, { headers: options as Record<string, string> });
   },
   delete<TResponse = unknown>(
     endpoint: string,
@@ -192,11 +211,11 @@ export const apiClient = {
       return request<TResponse>('DELETE', endpoint);
     }
 
-    if ('headers' in options || 'params' in options || 'rawBody' in options || 'body' in options) {
-      return request<TResponse>('DELETE', endpoint, options as ApiRequestOptions<never>);
+    if (isStructuredOptions(options)) {
+      return request<TResponse>('DELETE', endpoint, options);
     }
 
-    return request<TResponse>('DELETE', endpoint, { headers: options });
+    return request<TResponse>('DELETE', endpoint, { headers: options as Record<string, string> });
   },
   post<TResponse = unknown, TBody = unknown>(
     endpoint: string,
