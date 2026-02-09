@@ -5,6 +5,8 @@ export interface TransactionDetail {
   description: string;
   date: string;
   category_name?: string | null;
+  category_icon?: string | null;
+  category_color?: string | null;
   parent_name?: string | null;
   categoryType?: string | null;
   memo?: string;

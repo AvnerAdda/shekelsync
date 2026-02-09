@@ -26,7 +26,6 @@ const pathToPage = (pathname: string): string => {
 };
 
 export interface AppLayoutContext {
-  dataRefreshKey: number;
   triggerDataRefresh: () => void;
 }
 
@@ -36,7 +35,6 @@ const AppLayout: React.FC = () => {
   const theme = useTheme();
   const { session, loading: authLoading } = useAuth();
   const [currentPage, setCurrentPage] = useState<string>(() => pathToPage(location.pathname));
-  const [dataRefreshKey, setDataRefreshKey] = useState<number>(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const sessionDisplayName = session?.user?.name || session?.user?.email || null;
 
@@ -102,13 +100,12 @@ const AppLayout: React.FC = () => {
   );
 
   const handleDataRefresh = useCallback(() => {
-    setDataRefreshKey((prev) => prev + 1);
     window.dispatchEvent(new Event('dataRefresh'));
   }, []);
 
   const outletContext = useMemo<AppLayoutContext>(
-    () => ({ dataRefreshKey, triggerDataRefresh: handleDataRefresh }),
-    [dataRefreshKey, handleDataRefresh],
+    () => ({ triggerDataRefresh: handleDataRefresh }),
+    [handleDataRefresh],
   );
 
   return (

@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const { execFileSync } = require('child_process');
 const { app } = require('electron');
 const { resolveAppPath, requireFromApp } = require('./paths');
 
@@ -41,6 +42,98 @@ function resolveSqliteInitPath() {
   if (fs.existsSync(devPath)) return devPath;
 
   return null;
+}
+
+function resolveDemoSeedPath() {
+  const packagedPath = resolveAppPath('scripts', 'seed_realistic_demo.js');
+  if (fs.existsSync(packagedPath)) return packagedPath;
+
+  const resourcesPath = process.resourcesPath;
+  if (resourcesPath) {
+    const resourcesCandidate = path.join(resourcesPath, 'scripts', 'seed_realistic_demo.js');
+    if (fs.existsSync(resourcesCandidate)) return resourcesCandidate;
+
+    const unpackedCandidate = path.join(
+      resourcesPath,
+      'app.asar.unpacked',
+      'scripts',
+      'seed_realistic_demo.js',
+    );
+    if (fs.existsSync(unpackedCandidate)) return unpackedCandidate;
+  }
+
+  const devPath = resolveAppPath('..', 'scripts', 'seed_realistic_demo.js');
+  if (fs.existsSync(devPath)) return devPath;
+
+  return null;
+}
+
+function todayUtcDateString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getDemoBaseDate() {
+  return `${todayUtcDateString()}T12:00:00Z`;
+}
+
+function shouldRefreshDemoData(dbPath) {
+  const refreshSetting = process.env.DEMO_REFRESH_ON_LAUNCH;
+  const forceRefresh = refreshSetting === 'true';
+  const disableRefresh = refreshSetting === 'false';
+  const isAnonymized = path.basename(dbPath).includes('anonymized');
+
+  if (disableRefresh) return false;
+  if (!forceRefresh && !isAnonymized) return false;
+
+  if (!fs.existsSync(dbPath)) return true;
+
+  let demoDb = null;
+  try {
+    if (!SqliteDatabase) {
+      const betterSqlite = requireFromApp('better-sqlite3');
+      SqliteDatabase = typeof betterSqlite.default === 'function' ? betterSqlite.default : betterSqlite;
+    }
+    demoDb = new SqliteDatabase(dbPath, { fileMustExist: true });
+    const row = demoDb.prepare('SELECT MAX(date) as max_date FROM transactions').get();
+    if (!row || !row.max_date) return true;
+    const latestDay = String(row.max_date).slice(0, 10);
+    const todayDay = todayUtcDateString();
+    return latestDay < todayDay;
+  } catch (error) {
+    console.warn('[Demo Seed] Failed to read latest transaction date, refreshing demo data.', error?.message || error);
+    return true;
+  } finally {
+    try {
+      demoDb?.close();
+    } catch (e) {
+      // Ignore close failures
+    }
+  }
+}
+
+function refreshDemoData(dbPath) {
+  const seedPath = resolveDemoSeedPath();
+  if (!seedPath) {
+    console.warn('[Demo Seed] Demo seed script not found, skipping refresh.');
+    return;
+  }
+
+  const env = {
+    ...process.env,
+    SQLITE_DB_PATH: dbPath,
+    DEMO_BASE_DATE: getDemoBaseDate(),
+    ELECTRON_RUN_AS_NODE: '1',
+  };
+
+  try {
+    execFileSync(process.execPath, [seedPath], {
+      cwd: path.dirname(seedPath),
+      env,
+      stdio: 'inherit',
+    });
+  } catch (error) {
+    console.warn('[Demo Seed] Failed to refresh demo data:', error?.message || error);
+  }
 }
 
 function initializeSqliteIfMissing(dbPath, databaseCtor) {
@@ -100,6 +193,11 @@ class DatabaseManager {
         if (!SqliteDatabase) {
           const betterSqlite = requireFromApp('better-sqlite3');
           SqliteDatabase = typeof betterSqlite.default === 'function' ? betterSqlite.default : betterSqlite;
+        }
+
+        if (shouldRefreshDemoData(dbPath)) {
+          console.log('[Demo Seed] Refreshing anonymized demo data for latest day...');
+          refreshDemoData(dbPath);
         }
 
         initializeSqliteIfMissing(dbPath, SqliteDatabase);

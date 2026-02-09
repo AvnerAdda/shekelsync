@@ -238,7 +238,8 @@
       "intervals": {
         "daily": "כל יום",
         "twoDays": "כל יומיים",
-        "weekly": "שבועי"
+        "weekly": "שבועי",
+        "monthly": "חודשי"
       },
       "keepRunningLabel": "השאר פועל במגש כאשר החלון נסגר",
       "headlessLabel": "הרץ בשקט (ללא חלון)",
@@ -2485,6 +2486,41 @@
     },
     "loading": "טוען תובנות...",
     "clickRefresh": "לחץ על רענן כדי לטעון את התובנות הפיננסיות שלך.",
-    "refresh": "רענן"
+    "refresh": "רענן",
+    "snapshot": {
+      "alert": {
+        "title": "תמונת התקדמות",
+        "message": "ראו את ההתקדמות שלכם בתקופות זמן שהושלמו.",
+        "action": "הצג תמונה"
+      },
+      "periodLabels": {
+        "week": "שבוע",
+        "month": "חודש",
+        "2month": "חודשיים",
+        "6month": "חצי שנה",
+        "1year": "שנה",
+        "sinceStart": "מאז שהתחלתם עם ShekelSync"
+      },
+      "metrics": {
+        "income": "הכנסות",
+        "expenses": "הוצאות",
+        "investmentOutflow": "יציאה להשקעות",
+        "investmentInflow": "כניסה מהשקעות",
+        "net": "נטו",
+        "txCount": "עסקאות"
+      },
+      "modal": {
+        "title": "תמונת התקדמות",
+        "loading": "טוען תמונת מצב...",
+        "empty": "עדיין אין נתוני תמונת מצב.",
+        "fetchError": "טעינת תמונת ההתקדמות נכשלה.",
+        "currentPeriod": "תקופה נוכחית",
+        "previousPeriod": "תקופה קודמת",
+        "previousNet": "נטו קודם",
+        "insufficientHistory": "אין היסטוריה מספקת להשוואה מלאה לתקופה קודמת.",
+        "notAvailable": "לא זמין",
+        "daysTracked": "{{count}} ימים במעקב"
+      }
+    }
   }
 }

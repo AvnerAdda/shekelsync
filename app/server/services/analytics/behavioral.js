@@ -1,6 +1,7 @@
 const database = require('../database.js');
 const { getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
 const { getSubscriptionSummary } = require('./subscriptions.js');
+const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
 const {
   analyzeRecurringPatterns,
   normalizePatternKey,
@@ -15,6 +16,8 @@ const FREQUENCY_TYPES = {
   BIMONTHLY: { name: 'bimonthly', minPerMonth: 0.4, maxPerMonth: 0.6, color: '#00bcd4' },
   VARIABLE: { name: 'variable', minPerMonth: 0, maxPerMonth: Infinity, color: '#607d8b' }
 };
+
+const behavioralCache = createTtlCache({ maxEntries: 10, defaultTtlMs: 60 * 1000 });
 
 function normalizeCategoryKey(value) {
   if (!value || typeof value !== 'string') return '';
@@ -62,10 +65,33 @@ function calculateIntervalConsistency(dates, expectedIntervalDays) {
  * Analyzes programmed vs impulse spending, recurring patterns at transaction/category/subcategory levels
  * @param {string} locale - User's locale for category name translations (he, en, fr)
  */
-async function getBehavioralPatterns(locale = 'he') {
+async function getBehavioralPatterns(locale = 'he', params = {}) {
+  const skipCache =
+    process.env.NODE_ENV === 'test' ||
+    params.noCache === true ||
+    params.noCache === 'true' ||
+    params.noCache === '1';
+  const summaryOnly =
+    params.summary === true ||
+    params.summary === 'true' ||
+    params.summary === '1' ||
+    params.mode === 'summary';
   // Get last 3 months of transactions for pattern analysis
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  const now = new Date();
+  const cacheKey = JSON.stringify({
+    locale,
+    summary: summaryOnly,
+    start: threeMonthsAgo.toISOString().split('T')[0],
+    end: now.toISOString().split('T')[0],
+  });
+  if (!skipCache) {
+    const cached = behavioralCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
 
   const transactionsResult = await database.query(
     `SELECT
@@ -99,7 +125,7 @@ async function getBehavioralPatterns(locale = 'he') {
       AND t.price < 0
       AND t.date >= $1
       AND tpe.transaction_identifier IS NULL
-    ORDER BY t.date`,
+    `,
     [threeMonthsAgo.toISOString()]
   );
 
@@ -131,6 +157,53 @@ async function getBehavioralPatterns(locale = 'he') {
     excludePairingExclusions: true,
     transactions,
   });
+
+  const programmedAmount = recurringPatternRows.reduce(
+    (sum, pattern) => sum + (Number(pattern.detected_amount || 0) * Number(pattern.occurrence_count || 0)),
+    0,
+  );
+  const totalAmount = transactions.reduce((sum, t) => sum + Math.abs(t.price || 0), 0);
+  const impulseAmount = totalAmount - programmedAmount;
+  const programmedPercentage = totalAmount > 0 ? (programmedAmount / totalAmount) * 100 : 0;
+  const impulsePercentage = totalAmount > 0 ? (impulseAmount / totalAmount) * 100 : 0;
+
+  if (summaryOnly) {
+    const weekSet = new Set();
+    const categoryTotals = new Map();
+    localizedTransactions.forEach((txn) => {
+      const date = new Date(txn.date);
+      const { year, week } = getWeekNumber(date);
+      weekSet.add(`${year}-W${String(week).padStart(2, '0')}`);
+      const category = txn.localizedParentCategory || txn.localizedCategory || 'Uncategorized';
+      const amount = Math.abs(txn.price || 0);
+      categoryTotals.set(category, (categoryTotals.get(category) || 0) + amount);
+    });
+
+    const weekCount = weekSet.size || 1;
+    let topCategoryName = null;
+    let topCategoryWeekly = null;
+    categoryTotals.forEach((total, category) => {
+      const avgPerWeek = total / weekCount;
+      if (topCategoryWeekly === null || avgPerWeek > topCategoryWeekly) {
+        topCategoryWeekly = avgPerWeek;
+        topCategoryName = category;
+      }
+    });
+
+    const response = {
+      programmedAmount: Math.round(programmedAmount),
+      impulseAmount: Math.round(impulseAmount),
+      programmedPercentage,
+      impulsePercentage,
+      recurringCount: recurringPatternRows.length,
+      topCategoryWeekly: topCategoryWeekly !== null ? Math.round(topCategoryWeekly) : null,
+      topCategoryName,
+    };
+    if (!skipCache) {
+      behavioralCache.set(cacheKey, response);
+    }
+    return response;
+  }
 
   const recurringPatterns = recurringPatternRows.map((pattern) => {
     const localizedCategory = getLocalizedCategoryName({
@@ -175,13 +248,6 @@ async function getBehavioralPatterns(locale = 'he') {
   const patternsByFrequency = groupPatternsByFrequency(recurringPatterns, categoryPatterns, subcategoryPatterns);
 
   // Calculate programmed vs impulse spending
-  const programmedAmount = recurringPatterns.reduce((sum, p) => sum + (p.avgAmount * p.occurrences), 0);
-  const totalAmount = transactions.reduce((sum, t) => sum + Math.abs(t.price), 0);
-  const impulseAmount = totalAmount - programmedAmount;
-
-  const programmedPercentage = totalAmount > 0 ? (programmedAmount / totalAmount) * 100 : 0;
-  const impulsePercentage = totalAmount > 0 ? (impulseAmount / totalAmount) * 100 : 0;
-
   // Calculate category averages (with recurring percentage)
   const categoryAverages = calculateCategoryAverages(localizedTransactions, recurringPatterns);
   let subscriptionCategoryCounts = null;
@@ -202,7 +268,7 @@ async function getBehavioralPatterns(locale = 'he') {
     subscriptionCount: subscriptionCategoryCounts?.get(normalizeCategoryKey(entry.category)) || 0,
   }));
 
-  return {
+  const response = {
     programmedAmount: Math.round(programmedAmount),
     impulseAmount: Math.round(impulseAmount),
     programmedPercentage,
@@ -244,6 +310,10 @@ async function getBehavioralPatterns(locale = 'he') {
     })),
     categoryAverages: categoryAveragesWithSubscriptions
   };
+  if (!skipCache) {
+    behavioralCache.set(cacheKey, response);
+  }
+  return response;
 }
 
 /**

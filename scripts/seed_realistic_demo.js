@@ -16,7 +16,7 @@ const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
-const BASE_DATE = new Date(process.env.DEMO_BASE_DATE || '2026-02-01T12:00:00Z');
+const BASE_DATE = new Date(process.env.DEMO_BASE_DATE || '2026-02-06T12:00:00Z');
 const SEED = Number(process.env.DEMO_SEED || 42);
 const USD_ILS_RATE = Number(process.env.DEMO_USD_ILS_RATE || 3.7);
 const ID_BASE = BASE_DATE.getTime();
@@ -45,8 +45,15 @@ function addMonths(dateObj, months) {
   next.setUTCMonth(next.getUTCMonth() + months);
   return next;
 }
+function isSameUtcMonth(a, b) {
+  return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth();
+}
+function capDayForBaseMonth(monthDate, day) {
+  if (!isSameUtcMonth(monthDate, BASE_DATE)) return day;
+  return Math.min(day, BASE_DATE.getUTCDate());
+}
 function dateInMonth(monthDate, day, hourRange) {
-  const safeDay = Math.min(day, 28);
+  const safeDay = capDayForBaseMonth(monthDate, Math.min(day, 28));
   const [startHour, endHour] = hourRange || [8, 20];
   const date = new Date(Date.UTC(monthDate.getUTCFullYear(), monthDate.getUTCMonth(), safeDay, 0, 0, 0));
   date.setUTCHours(randomInt(startHour, endHour), randomInt(0, 59), 0, 0);
@@ -54,7 +61,21 @@ function dateInMonth(monthDate, day, hourRange) {
 }
 function dateRandomInMonth(monthDate, dayRange, hourRange) {
   const [dayStart, dayEnd] = dayRange || [1, 28];
-  return dateInMonth(monthDate, randomInt(dayStart, dayEnd), hourRange);
+  const cappedEnd = capDayForBaseMonth(monthDate, dayEnd);
+  const cappedStart = Math.min(dayStart, cappedEnd);
+  return dateInMonth(monthDate, randomInt(cappedStart, cappedEnd), hourRange);
+}
+function dateAtUtc(dateObj, hour, minute) {
+  const safeMinute = Number.isFinite(minute) ? minute : 0;
+  const date = new Date(Date.UTC(
+    dateObj.getUTCFullYear(),
+    dateObj.getUTCMonth(),
+    dateObj.getUTCDate(),
+    hour,
+    safeMinute,
+    0,
+  ));
+  return date.toISOString();
 }
 function generateId(i) { return `demo-${ID_BASE}-${i}`; }
 
@@ -486,6 +507,15 @@ const SCRAPE_EVENTS = [
   { triggeredBy: 'scheduled', vendor: 'visaCal', startDate: '2026-01-15', status: 'success', message: 'Scraped 20 transactions', createdAt: '2026-01-15T09:00:00Z', credentialId: 3 },
   { triggeredBy: 'scheduled', vendor: 'visaCal', startDate: '2026-01-20', status: 'success', message: 'Scraped 11 transactions', createdAt: '2026-01-20T09:00:00Z', credentialId: 3 },
 ];
+
+const latestSyncDay = dateOnly(BASE_DATE);
+const RECENT_SCRAPE_EVENTS = [
+  { triggeredBy: 'scheduled', vendor: 'discount', startDate: latestSyncDay, status: 'success', message: 'Scraped 17 transactions', createdAt: dateAtUtc(BASE_DATE, 7, 45), credentialId: 1 },
+  { triggeredBy: 'scheduled', vendor: 'max', startDate: latestSyncDay, status: 'success', message: 'Scraped 12 transactions', createdAt: dateAtUtc(BASE_DATE, 8, 5), credentialId: 2 },
+  { triggeredBy: 'scheduled', vendor: 'visaCal', startDate: latestSyncDay, status: 'success', message: 'Scraped 9 transactions', createdAt: dateAtUtc(BASE_DATE, 8, 25), credentialId: 3 },
+];
+
+SCRAPE_EVENTS.push(...RECENT_SCRAPE_EVENTS);
 
 SCRAPE_EVENTS.forEach((event) => {
   try {

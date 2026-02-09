@@ -1,4 +1,7 @@
 const database = require('../database.js');
+const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
+
+const temporalCache = createTtlCache({ maxEntries: 10, defaultTtlMs: 60 * 1000 });
 
 /**
  * Get temporal spending patterns
@@ -6,6 +9,16 @@ const database = require('../database.js');
  */
 async function getTemporalAnalytics(params = {}) {
   const { timeRange = '6months' } = params;
+  const skipCache =
+    process.env.NODE_ENV === 'test' ||
+    params.noCache === true ||
+    params.noCache === 'true' ||
+    params.noCache === '1';
+  const summaryOnly =
+    params.summary === true ||
+    params.summary === 'true' ||
+    params.summary === '1' ||
+    params.mode === 'summary';
   
   // Calculate date range
   const endDate = new Date();
@@ -33,6 +46,19 @@ async function getTemporalAnalytics(params = {}) {
       startDate.setMonth(startDate.getMonth() - 6);
   }
 
+  const cacheKey = JSON.stringify({
+    timeRange,
+    summary: summaryOnly,
+    start: startDate.toISOString().split('T')[0],
+    end: endDate.toISOString().split('T')[0],
+  });
+  if (!skipCache) {
+    const cached = temporalCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
+
   // Get transactions with time data (filter out transactions with placeholder times - minutes must not be exactly 00)
   const transactionsResult = await database.query(
     `SELECT
@@ -52,98 +78,106 @@ async function getTemporalAnalytics(params = {}) {
       AND t.date <= $2
       AND t.price < 0
       AND strftime('%M', datetime(t.date, 'localtime')) != '00'
-    ORDER BY t.date`,
+    `,
     [startDate.toISOString(), endDate.toISOString()]
   );
 
   const transactions = transactionsResult.rows || [];
 
-  // Get transaction count by hour
-  const hourlyCountResult = await database.query(
-    `SELECT
-      strftime('%H', datetime(t.date, 'localtime')) as hour,
-      COUNT(*) as count
-    FROM transactions t
-    WHERE t.status = 'completed'
-      AND t.category_type = 'expense'
-      AND t.price < 0
-      AND strftime('%M', datetime(t.date, 'localtime')) != '00'
-      AND t.date >= $1
-      AND t.date <= $2
-    GROUP BY hour
-    ORDER BY hour`,
-    [startDate.toISOString(), endDate.toISOString()]
-  );
+  let hourlyCountResult = { rows: [] };
+  let weekdayCountResult = { rows: [] };
+  let dailyEvolutionResult = { rows: [] };
+  let weeklyEvolutionResult = { rows: [] };
+  let monthlyEvolutionResult = { rows: [] };
 
-  // Get transaction count by day of week
-  const weekdayCountResult = await database.query(
-    `SELECT
-      strftime('%w', datetime(t.date, 'localtime')) as day_of_week,
-      COUNT(*) as count
-    FROM transactions t
-    WHERE t.status = 'completed'
-      AND t.category_type = 'expense'
-      AND t.price < 0
-      AND strftime('%M', datetime(t.date, 'localtime')) != '00'
-      AND t.date >= $1
-      AND t.date <= $2
-    GROUP BY day_of_week
-    ORDER BY day_of_week`,
-    [startDate.toISOString(), endDate.toISOString()]
-  );
+  if (!summaryOnly) {
+    // Get transaction count by hour
+    hourlyCountResult = await database.query(
+      `SELECT
+        strftime('%H', datetime(t.date, 'localtime')) as hour,
+        COUNT(*) as count
+      FROM transactions t
+      WHERE t.status = 'completed'
+        AND t.category_type = 'expense'
+        AND t.price < 0
+        AND strftime('%M', datetime(t.date, 'localtime')) != '00'
+        AND t.date >= $1
+        AND t.date <= $2
+      GROUP BY hour
+      ORDER BY hour`,
+      [startDate.toISOString(), endDate.toISOString()]
+    );
 
-  // Get daily evolution data
-  const dailyEvolutionResult = await database.query(
-    `SELECT
-      DATE(datetime(t.date, 'localtime')) as date,
-      SUM(ABS(t.price)) as total_amount,
-      COUNT(*) as transaction_count
-    FROM transactions t
-    WHERE t.status = 'completed'
-      AND t.category_type = 'expense'
-      AND t.price < 0
-      AND t.date >= $1
-      AND t.date <= $2
-    GROUP BY DATE(datetime(t.date, 'localtime'))
-    ORDER BY date`,
-    [startDate.toISOString(), endDate.toISOString()]
-  );
+    // Get transaction count by day of week
+    weekdayCountResult = await database.query(
+      `SELECT
+        strftime('%w', datetime(t.date, 'localtime')) as day_of_week,
+        COUNT(*) as count
+      FROM transactions t
+      WHERE t.status = 'completed'
+        AND t.category_type = 'expense'
+        AND t.price < 0
+        AND strftime('%M', datetime(t.date, 'localtime')) != '00'
+        AND t.date >= $1
+        AND t.date <= $2
+      GROUP BY day_of_week
+      ORDER BY day_of_week`,
+      [startDate.toISOString(), endDate.toISOString()]
+    );
 
-  // Get weekly evolution data
-  const weeklyEvolutionResult = await database.query(
-    `SELECT
-      strftime('%Y-%W', datetime(t.date, 'localtime')) as year_week,
-      MIN(DATE(datetime(t.date, 'localtime'))) as week_start_date,
-      SUM(ABS(t.price)) as total_amount,
-      COUNT(*) as transaction_count
-    FROM transactions t
-    WHERE t.status = 'completed'
-      AND t.category_type = 'expense'
-      AND t.price < 0
-      AND t.date >= $1
-      AND t.date <= $2
-    GROUP BY year_week
-    ORDER BY year_week`,
-    [startDate.toISOString(), endDate.toISOString()]
-  );
+    // Get daily evolution data
+    dailyEvolutionResult = await database.query(
+      `SELECT
+        DATE(datetime(t.date, 'localtime')) as date,
+        SUM(ABS(t.price)) as total_amount,
+        COUNT(*) as transaction_count
+      FROM transactions t
+      WHERE t.status = 'completed'
+        AND t.category_type = 'expense'
+        AND t.price < 0
+        AND t.date >= $1
+        AND t.date <= $2
+      GROUP BY DATE(datetime(t.date, 'localtime'))
+      ORDER BY date`,
+      [startDate.toISOString(), endDate.toISOString()]
+    );
 
-  // Get monthly evolution data
-  const monthlyEvolutionResult = await database.query(
-    `SELECT
-      strftime('%Y-%m', datetime(t.date, 'localtime')) as year_month,
-      MIN(DATE(datetime(t.date, 'localtime'))) as month_start_date,
-      SUM(ABS(t.price)) as total_amount,
-      COUNT(*) as transaction_count
-    FROM transactions t
-    WHERE t.status = 'completed'
-      AND t.category_type = 'expense'
-      AND t.price < 0
-      AND t.date >= $1
-      AND t.date <= $2
-    GROUP BY year_month
-    ORDER BY year_month`,
-    [startDate.toISOString(), endDate.toISOString()]
-  );
+    // Get weekly evolution data
+    weeklyEvolutionResult = await database.query(
+      `SELECT
+        strftime('%Y-%W', datetime(t.date, 'localtime')) as year_week,
+        MIN(DATE(datetime(t.date, 'localtime'))) as week_start_date,
+        SUM(ABS(t.price)) as total_amount,
+        COUNT(*) as transaction_count
+      FROM transactions t
+      WHERE t.status = 'completed'
+        AND t.category_type = 'expense'
+        AND t.price < 0
+        AND t.date >= $1
+        AND t.date <= $2
+      GROUP BY year_week
+      ORDER BY year_week`,
+      [startDate.toISOString(), endDate.toISOString()]
+    );
+
+    // Get monthly evolution data
+    monthlyEvolutionResult = await database.query(
+      `SELECT
+        strftime('%Y-%m', datetime(t.date, 'localtime')) as year_month,
+        MIN(DATE(datetime(t.date, 'localtime'))) as month_start_date,
+        SUM(ABS(t.price)) as total_amount,
+        COUNT(*) as transaction_count
+      FROM transactions t
+      WHERE t.status = 'completed'
+        AND t.category_type = 'expense'
+        AND t.price < 0
+        AND t.date >= $1
+        AND t.date <= $2
+      GROUP BY year_month
+      ORDER BY year_month`,
+      [startDate.toISOString(), endDate.toISOString()]
+    );
+  }
 
   // Initialize arrays
   const hourlySpending = Array(24).fill(0);
@@ -196,6 +230,25 @@ async function getTemporalAnalytics(params = {}) {
   const weekdayPercentage = totalSpending > 0 ? (weekdayTotal / totalSpending) * 100 : 0;
   const weekendPercentage = totalSpending > 0 ? (weekendTotal / totalSpending) * 100 : 0;
   const preciseTimePercentage = transactions.length > 0 ? (preciseTimeCount / transactions.length) * 100 : 0;
+  const dayCount = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+  const avgDailySpend = dayCount > 0 ? totalSpending / dayCount : 0;
+
+  if (summaryOnly) {
+    const response = {
+      hourlySpending: hourlySpending.map(v => Math.round(v)),
+      weekendPercentage,
+      preciseTimePercentage,
+      avgDailySpend: Math.round(avgDailySpend),
+      dateRange: {
+        start: startDate.toISOString().split('T')[0],
+        end: endDate.toISOString().split('T')[0]
+      },
+    };
+    if (!skipCache) {
+      temporalCache.set(cacheKey, response);
+    }
+    return response;
+  }
 
   // Format weekly trend data
   const weeklyTrend = Array.from(weeklyData.entries())
@@ -248,7 +301,7 @@ async function getTemporalAnalytics(params = {}) {
     daysAgo: Math.floor((now - new Date(row.month_start_date).getTime()) / (1000 * 60 * 60 * 24))
   }));
 
-  return {
+  const response = {
     hourlySpending: hourlySpending.map(v => Math.round(v)),
     weekdaySpending: weekdaySpending.map(v => Math.round(v)),
     hourlyByDaySpending: hourlyByDaySpending.map(row => row.map(v => Math.round(v))),
@@ -272,6 +325,10 @@ async function getTemporalAnalytics(params = {}) {
     weeklyEvolution,
     monthlyEvolution
   };
+  if (!skipCache) {
+    temporalCache.set(cacheKey, response);
+  }
+  return response;
 }
 
 module.exports = {

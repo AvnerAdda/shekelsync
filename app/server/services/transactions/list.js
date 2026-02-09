@@ -97,11 +97,25 @@ async function listRecentTransactions(params = {}) {
     [limit, offset],
   );
 
-  const transactions = result.rows.map((row) => ({
-    ...row,
-    price: parseFloat(row.price) || 0,
-    tags: row.tags ? JSON.parse(row.tags) : [],
-  }));
+  const transactions = result.rows.map((row) => {
+    let parsedTags = [];
+    if (row.tags) {
+      try {
+        const maybeTags = JSON.parse(row.tags);
+        if (Array.isArray(maybeTags)) {
+          parsedTags = maybeTags;
+        }
+      } catch {
+        parsedTags = [];
+      }
+    }
+
+    return {
+      ...row,
+      price: parseFloat(row.price) || 0,
+      tags: parsedTags,
+    };
+  });
 
   return {
     transactions,
@@ -235,14 +249,23 @@ async function searchTransactions(params = {}) {
 }
 
 async function getAllTags() {
-  const result = await database.query(
-    `
-      SELECT DISTINCT tags
-      FROM transactions
-      WHERE tags IS NOT NULL AND tags != '' AND tags != '[]'
-    `,
-    [],
-  );
+  let result;
+  try {
+    result = await database.query(
+      `
+        SELECT DISTINCT tags
+        FROM transactions
+        WHERE tags IS NOT NULL AND tags != '' AND tags != '[]'
+      `,
+      [],
+    );
+  } catch (error) {
+    // tags column may not exist yet if schema upgrade hasn't been applied
+    if (error.code === 'SQLITE_ERROR' && error.message?.includes('no such column')) {
+      return [];
+    }
+    throw error;
+  }
 
   // Parse and dedupe all tags across transactions
   const tagSet = new Set();

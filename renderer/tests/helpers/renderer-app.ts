@@ -847,6 +847,81 @@ const notificationsResponse = {
   },
 };
 
+const snapshotProgressResponse = {
+  success: true,
+  data: {
+    triggerKey: '2025-09-21',
+    generatedAt: '2025-09-21T09:00:00.000Z',
+    periods: [
+      {
+        key: 'week',
+        label: 'Week',
+        current: {
+          start: '2025-09-07',
+          end: '2025-09-13',
+          income: 2800,
+          expenses: 1900,
+          investmentOutflow: 300,
+          investmentInflow: 100,
+          net: 700,
+          txCount: 18,
+        },
+        previous: {
+          start: '2025-08-31',
+          end: '2025-09-06',
+          income: 2500,
+          expenses: 1700,
+          investmentOutflow: 200,
+          investmentInflow: 50,
+          net: 650,
+          txCount: 15,
+        },
+        deltaNet: 50,
+        deltaNetPct: 7.7,
+        hasData: true,
+      },
+      {
+        key: 'month',
+        label: 'Month',
+        current: {
+          start: '2025-08-01',
+          end: '2025-08-31',
+          income: 10000,
+          expenses: 7800,
+          investmentOutflow: 900,
+          investmentInflow: 300,
+          net: 1600,
+          txCount: 62,
+        },
+        previous: {
+          start: '2025-07-01',
+          end: '2025-07-31',
+          income: 9800,
+          expenses: 7600,
+          investmentOutflow: 1200,
+          investmentInflow: 400,
+          net: 1400,
+          txCount: 57,
+        },
+        deltaNet: 200,
+        deltaNetPct: 14.3,
+        hasData: true,
+      },
+    ],
+    sinceStart: {
+      startDate: '2025-01-01',
+      endDate: '2025-09-21',
+      daysTracked: 264,
+      income: 64000,
+      expenses: 51000,
+      investmentOutflow: 8300,
+      investmentInflow: 2900,
+      net: 7600,
+      txCount: 430,
+    },
+  },
+};
+
 const defaultHandlers: Record<string, Handler> = {
   'GET /api/ping': respondWith({ status: 'ok' }),
   'GET /api/credentials': respondWith(credentials),
@@ -948,6 +1023,7 @@ const defaultHandlers: Record<string, Handler> = {
   'POST /api/onboarding/dismiss': respondOK,
   'GET /api/notifications': respondWith(notificationsResponse),
   'GET /api/notifications?limit=20': respondWith(notificationsResponse),
+  'GET /api/notifications/snapshot-progress': respondWith(snapshotProgressResponse),
   'POST /api/scrape/bulk': respondWith({
     success: true,
     totalProcessed: 1,

@@ -225,7 +225,8 @@
       "intervals": {
         "daily": "Chaque jour",
         "twoDays": "Tous les 2 jours",
-        "weekly": "Hebdomadaire"
+        "weekly": "Hebdomadaire",
+        "monthly": "Mensuel"
       },
       "keepRunningLabel": "Continuer à fonctionner dans le tray lorsque la fenêtre est fermée",
       "headlessLabel": "Exécuter silencieusement (sans interface)",
@@ -2472,6 +2473,41 @@
     },
     "loading": "Chargement des aperçus...",
     "clickRefresh": "Cliquez sur actualiser pour charger vos aperçus financiers.",
-    "refresh": "Actualiser"
+    "refresh": "Actualiser",
+    "snapshot": {
+      "alert": {
+        "title": "Instantané de progression",
+        "message": "Consultez votre progression sur des périodes terminées.",
+        "action": "Voir l'instantané"
+      },
+      "periodLabels": {
+        "week": "Semaine",
+        "month": "Mois",
+        "2month": "2 mois",
+        "6month": "6 mois",
+        "1year": "1 an",
+        "sinceStart": "Depuis le début sur ShekelSync"
+      },
+      "metrics": {
+        "income": "Revenus",
+        "expenses": "Dépenses",
+        "investmentOutflow": "Sorties d'investissement",
+        "investmentInflow": "Entrées d'investissement",
+        "net": "Net",
+        "txCount": "Transactions"
+      },
+      "modal": {
+        "title": "Instantané de progression",
+        "loading": "Chargement de l'instantané...",
+        "empty": "Aucune donnée d'instantané disponible pour le moment.",
+        "fetchError": "Impossible de charger la progression.",
+        "currentPeriod": "Période actuelle",
+        "previousPeriod": "Période précédente",
+        "previousNet": "Net précédent",
+        "insufficientHistory": "Historique insuffisant pour comparer une période précédente complète.",
+        "notAvailable": "N/D",
+        "daysTracked": "{{count}} jours suivis"
+      }
+    }
   }
 }

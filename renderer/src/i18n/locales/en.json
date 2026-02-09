@@ -228,7 +228,8 @@
       "intervals": {
         "daily": "Every day",
         "twoDays": "Every 2 days",
-        "weekly": "Weekly"
+        "weekly": "Weekly",
+        "monthly": "Monthly"
       },
       "keepRunningLabel": "Keep running in tray when window closes",
       "headlessLabel": "Run silently (headless)",
@@ -2534,6 +2535,41 @@
     },
     "loading": "Loading insights...",
     "clickRefresh": "Click refresh to load your financial insights.",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "snapshot": {
+      "alert": {
+        "title": "Progress Snapshot",
+        "message": "See your progress across completed time periods.",
+        "action": "View Snapshot"
+      },
+      "periodLabels": {
+        "week": "Week",
+        "month": "Month",
+        "2month": "2 Months",
+        "6month": "6 Months",
+        "1year": "1 Year",
+        "sinceStart": "Since ShekelSync Started"
+      },
+      "metrics": {
+        "income": "Income",
+        "expenses": "Expenses",
+        "investmentOutflow": "Investment Outflow",
+        "investmentInflow": "Investment Inflow",
+        "net": "Net",
+        "txCount": "Transactions"
+      },
+      "modal": {
+        "title": "Progress Snapshot",
+        "loading": "Loading snapshot...",
+        "empty": "No snapshot data available yet.",
+        "fetchError": "Failed to load snapshot progress.",
+        "currentPeriod": "Current",
+        "previousPeriod": "Previous",
+        "previousNet": "Previous net",
+        "insufficientHistory": "Insufficient history for a full previous period comparison.",
+        "notAvailable": "N/A",
+        "daysTracked": "{{count}} days tracked"
+      }
+    }
   }
 }

@@ -42,7 +42,7 @@ declare global {
 
   interface BackgroundSyncSettings {
     enabled?: boolean;
-    intervalHours?: 24 | 48 | 168;
+    intervalHours?: 48 | 168 | 720;
     runOnStartup?: boolean;
     keepRunningInTray?: boolean;
     headless?: boolean;

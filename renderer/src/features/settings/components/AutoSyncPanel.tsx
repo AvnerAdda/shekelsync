@@ -27,7 +27,7 @@ import { useNotification } from '@renderer/features/notifications/NotificationCo
 import { apiClient } from '@/lib/api-client';
 import { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 
-type IntervalHours = 24 | 48 | 168;
+type IntervalHours = 48 | 168 | 720;
 
 interface BackgroundSyncSettings {
   enabled: boolean;
@@ -50,16 +50,16 @@ interface BackgroundSyncSettings {
 
 const DEFAULT_SETTINGS: BackgroundSyncSettings = {
   enabled: false,
-  intervalHours: 24,
+  intervalHours: 48,
   runOnStartup: true,
   keepRunningInTray: true,
   headless: true,
 };
 
-const INTERVAL_OPTIONS: Array<{ value: IntervalHours; labelKey: string; hours: number }> = [
-  { value: 24, labelKey: 'intervals.daily', hours: 24 },
-  { value: 48, labelKey: 'intervals.twoDays', hours: 48 },
-  { value: 168, labelKey: 'intervals.weekly', hours: 168 },
+const INTERVAL_OPTIONS: Array<{ value: IntervalHours; labelKey: string; display: string }> = [
+  { value: 48, labelKey: 'intervals.twoDays', display: '2' },
+  { value: 168, labelKey: 'intervals.weekly', display: '7' },
+  { value: 720, labelKey: 'intervals.monthly', display: '30' },
 ];
 
 const spin = keyframes`
@@ -391,7 +391,7 @@ const AutoSyncPanel: React.FC = () => {
                   fontWeight={700}
                   sx={{ color: isSelected ? theme.palette.primary.main : 'text.primary' }}
                 >
-                  {option.hours}
+                  {option.display}
                 </Typography>
                 <Typography
                   variant="caption"

@@ -134,7 +134,7 @@ async function fetchLastMonthHistory(startDate: Date): Promise<DashboardHistoryE
 
   try {
     const response = await apiClient.get(
-      `/api/analytics/dashboard?startDate=${lastMonthStart.toISOString()}&endDate=${lastMonthEnd.toISOString()}&aggregation=daily`,
+      `/api/analytics/dashboard?startDate=${lastMonthStart.toISOString()}&endDate=${lastMonthEnd.toISOString()}&aggregation=daily&includeBreakdowns=0&includeSummary=0`,
     );
 
     if (!response.ok) {
@@ -175,7 +175,7 @@ export function useDashboardData({
 
     try {
       const response = await apiClient.get(
-        `/api/analytics/dashboard?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&aggregation=${aggregation}`,
+        `/api/analytics/dashboard?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&aggregation=${aggregation}&includeBreakdowns=0`,
       );
 
       if (!response.ok) {
@@ -190,23 +190,32 @@ export function useDashboardData({
         };
       }
 
-      const viewingCurrentMonth = isCurrentMonthRange(startDate, endDate);
-      let lastMonthHistory: DashboardHistoryEntry[] = [];
-
-      if (viewingCurrentMonth && result.history?.length) {
-        lastMonthHistory = await fetchLastMonthHistory(startDate);
-      }
-
       if (requestId !== requestIdRef.current) {
         return;
       }
 
       setData(result);
+      const viewingCurrentMonth = isCurrentMonthRange(startDate, endDate);
+      const baseHistory = result.history ?? [];
       setCumulativeData(
-        result.history
-          ? calculateCumulativeData(result.history, lastMonthHistory, startDate, viewingCurrentMonth)
+        baseHistory.length
+          ? calculateCumulativeData(baseHistory, [], startDate, viewingCurrentMonth)
           : [],
       );
+
+      if (viewingCurrentMonth && aggregation === 'daily' && baseHistory.length) {
+        void fetchLastMonthHistory(startDate).then((lastMonthHistory) => {
+          if (requestId !== requestIdRef.current) {
+            return;
+          }
+          if (!lastMonthHistory.length) {
+            return;
+          }
+          setCumulativeData(
+            calculateCumulativeData(baseHistory, lastMonthHistory, startDate, true),
+          );
+        });
+      }
     } catch (err) {
       if (requestId !== requestIdRef.current) {
         return;

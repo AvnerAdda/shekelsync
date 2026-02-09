@@ -218,7 +218,7 @@ const AnalysisPageNew: React.FC = () => {
     setTemporalLoading(true);
     setTemporalError(null);
     try {
-      const response = await apiClient.get('/api/analytics/temporal?timeRange=6months');
+      const response = await apiClient.get('/api/analytics/temporal?timeRange=6months&summary=1');
       if (!response.ok) {
         throw new Error(t('errors.fetchFailed'));
       }
@@ -236,7 +236,7 @@ const AnalysisPageNew: React.FC = () => {
     setBehavioralLoading(true);
     setBehavioralError(null);
     try {
-      const response = await apiClient.get('/api/analytics/behavioral-patterns');
+      const response = await apiClient.get('/api/analytics/behavioral-patterns?summary=1');
       if (!response.ok) {
         throw new Error(t('errors.fetchFailed'));
       }
@@ -346,12 +346,30 @@ const AnalysisPageNew: React.FC = () => {
 
   const handleRefreshAll = useCallback(() => {
     fetchIntelligence();
-    fetchBudgetForecast();
-    fetchTemporalData();
-    fetchBehavioralData();
-    fetchFutureData();
-    fetchTimeValueData();
+    if (fetchOnceRef.current.budget) {
+      fetchBudgetForecast();
+    }
+    if (fetchOnceRef.current.temporal) {
+      fetchTemporalData();
+    }
+    if (fetchOnceRef.current.behavioral) {
+      fetchBehavioralData();
+    }
+    if (fetchOnceRef.current.future) {
+      fetchFutureData();
+    }
+    if (fetchOnceRef.current.timeValue) {
+      fetchTimeValueData();
+    }
   }, [fetchBehavioralData, fetchBudgetForecast, fetchFutureData, fetchIntelligence, fetchTemporalData, fetchTimeValueData]);
+
+  useEffect(() => {
+    const handleDataRefresh = () => {
+      handleRefreshAll();
+    };
+    window.addEventListener('dataRefresh', handleDataRefresh);
+    return () => window.removeEventListener('dataRefresh', handleDataRefresh);
+  }, [handleRefreshAll]);
 
   useEffect(() => {
     if (isLocked) {
@@ -500,9 +518,11 @@ const AnalysisPageNew: React.FC = () => {
     ).idx;
 
     const dailyEvolution = temporalData?.dailyEvolution;
-    const avgDailySpend = dailyEvolution?.length
-      ? dailyEvolution.reduce((sum: number, day: any) => sum + (day.amount || 0), 0) / dailyEvolution.length
-      : intelligence?.temporalIntelligence?.dailyBurnRate ?? null;
+    const avgDailySpend = temporalData?.avgDailySpend ?? (
+      dailyEvolution?.length
+        ? dailyEvolution.reduce((sum: number, day: any) => sum + (day.amount || 0), 0) / dailyEvolution.length
+        : intelligence?.temporalIntelligence?.dailyBurnRate ?? null
+    );
 
     return {
       peakHour,
@@ -521,9 +541,9 @@ const AnalysisPageNew: React.FC = () => {
       programmedPercentage,
       programmedAmount: behavioralData?.programmedAmount ?? null,
       impulseAmount: behavioralData?.impulseAmount ?? null,
-      recurringCount: behavioralData?.recurringPatterns?.length ?? null,
-      topCategoryWeekly: behavioralData?.categoryAverages?.[0]?.avgPerWeek ?? null,
-      topCategoryName: behavioralData?.categoryAverages?.[0]?.category ?? null,
+      recurringCount: behavioralData?.recurringCount ?? behavioralData?.recurringPatterns?.length ?? null,
+      topCategoryWeekly: behavioralData?.topCategoryWeekly ?? behavioralData?.categoryAverages?.[0]?.avgPerWeek ?? null,
+      topCategoryName: behavioralData?.topCategoryName ?? behavioralData?.categoryAverages?.[0]?.category ?? null,
     };
   }, [behavioralData, intelligence?.behavioralIntelligence?.impulseSpendingScore]);
 

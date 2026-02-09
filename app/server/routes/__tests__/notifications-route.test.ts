@@ -46,4 +46,27 @@ describe('Electron /api/notifications routes', () => {
 
     expect(res.body.error).toMatch(/invalid filters/i);
   });
+
+  it('returns snapshot progress payload', async () => {
+    const payload = { success: true, data: { triggerKey: '2025-08-17' } };
+    const spy = vi
+      .spyOn(notificationsService, 'getSnapshotProgress')
+      .mockResolvedValue(payload);
+
+    const res = await request(app).get('/api/notifications/snapshot-progress').expect(200);
+
+    expect(res.body).toEqual(payload);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles snapshot progress service errors', async () => {
+    vi.spyOn(notificationsService, 'getSnapshotProgress').mockRejectedValue({
+      status: 500,
+      message: 'snapshot failed',
+    });
+
+    const res = await request(app).get('/api/notifications/snapshot-progress').expect(500);
+
+    expect(res.body.error).toMatch(/snapshot failed/i);
+  });
 });
