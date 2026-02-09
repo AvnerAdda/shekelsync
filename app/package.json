@@ -212,7 +212,7 @@
     "publish": {
       "provider": "github",
       "owner": "AvnerAdda",
-      "repo": "finance-israel"
+      "repo": "shekelsync"
     }
   }
 }
