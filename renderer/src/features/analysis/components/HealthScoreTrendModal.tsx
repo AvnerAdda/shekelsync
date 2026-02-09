@@ -294,7 +294,7 @@ const HealthScoreTrendModal: React.FC<HealthScoreTrendModalProps> = ({ open, onC
                       const labelKey = nameStr === 'score' ? 'tooltip.score' : `breakdown.${nameStr.replace('Score', '')}`;
                       return [`${Math.round(Number(value))}`, t(labelKey, { defaultValue: nameStr })];
                     }}
-                    labelFormatter={(label: string) => label}
+                    labelFormatter={(label) => String(label ?? '')}
                     contentStyle={{
                       backgroundColor: alpha(theme.palette.background.paper, 0.85),
                       backdropFilter: 'blur(12px)',

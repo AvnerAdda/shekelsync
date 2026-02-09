@@ -47,7 +47,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
             </Box>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, sm: 6 }} md={3.5}>
+        <Grid size={{ xs: 12, sm: 6, md: 3.5 }}>
           <Card sx={{ height: 180, p: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
               <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
@@ -57,7 +57,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
             <Skeleton variant="text" width={100} height={16} />
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, sm: 6 }} md={3.5}>
+        <Grid size={{ xs: 12, sm: 6, md: 3.5 }}>
           <Card sx={{ height: 180, p: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
               <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />

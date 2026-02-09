@@ -95,7 +95,7 @@ const SecuritySettingsPanel: React.FC = () => {
 
       // Check if biometric auth is available
       const biometricBridge = window.electronAPI?.biometricAuth;
-      if (!biometricBridge) {
+      if (!biometricBridge?.isAvailable || !biometricBridge?.authenticate) {
         setAuthResult({ success: false, message: 'Biometric authentication not available' });
         return;
       }

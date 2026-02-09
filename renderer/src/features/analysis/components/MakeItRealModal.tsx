@@ -277,6 +277,7 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
                 <Box sx={{ height: 300, width: '100%' }}>
                   <BarChart
                     height={300}
+                    hideLegend
                     series={[
                       {
                         data: data.categoryCosts?.map((c: any) => c.hours) || [],
@@ -291,11 +292,6 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
                     yAxis={[{
                       label: t('categoryHours.yAxisLabel'),
                     }]}
-                    slotProps={{
-                      legend: {
-                        hidden: true
-                      }
-                    }}
                     sx={{
                       '.MuiBarElement-root': {
                         fill: `url(#categoryHoursGradient)`,

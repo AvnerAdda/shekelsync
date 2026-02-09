@@ -15,6 +15,7 @@ import {
   alpha,
   useTheme,
 } from '@mui/material';
+import type { Theme } from '@mui/material/styles';
 import {
   TrendingUp as GrowthIcon,
   Security as StabilityIcon,
@@ -177,12 +178,12 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
   };
 
   const toggleGroupStyles = {
-    bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+    bgcolor: (theme: Theme) => alpha(theme.palette.background.paper, 0.4),
     backdropFilter: 'blur(10px)',
     borderRadius: 2,
     p: 0.5,
     border: '1px solid',
-    borderColor: (theme) => alpha(theme.palette.divider, 0.1),
+    borderColor: (theme: Theme) => alpha(theme.palette.divider, 0.1),
     '& .MuiToggleButton-root': {
       border: 'none',
       borderRadius: 1.5,
@@ -190,12 +191,12 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
       py: 0.5,
       color: 'text.secondary',
       '&.Mui-selected': {
-        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
+        bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.1),
         color: 'primary.main',
         fontWeight: 600,
       },
       '&:hover': {
-        bgcolor: (theme) => alpha(theme.palette.action.hover, 0.1),
+        bgcolor: (theme: Theme) => alpha(theme.palette.action.hover, 0.1),
       }
     }
   };

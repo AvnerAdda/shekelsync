@@ -39,7 +39,7 @@ const useBreakdownDrilldown = ({
   const [categoryDetails, setCategoryDetails] = useState<CategoryDetails | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [isZooming, setIsZooming] = useState(false);
-  const zoomTimeout = useRef<number>();
+  const zoomTimeout = useRef<number | undefined>(undefined);
   const { locale } = useLocaleSettings();
 
   const startZoomAnimation = useCallback(() => {

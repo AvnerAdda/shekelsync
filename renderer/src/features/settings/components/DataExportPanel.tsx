@@ -443,7 +443,7 @@ const DataExportPanel: React.FC = () => {
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <InstitutionBadge institution={option.institution} fallback={option.name} />
                       <Typography variant="caption" color="text.secondary">
-                        {t('filters.vendors.count', { count: option.count.toLocaleString() })}
+                        {t('filters.vendors.count', { count: option.count })}
                       </Typography>
                     </Box>
                   </li>
@@ -479,7 +479,7 @@ const DataExportPanel: React.FC = () => {
                 <Box>
                   <Typography variant="h6">Export Summary</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {t('summary.estimated', { count: getEstimatedRecords().toLocaleString() })}
+                    {t('summary.estimated', { count: getEstimatedRecords() })}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {t('summary.formatType', { format: format.toUpperCase(), type: dataType })}

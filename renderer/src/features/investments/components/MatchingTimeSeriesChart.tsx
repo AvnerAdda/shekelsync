@@ -174,26 +174,29 @@ export default function MatchingTimeSeriesChart({ pairing, compact = false }: Ma
           />
           <Tooltip
             contentStyle={{ fontSize: compact ? 11 : 13 }}
-            formatter={(value: number, name: string) => {
+            formatter={(value, name) => {
               const labels: { [key: string]: string } = {
                 bankMatched: 'Bank Matched',
                 bankUnmatched: 'Bank Unmatched',
                 ccMatched: 'CC Matched',
                 ccUnmatched: 'CC Unmatched'
               };
-              return [value, labels[name] || name];
+              const safeName = String(name ?? '');
+              const numericValue = typeof value === 'number' ? value : Number(value ?? 0);
+              return [numericValue, labels[safeName] || safeName];
             }}
           />
           <Legend
             wrapperStyle={{ fontSize: compact ? 10 : 12 }}
-            formatter={(value: string) => {
+            formatter={(value) => {
               const labels: { [key: string]: string } = {
                 bankMatched: 'Bank Matched',
                 bankUnmatched: 'Bank Unmatched',
                 ccMatched: 'CC Matched',
                 ccUnmatched: 'CC Unmatched'
               };
-              return labels[value] || value;
+              const safeValue = String(value ?? '');
+              return labels[safeValue] || safeValue;
             }}
           />
 

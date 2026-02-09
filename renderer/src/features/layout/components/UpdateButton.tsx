@@ -200,7 +200,6 @@ const UpdateButton: React.FC<UpdateButtonProps> = ({
         {updateState.status === 'idle' || updateState.status === 'not-available' || updateState.status === 'error' ? (
           <MenuItem 
             onClick={() => handleAction(onCheckForUpdates)} 
-            disabled={updateState.status === 'checking'}
             sx={{ borderRadius: 1, mx: 0.5, my: 0.5 }}
           >
             <ListItemIcon>

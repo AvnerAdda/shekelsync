@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactElement } from 'react';
 import { createHashRouter } from 'react-router-dom';
 import AppLayout from './routes/AppLayout';
 import LoadingFallback from './components/LoadingFallback';
@@ -8,7 +8,7 @@ const AnalysisPageNew = lazy(() => import('@renderer/features/analysis/pages/Ana
 const InvestmentsPage = lazy(() => import('@renderer/features/investments/pages/InvestmentsPage'));
 const SettingsPage = lazy(() => import('@renderer/features/settings/pages/SettingsPage'));
 
-const withSuspense = (node: JSX.Element) => (
+const withSuspense = (node: ReactElement) => (
   <Suspense fallback={<LoadingFallback />}>
     {node}
   </Suspense>

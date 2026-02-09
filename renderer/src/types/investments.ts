@@ -143,6 +143,53 @@ export interface PortfolioHistoryResponse {
   }>;
 }
 
+export interface InvestmentBalanceSheetAccount {
+  id: number;
+  accountName: string;
+  accountType: string;
+  investmentCategory: string | null;
+  currency: string | null;
+  currentValue: number | null;
+  asOfDate: string | null;
+}
+
+export interface InvestmentBalanceSheetBucket {
+  totalValue: number;
+  accountsCount: number;
+  accountsWithValue: number;
+  missingValueCount: number;
+  newestUpdateDate: string | null;
+  accounts?: InvestmentBalanceSheetAccount[];
+}
+
+export interface InvestmentBalanceSheetResponse {
+  generatedAt: string;
+  assets: {
+    total: number;
+    newestUpdateDate: string | null;
+    buckets: {
+      cash: InvestmentBalanceSheetBucket;
+      liquid: InvestmentBalanceSheetBucket;
+      restricted: InvestmentBalanceSheetBucket;
+      stability: InvestmentBalanceSheetBucket;
+      other: InvestmentBalanceSheetBucket;
+    };
+    currencies: {
+      distinct: string[];
+      hasMultiple: boolean;
+    };
+  };
+  liabilities: {
+    pendingCreditCardDebt: number | null;
+    pendingCreditCardDebtStatus: 'ok' | 'no_pairings' | 'missing_repayment_baseline';
+    lastCreditCardRepaymentDate: string | null;
+    creditCardVendorCount: number;
+  };
+  netWorth: number | null;
+  netWorthStatus: 'ok' | 'partial';
+  missingValuationsCount: number;
+}
+
 // Pikadon (Term Deposit) Types
 
 export interface PikadonHolding {
