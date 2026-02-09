@@ -54,7 +54,6 @@ npm run init:sqlite
 ## Configuration
 
 Local desktop runs use `app/.env.local`.
-Use `.env.example` as the template, then place real values in `app/.env.local`.
 For production, set a strong `CLARIFY_ENCRYPTION_KEY` and keep `ALLOW_DEV_NO_ENCRYPTION=false`.
 
 ## Scraping and Compliance
