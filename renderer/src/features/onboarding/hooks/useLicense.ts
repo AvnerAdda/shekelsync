@@ -35,9 +35,6 @@ interface UseLicenseReturn {
   requiresRegistration: boolean;
 }
 
-// Check if we're running in Electron
-const isElectron = typeof window !== 'undefined' && window.electronAPI;
-
 const DEFAULT_STATUS: LicenseStatus = {
   registered: false,
   licenseType: 'none',
@@ -57,9 +54,14 @@ export function useLicense(): UseLicenseReturn {
   const [status, setStatus] = useState<LicenseStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const getLicenseBridge = useCallback(
+    () => (typeof window === 'undefined' ? undefined : window.electronAPI?.license),
+    []
+  );
 
   const fetchStatus = useCallback(async () => {
-    if (!isElectron) {
+    const licenseBridge = getLicenseBridge();
+    if (!licenseBridge?.getStatus) {
       // Not running in Electron - allow all operations
       setStatus({
         registered: true,
@@ -77,7 +79,7 @@ export function useLicense(): UseLicenseReturn {
       setLoading(true);
       setError(null);
 
-      const result = await window.electronAPI.license.getStatus();
+      const result = await licenseBridge.getStatus();
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to get license status');
@@ -96,15 +98,16 @@ export function useLicense(): UseLicenseReturn {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getLicenseBridge]);
 
   const register = useCallback(async (email: string) => {
-    if (!isElectron) {
+    const licenseBridge = getLicenseBridge();
+    if (!licenseBridge?.register) {
       return { success: false, error: 'Not running in Electron' };
     }
 
     try {
-      const result = await window.electronAPI.license.register(email);
+      const result = await licenseBridge.register(email);
 
       if (result.success) {
         await fetchStatus();
@@ -120,10 +123,11 @@ export function useLicense(): UseLicenseReturn {
         error: err instanceof Error ? err.message : 'Registration failed',
       };
     }
-  }, [fetchStatus]);
+  }, [fetchStatus, getLicenseBridge]);
 
   const validateEmail = useCallback(async (email: string): Promise<EmailValidation> => {
-    if (!isElectron) {
+    const licenseBridge = getLicenseBridge();
+    if (!licenseBridge?.validateEmail) {
       // Basic validation without Electron
       const normalized = email.trim().toLowerCase();
       if (!EMAIL_REGEX.test(normalized)) {
@@ -133,7 +137,7 @@ export function useLicense(): UseLicenseReturn {
     }
 
     try {
-      const result = await window.electronAPI.license.validateEmail(email);
+      const result = await licenseBridge.validateEmail(email);
 
       if (!result.success) {
         return { valid: false, error: result.error };
@@ -147,15 +151,16 @@ export function useLicense(): UseLicenseReturn {
         error: err instanceof Error ? err.message : 'Validation failed',
       };
     }
-  }, []);
+  }, [getLicenseBridge]);
 
   const activatePro = useCallback(async (paymentRef?: string) => {
-    if (!isElectron) {
+    const licenseBridge = getLicenseBridge();
+    if (!licenseBridge?.activatePro) {
       return { success: false, error: 'Not running in Electron' };
     }
 
     try {
-      const result = await window.electronAPI.license.activatePro(paymentRef);
+      const result = await licenseBridge.activatePro(paymentRef);
 
       if (result.success) {
         await fetchStatus();
@@ -171,15 +176,16 @@ export function useLicense(): UseLicenseReturn {
         error: err instanceof Error ? err.message : 'Activation failed',
       };
     }
-  }, [fetchStatus]);
+  }, [fetchStatus, getLicenseBridge]);
 
   const validateOnline = useCallback(async () => {
-    if (!isElectron) {
+    const licenseBridge = getLicenseBridge();
+    if (!licenseBridge?.validateOnline) {
       return { success: false, error: 'Not running in Electron' };
     }
 
     try {
-      const result = await window.electronAPI.license.validateOnline();
+      const result = await licenseBridge.validateOnline();
 
       if (result.success) {
         await fetchStatus();
@@ -195,7 +201,7 @@ export function useLicense(): UseLicenseReturn {
         error: err instanceof Error ? err.message : 'Online validation failed',
       };
     }
-  }, [fetchStatus]);
+  }, [fetchStatus, getLicenseBridge]);
 
   // Fetch status on mount
   useEffect(() => {
@@ -213,14 +219,14 @@ export function useLicense(): UseLicenseReturn {
 
   // Periodically validate online (every 30 minutes)
   useEffect(() => {
-    if (!isElectron) return;
+    if (!getLicenseBridge()?.validateOnline) return;
 
     const interval = setInterval(() => {
       validateOnline().catch(console.error);
     }, 30 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [validateOnline]);
+  }, [getLicenseBridge, validateOnline]);
 
   // Derived states
   const isRegistered = status?.registered ?? false;

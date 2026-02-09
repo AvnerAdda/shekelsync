@@ -36,9 +36,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({ data, categoryType, title, 
       <LineChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis dataKey="month" />
-        <YAxis tickFormatter={(value: number) => formatCurrencyValue(value)} />
+        <YAxis tickFormatter={(value) => formatCurrencyValue(typeof value === 'number' ? value : Number(value ?? 0))} />
         <Tooltip
-          formatter={(value: number) => formatCurrencyValue(value)}
+          formatter={(value) => formatCurrencyValue(typeof value === 'number' ? value : Number(value ?? 0))}
           contentStyle={{
             backgroundColor: alpha(theme.palette.background.paper, 0.8),
             backdropFilter: 'blur(8px)',

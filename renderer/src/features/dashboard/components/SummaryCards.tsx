@@ -451,7 +451,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                 ))}
               </Pie>
               <RechartsTooltip
-                formatter={(value: number) => formatCurrencyValue(value)}
+                formatter={(value) => formatCurrencyValue(typeof value === 'number' ? value : Number(value ?? 0))}
                 contentStyle={{
                   backgroundColor: alpha(theme.palette.background.paper, 0.8),
                   backdropFilter: 'blur(10px)',

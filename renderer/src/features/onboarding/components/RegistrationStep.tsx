@@ -25,9 +25,6 @@ interface RegistrationStepProps {
   onSkip?: () => void;
 }
 
-// Check if we're running in Electron
-const isElectron = typeof window !== 'undefined' && window.electronAPI;
-
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip }) => {
@@ -51,10 +48,11 @@ const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip 
     const timer = setTimeout(async () => {
       setIsValidating(true);
       try {
-        if (isElectron) {
-          const result = await window.electronAPI.license.validateEmail(normalized);
+        const licenseApi = typeof window === 'undefined' ? undefined : window.electronAPI?.license;
+        if (licenseApi?.validateEmail) {
+          const result = await licenseApi.validateEmail(normalized);
           if (result.success) {
-            setValidation(result.data);
+            setValidation(result.data ?? { valid: false, error: t('registration.validationError') });
           } else {
             setValidation({ valid: false, error: result.error });
           }
@@ -91,8 +89,9 @@ const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip 
     setRegistrationError(null);
 
     try {
-      if (isElectron) {
-        const result = await window.electronAPI.license.register(email.trim());
+      const licenseApi = typeof window === 'undefined' ? undefined : window.electronAPI?.license;
+      if (licenseApi?.register) {
+        const result = await licenseApi.register(email.trim());
         if (result.success) {
           onComplete?.();
         } else {

@@ -1000,7 +1000,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   />
                   <Tooltip 
                     formatter={(value, name) => [formatCurrencyValue(typeof value === 'number' ? value : 0), name ?? '']}
-                    labelFormatter={(label: string) => format(parseLocalDate(label), 'MMM dd, yyyy')}
+                    labelFormatter={(label) => format(parseLocalDate(String(label ?? '')), 'MMM dd, yyyy')}
                   />
                   <Legend />
                   <ReferenceLine y={0} stroke={theme.palette.divider} strokeWidth={2} />

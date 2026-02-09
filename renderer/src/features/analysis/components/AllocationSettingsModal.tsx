@@ -14,6 +14,7 @@ import {
   Divider,
   List,
   ListItem,
+  ListItemButton,
   ListItemText,
   ListItemIcon,
   Select,
@@ -211,25 +212,22 @@ const AllocationSettingsModal: React.FC<AllocationSettingsModalProps> = ({
 
             <List dense sx={{ maxHeight: 200, overflow: 'auto', bgcolor: 'background.default', borderRadius: 1 }}>
               {unallocatedCategories.map((category) => (
-                <ListItem
-                  key={category.category_definition_id}
-                  button
-                  onClick={() => handleToggleCategory(category.category_definition_id)}
-                  dense
-                >
-                  <ListItemIcon sx={{ minWidth: 36 }}>
-                    <Checkbox
-                      edge="start"
-                      checked={selectedUnallocated.includes(category.category_definition_id)}
-                      tabIndex={-1}
-                      disableRipple
-                      size="small"
+                <ListItem key={category.category_definition_id} dense disablePadding>
+                  <ListItemButton onClick={() => handleToggleCategory(category.category_definition_id)}>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <Checkbox
+                        edge="start"
+                        checked={selectedUnallocated.includes(category.category_definition_id)}
+                        tabIndex={-1}
+                        disableRipple
+                        size="small"
+                      />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={category.category_name}
+                      secondary={category.total_amount > 0 ? `${category.total_amount.toFixed(0)} (${category.percentage_of_income.toFixed(1)}%)` : 'No spending'}
                     />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={category.category_name}
-                    secondary={category.total_amount > 0 ? `${category.total_amount.toFixed(0)} (${category.percentage_of_income.toFixed(1)}%)` : 'No spending'}
-                  />
+                  </ListItemButton>
                 </ListItem>
               ))}
             </List>

@@ -9,6 +9,17 @@ interface UpdateProgressInfo {
   total: number;
 }
 
+interface UpdateCheckResult {
+  success: boolean;
+  error?: string;
+  updateInfo?: UpdateInfo;
+}
+
+interface UpdateActionResult {
+  success: boolean;
+  error?: string;
+}
+
 interface UpdateManagerReturn {
   updateState: UpdateState;
   checkForUpdates: () => Promise<void>;
@@ -48,9 +59,20 @@ export const useUpdateManager = (): UpdateManagerReturn => {
   // Check for updates manually
   const checkForUpdates = useCallback(async () => {
     setUpdateState(prev => ({ ...prev, status: 'checking', error: null }));
-    
-    const result = await safeElectronCall(
-      () => window.electronAPI.updater.checkForUpdates(),
+
+    const updaterApi = typeof window === 'undefined' ? undefined : window.electronAPI?.updater;
+    if (!updaterApi?.checkForUpdates) {
+      setUpdateState(prev => ({
+        ...prev,
+        status: 'error',
+        error: 'Auto-updater not available',
+      }));
+      return;
+    }
+    const checkForUpdatesFn = updaterApi.checkForUpdates;
+
+    const result = await safeElectronCall<UpdateCheckResult>(
+      () => checkForUpdatesFn(),
       { success: false, error: 'Auto-updater not available' }
     );
 
@@ -58,7 +80,7 @@ export const useUpdateManager = (): UpdateManagerReturn => {
       setUpdateState(prev => ({
         ...prev,
         status: 'available',
-        updateInfo: result.updateInfo,
+        updateInfo: result.updateInfo ?? null,
       }));
     } else if (result?.success && !result.updateInfo) {
       setUpdateState(prev => ({ 
@@ -82,9 +104,20 @@ export const useUpdateManager = (): UpdateManagerReturn => {
     }
 
     setUpdateState(prev => ({ ...prev, status: 'downloading', downloadProgress: 0 }));
-    
-    const result = await safeElectronCall(
-      () => window.electronAPI.updater.downloadUpdate(),
+
+    const updaterApi = typeof window === 'undefined' ? undefined : window.electronAPI?.updater;
+    if (!updaterApi?.downloadUpdate) {
+      setUpdateState(prev => ({
+        ...prev,
+        status: 'error',
+        error: 'Auto-updater not available',
+      }));
+      return;
+    }
+    const downloadUpdateFn = updaterApi.downloadUpdate;
+
+    const result = await safeElectronCall<UpdateActionResult>(
+      () => downloadUpdateFn(),
       { success: false, error: 'Auto-updater not available' }
     );
 
@@ -103,8 +136,19 @@ export const useUpdateManager = (): UpdateManagerReturn => {
       return;
     }
 
-    const result = await safeElectronCall(
-      () => window.electronAPI.updater.quitAndInstall(),
+    const updaterApi = typeof window === 'undefined' ? undefined : window.electronAPI?.updater;
+    if (!updaterApi?.quitAndInstall) {
+      setUpdateState(prev => ({
+        ...prev,
+        status: 'error',
+        error: 'Auto-updater not available',
+      }));
+      return;
+    }
+    const quitAndInstallFn = updaterApi.quitAndInstall;
+
+    const result = await safeElectronCall<UpdateActionResult>(
+      () => quitAndInstallFn(),
       { success: false, error: 'Auto-updater not available' }
     );
 
@@ -119,23 +163,26 @@ export const useUpdateManager = (): UpdateManagerReturn => {
 
   // Set up event listeners
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.electronAPI?.events) {
+    const eventsApi = typeof window === 'undefined' ? undefined : window.electronAPI?.events;
+    if (!eventsApi) {
       return;
     }
 
     const cleanup: Array<() => void> = [];
 
     // Checking for update
-    if (window.electronAPI.events.onUpdateCheckingForUpdate) {
-      const unsubscribe = window.electronAPI.events.onUpdateCheckingForUpdate(() => {
+    if (eventsApi.onUpdateCheckingForUpdate) {
+      const unsubscribe = eventsApi.onUpdateCheckingForUpdate(() => {
         setUpdateState(prev => ({ ...prev, status: 'checking', error: null }));
       });
-      cleanup.push(unsubscribe);
+      if (typeof unsubscribe === 'function') {
+        cleanup.push(unsubscribe);
+      }
     }
 
     // Update available
-    if (window.electronAPI.events.onUpdateAvailable) {
-      const unsubscribe = window.electronAPI.events.onUpdateAvailable((info: UpdateInfo) => {
+    if (eventsApi.onUpdateAvailable) {
+      const unsubscribe = eventsApi.onUpdateAvailable((info: UpdateInfo) => {
         setUpdateState(prev => ({
           ...prev,
           status: 'available',
@@ -147,24 +194,28 @@ export const useUpdateManager = (): UpdateManagerReturn => {
           'info'
         );
       });
-      cleanup.push(unsubscribe);
+      if (typeof unsubscribe === 'function') {
+        cleanup.push(unsubscribe);
+      }
     }
 
     // Update not available
-    if (window.electronAPI.events.onUpdateNotAvailable) {
-      const unsubscribe = window.electronAPI.events.onUpdateNotAvailable(() => {
+    if (eventsApi.onUpdateNotAvailable) {
+      const unsubscribe = eventsApi.onUpdateNotAvailable(() => {
         setUpdateState(prev => ({ 
           ...prev, 
           status: 'not-available',
           error: null,
         }));
       });
-      cleanup.push(unsubscribe);
+      if (typeof unsubscribe === 'function') {
+        cleanup.push(unsubscribe);
+      }
     }
 
     // Update error
-    if (window.electronAPI.events.onUpdateError) {
-      const unsubscribe = window.electronAPI.events.onUpdateError((errorInfo: { message: string }) => {
+    if (eventsApi.onUpdateError) {
+      const unsubscribe = eventsApi.onUpdateError((errorInfo: { message: string }) => {
         setUpdateState(prev => ({
           ...prev,
           status: 'error',
@@ -175,24 +226,28 @@ export const useUpdateManager = (): UpdateManagerReturn => {
           'error'
         );
       });
-      cleanup.push(unsubscribe);
+      if (typeof unsubscribe === 'function') {
+        cleanup.push(unsubscribe);
+      }
     }
 
     // Download progress
-    if (window.electronAPI.events.onUpdateDownloadProgress) {
-      const unsubscribe = window.electronAPI.events.onUpdateDownloadProgress((progress: UpdateProgressInfo) => {
+    if (eventsApi.onUpdateDownloadProgress) {
+      const unsubscribe = eventsApi.onUpdateDownloadProgress((progress: UpdateProgressInfo) => {
         setUpdateState(prev => ({
           ...prev,
           status: 'downloading',
           downloadProgress: progress.percent,
         }));
       });
-      cleanup.push(unsubscribe);
+      if (typeof unsubscribe === 'function') {
+        cleanup.push(unsubscribe);
+      }
     }
 
     // Update downloaded
-    if (window.electronAPI.events.onUpdateDownloaded) {
-      const unsubscribe = window.electronAPI.events.onUpdateDownloaded((info: UpdateInfo) => {
+    if (eventsApi.onUpdateDownloaded) {
+      const unsubscribe = eventsApi.onUpdateDownloaded((info: UpdateInfo) => {
         setUpdateState(prev => ({
           ...prev,
           status: 'downloaded',
@@ -204,7 +259,9 @@ export const useUpdateManager = (): UpdateManagerReturn => {
           'success'
         );
       });
-      cleanup.push(unsubscribe);
+      if (typeof unsubscribe === 'function') {
+        cleanup.push(unsubscribe);
+      }
     }
 
     // Store cleanup functions
