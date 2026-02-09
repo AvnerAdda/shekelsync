@@ -31,22 +31,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install app dependencies
+        run: npm --prefix app ci
+
       - name: Run security tests
         run: npm run test:security
         env:
           NODE_ENV: test
-          KEYTAR_DISABLE: 'true'
 
       - name: Generate test coverage
         run: npm run test:security:coverage
         env:
           NODE_ENV: test
-          KEYTAR_DISABLE: 'true'
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          files: ./coverage/coverage-final.json
+          files: ./app/coverage/coverage-final.json
           flags: security-tests
           name: security-coverage
 
