@@ -2,15 +2,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 const queryMock = vi.fn();
 let analyticsModule: any;
-let getBreakdownAnalytics: any;
 const metricsStore = require('../analytics/metrics-store.js');
 
 describe('breakdown analytics trends', () => {
   beforeAll(async () => {
     analyticsModule = await import('../analytics/breakdown.js');
-    getBreakdownAnalytics =
-      analyticsModule.getBreakdownAnalytics ??
-      analyticsModule.default?.getBreakdownAnalytics;
   });
 
   beforeEach(() => {

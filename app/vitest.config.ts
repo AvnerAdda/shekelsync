@@ -14,8 +14,7 @@ export default defineConfig({
     ],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'html'],
-      tempDir: path.resolve(__dirname, 'coverage/tmp'),
+      reporter: ['text', 'html', 'json'],
       cleanOnRerun: true,
     },
     // Enable mocking for server-side modules

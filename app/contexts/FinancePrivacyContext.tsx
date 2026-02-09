@@ -36,6 +36,18 @@ const getMaskLength = (value: number | null | undefined, override?: number) => {
   return Math.max(3, digits);
 };
 
+const readInitialMaskAmounts = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    return stored === 'true';
+  } catch {
+    return false;
+  }
+};
+
 interface FinancePrivacyProviderProps {
   children: React.ReactNode;
   locale?: string;
@@ -45,21 +57,7 @@ export const FinancePrivacyProvider: React.FC<FinancePrivacyProviderProps> = ({
   children,
   locale = 'he',
 }: FinancePrivacyProviderProps) => {
-  const [maskAmounts, setMaskAmountsState] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored !== null) {
-        setMaskAmountsState(stored === 'true');
-      }
-    } catch {
-      // Ignore storage read errors to avoid blocking the UI
-    }
-  }, []);
+  const [maskAmounts, setMaskAmountsState] = useState(readInitialMaskAmounts);
 
   useEffect(() => {
     if (typeof window === 'undefined') {

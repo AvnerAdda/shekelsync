@@ -23,11 +23,11 @@ const holdingsService = require('../../services/investments/holdings.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const summaryService = require('../../services/investments/summary.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const manualMatchingService = require('../../services/investments/manual-matching.js');
+const ignoredManualMatchingService = require('../../services/investments/manual-matching.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const bankSummaryService = require('../../services/investments/bank-summary.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const database = require('../../services/database.js');
+const ignoredDatabase = require('../../services/database.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pikadonService = require('../../services/investments/pikadon.js');
 
