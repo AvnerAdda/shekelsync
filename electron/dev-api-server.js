@@ -1,5 +1,20 @@
 require('./setup-module-alias');
 
+const fs = require('fs');
+const path = require('path');
+const { appRoot, requireFromApp } = require('./paths');
+
+// Keep env loading consistent with Electron dev runtime.
+try {
+  const dotenv = requireFromApp('dotenv');
+  const envFile = path.join(appRoot, '.env.local');
+  if (fs.existsSync(envFile)) {
+    dotenv.config({ path: envFile });
+  }
+} catch (error) {
+  console.warn('[dev-api] Unable to load dotenv configuration:', error.message);
+}
+
 const { setupAPIServer } = require('./server');
 
 async function start() {

@@ -13,8 +13,9 @@
 - **Supabase Supporter Schema:** `./supabase-supporter-program.md`
 
 ### Runtime Configuration
-- Set `DONATION_URL` in root `.env` or `app/.env.local` for desktop runtime.
-- For validated supporter plans, also set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
+- Use `app/.env.local` for desktop runtime values.
+- Set `DONATION_URL` in `app/.env.local`.
+- For validated supporter plans, also set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` in `app/.env.local`.
 
 ---
 
