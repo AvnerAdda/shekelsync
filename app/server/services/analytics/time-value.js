@@ -1,13 +1,31 @@
 const database = require('../database.js');
+const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
+
+const timeValueCache = createTtlCache({ maxEntries: 10, defaultTtlMs: 60 * 1000 });
 
 /**
  * Calculate time value of money - hours worked per purchase/category
  */
-async function getTimeValueAnalytics() {
+async function getTimeValueAnalytics(params = {}) {
+  const skipCache =
+    process.env.NODE_ENV === 'test' ||
+    params.noCache === true ||
+    params.noCache === 'true' ||
+    params.noCache === '1';
   // Get last 3 months of data
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
   const now = new Date();
+  const cacheKey = JSON.stringify({
+    start: threeMonthsAgo.toISOString().split('T')[0],
+    end: now.toISOString().split('T')[0],
+  });
+  if (!skipCache) {
+    const cached = timeValueCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
 
   // Calculate income and hourly wage
   const incomeResult = await database.query(
@@ -120,7 +138,7 @@ async function getTimeValueAnalytics() {
     amount: cat.amount
   }));
 
-  return {
+  const response = {
     hourlyWage: Math.round(hourlyWage),
     totalIncome: Math.round(totalIncome),
     totalExpenses: Math.round(totalExpenses),
@@ -128,6 +146,10 @@ async function getTimeValueAnalytics() {
     categoryCosts,
     biggestPurchase
   };
+  if (!skipCache) {
+    timeValueCache.set(cacheKey, response);
+  }
+  return response;
 }
 
 module.exports = {

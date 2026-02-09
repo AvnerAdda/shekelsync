@@ -67,6 +67,14 @@ function createSqlitePool(options = {}) {
       }
     }
 
+    const transactionColumns = db.prepare("PRAGMA table_info('transactions')").all();
+    if (Array.isArray(transactionColumns) && transactionColumns.length > 0) {
+      const hasTags = transactionColumns.some((col) => col && col.name === 'tags');
+      if (!hasTags) {
+        db.exec('ALTER TABLE transactions ADD COLUMN tags TEXT');
+      }
+    }
+
     const pairingExclusionInfo = db.prepare("PRAGMA table_info('transaction_pairing_exclusions')").all();
     const hasPairingExclusions = Array.isArray(pairingExclusionInfo) && pairingExclusionInfo.length > 0;
     const pairingIdPk = pairingExclusionInfo.some((col) => col && col.name === 'pairing_id' && col.pk);
@@ -91,6 +99,13 @@ function createSqlitePool(options = {}) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_pairing_exclusions_txn ON transaction_pairing_exclusions(transaction_identifier, transaction_vendor);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_processed_date ON transactions (processed_date);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_status_date ON transactions (status, date);');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_date_desc ON transactions (date DESC);');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions (category_definition_id, date);');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_category_def ON transactions (category_definition_id);');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_vendor_date ON transactions (vendor, date);');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_vendor ON transactions (vendor);');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_category_definitions_type ON category_definitions (category_type);');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_category_definitions_parent ON category_definitions (parent_id);');
 
     db.exec('DROP TRIGGER IF EXISTS trg_account_pairings_exclusions_insert');
     db.exec('DROP TRIGGER IF EXISTS trg_account_pairings_exclusions_update');
@@ -518,16 +533,16 @@ function createSqlitePool(options = {}) {
       db.exec(`
         CREATE TRIGGER IF NOT EXISTS transactions_fts_insert AFTER INSERT ON transactions BEGIN
           INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
-          VALUES (NEW.id, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
+          VALUES (NEW.rowid, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
         END;
       `);
       
       db.exec(`
         CREATE TRIGGER IF NOT EXISTS transactions_fts_update AFTER UPDATE ON transactions BEGIN
           INSERT INTO transactions_fts(transactions_fts, rowid, name, memo, vendor, merchant_name)
-          VALUES ('delete', OLD.id, OLD.name, OLD.memo, OLD.vendor, OLD.merchant_name);
+          VALUES ('delete', OLD.rowid, OLD.name, OLD.memo, OLD.vendor, OLD.merchant_name);
           INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
-          VALUES (NEW.id, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
+          VALUES (NEW.rowid, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
         END;
       `);
       
@@ -548,7 +563,7 @@ function createSqlitePool(options = {}) {
       db.exec('DELETE FROM transactions_fts');
       db.exec(`
         INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
-        SELECT id, name, memo, vendor, merchant_name FROM transactions
+        SELECT rowid, name, memo, vendor, merchant_name FROM transactions
       `);
     } catch (_error) {
       // Ignore if FTS table doesn't exist

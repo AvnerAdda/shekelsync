@@ -137,6 +137,10 @@ export interface PortfolioSummary {
 
 export interface PortfolioHistoryResponse {
   history?: PortfolioHistoryPoint[];
+  accounts?: Array<{
+    accountId: number;
+    history?: PortfolioHistoryPoint[];
+  }>;
 }
 
 // Pikadon (Term Deposit) Types

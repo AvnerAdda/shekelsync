@@ -20,6 +20,7 @@ import TimelineIcon from '@mui/icons-material/Timeline';
 import NotesIcon from '@mui/icons-material/Notes';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
+import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
 import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';
@@ -1234,11 +1235,14 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                               <Typography variant="caption" color="text.secondary">
                                 •
                               </Typography>
-                              <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 500 }}>
-                                {txn.parent_name && txn.category_name
-                                  ? `${txn.parent_name} > ${txn.category_name}`
-                                  : txn.category_name || txn.parent_name}
-                              </Typography>
+                              <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                                <CategoryIcon iconName={txn.category_icon} color={txn.category_color} size={14} />
+                                <Typography variant="caption" sx={{ color: txn.category_color || 'primary.main', fontWeight: 500 }}>
+                                  {txn.parent_name && txn.category_name
+                                    ? `${txn.parent_name} > ${txn.category_name}`
+                                    : txn.category_name || txn.parent_name}
+                                </Typography>
+                              </Box>
                             </>
                           )}
                           {txn.tags?.length > 0 && (

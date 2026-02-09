@@ -1,6 +1,7 @@
 const { CompanyTypes, createScraper } = require('israeli-bank-scrapers');
 const crypto = require('crypto');
-const database = require('../database.js');
+const path = require('path');
+const baseDatabase = require('../database.js');
 const Mutex = require('../../../lib/mutex.js');
 const {
   BANK_VENDORS,
@@ -21,7 +22,14 @@ const { getCreditCardRepaymentCategoryId } = require('../accounts/repayment-cate
 const DEFAULT_TIMEOUT = 120000; // 2 minutes
 const MAX_TIMEOUT = 300000; // 5 minutes for problematic scrapers
 const DEFAULT_LOOKBACK_MONTHS = 3;
+const DEMO_SYNC_MERCHANTS = {
+  discount: ['רמי לוי', 'סופר פארם', 'WOLT', 'העברה לכרטיס אשראי'],
+  max: ['WOLT', 'פז', 'סופר פארם', 'Amazon Marketplace'],
+  visaCal: ['ארומה', 'BUG', 'תן ביס', 'רב קו'],
+  default: ['עסקת דמו חדשה'],
+};
 let cachedBankCategory = null;
+let databaseRef = baseDatabase;
 
 const PENDING_COMPLETED_MATCH_WINDOW_HOURS = 36; // 1.5 days (handles timezone/date rounding)
 
@@ -34,6 +42,91 @@ function createHttpError(statusCode, message, extra = {}) {
   error.statusCode = statusCode;
   Object.assign(error, extra);
   return error;
+}
+
+function hasNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function pickRandom(list, fallback = null) {
+  if (!Array.isArray(list) || list.length === 0) return fallback;
+  const index = Math.floor(Math.random() * list.length);
+  return list[index];
+}
+
+function resolvePrimaryAccountNumber(credentials = {}) {
+  const raw =
+    credentials.bankAccountNumber ||
+    credentials.accountNumber ||
+    credentials.card6Digits ||
+    null;
+
+  if (!hasNonEmptyString(raw)) return null;
+
+  return raw
+    .split(';')
+    .map((segment) => segment.trim())
+    .find(Boolean) || null;
+}
+
+function isAnonymizedSqliteDatabase() {
+  const dbPath = process.env.SQLITE_DB_PATH || '';
+  if (!dbPath) return false;
+  return path.basename(String(dbPath)).toLowerCase().includes('anonymized');
+}
+
+function shouldSimulateDemoSync(options, credentials) {
+  if (!isAnonymizedSqliteDatabase()) return false;
+
+  const override = process.env.DEMO_SIMULATE_SYNC;
+  if (override === 'false') return false;
+  if (override === 'true') return true;
+
+  if (options?.forceRealScrape === true) return false;
+
+  // In anonymized demo DBs, credentials are intentionally blank.
+  // Simulate sync so demos can still show "new transactions arrived" behavior.
+  return !hasNonEmptyString(credentials?.password);
+}
+
+function buildSimulatedDemoResult(options, credentials, isBank) {
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const vendor = options?.companyId;
+  const merchants = DEMO_SYNC_MERCHANTS[vendor] || DEMO_SYNC_MERCHANTS.default;
+  const merchantName = pickRandom(merchants, 'עסקת דמו חדשה');
+  const amount = Number((Math.random() * 180 + 40).toFixed(2));
+  const rawAmount = isBank ? -amount : amount;
+  const accountNumber = resolvePrimaryAccountNumber(credentials);
+  const balance = isBank
+    ? Number((32000 + Math.random() * 28000).toFixed(2))
+    : Number((1200 + Math.random() * 6000).toFixed(2));
+
+  return {
+    success: true,
+    accounts: [
+      {
+        accountNumber,
+        balance,
+        txns: [
+          {
+            identifier: `demo-sync-${vendor || 'vendor'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            date: nowIso,
+            processedDate: nowIso,
+            description: merchantName,
+            chargedAmount: rawAmount,
+            originalAmount: rawAmount,
+            originalCurrency: 'ILS',
+            chargedCurrency: 'ILS',
+            type: isBank ? 'transfer' : 'card',
+            status: 'completed',
+            memo: 'Simulated sync transaction for anonymized demo data',
+            category: 'General',
+          },
+        ],
+      },
+    ],
+  };
 }
 
 function isBankVendor(companyId) {
@@ -232,7 +325,7 @@ function prepareScraperCredentials(companyId, options, credentials) {
 }
 
 async function insertScrapeEvent(client, { triggeredBy, vendor, startDate, credentialId }) {
-  const executor = client && typeof client.query === 'function' ? client : database;
+  const executor = client && typeof client.query === 'function' ? client : databaseRef;
   const result = await executor.query(
     `INSERT INTO scrape_events (triggered_by, vendor, start_date, status, message, credential_id)
      VALUES ($1, $2, $3, $4, $5, $6)
@@ -244,7 +337,7 @@ async function insertScrapeEvent(client, { triggeredBy, vendor, startDate, crede
 
 async function updateScrapeEventStatus(client, auditId, status, message) {
   if (!auditId) return;
-  const executor = client && typeof client.query === 'function' ? client : database;
+  const executor = client && typeof client.query === 'function' ? client : databaseRef;
   await executor.query(
     `UPDATE scrape_events SET status = $1, message = $2 WHERE id = $3`,
     [status, message, auditId],
@@ -254,7 +347,7 @@ async function updateScrapeEventStatus(client, auditId, status, message) {
 async function safeUpdateScrapeEventStatus(auditId, status, message, logger) {
   if (!auditId) return;
   try {
-    await updateScrapeEventStatus(database, auditId, status, message);
+    await updateScrapeEventStatus(databaseRef, auditId, status, message);
   } catch (error) {
     logger?.warn?.(`[Scrape] Failed to update scrape_events: ${error?.message || 'Unknown error'}`);
   }
@@ -304,7 +397,7 @@ async function markCredentialScrapeStatus(client, credentialId, status) {
  */
 async function wasScrapedRecently(credentialId, thresholdMs = SCRAPE_RATE_LIMIT_MS) {
   if (!credentialId) return false;
-  const client = await database.getClient();
+  const client = await databaseRef.getClient();
   try {
     const result = await client.query(
       `SELECT last_scrape_attempt FROM vendor_credentials WHERE id = $1`,
@@ -957,7 +1050,7 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
   const isBank = isBankVendor(options.companyId);
   const startDateInfo = await resolveStartDate(options, credentials);
   const resolvedStartDate = startDateInfo.date;
-  const client = await database.getClient();
+  const client = await databaseRef.getClient();
   let auditId = null;
   let failureMessage = null;
 
@@ -971,7 +1064,7 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
   try {
     const triggeredBy = resolveTriggeredBy(credentials);
     try {
-      auditId = await insertScrapeEvent(database, {
+      auditId = await insertScrapeEvent(databaseRef, {
         triggeredBy,
         vendor: options.companyId,
         startDate: resolvedStartDate,
@@ -986,6 +1079,41 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
     const executablePath = await getPuppeteerExecutable(logger);
     const scraperOptions = buildScraperOptions(options, isBank, executablePath, resolvedStartDate);
     const scraperCredentials = prepareScraperCredentials(companyType, options, credentials);
+
+    if (shouldSimulateDemoSync(options, credentials)) {
+      logger?.info?.(
+        `[Scrape:${options.companyId}] Using demo sync simulation for anonymized dataset`,
+      );
+
+      const simulatedResult = buildSimulatedDemoResult(options, credentials, isBank);
+      const summary = await processScrapeResult(client, {
+        options,
+        credentials,
+        result: simulatedResult,
+        isBank,
+        logger,
+      });
+
+      await applyCategorizationRules(client);
+      await applyAccountPairings(client);
+      if (credentials.dbId) {
+        await markCredentialScrapeStatus(client, credentials.dbId, 'success');
+      }
+
+      const accountsCount = Array.isArray(simulatedResult.accounts) ? simulatedResult.accounts.length : 0;
+      const message = `Demo sync simulated: accounts=${accountsCount}, bankTxns=${summary.bankTransactions}`;
+
+      await client.query('COMMIT');
+      await safeUpdateScrapeEventStatus(auditId, 'success', message, logger);
+
+      return {
+        success: true,
+        message: 'Demo sync completed with simulated transaction',
+        accounts: simulatedResult.accounts,
+        bankTransactions: summary.bankTransactions,
+        simulated: true,
+      };
+    }
 
     const scraperExecutor = execute
       ? () => execute({ scraperOptions, scraperCredentials })
@@ -1177,6 +1305,12 @@ async function runScrape(params) {
 module.exports = {
   runScrape,
   wasScrapedRecently,
+  __setDatabaseForTests(dbOverride = null) {
+    databaseRef = dbOverride || baseDatabase;
+  },
+  __resetDatabaseForTests() {
+    databaseRef = baseDatabase;
+  },
 };
 
 module.exports.default = module.exports;

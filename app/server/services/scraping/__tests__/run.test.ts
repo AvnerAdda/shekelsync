@@ -92,17 +92,29 @@ vi.mock('../../accounts/last-transaction-date.js', () => ({
 }));
 
 let runService: typeof import('../run.js').default;
+let originalSqliteDbPath: string | undefined;
 
 beforeEach(async () => {
+  originalSqliteDbPath = process.env.SQLITE_DB_PATH;
   vi.resetModules();
   queryMock.mockReset();
   getClientMock.mockReset();
   createScraperMock.mockReset();
   getLastTransactionDateMock.mockReset();
   runService = (await import('../run.js')).default;
+  runService.__setDatabaseForTests?.({
+    query: queryMock,
+    getClient: getClientMock,
+  });
 });
 
 afterEach(() => {
+  runService.__resetDatabaseForTests?.();
+  if (typeof originalSqliteDbPath === 'undefined') {
+    delete process.env.SQLITE_DB_PATH;
+  } else {
+    process.env.SQLITE_DB_PATH = originalSqliteDbPath;
+  }
   vi.clearAllMocks();
 });
 
@@ -133,6 +145,61 @@ describe('scraping run service', () => {
           companyId: 'hapoalim',
         } as any)
       ).rejects.toThrow();
+    });
+
+    it('simulates sync for anonymized demo DB and inserts a latest transaction', async () => {
+      process.env.SQLITE_DB_PATH = '/tmp/clarify-anonymized.sqlite';
+
+      getLastTransactionDateMock.mockResolvedValue({
+        lastTransactionDate: '2026-02-07T00:00:00.000Z',
+        message: 'Using latest transaction date',
+        hasTransactions: true,
+      });
+
+      queryMock.mockImplementation(async (sql: string) => {
+        if (String(sql).includes('RETURNING id')) {
+          return { rows: [{ id: 42 }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 1 };
+      });
+
+      mockClient.query.mockImplementation(async (sql: string) => {
+        const normalizedSql = String(sql);
+        if (normalizedSql.includes('SELECT id FROM vendor_credentials')) {
+          return { rows: [{ id: 7 }], rowCount: 1 };
+        }
+        if (normalizedSql.includes('UPDATE vendor_credentials')) {
+          return { rows: [], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      });
+
+      const result = await runService.runScrape({
+        options: { companyId: 'max' },
+        credentials: {
+          dbId: 7,
+          nickname: 'Max Demo',
+          password: '',
+          card6Digits: '1234',
+        },
+        logger: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+          debug: vi.fn(),
+        },
+      } as any);
+
+      expect(result.success).toBe(true);
+      expect(result.simulated).toBe(true);
+      expect(Array.isArray(result.accounts)).toBe(true);
+      expect(result.accounts[0]?.txns?.length).toBe(1);
+      expect(createScraperMock).not.toHaveBeenCalled();
+
+      const insertedTxnCall = mockClient.query.mock.calls.find(([sql]) =>
+        String(sql).includes('INSERT INTO transactions'),
+      );
+      expect(insertedTxnCall).toBeTruthy();
     });
   });
 });

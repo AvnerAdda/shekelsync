@@ -41,6 +41,8 @@ import { useNotification } from '../NotificationContext';
 import { apiClient } from '@/lib/api-client';
 import InsightsPanel from './InsightsPanel';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
+import SnapshotProgressModal, { SnapshotProgressData } from './SnapshotProgressModal';
+import { useTranslation } from 'react-i18next';
 
 interface Notification {
   id: string;
@@ -64,7 +66,81 @@ interface NotificationSummary {
   by_severity: Record<string, number>;
 }
 
+const SNAPSHOT_NOTIFICATION_TYPE = 'snapshot_progress';
+const SNAPSHOT_SEEN_STORAGE_KEY = 'smart_alert.snapshot_seen_trigger_key.v1';
+
+const toISODate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const startOfWeekSunday = (date: Date) => {
+  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  result.setDate(result.getDate() - result.getDay());
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+
+const startOfBiMonth = (date: Date) => new Date(date.getFullYear(), Math.floor(date.getMonth() / 2) * 2, 1);
+
+const startOfHalfYear = (date: Date) => new Date(date.getFullYear(), date.getMonth() < 6 ? 0 : 6, 1);
+
+const startOfYear = (date: Date) => new Date(date.getFullYear(), 0, 1);
+
+const computeSnapshotTriggerKey = (now: Date) => {
+  const boundaries = [
+    startOfWeekSunday(now),
+    startOfMonth(now),
+    startOfBiMonth(now),
+    startOfHalfYear(now),
+    startOfYear(now),
+  ];
+
+  const latestBoundary = boundaries.reduce((latest, candidate) =>
+    candidate.getTime() > latest.getTime() ? candidate : latest
+  );
+
+  return toISODate(latestBoundary);
+};
+
+const buildNotificationSummary = (
+  items: Notification[],
+  baseSummary?: NotificationSummary | null,
+): NotificationSummary => {
+  const byType: Record<string, number> = { ...(baseSummary?.by_type || {}) };
+  Object.keys(byType).forEach((key) => {
+    byType[key] = 0;
+  });
+
+  const bySeverity = {
+    critical: 0,
+    warning: 0,
+    info: 0,
+    ...(baseSummary?.by_severity || {}),
+  } as Record<string, number>;
+
+  bySeverity.critical = 0;
+  bySeverity.warning = 0;
+  bySeverity.info = 0;
+
+  items.forEach((item) => {
+    byType[item.type] = (byType[item.type] || 0) + 1;
+    bySeverity[item.severity] = (bySeverity[item.severity] || 0) + 1;
+  });
+
+  return {
+    total: items.length,
+    by_type: byType,
+    by_severity: bySeverity,
+  };
+};
+
 const SmartNotifications: React.FC = () => {
+  const { t } = useTranslation();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -77,10 +153,35 @@ const SmartNotifications: React.FC = () => {
   const [insightsCacheTime, setInsightsCacheTime] = useState<Date | null>(null);
   const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
   const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
+  const [snapshotModalOpen, setSnapshotModalOpen] = useState(false);
+  const [snapshotData, setSnapshotData] = useState<SnapshotProgressData | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const { showNotification } = useNotification();
 
   const open = Boolean(anchorEl);
   const INSIGHTS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+  const buildSnapshotAlert = (triggerKey: string): Notification => ({
+    id: `snapshot_progress_${triggerKey}`,
+    type: SNAPSHOT_NOTIFICATION_TYPE,
+    severity: 'warning',
+    title: t('insights.snapshot.alert.title'),
+    message: t('insights.snapshot.alert.message'),
+    data: {
+      triggerKey,
+      synthetic: true,
+    },
+    timestamp: new Date().toISOString(),
+    actionable: true,
+    actions: [
+      {
+        label: t('insights.snapshot.alert.action'),
+        action: 'view_snapshot',
+        params: { triggerKey },
+      },
+    ],
+  });
 
   useEffect(() => {
     fetchNotifications();
@@ -97,8 +198,16 @@ const SmartNotifications: React.FC = () => {
       const data = response.data as any;
 
       if (response.ok && data?.success) {
-        setNotifications(Array.isArray(data.data?.notifications) ? data.data.notifications : []);
-        setSummary(data.data?.summary ?? null);
+        const baseNotifications = Array.isArray(data.data?.notifications) ? data.data.notifications : [];
+        const triggerKey = computeSnapshotTriggerKey(new Date());
+        const seenTriggerKey = window.localStorage.getItem(SNAPSHOT_SEEN_STORAGE_KEY);
+        const shouldInjectSnapshot = seenTriggerKey !== triggerKey;
+        const mergedNotifications = shouldInjectSnapshot
+          ? [buildSnapshotAlert(triggerKey), ...baseNotifications]
+          : baseNotifications;
+
+        setNotifications(mergedNotifications);
+        setSummary(buildNotificationSummary(mergedNotifications, data.data?.summary ?? null));
         setLastFetch(new Date());
       }
     } catch (error) {
@@ -171,6 +280,8 @@ const SmartNotifications: React.FC = () => {
       case 'new_vendor':
         return <VendorIcon {...iconProps} />;
       case 'cash_flow_alert':
+        return <CashFlowIcon {...iconProps} />;
+      case 'snapshot_progress':
         return <CashFlowIcon {...iconProps} />;
       case 'goal_milestone':
         return <GoalIcon {...iconProps} />;
@@ -252,6 +363,38 @@ const SmartNotifications: React.FC = () => {
           setIsBulkSyncing(false);
         }
         break;
+      case 'view_snapshot': {
+        const triggerKey = params?.triggerKey || computeSnapshotTriggerKey(new Date());
+        window.localStorage.setItem(SNAPSHOT_SEEN_STORAGE_KEY, triggerKey);
+
+        setNotifications((previous) => {
+          const filtered = previous.filter((item) => item.type !== SNAPSHOT_NOTIFICATION_TYPE);
+          setSummary((currentSummary) => buildNotificationSummary(filtered, currentSummary));
+          return filtered;
+        });
+
+        setSnapshotModalOpen(true);
+        setSnapshotLoading(true);
+        setSnapshotError(null);
+        setSnapshotData(null);
+
+        try {
+          const response = await apiClient.get('/api/notifications/snapshot-progress');
+          const payload = response.data as any;
+
+          if (response.ok && payload?.success) {
+            setSnapshotData(payload.data as SnapshotProgressData);
+          } else {
+            setSnapshotError(payload?.error || t('insights.snapshot.modal.fetchError'));
+          }
+        } catch (error) {
+          console.error('Snapshot fetch error:', error);
+          setSnapshotError(t('insights.snapshot.modal.fetchError'));
+        } finally {
+          setSnapshotLoading(false);
+        }
+        break;
+      }
       case 'view_category':
         // Navigate to category view
         console.log('Navigate to category:', params?.category_definition_id || params?.category);
@@ -500,6 +643,14 @@ const SmartNotifications: React.FC = () => {
           )}
         </Box>
       </Popover>
+
+      <SnapshotProgressModal
+        open={snapshotModalOpen}
+        onClose={() => setSnapshotModalOpen(false)}
+        data={snapshotData}
+        loading={snapshotLoading}
+        error={snapshotError}
+      />
 
       <LicenseReadOnlyAlert
         open={licenseAlertOpen}

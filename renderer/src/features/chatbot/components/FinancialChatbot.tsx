@@ -135,6 +135,9 @@ interface Conversation {
   messageCount: number;
 }
 
+const MIN_DRAWER_WIDTH = 320;
+const MAX_DRAWER_WIDTH_VW = 0.8; // 80vw
+
 const FinancialChatbot: React.FC = () => {
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'chatbotWidget' });
@@ -156,8 +159,41 @@ const FinancialChatbot: React.FC = () => {
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
   const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
+  const [drawerWidth, setDrawerWidth] = useState(420);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isResizing = useRef(false);
+
+  // Resize handlers for draggable left edge
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return;
+      const newWidth = window.innerWidth - e.clientX;
+      const maxWidth = window.innerWidth * MAX_DRAWER_WIDTH_VW;
+      setDrawerWidth(Math.min(maxWidth, Math.max(MIN_DRAWER_WIDTH, newWidth)));
+    };
+
+    const handleMouseUp = () => {
+      if (!isResizing.current) return;
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
   const hasAnyPermission = allowTransactionAccess || allowCategoryAccess || allowAnalyticsAccess;
 
@@ -426,7 +462,7 @@ const FinancialChatbot: React.FC = () => {
         onClose={() => setIsOpen(false)}
         PaperProps={{
           sx: {
-            width: { xs: '100%', sm: 420 },
+            width: { xs: '100%', sm: drawerWidth },
             display: 'flex',
             flexDirection: 'column',
             zIndex: (muiTheme) => muiTheme.zIndex.drawer + 2,
@@ -444,6 +480,25 @@ const FinancialChatbot: React.FC = () => {
           zIndex: (muiTheme) => muiTheme.zIndex.drawer + 2,
         }}
       >
+        {/* Resize Handle */}
+        <Box
+          onMouseDown={handleResizeMouseDown}
+          sx={{
+            display: { xs: 'none', sm: 'block' },
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: 6,
+            height: '100%',
+            cursor: 'col-resize',
+            zIndex: 1,
+            '&:hover, &:active': {
+              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.2),
+            },
+            transition: 'background-color 0.2s',
+          }}
+        />
+
         {/* Header */}
         <Box
           sx={{

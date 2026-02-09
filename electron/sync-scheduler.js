@@ -10,12 +10,12 @@ const { maybeRunAutoDetection } = require(resolveAppPath(
   'subscriptions.js',
 ));
 
-const INTERVAL_CHOICES = new Set([24, 48, 168]);
+const INTERVAL_CHOICES = new Set([48, 168, 720]);
 const IMMEDIATE_DELAY_MS = 60 * 1000;
 
 const defaultBackgroundSync = () => ({
   enabled: false,
-  intervalHours: 24,
+  intervalHours: 48,
   runOnStartup: true,
   keepRunningInTray: true,
   headless: true,
@@ -25,7 +25,7 @@ const defaultBackgroundSync = () => ({
 
 function normalizeIntervalHours(value) {
   const parsed = Number(value);
-  return INTERVAL_CHOICES.has(parsed) ? parsed : 24;
+  return INTERVAL_CHOICES.has(parsed) ? parsed : 48;
 }
 
 function normalizeBackgroundSettings(raw = {}) {

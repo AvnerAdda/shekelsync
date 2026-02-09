@@ -2,7 +2,7 @@ const database = require('../database.js');
 const {
   INSTITUTION_SELECT_FIELDS,
   buildInstitutionFromRow,
-  getInstitutionByVendorCode,
+  loadInstitutionsCache,
 } = require('../institutions.js');
 
 // Helper to normalize date to UTC YYYY-MM-DD string
@@ -199,7 +199,7 @@ function buildAccountConditions(accountId, idsFilter, paramsList, accountConditi
   }
 }
 
-async function buildHistoryPoint(row) {
+function buildHistoryPoint(row, institutionByVendorCode) {
   const currentValue = row.current_value == null ? 0 : Number.parseFloat(row.current_value);
   const costBasis = row.cost_basis == null ? 0 : Number.parseFloat(row.cost_basis);
   const gainLoss = currentValue - costBasis;
@@ -207,7 +207,7 @@ async function buildHistoryPoint(row) {
 
   let institution = buildInstitutionFromRow(row);
   if (!institution && row.account_type) {
-    institution = await getInstitutionByVendorCode(database, row.account_type);
+    institution = institutionByVendorCode?.get(row.account_type) || null;
   }
 
   return {
@@ -277,7 +277,11 @@ function formatAggregatedHistory(aggregatedMap) {
 }
 
 async function getInvestmentHistory(params = {}) {
-  const { accountId, timeRange = '3m', accountIds } = params;
+  const { accountId, timeRange = '3m', accountIds, includeAccounts } = params;
+  const includeAccountsFlag =
+    includeAccounts === true ||
+    includeAccounts === 'true' ||
+    includeAccounts === '1';
   const startDate = calculateStartDate(timeRange);
   const startDateStr = startDate ? startDate.toISOString().split('T')[0] : null;
 
@@ -365,9 +369,14 @@ async function getInvestmentHistory(params = {}) {
   }
 
   // Build per-account histories
+  const institutions = await loadInstitutionsCache(database);
+  const institutionByVendorCode = new Map(
+    (institutions || []).map((institution) => [institution.vendor_code, institution]),
+  );
+
   const accountHistories = new Map();
   for (const row of uniqueRows.values()) {
-    const point = await buildHistoryPoint(row);
+    const point = buildHistoryPoint(row, institutionByVendorCode);
     if (!accountHistories.has(point.accountId)) {
       accountHistories.set(point.accountId, []);
     }
@@ -397,13 +406,22 @@ async function getInvestmentHistory(params = {}) {
   const aggregatedHistory = formatAggregatedHistory(aggregatedMap);
   const filledHistory = forwardFillAggregatedHistory(aggregatedHistory, startDate, today);
 
-  return {
+  const response = {
     success: true,
     timeRange,
     startDate: startDateStr,
     dataPoints: filledHistory.length,
     history: filledHistory,
   };
+  if (includeAccountsFlag) {
+    response.accounts = Array.from(filledPerAccount.entries())
+      .map(([id, history]) => ({
+        accountId: Number(id),
+        history,
+      }))
+      .sort((a, b) => a.accountId - b.accountId);
+  }
+  return response;
 }
 
 module.exports = {

@@ -3,6 +3,8 @@ const { standardizeResponse, standardizeError } = require('../../lib/server/quer
 const { STALE_SYNC_THRESHOLD_MS } = require('../../utils/constants.js');
 const { parseUTCDate } = require('../../lib/server/time-utils.js');
 const { generateDailyForecast } = require('./forecast.js');
+const { BANK_CATEGORY_NAME } = require('../../lib/category-constants.js');
+const { dialect } = require('../../lib/sql-dialect.js');
 
 const NOTIFICATION_TYPES = {
   BUDGET_WARNING: 'budget_warning',
@@ -29,6 +31,13 @@ function toISODate(date) {
   return date.toISOString().split('T')[0];
 }
 
+function toISODateLocal(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function startOfMonth(date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
@@ -41,6 +50,49 @@ function subDays(date, days) {
   const result = new Date(date.getTime());
   result.setDate(result.getDate() - days);
   return result;
+}
+
+function addDays(date, days) {
+  const result = new Date(date.getTime());
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function addMonths(date, months) {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
+
+function addYears(date, years) {
+  return new Date(date.getFullYear() + years, date.getMonth(), 1);
+}
+
+function startOfWeekSunday(date) {
+  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  result.setDate(result.getDate() - result.getDay());
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function startOfBiMonth(date) {
+  const biMonthStart = Math.floor(date.getMonth() / 2) * 2;
+  return new Date(date.getFullYear(), biMonthStart, 1);
+}
+
+function startOfHalfYear(date) {
+  const month = date.getMonth() < 6 ? 0 : 6;
+  return new Date(date.getFullYear(), month, 1);
+}
+
+function startOfYear(date) {
+  return new Date(date.getFullYear(), 0, 1);
+}
+
+function endOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+}
+
+function formatRange(start, end) {
+  return `${toISODateLocal(start)} - ${toISODateLocal(end)}`;
 }
 
 function formatShortMonthDay(date) {
@@ -208,6 +260,275 @@ async function fetchCredentialSyncStates(client) {
       status: row.last_event_status || row.last_scrape_status || 'never',
     };
   });
+}
+
+function toDateBoundary(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+async function getInstallStartDate(client, fallbackDate) {
+  const licenseResult = await client.query(
+    `SELECT installation_date
+     FROM license
+     WHERE id = 1
+     LIMIT 1`,
+  );
+
+  const installDate = toDateBoundary(licenseResult.rows[0]?.installation_date);
+  if (installDate) {
+    return toISODateLocal(installDate);
+  }
+
+  const txFallback = await client.query(
+    `SELECT MIN(date) AS first_date
+     FROM transactions`,
+  );
+
+  return txFallback.rows[0]?.first_date || fallbackDate;
+}
+
+async function aggregateNetMetrics(client, startDate, endDate) {
+  const categoryTypeExpr = 'COALESCE(cd.category_type, t.category_type)';
+  const incomeCase = `(
+    (${categoryTypeExpr} = 'income' AND t.price > 0 AND COALESCE(cd.is_counted_as_income, 1) = 1)
+    OR (${categoryTypeExpr} IS NULL AND t.price > 0)
+    OR (COALESCE(cd.name, '') = $3 AND t.price > 0)
+  )`;
+  const expenseCase = `(
+    (${categoryTypeExpr} = 'expense' OR (${categoryTypeExpr} IS NULL AND t.price < 0))
+    AND t.price < 0
+  )`;
+  const investmentOutflowCase = `(${categoryTypeExpr} = 'investment' AND t.price < 0)`;
+  const investmentInflowCase = `(${categoryTypeExpr} = 'investment' AND t.price > 0)`;
+  const capitalReturnsCase = `(
+    ${categoryTypeExpr} = 'income'
+    AND t.price > 0
+    AND COALESCE(cd.is_counted_as_income, 1) = 0
+  )`;
+
+  const result = await client.query(
+    `SELECT
+       SUM(CASE
+         WHEN ${incomeCase} THEN t.price
+         ELSE 0
+       END) AS income,
+       SUM(CASE
+         WHEN ${expenseCase} THEN ABS(t.price)
+         ELSE 0
+       END) AS expenses,
+       SUM(CASE
+         WHEN ${investmentOutflowCase} THEN ABS(t.price)
+         ELSE 0
+       END) AS investment_outflow,
+       SUM(CASE
+         WHEN ${investmentInflowCase} THEN t.price
+         ELSE 0
+       END) AS investment_inflow,
+       SUM(CASE
+         WHEN ${capitalReturnsCase} THEN t.price
+         ELSE 0
+       END) AS capital_returns,
+       COUNT(CASE
+         WHEN ${incomeCase}
+           OR ${expenseCase}
+           OR ${investmentOutflowCase}
+           OR ${investmentInflowCase}
+           OR ${capitalReturnsCase}
+         THEN 1
+         ELSE NULL
+       END) AS tx_count
+     FROM transactions t
+     LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+     LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+       ON t.identifier = tpe.transaction_identifier
+       AND t.vendor = tpe.transaction_vendor
+     WHERE t.date >= $1
+       AND t.date <= $2
+       AND tpe.transaction_identifier IS NULL
+       AND ${dialect.excludePikadon('t')}`,
+    [startDate, endDate, BANK_CATEGORY_NAME],
+  );
+
+  const row = result.rows[0] || {};
+  const income = Number.parseFloat(row.income || 0);
+  const expenses = Number.parseFloat(row.expenses || 0);
+  const investmentOutflow = Number.parseFloat(row.investment_outflow || 0);
+  const investmentInflow = Number.parseFloat(row.investment_inflow || 0);
+  const capitalReturns = Number.parseFloat(row.capital_returns || 0);
+  const txCount = Number.parseInt(row.tx_count || 0, 10) || 0;
+  const rawNetInvestments = investmentOutflow - investmentInflow;
+  const effectiveNetInvestments = Math.max(0, rawNetInvestments - capitalReturns);
+  const net = income - expenses - effectiveNetInvestments;
+
+  return {
+    income,
+    expenses,
+    investmentOutflow,
+    investmentInflow,
+    capitalReturns,
+    net,
+    txCount,
+  };
+}
+
+function getSnapshotPeriodDefinitions(now) {
+  const currentWeekStart = startOfWeekSunday(now);
+  const currentMonthStart = startOfMonth(now);
+  const currentBiMonthStart = startOfBiMonth(now);
+  const currentHalfYearStart = startOfHalfYear(now);
+  const currentYearStart = startOfYear(now);
+
+  return [
+    {
+      key: 'week',
+      label: 'Week',
+      currentStart: addDays(currentWeekStart, -7),
+      currentEnd: endOfDay(addDays(currentWeekStart, -1)),
+      previousStart: addDays(currentWeekStart, -14),
+      previousEnd: endOfDay(addDays(currentWeekStart, -8)),
+    },
+    {
+      key: 'month',
+      label: 'Month',
+      currentStart: addMonths(currentMonthStart, -1),
+      currentEnd: endOfDay(addDays(currentMonthStart, -1)),
+      previousStart: addMonths(currentMonthStart, -2),
+      previousEnd: endOfDay(addDays(addMonths(currentMonthStart, -1), -1)),
+    },
+    {
+      key: '2month',
+      label: '2 Months',
+      currentStart: addMonths(currentBiMonthStart, -2),
+      currentEnd: endOfDay(addDays(currentBiMonthStart, -1)),
+      previousStart: addMonths(currentBiMonthStart, -4),
+      previousEnd: endOfDay(addDays(addMonths(currentBiMonthStart, -2), -1)),
+    },
+    {
+      key: '6month',
+      label: '6 Months',
+      currentStart: addMonths(currentHalfYearStart, -6),
+      currentEnd: endOfDay(addDays(currentHalfYearStart, -1)),
+      previousStart: addMonths(currentHalfYearStart, -12),
+      previousEnd: endOfDay(addDays(addMonths(currentHalfYearStart, -6), -1)),
+    },
+    {
+      key: '1year',
+      label: '1 Year',
+      currentStart: addYears(currentYearStart, -1),
+      currentEnd: endOfDay(addDays(currentYearStart, -1)),
+      previousStart: addYears(currentYearStart, -2),
+      previousEnd: endOfDay(addDays(addYears(currentYearStart, -1), -1)),
+    },
+  ];
+}
+
+function computeSnapshotTriggerKey(now) {
+  const boundaries = [
+    startOfWeekSunday(now),
+    startOfMonth(now),
+    startOfBiMonth(now),
+    startOfHalfYear(now),
+    startOfYear(now),
+  ];
+
+  const latestBoundary = boundaries.reduce((latest, candidate) =>
+    candidate.getTime() > latest.getTime() ? candidate : latest
+  );
+  return toISODateLocal(latestBoundary);
+}
+
+function calculateDaysTracked(startDate, endDate) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  const dayMs = 24 * 60 * 60 * 1000;
+  const diff = Math.floor((end.getTime() - start.getTime()) / dayMs);
+  return Number.isFinite(diff) ? Math.max(1, diff + 1) : 1;
+}
+
+function toSnapshotWindowPayload(metrics, start, end) {
+  return {
+    start: toISODateLocal(start),
+    end: toISODateLocal(end),
+    range: formatRange(start, end),
+    income: metrics.income,
+    expenses: metrics.expenses,
+    investmentOutflow: metrics.investmentOutflow,
+    investmentInflow: metrics.investmentInflow,
+    capitalReturns: metrics.capitalReturns,
+    net: metrics.net,
+    txCount: metrics.txCount,
+  };
+}
+
+function calculateDeltaNetPct(deltaNet, previousNet) {
+  if (!previousNet) return null;
+  return (deltaNet / Math.abs(previousNet)) * 100;
+}
+
+async function getSnapshotProgress(options = {}) {
+  const now = options.now instanceof Date ? new Date(options.now.getTime()) : new Date();
+  const today = toISODateLocal(endOfDay(now));
+  const client = await database.getClient();
+
+  try {
+    const installStartDate = await getInstallStartDate(client, today);
+    const periodDefinitions = getSnapshotPeriodDefinitions(now);
+    const periods = [];
+
+    for (const period of periodDefinitions) {
+      const [currentMetrics, previousMetrics] = await Promise.all([
+        aggregateNetMetrics(client, toISODateLocal(period.currentStart), toISODateLocal(period.currentEnd)),
+        aggregateNetMetrics(client, toISODateLocal(period.previousStart), toISODateLocal(period.previousEnd)),
+      ]);
+
+      const deltaNet = currentMetrics.net - previousMetrics.net;
+      periods.push({
+        key: period.key,
+        label: period.label,
+        current: toSnapshotWindowPayload(currentMetrics, period.currentStart, period.currentEnd),
+        previous: toSnapshotWindowPayload(previousMetrics, period.previousStart, period.previousEnd),
+        deltaNet,
+        deltaNetPct: calculateDeltaNetPct(deltaNet, previousMetrics.net),
+        hasData: currentMetrics.txCount > 0 || previousMetrics.txCount > 0,
+      });
+    }
+
+    const sinceStartMetrics = await aggregateNetMetrics(client, installStartDate, today);
+
+    return standardizeResponse(
+      {
+        triggerKey: computeSnapshotTriggerKey(now),
+        generatedAt: now.toISOString(),
+        periods,
+        sinceStart: {
+          startDate: installStartDate,
+          endDate: today,
+          daysTracked: calculateDaysTracked(installStartDate, today),
+          income: sinceStartMetrics.income,
+          expenses: sinceStartMetrics.expenses,
+          investmentOutflow: sinceStartMetrics.investmentOutflow,
+          investmentInflow: sinceStartMetrics.investmentInflow,
+          capitalReturns: sinceStartMetrics.capitalReturns,
+          net: sinceStartMetrics.net,
+          txCount: sinceStartMetrics.txCount,
+        },
+      },
+      {
+        generated_at: now.toISOString(),
+      },
+    );
+  } catch (error) {
+    throw standardizeError('Failed to generate snapshot progress', 'SNAPSHOT_PROGRESS_ERROR', {
+      message: error.message,
+    });
+  } finally {
+    if (typeof client.release === 'function') {
+      client.release();
+    }
+  }
 }
 
 async function getNotifications(query = {}) {
@@ -786,5 +1107,6 @@ async function getNotifications(query = {}) {
 
 module.exports = {
   getNotifications,
+  getSnapshotProgress,
 };
 module.exports.default = module.exports;

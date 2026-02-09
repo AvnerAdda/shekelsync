@@ -85,7 +85,7 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
     setLoading(true);
     try {
       const response = await apiClient.get<string[]>('/api/transactions/tags');
-      setAllTags(response.data || []);
+      setAllTags(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Failed to fetch tags:', error);
     } finally {

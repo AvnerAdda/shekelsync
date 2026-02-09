@@ -100,18 +100,23 @@ const DashboardHomeContent: React.FC = () => {
     restrictedPortfolio,
     refresh: refreshPortfolio,
   } = usePortfolioSummary();
+  const waterfallEnabled = selectedBreakdownType === 'overall';
   const {
     data: waterfallData,
     loading: waterfallLoading,
     refresh: refreshWaterfall,
-  } = useWaterfallData({ startDate, endDate });
+  } = useWaterfallData({ startDate, endDate, enabled: waterfallEnabled });
 
   // Fallback waterfall data
   const {
     data: fallbackWaterfallData,
     loading: fallbackWaterfallLoading,
     refresh: refreshFallbackWaterfall,
-  } = useWaterfallData({ startDate: fallbackStartDate, endDate: fallbackEndDate, enabled: fallbackEnabled });
+  } = useWaterfallData({
+    startDate: fallbackStartDate,
+    endDate: fallbackEndDate,
+    enabled: fallbackEnabled && waterfallEnabled,
+  });
 
   const {
     breakdownData,
@@ -340,18 +345,24 @@ const DashboardHomeContent: React.FC = () => {
       refreshPortfolio();
 
       if (fallbackEnabled) {
-        refreshFallbackWaterfall();
         refreshFallbackBreakdowns(['expense', 'income']);
         if (selectedBreakdownType === 'investment') {
           void fetchFallbackBreakdown('investment');
         }
+        if (waterfallEnabled) {
+          refreshFallbackWaterfall();
+        }
       } else if (selectedBreakdownType === 'investment') {
         void fetchBreakdown('investment');
-        refreshWaterfall();
         refreshBreakdowns(['expense', 'income']);
+        if (waterfallEnabled) {
+          refreshWaterfall();
+        }
       } else {
-        refreshWaterfall();
         refreshBreakdowns(['expense', 'income']);
+        if (waterfallEnabled) {
+          refreshWaterfall();
+        }
       }
       refreshAccountSignals();
     };
@@ -371,6 +382,7 @@ const DashboardHomeContent: React.FC = () => {
     refreshFallbackWaterfall,
     refreshPortfolio,
     refreshWaterfall,
+    waterfallEnabled,
     selectedBreakdownType,
   ]);
 

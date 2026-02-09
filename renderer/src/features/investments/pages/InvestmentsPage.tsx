@@ -82,8 +82,6 @@ const InvestmentsPageContent: React.FC = () => {
     if (isLocked) return;
     setHistoryLoading(true);
     try {
-      const overallPromise = apiClient.get(`/api/investments/history?timeRange=${historyTimeRange}`);
-
       const accountIds =
         portfolioData?.breakdown
           ?.flatMap((group) => group.accounts?.map((account) => account.id).filter(Boolean) || [])
@@ -91,41 +89,32 @@ const InvestmentsPageContent: React.FC = () => {
 
       const uniqueAccountIds = Array.from(new Set(accountIds));
 
-      const accountHistoryPromises = uniqueAccountIds.map(async (accountId) => {
-        try {
-          const accountResponse = await apiClient.get(
-            `/api/investments/history?accountId=${accountId}&timeRange=${historyTimeRange}`
-          );
-          if (accountResponse.ok) {
-            const accountResult = (accountResponse.data as PortfolioHistoryResponse) || {};
-            return {
-              accountId,
-              history: Array.isArray(accountResult.history) ? accountResult.history : [],
-            };
-          }
-        } catch (innerError) {
-          console.error(`Error fetching history for account ${accountId}:`, innerError);
-        }
-        return { accountId, history: [] as PortfolioHistoryPoint[] };
-      });
-
-      const [overallResponse, accountResults] = await Promise.all([
-        overallPromise,
-        Promise.all(accountHistoryPromises),
-      ]);
-
-      if (overallResponse.ok) {
-        const overallResult = (overallResponse.data as PortfolioHistoryResponse) || {};
-        setOverallHistory(Array.isArray(overallResult.history) ? overallResult.history : []);
-      } else {
-        setOverallHistory([]);
+      const params = new URLSearchParams({ timeRange: historyTimeRange });
+      if (uniqueAccountIds.length > 0) {
+        params.append('includeAccounts', '1');
+        uniqueAccountIds.forEach((id) => params.append('accountIds', id.toString()));
       }
 
-      const histories: Record<number, PortfolioHistoryPoint[]> = {};
-      accountResults.forEach(({ accountId, history }) => {
-        histories[accountId] = history;
-      });
-      setAccountHistories(histories);
+      const historyResponse = await apiClient.get(`/api/investments/history?${params.toString()}`);
+
+      if (historyResponse.ok) {
+        const historyResult = (historyResponse.data as PortfolioHistoryResponse) || {};
+        setOverallHistory(Array.isArray(historyResult.history) ? historyResult.history : []);
+
+        const histories: Record<number, PortfolioHistoryPoint[]> = {};
+        if (Array.isArray(historyResult.accounts)) {
+          historyResult.accounts.forEach((account) => {
+            const accountId = Number(account.accountId);
+            if (Number.isFinite(accountId)) {
+              histories[accountId] = Array.isArray(account.history) ? account.history : [];
+            }
+          });
+        }
+        setAccountHistories(histories);
+      } else {
+        setOverallHistory([]);
+        setAccountHistories({});
+      }
     } catch (error) {
       console.error('Error fetching history data:', error);
       setOverallHistory([]);
@@ -168,7 +157,7 @@ const InvestmentsPageContent: React.FC = () => {
     triggerRefresh();
   };
 
-  const handleRefreshAll = async () => {
+  const handleRefreshAll = useCallback(async () => {
     setIsRefreshing(true);
     try {
       await Promise.all([
@@ -182,7 +171,15 @@ const InvestmentsPageContent: React.FC = () => {
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, [fetchHistoryData, fetchPortfolioData, portfolioData, setIsRefreshing]);
+
+  useEffect(() => {
+    const handleDataRefresh = () => {
+      void handleRefreshAll();
+    };
+    window.addEventListener('dataRefresh', handleDataRefresh);
+    return () => window.removeEventListener('dataRefresh', handleDataRefresh);
+  }, [handleRefreshAll]);
 
   if (isLocked) {
     return <LockedPagePlaceholder page="investments" onboardingStatus={onboardingStatus} />;

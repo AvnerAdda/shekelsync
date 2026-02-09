@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
-import { createHashRouter, useOutletContext } from 'react-router-dom';
-import AppLayout, { AppLayoutContext } from './routes/AppLayout';
+import { createHashRouter } from 'react-router-dom';
+import AppLayout from './routes/AppLayout';
 import LoadingFallback from './components/LoadingFallback';
 
 const HomePage = lazy(() => import('@renderer/features/dashboard/pages/HomePage'));
@@ -8,33 +8,19 @@ const AnalysisPageNew = lazy(() => import('@renderer/features/analysis/pages/Ana
 const InvestmentsPage = lazy(() => import('@renderer/features/investments/pages/InvestmentsPage'));
 const SettingsPage = lazy(() => import('@renderer/features/settings/pages/SettingsPage'));
 
-type OutletContext = AppLayoutContext;
-
 const withSuspense = (node: JSX.Element) => (
   <Suspense fallback={<LoadingFallback />}>
     {node}
   </Suspense>
 );
 
-const DashboardRoute = () => {
-  const { dataRefreshKey } = useOutletContext<OutletContext>();
-  return withSuspense(<HomePage key={dataRefreshKey} />);
-};
+const DashboardRoute = () => withSuspense(<HomePage />);
 
-const AnalysisRoute = () => {
-  const { dataRefreshKey } = useOutletContext<OutletContext>();
-  return withSuspense(<AnalysisPageNew key={`analysis-${dataRefreshKey}`} />);
-};
+const AnalysisRoute = () => withSuspense(<AnalysisPageNew />);
 
-const InvestmentsRoute = () => {
-  const { dataRefreshKey } = useOutletContext<OutletContext>();
-  return withSuspense(<InvestmentsPage key={`investments-${dataRefreshKey}`} />);
-};
+const InvestmentsRoute = () => withSuspense(<InvestmentsPage />);
 
-const SettingsRoute = () => {
-  const { dataRefreshKey } = useOutletContext<OutletContext>();
-  return withSuspense(<SettingsPage key={`settings-${dataRefreshKey}`} />);
-};
+const SettingsRoute = () => withSuspense(<SettingsPage />);
 
 export const router = createHashRouter([
   {

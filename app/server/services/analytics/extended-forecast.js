@@ -1,5 +1,8 @@
 const database = require('../database.js');
 const forecastService = require('../forecast.js');
+const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
+
+const extendedForecastCache = createTtlCache({ maxEntries: 5, defaultTtlMs: 60 * 1000 });
 
 function formatLocalDate(date) {
   const year = date.getFullYear();
@@ -21,7 +24,19 @@ function parseLocalDate(dateStr) {
  * Generate extended forecast with net position history + future scenarios
  * IMPORTANT: Always generates 6 months, regardless of other forecast settings
  */
-async function getExtendedForecast() {
+async function getExtendedForecast(params = {}) {
+  const skipCache =
+    process.env.NODE_ENV === 'test' ||
+    params.noCache === true ||
+    params.noCache === 'true' ||
+    params.noCache === '1';
+  const cacheKey = formatLocalDate(new Date());
+  if (!skipCache) {
+    const cached = extendedForecastCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
   // Get daily forecast data (6 months, start tomorrow to avoid overlapping with historical actuals)
   const forecastData = await forecastService.generateDailyForecast({
     includeToday: false,
@@ -281,7 +296,7 @@ async function getExtendedForecast() {
   // Sort by date
   combinedData.sort((a, b) => a.date.localeCompare(b.date));
 
-  return {
+  const response = {
     combinedData,
     scenarios: {
       p10: p10Data,
@@ -306,6 +321,10 @@ async function getExtendedForecast() {
       }
     }
   };
+  if (!skipCache) {
+    extendedForecastCache.set(cacheKey, response);
+  }
+  return response;
 }
 
 module.exports = {

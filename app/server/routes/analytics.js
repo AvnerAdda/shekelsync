@@ -167,7 +167,7 @@ function createAnalyticsRouter() {
   router.get('/behavioral-patterns', async (req, res) => {
     try {
       const locale = req.locale || 'he';
-      const result = await behavioralService.getBehavioralPatterns(locale);
+      const result = await behavioralService.getBehavioralPatterns(locale, req.query);
       res.json(result);
     } catch (error) {
       console.error('Behavioral patterns error:', error);
@@ -181,7 +181,7 @@ function createAnalyticsRouter() {
   router.get('/forecast-extended', async (req, res) => {
     try {
       // Extended forecast always uses 6 months, regardless of other settings
-      const result = await extendedForecastService.getExtendedForecast();
+      const result = await extendedForecastService.getExtendedForecast(req.query);
       res.json(result);
     } catch (error) {
       console.error('Extended forecast error:', error);
@@ -194,7 +194,7 @@ function createAnalyticsRouter() {
 
   router.get('/time-value', async (req, res) => {
     try {
-      const result = await timeValueService.getTimeValueAnalytics();
+      const result = await timeValueService.getTimeValueAnalytics(req.query);
       res.json(result);
     } catch (error) {
       console.error('Time value analytics error:', error);

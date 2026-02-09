@@ -306,6 +306,7 @@ const TABLE_DEFINITIONS = [
       transaction_datetime TEXT,
       processed_datetime TEXT,
       is_pikadon_related INTEGER NOT NULL DEFAULT 0 CHECK (is_pikadon_related IN (0,1)),
+      tags TEXT,
       PRIMARY KEY (identifier, vendor),
       FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE SET NULL
     );`,
@@ -924,8 +925,6 @@ const FTS5_STATEMENTS = [
     memo,
     vendor,
     merchant_name,
-    content='transactions',
-    content_rowid='id',
     tokenize='unicode61 remove_diacritics 2'
   );`,
 
