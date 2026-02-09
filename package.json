@@ -1,5 +1,5 @@
 {
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "init:sqlite": "node scripts/init_sqlite_db.js",
     "scrape:last2m": "node scripts/scrape-last-2-months.js",

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Personal finance tracker for Israeli banks and credit cards",
   "author": "ShekelSync",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "private": true,
   "engines": {
     "node": ">=22.12.0"
