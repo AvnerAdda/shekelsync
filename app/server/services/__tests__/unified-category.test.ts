@@ -4,7 +4,6 @@ import { createRequire } from 'module';
 const requireModule = createRequire(import.meta.url);
 const dbQuery = vi.fn();
 const dbRelease = vi.fn();
-const recordUnifiedCategoryMetric = vi.fn();
 
 describe('unified category analytics', () => {
   beforeEach(() => {

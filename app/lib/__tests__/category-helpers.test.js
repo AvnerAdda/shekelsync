@@ -1,6 +1,5 @@
-const { describe, expect, it, vi } = require('vitest');
-
-const { normalizeCategoryPath, resolveCategory } = require('../category-helpers.js');
+import { describe, expect, it, vi } from 'vitest';
+import { normalizeCategoryPath, resolveCategory } from '../category-helpers.js';
 
 describe('category-helpers', () => {
   it('normalizes category paths by trimming segments', () => {

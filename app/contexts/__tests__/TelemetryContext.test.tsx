@@ -122,9 +122,9 @@ describe('TelemetryContext', () => {
 
   it('throws when useTelemetry is called outside provider', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { result } = renderHook(() => useTelemetry());
-    expect(result.error).toBeInstanceOf(Error);
-    expect(result.error?.message).toContain('useTelemetry must be used within a TelemetryProvider');
+    expect(() => renderHook(() => useTelemetry())).toThrow(
+      'useTelemetry must be used within a TelemetryProvider',
+    );
     consoleError.mockRestore();
   });
 

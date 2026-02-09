@@ -20,7 +20,7 @@
     "rebuild:sqlite": "CC=gcc-11 CXX=g++-11 npm rebuild better-sqlite3 --build-from-source",
     "postinstall": "patch-package && electron-builder install-app-deps",
     "lint": "npm run lint:app && npm run lint:renderer",
-    "lint:app": "eslint --ext .ts,.tsx,.js,.jsx .",
+    "lint:app": "ESLINT_USE_FLAT_CONFIG=false eslint --ext .ts,.tsx .",
     "lint:renderer": "npm --prefix ../renderer run lint",
     "typecheck": "npm --prefix ../renderer run typecheck",
     "electron": "electron ../electron/main.js",

@@ -26,6 +26,19 @@ declare global {
     metadata?: Record<string, unknown>;
   }
 
+  interface UpdateInfo {
+    version: string;
+    releaseDate?: string;
+    releaseNotes?: string;
+  }
+
+  interface UpdateProgressInfo {
+    percent: number;
+    bytesPerSecond: number;
+    transferred: number;
+    total: number;
+  }
+
   interface ElectronScrapeProgressEvent {
     vendor?: string;
     status?: string;
@@ -67,12 +80,13 @@ declare global {
 
   interface ElectronWindowControls {
     minimize?: () => Promise<void>;
-    maximize?: () => Promise<void>;
+    maximize?: () => Promise<boolean>;
     close?: () => Promise<void>;
     isMaximized?: () => Promise<boolean>;
-    zoomIn?: () => Promise<void>;
-    zoomOut?: () => Promise<void>;
-    zoomReset?: () => Promise<void>;
+    zoomIn?: () => Promise<number>;
+    zoomOut?: () => Promise<number>;
+    zoomReset?: () => Promise<number>;
+    getZoomLevel?: () => Promise<number>;
   }
 
   interface ElectronDbApi {
@@ -128,6 +142,7 @@ declare global {
     getVersion?: () => Promise<string>;
     getName?: () => Promise<string>;
     isPackaged?: () => Promise<boolean>;
+    relaunch?: () => Promise<{ success: boolean; error?: string }>;
   }
 
   interface ElectronEventsApi {
@@ -144,6 +159,16 @@ declare global {
     onWindowStateChanged?: (
       callback: (payload: { maximized: boolean }) => void,
     ) => ElectronEventUnsubscribe | void;
+    onUpdateCheckingForUpdate?: (callback: () => void) => ElectronEventUnsubscribe | void;
+    onUpdateAvailable?: (callback: (info: UpdateInfo) => void) => ElectronEventUnsubscribe | void;
+    onUpdateNotAvailable?: (callback: (info?: UpdateInfo) => void) => ElectronEventUnsubscribe | void;
+    onUpdateError?: (
+      callback: (error: { message: string }) => void,
+    ) => ElectronEventUnsubscribe | void;
+    onUpdateDownloadProgress?: (
+      callback: (progress: UpdateProgressInfo) => void,
+    ) => ElectronEventUnsubscribe | void;
+    onUpdateDownloaded?: (callback: (info: UpdateInfo) => void) => ElectronEventUnsubscribe | void;
   }
 
   interface ElectronPlatformInfo {
@@ -219,9 +244,76 @@ declare global {
         debug: boolean;
       } | null;
       analyticsMetrics?: AnalyticsMetricsSnapshot | null;
+      configHealth?: {
+        warnings?: Array<{
+          code?: string;
+          message: string;
+          severity?: 'warning' | 'error' | 'info';
+        }>;
+      } | null;
     }>;
     openLogDirectory?: () => Promise<{ success: boolean; error?: string }>;
     exportDiagnostics?: (filePath: string) => Promise<ElectronDiagnosticsExportResult>;
+    copyDiagnostics?: () => Promise<{ success: boolean; error?: string }>;
+  }
+
+  interface ElectronDatabaseMaintenanceApi {
+    backup?: (targetPath: string) => Promise<{ success: boolean; error?: string; path?: string }>;
+    restore?: (sourcePath: string) => Promise<{
+      success: boolean;
+      error?: string;
+      path?: string;
+      restartRecommended?: boolean;
+    }>;
+  }
+
+  interface ElectronUpdaterApi {
+    checkForUpdates?: () => Promise<{ success: boolean; error?: string; updateInfo?: UpdateInfo }>;
+    downloadUpdate?: () => Promise<{ success: boolean; error?: string }>;
+    quitAndInstall?: () => Promise<{ success: boolean; error?: string }>;
+    getUpdateInfo?: () => Promise<{
+      autoUpdateEnabled: boolean;
+      currentVersion: string;
+      platform: string;
+    }>;
+  }
+
+  interface ElectronLicenseStatus {
+    registered: boolean;
+    licenseType: 'trial' | 'pro' | 'expired' | 'none';
+    trialDaysRemaining?: number;
+    isReadOnly: boolean;
+    canWrite: boolean;
+    offlineMode: boolean;
+    offlineGraceDaysRemaining?: number | null;
+    syncedToCloud: boolean;
+    lastValidated?: string;
+    email?: string;
+    error?: string;
+  }
+
+  interface ElectronEmailValidation {
+    valid: boolean;
+    error?: string;
+  }
+
+  interface ElectronLicenseApi {
+    getStatus?: () => Promise<{ success: boolean; data?: ElectronLicenseStatus; error?: string }>;
+    register?: (email: string) => Promise<{ success: boolean; license?: unknown; error?: string }>;
+    validateEmail?: (email: string) => Promise<{ success: boolean; data?: ElectronEmailValidation; error?: string }>;
+    activatePro?: (paymentRef?: string) => Promise<{ success: boolean; error?: string }>;
+    canWrite?: () => Promise<{ success: boolean; canWrite: boolean; error?: string }>;
+    validateOnline?: () => Promise<{ success: boolean; status?: ElectronLicenseStatus; error?: string }>;
+    getInfo?: () => Promise<{ success: boolean; data?: unknown; error?: string }>;
+  }
+
+  interface ElectronBiometricAuthApi {
+    isAvailable?: () => Promise<{ available: boolean; type?: string | null; reason?: string | null }>;
+    authenticate?: (reason?: string) => Promise<{
+      success: boolean;
+      method?: string;
+      error?: string;
+    }>;
   }
 
   interface ElectronSettingsApi {
@@ -259,6 +351,10 @@ declare global {
     diagnostics?: ElectronDiagnosticsApi;
     settings?: ElectronSettingsApi;
     telemetry?: ElectronTelemetryApi;
+    updater?: ElectronUpdaterApi;
+    license?: ElectronLicenseApi;
+    database?: ElectronDatabaseMaintenanceApi;
+    biometricAuth?: ElectronBiometricAuthApi;
   }
 
   interface Window {

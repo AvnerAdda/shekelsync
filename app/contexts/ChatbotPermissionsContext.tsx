@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 
 interface ChatbotPermissionsContextType {
   chatbotEnabled: boolean;
@@ -15,6 +15,14 @@ const ChatbotPermissionsContext = createContext<ChatbotPermissionsContextType | 
   undefined
 );
 
+const readStoredBoolean = (key: string, fallback: boolean): boolean => {
+  if (typeof window === 'undefined') {
+    return fallback;
+  }
+  const stored = window.localStorage.getItem(key);
+  return stored === null ? fallback : stored === 'true';
+};
+
 export const useChatbotPermissions = () => {
   const context = useContext(ChatbotPermissionsContext);
   if (!context) {
@@ -26,33 +34,18 @@ export const useChatbotPermissions = () => {
 export const ChatbotPermissionsProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [chatbotEnabled, setChatbotEnabledState] = useState<boolean>(true);
-  const [allowTransactionAccess, setAllowTransactionAccessState] = useState<boolean>(false);
-  const [allowCategoryAccess, setAllowCategoryAccessState] = useState<boolean>(false);
-  const [allowAnalyticsAccess, setAllowAnalyticsAccessState] = useState<boolean>(false);
-
-  useEffect(() => {
-    // Load saved permissions from localStorage
-    const savedEnabled = localStorage.getItem('chatbot-enabled');
-    if (savedEnabled !== null) {
-      setChatbotEnabledState(savedEnabled === 'true');
-    }
-
-    const savedTransactionAccess = localStorage.getItem('chatbot-transaction-access');
-    if (savedTransactionAccess !== null) {
-      setAllowTransactionAccessState(savedTransactionAccess === 'true');
-    }
-
-    const savedCategoryAccess = localStorage.getItem('chatbot-category-access');
-    if (savedCategoryAccess !== null) {
-      setAllowCategoryAccessState(savedCategoryAccess === 'true');
-    }
-
-    const savedAnalyticsAccess = localStorage.getItem('chatbot-analytics-access');
-    if (savedAnalyticsAccess !== null) {
-      setAllowAnalyticsAccessState(savedAnalyticsAccess === 'true');
-    }
-  }, []);
+  const [chatbotEnabled, setChatbotEnabledState] = useState<boolean>(() =>
+    readStoredBoolean('chatbot-enabled', true)
+  );
+  const [allowTransactionAccess, setAllowTransactionAccessState] = useState<boolean>(() =>
+    readStoredBoolean('chatbot-transaction-access', false)
+  );
+  const [allowCategoryAccess, setAllowCategoryAccessState] = useState<boolean>(() =>
+    readStoredBoolean('chatbot-category-access', false)
+  );
+  const [allowAnalyticsAccess, setAllowAnalyticsAccessState] = useState<boolean>(() =>
+    readStoredBoolean('chatbot-analytics-access', false)
+  );
 
   const setChatbotEnabled = (enabled: boolean) => {
     setChatbotEnabledState(enabled);
