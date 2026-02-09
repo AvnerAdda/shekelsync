@@ -1,16 +1,15 @@
 diff --git a/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js b/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js
-index 71d89de..2c3bb16 100644
+index 71d89de..872c5aa 100644
 --- a/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js
 +++ b/node_modules/israeli-bank-scrapers/lib/scrapers/discount.js
-@@ -81,9 +81,22 @@ async function fetchAccountData(page, options) {
+@@ -81,9 +81,21 @@ async function fetchAccountData(page, options) {
    return accountData;
  }
  async function navigateOrErrorLabel(page) {
 +  const successUrls = [`${BASE_URL}/apollo/retail/#/MY_ACCOUNT_HOMEPAGE`, `${BASE_URL}/apollo/retail2/#/MY_ACCOUNT_HOMEPAGE`, `${BASE_URL}/apollo/retail2/`];
    try {
      await (0, _navigation.waitForNavigation)(page);
-+    // Wait for SPA to fully route - the page may still be loading after initial navigation
-+    // Wait up to 30 seconds for the URL to contain MY_ACCOUNT_HOMEPAGE
++    // Wait for SPA route completion after initial navigation.
 +    const startTime = Date.now();
 +    const timeout = 30000;
 +    while (Date.now() - startTime < timeout) {
@@ -21,12 +20,12 @@ index 71d89de..2c3bb16 100644
 +      await new Promise(resolve => setTimeout(resolve, 500));
 +    }
    } catch (e) {
-+    // If navigation fails, check for error element
++    // If navigation throws, check whether the error state is shown.
      await (0, _elementsInteractions.waitUntilElementFound)(page, '#general-error', false, 100);
    }
  }
 diff --git a/node_modules/israeli-bank-scrapers/lib/scrapers/mizrahi.js b/node_modules/israeli-bank-scrapers/lib/scrapers/mizrahi.js
-index b744740..d34a763 100644
+index 4aa39d0..0a263ca 100644
 --- a/node_modules/israeli-bank-scrapers/lib/scrapers/mizrahi.js
 +++ b/node_modules/israeli-bank-scrapers/lib/scrapers/mizrahi.js
 @@ -120,6 +120,51 @@ function createHeadersFromRequest(request) {
@@ -78,10 +77,10 @@ index b744740..d34a763 100644
 +  }
 +  return bestBalance;
 +}
- async function convertTransactions(txns, getMoreDetails, pendingIfTodayTransaction = false, options) {
-   return Promise.all(txns.map(async row => {
-     const moreDetails = await getMoreDetails(row);
-@@ -251,10 +296,14 @@ class MizrahiScraper extends _baseScraperWithBrowser.BaseScraperWithBrowser {
+ function getTransactionIdentifier(row) {
+   if (!row.MC02AsmahtaMekoritEZ) {
+     return undefined;
+@@ -260,10 +305,14 @@ class MizrahiScraper extends _baseScraperWithBrowser.BaseScraperWithBrowser {
      const oshTxnAfterStartDate = oshTxn.filter(txn => (0, _moment.default)(txn.date).isSameOrAfter(startMoment));
      const pendingTxn = await this.getPendingTransactions();
      const allTxn = oshTxnAfterStartDate.concat(pendingTxn);
