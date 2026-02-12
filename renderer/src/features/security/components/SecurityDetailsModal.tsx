@@ -138,7 +138,7 @@ const SecurityDetailsModal: React.FC<SecurityDetailsModalProps> = ({ open, onClo
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <SecurityIcon color="primary" />
-            <Typography variant="h6" fontWeight={700}>
+            <Typography variant="h6" component="span" fontWeight={700}>
               Security & Privacy
             </Typography>
           </Box>

@@ -452,15 +452,15 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
               {institutionsLoading ? t('forms.loadingInstitutions') : t('forms.noInstitutions')}
             </MenuItem>
           ) : (
-            <>
-              {!selectValue && (
-                <MenuItem value="" disabled>
+            [
+              !selectValue ? (
+                <MenuItem key="placeholder" value="" disabled>
                   {t('forms.selectInstitution')}
                 </MenuItem>
-              )}
-              {vendorSections.flatMap((section) => [
+              ) : null,
+              ...vendorSections.flatMap((section) => [
                 <ListSubheader key={`${section.key}-header`}>{section.label}</ListSubheader>,
-                section.institutions.map((institution) => (
+                ...section.institutions.map((institution) => (
                   <MenuItem key={institution.vendor_code} value={institution.vendor_code}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <InstitutionBadge institution={institution} fallback={institution.vendor_code} />
@@ -468,8 +468,8 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
                     </Box>
                   </MenuItem>
                 )),
-              ])}
-            </>
+              ]),
+            ]
           )}
         </Select>
       </FormControl>

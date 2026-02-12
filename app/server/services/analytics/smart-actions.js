@@ -420,6 +420,8 @@ async function detectFixedCategoryVariations(params = {}) {
       const currentAvg = parseFloat(row.current_avg || 0);
       const currentCount = parseInt(row.current_count || 0);
       const stdDevPop = parseFloat(row.current_stddev_pop || 0);
+      const currentMin = parseFloat(row.current_min || 0);
+      const currentMax = parseFloat(row.current_max || 0);
 
       // Skip if no average or only one transaction
       if (currentAvg === 0 || currentCount < 2) continue;

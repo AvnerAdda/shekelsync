@@ -2185,7 +2185,8 @@
       "minimizeWindow": "מזער חלון",
       "maximizeWindow": "הגדל חלון",
       "restoreWindow": "שחזר חלון",
-      "closeWindow": "סגור חלון"
+      "closeWindow": "סגור חלון",
+      "sendFeedback": "שלח משוב"
     },
     "update": {
       "tooltip": {

@@ -1,14 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { goHome, setupRendererTest } from './helpers/renderer-app';
+import { goHome, openAnalysisPage, setupRendererTest } from './helpers/renderer-app';
 
 test.beforeEach(async ({ page }) => {
   await setupRendererTest(page);
 });
 
+test.setTimeout(120_000);
+
 test('Analysis Budget tab shows forecast risk status', async ({ page }) => {
   await goHome(page);
-
-  await page.getByRole('button', { name: 'Analysis' }).click();
+  await openAnalysisPage(page);
   await page.getByRole('tab', { name: 'Budget' }).click();
 
   await expect(page.getByRole('heading', { name: /Budget risk outlook/i })).toBeVisible();

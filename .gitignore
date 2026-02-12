@@ -68,7 +68,7 @@ coverage/
 # Miscellaneous
 .cache/
 
-website/
+shekelsync_web/
 /analysis/
 .venv/
 

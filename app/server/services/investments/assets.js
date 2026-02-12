@@ -1,4 +1,5 @@
-const database = require('../database.js');
+const actualDatabase = require('../database.js');
+let database = actualDatabase;
 const {
   INSTITUTION_SELECT_FIELDS,
   buildInstitutionFromRow,
@@ -233,6 +234,12 @@ module.exports = {
   createAsset,
   updateAsset,
   deactivateAsset,
+  __setDatabase(mockDatabase) {
+    database = mockDatabase || actualDatabase;
+  },
+  __resetDatabase() {
+    database = actualDatabase;
+  },
 };
 
 module.exports.default = module.exports;

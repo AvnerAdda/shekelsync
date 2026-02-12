@@ -19,8 +19,26 @@ const readStoredBoolean = (key: string, fallback: boolean): boolean => {
   if (typeof window === 'undefined') {
     return fallback;
   }
-  const stored = window.localStorage.getItem(key);
-  return stored === null ? fallback : stored === 'true';
+
+  try {
+    const stored = window.localStorage.getItem(key);
+    return stored === null ? fallback : stored === 'true';
+  } catch (error) {
+    console.warn(`[ChatbotPermissionsContext] Failed to read "${key}" from localStorage`, error);
+    return fallback;
+  }
+};
+
+const persistBoolean = (key: string, value: boolean): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(key, value.toString());
+  } catch (error) {
+    console.warn(`[ChatbotPermissionsContext] Failed to persist "${key}"`, error);
+  }
 };
 
 export const useChatbotPermissions = () => {
@@ -49,22 +67,22 @@ export const ChatbotPermissionsProvider: React.FC<{ children: React.ReactNode }>
 
   const setChatbotEnabled = (enabled: boolean) => {
     setChatbotEnabledState(enabled);
-    localStorage.setItem('chatbot-enabled', enabled.toString());
+    persistBoolean('chatbot-enabled', enabled);
   };
 
   const setAllowTransactionAccess = (allow: boolean) => {
     setAllowTransactionAccessState(allow);
-    localStorage.setItem('chatbot-transaction-access', allow.toString());
+    persistBoolean('chatbot-transaction-access', allow);
   };
 
   const setAllowCategoryAccess = (allow: boolean) => {
     setAllowCategoryAccessState(allow);
-    localStorage.setItem('chatbot-category-access', allow.toString());
+    persistBoolean('chatbot-category-access', allow);
   };
 
   const setAllowAnalyticsAccess = (allow: boolean) => {
     setAllowAnalyticsAccessState(allow);
-    localStorage.setItem('chatbot-analytics-access', allow.toString());
+    persistBoolean('chatbot-analytics-access', allow);
   };
 
   return (

@@ -29,6 +29,10 @@ import {
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import { apiClient } from '@/lib/api-client';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
+import {
+  findMatchingInvestmentAccounts,
+  getInvestmentSuggestionKey,
+} from './investment-account-suggestions-helpers';
 
 interface Transaction {
   transactionIdentifier: string;
@@ -103,15 +107,10 @@ export default function InvestmentAccountSuggestionsCard({
 }: InvestmentAccountSuggestionsCardProps) {
   const { showNotification } = useNotification();
 
-  const getSuggestionKey = useCallback((suggestion: GroupedSuggestion) => {
-    if (suggestion.transactions?.length) {
-      return suggestion.transactions
-        .map((txn) => txn.transactionIdentifier)
-        .sort()
-        .join('|');
-    }
-    return `${suggestion.suggestedAccountType}-${suggestion.suggestedAccountName}-${suggestion.suggestedInstitution ?? 'none'}`;
-  }, []);
+  const getSuggestionKey = useCallback(
+    (suggestion: GroupedSuggestion) => getInvestmentSuggestionKey(suggestion),
+    [],
+  );
   const [loading, setLoading] = useState(true);
   const [suggestions, setSuggestions] = useState<GroupedSuggestion[]>([]);
   const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set());
@@ -147,24 +146,11 @@ export default function InvestmentAccountSuggestionsCard({
     }
   };
 
-  const findMatchingAccounts = (suggestion: GroupedSuggestion): InvestmentAccount[] => {
-    return investmentAccounts.filter(account => {
-      if (account.account_type === suggestion.suggestedAccountType) {
-        return true;
-      }
-      if (suggestion.suggestedInstitution && account.institution) {
-        // institution is an object with display_name_he, display_name_en, etc.
-        const institutionName = account.institution.display_name_he || account.institution.display_name_en || '';
-
-        if (institutionName) {
-          const instMatch = institutionName.toLowerCase().includes(suggestion.suggestedInstitution.toLowerCase()) ||
-                           suggestion.suggestedInstitution.toLowerCase().includes(institutionName.toLowerCase());
-          if (instMatch) return true;
-        }
-      }
-      return false;
-    });
-  };
+  const findMatchingAccounts = useCallback(
+    (suggestion: GroupedSuggestion) =>
+      findMatchingInvestmentAccounts(suggestion, investmentAccounts),
+    [investmentAccounts],
+  );
 
   const fetchSuggestions = async () => {
     setLoading(true);

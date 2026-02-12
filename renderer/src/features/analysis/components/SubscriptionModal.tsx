@@ -208,7 +208,7 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 <SubscriptionIcon sx={{ color: '#fff', fontSize: 20 }} />
               </Box>
               <Box>
-                <Typography variant="h6" fontWeight={700}>
+                <Typography variant="h6" component="span" fontWeight={700}>
                   {isEditing ? t('modal.titleEdit') : t('modal.titleAdd')}
                 </Typography>
                 {isEditing && subscription?.category_name && (

@@ -47,6 +47,12 @@ import { STALE_SYNC_THRESHOLD_MS } from '@app/utils/constants';
 import { apiClient } from '@/lib/api-client';
 import { useScrapeProgress } from '@/hooks/useScrapeProgress';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
+import {
+  formatSidebarAccountLastSync,
+  formatSidebarLastSync,
+  getAccountSyncStatus,
+  type AccountSyncStatusColor,
+} from './sidebar-helpers';
 
 const DRAWER_WIDTH = 260;
 const DRAWER_WIDTH_COLLAPSED = 65;
@@ -67,7 +73,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     vendor: string;
     nickname: string | null;
     lastSync: Date | null;
-    status: 'green' | 'orange' | 'red' | 'never';
+    status: AccountSyncStatusColor;
   }
 
   const [stats, setStats] = useState({
@@ -102,17 +108,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     ],
     [t],
   );
-
-  const getAccountSyncStatus = (lastSyncDate: Date | null): 'green' | 'orange' | 'red' | 'never' => {
-    if (!lastSyncDate) return 'never';
-    const now = Date.now();
-    const diffMs = now - lastSyncDate.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
-
-    if (diffHours < 24) return 'green'; // < 24 hours
-    if (diffHours < 48) return 'orange'; // 1-2 days
-    return 'red'; // > 2 days
-  };
 
   const fetchStats = useCallback(async () => {
     try {
@@ -350,35 +345,27 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   };
 
   const formatLastSync = () => {
-    if (!stats.lastSync) return t('sync.never');
-    const now = new Date();
-    const diff = now.getTime() - stats.lastSync.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 0) return t('sync.daysAgo', { count: days });
-    if (hours > 0) return t('sync.hoursAgo', { count: hours });
-    if (minutes > 0) return t('sync.minutesAgo', { count: minutes });
-    return t('sync.justNow');
+    return formatSidebarLastSync(stats.lastSync, new Date(), {
+      never: t('sync.never'),
+      daysAgo: (count) => t('sync.daysAgo', { count }),
+      hoursAgo: (count) => t('sync.hoursAgo', { count }),
+      minutesAgo: (count) => t('sync.minutesAgo', { count }),
+      justNow: t('sync.justNow'),
+    });
   };
 
   const formatAccountLastSync = (lastSync: Date | null) => {
-    if (!lastSync) return t('accountSync.neverSynced');
-    const now = new Date();
-    const diff = now.getTime() - lastSync.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 1) return t('sync.daysAgo', { count: days });
-    if (days === 1) return t('sync.yesterday');
-    if (hours > 0) return t('sync.hoursAgo', { count: hours });
-    if (minutes > 0) return t('sync.minutesAgo', { count: minutes });
-    return t('sync.justNow');
+    return formatSidebarAccountLastSync(lastSync, new Date(), {
+      neverSynced: t('accountSync.neverSynced'),
+      daysAgo: (count) => t('sync.daysAgo', { count }),
+      hoursAgo: (count) => t('sync.hoursAgo', { count }),
+      minutesAgo: (count) => t('sync.minutesAgo', { count }),
+      yesterday: t('sync.yesterday'),
+      justNow: t('sync.justNow'),
+    });
   };
 
-  const getStatusColor = (status: 'green' | 'orange' | 'red' | 'never') => {
+  const getStatusColor = (status: AccountSyncStatusColor) => {
     switch (status) {
       case 'green':
         return theme.palette.success.main;

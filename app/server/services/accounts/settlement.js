@@ -2,6 +2,10 @@ const database = require('../database.js');
 const pairingsService = require('./pairings.js');
 const { getCreditCardRepaymentCategoryCondition } = require('./repayment-category.js');
 
+let databaseRef = database;
+let pairingsServiceRef = pairingsService;
+let repaymentCategoryConditionResolverRef = getCreditCardRepaymentCategoryCondition;
+
 const KEYWORDS = [
   'ויזה', 'visa',
   'כ.א.ל', 'cal',
@@ -69,11 +73,11 @@ async function findSettlementCandidates(params = {}) {
   const bankVendor = params.bank_vendor;
   const bankAccountNumber = params.bank_account_number || null;
 
-  const client = await database.getClient();
+  const client = await databaseRef.getClient();
 
   try {
-    const activePairings = await pairingsService.getActivePairings(client);
-    const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
+    const activePairings = await pairingsServiceRef.getActivePairings(client);
+    const repaymentCategoryCondition = repaymentCategoryConditionResolverRef('cd');
 
     const keywordConditions = KEYWORDS.map(
       (_, idx) => `LOWER(t.name) LIKE '%' || LOWER($${idx + 3}) || '%'`,
@@ -182,6 +186,22 @@ async function findSettlementCandidates(params = {}) {
 
 module.exports = {
   findSettlementCandidates,
+  __setDatabase: (mockDatabase) => {
+    databaseRef = mockDatabase || database;
+  },
+  __setPairingsService: (service) => {
+    pairingsServiceRef = service || pairingsService;
+  },
+  __setRepaymentCategoryResolver: (resolver) => {
+    if (typeof resolver === 'function') {
+      repaymentCategoryConditionResolverRef = resolver;
+    }
+  },
+  __resetDependencies: () => {
+    databaseRef = database;
+    pairingsServiceRef = pairingsService;
+    repaymentCategoryConditionResolverRef = getCreditCardRepaymentCategoryCondition;
+  },
 };
 
 module.exports.default = module.exports;

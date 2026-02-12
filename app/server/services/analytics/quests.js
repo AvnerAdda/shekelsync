@@ -1956,14 +1956,42 @@ module.exports = {
   LEVEL_TIERS,
   MAX_ACTIVE_QUESTS,
   _internal: {
+    median,
+    coerceNumber,
     computeWeeklyBaselineStats,
+    resolveAvgOccurrencesPerWeek,
+    resolveAvgOccurrencesPerMonth,
+    resolveQuestDurationDays,
+    estimateMonthlySpend,
+    computeBaselineSpend,
+    isBaselineMeaningful,
+    isPatternStale,
+    normalizeCategoryKey,
+    resolveCategoryId,
+    computeReductionPct,
+    getDaysRemainingInMonth,
+    computePeriodStability,
+    getWeekStart,
+    getWeekKey,
+    getMonthKey,
+    buildWeekKeys,
+    buildMonthKeys,
+    buildTotalsByCategory,
     isExcludedCategoryName,
+    isExcludedMerchant,
+    calculateLevel,
+    calculateQuestPoints,
+    determineQuestDifficulty,
+    getActiveQuestCount,
+    buildQuestTextParams,
   },
   __setDatabase(mock) {
     database = mock || actualDatabase;
+    triggerCleanupDone = false;
   },
   __resetDatabase() {
     database = actualDatabase;
+    triggerCleanupDone = false;
   },
 };
 

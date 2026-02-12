@@ -7,35 +7,56 @@ interface SecurityIndicatorProps {
   onClick?: () => void;
 }
 
+type SecurityLevel = 'secure' | 'warning' | 'error' | 'unknown';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+export function parseSecuritySummaryLevel(payload: unknown): SecurityLevel {
+  if (!isRecord(payload)) {
+    return 'unknown';
+  }
+
+  const nestedData = isRecord(payload.data) ? payload.data : null;
+  const rawLevel = nestedData?.level ?? payload.level;
+
+  if (rawLevel === 'secure' || rawLevel === 'warning' || rawLevel === 'error' || rawLevel === 'unknown') {
+    return rawLevel;
+  }
+
+  return 'unknown';
+}
+
+export function getSecurityTooltip(level: SecurityLevel): string {
+  switch (level) {
+    case 'secure':
+      return 'Security: All systems secure';
+    case 'warning':
+      return 'Security: Warning - Check details';
+    case 'error':
+      return 'Security: Issues detected';
+    default:
+      return 'Security status unknown';
+  }
+}
+
 const SecurityIndicator: React.FC<SecurityIndicatorProps> = ({ onClick }) => {
   const theme = useTheme();
-  const [securityLevel, setSecurityLevel] = useState<'secure' | 'warning' | 'error' | 'unknown'>('unknown');
+  const [securityLevel, setSecurityLevel] = useState<SecurityLevel>('unknown');
   const [tooltip, setTooltip] = useState('Loading security status...');
 
   const fetchSecurityStatus = async () => {
     try {
       const response = await apiClient.get('/api/security/summary');
 
-      if (response.ok && response.data) {
-        const summaryData = response.data as { success: boolean; data: { level: string; checks: any; warnings: any[] } };
-        const level = summaryData.data.level as 'secure' | 'warning' | 'error';
-        setSecurityLevel(level);
-
-        // Update tooltip based on level
-        switch (level) {
-          case 'secure':
-            setTooltip('Security: All systems secure');
-            break;
-          case 'warning':
-            setTooltip('Security: Warning - Check details');
-            break;
-          case 'error':
-            setTooltip('Security: Issues detected');
-            break;
-          default:
-            setTooltip('Security status unknown');
-        }
+      if (!response.ok) {
+        throw new Error('Failed to fetch security summary');
       }
+
+      const level = parseSecuritySummaryLevel(response.data);
+      setSecurityLevel(level);
+      setTooltip(getSecurityTooltip(level));
     } catch (err) {
       console.error('[SecurityIndicator] Error fetching status:', err);
       setSecurityLevel('unknown');

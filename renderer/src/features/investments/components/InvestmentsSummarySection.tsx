@@ -8,6 +8,11 @@ import {
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
+import {
+  formatSignedCurrencyValue,
+  formatSignedPercent,
+  hasPortfolioAccounts,
+} from './investments-summary-helpers';
 
 interface InvestmentsSummarySectionProps {
   portfolioData: PortfolioSummary | null;
@@ -71,7 +76,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
     );
   }
 
-  if (!portfolioData || portfolioData.summary.totalAccounts === 0) {
+  if (!hasPortfolioAccounts(portfolioData)) {
     return null;
   }
 
@@ -126,8 +131,10 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
                 portfolioData.summary.unrealizedGainLoss >= 0 ? 'success.main' : 'error.main'
               }
             >
-              {portfolioData.summary.unrealizedGainLoss >= 0 ? '+' : ''}
-              {formatCurrencyValue(portfolioData.summary.unrealizedGainLoss)}
+              {formatSignedCurrencyValue(
+                portfolioData.summary.unrealizedGainLoss,
+                formatCurrencyValue,
+              )}
             </Typography>
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
@@ -139,8 +146,7 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
               fontWeight="medium"
               color={portfolioData.summary.roi >= 0 ? 'success.main' : 'error.main'}
             >
-              {portfolioData.summary.roi >= 0 ? '+' : ''}
-              {portfolioData.summary.roi.toFixed(2)}%
+              {formatSignedPercent(portfolioData.summary.roi, 2)}
             </Typography>
           </Grid>
         </Grid>
@@ -184,8 +190,10 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
                       : 'error.main'
                   }
                 >
-                  {portfolioData.summary.liquid.unrealizedGainLoss >= 0 ? '+' : ''}
-                  {formatCurrencyValue(portfolioData.summary.liquid.unrealizedGainLoss)}
+                  {formatSignedCurrencyValue(
+                    portfolioData.summary.liquid.unrealizedGainLoss,
+                    formatCurrencyValue,
+                  )}
                 </Typography>
               </Grid>
             </Grid>
@@ -230,8 +238,10 @@ const InvestmentsSummarySection: React.FC<InvestmentsSummarySectionProps> = ({
                       : 'error.main'
                   }
                 >
-                  {portfolioData.summary.restricted.unrealizedGainLoss >= 0 ? '+' : ''}
-                  {formatCurrencyValue(portfolioData.summary.restricted.unrealizedGainLoss)}
+                  {formatSignedCurrencyValue(
+                    portfolioData.summary.restricted.unrealizedGainLoss,
+                    formatCurrencyValue,
+                  )}
                 </Typography>
               </Grid>
             </Grid>

@@ -262,7 +262,7 @@ const DataExportPanel: React.FC = () => {
   const selectedVendorOptions = vendors.filter((v) => selectedVendors.includes(v.name));
 
   return (
-    <Paper sx={{ p: 3 }}>
+    <Paper sx={{ p: 3 }} data-testid="data-export-panel">
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
         <ExportIcon color="primary" />
         <Typography variant="h6">{t('title')}</Typography>
@@ -491,6 +491,7 @@ const DataExportPanel: React.FC = () => {
                   startIcon={exportStatus.loading ? <CircularProgress size={20} color="inherit" /> : <DownloadIcon />}
                   onClick={handleExport}
                   disabled={exportStatus.loading}
+                  data-testid="data-export-submit"
                   sx={{ minWidth: 140 }}
                 >
                   {exportStatus.loading ? t('summary.exporting') : t('summary.cta')}
@@ -502,7 +503,7 @@ const DataExportPanel: React.FC = () => {
               )}
 
               {exportStatus.success && (
-                <Alert severity="success" icon={<SuccessIcon />} sx={{ mb: 2 }}>
+                <Alert severity="success" icon={<SuccessIcon />} sx={{ mb: 2 }} data-testid="data-export-success">
                   {t('summary.success')}
                 </Alert>
               )}

@@ -52,6 +52,11 @@ import { apiClient } from '@/lib/api-client';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
 import { useTranslation } from 'react-i18next';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
+import {
+  buildChildProfileDelete,
+  buildChildProfileUpdate,
+  calculateProfileAge,
+} from './enhanced-profile-helpers';
 
 const EnhancedProfileSection: React.FC = () => {
   const { t } = useTranslation('translation', { keyPrefix: 'settings.profile' });
@@ -239,17 +244,7 @@ const EnhancedProfileSection: React.FC = () => {
     }
   };
 
-  const calculateAge = (birthDate: string) => {
-    if (!birthDate) return null;
-    const today = new Date();
-    const birth = new Date(birthDate);
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
-    return age;
-  };
+  const calculateAge = (birthDate: string) => calculateProfileAge(birthDate);
 
   const handleAddChild = () => {
     setEditingChild(null);
@@ -275,17 +270,21 @@ const EnhancedProfileSection: React.FC = () => {
       return;
     }
 
-    const updatedChildren = editingChild
-      ? profileData.children.map(c => c.id === editingChild.id ? { ...tempChild } : c)
-      : [...profileData.children, { ...tempChild, id: Date.now() }]; // Temporary ID
+    const { updatedChildren, childrenCount, householdSize } = buildChildProfileUpdate({
+      existingChildren: profileData.children,
+      editingChild,
+      tempChild,
+      hasSpouse: Boolean(profileData.spouse),
+      newChildId: Date.now(),
+    });
 
     setProfileData({
       ...profileData,
       children: updatedChildren,
       profile: {
         ...profileData.profile,
-        children_count: updatedChildren.length,
-        household_size: 1 + (profileData.spouse ? 1 : 0) + updatedChildren.length,
+        children_count: childrenCount,
+        household_size: householdSize,
       }
     });
 
@@ -294,14 +293,18 @@ const EnhancedProfileSection: React.FC = () => {
 
   const handleDeleteChild = (childId: number | undefined) => {
     if (!childId) return;
-    const updatedChildren = profileData.children.filter(c => c.id !== childId);
+    const { updatedChildren, childrenCount, householdSize } = buildChildProfileDelete({
+      existingChildren: profileData.children,
+      childId,
+      hasSpouse: Boolean(profileData.spouse),
+    });
     setProfileData({
       ...profileData,
       children: updatedChildren,
       profile: {
         ...profileData.profile,
-        children_count: updatedChildren.length,
-        household_size: 1 + (profileData.spouse ? 1 : 0) + updatedChildren.length,
+        children_count: childrenCount,
+        household_size: householdSize,
       }
     });
   };

@@ -20,7 +20,7 @@ interface UseBreakdownDataResult {
 
 const TYPES: BreakdownType[] = ['expense', 'income', 'investment'];
 const DEFAULT_INITIAL_TYPES: BreakdownType[] = ['expense', 'income'];
-const CACHE_TTL_MS = 60_000;
+export const BREAKDOWN_CACHE_TTL_MS = 60_000;
 
 type CacheEntry = {
   data: any;
@@ -29,16 +29,29 @@ type CacheEntry = {
 
 const breakdownCache = new Map<string, CacheEntry>();
 
-function makeCacheKey(type: BreakdownType, start: Date, end: Date, locale: string): string {
+export function makeCacheKey(type: BreakdownType, start: Date, end: Date, locale: string): string {
   return `${type}:${start.toISOString()}:${end.toISOString()}:${locale}`;
 }
 
-function createInitialState<T>(value: T): Record<BreakdownType, T> {
+export function createInitialState<T>(value: T): Record<BreakdownType, T> {
   return {
     expense: value,
     income: value,
     investment: value,
   };
+}
+
+export function normalizeBreakdownTypes(initialTypes?: BreakdownType[]): BreakdownType[] {
+  const sourceInitialTypes = initialTypes ?? DEFAULT_INITIAL_TYPES;
+  const seen = new Set<BreakdownType>();
+  const list: BreakdownType[] = [];
+  sourceInitialTypes.forEach((type) => {
+    if (TYPES.includes(type) && !seen.has(type)) {
+      seen.add(type);
+      list.push(type);
+    }
+  });
+  return list;
 }
 
 export function useBreakdownData({
@@ -70,7 +83,7 @@ export function useBreakdownData({
     const cached = breakdownCache.get(cacheKey);
     const now = Date.now();
 
-    if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+    if (cached && now - cached.timestamp < BREAKDOWN_CACHE_TTL_MS) {
       setBreakdownData((prev) => ({ ...prev, [type]: cached.data }));
       setBreakdownErrors((prev) => ({ ...prev, [type]: null }));
       return;
@@ -116,18 +129,10 @@ export function useBreakdownData({
     }
   }, [enabled, endDate, locale, startDate]);
 
-  const normalizedInitialTypes = useMemo(() => {
-    const sourceInitialTypes = initialTypes ?? DEFAULT_INITIAL_TYPES;
-    const seen = new Set<BreakdownType>();
-    const list: BreakdownType[] = [];
-    sourceInitialTypes.forEach((type) => {
-      if (TYPES.includes(type) && !seen.has(type)) {
-        seen.add(type);
-        list.push(type);
-      }
-    });
-    return list;
-  }, [initialTypes]);
+  const normalizedInitialTypes = useMemo(
+    () => normalizeBreakdownTypes(initialTypes),
+    [initialTypes],
+  );
 
   useEffect(() => {
     if (!enabled) {

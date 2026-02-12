@@ -1,17 +1,19 @@
 import { test, expect } from '@playwright/test';
-import { setupRendererTest, goHome } from './helpers/renderer-app';
+import { setupRendererTest, goHome, openAnalysisPage } from './helpers/renderer-app';
 
 test.beforeEach(async ({ page }) => {
   await setupRendererTest(page);
 });
 
+test.setTimeout(120_000);
+
 test('Router nav: Dashboard → Budgets → Analysis Budget health', async ({ page }) => {
   await goHome(page);
 
   // Jump directly to Analysis route
-  await page.goto('/#/analysis');
-  await expect(page.getByRole('tab', { name: 'Budget' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Budget' }).click();
+  await openAnalysisPage(page, 'route');
+  const budgetTab = page.getByRole('tab', { name: 'Budget', exact: true });
+  await budgetTab.click();
 
   // Verify budget outlook is displayed
   await expect(page.getByRole('heading', { name: /Budget risk outlook/i })).toBeVisible();

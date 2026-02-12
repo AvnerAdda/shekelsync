@@ -17,18 +17,17 @@ import {
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioSummary, PortfolioHistoryPoint, InvestmentAccountSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
-import { getInstitutionLabel, type InstitutionMetadata } from '@renderer/shared/components/InstitutionBadge';
+import {
+  calculatePortfolioRoi,
+  getPortfolioAccountColor,
+  resolvePortfolioInstitutionName,
+} from './portfolio-breakdown-helpers';
 
 interface PortfolioBreakdownSectionProps {
   portfolioData: PortfolioSummary;
   accountHistories: Record<number, PortfolioHistoryPoint[]>;
   historyLoading: boolean;
 }
-
-// Must match PortfolioHistorySection
-const CHART_COLORS = [
-  '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#a05195', '#d45087', '#f95d6a', '#ff7c43', '#ffa600'
-];
 
 const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
   portfolioData,
@@ -50,18 +49,6 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
   const liquidAccounts = portfolioData.liquidAccounts || [];
   const orderedAccounts = [...restrictedAccounts, ...liquidAccounts];
 
-  const getAccountColor = (accountId: number) => {
-    const index = orderedAccounts.findIndex(a => a.id === accountId);
-    if (index === -1) return theme.palette.grey[500];
-    return CHART_COLORS[index % CHART_COLORS.length];
-  };
-
-  const getInstitutionName = (institution: unknown) => {
-    if (!institution) return '';
-    if (typeof institution === 'string') return institution;
-    return getInstitutionLabel(institution as InstitutionMetadata, locale) || (institution as InstitutionMetadata).vendor_code || '';
-  };
-
   const renderAccountList = (accounts: InvestmentAccountSummary[], title: string) => {
     if (!accounts || accounts.length === 0) return null;
 
@@ -71,15 +58,19 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
           {title}
         </ListSubheader>
         {accounts.map((account) => {
-          const roi = account.cost_basis > 0 
-            ? ((account.current_value - account.cost_basis) / account.cost_basis) * 100 
-            : 0;
+          const roi = calculatePortfolioRoi(account.current_value, account.cost_basis);
           const isPositive = roi >= 0;
 
           return (
             <ListItem key={account.id} disablePadding sx={{ py: 0.5, px: 2 }}>
               <ListItemIcon sx={{ minWidth: 24 }}>
-                <CircleIcon sx={{ width: 12, height: 12, color: getAccountColor(account.id) }} />
+                <CircleIcon
+                  sx={{
+                    width: 12,
+                    height: 12,
+                    color: getPortfolioAccountColor(orderedAccounts, account.id, theme.palette.grey[500]),
+                  }}
+                />
               </ListItemIcon>
               <ListItemText
                 primary={
@@ -95,7 +86,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                 secondary={
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                     <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: '60%' }}>
-                      {getInstitutionName(account.institution)}
+                      {resolvePortfolioInstitutionName(account.institution, locale)}
                     </Typography>
                     {account.cost_basis > 0 && (
                       <Typography 

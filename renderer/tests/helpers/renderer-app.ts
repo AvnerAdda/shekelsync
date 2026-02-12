@@ -922,8 +922,73 @@ const snapshotProgressResponse = {
   },
 };
 
+const donationStatusResponse = {
+  success: true,
+  data: {
+    hasDonated: false,
+    tier: 'none',
+    supportStatus: 'none',
+    totalAmountUsd: 0,
+    currentMonthKey: '2025-09',
+    reminderShownThisMonth: true,
+    shouldShowMonthlyReminder: false,
+    hasPendingVerification: false,
+    canAccessAiAgent: false,
+    aiAgentAccessLevel: 'none',
+    plans: [],
+    donationUrl: 'https://buymeacoffee.com/shekelsync',
+  },
+};
+
+const securitySummaryResponse = {
+  success: true,
+  data: {
+    level: 'secure',
+    checks: {
+      encryption: true,
+      keychain: true,
+      authenticated: true,
+    },
+    warnings: [],
+  },
+};
+
+const securityStatusResponse = {
+  success: true,
+  data: {
+    encryption: {
+      status: 'active',
+      algorithm: 'aes-256-gcm',
+      keyStorage: 'keychain',
+    },
+    keychain: {
+      status: 'connected',
+      type: 'mock',
+      available: true,
+      fallbackMode: false,
+    },
+    authentication: {
+      isActive: true,
+      method: 'session',
+      lastAuthenticated: '2025-09-20T00:00:00.000Z',
+      requiresReauth: false,
+    },
+    biometric: {
+      available: false,
+      type: null,
+      reason: null,
+    },
+    platform: {
+      os: 'linux',
+      osName: 'Linux',
+    },
+  },
+};
+
 const defaultHandlers: Record<string, Handler> = {
   'GET /api/ping': respondWith({ status: 'ok' }),
+  'GET /api/security/status': respondWith(securityStatusResponse),
+  'GET /api/security/summary': respondWith(securitySummaryResponse),
   'GET /api/credentials': respondWith(credentials),
   'POST /api/credentials': respondOK,
   'GET /api/accounts/last-update': respondWith(accountsLastUpdate),
@@ -1024,6 +1089,10 @@ const defaultHandlers: Record<string, Handler> = {
   'GET /api/notifications': respondWith(notificationsResponse),
   'GET /api/notifications?limit=20': respondWith(notificationsResponse),
   'GET /api/notifications/snapshot-progress': respondWith(snapshotProgressResponse),
+  'GET /api/donations/status': respondWith(donationStatusResponse),
+  'POST /api/donations/intent': respondWith(donationStatusResponse),
+  'POST /api/donations': respondWith(donationStatusResponse),
+  'POST /api/donations/reminder-shown': respondWith(donationStatusResponse),
   'POST /api/scrape/bulk': respondWith({
     success: true,
     totalProcessed: 1,
@@ -1098,6 +1167,18 @@ export const goHome = async (page: Page) => {
   await page.goto('/#/', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('banner').getByText('ShekelSync', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add Account' })).toBeVisible();
+};
+
+export const openAnalysisPage = async (page: Page, mode: 'sidebar' | 'route' = 'sidebar') => {
+  if (mode === 'route') {
+    await page.goto('/#/analysis', { waitUntil: 'domcontentloaded' });
+  } else {
+    await page.getByRole('button', { name: 'Analysis' }).click();
+  }
+
+  // Analysis chunk compilation can be slow on CI when multiple workers boot together.
+  await expect(page.getByRole('heading', { name: 'Financial Analysis' })).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('#analysis-tab-3')).toBeVisible({ timeout: 30_000 });
 };
 
 export type { Handler };

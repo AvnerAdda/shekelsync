@@ -1,10 +1,12 @@
-const database = require('../database.js');
+const actualDatabase = require('../database.js');
 const { getAllPatterns } = require('../../../config/investment-patterns-cjs.js');
 const {
   INSTITUTION_SELECT_FIELDS,
   buildInstitutionFromRow,
   getInstitutionByVendorCode,
 } = require('../institutions.js');
+
+let database = actualDatabase;
 
 async function getExistingInvestments() {
   const vendorResult = await database.query(
@@ -119,5 +121,11 @@ async function getExistingInvestments() {
 
 module.exports = {
   getExistingInvestments,
+  __setDatabase(mockDatabase) {
+    database = mockDatabase || actualDatabase;
+  },
+  __resetDatabase() {
+    database = actualDatabase;
+  },
 };
 module.exports.default = module.exports;

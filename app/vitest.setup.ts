@@ -1,8 +1,31 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+declare global {
+  // Optional test hook to provide a custom in-memory DB implementation for better-sqlite3.
+  // When unset, the fallback no-op DB is used.
+  var __BETTER_SQLITE3_FACTORY__: ((...args: any[]) => any) | undefined;
+}
+
 vi.mock('better-sqlite3', () => {
-  function FakeDatabase() {}
+  const createFallbackDb = () => ({
+    pragma: () => {},
+    prepare: () => ({
+      run: () => {},
+      get: () => undefined,
+      all: () => [],
+    }),
+    close: () => {},
+  });
+
+  function FakeDatabase(...args: any[]) {
+    if (typeof globalThis.__BETTER_SQLITE3_FACTORY__ === 'function') {
+      const customDb = globalThis.__BETTER_SQLITE3_FACTORY__(...args);
+      if (customDb) return customDb;
+    }
+    return createFallbackDb();
+  }
+
   FakeDatabase.prototype.pragma = () => {};
   FakeDatabase.prototype.prepare = () => ({
     run: () => {},

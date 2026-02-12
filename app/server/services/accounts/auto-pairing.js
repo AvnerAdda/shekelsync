@@ -1,6 +1,8 @@
 const database = require('../database.js');
-const pairingsService = require('./pairings.js');
-const { getCreditCardRepaymentCategoryCondition, getCreditCardRepaymentCategoryId } = require('./repayment-category.js');
+const pairingsServiceModule = require('./pairings.js');
+const repaymentCategoryModule = require('./repayment-category.js');
+let pairingsServiceRef = pairingsServiceModule;
+let repaymentCategoryRef = repaymentCategoryModule;
 
 // Credit card vendor keywords (Hebrew and English)
 const VENDOR_KEYWORDS = {
@@ -126,7 +128,7 @@ async function findBestBankAccount(params) {
     const ccVendors = Object.keys(VENDOR_KEYWORDS);
     const ccVendorPlaceholders = ccVendors.map((_, i) => `$${i + 1}`).join(', ');
 
-    const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
+    const repaymentCategoryCondition = repaymentCategoryRef.getCreditCardRepaymentCategoryCondition('cd');
 
     // Find all bank repayment transactions (by category only)
     const query = `
@@ -289,7 +291,7 @@ async function calculateDiscrepancy(params) {
     startDate.setMonth(startDate.getMonth() - monthsBack);
     const startDateStr = startDate.toISOString().split('T')[0];
 
-    const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
+    const repaymentCategoryCondition = repaymentCategoryRef.getCreditCardRepaymentCategoryCondition('cd');
     const ccFeesCategoryId = await getCCFeesCategoryId(client);
     let earliestCcCycleDate = null;
     try {
@@ -755,7 +757,7 @@ async function applyPairingToTransactions({
 
   try {
     // Lookup the Credit Card Repayment category ID dynamically
-    const creditCardRepaymentCategoryId = await getCreditCardRepaymentCategoryId(client);
+    const creditCardRepaymentCategoryId = await repaymentCategoryRef.getCreditCardRepaymentCategoryId(client);
 
     if (!creditCardRepaymentCategoryId) {
       console.warn('Credit Card Repayment category not found - skipping pairing categorization');
@@ -831,7 +833,7 @@ async function autoPairCreditCard(params) {
   }
 
   // Step 2: Check if pairing already exists
-  const existingPairings = await pairingsService.listPairings({ include_inactive: true });
+  const existingPairings = await pairingsServiceRef.listPairings({ include_inactive: true });
   const existingPairing = existingPairings.find(p =>
     p.creditCardVendor === creditCardVendor &&
     p.creditCardAccountNumber === creditCardAccountNumber &&
@@ -846,14 +848,14 @@ async function autoPairCreditCard(params) {
   if (existingPairing) {
     pairingId = existingPairing.id;
     if (!existingPairing.isActive) {
-      await pairingsService.updatePairing({
+      await pairingsServiceRef.updatePairing({
         id: pairingId,
         isActive: true,
         matchPatterns: bankAccountResult.matchPatterns,
       });
     }
   } else {
-    const createResult = await pairingsService.createPairing({
+    const createResult = await pairingsServiceRef.createPairing({
       creditCardVendor,
       creditCardAccountNumber,
       bankVendor: bankAccountResult.bankVendor,
@@ -918,6 +920,20 @@ function __resetDatabase() {
   testDatabase = null;
 }
 
+function __setDependencies(overrides = {}) {
+  if (overrides.pairingsService) {
+    pairingsServiceRef = overrides.pairingsService;
+  }
+  if (overrides.repaymentCategory) {
+    repaymentCategoryRef = overrides.repaymentCategory;
+  }
+}
+
+function __resetDependencies() {
+  pairingsServiceRef = pairingsServiceModule;
+  repaymentCategoryRef = repaymentCategoryModule;
+}
+
 function getDatabase() {
   return testDatabase || database;
 }
@@ -926,8 +942,19 @@ module.exports = {
   autoPairCreditCard,
   findBestBankAccount,
   calculateDiscrepancy,
+  _internal: {
+    applyPairingToTransactions,
+    buildMatchPatterns,
+    detectCCVendorFromName,
+    extractDigitSequences,
+    getAccountLast4,
+    getCCFeesCategoryId,
+    nameContainsVendor,
+  },
   __setDatabase,
   __resetDatabase,
+  __setDependencies,
+  __resetDependencies,
 };
 
 module.exports.default = module.exports;

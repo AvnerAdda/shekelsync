@@ -4,6 +4,9 @@ const { v4: uuidv4 } = require('uuid');
 // Category ID for Bank & Card Fees
 const CC_FEES_CATEGORY_ID = null; // Will be looked up dynamically
 
+let databaseRef = database;
+let uuidv4Ref = uuidv4;
+
 /**
  * Find the CC fees category ID
  */
@@ -53,7 +56,7 @@ async function resolveDiscrepancy(params) {
     }
   }
 
-  const client = await database.getClient();
+  const client = await databaseRef.getClient();
 
   try {
     // Get the pairing
@@ -106,7 +109,7 @@ async function resolveDiscrepancy(params) {
       }
 
       // Generate unique transaction identifier
-      const transactionId = `fee-${pairingId}-${uuidv4().slice(0, 8)}`;
+      const transactionId = `fee-${pairingId}-${uuidv4Ref().slice(0, 8)}`;
 
       // Create the fee transaction
       // Fee goes to the CC vendor as a negative amount (expense)
@@ -194,7 +197,7 @@ async function resolveDiscrepancy(params) {
  * Called when new transactions are imported that might affect the discrepancy
  */
 async function resetDiscrepancyAcknowledgment(pairingId) {
-  const result = await database.query(
+  const result = await databaseRef.query(
     `UPDATE account_pairings
      SET discrepancy_acknowledged = 0, updated_at = CURRENT_TIMESTAMP
      WHERE id = $1`,
@@ -208,7 +211,7 @@ async function resetDiscrepancyAcknowledgment(pairingId) {
  * Get discrepancy status for a pairing
  */
 async function getDiscrepancyStatus(pairingId) {
-  const result = await database.query(
+  const result = await databaseRef.query(
     `SELECT discrepancy_acknowledged FROM account_pairings WHERE id = $1`,
     [pairingId]
   );
@@ -226,6 +229,18 @@ module.exports = {
   resolveDiscrepancy,
   resetDiscrepancyAcknowledgment,
   getDiscrepancyStatus,
+  __setDatabase: (mockDatabase) => {
+    databaseRef = mockDatabase || database;
+  },
+  __setUuidGenerator: (generator) => {
+    if (typeof generator === 'function') {
+      uuidv4Ref = generator;
+    }
+  },
+  __resetDependencies: () => {
+    databaseRef = database;
+    uuidv4Ref = uuidv4;
+  },
 };
 
 module.exports.default = module.exports;

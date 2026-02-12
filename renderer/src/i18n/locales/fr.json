@@ -2172,7 +2172,8 @@
       "minimizeWindow": "Minimiser la fenêtre",
       "maximizeWindow": "Agrandir la fenêtre",
       "restoreWindow": "Restaurer la fenêtre",
-      "closeWindow": "Fermer la fenêtre"
+      "closeWindow": "Fermer la fenêtre",
+      "sendFeedback": "Envoyer un commentaire"
     },
     "update": {
       "tooltip": {

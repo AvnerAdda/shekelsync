@@ -168,7 +168,7 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <StarIcon color="primary" />
-            <Typography variant="h6" fontWeight={700}>
+            <Typography variant="h6" component="span" fontWeight={700}>
               {t('license.title', 'License')}
             </Typography>
           </Box>

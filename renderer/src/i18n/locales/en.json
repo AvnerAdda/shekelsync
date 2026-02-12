@@ -2234,7 +2234,8 @@
       "minimizeWindow": "Minimize window",
       "maximizeWindow": "Maximize window",
       "restoreWindow": "Restore window",
-      "closeWindow": "Close window"
+      "closeWindow": "Close window",
+      "sendFeedback": "Send Feedback"
     },
     "update": {
       "tooltip": {

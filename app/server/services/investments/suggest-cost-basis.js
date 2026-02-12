@@ -1,6 +1,7 @@
 const path = require('path');
 const { pathToFileURL } = require('url');
-const database = require('../database.js');
+const actualDatabase = require('../database.js');
+let database = actualDatabase;
 
 function serviceError(status, message) {
   const error = new Error(message);
@@ -156,6 +157,12 @@ async function suggestCostBasis(params = {}) {
 
 module.exports = {
   suggestCostBasis,
+  __setDatabase(mockDatabase) {
+    database = mockDatabase || actualDatabase;
+  },
+  __resetDatabase() {
+    database = actualDatabase;
+  },
 };
 
 module.exports.default = module.exports;

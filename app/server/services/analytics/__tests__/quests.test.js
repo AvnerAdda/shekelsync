@@ -1,5 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import questsService from '../quests.js';
+import { describe, expect, it, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 
 // Mock the behavioral service
 vi.mock('../behavioral.js', () => ({
@@ -7,6 +6,12 @@ vi.mock('../behavioral.js', () => ({
 }));
 
 import { getBehavioralPatterns } from '../behavioral.js';
+let questsService;
+
+beforeAll(async () => {
+  const questsModule = await import('../quests.js');
+  questsService = questsModule.default;
+});
 
 describe('quest weekly baseline helpers', () => {
   it('flags sparse/outlier-heavy categories as sporadic', () => {
@@ -57,6 +62,7 @@ describe('new actionable quest types', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDbClient.query.mockImplementation(async () => ({ rows: [] }));
     // Mock database client
     questsService.__setDatabase({
       getClient: vi.fn().mockResolvedValue(mockDbClient),
@@ -164,4 +170,3 @@ describe('new actionable quest types', () => {
     });
   });
 });
-

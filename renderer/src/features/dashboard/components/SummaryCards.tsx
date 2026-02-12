@@ -34,6 +34,12 @@ import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpend
 import type { SpendingCategory } from '@renderer/types/spending-categories';
 import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
+import {
+  computeEffectiveNetInvestments,
+  computeNetSavings,
+  computePendingExpenseImpact,
+  computeSummaryHealthMetrics,
+} from './summary-cards-helpers';
 
 interface FinancialHealthSnapshot {
   overallHealthScore: number;
@@ -90,56 +96,44 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   const { formatCurrency } = useFinancePrivacy();
 
   // Capital Returns offset investment outflows (it's money coming back from previous investments)
-  const effectiveNetInvestments = Math.max(0, netInvestments - totalCapitalReturns);
-  const netSavings = totalIncome - (totalExpenses + effectiveNetInvestments);
-
-  // Calculate if pending expenses will cause financial difficulty
-  const netSavingsAfterPending = netSavings - pendingExpenses;
-  const hasPendingExpenses = pendingExpenses > 0;
-  const projectedBankBalanceAfterPending =
-    currentBankBalance !== undefined ? currentBankBalance - pendingExpenses : null;
-  const pendingCreatesCashFlowDeficit = netSavingsAfterPending < 0;
-  const pendingOverdrawsBank =
-    projectedBankBalanceAfterPending !== null ? projectedBankBalanceAfterPending < 0 : null;
-  const showPendingDeficitWarning = pendingCreatesCashFlowDeficit && (pendingOverdrawsBank === null || pendingOverdrawsBank);
-  const showPendingDeficitCovered = pendingCreatesCashFlowDeficit && pendingOverdrawsBank === false;
-  const pendingDeficitAmount = Math.abs(netSavingsAfterPending);
-  const pendingOverdraftAmount =
-    projectedBankBalanceAfterPending !== null && projectedBankBalanceAfterPending < 0
-      ? Math.abs(projectedBankBalanceAfterPending)
-      : 0;
-
-  // Use absolute values for calculations since expenses might be negative
-  const absExpenses = Math.abs(totalExpenses);
-  const absTopCategoryAmount = topCategories.length > 0 ? Math.abs(topCategories[0]?.amount || 0) : 0;
-  const absCurrentBalance = currentBankBalance !== undefined ? Math.abs(currentBankBalance) : 0;
-
-  // Check if we have real breakdown data (not just the fallback "Total Expenses")
-  const hasRealBreakdownData = categoryCount > 0 && topCategories.length > 0 && topCategories[0]?.name !== 'Total Expenses';
-
-  // Financial Intelligence Metrics (matching backend logic)
-
-  // Savings Rate: (Income - Expenses) / Income
-  const rawSavingsRate = totalIncome > 0
-    ? ((totalIncome - absExpenses) / totalIncome)
-    : 0;
-  // Savings Score: savingsRate * 200, capped at 100
-  const savingsScore = Math.max(0, Math.min(100, rawSavingsRate * 200));
-
-  // Diversity Score: (1 - maxCategorySpend / totalExpenses) * 100
-  const diversityScore = hasRealBreakdownData && absExpenses > 0
-    ? Math.round((1 - (absTopCategoryAmount / absExpenses)) * 100)
-    : undefined;
-
-  // Impulse Control: Not directly calculated from categories in backend
-  // Backend uses small transaction count, so we'll use diversity as proxy
-  const impulseControl = diversityScore;
-
-  // Runway Score: (currentBalance / dailyBurnRate) / 60 * 100
-  // Simplified: (balance / (monthlyExpenses / 30)) / 60 * 100
-  const dailyBurnRate = absExpenses / 30; // Approximate daily from monthly
-  const runwayDays = dailyBurnRate > 0 ? absCurrentBalance / dailyBurnRate : 0;
-  const runwayScore = Math.max(0, Math.min(100, runwayDays / 60 * 100));
+  const effectiveNetInvestments = computeEffectiveNetInvestments(
+    netInvestments,
+    totalCapitalReturns,
+  );
+  const netSavings = computeNetSavings(totalIncome, totalExpenses, effectiveNetInvestments);
+  const pendingImpact = computePendingExpenseImpact({
+    netSavings,
+    pendingExpenses,
+    currentBankBalance,
+  });
+  const {
+    hasPendingExpenses,
+    showPendingDeficitWarning,
+    showPendingDeficitCovered,
+    pendingDeficitAmount,
+    pendingOverdraftAmount,
+    pendingCreatesCashFlowDeficit,
+    pendingOverdrawsBank,
+    projectedBankBalanceAfterPending,
+  } = pendingImpact;
+  const {
+    absExpenses,
+    absTopCategoryAmount,
+    absCurrentBalance,
+    hasRealBreakdownData,
+    rawSavingsRate,
+    savingsScore,
+    diversityScore,
+    impulseControl,
+    runwayDays,
+    runwayScore,
+  } = computeSummaryHealthMetrics({
+    totalIncome,
+    totalExpenses,
+    currentBankBalance,
+    topCategories,
+    categoryCount,
+  });
 
   // Debug logging
   console.log('SummaryCards Financial Health Metrics:', {

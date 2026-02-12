@@ -110,7 +110,7 @@ const DonationModal: React.FC<DonationModalProps> = ({ open, onClose, onDonation
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <CoffeeIcon color="primary" />
-            <Typography variant="h6" fontWeight={700}>
+            <Typography variant="h6" component="span" fontWeight={700}>
               {t('support.program.title', { defaultValue: 'Buy Me a Coffee Support Program' })}
             </Typography>
           </Box>
