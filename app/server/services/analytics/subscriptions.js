@@ -1,13 +1,17 @@
 const actualDatabase = require('../database.js');
 const { getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
 const { getCreditCardRepaymentCategoryCondition } = require('../accounts/repayment-category.js');
-const recurringAnalyzer = require('./recurring-analyzer.js');
 
 let database = actualDatabase;
+
+function getRecurringAnalyzer() {
+  return require('./recurring-analyzer.js');
+}
+
 const defaultRecurringAnalyzer = {
-  analyzeRecurringPatterns: recurringAnalyzer.analyzeRecurringPatterns,
-  normalizePatternKey: recurringAnalyzer.normalizePatternKey,
-  selectDominantCluster: recurringAnalyzer.selectDominantCluster,
+  analyzeRecurringPatterns: (...args) => getRecurringAnalyzer().analyzeRecurringPatterns(...args),
+  normalizePatternKey: (...args) => getRecurringAnalyzer().normalizePatternKey(...args),
+  selectDominantCluster: (...args) => getRecurringAnalyzer().selectDominantCluster(...args),
 };
 let recurringAnalyzerRef = { ...defaultRecurringAnalyzer };
 

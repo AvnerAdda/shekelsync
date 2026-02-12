@@ -79,4 +79,28 @@ describe('Shared /api/patterns routes', () => {
     const res = await request(app).post('/api/patterns').send({ vendor: 'x' }).expect(500);
     expect(res.body.error).toBeDefined();
   });
+
+  it('handles list, update, and delete errors', async () => {
+    vi.spyOn(duplicatePatternsService, 'listPatterns').mockRejectedValue({
+      status: 503,
+      message: 'list unavailable',
+      stack: 'list-stack',
+    });
+    const listRes = await request(app).get('/api/patterns').expect(503);
+    expect(listRes.body.error).toMatch(/list unavailable/i);
+    expect(listRes.body.details).toBe('list-stack');
+
+    vi.spyOn(duplicatePatternsService, 'updatePattern').mockRejectedValue(new Error('update boom'));
+    const updateRes = await request(app).put('/api/patterns').send({ id: 'x' }).expect(500);
+    expect(updateRes.body.error).toMatch(/update boom|failed to update/i);
+
+    vi.spyOn(duplicatePatternsService, 'deletePattern').mockRejectedValue({
+      status: 410,
+      message: 'already deleted',
+      stack: 'delete-stack',
+    });
+    const deleteRes = await request(app).delete('/api/patterns?id=2').expect(410);
+    expect(deleteRes.body.error).toMatch(/already deleted/i);
+    expect(deleteRes.body.details).toBe('delete-stack');
+  });
 });

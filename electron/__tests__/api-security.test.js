@@ -324,18 +324,9 @@ describe('API Security', () => {
 
       expect(stats.activeTokens).toBe(2);
       expect(stats.tokens).toHaveLength(2);
-      expect(stats.tokens[0]).toHaveProperty('token');
       expect(stats.tokens[0]).toHaveProperty('age');
       expect(stats.tokens[0]).toHaveProperty('lastUsed');
-    });
-
-    test('should truncate token in statistics', () => {
-      createToken();
-
-      const stats = getTokenStats();
-
-      expect(stats.tokens[0].token).toMatch(/^.{8}\.\.\./);
-      expect(stats.tokens[0].token.length).toBeLessThan(20);
+      expect(stats.tokens[0]).not.toHaveProperty('token');
     });
   });
 

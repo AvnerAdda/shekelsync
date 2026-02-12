@@ -200,8 +200,8 @@ async function updateCredential(payload = {}) {
     updates.username = usernameValue ? encryptRef(usernameValue) : null;
   }
 
-  if (hasOwn('id_number') || hasOwn('id')) {
-    const idValue = normalizeCredentialField(payload.id_number ?? payload.id);
+  if (hasOwn('id_number')) {
+    const idValue = normalizeCredentialField(payload.id_number);
     updates.id_number = idValue ? encryptRef(idValue) : null;
   }
 
@@ -368,53 +368,66 @@ async function deleteCredential(params = {}) {
   const credential = credentialResult.rows[0];
   const { vendor, bank_account_number, nickname } = credential;
 
-  // Delete related scrape_events
-  await database.query(
-    `DELETE FROM scrape_events WHERE credential_id = $1`,
-    [id],
-  );
+  const client = await database.getClient();
+  try {
+    await client.query('BEGIN');
 
-  // Delete related investment_accounts (bank_balance type) that reference this credential
-  // investment_holdings will cascade delete due to FK constraint
-  await database.query(
-    `DELETE FROM investment_accounts WHERE notes LIKE $1`,
-    [`%credential_id:${id}%`],
-  );
+    // Delete related scrape_events
+    await client.query(
+      `DELETE FROM scrape_events WHERE credential_id = $1`,
+      [id],
+    );
 
-  // Delete related transactions
-  // Transactions are linked via vendor + account_number (for banks) or vendor + vendor_nickname
-  if (bank_account_number) {
-    // For bank accounts, match by vendor and account_number
-    await database.query(
-      `DELETE FROM transactions WHERE vendor = $1 AND account_number = $2`,
-      [vendor, bank_account_number],
+    // Delete related investment_accounts (bank_balance type) that reference this credential
+    // investment_holdings will cascade delete due to FK constraint
+    const escapedId = String(id).replace(/%/g, '\\%').replace(/_/g, '\\_');
+    await client.query(
+      `DELETE FROM investment_accounts WHERE notes LIKE $1 ESCAPE '\\'`,
+      [`%credential_id:${escapedId}%`],
     );
-  } else if (nickname) {
-    // For credit cards or accounts without account_number, match by vendor and vendor_nickname
-    await database.query(
-      `DELETE FROM transactions WHERE vendor = $1 AND vendor_nickname = $2`,
-      [vendor, nickname],
-    );
-  } else {
-    // Fallback: if no account_number or nickname, delete all transactions for this vendor
-    // Only if this is the last credential for this vendor
-    const otherCredentials = await database.query(
-      `SELECT COUNT(*) as count FROM vendor_credentials WHERE vendor = $1 AND id != $2`,
-      [vendor, id],
-    );
-    if (otherCredentials.rows[0].count === 0) {
-      await database.query(
-        `DELETE FROM transactions WHERE vendor = $1`,
-        [vendor],
+
+    // Delete related transactions
+    // Transactions are linked via vendor + account_number (for banks) or vendor + vendor_nickname
+    if (bank_account_number) {
+      // For bank accounts, match by vendor and account_number
+      await client.query(
+        `DELETE FROM transactions WHERE vendor = $1 AND account_number = $2`,
+        [vendor, bank_account_number],
       );
+    } else if (nickname) {
+      // For credit cards or accounts without account_number, match by vendor and vendor_nickname
+      await client.query(
+        `DELETE FROM transactions WHERE vendor = $1 AND vendor_nickname = $2`,
+        [vendor, nickname],
+      );
+    } else {
+      // Fallback: if no account_number or nickname, delete all transactions for this vendor
+      // Only if this is the last credential for this vendor
+      const otherCredentials = await client.query(
+        `SELECT COUNT(*) as count FROM vendor_credentials WHERE vendor = $1 AND id != $2`,
+        [vendor, id],
+      );
+      if (otherCredentials.rows[0].count === 0) {
+        await client.query(
+          `DELETE FROM transactions WHERE vendor = $1`,
+          [vendor],
+        );
+      }
     }
-  }
 
-  // Finally, delete the credential itself
-  await database.query(
-    `DELETE FROM vendor_credentials WHERE id = $1`,
-    [id],
-  );
+    // Finally, delete the credential itself
+    await client.query(
+      `DELETE FROM vendor_credentials WHERE id = $1`,
+      [id],
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 
   return { success: true };
 }

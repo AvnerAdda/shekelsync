@@ -21,6 +21,10 @@ const lastTransactionDateService = require('../../services/accounts/last-transac
 const smartMatchService = require('../../services/accounts/smart-match.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const creditCardDetectorService = require('../../services/accounts/credit-card-detector.js');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const autoPairingService = require('../../services/accounts/auto-pairing.js');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const discrepancyService = require('../../services/accounts/discrepancy.js');
 
 function buildApp() {
   const app = express();
@@ -158,5 +162,172 @@ describe('Electron /api/accounts routes', () => {
 
     const res = await request(app).get('/api/accounts/credit-card-suggestions').expect(200);
     expect(res.body).toEqual([{ card: '1234' }]);
+  });
+
+  it('returns auto-pair results with status based on creation state', async () => {
+    vi.spyOn(autoPairingService, 'autoPairCreditCard')
+      .mockResolvedValueOnce({ success: true, wasCreated: true, pairingId: 9 })
+      .mockResolvedValueOnce({ success: true, wasCreated: false, pairingId: 9 })
+      .mockResolvedValueOnce({ success: false, reason: 'no match' });
+
+    const created = await request(app)
+      .post('/api/accounts/auto-pair')
+      .send({ creditCardId: 1 })
+      .expect(201);
+    expect(created.body).toMatchObject({ success: true, wasCreated: true, pairingId: 9 });
+
+    const updated = await request(app)
+      .post('/api/accounts/auto-pair')
+      .send({ creditCardId: 1 })
+      .expect(200);
+    expect(updated.body).toMatchObject({ success: true, wasCreated: false, pairingId: 9 });
+
+    const noMatch = await request(app)
+      .post('/api/accounts/auto-pair')
+      .send({ creditCardId: 1 })
+      .expect(200);
+    expect(noMatch.body).toMatchObject({ success: false, reason: 'no match' });
+  });
+
+  it('handles auto-pair errors and includes existingId when provided', async () => {
+    vi.spyOn(autoPairingService, 'autoPairCreditCard').mockRejectedValue({
+      status: 409,
+      message: 'pairing exists',
+      existingId: 77,
+    });
+
+    const res = await request(app).post('/api/accounts/auto-pair').send({ creditCardId: 1 }).expect(409);
+    expect(res.body).toMatchObject({
+      success: false,
+      error: 'pairing exists',
+      existingId: 77,
+    });
+  });
+
+  it('returns best bank account and handles service errors', async () => {
+    vi.spyOn(autoPairingService, 'findBestBankAccount')
+      .mockResolvedValueOnce({ found: true, bankAccountId: 22 })
+      .mockRejectedValueOnce({ statusCode: 503, message: 'temporarily unavailable' });
+
+    const ok = await request(app).post('/api/accounts/find-bank-account').send({}).expect(200);
+    expect(ok.body).toEqual({ found: true, bankAccountId: 22 });
+
+    const fail = await request(app).post('/api/accounts/find-bank-account').send({}).expect(503);
+    expect(fail.body.error).toBe('temporarily unavailable');
+  });
+
+  it('returns discrepancy calculation fallback when service returns null', async () => {
+    vi.spyOn(autoPairingService, 'calculateDiscrepancy').mockResolvedValue(null);
+
+    const res = await request(app).post('/api/accounts/calculate-discrepancy').send({ pairingId: 3 }).expect(200);
+    expect(res.body).toEqual({ exists: false });
+  });
+
+  it('handles discrepancy calculation errors', async () => {
+    vi.spyOn(autoPairingService, 'calculateDiscrepancy').mockRejectedValue({
+      status: 422,
+      message: 'invalid pairing',
+    });
+
+    const res = await request(app).post('/api/accounts/calculate-discrepancy').send({ pairingId: 3 }).expect(422);
+    expect(res.body.error).toBe('invalid pairing');
+  });
+
+  it('resolves discrepancy using route param pairing id', async () => {
+    const resolveSpy = vi.spyOn(discrepancyService, 'resolveDiscrepancy').mockResolvedValue({ success: true });
+
+    const res = await request(app)
+      .post('/api/accounts/pairing/15/resolve-discrepancy')
+      .send({ resolution: 'accept' })
+      .expect(200);
+
+    expect(res.body).toEqual({ success: true });
+    expect(resolveSpy).toHaveBeenCalledWith({ pairingId: 15, resolution: 'accept' });
+  });
+
+  it('returns discrepancy status fallback and handles status errors', async () => {
+    const statusSpy = vi.spyOn(discrepancyService, 'getDiscrepancyStatus')
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce({ statusCode: 500, message: 'status failed' });
+
+    const fallback = await request(app).get('/api/accounts/pairing/33/discrepancy-status').expect(200);
+    expect(fallback.body).toEqual({ acknowledged: false });
+    expect(statusSpy).toHaveBeenCalledWith(33);
+
+    const failed = await request(app).get('/api/accounts/pairing/33/discrepancy-status').expect(500);
+    expect(failed.body.error).toBe('status failed');
+  });
+
+  it('handles resolve discrepancy errors', async () => {
+    vi.spyOn(discrepancyService, 'resolveDiscrepancy').mockRejectedValue({
+      status: 400,
+      message: 'cannot resolve',
+    });
+
+    const res = await request(app)
+      .post('/api/accounts/pairing/20/resolve-discrepancy')
+      .send({ resolution: 'reject' })
+      .expect(400);
+
+    expect(res.body.error).toBe('cannot resolve');
+  });
+
+  it('handles service failures across remaining account endpoints', async () => {
+    vi.spyOn(lastUpdateService, 'listAccountLastUpdates').mockRejectedValue({
+      status: 502,
+      message: 'last-update failed',
+    });
+    vi.spyOn(pairingsService, 'createPairing').mockRejectedValue({
+      statusCode: 422,
+      message: 'create failed',
+    });
+    vi.spyOn(pairingsService, 'updatePairing').mockRejectedValue({
+      status: 409,
+      message: 'update failed',
+    });
+    vi.spyOn(pairingsService, 'deletePairing').mockRejectedValue({
+      status: 410,
+      message: 'delete failed',
+    });
+    vi.spyOn(unpairedService, 'getTrulyUnpairedTransactions').mockRejectedValue({
+      status: 503,
+      message: 'unpaired list failed',
+    });
+    vi.spyOn(lastTransactionDateService, 'getLastTransactionDate').mockRejectedValue({
+      statusCode: 500,
+      message: 'last-date failed',
+    });
+    vi.spyOn(smartMatchService, 'findSmartMatches').mockRejectedValue({
+      status: 429,
+      message: 'smart-match failed',
+    });
+    vi.spyOn(creditCardDetectorService, 'detectCreditCardSuggestions').mockRejectedValue({
+      status: 500,
+      message: 'suggestions failed',
+    });
+
+    const lastUpdateRes = await request(app).get('/api/accounts/last-update').expect(502);
+    expect(lastUpdateRes.body.error).toBe('last-update failed');
+
+    const createPairingRes = await request(app).post('/api/accounts/pairing').send({}).expect(422);
+    expect(createPairingRes.body.error).toBe('create failed');
+
+    const updatePairingRes = await request(app).put('/api/accounts/pairing').send({ id: 1 }).expect(409);
+    expect(updatePairingRes.body.error).toBe('update failed');
+
+    const deletePairingRes = await request(app).delete('/api/accounts/pairing?id=1').expect(410);
+    expect(deletePairingRes.body.error).toBe('delete failed');
+
+    const unpairedRes = await request(app).get('/api/accounts/truly-unpaired-transactions').expect(503);
+    expect(unpairedRes.body.error).toBe('unpaired list failed');
+
+    const lastDateRes = await request(app).get('/api/accounts/last-transaction-date').expect(500);
+    expect(lastDateRes.body.error).toBe('last-date failed');
+
+    const smartMatchRes = await request(app).post('/api/accounts/smart-match').send({}).expect(429);
+    expect(smartMatchRes.body.error).toBe('smart-match failed');
+
+    const suggestionsRes = await request(app).get('/api/accounts/credit-card-suggestions').expect(500);
+    expect(suggestionsRes.body.error).toBe('suggestions failed');
   });
 });

@@ -65,9 +65,32 @@ describe('Smart Actions routes', () => {
     expect(spy).toHaveBeenCalledWith(5, 'resolved', 'done');
   });
 
+  it('updates smart action status via dismiss and snooze endpoints', async () => {
+    const spy = vi
+      .spyOn(smartActionsService, 'updateSmartActionStatus')
+      .mockResolvedValueOnce({ success: true, id: 7, status: 'dismissed' })
+      .mockResolvedValueOnce({ success: true, id: 8, status: 'snoozed' });
+
+    const dismissRes = await request(app)
+      .post('/api/smart-actions/7/dismiss')
+      .send({ userNote: 'not useful' })
+      .expect(200);
+    const snoozeRes = await request(app)
+      .post('/api/smart-actions/8/snooze')
+      .send({ userNote: 'next month' })
+      .expect(200);
+
+    expect(dismissRes.body.status).toBe('dismissed');
+    expect(snoozeRes.body.status).toBe('snoozed');
+    expect(spy).toHaveBeenNthCalledWith(1, 7, 'dismissed', 'not useful');
+    expect(spy).toHaveBeenNthCalledWith(2, 8, 'snoozed', 'next month');
+  });
+
   it('returns 400 for invalid IDs', async () => {
     await request(app).post('/api/smart-actions/not-a-number/resolve').expect(400);
     await request(app).put('/api/smart-actions/abc/status').send({ status: 'resolved' }).expect(400);
+    await request(app).post('/api/smart-actions/not-a-number/dismiss').expect(400);
+    await request(app).post('/api/smart-actions/abc/snooze').expect(400);
   });
 
   it('handles service failures for generate and update', async () => {
@@ -82,6 +105,18 @@ describe('Smart Actions routes', () => {
     );
     const upd = await request(app).put('/api/smart-actions/1/status').send({ status: 'active' }).expect(503);
     expect(upd.body.error).toBeDefined();
+  });
+
+  it('handles service failures for dismiss and snooze endpoints', async () => {
+    vi.spyOn(smartActionsService, 'updateSmartActionStatus')
+      .mockRejectedValueOnce(Object.assign(new Error('dismiss fail'), { status: 409 }))
+      .mockRejectedValueOnce(Object.assign(new Error('snooze fail'), { statusCode: 410 }));
+
+    const dismissRes = await request(app).post('/api/smart-actions/1/dismiss').expect(409);
+    expect(dismissRes.body.error).toMatch(/dismiss/i);
+
+    const snoozeRes = await request(app).post('/api/smart-actions/2/snooze').expect(410);
+    expect(snoozeRes.body.error).toMatch(/snooze/i);
   });
 
   it('validates required status when updating', async () => {

@@ -6,6 +6,8 @@ const scrapeEventsService = require('../services/scraping/events.js');
 const scrapeStatusService = require('../services/scraping/status.js');
 const { wasScrapedRecently } = require('../services/scraping/run.js');
 const { maybeRunAutoDetection } = require('../services/analytics/subscriptions.js');
+const databaseService = require('../services/database.js');
+const { SCRAPE_RATE_LIMIT_MS } = require('../../utils/constants.js');
 
 let CompanyTypes = {};
 try {
@@ -22,6 +24,41 @@ function createLogger(vendor) {
     warn: (...args) => console.warn(prefix, ...args),
     error: (...args) => console.error(prefix, ...args),
   };
+}
+
+async function resolveCredentialRateLimitDetails(credentialId, thresholdMs = SCRAPE_RATE_LIMIT_MS) {
+  if (!credentialId) return null;
+
+  let client = null;
+  try {
+    client = await databaseService.getClient();
+    const result = await client.query(
+      'SELECT last_scrape_attempt FROM vendor_credentials WHERE id = $1',
+      [credentialId],
+    );
+    const lastAttemptRaw = result?.rows?.[0]?.last_scrape_attempt;
+    if (!lastAttemptRaw) return null;
+
+    const lastAttempt = new Date(lastAttemptRaw);
+    if (Number.isNaN(lastAttempt.getTime())) return null;
+
+    const nextAllowedAtMs = lastAttempt.getTime() + thresholdMs;
+    const retryAfter = Math.max(0, Math.ceil((nextAllowedAtMs - Date.now()) / 1000));
+
+    return {
+      retryAfter,
+      lastAttemptAt: lastAttempt.toISOString(),
+      nextAllowedAt: new Date(nextAllowedAtMs).toISOString(),
+    };
+  } catch {
+    return null;
+  } finally {
+    try {
+      client?.release();
+    } catch {
+      // Ignore client release failures in best-effort metadata lookup.
+    }
+  }
 }
 
 function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
@@ -117,10 +154,26 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
       if (dbId && !forceOverride) {
         const isRateLimited = await wasScrapedRecentlyFn(dbId);
         if (isRateLimited) {
+          const fallbackRetryAfter = Math.ceil(SCRAPE_RATE_LIMIT_MS / 1000);
+          const details = await resolveCredentialRateLimitDetails(dbId);
+          const retryAfter = Number.isFinite(details?.retryAfter) ? details.retryAfter : fallbackRetryAfter;
+          res.set('Retry-After', String(retryAfter));
+          sendProgress({
+            vendor,
+            status: 'failed',
+            progress: 100,
+            message: `Sync blocked by cooldown. Try again in ${retryAfter} seconds.`,
+            error: 'account_recently_scraped',
+          });
+
           return res.status(429).json({
             success: false,
-            message: 'This account was already scraped in the last 24 hours. Please wait before trying again.',
+            message: 'This account was synced recently. To avoid duplicate imports and temporary bank login lockouts, another sync is blocked for a short cooldown window.',
+            reason: 'account_recently_scraped',
             rateLimited: true,
+            retryAfter,
+            nextAllowedAt: details?.nextAllowedAt || null,
+            lastAttemptAt: details?.lastAttemptAt || null,
           });
         }
       }
@@ -174,11 +227,12 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         });
       }
 
-      res.status(200).json({
+      const statusCode = error?.status || 500;
+      res.status(statusCode).json({
         success: false,
         message: error?.message || 'Internal server error',
         errorType: error?.errorType,
-        error: error?.payload || error?.stack || error?.message,
+        error: error?.payload || error?.message,
       });
     }
   });

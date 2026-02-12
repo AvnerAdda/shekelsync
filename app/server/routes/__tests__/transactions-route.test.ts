@@ -30,6 +30,7 @@ function buildApp() {
   app.put('/api/transactions', transactionsHandlers.updateTransaction);
   app.delete('/api/transactions/:id', transactionsHandlers.deleteTransaction);
   app.delete('/api/transactions', transactionsHandlers.deleteTransaction);
+  app.get('/api/transactions/tags', transactionsHandlers.getAllTags);
   return app;
 }
 
@@ -176,5 +177,85 @@ describe('Electron transaction endpoints', () => {
   it('rejects delete when id missing', async () => {
     const res = await request(app).delete('/api/transactions').expect(400);
     expect(res.body.error).toMatch(/ID parameter is required/i);
+  });
+
+  it('returns all tags', async () => {
+    vi.spyOn(listService, 'getAllTags').mockResolvedValue(['rent', 'groceries']);
+
+    const res = await request(app).get('/api/transactions/tags').expect(200);
+
+    expect(res.body).toEqual(['rent', 'groceries']);
+  });
+
+  it('propagates service errors across remaining handlers', async () => {
+    vi.spyOn(metricsService, 'listAvailableMonths').mockRejectedValue({
+      status: 502,
+      message: 'months failed',
+    });
+    await request(app).get('/api/available_months').expect(502);
+
+    vi.spyOn(metricsService, 'getBoxPanelData').mockRejectedValue(new Error('box failed'));
+    const boxRes = await request(app).get('/api/box_panel_data').expect(500);
+    expect(boxRes.body.error).toMatch(/box failed/i);
+
+    vi.spyOn(metricsService, 'getCategorySpendingTimeline').mockRejectedValue({
+      status: 503,
+      message: 'timeline failed',
+    });
+    await request(app).get('/api/category_by_month').expect(503);
+
+    vi.spyOn(metricsService, 'getExpensesByMonth').mockRejectedValue({
+      status: 501,
+      message: 'expenses failed',
+    });
+    await request(app).get('/api/expenses_by_month').expect(501);
+
+    vi.spyOn(metricsService, 'getMonthByCategories').mockRejectedValue({
+      status: 504,
+      message: 'month-by-categories failed',
+    });
+    await request(app).get('/api/month_by_categories').expect(504);
+
+    vi.spyOn(listService, 'listRecentTransactions').mockRejectedValue({
+      status: 500,
+      message: 'recent failed',
+    });
+    await request(app).get('/api/transactions/recent').expect(500);
+
+    vi.spyOn(listService, 'searchTransactions').mockRejectedValue({
+      status: 500,
+      message: 'search failed',
+    });
+    await request(app).get('/api/transactions/search').expect(500);
+
+    vi.spyOn(adminService, 'createManualTransaction').mockRejectedValue({
+      status: 500,
+      message: 'create failed',
+    });
+    await request(app).post('/api/manual_transaction').send({}).expect(500);
+
+    vi.spyOn(adminService, 'updateTransaction').mockRejectedValue({
+      status: 409,
+      message: 'update failed',
+    });
+    const updateRes = await request(app)
+      .put('/api/transactions/abc')
+      .send({ memo: 'x' })
+      .expect(409);
+    expect(updateRes.body.error).toMatch(/update failed/i);
+
+    vi.spyOn(adminService, 'deleteTransaction').mockRejectedValue({
+      status: 410,
+      message: 'delete failed',
+    });
+    const deleteRes = await request(app).delete('/api/transactions/abc').expect(410);
+    expect(deleteRes.body.error).toMatch(/delete failed/i);
+
+    vi.spyOn(listService, 'getAllTags').mockRejectedValue({
+      status: 500,
+      message: 'tags failed',
+    });
+    const tagsRes = await request(app).get('/api/transactions/tags').expect(500);
+    expect(tagsRes.body.error).toMatch(/tags failed/i);
   });
 });

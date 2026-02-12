@@ -71,4 +71,30 @@ describe('Electron /api/data/export route', () => {
     const res = await request(app).get('/api/data/export').expect(400);
     expect(res.body.error?.code).toBe('VALIDATION_ERROR');
   });
+
+  it('sends non-json export payloads', async () => {
+    vi.spyOn(dataExportService, 'exportData').mockResolvedValue({
+      format: 'csv',
+      contentType: 'text/csv',
+      filename: 'export.csv',
+      body: 'a,b\n1,2\n',
+    });
+
+    const res = await request(app).get('/api/data/export?format=csv').expect(200);
+
+    expect(res.text).toBe('a,b\n1,2\n');
+    expect(res.headers['content-type']).toContain('text/csv');
+    expect(res.headers['content-disposition']).toContain('export.csv');
+  });
+
+  it('returns generic 500 payload when error is not structured', async () => {
+    vi.spyOn(dataExportService, 'exportData').mockRejectedValue(new Error('plain failure'));
+
+    const res = await request(app).get('/api/data/export').expect(500);
+
+    expect(res.body).toEqual({
+      error: 'Failed to export data',
+      message: 'plain failure',
+    });
+  });
 });

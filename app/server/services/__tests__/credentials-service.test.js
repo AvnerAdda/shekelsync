@@ -83,6 +83,7 @@ beforeEach(() => {
 
   credentialsService.__setDatabase({
     query: queryMock,
+    getClient: async () => ({ query: queryMock, release: () => {} }),
   });
   credentialsService.__setEncryption({
     encrypt: encryptMock,
@@ -156,14 +157,17 @@ describe('credentials service', () => {
     });
   });
 
-  it('supports legacy id-only payload updates as id_number', async () => {
+  it('does not overwrite id_number when only row id + non-id field are provided', async () => {
     queryMock
       .mockResolvedValueOnce({ rowCount: 1 })
       .mockResolvedValueOnce({ rows: [createCredentialRow({ id: 1 })] });
 
-    await credentialsService.updateCredential({ id: 1 });
+    await credentialsService.updateCredential({ id: 1, nickname: 'Updated nickname' });
 
-    expect(encryptMock).toHaveBeenCalledWith('1');
+    const [updateSql, updateParams] = queryMock.mock.calls[0];
+    expect(String(updateSql)).not.toContain('id_number');
+    expect(updateParams).toEqual([1, 'Updated nickname']);
+    expect(encryptMock).not.toHaveBeenCalledWith('1');
   });
 
   it('updates credential fields and returns mapped credential', async () => {
@@ -294,8 +298,8 @@ describe('credentials service', () => {
     });
 
     await expect(credentialsService.deleteCredential({ id: 10 })).resolves.toEqual({ success: true });
-    expect(String(queryMock.mock.calls[3][0])).toContain('DELETE FROM transactions WHERE vendor = $1 AND account_number = $2');
-    expect(queryMock.mock.calls[3][1]).toEqual(['hapoalim', '1111']);
+    expect(String(queryMock.mock.calls[4][0])).toContain('DELETE FROM transactions WHERE vendor = $1 AND account_number = $2');
+    expect(queryMock.mock.calls[4][1]).toEqual(['hapoalim', '1111']);
   });
 
   it('deletes vendor transactions by nickname when account number is absent', async () => {
@@ -308,8 +312,8 @@ describe('credentials service', () => {
     });
 
     await credentialsService.deleteCredential({ id: 11 });
-    expect(String(queryMock.mock.calls[3][0])).toContain('DELETE FROM transactions WHERE vendor = $1 AND vendor_nickname = $2');
-    expect(queryMock.mock.calls[3][1]).toEqual(['isracard', 'Gold Card']);
+    expect(String(queryMock.mock.calls[4][0])).toContain('DELETE FROM transactions WHERE vendor = $1 AND vendor_nickname = $2');
+    expect(queryMock.mock.calls[4][1]).toEqual(['isracard', 'Gold Card']);
   });
 
   it('fallback-deletes all vendor transactions only when credential is last for that vendor', async () => {

@@ -395,4 +395,55 @@ describe('data export service', () => {
     expect(result.body).toContain('=== VENDORS SUMMARY ===');
     expect(result.body).toContain('Institution,Institution Type');
   });
+
+  it('supports query-utils overrides for date range, response, and error standardization', async () => {
+    const customResolveDateRange = vi.fn(() => ({
+      start: new Date('2026-01-01T00:00:00.000Z'),
+      end: new Date('2026-01-31T23:59:59.000Z'),
+    }));
+    const customStandardizeResponse = vi.fn((data, meta) => ({
+      success: true,
+      custom: true,
+      data,
+      meta,
+    }));
+    const customStandardizeError = vi.fn((message: string, code?: string) => ({
+      success: false,
+      error: {
+        code: `CUSTOM_${code || 'UNKNOWN'}`,
+        message,
+      },
+    }));
+
+    dataExportService.__setQueryUtils({
+      resolveDateRange: customResolveDateRange,
+      standardizeResponse: customStandardizeResponse,
+      standardizeError: customStandardizeError,
+    });
+
+    await expect(
+      dataExportService.exportData({ format: 'invalid-format' }),
+    ).rejects.toMatchObject({
+      error: {
+        code: 'CUSTOM_INVALID_FORMAT',
+      },
+    });
+    expect(customStandardizeError).toHaveBeenCalled();
+
+    databaseQueryMock.mockResolvedValueOnce({ rows: [] });
+
+    const result = await dataExportService.exportData({
+      format: 'json',
+      dataType: 'transactions',
+      months: 1,
+    });
+
+    expect(customResolveDateRange).toHaveBeenCalledWith({
+      startDate: undefined,
+      endDate: undefined,
+      months: 1,
+    });
+    expect(customStandardizeResponse).toHaveBeenCalled();
+    expect(result.body.custom).toBe(true);
+  });
 });

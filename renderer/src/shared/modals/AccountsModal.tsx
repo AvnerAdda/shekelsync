@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { startOfMonth, subMonths } from 'date-fns';
 import {
   Dialog,
@@ -50,6 +50,8 @@ import PortfolioIcon from '@mui/icons-material/AccountBalanceWallet';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import CircularProgress from '@mui/material/CircularProgress';
 import SyncModal from './ScrapeModal';
 import AccountPairingModal from './AccountPairingModal';
@@ -185,6 +187,7 @@ export interface Account {
   suggestedStartDate?: string;
   startDateMessage?: string;
   institution?: InstitutionMetadata | null;
+  institutionObj?: InstitutionMetadata | null;
 }
 
 const createEmptyCredentialAccount = (): Account => ({
@@ -224,12 +227,29 @@ const resetAccountCredentialFields = (account: Account): Account => ({
   password: '',
 });
 
+interface ScrapeResponseData {
+  success?: boolean;
+  accounts?: Array<{ txns?: unknown[] }>;
+  error?: string;
+  errorType?: string;
+  message?: string;
+}
+
+interface InstitutionTreeResponse {
+  nodes?: InstitutionTreeNode[];
+}
+
+interface InstitutionListResponse {
+  institutions?: InstitutionMetadata[];
+  institution?: InstitutionMetadata;
+}
+
 const getAccountInstitutionMeta = (account: Account): InstitutionMetadata | null => {
   if (account.institution && typeof account.institution !== 'string') {
     return account.institution as InstitutionMetadata;
   }
-  if ((account as any).institutionObj && typeof (account as any).institutionObj !== 'string') {
-    return (account as any).institutionObj as InstitutionMetadata;
+  if (account.institutionObj && typeof account.institutionObj !== 'string') {
+    return account.institutionObj;
   }
   return null;
 };
@@ -357,6 +377,70 @@ export const getBankingAccountValidationError = (
   }
 
   return null;
+};
+
+const resolveAccountCredentialValue = (account: Account, fieldKey: string): string | undefined => {
+  switch (fieldKey) {
+    case 'id':
+      return account.id_number;
+    case 'password':
+      return account.password;
+    case 'username':
+      return account.username;
+    case 'userCode':
+      return account.userCode || account.username;
+    case 'email':
+      return account.email || account.username;
+    case 'otpCode':
+      return account.otpCode;
+    case 'otpToken':
+      return account.otpToken || account.identification_code;
+    case 'card6Digits':
+      return account.card6_digits;
+    case 'nationalID':
+      return account.nationalID || account.identification_code;
+    case 'num':
+      return account.num || account.identification_code;
+    case 'identification_code':
+      return account.identification_code;
+    case 'bankAccountNumber':
+      return account.bank_account_number;
+    default:
+      return undefined;
+  }
+};
+
+const buildSyncCredentialsForSelectedAccount = (
+  account: Account,
+  credentialFieldList?: string[] | null,
+): Record<string, string> => {
+  const fallbackFields = [
+    'username',
+    'id',
+    'card6Digits',
+    'bankAccountNumber',
+    'identification_code',
+    'otpCode',
+  ];
+  const requiredFields =
+    Array.isArray(credentialFieldList) && credentialFieldList.length > 0
+      ? credentialFieldList
+      : fallbackFields;
+  const fields = Array.from(new Set([...requiredFields, 'password']));
+
+  const credentials: Record<string, string> = {};
+  for (const fieldKey of fields) {
+    const value = resolveAccountCredentialValue(account, fieldKey);
+    if (typeof value === 'string' && value.trim().length > 0) {
+      credentials[fieldKey] = value;
+    }
+  }
+
+  if (account.nickname && account.nickname.trim().length > 0) {
+    credentials.nickname = account.nickname;
+  }
+
+  return credentials;
 };
 
 const StyledTableRow = styled(TableRow)(({ theme }) => ({
@@ -490,12 +574,21 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const { showNotification} = useNotification();
   const { refetch: refetchOnboardingStatus } = useOnboarding();
   const [newAccount, setNewAccount] = useState<Account>(() => createEmptyCredentialAccount());
+  const [showNewAccountPassword, setShowNewAccountPassword] = useState(false);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    };
+  }, []);
 
   const [isCredentialsUpdateOpen, setIsCredentialsUpdateOpen] = useState(false);
   const [credentialsUpdateAccount, setCredentialsUpdateAccount] = useState<Account | null>(null);
   const [credentialsUpdateSaving, setCredentialsUpdateSaving] = useState(false);
   const [credentialsUpdateError, setCredentialsUpdateError] = useState<string | null>(null);
   const [credentialsUpdateShowOptional, setCredentialsUpdateShowOptional] = useState(false);
+  const [showCredentialsUpdatePassword, setShowCredentialsUpdatePassword] = useState(false);
   const [credentialsUpdateDraft, setCredentialsUpdateDraft] = useState({
     nickname: '',
     loginIdentifier: '',
@@ -675,6 +768,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
     if (institutionType === 'bank' || institutionType === 'credit_card') {
       setCurrentAccountType('banking');
+      setShowNewAccountPassword(false);
       setNewAccount((prev) => ({
         ...resetAccountCredentialFields(prev),
         vendor: addWizardSelectedInstitution.vendor_code || '',
@@ -717,6 +811,10 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
   }, [bankInstitutionOptions, creditCardInstitutionOptions, isAdding, newAccount.vendor]);
 
+  useEffect(() => {
+    setShowNewAccountPassword(false);
+  }, [newAccount.vendor]);
+
   const findInstitutionByVendor = useCallback(
     (vendor?: string | null) => {
       if (!vendor) return undefined;
@@ -752,16 +850,33 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         const helperText = config.helperText
           ? t(`credentials.${fieldKey}Helper`, { defaultValue: config.helperText })
           : undefined;
+        const isPasswordField = config.type === 'password';
         return (
           <Grid size={{ xs: 12 }} key={`${institution.vendor_code}-${fieldKey}`}>
             <TextField
               fullWidth
               label={label}
-              type={config.type || 'text'}
+              type={isPasswordField ? (showNewAccountPassword ? 'text' : 'password') : (config.type || 'text')}
               value={value}
               onChange={(e) => setNewAccount((prev) => ({ ...prev, [config.key]: e.target.value }))}
               required
               helperText={helperText}
+              InputProps={isPasswordField
+                ? {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          edge="end"
+                          onClick={() => setShowNewAccountPassword((prev) => !prev)}
+                          onMouseDown={(event) => event.preventDefault()}
+                          aria-label={showNewAccountPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showNewAccountPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }
+                : undefined}
             />
           </Grid>
         );
@@ -782,7 +897,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
       return inputs;
     },
-    [newAccount],
+    [newAccount, showNewAccountPassword, t],
   );
 
   // Holdings management state
@@ -880,7 +995,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       if (!response.ok) {
         throw new Error(response.statusText || 'Failed to load institution tree');
       }
-      const payload = response.data as any;
+      const payload = response.data as InstitutionTreeResponse;
       const nodes: InstitutionTreeNode[] = Array.isArray(payload?.nodes) ? payload.nodes : [];
       setInstitutionNodes(nodes);
       const leaves = nodes.filter((n) => n.node_type === 'institution' && typeof n.vendor_code === 'string' && n.vendor_code.length > 0);
@@ -912,13 +1027,13 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       try {
         const fallback = await apiClient.get('/api/institutions');
         if (fallback.ok) {
-          const payload = fallback.data as any;
+          const payload = fallback.data as InstitutionListResponse;
           const list = Array.isArray(payload?.institutions)
             ? payload.institutions
             : (payload?.institution ? [payload.institution] : []);
           const normalized = list.map((inst: InstitutionMetadata) => ({
             ...inst,
-            credentialFieldList: parseCredentialFields((inst as any).credential_fields),
+            credentialFieldList: parseCredentialFields(inst.credential_fields),
           }));
           setInstitutions(normalized);
         }
@@ -940,6 +1055,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     setExpandedForm(null);
     setCurrentAccountType('banking');
     setNewAccount(createEmptyCredentialAccount());
+    setShowNewAccountPassword(false);
     setNewInvestmentAccount({
       account_name: '',
       account_type: 'brokerage',
@@ -1055,7 +1171,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       setIsSyncing(true);
 
       const syncAccount = { ...accountPayload };
-      setTimeout(async () => {
+      syncTimeoutRef.current = setTimeout(async () => {
         try {
           const scrapeConfig = buildInitialSyncPayload(syncAccount);
           const syncStartDate = new Date(scrapeConfig.options.startDate);
@@ -1069,13 +1185,13 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
           showNotification('Syncing transactions... This may take a few minutes.', 'info');
 
-          const scrapeResponse = await apiClient.post('/api/scrape', scrapeConfig);
-          const scrapeResult = scrapeResponse.data as any;
+          const scrapeResponse = await apiClient.post<ScrapeResponseData>('/api/scrape', scrapeConfig);
+          const scrapeResult = scrapeResponse.data;
 
           if (scrapeResponse.ok && !(scrapeResult && scrapeResult.error)) {
             let transactionCount = 0;
-            if (scrapeResult.accounts) {
-              transactionCount = scrapeResult.accounts.reduce((sum: number, acc: any) => {
+            if (scrapeResult?.accounts) {
+              transactionCount = scrapeResult.accounts.reduce((sum, acc) => {
                 return sum + (acc.txns ? acc.txns.length : 0);
               }, 0);
             }
@@ -1099,6 +1215,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       }, 1000);
 
       setNewAccount(createEmptyCredentialAccount());
+      setShowNewAccountPassword(false);
       setActiveTab(0);
       setIsAdding(false);
       showNotification('Account added successfully!', 'success');
@@ -1376,6 +1493,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     setCredentialsUpdateError(null);
     setCredentialsUpdateSaving(false);
     setCredentialsUpdateShowOptional(false);
+    setShowCredentialsUpdatePassword(false);
 
     const draft = {
       nickname: account.nickname ?? '',
@@ -1397,6 +1515,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     setCredentialsUpdateAccount(null);
     setCredentialsUpdateError(null);
     setCredentialsUpdateShowOptional(false);
+    setShowCredentialsUpdatePassword(false);
   };
 
   const handleSaveCredentialsUpdate = async () => {
@@ -1536,6 +1655,28 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     window.dispatchEvent(new CustomEvent('dataRefresh'));
     fetchAccounts(); // Refresh accounts to update last sync dates
   };
+
+  const syncInitialConfig = useMemo(() => {
+    if (!selectedAccount) {
+      return undefined;
+    }
+
+    const institution = institutionMap.get(selectedAccount.vendor);
+
+    return {
+      options: {
+        companyId: selectedAccount.vendor,
+        startDate: selectedAccount.suggestedStartDate ? new Date(selectedAccount.suggestedStartDate) : new Date(),
+        combineInstallments: false,
+        showBrowser: true,
+        additionalTransactionInformation: true,
+      },
+      credentials: buildSyncCredentialsForSelectedAccount(
+        selectedAccount,
+        institution?.credentialFieldList,
+      ),
+    };
+  }, [selectedAccount, institutionMap]);
 
   // Helper to fetch last holding and calculate default values
   const fetchLastHoldingData = async (accountId: string) => {
@@ -3578,7 +3719,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                     <Grid size={{ xs: 12 }}>
                       <TextField
                         fullWidth
-                        type="password"
+                        type={showCredentialsUpdatePassword ? 'text' : 'password'}
                         label={t('credentials.password')}
                         value={credentialsUpdateDraft.password}
                         onChange={(e) =>
@@ -3586,6 +3727,20 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                         }
                         placeholder={t('credentialsUpdate.passwordPlaceholder')}
                         helperText={t('credentialsUpdate.passwordHelper')}
+                        InputProps={{
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton
+                                edge="end"
+                                onClick={() => setShowCredentialsUpdatePassword((prev) => !prev)}
+                                onMouseDown={(event) => event.preventDefault()}
+                                aria-label={showCredentialsUpdatePassword ? 'Hide password' : 'Show password'}
+                              >
+                                {showCredentialsUpdatePassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        }}
                       />
                     </Grid>
                   </Grid>
@@ -3680,29 +3835,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         onSuccess={handleSyncSuccess}
         onStart={() => setIsSyncing(true)}
         onComplete={() => setIsSyncing(false)}
-        initialConfig={selectedAccount ? {
-          options: {
-            companyId: selectedAccount.vendor,
-            startDate: selectedAccount.suggestedStartDate ? new Date(selectedAccount.suggestedStartDate) : new Date(),
-            combineInstallments: false,
-            showBrowser: true,
-            additionalTransactionInformation: true
-          },
-          credentials: {
-            id: selectedAccount.id_number,
-            card6Digits: selectedAccount.card6_digits,
-            password: selectedAccount.password,
-            username: selectedAccount.username,
-            userCode: selectedAccount.username,
-            email: selectedAccount.username,
-            bankAccountNumber: selectedAccount.bank_account_number,
-            identification_code: selectedAccount.identification_code,
-            num: selectedAccount.identification_code,
-            nationalID: selectedAccount.identification_code,
-            otpToken: selectedAccount.identification_code,
-            nickname: selectedAccount.nickname
-          }
-        } : undefined}
+        initialConfig={syncInitialConfig}
       />
 
       {/* Account Pairing Modal */}
