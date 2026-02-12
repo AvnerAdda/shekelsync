@@ -271,6 +271,18 @@ describe('duplicate-patterns service', () => {
       await expect(duplicatePatternsService.deletePattern({ id: 1 })).rejects.toThrow();
       expect(releaseMock).toHaveBeenCalled();
     });
+
+    it('accepts patternId alias when deleting', async () => {
+      clientQueryMock
+        .mockResolvedValueOnce({ rows: [{ count: 1 }] })
+        .mockResolvedValueOnce({ rows: [{ id: 23, pattern_name: 'Alias Delete' }] });
+
+      const result = await duplicatePatternsService.deletePattern({ patternId: 23 });
+
+      expect(result.message).toBe('Pattern deleted successfully');
+      expect(result.pattern.id).toBe(23);
+      expect(clientQueryMock.mock.calls[1][1]).toEqual([23]);
+    });
   });
 
   describe('createPattern additional tests', () => {
@@ -448,4 +460,53 @@ describe('duplicate-patterns service', () => {
       expect(result.patterns).toHaveLength(1);
     });
   });
+
+  describe('coverage branches', () => {
+    it('clears override category fields when overrideCategoryDefinitionId is null', async () => {
+      clientQueryMock
+        .mockResolvedValueOnce({ rows: [{ count: 1 }] }) // table exists
+        .mockResolvedValueOnce({
+          rows: [{ id: 7, pattern_name: 'Clear Override', override_category_definition_id: null }],
+        }); // update returning
+
+      const result = await duplicatePatternsService.updatePattern({
+        id: 7,
+        overrideCategoryDefinitionId: null,
+      });
+
+      expect(result.pattern.id).toBe(7);
+      const updateCall = clientQueryMock.mock.calls[1];
+      expect(String(updateCall[0])).toContain('override_category =');
+      expect(String(updateCall[0])).toContain('override_category_definition_id =');
+      expect(updateCall[1]).toContain(null);
+    });
+
+    it('updates regex, match type, override category and notes in one mutation', async () => {
+      clientQueryMock
+        .mockResolvedValueOnce({ rows: [{ count: 1 }] }) // table exists
+        .mockResolvedValueOnce({ rows: [{ id: 50, name: 'Expenses', category_type: 'expense' }] }) // override category
+        .mockResolvedValueOnce({
+          rows: [{ id: 8, pattern_name: 'Updated', pattern_regex: 'foo.*', match_type: 'memo', notes: 'n' }],
+        }); // update returning
+
+      const result = await duplicatePatternsService.updatePattern({
+        id: 8,
+        patternRegex: 'foo.*',
+        matchType: 'memo',
+        overrideCategoryDefinitionId: 50,
+        notes: 'updated notes',
+      });
+
+      expect(result.pattern.id).toBe(8);
+      const updateCall = clientQueryMock.mock.calls[2];
+      expect(String(updateCall[0])).toContain('pattern_regex =');
+      expect(String(updateCall[0])).toContain('match_type =');
+      expect(String(updateCall[0])).toContain('notes =');
+      expect(updateCall[1]).toContain('foo.*');
+      expect(updateCall[1]).toContain('memo');
+      expect(updateCall[1]).toContain('updated notes');
+      expect(updateCall[1]).toContain(50);
+    });
+  });
+
 });

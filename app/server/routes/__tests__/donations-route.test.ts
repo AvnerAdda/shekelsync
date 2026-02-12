@@ -150,4 +150,50 @@ describe('Electron /api/donations routes', () => {
       code: 'VALIDATION_FAILED',
     });
   });
+
+  it('surfaces status route errors', async () => {
+    vi.spyOn(donationsService, 'getDonationStatus').mockRejectedValue(new Error('status unavailable'));
+
+    const res = await request(app).get('/api/donations/status').expect(500);
+
+    expect(res.body).toEqual({
+      success: false,
+      error: 'status unavailable',
+    });
+  });
+
+  it('surfaces intent route errors with status and code', async () => {
+    vi.spyOn(donationsService, 'createSupportIntent').mockRejectedValue({
+      status: 422,
+      message: 'intent invalid',
+      code: 'INTENT_INVALID',
+    });
+
+    const res = await request(app)
+      .post('/api/donations/intent')
+      .send({ planKey: 'bad' })
+      .expect(422);
+
+    expect(res.body).toEqual({
+      success: false,
+      error: 'intent invalid',
+      code: 'INTENT_INVALID',
+    });
+  });
+
+  it('surfaces reminder route errors', async () => {
+    vi.spyOn(donationsService, 'markMonthlyReminderShown').mockRejectedValue({
+      message: 'reminder failed',
+    });
+
+    const res = await request(app)
+      .post('/api/donations/reminder-shown')
+      .send({ monthKey: '2026-03' })
+      .expect(500);
+
+    expect(res.body).toEqual({
+      success: false,
+      error: 'reminder failed',
+    });
+  });
 });

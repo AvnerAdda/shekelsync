@@ -114,6 +114,51 @@ describe('categorization rules service', () => {
     expect(result).toMatchObject({ target_category: 'Transport', category_definition_id: null });
   });
 
+  it('createRule keeps provided target/category when category lookup is empty', async () => {
+    clientQueryMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 81,
+            name_pattern: 'CINEMA',
+            target_category: 'Fun',
+            category_definition_id: 42,
+            category_type: 'expense',
+            category_path: null,
+          },
+        ],
+      });
+
+    const result = await rulesService.createRule({
+      name_pattern: 'CINEMA',
+      target_category: 'Fun',
+      category_type: 'expense',
+      category_definition_id: 42,
+    });
+
+    expect(result).toMatchObject({
+      id: 81,
+      target_category: 'Fun',
+      category_type: 'expense',
+      category_path: null,
+    });
+    expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('createRule releases client when insert fails', async () => {
+    clientQueryMock.mockRejectedValueOnce(new Error('insert failed'));
+
+    await expect(
+      rulesService.createRule({
+        name_pattern: 'ERR',
+        target_category: 'Test',
+      }),
+    ).rejects.toThrow('insert failed');
+
+    expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
+
   it('updateRule updates provided fields', async () => {
     queryMock.mockResolvedValueOnce({
       rows: [
@@ -132,6 +177,10 @@ describe('categorization rules service', () => {
     expect(result).toMatchObject({ id: 5, priority: 10 });
   });
 
+  it('updateRule throws when id is missing', async () => {
+    await expect(rulesService.updateRule({ priority: 10 })).rejects.toMatchObject({ status: 400 });
+  });
+
   it('deleteRule executes delete statement', async () => {
     queryMock.mockResolvedValueOnce({ rowCount: 1 });
 
@@ -142,9 +191,23 @@ describe('categorization rules service', () => {
     expect(queryMock.mock.calls[0][1]).toEqual([4]);
   });
 
+  it('deleteRule throws when id is missing', async () => {
+    await expect(rulesService.deleteRule({})).rejects.toMatchObject({ status: 400 });
+  });
+
   describe('createAutoRule', () => {
     it('throws when required fields missing', async () => {
       await expect(rulesService.createAutoRule({})).rejects.toMatchObject({ status: 400 });
+    });
+
+    it('throws when category is not found', async () => {
+      querySequence({ rows: [] });
+      await expect(
+        rulesService.createAutoRule({
+          transactionName: 'SPOTIFY',
+          categoryDefinitionId: 404,
+        }),
+      ).rejects.toMatchObject({ status: 404 });
     });
 
     it('returns rule metadata when pattern already exists', async () => {
@@ -228,6 +291,72 @@ describe('categorization rules service', () => {
         category_path: 'Entertainment > Subscriptions',
       });
     });
+
+    it('applies income rule with positive-price condition and singular message', async () => {
+      querySequence(
+        {
+          rows: [
+            {
+              id: 11,
+              name: 'Salary',
+              category_type: 'income',
+              parent_name: null,
+            },
+          ],
+        },
+        {
+          rows: [
+            {
+              id: 500,
+              name_pattern: 'PAYROLL',
+              target_category: 'Salary',
+            },
+          ],
+        },
+        { rowCount: 0 },
+        { rowCount: 1 },
+      );
+
+      const result = await rulesService.createAutoRule({
+        transactionName: 'PAYROLL',
+        categoryDefinitionId: 11,
+      });
+
+      expect(result.message).toContain('1 transaction');
+      const applySql = String(queryMock.mock.calls[3][0]);
+      expect(applySql).toContain('AND price > 0');
+      expect(queryMock.mock.calls[3][1][3]).toBe(0.7);
+    });
+
+    it('supports neutral category type override with no price condition', async () => {
+      querySequence(
+        {
+          rows: [
+            {
+              id: 25,
+              name: 'Transfers',
+              category_type: 'expense',
+              parent_name: null,
+            },
+          ],
+        },
+        { rows: [{ id: 99, target_category: 'Transfers' }] },
+        { rowCount: 0 },
+        { rowCount: 0 },
+      );
+
+      const result = await rulesService.createAutoRule({
+        transactionName: 'INTERNAL TRANSFER',
+        categoryDefinitionId: 25,
+        categoryType: 'transfer',
+      });
+
+      expect(result.message).toBe('Rule created successfully');
+      const applySql = String(queryMock.mock.calls[3][0]);
+      expect(applySql).not.toContain('AND price > 0');
+      expect(applySql).not.toContain('AND price < 0');
+      expect(queryMock.mock.calls[3][1][3]).toBe(0.8);
+    });
   });
 
   describe('previewRuleMatches', () => {
@@ -265,6 +394,35 @@ describe('categorization rules service', () => {
         name: 'Amazon Prime',
         price: -12.99,
       });
+    });
+
+    it('throws when ruleId does not exist', async () => {
+      querySequence({ rows: [] });
+      await expect(rulesService.previewRuleMatches({ ruleId: 999 })).rejects.toMatchObject({
+        status: 404,
+      });
+    });
+
+    it('defaults to limit 100 when limit is invalid', async () => {
+      querySequence(
+        { rows: [] },
+        { rows: [{ total: '0' }] },
+      );
+
+      const result = await rulesService.previewRuleMatches({ pattern: 'uber', limit: -1 });
+      expect(result.limitApplied).toBe(100);
+      expect(queryMock.mock.calls[0][1][1]).toBe(100);
+    });
+
+    it('caps limit at 500 when request limit is too high', async () => {
+      querySequence(
+        { rows: [] },
+        { rows: [{ total: '0' }] },
+      );
+
+      const result = await rulesService.previewRuleMatches({ pattern: 'uber', limit: 9999 });
+      expect(result.limitApplied).toBe(500);
+      expect(queryMock.mock.calls[0][1][1]).toBe(500);
     });
   });
 
@@ -319,6 +477,85 @@ describe('categorization rules service', () => {
       });
       expect(clientQueryMock).toHaveBeenCalledTimes(4);
       expect(releaseMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to target_category lookup and skips unresolved rules', async () => {
+      getClientMock.mockResolvedValue({ query: clientQueryMock, release: releaseMock });
+      clientQueryMock
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: 1,
+              name_pattern: 'PAY',
+              target_category: 'Salary',
+              category_definition_id: null,
+              category_type: null,
+            },
+            {
+              id: 2,
+              name_pattern: 'UNKNOWN',
+              target_category: null,
+              category_definition_id: 999,
+              category_type: null,
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [] }) // no bank category
+        .mockResolvedValueOnce({
+          rows: [{ id: 7, name: 'Salary', category_type: 'income', parent_name: null }],
+        }) // fallback category lookup
+        .mockResolvedValueOnce({ rowCount: 2 }) // update for income rule
+        .mockResolvedValueOnce({ rows: [] }); // missing explicit category id => skipped
+
+      const result = await rulesService.applyCategorizationRules();
+
+      expect(result).toEqual({
+        success: true,
+        rulesApplied: 2,
+        transactionsUpdated: 2,
+      });
+      const updateSql = String(clientQueryMock.mock.calls[3][0]);
+      expect(updateSql).toContain('AND price > 0');
+      expect(clientQueryMock.mock.calls[3][1][4]).toBeNull();
+    });
+
+    it('always releases client when applying rules fails', async () => {
+      getClientMock.mockResolvedValue({ query: clientQueryMock, release: releaseMock });
+      clientQueryMock.mockRejectedValueOnce(new Error('query failed'));
+
+      await expect(rulesService.applyCategorizationRules()).rejects.toThrow('query failed');
+      expect(releaseMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('mergeCategories', () => {
+    it('rejects when fewer than two source categories are provided', async () => {
+      await expect(
+        rulesService.mergeCategories({ sourceCategories: ['A'], newCategoryName: 'Merged' }),
+      ).rejects.toMatchObject({ status: 400 });
+    });
+
+    it('rejects invalid new category name', async () => {
+      await expect(
+        rulesService.mergeCategories({ sourceCategories: ['A', 'B'], newCategoryName: '   ' }),
+      ).rejects.toMatchObject({ status: 400 });
+    });
+
+    it('merges categories and trims target name', async () => {
+      queryMock.mockResolvedValueOnce({ rowCount: 3 });
+
+      const result = await rulesService.mergeCategories({
+        sourceCategories: ['Rent', 'Lease', 'Housing'],
+        newCategoryName: '  Housing  ',
+      });
+
+      expect(result).toEqual({
+        success: true,
+        message: 'Successfully merged categories into "Housing"',
+        updatedRows: 3,
+      });
+      expect(String(queryMock.mock.calls[0][0])).toContain('WHERE category IN ($2, $3, $4)');
+      expect(queryMock.mock.calls[0][1]).toEqual(['Housing', 'Rent', 'Lease', 'Housing']);
     });
   });
 });

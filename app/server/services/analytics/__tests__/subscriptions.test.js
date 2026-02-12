@@ -180,6 +180,94 @@ describe('subscriptions service', () => {
     expect(summary.category_breakdown.length).toBeGreaterThan(1);
   });
 
+  it('normalizes additional frequency types when building monthly totals', async () => {
+    configureService({
+      patterns: [
+        {
+          pattern_key: 'biweekly-sub',
+          display_name: 'Biweekly',
+          detected_frequency: 'biweekly',
+          detected_amount: 10,
+          amount_is_fixed: true,
+          consistency_score: 0.9,
+          category_name: 'A',
+          category_name_en: 'A',
+          last_charge_date: '2026-02-01',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 6,
+          total_spent: 60,
+        },
+        {
+          pattern_key: 'bimonthly-sub',
+          display_name: 'BiMonthly',
+          detected_frequency: 'bimonthly',
+          detected_amount: 60,
+          amount_is_fixed: true,
+          consistency_score: 0.9,
+          category_name: 'B',
+          category_name_en: 'B',
+          last_charge_date: '2026-02-01',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 6,
+          total_spent: 360,
+        },
+        {
+          pattern_key: 'quarterly-sub',
+          display_name: 'Quarterly',
+          detected_frequency: 'quarterly',
+          detected_amount: 90,
+          amount_is_fixed: true,
+          consistency_score: 0.9,
+          category_name: 'C',
+          category_name_en: 'C',
+          last_charge_date: '2026-02-01',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 6,
+          total_spent: 540,
+        },
+        {
+          pattern_key: 'yearly-sub',
+          display_name: 'Yearly',
+          detected_frequency: 'yearly',
+          detected_amount: 120,
+          amount_is_fixed: true,
+          consistency_score: 0.9,
+          category_name: 'D',
+          category_name_en: 'D',
+          last_charge_date: '2026-02-01',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 6,
+          total_spent: 720,
+        },
+        {
+          pattern_key: 'custom-sub',
+          display_name: 'Custom',
+          detected_frequency: 'custom',
+          detected_amount: 40,
+          amount_is_fixed: true,
+          consistency_score: 0.9,
+          category_name: 'E',
+          category_name_en: 'E',
+          last_charge_date: '2026-02-01',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 6,
+          total_spent: 240,
+        },
+      ],
+      queryImpl: async (sql) => {
+        if (String(sql).includes('FROM subscriptions s')) {
+          return { rows: [] };
+        }
+        return { rows: [] };
+      },
+    });
+
+    const summary = await subscriptionsService.getSubscriptionSummary({ locale: 'en' });
+    // 10*2.17 + 60/2 + 90/3 + 120/12 + 40 = 131.7
+    expect(summary.monthly_total).toBeCloseTo(131.7, 2);
+    expect(summary.yearly_total).toBeCloseTo(1580.4, 2);
+  });
+
   it('builds subscription creep trend and aggregate growth', async () => {
     const { normalizePatternKey } = configureService({
       patterns: [
@@ -324,6 +412,54 @@ describe('subscriptions service', () => {
     expect(renewals.renewals).toHaveLength(1);
     expect(renewals.renewals[0].display_name).toBe('Weekly A');
     expect(renewals.renewals[0].days_until_renewal).toBeGreaterThanOrEqual(1);
+  });
+
+  it('sorts multiple upcoming renewals by nearest next expected date', async () => {
+    configureService({
+      patterns: [
+        {
+          pattern_key: 'monthly-near',
+          display_name: 'Monthly Near',
+          detected_frequency: 'monthly',
+          detected_amount: 40,
+          amount_is_fixed: true,
+          consistency_score: 0.9,
+          category_name: 'A',
+          category_name_en: 'A',
+          last_charge_date: '2026-01-13',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 8,
+          total_spent: 320,
+        },
+        {
+          pattern_key: 'weekly-far',
+          display_name: 'Weekly Far',
+          detected_frequency: 'weekly',
+          detected_amount: 15,
+          amount_is_fixed: false,
+          consistency_score: 0.7,
+          category_name: 'B',
+          category_name_en: 'B',
+          last_charge_date: '2026-02-07',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 8,
+          total_spent: 120,
+        },
+      ],
+      queryImpl: async (sql) => {
+        if (String(sql).includes('FROM subscriptions s')) {
+          return { rows: [] };
+        }
+        return { rows: [] };
+      },
+    });
+
+    const renewals = await subscriptionsService.getUpcomingRenewals({ days: 7, locale: 'en' });
+    expect(renewals.renewals).toHaveLength(2);
+    expect(renewals.renewals[0].display_name).toBe('Monthly Near');
+    expect(renewals.renewals[0].next_expected_date).toBe('2026-02-12');
+    expect(renewals.renewals[1].display_name).toBe('Weekly Far');
+    expect(renewals.renewals[1].next_expected_date).toBe('2026-02-14');
   });
 
   it('updates subscription and writes history entries for status and amount changes', async () => {

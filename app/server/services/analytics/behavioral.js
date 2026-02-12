@@ -1,15 +1,24 @@
 const actualDatabase = require('../database.js');
 const { getLocalizedCategoryName: localizeCategoryName } = require('../../../lib/server/locale-utils.js');
-const subscriptionsService = require('./subscriptions.js');
 const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
-const recurringAnalyzer = require('./recurring-analyzer.js');
 
 let database = actualDatabase;
+
+function getSubscriptionsService() {
+  // Lazy-load to avoid incidental module initialization in tests that override dependencies.
+  // Runtime behavior remains identical because defaults still call through to the same service.
+  return require('./subscriptions.js');
+}
+
+function getRecurringAnalyzer() {
+  return require('./recurring-analyzer.js');
+}
+
 const defaultDependencies = {
   getLocalizedCategoryName: localizeCategoryName,
-  getSubscriptionSummary: subscriptionsService.getSubscriptionSummary,
-  analyzeRecurringPatterns: recurringAnalyzer.analyzeRecurringPatterns,
-  normalizePatternKey: recurringAnalyzer.normalizePatternKey,
+  getSubscriptionSummary: (...args) => getSubscriptionsService().getSubscriptionSummary(...args),
+  analyzeRecurringPatterns: (...args) => getRecurringAnalyzer().analyzeRecurringPatterns(...args),
+  normalizePatternKey: (...args) => getRecurringAnalyzer().normalizePatternKey(...args),
 };
 let dependencies = { ...defaultDependencies };
 

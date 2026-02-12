@@ -72,6 +72,10 @@ function todayUtcDateString() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function isAnonymizedDbPath(dbPath) {
+  return path.basename(String(dbPath || '')).toLowerCase().includes('anonymized');
+}
+
 function getDemoBaseDate() {
   return `${todayUtcDateString()}T12:00:00Z`;
 }
@@ -80,7 +84,7 @@ function shouldRefreshDemoData(dbPath) {
   const refreshSetting = process.env.DEMO_REFRESH_ON_LAUNCH;
   const forceRefresh = refreshSetting === 'true';
   const disableRefresh = refreshSetting === 'false';
-  const isAnonymized = path.basename(dbPath).includes('anonymized');
+  const isAnonymized = isAnonymizedDbPath(dbPath);
 
   if (disableRefresh) return false;
   if (!forceRefresh && !isAnonymized) return false;
@@ -136,11 +140,54 @@ function refreshDemoData(dbPath) {
   }
 }
 
-function initializeSqliteIfMissing(dbPath, databaseCtor) {
-  if (fs.existsSync(dbPath)) {
-    return;
+function resolveSqliteDatabaseCtor(databaseCtor) {
+  if (databaseCtor) {
+    return databaseCtor;
   }
+  if (SqliteDatabase) {
+    return SqliteDatabase;
+  }
+  const betterSqlite = requireFromApp('better-sqlite3');
+  SqliteDatabase = typeof betterSqlite.default === 'function' ? betterSqlite.default : betterSqlite;
+  return SqliteDatabase;
+}
 
+function hasMinimumSchema(dbPath, databaseCtor) {
+  let db = null;
+  try {
+    const DatabaseCtor = resolveSqliteDatabaseCtor(databaseCtor);
+    db = new DatabaseCtor(dbPath, { fileMustExist: true, readonly: true });
+
+    const requiredTables = [
+      'transactions',
+      'vendor_credentials',
+      'category_definitions',
+      'institution_nodes',
+    ];
+
+    const placeholders = requiredTables.map(() => '?').join(', ');
+    const presentRows = db
+      .prepare(`
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table' AND name IN (${placeholders})
+      `)
+      .all(requiredTables);
+
+    const present = new Set(presentRows.map((row) => row.name));
+    return requiredTables.every((name) => present.has(name));
+  } catch {
+    return false;
+  } finally {
+    try {
+      db?.close();
+    } catch (error) {
+      // Ignore close failures for probe handles.
+    }
+  }
+}
+
+function initializeSqliteIfMissing(dbPath, databaseCtor) {
   const initPath = resolveSqliteInitPath();
   if (!initPath) {
     throw new Error('SQLite init script not found for database bootstrap.');
@@ -151,11 +198,25 @@ function initializeSqliteIfMissing(dbPath, databaseCtor) {
     throw new Error('SQLite init script is missing initializeSqliteDatabase export.');
   }
 
-  initModule.initializeSqliteDatabase({
-    output: dbPath,
-    databaseCtor,
-    withDemo: true,
-  });
+  const initialize = (force = false) =>
+    initModule.initializeSqliteDatabase({
+      output: dbPath,
+      force,
+      databaseCtor,
+      withDemo: isAnonymizedDbPath(dbPath),
+    });
+
+  if (!fs.existsSync(dbPath)) {
+    initialize(false);
+    return;
+  }
+
+  if (hasMinimumSchema(dbPath, databaseCtor)) {
+    return;
+  }
+
+  console.warn('[SQLite Init] Existing database is missing required schema tables. Reinitializing schema.', { dbPath });
+  initialize(true);
 }
 
 function replacePlaceholders(sql) {
@@ -195,12 +256,12 @@ class DatabaseManager {
           SqliteDatabase = typeof betterSqlite.default === 'function' ? betterSqlite.default : betterSqlite;
         }
 
+        initializeSqliteIfMissing(dbPath, SqliteDatabase);
+
         if (shouldRefreshDemoData(dbPath)) {
           console.log('[Demo Seed] Refreshing anonymized demo data for latest day...');
           refreshDemoData(dbPath);
         }
-
-        initializeSqliteIfMissing(dbPath, SqliteDatabase);
 
         this.sqliteDb = new SqliteDatabase(dbPath, { fileMustExist: true });
         this.sqlitePath = dbPath;

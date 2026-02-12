@@ -126,4 +126,128 @@ describe('transactions list service', () => {
       transactionsList.searchTransactions({ query: 'chips', limit: 'abc' as any, month: '2025-02' }),
     ).rejects.toThrow('Invalid limit parameter');
   });
+
+  it('listRecentTransactions parses array tags and ignores malformed tags json', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [
+        {
+          identifier: 'txn-tags-1',
+          vendor: 'v1',
+          tags: '["groceries","weekly"]',
+          price: '10',
+          date: '2025-02-01',
+          processed_date: '2025-02-01',
+        },
+        {
+          identifier: 'txn-tags-2',
+          vendor: 'v2',
+          tags: '{bad-json',
+          price: '4.5',
+          date: '2025-02-01',
+          processed_date: '2025-02-01',
+        },
+        {
+          identifier: 'txn-tags-3',
+          vendor: 'v3',
+          tags: '"single-string"',
+          price: '6.7',
+          date: '2025-02-01',
+          processed_date: '2025-02-01',
+        },
+      ],
+    });
+
+    const result = await transactionsList.listRecentTransactions({ limit: 10, offset: 0 });
+
+    expect(result.hasMore).toBe(false);
+    expect(result.transactions[0].tags).toEqual(['groceries', 'weekly']);
+    expect(result.transactions[1].tags).toEqual([]);
+    expect(result.transactions[2].tags).toEqual([]);
+  });
+
+  it('searchTransactions supports numeric category id filtering', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{ identifier: 'txn3', price: '-12.5', tags: '[]', date: '2025-02-03' }],
+    });
+
+    await transactionsList.searchTransactions({
+      category: '123',
+      vendor: 'max',
+      limit: 20,
+    });
+
+    const [sql, params] = queryMock.mock.calls[0];
+    expect(String(sql)).toContain('t.category_definition_id =');
+    expect(params).toContain(123);
+    expect(params).toContain('max');
+    expect(params[params.length - 1]).toBe(20);
+  });
+
+  it('searchTransactions works without text query and returns parsed tags', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [
+        {
+          identifier: 'txn-no-query',
+          vendor: 'shop',
+          tags: '["a","b"]',
+          price: '-33.9',
+          date: '2025-02-05',
+          processed_date: '2025-02-05',
+        },
+      ],
+    });
+
+    const result = await transactionsList.searchTransactions({
+      vendor: 'shop',
+      startDate: '2025-02-01',
+      endDate: '2025-02-28',
+      limit: 5,
+    });
+
+    const [sql, params] = queryMock.mock.calls[0];
+    expect(String(sql)).toContain('WHERE');
+    expect(String(sql)).toContain('t.vendor =');
+    expect(result.transactions[0].tags).toEqual(['a', 'b']);
+    expect(params[params.length - 1]).toBe(5);
+  });
+
+  it('getAllTags returns unique sorted tags from all rows', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [
+        { tags: '["food","weekly"]' },
+        { tags: '["food","home"]' },
+        { tags: '[]' },
+      ],
+    });
+
+    const tags = await transactionsList.getAllTags();
+
+    expect(tags).toEqual(['food', 'home', 'weekly']);
+  });
+
+  it('getAllTags ignores malformed JSON entries', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{ tags: '["ok"]' }, { tags: '{bad-json' }, { tags: '["later"]' }],
+    });
+
+    const tags = await transactionsList.getAllTags();
+
+    expect(tags).toEqual(['later', 'ok']);
+  });
+
+  it('getAllTags returns empty list when tags column is missing in sqlite', async () => {
+    const err = new Error('no such column: tags') as Error & { code?: string };
+    err.code = 'SQLITE_ERROR';
+    queryMock.mockRejectedValueOnce(err);
+
+    await expect(transactionsList.getAllTags()).resolves.toEqual([]);
+  });
+
+  it('getAllTags rethrows non-schema query errors', async () => {
+    const err = new Error('db offline') as Error & { code?: string };
+    err.code = 'SQLITE_BUSY';
+    queryMock.mockRejectedValueOnce(err);
+
+    await expect(transactionsList.getAllTags()).rejects.toThrow('db offline');
+  });
 });

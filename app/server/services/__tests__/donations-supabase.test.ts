@@ -404,4 +404,390 @@ describe('donations service supabase flows', () => {
     expect(service.getDonationTier(150)).toBe('silver');
     expect(service.getDonationTier(500)).toBe('gold');
   });
+
+  it('falls back to session identity when token lookup fails', async () => {
+    const supabaseMock = createSupabaseClientMock({
+      onInsert: () => null,
+      onGetUser: async () => ({ data: null, error: { message: 'invalid token' } }),
+      onSelect: (call) => {
+        if (call.table === 'supporter_entitlements') {
+          return { data: [], error: null };
+        }
+        if (call.table === 'supporter_intents') {
+          return {
+            data: [
+              {
+                user_id: 'ctx-user',
+                plan_key: 'silver',
+                status: 'pending',
+                updated_at: '2026-02-09T00:00:00.000Z',
+              },
+            ],
+            error: null,
+          };
+        }
+        return { data: [], error: null };
+      },
+    });
+
+    const { service, supabaseMock: mock } = await setupDonationsService({ supabaseMock });
+
+    const result = await service.createSupportIntent(
+      { planKey: 'silver' },
+      { accessToken: 'invalid-token', userId: 'ctx-user', email: 'CTX@EXAMPLE.COM' },
+    );
+
+    expect(mock.auth.getUser).toHaveBeenCalledWith('invalid-token');
+    expect(mock.insertCalls[0].payload.user_id).toBe('ctx-user');
+    expect(mock.insertCalls[0].payload.email).toBe('ctx@example.com');
+    expect(result.supportStatus).toBe('pending');
+    expect(result.pendingPlanKey).toBe('silver');
+  });
+
+  it('uses email fallback entitlement and derives plan-based amount and billing cycle', async () => {
+    const supabaseMock = createSupabaseClientMock({
+      onSelect: (call) => {
+        if (call.table === 'supporter_entitlements' && call.filters.user_id === 'user-100') {
+          return { data: [], error: null };
+        }
+        if (call.table === 'supporter_entitlements' && call.filters.email === 'mail@example.com') {
+          return {
+            data: [
+              {
+                user_id: null,
+                email: 'mail@example.com',
+                tier: 'silver',
+                plan: 'silver',
+                verification_status: 'verified',
+                amount_usd: '0',
+                billing_cycle: 'unexpected',
+                updated_at: '2026-02-10T00:00:00.000Z',
+              },
+            ],
+            error: null,
+          };
+        }
+        if (call.table === 'supporter_intents') {
+          return { data: [], error: null };
+        }
+        return { data: [], error: null };
+      },
+    });
+
+    const { service } = await setupDonationsService({ supabaseMock });
+
+    const status = await service.getDonationStatus({ userId: 'user-100', email: 'MAIL@EXAMPLE.COM' });
+
+    expect(status.supportStatus).toBe('verified');
+    expect(status.tier).toBe('silver');
+    expect(status.currentPlanKey).toBe('silver');
+    expect(status.totalAmountUsd).toBe(10);
+    expect(status.billingCycle).toBe('monthly');
+    expect(status.canAccessAiAgent).toBe(true);
+    expect(status.aiAgentAccessLevel).toBe('extended');
+  });
+
+  it('returns rejected support status and default donation url when configured url is invalid', async () => {
+    const supabaseMock = createSupabaseClientMock({
+      onSelect: (call) => {
+        if (call.table === 'supporter_entitlements') {
+          return {
+            data: [
+              {
+                user_id: 'declined-user',
+                tier: 'gold',
+                plan_key: 'gold',
+                status: 'declined',
+                amount_usd: '20',
+                updated_at: '2026-02-10T00:00:00.000Z',
+              },
+            ],
+            error: null,
+          };
+        }
+        if (call.table === 'supporter_intents') {
+          return { data: [], error: null };
+        }
+        return { data: [], error: null };
+      },
+    });
+
+    const { service } = await setupDonationsService({
+      supabaseMock,
+      env: { DONATION_URL: 'not-a-valid-url' },
+    });
+
+    const status = await service.getDonationStatus({ userId: 'declined-user' });
+
+    expect(status.supportStatus).toBe('rejected');
+    expect(status.tier).toBe('none');
+    expect(status.hasDonated).toBe(false);
+    expect(status.shouldShowMonthlyReminder).toBe(true);
+    expect(status.donationUrl).toBe(service.DEFAULT_DONATION_URL);
+  });
+
+  it('supports custom intents table and falls back invalid entitlement table config', async () => {
+    const supabaseMock = createSupabaseClientMock({
+      onInsert: () => null,
+      onSelect: (call) => {
+        if (call.table === 'supporter_entitlements') {
+          return { data: [], error: null };
+        }
+        if (call.table === 'custom_intents') {
+          return {
+            data: [
+              {
+                user_id: 'custom-user',
+                plan_key: 'bronze',
+                status: 'clicked',
+                updated_at: '2026-02-11T00:00:00.000Z',
+              },
+            ],
+            error: null,
+          };
+        }
+        return { data: [], error: null };
+      },
+    });
+
+    const { service, supabaseMock: mock } = await setupDonationsService({
+      supabaseMock,
+      env: {
+        SUPABASE_SUPPORTER_ENTITLEMENTS_TABLE: '123bad',
+        SUPABASE_SUPPORTER_INTENTS_TABLE: 'custom_intents',
+      },
+    });
+
+    const result = await service.createSupportIntent({ planKey: 'bronze' }, { userId: 'custom-user' });
+
+    expect(mock.insertCalls[0].table).toBe('custom_intents');
+    expect(mock.selectCalls.some((call) => call.table === 'supporter_entitlements')).toBe(true);
+    expect(mock.selectCalls.some((call) => call.table === 'custom_intents')).toBe(true);
+    expect(result.supportStatus).toBe('pending');
+    expect(result.pendingPlanKey).toBe('bronze');
+  });
+
+  it('uses current month when reminder month key is omitted', async () => {
+    const supabaseMock = createSupabaseClientMock({});
+    const { service } = await setupDonationsService({ supabaseMock });
+
+    const status = await service.markMonthlyReminderShown({});
+
+    expect(status.reminderShownThisMonth).toBe(true);
+    expect(status.shouldShowMonthlyReminder).toBe(false);
+  });
+
+  it('maps active entitlement status to verified and falls back negative amount to plan amount', async () => {
+    const supabaseMock = createSupabaseClientMock({
+      onSelect: (call) => {
+        if (call.table === 'supporter_entitlements') {
+          return {
+            data: [
+              {
+                user_id: 'active-user',
+                tier: 'gold',
+                plan_key: 'gold',
+                status: 'active',
+                amount_usd: '-5',
+                billing_cycle: 'unexpected',
+                updated_at: '2026-02-10T00:00:00.000Z',
+              },
+            ],
+            error: null,
+          };
+        }
+        if (call.table === 'supporter_intents') {
+          return { data: [], error: null };
+        }
+        return { data: [], error: null };
+      },
+    });
+
+    const { service } = await setupDonationsService({ supabaseMock });
+
+    const status = await service.getDonationStatus({ userId: 'active-user' });
+
+    expect(status.supportStatus).toBe('verified');
+    expect(status.tier).toBe('gold');
+    expect(status.totalAmountUsd).toBe(20);
+    expect(status.billingCycle).toBe('monthly');
+    expect(status.canAccessAiAgent).toBe(true);
+    expect(status.aiAgentAccessLevel).toBe('unlimited');
+  });
+
+  it('keeps declined entitlement rejected even when an intent row exists', async () => {
+    const supabaseMock = createSupabaseClientMock({
+      onSelect: (call) => {
+        if (call.table === 'supporter_entitlements') {
+          return {
+            data: [
+              {
+                user_id: 'declined-pending-user',
+                tier: 'gold',
+                plan_key: 'gold',
+                status: 'declined',
+                amount_usd: '20',
+                updated_at: '2026-02-10T00:00:00.000Z',
+              },
+            ],
+            error: null,
+          };
+        }
+        if (call.table === 'supporter_intents') {
+          return {
+            data: [
+              {
+                user_id: 'declined-pending-user',
+                plan_key: 'silver',
+                status: 'clicked',
+                updated_at: '2026-02-11T00:00:00.000Z',
+              },
+            ],
+            error: null,
+          };
+        }
+        return { data: [], error: null };
+      },
+    });
+
+    const { service } = await setupDonationsService({ supabaseMock });
+
+    const status = await service.getDonationStatus({ userId: 'declined-pending-user' });
+
+    expect(status.supportStatus).toBe('rejected');
+    expect(status.hasPendingVerification).toBe(false);
+    expect(status.pendingPlanKey).toBeNull();
+    expect(status.tier).toBe('none');
+    expect(status.hasDonated).toBe(false);
+  });
+
+  it('throws non-supabase-query errors from entitlement lookup', async () => {
+    const supabaseMock = createSupabaseClientMock({
+      onSelect: (call) => {
+        if (call.table === 'supporter_entitlements') {
+          throw new Error('unexpected select failure');
+        }
+        return { data: [], error: null };
+      },
+    });
+
+    const { service } = await setupDonationsService({ supabaseMock });
+
+    await expect(service.getDonationStatus({ userId: 'u-1' })).rejects.toThrow('unexpected select failure');
+  });
+
+  it('builds supabase clients from env using injected createClient and reuses cached client', async () => {
+    vi.resetModules();
+
+    process.env.SUPABASE_URL = 'https://example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+    process.env.SUPABASE_ANON_KEY = 'anon-key';
+    process.env.SUPPORTER_REQUIRE_AUTH = 'false';
+
+    const release = vi.fn();
+    const query = vi.fn(async (sql: string, params: unknown[] = []) => {
+      const text = String(sql).replace(/\s+/g, ' ').trim().toLowerCase();
+      if (text.startsWith('create table') || text.startsWith('create index')) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (text.includes('insert into donation_meta')) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (text.includes('select last_reminder_month_key')) {
+        return { rows: [{ last_reminder_month_key: null }], rowCount: 1 };
+      }
+      if (text.includes('select coalesce(sum(amount_ils), 0) as total_amount_ils')) {
+        return { rows: [{ total_amount_ils: '0' }], rowCount: 1 };
+      }
+      if (text.includes('insert into donation_events')) {
+        return { rows: [], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    const getClient = vi.fn(async () => ({ query, release }));
+
+    const createClient = vi.fn((_url: string, _key: string) => ({
+      from: (_table: string) => ({
+        insert: async () => ({ error: null }),
+        select: () => {
+          const chain = {
+            eq: () => chain,
+            in: () => chain,
+            order: () => chain,
+            limit: async () => ({ data: [], error: null }),
+          };
+          return chain;
+        },
+      }),
+      auth: {
+        getUser: vi.fn(async () => ({ data: null, error: { message: 'not used' } })),
+      },
+    }));
+
+    const module = await import('../donations.js');
+    const service = module.default ?? module;
+    service.__setDatabase({ getClient });
+    service.__setSupabaseClients({ createClient });
+
+    const first = await service.createSupportIntent({ planKey: 'bronze' }, { userId: 'cached-user' });
+    const second = await service.getDonationStatus({ userId: 'cached-user' });
+
+    expect(first.supportStatus).toBe('none');
+    expect(first.pendingPlanKey).toBeNull();
+    expect(first.checkoutUrl).toContain('plan=bronze');
+    expect(second.supportStatus).toBe('none');
+    expect(createClient).toHaveBeenCalledTimes(1);
+    expect(createClient).toHaveBeenCalledWith(
+      'https://example.supabase.co',
+      'service-role-key',
+      expect.objectContaining({
+        auth: expect.objectContaining({
+          persistSession: false,
+          autoRefreshToken: false,
+        }),
+      }),
+    );
+  });
+
+  it('returns SUPABASE_NOT_CONFIGURED when injected createClient throws', async () => {
+    vi.resetModules();
+
+    process.env.SUPABASE_URL = 'https://example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+    process.env.SUPABASE_ANON_KEY = 'anon-key';
+    process.env.SUPPORTER_REQUIRE_AUTH = 'false';
+
+    const release = vi.fn();
+    const query = vi.fn(async (sql: string) => {
+      const text = String(sql).replace(/\s+/g, ' ').trim().toLowerCase();
+      if (text.startsWith('create table') || text.startsWith('create index')) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (text.includes('insert into donation_meta')) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (text.includes('select last_reminder_month_key')) {
+        return { rows: [{ last_reminder_month_key: null }], rowCount: 1 };
+      }
+      if (text.includes('select coalesce(sum(amount_ils), 0) as total_amount_ils')) {
+        return { rows: [{ total_amount_ils: '0' }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    const getClient = vi.fn(async () => ({ query, release }));
+
+    const module = await import('../donations.js');
+    const service = module.default ?? module;
+    service.__setDatabase({ getClient });
+    service.__setSupabaseClients({
+      createClient: () => {
+        throw new Error('create client boom');
+      },
+    });
+
+    await expect(service.createSupportIntent({ planKey: 'bronze' }, { userId: 'u-2' })).rejects.toMatchObject({
+      status: 503,
+      code: 'SUPABASE_NOT_CONFIGURED',
+    });
+  });
 });

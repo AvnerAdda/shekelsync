@@ -509,6 +509,54 @@ describe('Input Validator', () => {
       expect(result.valid).toBe(true);
       expect(result.data.identification_code).toBe('99');
     });
+
+    test('validates otpToken alias for identification_code in update', () => {
+      const result = validateCredentialUpdate({ id: 1, otpToken: 'OTP-123' });
+      expect(result.valid).toBe(true);
+      expect(result.data.identification_code).toBe('OTP-123');
+    });
+
+    test('returns bank account validation errors during update', () => {
+      const result = validateCredentialUpdate({
+        id: 1,
+        bank_account_number: 'a'.repeat(51),
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((error) => error.includes('bank_account_number'))).toBe(true);
+    });
+
+    test('returns identification validation errors during update', () => {
+      const result = validateCredentialUpdate({
+        id: 1,
+        identification_code: 'a'.repeat(256),
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((error) => error.includes('identification_code'))).toBe(true);
+    });
+
+    test('returns nickname validation errors during update', () => {
+      const result = validateCredentialUpdate({
+        id: 1,
+        nickname: 'a'.repeat(101),
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((error) => error.includes('nickname'))).toBe(true);
+    });
+
+    test('accepts combined bank account and identification updates', () => {
+      const result = validateCredentialUpdate({
+        id: 1,
+        bank_account_number: '111222',
+        identification_code: 'SYNC-OTP',
+      });
+
+      expect(result.valid).toBe(true);
+      expect(result.data.bank_account_number).toBe('111222');
+      expect(result.data.identification_code).toBe('SYNC-OTP');
+    });
   });
 
   describe('Credential Creation - identification fields', () => {
@@ -534,6 +582,16 @@ describe('Input Validator', () => {
       const result = validateCredentialCreation({ vendor: 'hapoalim', bank_account_number: '4444' });
       expect(result.valid).toBe(true);
       expect(result.data.bank_account_number).toBe('4444');
+    });
+
+    test('returns institution validation error even when vendor is present', () => {
+      const result = validateCredentialCreation({
+        vendor: 'hapoalim',
+        institution_id: 'not-a-number',
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((error) => error.includes('Institution ID'))).toBe(true);
     });
   });
 

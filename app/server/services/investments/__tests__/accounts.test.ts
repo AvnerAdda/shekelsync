@@ -181,6 +181,24 @@ describe('investment accounts service', () => {
       expect(insertParams[6]).toBe(false);
       expect(insertParams[7]).toBe('restricted');
     });
+
+    it('sets cash category for cash accounts', async () => {
+      queryMock
+        .mockResolvedValueOnce({ rows: [{ id: 6 }] })
+        .mockResolvedValueOnce({
+          rows: [{ id: 6, account_type: 'cash', institution_id: 8, institution_vendor_code: 'cash' }],
+        });
+
+      await accountsService.createAccount({
+        account_name: 'Cash Wallet',
+        account_type: 'cash',
+        institution_id: 8,
+      });
+
+      const insertParams = queryMock.mock.calls[0][1];
+      expect(insertParams[6]).toBe(true);
+      expect(insertParams[7]).toBe('cash');
+    });
   });
 
   describe('updateAccount', () => {
@@ -244,6 +262,92 @@ describe('investment accounts service', () => {
         accountsService.updateAccount({ id: 404, notes: 'x' }),
       ).rejects.toMatchObject({ status: 404 });
     });
+
+    it('updates account_name/institution/account_number/currency and normalizes is_active="true"', async () => {
+      queryMock
+        .mockResolvedValueOnce({ rows: [{ id: 41 }] })
+        .mockResolvedValueOnce({
+          rows: [{ id: 41, account_type: 'brokerage', institution_id: 9, institution_vendor_code: 'brokerage' }],
+        });
+
+      const result = await accountsService.updateAccount({
+        id: 41,
+        account_name: 'Renamed Account',
+        institution: 'My Bank',
+        institution_id: 9,
+        account_number: '1234',
+        currency: 'USD',
+        is_active: 'true',
+        notes: 'updated notes',
+      });
+
+      const [updateSql, updateParams] = queryMock.mock.calls[0];
+      expect(updateSql).toContain('account_name = $1');
+      expect(updateSql).toContain('institution = $2');
+      expect(updateSql).toContain('institution_id = $3');
+      expect(updateSql).toContain('account_number = $4');
+      expect(updateSql).toContain('currency = $5');
+      expect(updateSql).toContain('is_active = $6');
+      expect(updateSql).toContain('notes = $7');
+      expect(updateParams).toEqual([
+        'Renamed Account',
+        'My Bank',
+        9,
+        '1234',
+        'USD',
+        true,
+        'updated notes',
+        41,
+      ]);
+      expect(result.account.id).toBe(41);
+    });
+
+    it('accepts boolean is_active values directly', async () => {
+      queryMock
+        .mockResolvedValueOnce({ rows: [{ id: 42 }] })
+        .mockResolvedValueOnce({
+          rows: [{ id: 42, account_type: 'brokerage', institution_id: 9, institution_vendor_code: 'brokerage' }],
+        });
+
+      await accountsService.updateAccount({
+        id: 42,
+        is_active: true,
+      });
+
+      expect(queryMock.mock.calls[0][1]).toEqual([true, 42]);
+    });
+
+    it.each([
+      ['brokerage', true, 'liquid'],
+      ['pension', false, 'restricted'],
+      ['insurance', false, 'stability'],
+    ])(
+      'maps account_type %s to is_liquid=%s and investment_category=%s',
+      async (accountType, expectedLiquid, expectedCategory) => {
+        queryMock
+          .mockResolvedValueOnce({ rows: [{ id: 55, vendor_code: accountType }] })
+          .mockResolvedValueOnce({ rows: [{ id: 55 }] })
+          .mockResolvedValueOnce({
+            rows: [{ id: 55, account_type: accountType, institution_id: 55, institution_vendor_code: accountType }],
+          });
+
+        await accountsService.updateAccount({
+          id: 55,
+          account_type: accountType,
+        });
+
+        const updateCall = queryMock.mock.calls.find(([sql]) =>
+          String(sql).includes('UPDATE investment_accounts'),
+        );
+        expect(updateCall).toBeTruthy();
+        const updateParams = updateCall![1];
+        expect(updateParams[0]).toBe(accountType);
+        expect(updateParams[1]).toBe(expectedLiquid);
+        expect(updateParams[2]).toBe(expectedCategory);
+        expect(typeof updateParams[3]).toBe('number');
+        expect(updateParams[3]).toBeGreaterThan(0);
+      },
+    );
   });
 
   describe('deactivateAccount', () => {

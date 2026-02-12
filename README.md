@@ -32,6 +32,8 @@ npm run dev:electron
 npm run dev:api
 ```
 
+On Linux, `npm run dev:electron` automatically falls back to `app/.env.local` for `CLARIFY_ENCRYPTION_KEY` when no OS keychain service is available (for example in WSL/headless sessions).
+
 ## Tests
 
 ```bash

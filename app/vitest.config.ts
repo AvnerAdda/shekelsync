@@ -15,7 +15,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json'],
-      cleanOnRerun: true,
+      // Avoid intermittent ENOENT reads from coverage/.tmp during large runs.
+      cleanOnRerun: false,
     },
     // Enable mocking for server-side modules
     deps: {

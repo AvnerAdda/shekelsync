@@ -57,4 +57,18 @@ describe('Electron /api/onboarding routes', () => {
 
     expect(res.body.error).toMatch(/failed to fetch onboarding status/i);
   });
+
+  it('returns 500 when dismiss onboarding fails', async () => {
+    vi.spyOn(onboardingService, 'dismissOnboarding').mockRejectedValue(
+      new Error('dismiss failed'),
+    );
+
+    const res = await request(app).post('/api/onboarding/dismiss').expect(500);
+
+    expect(res.body).toEqual({
+      success: false,
+      error: 'Failed to dismiss onboarding',
+      message: 'dismiss failed',
+    });
+  });
 });

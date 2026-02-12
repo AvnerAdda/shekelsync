@@ -5,6 +5,8 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
+import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
 import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import Select from '@mui/material/Select';
@@ -12,6 +14,8 @@ import MenuItem from '@mui/material/MenuItem';
 import Box from '@mui/material/Box';
 import Alert from '@mui/material/Alert';
 import LockIcon from '@mui/icons-material/Lock';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import Typography from '@mui/material/Typography';
 import ListSubheader from '@mui/material/ListSubheader';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -138,9 +142,44 @@ const createDefaultConfig = (): ScraperConfig => ({
   credentials: createEmptyCredentials(),
 });
 
+function formatRetryAfter(retryAfterSeconds?: number): string | null {
+  if (!Number.isFinite(retryAfterSeconds) || retryAfterSeconds === undefined || retryAfterSeconds <= 0) {
+    return null;
+  }
+  const seconds = Math.ceil(retryAfterSeconds);
+  if (seconds < 60) {
+    return `${seconds} second${seconds === 1 ? '' : 's'}`;
+  }
+
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  }
+
+  const hours = Math.ceil(minutes / 60);
+  if (hours < 48) {
+    return `${hours} hour${hours === 1 ? '' : 's'}`;
+  }
+
+  const days = Math.ceil(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
+function formatLocalTimestamp(value: unknown): string | null {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return null;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toLocaleString();
+}
+
 export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onComplete, initialConfig }: SyncModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
   const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>(undefined);
   const { showNotification } = useNotification();
@@ -200,15 +239,15 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         if (!response.ok) {
           throw new Error(response.statusText || t('errors.loadInstitutions'));
         }
-        const payload = response.data as any;
+        const payload = response.data as { nodes?: Array<InstitutionMetadata & { node_type: string }> };
         const nodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
-        const leaves = nodes.filter((n: any) => n.node_type === 'institution');
+        const leaves = nodes.filter((n) => n.node_type === 'institution');
         if (leaves.length === 0) {
           throw new Error('No institution leaves returned from tree');
         }
         const normalized = leaves.map((inst: InstitutionMetadata) => ({
           ...inst,
-          credentialFieldList: parseCredentialFields((inst as any).credential_fields),
+          credentialFieldList: parseCredentialFields(inst.credential_fields),
         }));
         if (isMounted) {
           setInstitutions(normalized);
@@ -218,7 +257,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         console.error('[SyncModal] Failed to load institution tree, falling back to flat list', fetchError);
         try {
           const fallback = await apiClient.get('/api/institutions?scrapable=true');
-          const payload = fallback.data as any;
+          const payload = fallback.data as { institutions?: InstitutionMetadata[]; institution?: InstitutionMetadata };
           const list = Array.isArray(payload?.institutions)
             ? payload.institutions
             : payload?.institution
@@ -226,7 +265,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
               : [];
           const normalized = list.map((inst: InstitutionMetadata) => ({
             ...inst,
-            credentialFieldList: parseCredentialFields((inst as any).credential_fields),
+            credentialFieldList: parseCredentialFields(inst.credential_fields),
           }));
           if (isMounted) {
             setInstitutions(normalized);
@@ -307,6 +346,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
       setConfig(initialConfig || createDefaultConfig());
       setError(null);
       setIsLoading(false);
+      setShowPassword(false);
     }
   }, [isOpen, initialConfig]);
 
@@ -336,14 +376,47 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
     try {
       const response = await apiClient.post('/api/scrape', config);
       if (!response.ok) {
+        const errorData = response.data as any;
+
         // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
+        const licenseCheck = isLicenseReadOnlyError(errorData);
         if (licenseCheck.isReadOnly) {
           setLicenseAlertReason(licenseCheck.reason);
           setLicenseAlertOpen(true);
           return;
         }
-        throw new Error(response.statusText || t('errors.startFailed'));
+
+        if (response.status === 429) {
+          const retryAfter = Number(errorData?.retryAfter);
+          const retryIn = formatRetryAfter(retryAfter);
+          const nextAllowedAt = formatLocalTimestamp(errorData?.nextAllowedAt);
+          const isAccountCooldown = errorData?.reason === 'account_recently_scraped';
+
+          const details = [
+            typeof errorData?.message === 'string' && errorData.message.trim().length > 0
+              ? errorData.message
+              : (isAccountCooldown
+                ? 'This account was synced recently and is temporarily cooling down.'
+                : 'Too many sync attempts were sent in a short time.'),
+            isAccountCooldown
+              ? 'This is expected and resets automatically.'
+              : null,
+            retryIn ? `Please try again in ${retryIn}.` : null,
+            nextAllowedAt ? `Next retry time: ${nextAllowedAt}.` : null,
+          ]
+            .filter(Boolean)
+            .join(' ');
+
+          throw new Error(details);
+        }
+
+        const backendMessage =
+          typeof errorData?.message === 'string' && errorData.message.trim().length > 0
+            ? errorData.message
+            : (typeof errorData?.error === 'string' && errorData.error.trim().length > 0
+              ? errorData.error
+              : null);
+        throw new Error(backendMessage || response.statusText || t('errors.startFailed'));
       }
 
       showNotification(t('notifications.syncStarted'), 'success');
@@ -394,17 +467,37 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
           const label = configEntry.labelKey ? t(configEntry.labelKey) : formatFieldLabel(fieldKey);
           const helperText = configEntry.helperTextKey ? t(configEntry.helperTextKey) : undefined;
           const value = (config.credentials as Record<string, string | undefined>)[fieldKey] ?? '';
+          const isPasswordField = fieldKey === 'password';
+          const inputType = isPasswordField
+            ? (showPassword ? 'text' : 'password')
+            : (configEntry.type || 'text');
 
           return (
             <TextField
               key={`${selectedInstitution.vendor_code}-${fieldKey}`}
               label={label}
-              type={configEntry.type || 'text'}
+              type={inputType}
               value={value}
               onChange={(e) => handleConfigChange(`credentials.${fieldKey}`, e.target.value)}
               fullWidth
               required
               helperText={helperText}
+              InputProps={isPasswordField
+                ? {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          edge="end"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          onMouseDown={(event) => event.preventDefault()}
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }
+                : undefined}
             />
           );
         })}
@@ -489,6 +582,11 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
 
   const renderExistingAccountForm = () => {
     const creds = config.credentials;
+    const institutionFields = selectedInstitution?.credentialFieldList ?? [];
+    const hasExplicitFields = institutionFields.length > 0;
+    const displayFields = hasExplicitFields
+      ? Array.from(new Set([...institutionFields, 'password']))
+      : Object.keys(creds).filter((fieldKey) => fieldKey !== 'nickname');
     
     return (
       <>
@@ -508,78 +606,44 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
             fullWidth
           />
         )}
-        {creds.username && (
-          <TextField
-            label={t('fields.username')}
-            value={creds.username}
-            disabled
-            fullWidth
-          />
-        )}
-        {creds.userCode && (
-          <TextField
-            label={t('fields.userCode')}
-            value={creds.userCode}
-            disabled
-            fullWidth
-          />
-        )}
-        {creds.id && (
-          <TextField
-            label={t('fields.id')}
-            value={creds.id}
-            disabled
-            fullWidth
-          />
-        )}
-        {creds.email && (
-          <TextField
-            label={t('fields.email')}
-            value={creds.email}
-            disabled
-            fullWidth
-          />
-        )}
-        {creds.card6Digits && (
-          <TextField
-            label={t('fields.card6Digits')}
-            value={creds.card6Digits}
-            disabled
-            fullWidth
-          />
-        )}
-        {creds.nationalID && (
-          <TextField
-            label={t('fields.nationalID')}
-            value={creds.nationalID}
-            disabled
-            fullWidth
-          />
-        )}
-        {creds.num && (
-          <TextField
-            label={t('fields.num')}
-            value={creds.num}
-            disabled
-            fullWidth
-          />
-        )}
-        {creds.identification_code && (
-          <TextField
-            label={t('fields.identification_code')}
-            value={creds.identification_code}
-            disabled
-            fullWidth
-          />
-        )}
-        {creds.bankAccountNumber && (
-          <TextField
-            label={t('fields.bankAccountNumber')}
-            value={creds.bankAccountNumber}
-            disabled
-            fullWidth
-          />
-        )}
+        {displayFields.map((fieldKey) => {
+          const value = (creds as Record<string, string | undefined>)[fieldKey] ?? '';
+          if (!value) return null;
+
+          const configEntry = SCRAPER_FIELD_CONFIG[fieldKey] || {
+            labelKey: '',
+          };
+          const label = configEntry.labelKey ? t(configEntry.labelKey) : formatFieldLabel(fieldKey);
+          const isPasswordField = fieldKey === 'password';
+
+          return (
+            <TextField
+              key={`existing-${fieldKey}`}
+              label={label}
+              type={isPasswordField && !showPassword ? 'password' : 'text'}
+              value={value}
+              fullWidth
+              disabled={!isPasswordField}
+              InputProps={isPasswordField
+                ? {
+                    readOnly: true,
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          edge="end"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          onMouseDown={(event) => event.preventDefault()}
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }
+                : undefined}
+            />
+          );
+        })}
       </>
     );
   };

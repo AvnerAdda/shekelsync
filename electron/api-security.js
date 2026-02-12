@@ -92,6 +92,19 @@ function revokeAllTokens() {
   rateLimitStore.clear();
 }
 
+// Periodic cleanup of expired tokens (every hour)
+const _cleanupInterval = setInterval(() => {
+  const now = Date.now();
+  for (const [token, meta] of tokenMetadata.entries()) {
+    if (now - meta.created > TOKEN_EXPIRY_MS) {
+      validTokens.delete(token);
+      tokenMetadata.delete(token);
+      rateLimitStore.delete(token);
+    }
+  }
+}, 60 * 60 * 1000);
+_cleanupInterval.unref();
+
 /**
  * Check rate limit for a token and endpoint
  */
@@ -229,6 +242,8 @@ function rateLimitMiddleware(req, res, next) {
 
   if (!result.allowed) {
     const retryAfter = Math.ceil((result.resetAt - Date.now()) / 1000);
+    const nextAllowedAt = new Date(result.resetAt).toISOString();
+    const isScrapeEndpoint = req.path.startsWith('/api/scrape');
     res.set('Retry-After', retryAfter.toString());
 
     logRateLimitExceeded({
@@ -240,8 +255,13 @@ function rateLimitMiddleware(req, res, next) {
 
     return res.status(429).json({
       error: 'Too Many Requests',
-      message: `Rate limit exceeded. Try again in ${retryAfter} seconds.`,
+      message: isScrapeEndpoint
+        ? `Too many sync attempts were sent in a short time. This temporary limit protects your bank login session. Try again in ${retryAfter} seconds.`
+        : `Rate limit exceeded. Try again in ${retryAfter} seconds.`,
+      reason: isScrapeEndpoint ? 'sync_rate_limit' : 'rate_limit',
+      rateLimited: true,
       retryAfter,
+      nextAllowedAt,
     });
   }
 
@@ -269,8 +289,7 @@ function securityHeadersMiddleware(req, res, next) {
 function getTokenStats() {
   return {
     activeTokens: validTokens.size,
-    tokens: Array.from(tokenMetadata.entries()).map(([token, metadata]) => ({
-      token: token.substring(0, 8) + '...', // Only show first 8 chars
+    tokens: Array.from(tokenMetadata.entries()).map(([, metadata]) => ({
       age: Date.now() - metadata.created,
       lastUsed: Date.now() - metadata.lastUsed,
     })),

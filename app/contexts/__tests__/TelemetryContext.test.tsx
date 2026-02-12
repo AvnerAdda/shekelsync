@@ -79,25 +79,23 @@ describe('TelemetryContext', () => {
   it(
     'updates preference via electron settings bridge when toggled',
     async () => {
-      render(
-        <TelemetryProvider>
-          <TestConsumer />
-        </TelemetryProvider>,
+      const wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+        <TelemetryProvider>{children}</TelemetryProvider>
       );
 
-      await waitFor(() => expect(screen.getByRole('button')).toHaveTextContent('enabled'));
+      const hook = renderHook(() => useTelemetry(), { wrapper });
 
-      const button = screen.getByRole('button');
+      await waitFor(() => expect(hook.result.current.loading).toBe(false));
+      expect(hook.result.current.telemetryEnabled).toBe(true);
+
       await act(async () => {
-        fireEvent.click(button);
+        await hook.result.current.setTelemetryEnabled(false);
       });
 
-      await waitFor(() => {
-        expect(window.electronAPI?.settings?.update).toHaveBeenCalledWith({
-          telemetry: { crashReportsEnabled: false },
-        });
+      expect(window.electronAPI?.settings?.update).toHaveBeenCalledWith({
+        telemetry: { crashReportsEnabled: false },
       });
-
+      expect(hook.result.current.telemetryEnabled).toBe(false);
       expect(syncRendererTelemetry).toHaveBeenLastCalledWith(
         false,
         expect.objectContaining({ dsn: expect.any(String) }),

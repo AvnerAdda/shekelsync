@@ -3,12 +3,14 @@
  * Tests PII redaction and error sanitization
  */
 
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import {
   sanitizeError,
   sanitizeErrorForLogging,
   redactSensitiveData,
   isSensitiveKey,
+  createErrorHandler,
+  wrapAsyncHandler,
 } from '../error-sanitizer.js';
 
 describe('Error Sanitizer', () => {
@@ -66,6 +68,13 @@ describe('Error Sanitizer', () => {
       expect(isSensitiveKey('PASSWORD')).toBe(true);
       expect(isSensitiveKey('Token')).toBe(true);
       expect(isSensitiveKey('API_KEY')).toBe(true);
+    });
+
+    test('should return false for non-string keys', () => {
+      expect(isSensitiveKey(null)).toBe(false);
+      expect(isSensitiveKey(undefined)).toBe(false);
+      expect(isSensitiveKey(123)).toBe(false);
+      expect(isSensitiveKey({})).toBe(false);
     });
   });
 
@@ -234,6 +243,14 @@ describe('Error Sanitizer', () => {
       expect(sanitized).toBeNull();
     });
 
+    test('should skip context redaction for non-object context', () => {
+      const error = new Error('Test error');
+      const sanitized = sanitizeErrorForLogging(error, 'not-an-object');
+
+      expect(sanitized.context).toBeUndefined();
+      expect(sanitized.message).toBe('Test error');
+    });
+
     test('should redact sensitive data in context', () => {
       const error = new Error('Test error');
       const context = {
@@ -343,6 +360,116 @@ describe('Error Sanitizer', () => {
       expect(redacted.number).toBe(123);
       expect(redacted.boolean).toBe(true);
       expect(redacted.password).toBe('[REDACTED]');
+    });
+  });
+
+  describe('Express Error Handler Helpers', () => {
+    test('createErrorHandler logs sanitized context and responds when headers are not sent', () => {
+      const logger = { error: vi.fn() };
+      const handler = createErrorHandler({ logger, includeStack: false });
+      const error = Object.assign(new Error('Boom'), { statusCode: 422, code: 'VALIDATION' });
+      const req = {
+        path: '/api/credentials',
+        method: 'POST',
+        query: { token: 'abc', page: '1' },
+      };
+      const res = {
+        headersSent: false,
+        status: vi.fn().mockReturnThis(),
+        json: vi.fn(),
+      };
+
+      handler(error, req, res, vi.fn());
+
+      expect(logger.error).toHaveBeenCalledWith(
+        '[API Error]',
+        expect.objectContaining({
+          message: 'Boom',
+          context: expect.objectContaining({
+            path: '/api/credentials',
+            method: 'POST',
+            query: expect.objectContaining({
+              token: '[REDACTED]',
+              page: '1',
+            }),
+          }),
+        }),
+      );
+      expect(res.status).toHaveBeenCalledWith(422);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: 'Boom',
+          statusCode: 422,
+          code: 'VALIDATION',
+        }),
+      );
+    });
+
+    test('createErrorHandler does not write response when headers were already sent', () => {
+      const logger = { error: vi.fn() };
+      const handler = createErrorHandler({ logger, includeStack: false });
+      const res = {
+        headersSent: true,
+        status: vi.fn().mockReturnThis(),
+        json: vi.fn(),
+      };
+
+      handler(new Error('late error'), { path: '/x', method: 'GET', query: {} }, res, vi.fn());
+
+      expect(logger.error).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+      expect(res.json).not.toHaveBeenCalled();
+    });
+
+    test('wrapAsyncHandler forwards successful execution', async () => {
+      const next = vi.fn();
+      const handler = vi.fn(async (req, res) => {
+        res.ok = true;
+      });
+      const wrapped = wrapAsyncHandler(handler);
+      const req = {};
+      const res = {};
+
+      await wrapped(req, res, next);
+
+      expect(handler).toHaveBeenCalledWith(req, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.ok).toBe(true);
+    });
+
+    test('wrapAsyncHandler sanitizes thrown errors before forwarding', async () => {
+      const next = vi.fn();
+      const wrapped = wrapAsyncHandler(async () => {
+        const error = new Error('database failed');
+        error.statusCode = 409;
+        error.code = 'CONFLICT';
+        error.stack = 'should not propagate';
+        throw error;
+      });
+
+      await wrapped({}, {}, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      const forwarded = next.mock.calls[0][0];
+      expect(forwarded).toBeInstanceOf(Error);
+      expect(forwarded.message).toBe('database failed');
+      expect(forwarded.statusCode).toBe(409);
+      expect(forwarded.code).toBe('CONFLICT');
+      expect(forwarded.stack).not.toContain('should not propagate');
+    });
+
+    test('wrapAsyncHandler uses fallback values for non-standard throwables', async () => {
+      const next = vi.fn();
+      const wrapped = wrapAsyncHandler(async () => {
+        throw { statusCode: 418 };
+      });
+
+      await wrapped({}, {}, next);
+
+      const forwarded = next.mock.calls[0][0];
+      expect(forwarded.message).toBe('Request failed');
+      expect(forwarded.statusCode).toBe(418);
+      expect(forwarded.code).toBeUndefined();
     });
   });
 });
