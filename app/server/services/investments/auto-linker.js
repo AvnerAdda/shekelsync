@@ -23,7 +23,8 @@ async function fetchAccountInstitution(accountId) {
   `;
 
   const result = await pool.query(accountQuery, [accountId]);
-  const row = result.rows[0];
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  const row = rows[0];
   if (!row) {
     return null;
   }
@@ -111,9 +112,19 @@ async function linkTransactionToAccount(params) {
  * @returns {Promise<object>} Summary of linking operation
  */
 async function linkMultipleTransactions(accountId, transactions, linkMethod = 'auto', confidence = 1.0) {
+  if (!Array.isArray(transactions) || transactions.length === 0) {
+    return {
+      totalAttempted: 0,
+      successCount: 0,
+      failureCount: 0,
+      successfulLinks: [],
+      failedLinks: []
+    };
+  }
+
   const successfulLinks = [];
   const failedLinks = [];
-  const accountInstitution = await fetchAccountInstitution(accountId);
+  let accountInstitution = null;
 
   for (const transaction of transactions) {
     try {
@@ -133,6 +144,15 @@ async function linkMultipleTransactions(accountId, transactions, linkMethod = 'a
         transaction,
         error: error.message
       });
+    }
+  }
+
+  if (successfulLinks.length > 0) {
+    try {
+      accountInstitution = await fetchAccountInstitution(accountId);
+    } catch (error) {
+      console.warn('[auto-linker] Failed to fetch account institution metadata', error);
+      accountInstitution = null;
     }
   }
 

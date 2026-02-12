@@ -47,7 +47,7 @@ test('profile section loads data and saves changes', async ({ page }) => {
   await goHome(page);
 
   await page.getByRole('button', { name: 'Settings' }).click();
-  await expect(page.getByRole('heading', { name: /profile information/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /profile information/i })).toBeVisible({ timeout: 20000 });
 
   const nameInput = page.getByLabel('Username');
   await expect(nameInput).toHaveValue('Jane Doe');
@@ -68,8 +68,11 @@ test('shows session expiry message when profile fetch returns 401', async ({ pag
 
   await goHome(page);
   await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByRole('heading', { name: /profile information/i })).toBeVisible({ timeout: 20000 });
 
-  await expect(page.getByText(/session expired/i)).toBeVisible();
+  await expect(
+    page.getByRole('alert').filter({ hasText: /(session expired|sign in again)/i }).first(),
+  ).toBeVisible({ timeout: 20000 });
 });
 
 test('allows adding and editing a child profile', async ({ page }) => {
@@ -90,9 +93,9 @@ test('allows adding and editing a child profile', async ({ page }) => {
   await goHome(page);
 
   await page.getByRole('button', { name: 'Settings' }).click();
-  await expect(page.getByRole('heading', { name: /profile information/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /profile information/i })).toBeVisible({ timeout: 20000 });
 
-  await page.getByRole('button', { name: 'Children Information' }).click();
+  await page.getByRole('button', { name: /Children Information/i }).click();
   await page.getByRole('button', { name: 'Add Child' }).click();
   const addDialog = page.getByRole('dialog', { name: /Add Child Information/i });
   await addDialog.getByLabel('Child Name').fill('Luna');

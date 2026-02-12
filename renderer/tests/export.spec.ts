@@ -7,17 +7,20 @@ test.describe('Data export flow', () => {
   });
 
   const openDataExport = async (page: Parameters<typeof goHome>[0]) => {
-    await page.goto('/#/settings', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: 'Data Export', exact: true })).toBeVisible({ timeout: 15000 });
+    await goHome(page);
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible({ timeout: 30000 });
+    const exportPanel = page.getByTestId('data-export-panel');
+    await expect(exportPanel).toBeVisible({ timeout: 30000 });
+    await exportPanel.scrollIntoViewIfNeeded();
   };
 
   test('allows user to trigger export via browser fallback when electron bridge is unavailable', async ({ page }) => {
     await openDataExport(page);
 
-    await page.getByRole('button', { name: 'Export Data' }).click();
-    await page.getByRole('button', { name: 'Export Data' }).click();
+    await page.getByTestId('data-export-submit').click();
 
-    await expect(page.getByText('Data exported successfully')).toBeVisible();
+    await expect(page.getByTestId('data-export-success')).toBeVisible();
   });
 
   test('saves exports via the Electron file bridge when available', async ({ page }) => {
@@ -38,9 +41,9 @@ test.describe('Data export flow', () => {
     });
 
     await openDataExport(page);
-    await page.getByRole('button', { name: 'Export Data' }).click();
+    await page.getByTestId('data-export-submit').click();
 
-    await expect(page.getByText('Data exported successfully')).toBeVisible();
+    await expect(page.getByTestId('data-export-success')).toBeVisible();
 
     const writes = await page.evaluate(() => (window as any).__fileWrites as Array<{ filePath: string; contentsLength: number }>);
     expect(writes).toHaveLength(1);

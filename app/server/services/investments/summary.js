@@ -1,4 +1,5 @@
-const database = require('../database.js');
+const actualDatabase = require('../database.js');
+let database = actualDatabase;
 const {
   INSTITUTION_SELECT_FIELDS,
   buildInstitutionFromRow,
@@ -425,6 +426,12 @@ async function getInvestmentSummary(params = {}) {
 
 module.exports = {
   getInvestmentSummary,
+  __setDatabase(mockDatabase) {
+    database = mockDatabase || actualDatabase;
+  },
+  __resetDatabase() {
+    database = actualDatabase;
+  },
 };
 
 module.exports.default = module.exports;

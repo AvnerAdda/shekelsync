@@ -1,11 +1,15 @@
-const database = require('../database.js');
+const actualDatabase = require('../database.js');
 const { getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
 const { getCreditCardRepaymentCategoryCondition } = require('../accounts/repayment-category.js');
-const {
-  analyzeRecurringPatterns,
-  normalizePatternKey,
-  selectDominantCluster,
-} = require('./recurring-analyzer.js');
+const recurringAnalyzer = require('./recurring-analyzer.js');
+
+let database = actualDatabase;
+const defaultRecurringAnalyzer = {
+  analyzeRecurringPatterns: recurringAnalyzer.analyzeRecurringPatterns,
+  normalizePatternKey: recurringAnalyzer.normalizePatternKey,
+  selectDominantCluster: recurringAnalyzer.selectDominantCluster,
+};
+let recurringAnalyzerRef = { ...defaultRecurringAnalyzer };
 
 // Frequency types with expected intervals in days
 const FREQUENCY_INTERVALS = {
@@ -48,7 +52,7 @@ function calculateNextExpectedDate(lastChargeDate, frequency) {
  */
 async function getSubscriptions(options = {}) {
   const { status, frequency, locale = 'he' } = options;
-  const { patterns } = await analyzeRecurringPatterns({
+  const { patterns } = await recurringAnalyzerRef.analyzeRecurringPatterns({
     monthsBack: 6,
     minOccurrences: 2,
     minConsistency: 0.3,
@@ -290,7 +294,7 @@ async function getSubscriptionCreep(options = {}) {
   const patternKeys = new Set();
 
   for (const row of rows) {
-    const normalizedKey = normalizePatternKey(row.pattern_key);
+    const normalizedKey = recurringAnalyzerRef.normalizePatternKey(row.pattern_key);
     if (!normalizedKey || !subscriptionKeys.has(normalizedKey)) continue;
 
     patternKeys.add(normalizedKey);
@@ -413,7 +417,9 @@ async function detectNewAlerts(locale = 'he') {
       date: row.charge_date,
       amount: Number(row.amount) || 0,
     }));
-    const dominantCluster = charges.length >= 2 ? selectDominantCluster(charges) : null;
+    const dominantCluster = charges.length >= 2
+      ? recurringAnalyzerRef.selectDominantCluster(charges)
+      : null;
     let clusterCharges = dominantCluster?.charges?.length ? dominantCluster.charges : charges;
     if (clusterCharges.length < 2) {
       clusterCharges = charges;
@@ -589,7 +595,7 @@ async function addManualSubscription(subscription) {
     notes
   } = subscription;
 
-  const patternKey = normalizePatternKey(display_name);
+  const patternKey = recurringAnalyzerRef.normalizePatternKey(display_name);
 
   // Check if subscription with this pattern key already exists
   const existingResult = await database.query(
@@ -776,5 +782,19 @@ module.exports = {
   deleteSubscription,
   dismissAlert,
   refreshDetection,
-  maybeRunAutoDetection
+  maybeRunAutoDetection,
+  __setDatabase(mock) {
+    database = mock || actualDatabase;
+  },
+  __setRecurringAnalyzer(mock = {}) {
+    recurringAnalyzerRef = {
+      ...defaultRecurringAnalyzer,
+      ...mock,
+    };
+  },
+  __resetDependencies() {
+    database = actualDatabase;
+    recurringAnalyzerRef = { ...defaultRecurringAnalyzer };
+    lastAutoDetectionAt = 0;
+  },
 };

@@ -27,6 +27,20 @@ async function loadESModules() {
   }
 }
 
+function __setESModulesForTests(modules = {}) {
+  if (modules.suggestionAnalyzer) {
+    suggestionAnalyzer = modules.suggestionAnalyzer;
+  }
+  if (modules.autoLinker) {
+    autoLinker = modules.autoLinker;
+  }
+}
+
+function __resetESModulesForTests() {
+  suggestionAnalyzer = null;
+  autoLinker = null;
+}
+
 function createInvestmentsRouter() {
   const router = express.Router();
 
@@ -1295,4 +1309,8 @@ function createInvestmentsRouter() {
   return router;
 }
 
-module.exports = { createInvestmentsRouter };
+module.exports = {
+  createInvestmentsRouter,
+  __setESModulesForTests,
+  __resetESModulesForTests,
+};

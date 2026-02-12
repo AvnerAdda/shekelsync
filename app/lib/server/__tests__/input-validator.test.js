@@ -8,9 +8,14 @@ import {
   validateSafeString,
   validateCredentialId,
   validateVendorCode,
+  validateInstitutionId,
   validateUsername,
   validatePassword,
+  validateIdNumber,
   validateCard6Digits,
+  validateIdentificationCode,
+  validateNickname,
+  validateBankAccountNumber,
   validateCredentialCreation,
   validateCredentialUpdate,
 } from '../input-validator.js';
@@ -386,6 +391,149 @@ describe('Input Validator', () => {
       expect(validateUsername(longString).valid).toBe(false);
       expect(validatePassword('a'.repeat(501)).valid).toBe(false);
       expect(validateVendorCode('a'.repeat(101)).valid).toBe(false);
+    });
+  });
+
+  describe('Institution ID Validation', () => {
+    test('allows null when not required (default)', () => {
+      expect(validateInstitutionId(null)).toEqual({ valid: true, value: null });
+      expect(validateInstitutionId(undefined)).toEqual({ valid: true, value: null });
+      expect(validateInstitutionId('')).toEqual({ valid: true, value: null });
+    });
+
+    test('rejects null when required', () => {
+      expect(validateInstitutionId(null, { required: true }).valid).toBe(false);
+      expect(validateInstitutionId(null, { required: true }).error).toContain('Institution ID');
+    });
+
+    test('rejects non-positive integers', () => {
+      expect(validateInstitutionId(-5).valid).toBe(false);
+      expect(validateInstitutionId(0).valid).toBe(false);
+      expect(validateInstitutionId(1.5).valid).toBe(false);
+    });
+
+    test('accepts valid positive integers', () => {
+      expect(validateInstitutionId(10)).toEqual({ valid: true, value: 10 });
+      expect(validateInstitutionId('42')).toEqual({ valid: true, value: 42 });
+    });
+  });
+
+  describe('ID Number Validation', () => {
+    test('allows empty by default', () => {
+      expect(validateIdNumber(null)).toEqual({ valid: true, value: null });
+      expect(validateIdNumber(undefined)).toEqual({ valid: true, value: null });
+    });
+
+    test('rejects when allowEmpty is false', () => {
+      expect(validateIdNumber(null, { allowEmpty: false }).valid).toBe(false);
+    });
+
+    test('accepts valid ID number strings', () => {
+      expect(validateIdNumber('123456789')).toEqual({ valid: true, value: '123456789' });
+    });
+
+    test('enforces maxLength of 50', () => {
+      expect(validateIdNumber('a'.repeat(51)).valid).toBe(false);
+    });
+  });
+
+  describe('Identification Code Validation', () => {
+    test('allows empty by default', () => {
+      expect(validateIdentificationCode(null)).toEqual({ valid: true, value: null });
+    });
+
+    test('accepts valid code', () => {
+      expect(validateIdentificationCode('ABC123')).toEqual({ valid: true, value: 'ABC123' });
+    });
+
+    test('enforces maxLength of 255', () => {
+      expect(validateIdentificationCode('a'.repeat(256)).valid).toBe(false);
+    });
+  });
+
+  describe('Nickname Validation', () => {
+    test('allows empty by default', () => {
+      expect(validateNickname(null)).toEqual({ valid: true, value: null });
+    });
+
+    test('accepts valid nickname', () => {
+      expect(validateNickname('My Card')).toEqual({ valid: true, value: 'My Card' });
+    });
+
+    test('enforces maxLength of 100', () => {
+      expect(validateNickname('a'.repeat(101)).valid).toBe(false);
+    });
+  });
+
+  describe('Bank Account Number Validation', () => {
+    test('allows empty by default', () => {
+      expect(validateBankAccountNumber(null)).toEqual({ valid: true, value: null });
+    });
+
+    test('accepts valid account number', () => {
+      expect(validateBankAccountNumber('9876543')).toEqual({ valid: true, value: '9876543' });
+    });
+
+    test('enforces maxLength of 50', () => {
+      expect(validateBankAccountNumber('a'.repeat(51)).valid).toBe(false);
+    });
+  });
+
+  describe('Credential Update - extra edge cases', () => {
+    test('validates id_number field in update', () => {
+      const result = validateCredentialUpdate({ id: 1, id_number: '123456789' });
+      expect(result.valid).toBe(true);
+      expect(result.data.id_number).toBe('123456789');
+    });
+
+    test('validates bank_account_number field in update', () => {
+      const result = validateCredentialUpdate({ id: 1, bank_account_number: '555' });
+      expect(result.valid).toBe(true);
+      expect(result.data.bank_account_number).toBe('555');
+    });
+
+    test('validates card6_digits in update', () => {
+      const result = validateCredentialUpdate({ id: 1, card6_digits: '654321' });
+      expect(result.valid).toBe(true);
+      expect(result.data.card6_digits).toBe('654321');
+    });
+
+    test('validates identification_code in update', () => {
+      const result = validateCredentialUpdate({ id: 1, identification_code: 'CODE' });
+      expect(result.valid).toBe(true);
+      expect(result.data.identification_code).toBe('CODE');
+    });
+
+    test('validates num alias for identification_code in update', () => {
+      const result = validateCredentialUpdate({ id: 1, num: '99' });
+      expect(result.valid).toBe(true);
+      expect(result.data.identification_code).toBe('99');
+    });
+  });
+
+  describe('Credential Creation - identification fields', () => {
+    test('accepts nationalID as identification alias', () => {
+      const result = validateCredentialCreation({ vendor: 'hapoalim', nationalID: 'NATID123' });
+      expect(result.valid).toBe(true);
+      expect(result.data.identification_code).toBe('NATID123');
+    });
+
+    test('accepts email as username alias', () => {
+      const result = validateCredentialCreation({ vendor: 'hapoalim', email: 'a@b.com' });
+      expect(result.valid).toBe(true);
+      expect(result.data.username).toBe('a@b.com');
+    });
+
+    test('validates id_number in creation', () => {
+      const result = validateCredentialCreation({ vendor: 'hapoalim', id_number: '999' });
+      expect(result.valid).toBe(true);
+      expect(result.data.id_number).toBe('999');
+    });
+
+    test('validates bank_account_number in creation', () => {
+      const result = validateCredentialCreation({ vendor: 'hapoalim', bank_account_number: '4444' });
+      expect(result.valid).toBe(true);
+      expect(result.data.bank_account_number).toBe('4444');
     });
   });
 

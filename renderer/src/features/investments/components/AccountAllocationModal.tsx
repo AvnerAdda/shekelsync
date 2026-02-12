@@ -124,7 +124,7 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
           pb: 2,
         }}
       >
-        <Typography variant="h6" fontWeight={600}>
+        <Typography variant="h6" component="span" fontWeight={600}>
           {t('title', 'Portfolio Allocation')}
         </Typography>
         <IconButton onClick={onClose} size="small">

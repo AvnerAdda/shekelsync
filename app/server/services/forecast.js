@@ -5,6 +5,7 @@
 
 const path = require('path');
 const Database = require('better-sqlite3');
+let databaseCtor = Database;
 
 function parsePositiveInt(value, fallback) {
   const numberValue = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
@@ -25,7 +26,7 @@ function resolveForecastDbPath() {
 }
 
 function openForecastDb() {
-  const db = new Database(CONFIG.dbPath, { readonly: true });
+  const db = new databaseCtor(CONFIG.dbPath, { readonly: true });
   return db;
 }
 
@@ -1698,13 +1699,41 @@ async function getForecast(options = {}) {
 module.exports = {
   generateDailyForecast,
   getForecast,
+  __setDatabaseCtor(mockCtor) {
+    databaseCtor = mockCtor || Database;
+  },
+  __resetDatabaseCtor() {
+    databaseCtor = Database;
+  },
   _internal: {
+    analyzeCategoryPatterns,
     adjustProbabilitiesForCurrentMonth,
+    adjustMonthlyPatternForecasts,
+    buildBudgetOutlook,
+    buildChosenMonthlyOccurrenceDateByMonth,
+    buildPatternCaches,
     calculateDayProbability,
     formatDate,
+    generateForecastAcrossMonths,
+    forecastDay,
+    getAllTransactions,
+    getCurrentMonthTransactions,
+    getDayName,
     getDaysInMonth,
+    getProbabilityThreshold,
     isLastDayOfMonth,
+    loadCategoryDefinitions,
+    logPatternSummary,
+    mean,
+    openForecastDb,
     parseLocalDate,
+    parsePositiveInt,
+    resolveForecastDbPath,
     resolveForecastWindow,
+    runMonteCarloSimulation,
+    sampleAmount,
+    simulateScenario,
+    standardDeviation,
+    willOccur,
   },
 };

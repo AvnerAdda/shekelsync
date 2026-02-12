@@ -1,7 +1,14 @@
-const database = require('./database.js');
-const { encrypt, decrypt } = require('../../lib/server/encryption.js');
-const { buildInstitutionFromRow } = require('./institutions.js');
-const { toUTCISOString } = require('../../lib/server/time-utils.js');
+const actualDatabase = require('./database.js');
+const encryptionUtils = require('../../lib/server/encryption.js');
+const institutionsModule = require('./institutions.js');
+const timeUtils = require('../../lib/server/time-utils.js');
+
+let database = actualDatabase;
+let encryptRef = encryptionUtils.encrypt;
+let decryptRef = encryptionUtils.decrypt;
+let institutionsModuleRef = institutionsModule;
+let buildInstitutionFromRowRef = institutionsModule.buildInstitutionFromRow;
+let toUTCISOStringRef = timeUtils.toUTCISOString;
 
 function safeDecrypt(value) {
   if (!value) {
@@ -9,7 +16,7 @@ function safeDecrypt(value) {
   }
 
   try {
-    return decrypt(value);
+    return decryptRef(value);
   } catch (error) {
     // SECURITY: Never return raw encrypted values
     // If decryption fails, it means the key changed or data is corrupted
@@ -30,17 +37,17 @@ function mapCredentialRow(row) {
     identification_code: safeDecrypt(row.identification_code),
     nickname: row.nickname,
     bank_account_number: row.bank_account_number,
-    created_at: toUTCISOString(row.created_at),
+    created_at: toUTCISOStringRef(row.created_at),
     // Balance now comes from investment_holdings
     current_balance: row.current_balance !== undefined ? row.current_balance : (row.holding_balance || null),
-    balance_updated_at: toUTCISOString(row.balance_updated_at || row.holding_as_of_date),
-    lastUpdate: toUTCISOString(row.lastscrapesuccess || row.lastupdate || row.last_scrape_success),
+    balance_updated_at: toUTCISOStringRef(row.balance_updated_at || row.holding_as_of_date),
+    lastUpdate: toUTCISOStringRef(row.lastscrapesuccess || row.lastupdate || row.last_scrape_success),
     lastScrapeStatus: row.lastscrapestatus || row.last_scrape_status,
-    last_scrape_attempt: toUTCISOString(row.last_scrape_attempt),
+    last_scrape_attempt: toUTCISOStringRef(row.last_scrape_attempt),
   };
 
   // Add institution object if available
-  const institution = buildInstitutionFromRow(row);
+  const institution = buildInstitutionFromRowRef(row);
   if (institution) {
     credential.institution = institution;
   }
@@ -50,7 +57,7 @@ function mapCredentialRow(row) {
 
 async function listCredentials(params = {}) {
   const { vendor } = params;
-  const { INSTITUTION_JOIN_VENDOR_CRED, INSTITUTION_SELECT_FIELDS } = require('./institutions.js');
+  const { INSTITUTION_JOIN_VENDOR_CRED, INSTITUTION_SELECT_FIELDS } = institutionsModuleRef;
 
   let sql;
   let sqlParams = [];
@@ -145,13 +152,13 @@ function buildEncryptedPayload(payload = {}) {
 
   return {
     vendor,
-    username: usernameValue ? encrypt(usernameValue) : null,
-    password: password ? encrypt(password) : null,
-    id_number: id_number ? encrypt(id_number) : null,
+    username: usernameValue ? encryptRef(usernameValue) : null,
+    password: password ? encryptRef(password) : null,
+    id_number: id_number ? encryptRef(id_number) : null,
     card6_digits: card6_digits || null,
     nickname: nickname || null,
     bank_account_number: bank_account_number || null,
-    identification_code: identificationValue ? encrypt(identificationValue) : null,
+    identification_code: identificationValue ? encryptRef(identificationValue) : null,
   };
 }
 
@@ -184,18 +191,18 @@ async function updateCredential(payload = {}) {
 
   if (hasOwn('password')) {
     const value = normalizeCredentialField(payload.password);
-    updates.password = value ? encrypt(value) : null;
+    updates.password = value ? encryptRef(value) : null;
   }
 
   const hasUsernameInputs = hasOwn('username') || hasOwn('userCode') || hasOwn('email');
   if (hasUsernameInputs) {
     const usernameValue = normalizeCredentialField(payload.userCode ?? payload.email ?? payload.username);
-    updates.username = usernameValue ? encrypt(usernameValue) : null;
+    updates.username = usernameValue ? encryptRef(usernameValue) : null;
   }
 
   if (hasOwn('id_number') || hasOwn('id')) {
     const idValue = normalizeCredentialField(payload.id_number ?? payload.id);
-    updates.id_number = idValue ? encrypt(idValue) : null;
+    updates.id_number = idValue ? encryptRef(idValue) : null;
   }
 
   if (hasOwn('card6_digits') || hasOwn('card6Digits')) {
@@ -214,7 +221,7 @@ async function updateCredential(payload = {}) {
     const identificationValue = normalizeCredentialField(
       payload.num ?? payload.nationalID ?? payload.identification_code ?? payload.otpToken,
     );
-    updates.identification_code = identificationValue ? encrypt(identificationValue) : null;
+    updates.identification_code = identificationValue ? encryptRef(identificationValue) : null;
   }
 
   if (hasOwn('nickname')) {
@@ -254,7 +261,7 @@ async function updateCredential(payload = {}) {
     throw error;
   }
 
-  const { INSTITUTION_JOIN_VENDOR_CRED, INSTITUTION_SELECT_FIELDS } = require('./institutions.js');
+  const { INSTITUTION_JOIN_VENDOR_CRED, INSTITUTION_SELECT_FIELDS } = institutionsModuleRef;
   const credentialResult = await database.query(
     `
       SELECT vc.*, ${INSTITUTION_SELECT_FIELDS}
@@ -288,15 +295,13 @@ async function createCredential(payload = {}) {
   let institutionId = payload.institution_id;
 
   if (institutionId && !vendor) {
-    const { getInstitutionById } = require('./institutions.js');
-    const institution = await getInstitutionById(database, institutionId);
+    const institution = await institutionsModuleRef.getInstitutionById(database, institutionId);
     if (institution) {
       vendor = institution.vendor_code;
     }
   } else if (vendor && !institutionId) {
     // If vendor provided but no institution_id, lookup institution
-    const { mapVendorCodeToInstitutionId } = require('./institutions.js');
-    institutionId = await mapVendorCodeToInstitutionId(database, vendor);
+    institutionId = await institutionsModuleRef.mapVendorCodeToInstitutionId(database, vendor);
   }
 
   if (!institutionId) {
@@ -305,7 +310,7 @@ async function createCredential(payload = {}) {
     throw error;
   }
 
-  const { INSTITUTION_JOIN_VENDOR_CRED, INSTITUTION_SELECT_FIELDS } = require('./institutions.js');
+  const { INSTITUTION_JOIN_VENDOR_CRED, INSTITUTION_SELECT_FIELDS } = institutionsModuleRef;
 
   const result = await database.query(
     `
@@ -419,5 +424,35 @@ module.exports = {
   createCredential,
   updateCredential,
   deleteCredential,
+  __setDatabase(mockDatabase) {
+    database = mockDatabase || actualDatabase;
+  },
+  __setEncryption(overrides = {}) {
+    if (typeof overrides.encrypt === 'function') {
+      encryptRef = overrides.encrypt;
+    }
+    if (typeof overrides.decrypt === 'function') {
+      decryptRef = overrides.decrypt;
+    }
+  },
+  __setInstitutionsModule(mockInstitutionsModule) {
+    institutionsModuleRef = mockInstitutionsModule || institutionsModule;
+    if (typeof institutionsModuleRef.buildInstitutionFromRow === 'function') {
+      buildInstitutionFromRowRef = institutionsModuleRef.buildInstitutionFromRow;
+    }
+  },
+  __setTimeUtils(overrides = {}) {
+    if (typeof overrides.toUTCISOString === 'function') {
+      toUTCISOStringRef = overrides.toUTCISOString;
+    }
+  },
+  __resetDependencies() {
+    database = actualDatabase;
+    encryptRef = encryptionUtils.encrypt;
+    decryptRef = encryptionUtils.decrypt;
+    institutionsModuleRef = institutionsModule;
+    buildInstitutionFromRowRef = institutionsModule.buildInstitutionFromRow;
+    toUTCISOStringRef = timeUtils.toUTCISOString;
+  },
 };
 module.exports.default = module.exports;

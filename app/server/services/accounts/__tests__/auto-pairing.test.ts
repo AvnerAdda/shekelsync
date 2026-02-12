@@ -4,13 +4,25 @@ const modulePromise = import('../auto-pairing.js');
 
 const queryMock = vi.fn();
 const getClientMock = vi.fn();
+const listPairingsMock = vi.fn();
+const createPairingMock = vi.fn();
+const updatePairingMock = vi.fn();
+const getCreditCardRepaymentCategoryConditionMock = vi.fn(() => "cd.name = 'Credit Card Repayment'");
+const getCreditCardRepaymentCategoryIdMock = vi.fn();
 const mockClient = {
   query: vi.fn(),
   release: vi.fn(),
 };
 
+vi.mock('../pairings.js', () => ({
+  listPairings: listPairingsMock,
+  createPairing: createPairingMock,
+  updatePairing: updatePairingMock,
+}));
+
 vi.mock('../repayment-category.js', () => ({
-  getCreditCardRepaymentCategoryCondition: vi.fn(() => "cd.name = 'Credit Card Repayment'"),
+  getCreditCardRepaymentCategoryCondition: getCreditCardRepaymentCategoryConditionMock,
+  getCreditCardRepaymentCategoryId: getCreditCardRepaymentCategoryIdMock,
 }));
 
 let autoPairingService: any;
@@ -23,22 +35,113 @@ beforeAll(async () => {
 beforeEach(() => {
   queryMock.mockReset();
   getClientMock.mockReset();
+  listPairingsMock.mockReset();
+  createPairingMock.mockReset();
+  updatePairingMock.mockReset();
+  getCreditCardRepaymentCategoryConditionMock.mockReset();
+  getCreditCardRepaymentCategoryIdMock.mockReset();
   mockClient.query.mockReset();
   mockClient.release.mockReset();
 
   getClientMock.mockResolvedValue(mockClient);
+  listPairingsMock.mockResolvedValue([]);
+  createPairingMock.mockResolvedValue({ pairingId: 101 });
+  updatePairingMock.mockResolvedValue({ success: true });
+  getCreditCardRepaymentCategoryConditionMock.mockReturnValue("cd.name = 'Credit Card Repayment'");
+  getCreditCardRepaymentCategoryIdMock.mockResolvedValue(55);
 
   autoPairingService.__setDatabase?.({
     query: queryMock,
     getClient: getClientMock,
   });
+  autoPairingService.__setDependencies?.({
+    pairingsService: {
+      listPairings: listPairingsMock,
+      createPairing: createPairingMock,
+      updatePairing: updatePairingMock,
+    },
+    repaymentCategory: {
+      getCreditCardRepaymentCategoryCondition: getCreditCardRepaymentCategoryConditionMock,
+      getCreditCardRepaymentCategoryId: getCreditCardRepaymentCategoryIdMock,
+    },
+  });
 });
 
 afterEach(() => {
   autoPairingService.__resetDatabase?.();
+  autoPairingService.__resetDependencies?.();
 });
 
 describe('auto-pairing service', () => {
+  describe('_internal helpers', () => {
+    it('extracts account suffixes, digit hints, vendor matches, and match patterns', () => {
+      const internal = autoPairingService._internal;
+
+      expect(internal.getAccountLast4('12345678')).toBe('5678');
+      expect(internal.getAccountLast4('  9876  ')).toBe('9876');
+      expect(internal.getAccountLast4('')).toBeNull();
+      expect(internal.getAccountLast4(null)).toBeNull();
+
+      expect(internal.extractDigitSequences('Repayment 123456789')).toEqual(
+        expect.arrayContaining(['123456789', '6789']),
+      );
+      expect(internal.extractDigitSequences('no digits')).toEqual([]);
+
+      expect(internal.nameContainsVendor('תשלום ישראכרט', 'isracard')).toBe(true);
+      expect(internal.detectCCVendorFromName('Monthly MAX charge')).toBe('max');
+      expect(internal.detectCCVendorFromName('unknown')).toBeNull();
+
+      expect(internal.buildMatchPatterns('isracard', '12345678')).toEqual(
+        expect.arrayContaining(['ישראכרט', 'isracard', '12345678', '5678']),
+      );
+    });
+
+    it('applies pairing transaction updates only when repayment category id is available', async () => {
+      const internal = autoPairingService._internal;
+
+      await expect(
+        internal.applyPairingToTransactions({
+          bankVendor: 'hapoalim',
+          matchPatterns: [],
+        }),
+      ).resolves.toEqual({ transactionsUpdated: 0 });
+
+      getCreditCardRepaymentCategoryIdMock.mockResolvedValueOnce(null);
+      await expect(
+        internal.applyPairingToTransactions({
+          pairingId: 1,
+          bankVendor: 'hapoalim',
+          bankAccountNumber: '9876',
+          matchPatterns: ['ישראכרט'],
+        }),
+      ).resolves.toEqual({ transactionsUpdated: 0 });
+
+      mockClient.query.mockImplementation(async (sql: string) => {
+        const normalized = String(sql);
+        if (normalized.includes('UPDATE transactions')) {
+          return { rowCount: 3, rows: [] };
+        }
+        if (normalized.includes('INSERT INTO account_pairing_log')) {
+          return { rowCount: 1, rows: [] };
+        }
+        return { rowCount: 0, rows: [] };
+      });
+
+      const result = await internal.applyPairingToTransactions({
+        pairingId: 9,
+        bankVendor: 'hapoalim',
+        bankAccountNumber: '9876',
+        matchPatterns: ['ישראכרט', '5678'],
+      });
+
+      expect(result.transactionsUpdated).toBe(3);
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO account_pairing_log'),
+        [9, 'applied', 3],
+      );
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+  });
 
   describe('findBestBankAccount', () => {
     it('finds matching bank account based on repayment transactions', async () => {
@@ -367,6 +470,70 @@ describe('auto-pairing service', () => {
       expect(mockClient.release).toHaveBeenCalled();
     });
 
+    it('uses allocated matching when multiple same-vendor cards share a bank account', async () => {
+      mockClient.query
+        // CC fees category
+        .mockResolvedValueOnce({ rows: [{ id: 5 }] })
+        // Earliest CC cycle
+        .mockResolvedValueOnce({ rows: [{ min_date: '2024-10-01' }] })
+        // Bank repayments for shared account/date
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'bank-1',
+              vendor: 'hapoalim',
+              name: 'ישראכרט חיוב חודשי',
+              price: -1000,
+              date: '2025-01-05',
+              repayment_date: '2025-01-05',
+              account_number: '9876',
+            },
+            {
+              identifier: 'bank-2',
+              vendor: 'hapoalim',
+              name: 'ישראכרט חיוב חודשי',
+              price: -500,
+              date: '2025-01-05',
+              repayment_date: '2025-01-05',
+              account_number: '9876',
+            },
+          ],
+        })
+        // Active pairings for same bank/vendor with 2 different CC accounts
+        .mockResolvedValueOnce({
+          rows: [
+            { credit_card_account_number: '5678' },
+            { credit_card_account_number: '9999' },
+          ],
+        })
+        // CC totals by account/date (used by allocation)
+        .mockResolvedValueOnce({
+          rows: [
+            { account_number: '5678', cycle_date: '2025-01-05', total: 1000 },
+            { account_number: '9999', cycle_date: '2025-01-05', total: 500 },
+          ],
+        })
+        // Per-cycle CC comparison for target account
+        .mockResolvedValueOnce({
+          rows: [
+            { account_number: '5678', total: 1000, txn_count: 2 },
+          ],
+        });
+
+      const result = await autoPairingService.calculateDiscrepancy({
+        bankVendor: 'hapoalim',
+        bankAccountNumber: '9876',
+        ccVendor: 'isracard',
+        ccAccountNumber: '5678',
+        monthsBack: 3,
+      });
+
+      expect(result).toBeDefined();
+      expect(result.method).toBe('allocated');
+      expect(result.totalCycles).toBeGreaterThan(0);
+      expect(result.matchedCycleCount).toBeGreaterThanOrEqual(1);
+    });
+
     it('includes acknowledged flag from pairing', async () => {
       mockClient.query
         // Acknowledged check
@@ -491,6 +658,88 @@ describe('auto-pairing service', () => {
       expect(result.success).toBe(false);
       expect(result.reason).toBeDefined();
       expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it('creates a new pairing when a bank match is found and no existing pairing exists', async () => {
+      mockClient.query
+        // findBestBankAccount query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'tx-1',
+              vendor: 'hapoalim',
+              account_number: '9876',
+              name: 'ישראכרט 5678',
+              price: -1200,
+              date: '2025-01-02',
+            },
+          ],
+        })
+        // discrepancy: cc fees category
+        .mockResolvedValueOnce({ rows: [] })
+        // discrepancy: earliest cycle
+        .mockResolvedValueOnce({ rows: [] })
+        // discrepancy: bank repayments
+        .mockResolvedValueOnce({ rows: [] })
+        // discrepancy: account_pairings lookup for shared allocation
+        .mockResolvedValueOnce({ rows: [] });
+
+      const result = await autoPairingService.autoPairCreditCard({
+        creditCardVendor: 'isracard',
+        creditCardAccountNumber: '12345678',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.wasCreated).toBe(true);
+      expect(result.pairing.id).toBe(101);
+      expect(createPairingMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('reactivates an existing inactive pairing instead of creating a new one', async () => {
+      listPairingsMock.mockResolvedValueOnce([
+        {
+          id: 77,
+          creditCardVendor: 'isracard',
+          creditCardAccountNumber: '12345678',
+          bankVendor: 'hapoalim',
+          bankAccountNumber: '9876',
+          isActive: false,
+        },
+      ]);
+
+      mockClient.query
+        // findBestBankAccount query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'tx-1',
+              vendor: 'hapoalim',
+              account_number: '9876',
+              name: 'ישראכרט 5678',
+              price: -1200,
+              date: '2025-01-02',
+            },
+          ],
+        })
+        // discrepancy: cc fees category
+        .mockResolvedValueOnce({ rows: [] })
+        // discrepancy: earliest cycle
+        .mockResolvedValueOnce({ rows: [] })
+        // discrepancy: bank repayments
+        .mockResolvedValueOnce({ rows: [] })
+        // discrepancy: account_pairings lookup for shared allocation
+        .mockResolvedValueOnce({ rows: [] });
+
+      const result = await autoPairingService.autoPairCreditCard({
+        creditCardVendor: 'isracard',
+        creditCardAccountNumber: '12345678',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.wasCreated).toBe(false);
+      expect(result.pairing.id).toBe(77);
+      expect(updatePairingMock).toHaveBeenCalledTimes(1);
+      expect(createPairingMock).not.toHaveBeenCalled();
     });
 
     it('releases client on error', async () => {

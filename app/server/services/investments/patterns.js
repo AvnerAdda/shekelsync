@@ -1,9 +1,11 @@
-const database = require('../database.js');
+const actualDatabase = require('../database.js');
 const {
   INSTITUTION_SELECT_FIELDS,
   buildInstitutionFromRow,
   getInstitutionByVendorCode,
 } = require('../institutions.js');
+
+let database = actualDatabase;
 
 async function listPatterns({ account_id } = {}) {
   let query = `
@@ -124,5 +126,11 @@ module.exports = {
   listPatterns,
   createPattern,
   removePattern,
+  __setDatabase(mockDatabase) {
+    database = mockDatabase || actualDatabase;
+  },
+  __resetDatabase() {
+    database = actualDatabase;
+  },
 };
 module.exports.default = module.exports;

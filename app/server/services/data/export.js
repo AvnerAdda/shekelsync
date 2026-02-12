@@ -1,5 +1,10 @@
 const database = require('../database.js');
-const { resolveDateRange, standardizeResponse, standardizeError } = require('../../../lib/server/query-utils.js');
+const queryUtils = require('../../../lib/server/query-utils.js');
+
+let databaseRef = database;
+let resolveDateRangeRef = queryUtils.resolveDateRange;
+let standardizeResponseRef = queryUtils.standardizeResponse;
+let standardizeErrorRef = queryUtils.standardizeError;
 
 const VALID_FORMATS = new Set(['csv', 'json']);
 const VALID_DATA_TYPES = new Set(['transactions', 'categories', 'vendors', 'budgets', 'full']);
@@ -162,7 +167,7 @@ async function resolveCategoryFilters(categoryValues = []) {
     return { clause: '', params: [] };
   }
 
-  const { rows: categoryRows } = await database.query(
+  const { rows: categoryRows } = await databaseRef.query(
     `
           WITH provided AS (
             SELECT LOWER(TRIM(identifier)) AS identifier
@@ -227,20 +232,20 @@ async function exportData(params = {}) {
   } = params;
 
   if (!VALID_FORMATS.has(format)) {
-    throw standardizeError(
+    throw standardizeErrorRef(
       `Invalid format. Expected one of ${Array.from(VALID_FORMATS).join(', ')}`,
       'INVALID_FORMAT',
     );
   }
 
   if (!VALID_DATA_TYPES.has(dataType)) {
-    throw standardizeError(
+    throw standardizeErrorRef(
       `Invalid data type. Expected one of ${Array.from(VALID_DATA_TYPES).join(', ')}`,
       'INVALID_DATA_TYPE',
     );
   }
 
-  const { start, end } = resolveDateRange({ startDate, endDate, months });
+  const { start, end } = resolveDateRangeRef({ startDate, endDate, months });
 
   const categoryValues = categories
     ? (Array.isArray(categories) ? categories : String(categories).split(','))
@@ -288,7 +293,7 @@ async function exportData(params = {}) {
   const exportData = {};
 
   if (dataType === 'transactions' || dataType === 'full') {
-    const transactionsResult = await database.query(
+    const transactionsResult = await databaseRef.query(
       `
           SELECT
             t.date,
@@ -336,7 +341,7 @@ async function exportData(params = {}) {
   }
 
   if (dataType === 'categories' || dataType === 'full') {
-    const categoriesResult = await database.query(
+    const categoriesResult = await databaseRef.query(
       `
           SELECT
             COALESCE(parent.id, cd.id) AS category_definition_id,
@@ -370,7 +375,7 @@ async function exportData(params = {}) {
   }
 
   if (dataType === 'vendors' || dataType === 'full') {
-    const vendorsResult = await database.query(
+    const vendorsResult = await databaseRef.query(
       `
           SELECT
             t.vendor,
@@ -408,7 +413,7 @@ async function exportData(params = {}) {
   }
 
   if (dataType === 'budgets' || dataType === 'full') {
-    const budgetsResult = await database.query(
+    const budgetsResult = await databaseRef.query(
       `
         SELECT
           cb.category_definition_id,
@@ -473,7 +478,7 @@ async function exportData(params = {}) {
     };
   }
 
-  const response = standardizeResponse(
+  const response = standardizeResponseRef(
     {
       ...exportData,
       exportInfo: {
@@ -513,5 +518,29 @@ async function exportData(params = {}) {
 
 module.exports = {
   exportData,
+  __setDatabase: (mockDatabase) => {
+    databaseRef = mockDatabase || database;
+  },
+  __setQueryUtils: ({
+    resolveDateRange: resolveDateRangeOverride,
+    standardizeResponse: standardizeResponseOverride,
+    standardizeError: standardizeErrorOverride,
+  } = {}) => {
+    if (typeof resolveDateRangeOverride === 'function') {
+      resolveDateRangeRef = resolveDateRangeOverride;
+    }
+    if (typeof standardizeResponseOverride === 'function') {
+      standardizeResponseRef = standardizeResponseOverride;
+    }
+    if (typeof standardizeErrorOverride === 'function') {
+      standardizeErrorRef = standardizeErrorOverride;
+    }
+  },
+  __resetDependencies: () => {
+    databaseRef = database;
+    resolveDateRangeRef = queryUtils.resolveDateRange;
+    standardizeResponseRef = queryUtils.standardizeResponse;
+    standardizeErrorRef = queryUtils.standardizeError;
+  },
 };
 module.exports.default = module.exports;

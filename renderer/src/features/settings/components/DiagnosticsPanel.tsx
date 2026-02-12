@@ -88,12 +88,12 @@ const METRIC_LABELS: Record<string, string> = {
   categoryOpportunities: 'metrics.categoryOpportunities',
 };
 
-function formatMetricKey(key: string) {
+export function formatMetricKey(key: string) {
   const spaced = key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-function formatTimestamp(value?: string) {
+export function formatTimestamp(value?: string) {
   if (!value) {
     return null;
   }

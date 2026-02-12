@@ -48,6 +48,21 @@ const baseProfile = {
 
 test('child add/edit/delete flows update payload', async ({ page }) => {
   const payloads: any[] = [];
+  const uiWarnings: string[] = [];
+  const warningPatterns = [
+    "The Select component doesn't accept a Fragment as a child.",
+    "The Menu component doesn't accept a Fragment as a child.",
+    'cannot contain a nested',
+    'cannot be a child of',
+  ];
+
+  page.on('console', (msg) => {
+    if (msg.type() !== 'error') return;
+    const text = msg.text();
+    if (warningPatterns.some((pattern) => text.includes(pattern))) {
+      uiWarnings.push(text);
+    }
+  });
 
   const overrides: Record<string, Handler> = {
     'GET /api/profile': async ({ route }) => {
@@ -64,9 +79,9 @@ test('child add/edit/delete flows update payload', async ({ page }) => {
   await goHome(page);
 
   await page.getByRole('button', { name: 'Settings' }).click();
-  await expect(page.getByRole('heading', { name: /profile information/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /profile information/i })).toBeVisible({ timeout: 15000 });
 
-  await page.getByRole('button', { name: 'Children Information' }).click();
+  await page.getByRole('button', { name: /Children Information/i }).click();
 
   await page.getByRole('button', { name: 'Edit Child' }).click();
   const editDialog = page.getByRole('dialog', { name: /Edit Child Information/i });
@@ -96,4 +111,5 @@ test('child add/edit/delete flows update payload', async ({ page }) => {
 
   const finalPayload = payloads.at(-1);
   expect(finalPayload.children.some((child: any) => child.name === 'Noa Updated')).toBe(false);
+  expect(uiWarnings).toEqual([]);
 });

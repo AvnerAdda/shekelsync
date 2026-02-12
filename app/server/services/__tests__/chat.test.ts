@@ -57,6 +57,8 @@ vi.mock('../chat/conversation-store.js', () => ({
   getMessagesForAPI: vi.fn().mockResolvedValue([]),
   generateTitle: vi.fn().mockReturnValue('Test Conversation'),
   updateTitle: vi.fn().mockResolvedValue({}),
+  listConversations: vi.fn().mockResolvedValue([]),
+  deleteConversation: vi.fn().mockResolvedValue(true),
 }));
 
 // Mock financial context
@@ -84,7 +86,8 @@ vi.mock('../chat/data-anonymizer.js', () => ({
 // Mock code sandbox
 vi.mock('../chat/code-sandbox.js', () => ({
   createSandbox: vi.fn().mockReturnValue({
-    execute: vi.fn(),
+    executeSQL: vi.fn().mockResolvedValue({ success: true, data: [], rowCount: 0 }),
+    executeCode: vi.fn().mockResolvedValue({ success: true, result: {} }),
     dispose: vi.fn(),
   }),
   validateSQL: vi.fn().mockReturnValue({ isValid: true }),
@@ -266,6 +269,37 @@ describe('chat service', () => {
       });
     });
 
+    it('throws 503 when OpenAI client is not configured', async () => {
+      mockOpenAI.isConfigured.mockReturnValueOnce(false);
+      await expect(
+        chatService.processMessage({ message: 'Hello' })
+      ).rejects.toMatchObject({
+        status: 503,
+        message: 'AI service not configured',
+        details: 'OpenAI API key is missing',
+      });
+      expect(getClientMock).not.toHaveBeenCalled();
+    });
+
+    it('throws 404 when a requested conversation is missing', async () => {
+      setupDefaultMocks();
+      mockClient.query.mockImplementation((sql: string) => {
+        const sqlLower = sql.toLowerCase();
+        if (sqlLower.includes('from chat_conversations') && sqlLower.includes('external_id = $1')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      await expect(
+        chatService.processMessage({ message: 'Hello', conversationId: 'missing-conv' })
+      ).rejects.toMatchObject({
+        status: 404,
+        message: 'Conversation not found',
+      });
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
     it('handles Hebrew monthly spending question', async () => {
       setupDefaultMocks();
 
@@ -422,6 +456,148 @@ describe('chat service', () => {
         status: 500,
         message: 'Failed to process chat message',
       });
+    });
+
+    it('processes SQL tool calls and returns final response with tool metadata', async () => {
+      setupDefaultMocks();
+      mockOpenAI.createCompletion
+        .mockResolvedValueOnce({
+          success: true,
+          message: {
+            content: null,
+            tool_calls: [
+              {
+                id: 'tool-1',
+                function: {
+                  name: 'execute_sql_query',
+                  arguments: JSON.stringify({ query: 'SELECT 1', explanation: 'quick check' }),
+                },
+              },
+            ],
+          },
+          finishReason: 'tool_calls',
+          usage: { total_tokens: 50 },
+          model: 'gpt-4o-mini',
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          message: { content: 'Done after tool call' },
+          finishReason: 'stop',
+          usage: { total_tokens: 80 },
+          model: 'gpt-4o-mini',
+        });
+
+      const result = await chatService.processMessage({
+        message: 'Run SQL tool',
+        permissions: { allowTransactionAccess: true },
+      });
+
+      expect(result.response).toBe('Done after tool call');
+      expect(result.metadata.tokensUsed).toBe(130);
+      expect(result.metadata.toolExecutions).toEqual([
+        expect.objectContaining({
+          tool: 'execute_sql_query',
+          explanation: 'quick check',
+          success: true,
+          rowCount: expect.any(Number),
+        }),
+      ]);
+    });
+  });
+
+  describe('conversation helpers', () => {
+    it('validates and fetches conversation history', async () => {
+      await expect(chatService.getConversationHistory('')).rejects.toMatchObject({
+        status: 400,
+        message: 'Conversation ID is required',
+      });
+
+      mockClient.query.mockResolvedValueOnce({ rows: [] });
+      await expect(chatService.getConversationHistory('missing')).rejects.toMatchObject({
+        status: 404,
+        message: 'Conversation not found',
+      });
+
+      mockClient.query.mockImplementation((sql: string) => {
+        const sqlLower = sql.toLowerCase();
+        if (sqlLower.includes('from chat_conversations')) {
+          return Promise.resolve({
+            rows: [{
+              id: 1,
+              external_id: 'conv-1',
+              title: 'Chat',
+              created_at: '2026-01-01',
+              updated_at: '2026-01-02',
+              last_message_at: '2026-01-02',
+              message_count: 1,
+              total_tokens_used: 10,
+              metadata: null,
+            }],
+          });
+        }
+        if (sqlLower.includes('from chat_messages')) {
+          return Promise.resolve({
+            rows: [{
+              role: 'user',
+              content: 'hi',
+              tool_calls: null,
+              tool_call_id: null,
+            }],
+          });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+
+      await expect(chatService.getConversationHistory('conv-1')).resolves.toMatchObject({
+        externalId: 'conv-1',
+        messages: [{ role: 'user', content: 'hi' }],
+      });
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it('lists and deletes conversations through conversation-store helpers', async () => {
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{
+          id: 1,
+          external_id: 'conv-1',
+          title: 'Chat',
+          created_at: '2026-01-01',
+          updated_at: '2026-01-02',
+          last_message_at: '2026-01-02',
+          message_count: 3,
+          total_tokens_used: 30,
+          is_archived: 0,
+        }],
+      });
+      await expect(chatService.listConversations({ includeArchived: true })).resolves.toEqual([
+        expect.objectContaining({ externalId: 'conv-1', isArchived: false }),
+      ]);
+
+      await expect(chatService.deleteConversation('')).rejects.toMatchObject({
+        status: 400,
+        message: 'Conversation ID is required',
+      });
+
+      mockClient.query.mockResolvedValueOnce({ rows: [] });
+      await expect(chatService.deleteConversation('missing')).rejects.toMatchObject({
+        status: 404,
+        message: 'Conversation not found',
+      });
+
+      mockClient.query.mockImplementation(async (sql: string) => {
+        const sqlLower = sql.toLowerCase();
+        if (sqlLower.includes('select id from chat_conversations')) {
+          return { rows: [{ id: 1 }] };
+        }
+        if (sqlLower.includes('delete from chat_messages')) {
+          return { rows: [], changes: 1 };
+        }
+        if (sqlLower.includes('delete from chat_conversations')) {
+          return { rows: [], changes: 1 };
+        }
+        return { rows: [] };
+      });
+      await expect(chatService.deleteConversation('conv-1')).resolves.toBe(true);
     });
   });
 });

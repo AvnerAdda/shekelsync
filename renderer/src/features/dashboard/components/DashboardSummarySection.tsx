@@ -7,6 +7,11 @@ import { format, subMonths } from 'date-fns';
 import SummaryCards from './SummaryCards';
 import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
+import {
+  buildDashboardTopCategories,
+  getDashboardCategoryCount,
+  hasDashboardSummaryActivity,
+} from './dashboard-summary-helpers';
 
 interface DashboardSummarySectionProps {
   data: any;
@@ -34,11 +39,7 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
   const { startDate, endDate } = useDashboardFilters();
   const { t } = useTranslation('translation', { keyPrefix: 'dashboard.summarySection' });
   const theme = useTheme();
-  const hasAnyTransactions =
-    (data?.summary?.totalIncome ?? 0) !== 0 ||
-    (data?.summary?.totalExpenses ?? 0) !== 0 ||
-    (data?.summary?.netInvestments ?? 0) !== 0 ||
-    (data?.summary?.totalCapitalReturns ?? 0) !== 0;
+  const hasAnyTransactions = hasDashboardSummaryActivity(data?.summary);
 
   return (
     <>
@@ -62,21 +63,12 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
           }))}
           budgetUsage={budgetUsage}
           monthlyAverage={undefined}
-          topCategories={
-            breakdownData['expense'] && Array.isArray(breakdownData['expense']?.breakdowns)
-              ? breakdownData['expense'].breakdowns.slice(0, 3).map((cat: any) => ({
-                  name: cat.name,
-                  amount: cat.value,
-                }))
-              : data.summary.totalExpenses > 0
-              ? [{ name: t('fallbackCategory'), amount: data.summary.totalExpenses }]
-              : []
-          }
-          categoryCount={
-            breakdownData['expense'] && Array.isArray(breakdownData['expense']?.breakdowns)
-              ? breakdownData['expense'].breakdowns.length
-              : 0
-          }
+          topCategories={buildDashboardTopCategories(
+            breakdownData,
+            data.summary.totalExpenses,
+            t('fallbackCategory'),
+          )}
+          categoryCount={getDashboardCategoryCount(breakdownData)}
         />
       </Box>
 

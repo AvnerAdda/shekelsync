@@ -19,6 +19,12 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CategoryIcon from './CategoryIcon';
 import { CategoryType, DrillLevel, FormatCurrencyFn, OverviewDataItem } from '../types';
 import { getBreakdownStrings } from '../strings';
+import {
+  buildOverviewLeafParams,
+  computeOverviewDelta,
+  formatOverviewPieLabel,
+  resolveOverviewHeaderTitle,
+} from './overview-helpers';
 
 interface OverviewViewProps {
   data: OverviewDataItem[];
@@ -59,45 +65,10 @@ const OverviewView: React.FC<OverviewViewProps> = ({
   const strings = getBreakdownStrings();
   const generalStrings = strings.general;
   const timelineStrings = strings.timeline;
-  const computeDelta = React.useCallback((current: number, previous?: number) => {
-    if (!previous || previous === 0) {
-      return null;
-    }
-    return ((current - previous) / previous) * 100;
-  }, []);
   const isSubcategoryLevel = currentLevel?.type === 'subcategory';
   const totalAmount = React.useMemo(() => data.reduce((sum, item) => sum + item.value, 0), [data]);
-  const getHeaderTitle = () => {
-    if (!currentLevel) {
-      return chartTitle;
-    }
-    if (currentLevel.type === 'parent') {
-      return parentTitle(currentLevel.parentName || '');
-    }
-    return subcategoryTitle(currentLevel.subcategoryName || '');
-  };
-
-  const headerTitle = getHeaderTitle();
-
-  const buildLeafParams = (id: number, name: string) => {
-    if (!currentLevel) {
-      return { parentId: id, categoryName: name };
-    }
-
-    if (currentLevel.type === 'parent') {
-      return { subcategoryId: id, categoryName: name };
-    }
-
-    return { categoryName: name };
-  };
-
-  const renderPieLabel = ({ value }: PieLabelRenderProps) => {
-    if (!totalAmount || typeof value !== 'number') {
-      return '0%';
-    }
-    const percent = ((value / totalAmount) * 100).toFixed(0);
-    return `${percent}%`;
-  };
+  const headerTitle = resolveOverviewHeaderTitle(currentLevel, chartTitle, parentTitle, subcategoryTitle);
+  const renderPieLabel = ({ value }: PieLabelRenderProps) => formatOverviewPieLabel(value as number | undefined, totalAmount);
 
   return (
     <Fade in={!isZooming} timeout={300}>
@@ -140,7 +111,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                               onSubcategoryClick(entry.id, entry.name);
                             }
                           } else {
-                            onLeafClick(buildLeafParams(entry.id, entry.name));
+                            onLeafClick(buildOverviewLeafParams(currentLevel, entry.id, entry.name));
                           }
                         }}
                         style={{ cursor: !isSubcategoryLevel ? 'pointer' : 'default' }}
@@ -196,7 +167,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
           <Box sx={{ maxHeight: 400, overflowY: 'auto', pr: 1 }}>
             {data.map((item, index) => {
               const percentage = totalAmount ? ((item.value / totalAmount) * 100).toFixed(1) : '0.0';
-              const delta = computeDelta(item.value, item.previousValue);
+              const delta = computeOverviewDelta(item.value, item.previousValue);
               
               let counts;
               if (!currentLevel) {
@@ -240,7 +211,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                           onSubcategoryClick(item.id, item.name);
                         }
                       } else {
-                        onLeafClick(buildLeafParams(item.id, item.name));
+                        onLeafClick(buildOverviewLeafParams(currentLevel, item.id, item.name));
                       }
                     }}
                   >
@@ -327,7 +298,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                               size="small"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onLeafClick(buildLeafParams(item.id, item.name));
+                                onLeafClick(buildOverviewLeafParams(currentLevel, item.id, item.name));
                               }}
                               sx={{ color: 'action.active' }}
                             >

@@ -2,7 +2,7 @@ const database = require('./database.js');
 const { standardizeResponse, standardizeError } = require('../../lib/server/query-utils.js');
 const { STALE_SYNC_THRESHOLD_MS } = require('../../utils/constants.js');
 const { parseUTCDate } = require('../../lib/server/time-utils.js');
-const { generateDailyForecast } = require('./forecast.js');
+const forecastService = require('./forecast.js');
 const { BANK_CATEGORY_NAME } = require('../../lib/category-constants.js');
 const { dialect } = require('../../lib/sql-dialect.js');
 
@@ -792,7 +792,7 @@ async function getNotifications(query = {}) {
       type === NOTIFICATION_TYPES.BUDGET_PROJECTED
     ) {
       try {
-        const forecast = await generateDailyForecast();
+        const forecast = await forecastService.generateDailyForecast();
         const outlook = forecast?.budgetOutlook || [];
 
         outlook.forEach((item) => {

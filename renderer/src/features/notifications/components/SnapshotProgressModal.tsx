@@ -129,7 +129,9 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({
       transitionDuration={0}
     >
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="h6">{t('insights.snapshot.modal.title')}</Typography>
+        <Typography variant="h6" component="span" role="heading" aria-level={2}>
+          {t('insights.snapshot.modal.title')}
+        </Typography>
         <IconButton size="small" onClick={onClose} aria-label={t('common.close')}>
           <CloseIcon fontSize="small" />
         </IconButton>

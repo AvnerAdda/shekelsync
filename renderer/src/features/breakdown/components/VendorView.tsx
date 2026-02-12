@@ -11,17 +11,28 @@ interface VendorViewProps {
   vendorTrendLabel: (vendor: string) => string;
 }
 
+export const calculateVendorDelta = (current: number, previous?: number): number | null => {
+  if (!previous || previous === 0) {
+    return null;
+  }
+  return ((current - previous) / previous) * 100;
+};
+
+export const getVendorDeltaChipColor = (
+  categoryType: CategoryType,
+  delta: number,
+): 'error' | 'success' => {
+  const isPositive = delta >= 0;
+  if (categoryType === 'expense') {
+    return isPositive ? 'error' : 'success';
+  }
+  return isPositive ? 'success' : 'error';
+};
+
 const VendorView: React.FC<VendorViewProps> = ({ vendors, categoryType, formatCurrencyValue, vendorTrendLabel }) => {
   const theme = useTheme();
   const strings = getBreakdownStrings();
   const generalStrings = strings.general;
-
-  const calculateDelta = (current: number, previous?: number) => {
-    if (!previous || previous === 0) {
-      return null;
-    }
-    return ((current - previous) / previous) * 100;
-  };
 
   return (
     <Grid container spacing={2}>
@@ -48,19 +59,12 @@ const VendorView: React.FC<VendorViewProps> = ({ vendors, categoryType, formatCu
                   {vendor.vendor}
                 </Typography>
                 {(() => {
-                  const delta = calculateDelta(vendor.total, vendor.previousTotal);
+                  const delta = calculateVendorDelta(vendor.total, vendor.previousTotal);
                   if (delta === null) {
                     return null;
                   }
                   const isPositive = delta >= 0;
-                  let color: 'error' | 'success' | 'default' | 'primary' | 'secondary' | 'info' | 'warning';
-                  
-                  if (categoryType === 'expense') {
-                    color = isPositive ? 'error' : 'success';
-                  } else {
-                    color = isPositive ? 'success' : 'error';
-                  }
-                  
+                  const color = getVendorDeltaChipColor(categoryType, delta);
                   const formattedDelta = `${isPositive ? '+' : ''}${delta.toFixed(1)}%`;
                   return (
                     <Chip

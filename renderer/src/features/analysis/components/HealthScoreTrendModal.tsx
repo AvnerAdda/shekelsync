@@ -193,7 +193,7 @@ const HealthScoreTrendModal: React.FC<HealthScoreTrendModalProps> = ({ open, onC
       <DialogTitle sx={{ pr: 6 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
           <Box>
-            <Typography variant="h6" fontWeight="bold">
+            <Typography variant="h6" component="span" fontWeight="bold">
               {t('title')}
             </Typography>
             <Typography variant="body2" color="text.secondary">

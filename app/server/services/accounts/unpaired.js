@@ -3,6 +3,11 @@ const pairingsService = require('./pairings.js');
 const { getVendorCodesByTypes } = require('../institutions.js');
 const { getCreditCardRepaymentCategoryCondition } = require('./repayment-category.js');
 
+let databaseRef = database;
+let pairingsServiceRef = pairingsService;
+let vendorCodesByTypesResolverRef = getVendorCodesByTypes;
+let repaymentCategoryConditionResolverRef = getCreditCardRepaymentCategoryCondition;
+
 let cachedBankVendors = null;
 let bankVendorCacheTimestamp = 0;
 const VENDOR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -14,7 +19,7 @@ async function getBankVendors() {
   }
 
   try {
-    const vendors = await getVendorCodesByTypes(database, ['bank']);
+    const vendors = await vendorCodesByTypesResolverRef(databaseRef, ['bank']);
     if (vendors && vendors.length > 0) {
       cachedBankVendors = vendors;
       bankVendorCacheTimestamp = now;
@@ -70,7 +75,7 @@ async function fetchCandidateTransactions(client) {
     return [];
   }
 
-  const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
+  const repaymentCategoryCondition = repaymentCategoryConditionResolverRef('cd');
 
   // SQLite doesn't support ANY operator, so we build IN clause with placeholders
   const placeholders = bankVendors.map((_, i) => `$${i + 1}`).join(', ');
@@ -112,11 +117,11 @@ async function fetchCandidateTransactions(client) {
 
 async function getTrulyUnpairedTransactions(params = {}) {
   const includeDetails = params.include_details === 'true' || params.include_details === true;
-  const client = await database.getClient();
+  const client = await databaseRef.getClient();
 
   try {
     const [activePairings, transactions] = await Promise.all([
-      pairingsService.getActivePairings(client),
+      pairingsServiceRef.getActivePairings(client),
       fetchCandidateTransactions(client),
     ]);
 
@@ -161,6 +166,30 @@ async function getUnpairedTransactionCount() {
 module.exports = {
   getTrulyUnpairedTransactions,
   getUnpairedTransactionCount,
+  __setDatabase: (mockDatabase) => {
+    databaseRef = mockDatabase || database;
+  },
+  __setPairingsService: (service) => {
+    pairingsServiceRef = service || pairingsService;
+  },
+  __setVendorCodesResolver: (resolver) => {
+    if (typeof resolver === 'function') {
+      vendorCodesByTypesResolverRef = resolver;
+    }
+  },
+  __setRepaymentCategoryResolver: (resolver) => {
+    if (typeof resolver === 'function') {
+      repaymentCategoryConditionResolverRef = resolver;
+    }
+  },
+  __resetDependencies: () => {
+    databaseRef = database;
+    pairingsServiceRef = pairingsService;
+    vendorCodesByTypesResolverRef = getVendorCodesByTypes;
+    repaymentCategoryConditionResolverRef = getCreditCardRepaymentCategoryCondition;
+    cachedBankVendors = null;
+    bankVendorCacheTimestamp = 0;
+  },
 };
 
 module.exports.default = module.exports;

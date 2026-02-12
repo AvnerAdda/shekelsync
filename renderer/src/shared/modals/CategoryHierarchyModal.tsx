@@ -98,6 +98,13 @@ import { apiClient } from '@/lib/api-client';
 import CategoryIconComponent from '@renderer/features/breakdown/components/CategoryIcon';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '../components/LicenseReadOnlyAlert';
 import TransactionDetailModal, { TransactionForModal } from './TransactionDetailModal';
+import {
+  buildCategoryHierarchyTransactionKey,
+  formatCategoryHierarchyCurrency,
+  formatCategoryHierarchyDate,
+  resolveLocalizedCategoryName,
+  type LocalizedCategoryInfo,
+} from './category-hierarchy-helpers';
 
 interface CategoryDefinition {
   id: number;
@@ -189,17 +196,6 @@ interface CategoryHierarchyModalProps {
   onClose: () => void;
   onCategoriesUpdated?: () => void;
 }
-
-type LocalizedCategoryInfo = {
-  name?: string | null;
-  name_en?: string | null;
-  name_fr?: string | null;
-  name_he?: string | null;
-  category_name?: string | null;
-  category_name_en?: string | null;
-  category_name_fr?: string | null;
-  category_name_he?: string | null;
-};
 
 // Icon rendering is now handled by the CategoryIcon component which supports all Material-UI icons dynamically
 
@@ -318,34 +314,15 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [parentCategoryForCreation, setParentCategoryForCreation] = useState<CategoryDefinition | null>(null);
 
-  const getLocalizedCategoryName = useCallback((category?: LocalizedCategoryInfo | null) => {
-    if (!category) return '';
+  const getLocalizedCategoryName = useCallback(
+    (category?: LocalizedCategoryInfo | null) =>
+      resolveLocalizedCategoryName(category, locale),
+    [locale],
+  );
 
-    const heName = category.name || category.name_he || category.category_name || category.category_name_he || '';
-    const enName = category.name_en || category.category_name_en || '';
-    const frName = category.name_fr || category.category_name_fr || '';
-
-    if (locale === 'fr') return frName || enName || heName;
-    if (locale === 'en') return enName || frName || heName;
-    return heName || frName || enName;
-  }, [locale]);
-
-  const formatCurrency = (value: number) => {
-    const amount = Number.isFinite(value) ? Math.abs(value) : 0;
-    const formatted = amount.toLocaleString('en-US', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
-    return `${value < 0 ? '-' : ''}₪${formatted}`;
-  };
-
-  const formatDate = (value: string) => {
-    if (!value) {
-      return t('helpers.unknownDate');
-    }
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? t('helpers.unknownDate') : parsed.toLocaleDateString('en-IL');
-  };
+  const formatCurrency = formatCategoryHierarchyCurrency;
+  const formatDate = (value: string) =>
+    formatCategoryHierarchyDate(value, t('helpers.unknownDate'));
 
   const getCategoryIcon = (category: CategoryDefinition) => {
     return (
@@ -390,7 +367,8 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     return result;
   }, [categories]);
 
-  const getTransactionKey = (txn: UncategorizedTransaction) => `${txn.identifier}|${txn.vendor}`;
+  const getTransactionKey = (txn: UncategorizedTransaction) =>
+    buildCategoryHierarchyTransactionKey(txn);
 
   // Helper function to auto-detect type from category path
   const getTypeFromCategoryPath = useCallback((path: number[]): CategoryType => {

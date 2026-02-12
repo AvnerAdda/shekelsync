@@ -1,11 +1,17 @@
-const database = require('../database.js');
-const { getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
-const { getSubscriptionSummary } = require('./subscriptions.js');
+const actualDatabase = require('../database.js');
+const { getLocalizedCategoryName: localizeCategoryName } = require('../../../lib/server/locale-utils.js');
+const subscriptionsService = require('./subscriptions.js');
 const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
-const {
-  analyzeRecurringPatterns,
-  normalizePatternKey,
-} = require('./recurring-analyzer.js');
+const recurringAnalyzer = require('./recurring-analyzer.js');
+
+let database = actualDatabase;
+const defaultDependencies = {
+  getLocalizedCategoryName: localizeCategoryName,
+  getSubscriptionSummary: subscriptionsService.getSubscriptionSummary,
+  analyzeRecurringPatterns: recurringAnalyzer.analyzeRecurringPatterns,
+  normalizePatternKey: recurringAnalyzer.normalizePatternKey,
+};
+let dependencies = { ...defaultDependencies };
 
 // Frequency types with detection thresholds
 const FREQUENCY_TYPES = {
@@ -134,12 +140,12 @@ async function getBehavioralPatterns(locale = 'he', params = {}) {
   // Apply localization to transaction category names
   const localizedTransactions = transactions.map(txn => ({
     ...txn,
-    localizedCategory: getLocalizedCategoryName({
+    localizedCategory: dependencies.getLocalizedCategoryName({
       name: txn.category_name,
       name_en: txn.category_name_en,
       name_fr: txn.category_name_fr
     }, locale),
-    localizedParentCategory: getLocalizedCategoryName({
+    localizedParentCategory: dependencies.getLocalizedCategoryName({
       name: txn.parent_category,
       name_en: txn.parent_category_en,
       name_fr: txn.parent_category_fr
@@ -147,7 +153,7 @@ async function getBehavioralPatterns(locale = 'he', params = {}) {
   }));
 
   // Detect recurring patterns at transaction level
-  const { patterns: recurringPatternRows } = await analyzeRecurringPatterns({
+  const { patterns: recurringPatternRows } = await dependencies.analyzeRecurringPatterns({
     monthsBack: 3,
     minOccurrences: 2,
     minConsistency: 0.3,
@@ -206,12 +212,12 @@ async function getBehavioralPatterns(locale = 'he', params = {}) {
   }
 
   const recurringPatterns = recurringPatternRows.map((pattern) => {
-    const localizedCategory = getLocalizedCategoryName({
+    const localizedCategory = dependencies.getLocalizedCategoryName({
       name: pattern.category_name,
       name_en: pattern.category_name_en,
       name_fr: pattern.category_name_fr
     }, locale);
-    const localizedParent = getLocalizedCategoryName({
+    const localizedParent = dependencies.getLocalizedCategoryName({
       name: pattern.parent_category_name,
       name_en: pattern.parent_category_name_en,
       name_fr: pattern.parent_category_name_fr
@@ -253,7 +259,7 @@ async function getBehavioralPatterns(locale = 'he', params = {}) {
   let subscriptionCategoryCounts = null;
 
   try {
-    const summary = await getSubscriptionSummary({ locale });
+    const summary = await dependencies.getSubscriptionSummary({ locale });
     subscriptionCategoryCounts = new Map(
       (summary?.category_breakdown || [])
         .filter((entry) => entry?.name)
@@ -492,7 +498,7 @@ function calculateCategoryAverages(transactions, recurringPatterns) {
     const category = txn.localizedParentCategory || txn.localizedCategory || 'Uncategorized';
     const iconName = txn.parent_icon || txn.icon_name || null;
     const txnName = (txn.name || txn.vendor || '').trim();
-    const normalizedName = normalizePatternKey(txnName);
+    const normalizedName = dependencies.normalizePatternKey(txnName);
 
     if (!categoryData.has(category)) {
       categoryData.set(category, {
@@ -565,5 +571,35 @@ function getWeekNumber(date) {
 }
 
 module.exports = {
-  getBehavioralPatterns
+  getBehavioralPatterns,
+  _internal: {
+    FREQUENCY_TYPES,
+    normalizeCategoryKey,
+    detectFrequency,
+    calculateIntervalConsistency,
+    groupPatternsByFrequency,
+    detectCategoryPatterns,
+    detectSubcategoryPatterns,
+    calculateCategoryAverages,
+    getWeekNumber,
+  },
+  __setDependencies(mock = {}) {
+    if (mock.database) {
+      database = mock.database;
+    }
+    dependencies = {
+      ...dependencies,
+      ...(mock.getLocalizedCategoryName ? { getLocalizedCategoryName: mock.getLocalizedCategoryName } : {}),
+      ...(mock.getSubscriptionSummary ? { getSubscriptionSummary: mock.getSubscriptionSummary } : {}),
+      ...(mock.analyzeRecurringPatterns ? { analyzeRecurringPatterns: mock.analyzeRecurringPatterns } : {}),
+      ...(mock.normalizePatternKey ? { normalizePatternKey: mock.normalizePatternKey } : {}),
+    };
+  },
+  __resetDependencies() {
+    database = actualDatabase;
+    dependencies = { ...defaultDependencies };
+    behavioralCache.clear();
+  },
 };
+
+module.exports.default = module.exports;

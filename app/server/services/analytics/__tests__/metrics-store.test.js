@@ -67,4 +67,64 @@ describe('analytics metrics store', () => {
     expect(snapshot.dashboard.length).toBeLessThanOrEqual(50);
     expect(snapshot.dashboard[snapshot.dashboard.length - 1]).toMatchObject({ durationMs: 59 });
   });
+
+  it('swallows reporter failures while still recording the metric', () => {
+    metricsStore.setMetricReporter(() => {
+      throw new Error('telemetry sink unavailable');
+    });
+
+    expect(() => {
+      metricsStore.recordBreakdownMetric({ durationMs: 7, rowCounts: { current: 3 } });
+    }).not.toThrow();
+
+    const snapshot = metricsStore.getMetricsSnapshot();
+    expect(snapshot.breakdown).toHaveLength(1);
+    expect(snapshot.breakdown[0]).toMatchObject({
+      durationMs: 7,
+      rowCounts: { current: 3 },
+    });
+    expect(typeof snapshot.breakdown[0].recordedAt).toBe('string');
+  });
+
+  it('records all metric buckets and resetMetrics clears them', () => {
+    metricsStore.recordBreakdownMetric({ durationMs: 1 });
+    metricsStore.recordUnifiedCategoryMetric({ durationMs: 2, groupBy: 'category' });
+    metricsStore.recordWaterfallMetric({ durationMs: 3, months: 6 });
+    metricsStore.recordCategoryOpportunitiesMetric({ durationMs: 4, minTransactions: 8 });
+
+    const beforeReset = metricsStore.getMetricsSnapshot();
+    expect(beforeReset.breakdown).toHaveLength(1);
+    expect(beforeReset.unifiedCategory).toHaveLength(1);
+    expect(beforeReset.waterfall).toHaveLength(1);
+    expect(beforeReset.categoryOpportunities).toHaveLength(1);
+
+    metricsStore.resetMetrics();
+
+    const afterReset = metricsStore.getMetricsSnapshot();
+    expect(afterReset.breakdown).toHaveLength(0);
+    expect(afterReset.dashboard).toHaveLength(0);
+    expect(afterReset.unifiedCategory).toHaveLength(0);
+    expect(afterReset.waterfall).toHaveLength(0);
+    expect(afterReset.categoryOpportunities).toHaveLength(0);
+  });
+
+  it('returns empty sanitized payload for invalid or non-object samples', () => {
+    expect(metricsStore.sanitizeMetricSample(null)).toEqual({});
+    expect(metricsStore.sanitizeMetricSample('invalid')).toEqual({});
+
+    const payload = metricsStore.sanitizeMetricSample({
+      durationMs: 'not-a-number',
+      months: null,
+      dateRange: { start: 'invalid', end: '2025-03-01' },
+      rowCounts: { history: 'x', current: undefined, valid: '4' },
+    });
+
+    expect(payload).toEqual({
+      months: 0,
+      rowCounts: {
+        history: null,
+        valid: 4,
+      },
+    });
+  });
 });

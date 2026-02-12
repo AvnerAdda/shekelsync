@@ -7,6 +7,8 @@ const mockGet = vi.fn();
 const mockPost = vi.fn();
 const showNotification = vi.fn();
 
+const SNAPSHOT_SEEN_STORAGE_KEY = 'smart_alert.snapshot_seen_trigger_key.v1';
+
 const translations: Record<string, string> = {
   'common.close': 'Close',
   'insights.snapshot.alert.title': 'Progress Snapshot',
@@ -49,7 +51,15 @@ vi.mock('@mui/material', () => {
         {children}
       </span>
     ),
-    IconButton: ({ children, onClick, 'aria-label': ariaLabel }: { children?: React.ReactNode; onClick?: () => void; 'aria-label'?: string }) => (
+    IconButton: ({
+      children,
+      onClick,
+      'aria-label': ariaLabel,
+    }: {
+      children?: React.ReactNode;
+      onClick?: () => void;
+      'aria-label'?: string;
+    }) => (
       <button onClick={onClick} aria-label={ariaLabel}>
         {children}
       </button>
@@ -141,37 +151,50 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-const baseNotificationsResponse = {
+const createNotificationsResponse = (notifications: any[], summaryOverride?: any) => ({
   ok: true,
   data: {
     success: true,
     data: {
-      summary: {
-        total: 1,
-        by_type: {
-          budget_warning: 1,
-        },
+      summary: summaryOverride || {
+        total: notifications.length,
+        by_type: {},
         by_severity: {
           critical: 0,
-          warning: 1,
-          info: 0,
+          warning: notifications.filter((n) => n.severity === 'warning').length,
+          info: notifications.filter((n) => n.severity === 'info').length,
         },
       },
-      notifications: [
-        {
-          id: 'notif-1',
-          type: 'budget_warning',
-          severity: 'warning',
-          title: 'Budget warning',
-          message: 'Groceries budget is at 85%',
-          data: {},
-          timestamp: '2025-08-20T10:00:00.000Z',
-          actionable: false,
-        },
-      ],
+      notifications,
     },
   },
+});
+
+const baseNotification = {
+  id: 'notif-1',
+  type: 'budget_warning',
+  severity: 'warning',
+  title: 'Budget warning',
+  message: 'Groceries budget is at 85%',
+  data: {},
+  timestamp: '2025-08-20T10:00:00.000Z',
+  actionable: false,
 };
+
+const baseNotificationsResponse = createNotificationsResponse(
+  [baseNotification],
+  {
+    total: 1,
+    by_type: {
+      budget_warning: 1,
+    },
+    by_severity: {
+      critical: 0,
+      warning: 1,
+      info: 0,
+    },
+  },
+);
 
 const snapshotProgressResponse = {
   ok: true,
@@ -224,11 +247,36 @@ const snapshotProgressResponse = {
   },
 };
 
+const toIsoDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const computeExpectedTriggerKey = (now: Date) => {
+  const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfBiMonth = new Date(now.getFullYear(), Math.floor(now.getMonth() / 2) * 2, 1);
+  const startOfHalfYear = new Date(now.getFullYear(), now.getMonth() < 6 ? 0 : 6, 1);
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+  const latestBoundary = [startOfWeek, startOfMonth, startOfBiMonth, startOfHalfYear, startOfYear].reduce((latest, candidate) =>
+    candidate.getTime() > latest.getTime() ? candidate : latest,
+  );
+
+  return toIsoDate(latestBoundary);
+};
+
 describe('SmartNotifications snapshot flow', () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockGet.mockReset();
     mockPost.mockReset();
+    showNotification.mockReset();
 
     mockGet.mockImplementation((endpoint: string) => {
       if (endpoint === '/api/notifications?limit=20') {
@@ -259,6 +307,22 @@ describe('SmartNotifications snapshot flow', () => {
     expect(screen.getByRole('button', { name: 'View Snapshot' })).toBeInTheDocument();
   });
 
+  it('does not inject a synthetic snapshot alert when current trigger was already seen', async () => {
+    const seenTriggerKey = computeExpectedTriggerKey(new Date());
+    window.localStorage.setItem(SNAPSHOT_SEEN_STORAGE_KEY, seenTriggerKey);
+
+    render(<SmartNotifications />);
+
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith('/api/notifications?limit=20');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
+
+    expect(screen.queryByText('See your progress across completed time periods.')).not.toBeInTheDocument();
+    expect(screen.getByText('Budget warning')).toBeInTheDocument();
+  });
+
   it('writes seen key, opens snapshot modal, and removes synthetic alert after click', async () => {
     render(<SmartNotifications />);
 
@@ -275,7 +339,7 @@ describe('SmartNotifications snapshot flow', () => {
       expect(mockGet).toHaveBeenCalledWith('/api/notifications/snapshot-progress');
     });
 
-    const storedTriggerKey = window.localStorage.getItem('smart_alert.snapshot_seen_trigger_key.v1');
+    const storedTriggerKey = window.localStorage.getItem(SNAPSHOT_SEEN_STORAGE_KEY);
     expect(storedTriggerKey).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     await waitFor(() => {
       expect(screen.getByTestId('snapshot-modal')).toHaveTextContent('snapshot modal open');
@@ -284,5 +348,204 @@ describe('SmartNotifications snapshot flow', () => {
     fireEvent.click(alertsButton);
 
     expect(screen.queryByText('See your progress across completed time periods.')).not.toBeInTheDocument();
+  });
+
+  it('shows API snapshot error details when fetch returns non-success', async () => {
+    mockGet.mockImplementation((endpoint: string) => {
+      if (endpoint === '/api/notifications?limit=20') {
+        return Promise.resolve(baseNotificationsResponse);
+      }
+      if (endpoint === '/api/notifications/snapshot-progress') {
+        return Promise.resolve({ ok: false, data: { error: 'Snapshot endpoint unavailable' } });
+      }
+      return Promise.resolve({ ok: true, data: { success: true } });
+    });
+
+    render(<SmartNotifications />);
+
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith('/api/notifications?limit=20');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View Snapshot' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('snapshot-modal')).toHaveTextContent('Snapshot endpoint unavailable');
+    });
+  });
+
+  it('shows translated snapshot error when fetch throws', async () => {
+    mockGet.mockImplementation((endpoint: string) => {
+      if (endpoint === '/api/notifications?limit=20') {
+        return Promise.resolve(baseNotificationsResponse);
+      }
+      if (endpoint === '/api/notifications/snapshot-progress') {
+        return Promise.reject(new Error('network down'));
+      }
+      return Promise.resolve({ ok: true, data: { success: true } });
+    });
+
+    render(<SmartNotifications />);
+
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith('/api/notifications?limit=20');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View Snapshot' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('snapshot-modal')).toHaveTextContent('Failed to load snapshot progress.');
+    });
+  });
+
+  it('handles bulk refresh success and emits a global data refresh event', async () => {
+    const staleSyncNotification = {
+      id: 'notif-stale-1',
+      type: 'stale_sync',
+      severity: 'warning',
+      title: 'Stale account sync',
+      message: 'Some accounts are stale',
+      data: {},
+      timestamp: '2025-08-20T10:00:00.000Z',
+      actionable: true,
+      actions: [
+        {
+          label: 'Sync now',
+          action: 'bulk_refresh',
+          params: {},
+        },
+      ],
+    };
+
+    mockGet.mockImplementation((endpoint: string) => {
+      if (endpoint === '/api/notifications?limit=20') {
+        return Promise.resolve(createNotificationsResponse([staleSyncNotification]));
+      }
+      return Promise.resolve({ ok: true, data: { success: true } });
+    });
+
+    mockPost.mockResolvedValue({
+      ok: true,
+      data: {
+        success: true,
+        totalProcessed: 0,
+        successCount: 0,
+        totalTransactions: 0,
+      },
+    });
+
+    const refreshEventListener = vi.fn();
+    window.addEventListener('dataRefresh', refreshEventListener as EventListener);
+
+    render(<SmartNotifications />);
+
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith('/api/notifications?limit=20');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sync now' }));
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith('/api/scrape/bulk', { payload: {} });
+    });
+
+    await waitFor(() => {
+      expect(showNotification).toHaveBeenCalledWith('All accounts are up to date', 'success');
+    });
+
+    expect(refreshEventListener).toHaveBeenCalledTimes(1);
+    window.removeEventListener('dataRefresh', refreshEventListener as EventListener);
+  });
+
+  it('handles bulk refresh API failures with an error notification', async () => {
+    const staleSyncNotification = {
+      id: 'notif-stale-2',
+      type: 'stale_sync',
+      severity: 'warning',
+      title: 'Stale account sync',
+      message: 'Some accounts are stale',
+      data: {},
+      timestamp: '2025-08-20T10:00:00.000Z',
+      actionable: true,
+      actions: [
+        {
+          label: 'Sync now',
+          action: 'bulk_refresh',
+          params: {},
+        },
+      ],
+    };
+
+    mockGet.mockImplementation((endpoint: string) => {
+      if (endpoint === '/api/notifications?limit=20') {
+        return Promise.resolve(createNotificationsResponse([staleSyncNotification]));
+      }
+      return Promise.resolve({ ok: true, data: { success: true } });
+    });
+
+    mockPost.mockResolvedValue({
+      ok: false,
+      data: {
+        message: 'Bulk sync denied',
+      },
+    });
+
+    render(<SmartNotifications />);
+
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith('/api/notifications?limit=20');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sync now' }));
+
+    await waitFor(() => {
+      expect(showNotification).toHaveBeenCalledWith('Bulk sync denied', 'error');
+    });
+  });
+
+  it('dispatches navigateToUncategorized event for view_uncategorized action', async () => {
+    const uncategorizedNotification = {
+      id: 'notif-uncat-1',
+      type: 'uncategorized_transactions',
+      severity: 'warning',
+      title: 'Uncategorized transactions',
+      message: 'Review uncategorized items',
+      data: {},
+      timestamp: '2025-08-20T10:00:00.000Z',
+      actionable: true,
+      actions: [
+        {
+          label: 'Open uncategorized',
+          action: 'view_uncategorized',
+          params: {},
+        },
+      ],
+    };
+
+    mockGet.mockImplementation((endpoint: string) => {
+      if (endpoint === '/api/notifications?limit=20') {
+        return Promise.resolve(createNotificationsResponse([uncategorizedNotification]));
+      }
+      return Promise.resolve({ ok: true, data: { success: true } });
+    });
+
+    const navigationListener = vi.fn();
+    window.addEventListener('navigateToUncategorized', navigationListener as EventListener);
+
+    render(<SmartNotifications />);
+
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith('/api/notifications?limit=20');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open uncategorized' }));
+
+    expect(navigationListener).toHaveBeenCalledTimes(1);
+    window.removeEventListener('navigateToUncategorized', navigationListener as EventListener);
   });
 });

@@ -143,6 +143,18 @@ function __resetDatabase() {
   supabaseAuthClient = null;
 }
 
+function __setSupabaseClients({ adminClient, authClient, createClient } = {}) {
+  if (adminClient !== undefined) {
+    supabaseAdminClient = adminClient;
+  }
+  if (authClient !== undefined) {
+    supabaseAuthClient = authClient;
+  }
+  if (createClient !== undefined) {
+    supabaseCreateClient = createClient;
+  }
+}
+
 function getDatabase() {
   return databaseRef || database;
 }
@@ -930,6 +942,7 @@ module.exports = {
   markMonthlyReminderShown,
   __setDatabase,
   __resetDatabase,
+  __setSupabaseClients,
   getDonationTier,
   getCurrentMonthKey,
   DONATION_THRESHOLDS,

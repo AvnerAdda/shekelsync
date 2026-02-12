@@ -57,6 +57,7 @@ import {
   AccountBalance as AccountsIcon,
   Category as CategoryIcon,
   LocalCafe as CoffeeIcon,
+  Feedback as FeedbackIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -96,7 +97,16 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   // Theme and language hooks
   const { mode, setMode, actualTheme } = useThemeMode();
   const { locale, setLocale } = useLocaleSettings();
-  
+
+  const openFeedbackPage = useCallback(() => {
+    const version = window.electronAPI?.app?.getVersion?.() ?? 'unknown';
+    const platform = window.electronAPI?.platform;
+    const os = platform?.isWindows ? 'windows' : platform?.isMacOS ? 'macos' : platform?.isLinux ? 'linux' : 'unknown';
+    const localePrefix = locale !== 'he' ? `${locale}/` : '';
+    const url = `https://shekelsync.com/${localePrefix}feedback?version=${encodeURIComponent(version)}&os=${encodeURIComponent(os)}&locale=${encodeURIComponent(locale)}&source=app`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }, [locale]);
+
   // Update manager
   const { updateState, checkForUpdates, downloadUpdate, installUpdate } = useUpdateManager();
 
@@ -389,127 +399,117 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
     }
   };
 
-  const renderSubmenu = (submenu: string) => {
+  const renderSubmenu = (submenu: string): React.ReactNode[] => {
     switch (submenu) {
       case 'file':
-        return (
-          <>
-            <MenuItem onClick={() => handleMenuAction('file-new')}>
-              <ListItemIcon><NewIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.new')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={() => handleMenuAction('file-open')}>
-              <ListItemIcon><OpenIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.open')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={() => handleMenuAction('file-save')}>
-              <ListItemIcon><SaveIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.save')}</ListItemText>
-            </MenuItem>
-            <Divider />
-            <MenuItem onClick={() => handleMenuAction('file-exit')}>
-              <ListItemIcon><ExitIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.exit')}</ListItemText>
-            </MenuItem>
-          </>
-        );
+        return [
+          <MenuItem key="file-new" onClick={() => handleMenuAction('file-new')}>
+            <ListItemIcon><NewIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.new')}</ListItemText>
+          </MenuItem>,
+          <MenuItem key="file-open" onClick={() => handleMenuAction('file-open')}>
+            <ListItemIcon><OpenIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.open')}</ListItemText>
+          </MenuItem>,
+          <MenuItem key="file-save" onClick={() => handleMenuAction('file-save')}>
+            <ListItemIcon><SaveIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.save')}</ListItemText>
+          </MenuItem>,
+          <Divider key="file-divider" />,
+          <MenuItem key="file-exit" onClick={() => handleMenuAction('file-exit')}>
+            <ListItemIcon><ExitIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.exit')}</ListItemText>
+          </MenuItem>,
+        ];
       case 'edit':
-        return (
-          <>
-            <MenuItem onClick={() => handleMenuAction('edit-undo')}>
-              <ListItemIcon><UndoIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.undo')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={() => handleMenuAction('edit-redo')}>
-              <ListItemIcon><RedoIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.redo')}</ListItemText>
-            </MenuItem>
-            <Divider />
-            <MenuItem onClick={() => handleMenuAction('edit-cut')}>
-              <ListItemIcon><CutIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.cut')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={() => handleMenuAction('edit-copy')}>
-              <ListItemIcon><CopyIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.copy')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={() => handleMenuAction('edit-paste')}>
-              <ListItemIcon><PasteIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.paste')}</ListItemText>
-            </MenuItem>
-          </>
-        );
+        return [
+          <MenuItem key="edit-undo" onClick={() => handleMenuAction('edit-undo')}>
+            <ListItemIcon><UndoIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.undo')}</ListItemText>
+          </MenuItem>,
+          <MenuItem key="edit-redo" onClick={() => handleMenuAction('edit-redo')}>
+            <ListItemIcon><RedoIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.redo')}</ListItemText>
+          </MenuItem>,
+          <Divider key="edit-divider" />,
+          <MenuItem key="edit-cut" onClick={() => handleMenuAction('edit-cut')}>
+            <ListItemIcon><CutIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.cut')}</ListItemText>
+          </MenuItem>,
+          <MenuItem key="edit-copy" onClick={() => handleMenuAction('edit-copy')}>
+            <ListItemIcon><CopyIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.copy')}</ListItemText>
+          </MenuItem>,
+          <MenuItem key="edit-paste" onClick={() => handleMenuAction('edit-paste')}>
+            <ListItemIcon><PasteIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.paste')}</ListItemText>
+          </MenuItem>,
+        ];
       case 'view':
-        return (
-          <>
-            <MenuItem onClick={() => handleMenuAction('view-fullscreen')}>
-              <ListItemIcon><FullscreenIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.fullscreen')}</ListItemText>
-            </MenuItem>
-            <Divider />
-            <MenuItem onClick={() => handleMenuAction('view-zoom-in')}>
-              <ListItemIcon><ZoomInIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.zoomIn')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={() => handleMenuAction('view-zoom-out')}>
-              <ListItemIcon><ZoomOutIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.zoomOut')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={() => handleMenuAction('view-reset')}>
-              <ListItemIcon><ResetIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.resetZoom')}</ListItemText>
-            </MenuItem>
-          </>
-        );
+        return [
+          <MenuItem key="view-fullscreen" onClick={() => handleMenuAction('view-fullscreen')}>
+            <ListItemIcon><FullscreenIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.fullscreen')}</ListItemText>
+          </MenuItem>,
+          <Divider key="view-divider" />,
+          <MenuItem key="view-zoom-in" onClick={() => handleMenuAction('view-zoom-in')}>
+            <ListItemIcon><ZoomInIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.zoomIn')}</ListItemText>
+          </MenuItem>,
+          <MenuItem key="view-zoom-out" onClick={() => handleMenuAction('view-zoom-out')}>
+            <ListItemIcon><ZoomOutIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.zoomOut')}</ListItemText>
+          </MenuItem>,
+          <MenuItem key="view-reset" onClick={() => handleMenuAction('view-reset')}>
+            <ListItemIcon><ResetIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.resetZoom')}</ListItemText>
+          </MenuItem>,
+        ];
       case 'go':
-        return (
-          <>
-            <MenuItem onClick={() => handleMenuAction('go-dashboard')}>
-              <ListItemIcon><DashboardIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.dashboard')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={() => handleMenuAction('go-analysis')}>
-              <ListItemIcon><AnalyticsIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.analysis')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={() => handleMenuAction('go-investments')}>
-              <ListItemIcon><InvestmentsIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.investments')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={() => handleMenuAction('go-settings')}>
-              <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.settings')}</ListItemText>
-            </MenuItem>
-          </>
-        );
+        return [
+          <MenuItem key="go-dashboard" onClick={() => handleMenuAction('go-dashboard')}>
+            <ListItemIcon><DashboardIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.dashboard')}</ListItemText>
+          </MenuItem>,
+          <MenuItem key="go-analysis" onClick={() => handleMenuAction('go-analysis')}>
+            <ListItemIcon><AnalyticsIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.analysis')}</ListItemText>
+          </MenuItem>,
+          <MenuItem key="go-investments" onClick={() => handleMenuAction('go-investments')}>
+            <ListItemIcon><InvestmentsIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.investments')}</ListItemText>
+          </MenuItem>,
+          <MenuItem key="go-settings" onClick={() => handleMenuAction('go-settings')}>
+            <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.settings')}</ListItemText>
+          </MenuItem>,
+        ];
       case 'help':
-        return (
-          <>
-            <MenuItem onClick={() => handleMenuAction('help-docs')}>
-              <ListItemIcon><DocsIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.documentation')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={() => handleMenuAction('help-open-logs')}>
-              <ListItemIcon><FolderIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.openLogs')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={() => handleMenuAction('help-export-diagnostics')}>
-              <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.exportDiagnostics')}</ListItemText>
-            </MenuItem>
-            <Divider />
-            <MenuItem disabled>
-              <ListItemIcon><DiagnosticsIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.supportTools')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={() => handleMenuAction('help-about')}>
-              <ListItemIcon><AboutIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>{t('titleBar.menu.items.about')}</ListItemText>
-            </MenuItem>
-          </>
-        );
+        return [
+          <MenuItem key="help-docs" onClick={() => handleMenuAction('help-docs')}>
+            <ListItemIcon><DocsIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.documentation')}</ListItemText>
+          </MenuItem>,
+          <MenuItem key="help-open-logs" onClick={() => handleMenuAction('help-open-logs')}>
+            <ListItemIcon><FolderIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.openLogs')}</ListItemText>
+          </MenuItem>,
+          <MenuItem key="help-export-diagnostics" onClick={() => handleMenuAction('help-export-diagnostics')}>
+            <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.exportDiagnostics')}</ListItemText>
+          </MenuItem>,
+          <Divider key="help-divider" />,
+          <MenuItem key="help-support-tools" disabled>
+            <ListItemIcon><DiagnosticsIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.supportTools')}</ListItemText>
+          </MenuItem>,
+          <MenuItem key="help-about" onClick={() => handleMenuAction('help-about')}>
+            <ListItemIcon><AboutIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('titleBar.menu.items.about')}</ListItemText>
+          </MenuItem>,
+        ];
       default:
-        return null;
+        return [];
     }
   };
 
@@ -607,7 +607,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
                 {t('titleBar.menu.back')}
               </MenuItem>,
               <Divider key="divider" sx={{ borderColor: alpha(theme.palette.divider, 0.1) }} />,
-              renderSubmenu(activeSubmenu)
+              ...renderSubmenu(activeSubmenu)
           ] : [
               <MenuItem key="file" onClick={() => setActiveSubmenu('file')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
                 <ListItemIcon><FileIcon fontSize="small" /></ListItemIcon>
@@ -861,6 +861,27 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         />
 
         <SmartNotifications />
+
+        <Tooltip title={t('titleBar.tooltips.sendFeedback')}>
+          <IconButton
+            size="small"
+            onClick={openFeedbackPage}
+            sx={{
+              width: 36,
+              height: 36,
+              borderRadius: 2,
+              transition: 'all 0.2s',
+              color: theme.palette.info.main,
+              backgroundColor: alpha(theme.palette.info.main, 0.18),
+              '&:hover': {
+                backgroundColor: alpha(theme.palette.info.main, 0.28),
+                transform: 'translateY(-2px)',
+              },
+            }}
+          >
+            <FeedbackIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </Tooltip>
 
         <Tooltip title={buyMeCoffeeTooltip}>
           <IconButton
