@@ -27,6 +27,13 @@ afterEach(() => {
 });
 
 describe('check existing investments service', () => {
+  it('falls back to actual database when __setDatabase is called without a mock', () => {
+    checkExistingService.__setDatabase();
+    checkExistingService.__setDatabase({
+      query: (...args: any[]) => queryMock(...args),
+    });
+  });
+
   it('maps vendors, rules, linked accounts, and grouped patterns', async () => {
     queryMock
       .mockResolvedValueOnce({

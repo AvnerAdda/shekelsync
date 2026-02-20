@@ -27,6 +27,13 @@ afterEach(() => {
 });
 
 describe('bank summary service', () => {
+  it('falls back to actual database when __setDatabase receives no mock', () => {
+    bankSummaryService.__setDatabase();
+    bankSummaryService.__setDatabase({
+      query: (...args: any[]) => queryMock(...args),
+    });
+  });
+
   it('builds summary with daily aggregation by default', async () => {
     queryMock
       .mockResolvedValueOnce({

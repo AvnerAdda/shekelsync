@@ -167,6 +167,7 @@ async function processMessage(payload = {}) {
       financialContext = await buildContext(client, perms);
       console.log('[chat] Financial context built:', {
         hasData: financialContext.hasData,
+        hasProfile: Boolean(financialContext.profile),
         transactionCount: financialContext.summary?.transactionCount,
         categoriesCount: financialContext.categories?.length,
         budgetsCount: financialContext.budgets?.length,

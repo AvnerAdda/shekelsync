@@ -5,6 +5,7 @@ export const OTHER_BANK_VENDORS: readonly string[];
 export const ALL_VENDORS: readonly string[];
 export const STALE_SYNC_THRESHOLD_MS: number;
 export const SCRAPE_RATE_LIMIT_MS: number;
+export const SCRAPE_RATE_LIMIT_MAX_ATTEMPTS: number;
 
 export interface AccountCategory {
   id: string;

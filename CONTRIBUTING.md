@@ -43,5 +43,5 @@ npm test
 ## Security Notes
 
 - Never commit `.env` values with real credentials.
-- `CLARIFY_ENCRYPTION_KEY` must be managed securely in production.
+- `SHEKELSYNC_ENCRYPTION_KEY` must be managed securely in production.
 - Use private reporting for vulnerabilities (see `SECURITY.md`).

@@ -4,6 +4,8 @@ export interface DashboardHistoryEntry {
   date: string;
   income: number | null;
   expenses: number | null;
+  capitalReturns?: number;
+  cardRepayments?: number;
   bankBalance?: number;
 }
 

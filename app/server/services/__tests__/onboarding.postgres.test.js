@@ -72,4 +72,55 @@ describe('onboarding service postgres query behavior', () => {
     );
     expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
+
+  it('suggests profile when no profile record exists in postgres mode', async () => {
+    const institutions = [
+      { vendor_code: 'hapoalim', institution_type: 'bank' },
+      { vendor_code: 'isracard', institution_type: 'credit_card' },
+    ];
+    queryMock.mockResolvedValueOnce({ rows: institutions });
+    queryMock.mockResolvedValueOnce({ rows: institutions });
+
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [] }) // no profile
+      .mockResolvedValueOnce({ rows: [{ count: 0 }] }) // total accounts
+      .mockResolvedValueOnce({ rows: [{ count: 0 }] }) // bank accounts
+      .mockResolvedValueOnce({ rows: [{ count: 0 }] }) // credit cards
+      .mockResolvedValueOnce({ rows: [{ count: 0 }] }) // transactions
+      .mockResolvedValueOnce({ rows: [{ last_scrape: null }] });
+
+    const result = await onboardingService.getOnboardingStatus();
+
+    expect(result.completedSteps.profile).toBe(false);
+    expect(result.suggestedAction).toBe('profile');
+    expect(result.isComplete).toBe(false);
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates existing profile when dismissing onboarding in postgres mode', async () => {
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [{ id: 9 }] })
+      .mockResolvedValueOnce({ rowCount: 1 });
+
+    const result = await onboardingService.dismissOnboarding();
+
+    expect(result).toEqual({
+      success: true,
+      message: 'Onboarding dismissed successfully',
+    });
+    expect(mockClient.query.mock.calls[1][0]).toContain('UPDATE user_profile');
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('inserts a default profile when dismissing onboarding without an existing profile', async () => {
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rowCount: 1 });
+
+    const result = await onboardingService.dismissOnboarding();
+
+    expect(result.success).toBe(true);
+    expect(mockClient.query.mock.calls[1][0]).toContain('INSERT INTO user_profile');
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
+  });
 });

@@ -18,6 +18,7 @@ const STALE_SYNC_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48 hours
 
 // Rate limit - prevent scraping the same credential more than once per 24 hours
 const SCRAPE_RATE_LIMIT_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SCRAPE_RATE_LIMIT_MAX_ATTEMPTS = 2;
 
 // Unified Account Type Taxonomy for enhanced AccountsModal
 // Updated with website color palette (primary green and secondary peach)
@@ -308,6 +309,7 @@ module.exports = {
   ALL_VENDORS,
   STALE_SYNC_THRESHOLD_MS,
   SCRAPE_RATE_LIMIT_MS,
+  SCRAPE_RATE_LIMIT_MAX_ATTEMPTS,
   ACCOUNT_CATEGORIES,
   INVESTMENT_ACCOUNT_TYPES,
   getAccountCategory,

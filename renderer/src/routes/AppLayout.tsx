@@ -59,39 +59,78 @@ const AppLayout: React.FC = () => {
     setDonationReminderOpen(false);
   }, [donationStatus, donationStatusLoading]);
 
+  const handleDataRefresh = useCallback(() => {
+    window.dispatchEvent(new Event('dataRefresh'));
+  }, []);
+
   // Global keyboard shortcuts
   useEffect(() => {
+    const isModifierPressed = (event: KeyboardEvent) => event.metaKey || event.ctrlKey;
+    const isLetterShortcut = (event: KeyboardEvent, letter: string) => {
+      const normalizedLetter = letter.toLowerCase();
+      const normalizedKey = event.key.toLowerCase();
+      const normalizedCode = event.code.toLowerCase();
+      return normalizedKey === normalizedLetter || normalizedCode === `key${normalizedLetter}`;
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       // Cmd/Ctrl + K: Open global transaction search
-      if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+      if (isModifierPressed(event) && isLetterShortcut(event, 'k')) {
         event.preventDefault();
         setSearchOpen(true);
       }
       
       // Cmd/Ctrl + 1-4: Navigate between pages
-      if (event.metaKey || event.ctrlKey) {
-        switch (event.key) {
-          case '1':
+      if (isModifierPressed(event)) {
+        let handledDigitShortcut = false;
+        switch (event.code) {
+          case 'Digit1':
             event.preventDefault();
             navigate('/');
+            handledDigitShortcut = true;
             break;
-          case '2':
+          case 'Digit2':
             event.preventDefault();
             navigate('/analysis');
+            handledDigitShortcut = true;
             break;
-          case '3':
+          case 'Digit3':
             event.preventDefault();
             navigate('/investments');
+            handledDigitShortcut = true;
             break;
-          case '4':
+          case 'Digit4':
             event.preventDefault();
             navigate('/settings');
+            handledDigitShortcut = true;
             break;
+        }
+
+        // Fallback for unusual keyboard layouts where event.code is unavailable
+        if (!handledDigitShortcut) {
+          switch (event.key) {
+            case '1':
+              event.preventDefault();
+              navigate('/');
+              break;
+            case '2':
+              event.preventDefault();
+              navigate('/analysis');
+              break;
+            case '3':
+              event.preventDefault();
+              navigate('/investments');
+              break;
+            case '4':
+              event.preventDefault();
+              navigate('/settings');
+              break;
+          }
         }
       }
       
       // Cmd/Ctrl + R: Refresh data (prevent browser refresh)
-      if ((event.metaKey || event.ctrlKey) && event.key === 'r' && !event.shiftKey) {
+      if (isModifierPressed(event) && isLetterShortcut(event, 'r') && !event.shiftKey) {
         // Only handle if not in a text input
         const target = event.target as HTMLElement;
         if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
@@ -103,7 +142,7 @@ const AppLayout: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate]);
+  }, [navigate, handleDataRefresh]);
 
   const handlePageChange = useCallback(
     (page: string) => {
@@ -115,10 +154,6 @@ const AppLayout: React.FC = () => {
     },
     [location.pathname, navigate],
   );
-
-  const handleDataRefresh = useCallback(() => {
-    window.dispatchEvent(new Event('dataRefresh'));
-  }, []);
 
   const handleDismissDonationReminder = useCallback(async () => {
     if (!donationStatus) {

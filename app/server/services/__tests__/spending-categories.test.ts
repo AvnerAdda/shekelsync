@@ -45,6 +45,10 @@ beforeEach(() => {
       const next = queryQueue.shift();
       return Promise.resolve(next ?? { rows: [] });
     }
+    if (sql.includes('SELECT COALESCE(SUM(t.price)') && sql.includes('total_salary')) {
+      const next = queryQueue.shift();
+      return Promise.resolve(next ?? { rows: [] });
+    }
     if (sql.includes('COALESCE(NULLIF(scm.spending_category') && sql.includes('avg_transaction')) {
       const next = queryQueue.shift();
       return Promise.resolve(next ?? { rows: [] });
@@ -82,6 +86,8 @@ describe('spending categories service', () => {
     queryQueue.push(
       // total income
       { rows: [{ total_income: '100' }] },
+      // total salary
+      { rows: [{ total_salary: '80' }] },
       // spending breakdown
       {
         rows: [

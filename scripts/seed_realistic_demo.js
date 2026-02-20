@@ -9,7 +9,7 @@
  * - Sample data for new features
  */
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const Database = require(path.join(__dirname, '..', 'app', 'node_modules', 'better-sqlite3'));
 const DB_PATH = process.env.SQLITE_DB_PATH || path.join(__dirname, '..', 'dist', 'clarify-anonymized.sqlite');
 const db = new Database(DB_PATH);
@@ -448,7 +448,7 @@ const DEMO_CREDENTIALS = [
 
 const insertCredential = db.prepare(`
   INSERT OR IGNORE INTO vendor_credentials (vendor, nickname, username, bank_account_number, institution_id, last_scrape_status)
-  VALUES (@vendor, @nickname, @username, @bankAccount, @institutionId, 'success')
+  VALUES (@vendor, @nickname, @username, @bankAccount, @institutionId, 'never')
 `);
 
 DEMO_CREDENTIALS.forEach((cred) => {
@@ -461,6 +461,15 @@ DEMO_CREDENTIALS.forEach((cred) => {
   });
 });
 console.log(`  Inserted ${DEMO_CREDENTIALS.length} vendor credentials`);
+
+const demoVendors = DEMO_CREDENTIALS.map((cred) => cred.vendor);
+const vendorPlaceholders = demoVendors.map(() => '?').join(', ');
+const credentialIdByVendor = new Map(
+  db
+    .prepare(`SELECT id, vendor FROM vendor_credentials WHERE vendor IN (${vendorPlaceholders})`)
+    .all(...demoVendors)
+    .map((row) => [row.vendor, row.id])
+);
 
 // ============================================
 // STEP 5: SEED SCRAPE EVENTS
@@ -530,23 +539,35 @@ const SCRAPE_EVENTS = [
   { triggeredBy: 'scheduled', vendor: 'visaCal', startDate: '2026-01-20', status: 'success', message: 'Scraped 11 transactions', createdAt: '2026-01-20T09:00:00Z', credentialId: 3 },
 ];
 
-const latestSyncDay = dateOnly(BASE_DATE);
+const syncNow = new Date();
+const latestSyncDay = dateOnly(syncNow);
+const twoDaysAgo = new Date(syncNow.getTime() - 2 * 24 * 60 * 60 * 1000);
+const twoDaysAgoSyncDay = dateOnly(twoDaysAgo);
 const RECENT_SCRAPE_EVENTS = [
-  { triggeredBy: 'scheduled', vendor: 'discount', startDate: latestSyncDay, status: 'success', message: 'Scraped 17 transactions', createdAt: dateAtUtc(BASE_DATE, 7, 45), credentialId: 1 },
-  { triggeredBy: 'scheduled', vendor: 'max', startDate: latestSyncDay, status: 'success', message: 'Scraped 12 transactions', createdAt: dateAtUtc(BASE_DATE, 8, 5), credentialId: 2 },
-  { triggeredBy: 'scheduled', vendor: 'visaCal', startDate: latestSyncDay, status: 'success', message: 'Scraped 9 transactions', createdAt: dateAtUtc(BASE_DATE, 8, 25), credentialId: 3 },
+  { triggeredBy: 'scheduled', vendor: 'discount', startDate: latestSyncDay, status: 'success', message: 'Scraped 17 transactions', createdAt: syncNow.toISOString() },
+  { triggeredBy: 'scheduled', vendor: 'max', startDate: twoDaysAgoSyncDay, status: 'success', message: 'Scraped 12 transactions', createdAt: twoDaysAgo.toISOString() },
 ];
 
-SCRAPE_EVENTS.push(...RECENT_SCRAPE_EVENTS);
+const NEVER_SYNCED_VENDOR = 'visaCal';
+const preparedScrapeEvents = SCRAPE_EVENTS
+  .concat(RECENT_SCRAPE_EVENTS)
+  .filter((event) => event.vendor !== NEVER_SYNCED_VENDOR)
+  .map((event) => {
+    const credentialId = credentialIdByVendor.get(event.vendor);
+    if (!credentialId) return null;
+    return { ...event, credentialId };
+  })
+  .filter(Boolean);
 
-SCRAPE_EVENTS.forEach((event) => {
+preparedScrapeEvents.forEach((event) => {
   try {
     insertScrapeEvent.run(event);
   } catch (e) {
     // Ignore duplicates
   }
 });
-console.log(`  Inserted ${SCRAPE_EVENTS.length} scrape events`);
+console.log(`  Inserted ${preparedScrapeEvents.length} scrape events`);
+console.log('  Demo sync states: discount = now, max = 2 days ago, visaCal = never');
 
 // ============================================
 // STEP 6: SEED ACCOUNT PAIRINGS
@@ -1649,14 +1670,14 @@ console.log(`\nDate range: ${dateRange.min_date} to ${dateRange.max_date}`);
 // Ensure spending category mappings exist so dashboard allocation renders immediately
 console.log('\n📋 Initializing spending category mappings...');
 try {
-  execSync(
-    "node -e \"const svc=require('./app/server/services/analytics/spending-categories.js'); const db=require('./app/server/services/database.js'); (async()=>{const res=await svc.initializeSpendingCategories(); console.log('  Spending categories initialized:', res); await db.close();})().catch(err=>{console.error(err); process.exit(1);});\"",
-    {
-      stdio: 'inherit',
-      cwd: path.join(__dirname, '..'),
-      env: { ...process.env, SQLITE_DB_PATH: DB_PATH },
-    }
-  );
+  const initScript =
+    "const svc=require('./app/server/services/analytics/spending-categories.js'); const db=require('./app/server/services/database.js'); (async()=>{const res=await svc.initializeSpendingCategories(); console.log('  Spending categories initialized:', res); await db.close();})().catch(err=>{console.error(err); process.exit(1);});";
+
+  execFileSync(process.execPath, ['-e', initScript], {
+    stdio: 'inherit',
+    cwd: path.join(__dirname, '..'),
+    env: { ...process.env, SQLITE_DB_PATH: DB_PATH, ELECTRON_RUN_AS_NODE: '1' },
+  });
 } catch (e) {
   console.log('  Spending categories init skipped:', e.message);
 }

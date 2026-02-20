@@ -137,9 +137,9 @@ describe('bulk scrape service', () => {
   });
 
   it('decrypts credential envelopes and falls back to raw values on decrypt errors', async () => {
-    const originalKey = process.env.CLARIFY_ENCRYPTION_KEY;
+    const originalKey = process.env.SHEKELSYNC_ENCRYPTION_KEY;
     try {
-      process.env.CLARIFY_ENCRYPTION_KEY = '1'.repeat(64);
+      process.env.SHEKELSYNC_ENCRYPTION_KEY = '1'.repeat(64);
       const encryptionModule = await import('../../../lib/server/encryption.js');
       const encryption = (encryptionModule as any).default ?? encryptionModule;
 
@@ -183,9 +183,9 @@ describe('bulk scrape service', () => {
       });
     } finally {
       if (typeof originalKey === 'undefined') {
-        delete process.env.CLARIFY_ENCRYPTION_KEY;
+        delete process.env.SHEKELSYNC_ENCRYPTION_KEY;
       } else {
-        process.env.CLARIFY_ENCRYPTION_KEY = originalKey;
+        process.env.SHEKELSYNC_ENCRYPTION_KEY = originalKey;
       }
     }
   });

@@ -88,6 +88,25 @@ function createSpendingCategoriesRouter() {
   });
 
   /**
+   * GET /api/spending-categories/transactions
+   * Get transactions for a spending allocation category
+   * Query params: spendingCategory, startDate, endDate, months, currentMonthOnly, limit, offset
+   */
+  router.get('/transactions', async (req, res) => {
+    try {
+      const params = {
+        ...req.query,
+        currentMonthOnly: req.query.currentMonthOnly === 'true',
+      };
+      const result = await spendingCategoriesService.getSpendingCategoryTransactions(params);
+      res.json(result);
+    } catch (error) {
+      console.error('Get spending category transactions error:', error);
+      handleServiceError(res, error, 'Failed to fetch spending category transactions');
+    }
+  });
+
+  /**
    * PUT /api/spending-categories/targets
    * Update spending category allocation targets
    * Body: { growth: 20, stability: 10, essential: 50, reward: 15 }

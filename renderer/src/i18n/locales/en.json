@@ -10,6 +10,11 @@
     "or": "or",
     "close": "Close"
   },
+  "smartNotifications": {
+    "dismiss": "Dismiss",
+    "dismissAll": "Dismiss all",
+    "allGood": "All good! No alerts at the moment."
+  },
   "globalSearch": {
     "placeholder": "Search transactions...",
     "hint": "Press Enter to select, Escape to close",
@@ -634,7 +639,7 @@
           "postgresMissing": "PostgreSQL configuration is incomplete."
         },
         "encryption": {
-          "invalidEnvKey": "CLARIFY_ENCRYPTION_KEY is invalid. It must be a 64-character hex string.",
+          "invalidEnvKey": "SHEKELSYNC_ENCRYPTION_KEY is invalid. It must be a 64-character hex string.",
           "allowDevNoEncryption": "ALLOW_DEV_NO_ENCRYPTION is enabled. Disable this for production."
         },
         "security": {
@@ -745,6 +750,16 @@
       "last60": "60d",
       "last90": "90d",
       "showingLast": "Last {{count}} days"
+    },
+    "settings": {
+      "button": "Chart options",
+      "title": "Chart options",
+      "cardRepayments": "Include card repayments",
+      "capitalReturns": "Include capital returns",
+      "avgGuides": "Show average guides",
+      "forecastLines": "Show forecast lines",
+      "on": "On",
+      "off": "Off"
     },
     "tabs": {
       "history": "Daily Income vs Expenses",
@@ -1371,9 +1386,12 @@
       "viewToggle": {
         "current": "Current spend",
         "incomeIndexed": "Indexed to income",
+        "salaryIndexed": "Indexed to salary",
         "currentHint": "Shows allocation as a share of total spending",
         "incomeHint": "Indexes targets to income ({{amount}} this period)",
-        "noIncome": "No income recorded for this period"
+        "salaryHint": "Indexes targets to salary ({{amount}} this period)",
+        "noIncome": "No income recorded for this period",
+        "noSalary": "No salary identified for this period"
       },
       "empty": {
         "title": "No spending data available",
@@ -1390,13 +1408,39 @@
       "labels": {
         "target": "Target: {{value}}%",
         "incomeTarget": "Income target: {{value}}%",
+        "salaryTarget": "Salary target: {{value}}%",
         "transactions_one": "{{count}} transaction",
         "transactions_other": "{{count}} transactions",
         "totalSpending_one": "Total Spending ({{count}} month)",
         "totalSpending_other": "Total Spending ({{count}} months)",
         "totalSpendingRange": "Total Spending ({{range}})",
         "currentSpend": "Current spend: {{amount}}",
-        "ofIncome": "of income"
+        "ofIncome": "of income",
+        "ofSalary": "of salary"
+      },
+      "transactionModal": {
+        "title": "Transactions in {{category}} ({{range}})",
+        "close": "Close",
+        "loadError": "Failed to load category transactions",
+        "empty": "No transactions found for this category in the selected range.",
+        "count_one": "{{count}} transaction",
+        "count_other": "{{count}} transactions",
+        "total": "Total: {{amount}}",
+        "unknown": "Unknown transaction",
+        "unknownVendor": "Unknown vendor",
+        "reassignTransaction": "Reassign transaction",
+        "reassignDialogTitle": "Reassign transaction category",
+        "assignToCategory": "Assign to category",
+        "selectCategory": "Select a category",
+        "selectBucket": "Move to...",
+        "applyToAll": "Apply to all transactions with this name",
+        "applyToAllHint": "Creates a rule so future transactions are auto-categorized",
+        "reassign": "Reassign",
+        "cancel": "Cancel",
+        "reassigning": "Reassigning...",
+        "moveTo": "Move to:",
+        "moveCategorySuccess": "Category moved successfully",
+        "moveCategoryError": "Failed to move category"
       },
       "tooltips": {
         "overTarget": "Over target allocation",
@@ -1852,6 +1896,19 @@
         "inProgress": "Sync in progress",
         "start": "Start sync"
       }
+    },
+    "rateLimit": {
+      "attemptsRemaining": "Sync attempts left in this window: {{remaining}}/{{limit}}.",
+      "accountCooldownUntil": "This account is cooling down until {{time}}.",
+      "accountCooldownRetryIn": "This account is cooling down. Try again in {{time}}.",
+      "blockedUntil": "Sync is temporarily blocked until {{time}}.",
+      "blockedRetryIn": "Sync is temporarily blocked. Try again in {{time}}.",
+      "accountCooldownMessage": "This account was synced recently and is temporarily cooling down.",
+      "tooManyAttemptsMessage": "Too many sync attempts were sent in a short time.",
+      "expectedReset": "This is expected and resets automatically.",
+      "remainingAttemptsDetail": "Remaining sync attempts in this window: {{remaining}}/{{limit}}.",
+      "tryAgainIn": "Please try again in {{time}}.",
+      "nextRetryTime": "Next retry time: {{time}}."
     },
     "errors": {
       "generic": "An error occurred",
@@ -2347,7 +2404,8 @@
       "transactionsCount": "{{count}} transactions",
       "knownInstitution": "Select from registry or leave blank for a custom institution",
       "selectInstitution": "Select an institution to see the required credentials.",
-      "noSpecificCredentials": "No specific credential requirements configured. Please provide a username and password."
+      "noSpecificCredentials": "No specific credential requirements configured. Please provide a username and password.",
+      "retryLimitWarning": "Banks and credit cards limit repeated login retries. Double-check your credentials before saving to avoid temporary sync lockouts."
     },
     "wizard": {
       "chooseInstitutionTitle": "Choose institution",
@@ -2646,6 +2704,85 @@
         "insufficientHistory": "Insufficient history for a full previous period comparison.",
         "notAvailable": "N/A",
         "daysTracked": "{{count}} days tracked"
+      }
+    }
+  },
+  "guideTips": {
+    "tooltip": "Getting Started Guide",
+    "header": "Getting Started Guide",
+    "progress": "{{done}}/{{total}} completed",
+    "loading": "Loading tips...",
+    "skip": "Skip",
+    "tips": {
+      "add_bank": {
+        "title": "Add Bank Account",
+        "description": "Connect your bank account to start tracking transactions.",
+        "action": "Add Bank"
+      },
+      "add_credit_cards": {
+        "title": "Add Credit Cards",
+        "description": "You have {{count}} credit card(s) added. Add more to track all spending.",
+        "action": "Add Card"
+      },
+      "pair_accounts": {
+        "title": "Pair Accounts",
+        "description": "{{count}} credit card(s) are not paired with a bank account.",
+        "action": "Pair Now"
+      },
+      "manage_categories": {
+        "title": "Manage Categories",
+        "description": "Review and customize your category tree to match your spending habits.",
+        "action": "Manage"
+      },
+      "categorize": {
+        "title": "Categorize Transactions",
+        "description": "{{count}} transaction(s) need categorization.",
+        "action": "Categorize"
+      },
+      "create_rules": {
+        "title": "Create Category Rules",
+        "description": "You have {{count}} rule(s). Create rules to auto-categorize transactions.",
+        "action": "Create Rules"
+      },
+      "search_transactions": {
+        "title": "Search Transactions",
+        "description": "Use Ctrl+K to quickly search any transaction across all accounts and dates.",
+        "action": "Try Search"
+      },
+      "categorize_investments": {
+        "title": "Categorize Investment Transactions",
+        "description": "Ensure investment transactions are properly assigned to categories.",
+        "action": "Categorize"
+      },
+      "add_investments": {
+        "title": "Add Investment Accounts",
+        "description": "You have {{count}} investment account(s). Track your investments.",
+        "action": "Add Account"
+      },
+      "set_budgets": {
+        "title": "Set Up Budgets",
+        "description": "You have {{count}} budget(s). Set budgets to control spending.",
+        "action": "Set Budgets"
+      },
+      "add_notes_tags": {
+        "title": "Add Notes & Tags",
+        "description": "{{notes}} note(s), {{tags}} tag(s). Annotate transactions for better tracking.",
+        "action": "Add Notes"
+      },
+      "try_chatbot": {
+        "title": "Try AI Chatbot",
+        "description": "Ask the AI assistant about your finances.",
+        "action": "Open Settings"
+      },
+      "accept_quest": {
+        "title": "Accept a Quest",
+        "description": "You've accepted {{count}} quest(s). Take on financial challenges.",
+        "action": "View Quests"
+      },
+      "sync_reminder": {
+        "title": "Sync Your Accounts",
+        "description": "Keep your data up to date by syncing regularly.",
+        "action": "Sync Now"
       }
     }
   }

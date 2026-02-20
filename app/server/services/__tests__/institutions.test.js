@@ -182,4 +182,63 @@ describe('institutions service', () => {
     await institutionsService.backfillMissingInstitutionIds(failingDb);
     expect(errorSpy).toHaveBeenCalled();
   });
+
+  it('covers null guards, missing lookups, scrapable=false filtering, and no-op backfill paths', async () => {
+    const fallbackDb = {
+      query: vi.fn(async (sql) => {
+        const text = String(sql);
+        if (text.includes('FROM institution_nodes') && text.includes('ORDER BY category')) {
+          return {
+            rows: [
+              { id: 1, vendor_code: 'hapoalim', institution_type: 'bank', category: 'banking', is_scrapable: 1 },
+              { id: 2, vendor_code: 'manual', institution_type: 'bank', category: 'banking', is_scrapable: 0 },
+            ],
+          };
+        }
+        if (text.includes('WHERE id = $1')) {
+          return { rows: [] };
+        }
+        if (text.includes('WHERE vendor_code = $1')) {
+          return { rows: [] };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    await expect(institutionsService.getInstitutionById(fallbackDb, null)).resolves.toBeNull();
+    await expect(institutionsService.getInstitutionByVendorCode(fallbackDb, '')).resolves.toBeNull();
+    await expect(institutionsService.getInstitutionById(fallbackDb, 999)).resolves.toBeNull();
+    await expect(institutionsService.getInstitutionByVendorCode(fallbackDb, 'missing')).resolves.toBeNull();
+    await expect(institutionsService.mapVendorCodeToInstitutionId(fallbackDb, 'missing')).resolves.toBeNull();
+    await expect(institutionsService.getAllInstitutions(fallbackDb, { scrapable: false })).resolves.toEqual([
+      { id: 2, vendor_code: 'manual', institution_type: 'bank', category: 'banking', is_scrapable: 0 },
+    ]);
+
+    await expect(institutionsService.enrichCredentialWithInstitution(fallbackDb, null)).resolves.toBeNull();
+    const untouchedCredential = { id: 77 };
+    await expect(institutionsService.enrichCredentialWithInstitution(fallbackDb, untouchedCredential)).resolves.toEqual({
+      id: 77,
+    });
+
+    await expect(institutionsService.enrichAccountWithInstitution(fallbackDb, null)).resolves.toBeNull();
+    const untouchedAccount = { id: 88 };
+    await expect(institutionsService.enrichAccountWithInstitution(fallbackDb, untouchedAccount)).resolves.toEqual({
+      id: 88,
+    });
+
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const moduleHelpers = await import('node:module');
+    const requireFromTest = moduleHelpers.createRequire(import.meta.url);
+    const sharedDatabase = requireFromTest('../database.js');
+    const querySpy = vi.spyOn(sharedDatabase, 'query')
+      .mockResolvedValueOnce({ rowCount: 0 })
+      .mockResolvedValueOnce({ rowCount: 0 });
+
+    await institutionsService.backfillMissingInstitutionIds();
+
+    expect(querySpy).toHaveBeenCalledTimes(2);
+    expect(infoSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
 });

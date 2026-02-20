@@ -51,7 +51,7 @@ async function bulkScrape(options = {}) {
     thresholdMs = STALE_SYNC_THRESHOLD_MS,
     rateLimitMs = SCRAPE_RATE_LIMIT_MS,
     logger = console,
-    showBrowser = true,
+    showBrowser = false,
     onAccountStart,
     onAccountComplete,
     createLogger,

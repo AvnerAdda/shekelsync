@@ -63,6 +63,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import logoUrl from '@app/public/logo.svg?url';
 import SmartNotifications from '@renderer/features/notifications/components/SmartNotifications';
+import GuideTips from '@renderer/features/guide-tips/components/GuideTips';
 import UpdateButton from './UpdateButton';
 import { useUpdateManager } from '../hooks/useUpdateManager';
 import { useThemeMode } from '@renderer/contexts/ThemeContext';
@@ -860,22 +861,19 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
           onInstallUpdate={installUpdate}
         />
 
+        <GuideTips />
+
         <SmartNotifications />
 
         <Tooltip title={t('titleBar.tooltips.sendFeedback')}>
           <IconButton
+            color="inherit"
             size="small"
             onClick={openFeedbackPage}
             sx={{
-              width: 36,
-              height: 36,
-              borderRadius: 2,
-              transition: 'all 0.2s',
               color: theme.palette.info.main,
-              backgroundColor: alpha(theme.palette.info.main, 0.18),
               '&:hover': {
-                backgroundColor: alpha(theme.palette.info.main, 0.28),
-                transform: 'translateY(-2px)',
+                backgroundColor: 'action.hover',
               },
             }}
           >
@@ -885,18 +883,13 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
 
         <Tooltip title={buyMeCoffeeTooltip}>
           <IconButton
+            color="inherit"
             size="small"
             onClick={() => setDonationModalOpen(true)}
             sx={{
-              width: 36,
-              height: 36,
-              borderRadius: 2,
-              transition: 'all 0.2s',
               color: supportButtonColor,
-              backgroundColor: alpha(supportButtonColor, 0.18),
               '&:hover': {
-                backgroundColor: alpha(supportButtonColor, 0.28),
-                transform: 'translateY(-2px)',
+                backgroundColor: 'action.hover',
               },
             }}
           >

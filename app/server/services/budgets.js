@@ -102,7 +102,7 @@ async function upsertBudget(payload = {}) {
     `INSERT INTO category_budgets (category_definition_id, period_type, budget_limit)
      VALUES ($1, $2, $3)
      ON CONFLICT (category_definition_id, period_type)
-     DO UPDATE SET budget_limit = $3, updated_at = CURRENT_TIMESTAMP
+     DO UPDATE SET budget_limit = $3, is_active = true, updated_at = CURRENT_TIMESTAMP
      RETURNING id`,
     [categoryId, period_type, limit]
   );

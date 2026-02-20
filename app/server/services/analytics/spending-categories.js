@@ -464,24 +464,54 @@ async function updateSpendingCategoryMapping(categoryDefinitionId, updates) {
   }
 }
 
+function resolveSpendingPeriod(params = {}) {
+  const { startDate, endDate, months = 3, currentMonthOnly = false } = params;
+  if (currentMonthOnly) {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    return { start, end };
+  }
+  return resolveDateRange({ startDate, endDate, months });
+}
+
+function toBoundedInteger(value, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+const SALARY_MATCH_SQL = `
+  (
+    LOWER(COALESCE(cd.name, '')) LIKE '%salary%'
+    OR LOWER(COALESCE(cd.name_en, '')) LIKE '%salary%'
+    OR LOWER(COALESCE(cd.name_fr, '')) LIKE '%salaire%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%salary%'
+    OR LOWER(COALESCE(parent_cd.name_en, '')) LIKE '%salary%'
+    OR LOWER(COALESCE(parent_cd.name_fr, '')) LIKE '%salaire%'
+    OR LOWER(COALESCE(t.name, '')) LIKE '%salary%'
+    OR LOWER(COALESCE(t.name, '')) LIKE '%payroll%'
+    OR LOWER(COALESCE(t.name, '')) LIKE '%wage%'
+    OR LOWER(COALESCE(t.name, '')) LIKE '%paycheck%'
+    OR LOWER(COALESCE(t.name, '')) LIKE '%salaire%'
+    OR LOWER(COALESCE(t.name, '')) LIKE '%משכורת%'
+    OR LOWER(COALESCE(t.name, '')) LIKE '%שכר%'
+    OR LOWER(COALESCE(t.vendor, '')) LIKE '%salary%'
+    OR LOWER(COALESCE(t.vendor, '')) LIKE '%payroll%'
+    OR LOWER(COALESCE(t.vendor, '')) LIKE '%wage%'
+    OR LOWER(COALESCE(t.vendor, '')) LIKE '%paycheck%'
+    OR LOWER(COALESCE(t.vendor, '')) LIKE '%salaire%'
+    OR LOWER(COALESCE(t.vendor, '')) LIKE '%משכורת%'
+    OR LOWER(COALESCE(t.vendor, '')) LIKE '%שכר%'
+  )
+`;
+
 /**
  * Get spending category breakdown with actual spending data
  * Uses current month income as 100% base for allocation percentages
  */
 async function getSpendingCategoryBreakdown(params = {}) {
-  const { startDate, endDate, months = 3, currentMonthOnly = false } = params;
-
-  let start, end;
-  if (currentMonthOnly) {
-    // Current month only
-    const now = new Date();
-    start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-  } else {
-    const resolved = resolveDateRange({ startDate, endDate, months });
-    start = resolved.start;
-    end = resolved.end;
-  }
+  const { start, end } = resolveSpendingPeriod(params);
 
   const client = await database.getClient();
 
@@ -509,6 +539,19 @@ async function getSpendingCategoryBreakdown(params = {}) {
     `, [start, end]);
 
     const totalIncome = parseFloat(incomeResult.rows[0]?.total_income || 0);
+    const salaryResult = await client.query(`
+      SELECT COALESCE(SUM(t.price), 0) as total_salary
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN category_definitions parent_cd ON parent_cd.id = cd.parent_id
+      WHERE t.date >= $1 AND t.date <= $2
+        AND t.price > 0
+        AND (cd.category_type = 'income' OR t.category_type = 'income')
+        AND (cd.is_counted_as_income IS NULL OR cd.is_counted_as_income = 1)
+        AND cd.id NOT IN (${capitalReturnSubquery})
+        AND ${SALARY_MATCH_SQL}
+    `, [start, end]);
+    const totalSalary = parseFloat(salaryResult.rows[0]?.total_salary || 0);
 
     // Get spending totals by spending category
     const result = await client.query(`
@@ -662,8 +705,111 @@ async function getSpendingCategoryBreakdown(params = {}) {
       breakdown: enrichedBreakdown,
       total_spending: totalSpending,
       total_income: totalIncome,
+      total_salary: totalSalary,
       targets,
       categories_by_allocation: categoriesByAllocation,
+    };
+  } finally {
+    client.release();
+  }
+}
+
+async function getSpendingCategoryTransactions(params = {}) {
+  const spendingCategory = String(params.spendingCategory || '').toLowerCase();
+  const validCategories = new Set(['essential', 'growth', 'stability', 'reward', 'unallocated']);
+  if (!validCategories.has(spendingCategory)) {
+    const error = new Error('Invalid spending category');
+    error.status = 400;
+    throw error;
+  }
+
+  const { start, end } = resolveSpendingPeriod(params);
+  const limit = toBoundedInteger(params.limit, 500, { min: 1, max: 2000 });
+  const offset = toBoundedInteger(params.offset, 0, { min: 0 });
+
+  const client = await database.getClient();
+
+  try {
+    const capitalReturnSubquery = `
+      SELECT id FROM category_definitions
+      WHERE name = 'החזר קרן'
+         OR name_en = 'Capital Returns'
+         OR (is_counted_as_income IS NOT NULL AND is_counted_as_income = 0)
+    `;
+
+    await ensureSpendingCategorySchema(client);
+
+    const transactionsResult = await client.query(`
+      SELECT
+        t.identifier,
+        t.vendor,
+        t.name,
+        t.date,
+        t.price,
+        t.account_number,
+        t.category_definition_id,
+        t.category_type,
+        t.status,
+        cd.name AS category_name,
+        cd.name_en AS category_name_en,
+        cd.name_fr AS category_name_fr
+      FROM transactions t
+      JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN spending_category_mappings scm ON cd.id = scm.category_definition_id
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+       AND t.vendor = tpe.transaction_vendor
+      WHERE t.date >= $1 AND t.date <= $2
+        AND t.price < 0
+        AND cd.category_type IN ('expense', 'investment')
+        AND cd.id NOT IN (${capitalReturnSubquery})
+        AND tpe.transaction_identifier IS NULL
+        AND COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') = $3
+      ORDER BY t.date DESC, ABS(t.price) DESC
+      LIMIT $4 OFFSET $5
+    `, [start, end, spendingCategory, limit, offset]);
+
+    const summaryResult = await client.query(`
+      SELECT
+        COUNT(*) AS total_count,
+        COALESCE(SUM(ABS(t.price)), 0) AS total_amount
+      FROM transactions t
+      JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN spending_category_mappings scm ON cd.id = scm.category_definition_id
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+       AND t.vendor = tpe.transaction_vendor
+      WHERE t.date >= $1 AND t.date <= $2
+        AND t.price < 0
+        AND cd.category_type IN ('expense', 'investment')
+        AND cd.id NOT IN (${capitalReturnSubquery})
+        AND tpe.transaction_identifier IS NULL
+        AND COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') = $3
+    `, [start, end, spendingCategory]);
+
+    const summary = summaryResult.rows[0] || {};
+
+    return {
+      period: { start, end },
+      spending_category: spendingCategory,
+      transactions: transactionsResult.rows.map(row => ({
+        identifier: row.identifier,
+        vendor: row.vendor,
+        name: row.name,
+        date: row.date,
+        price: parseFloat(row.price || 0),
+        account_number: row.account_number ?? null,
+        category_definition_id: row.category_definition_id === null ? null : Number(row.category_definition_id),
+        category_type: row.category_type ?? null,
+        status: row.status ?? null,
+        category_name: row.category_name ?? null,
+        category_name_en: row.category_name_en ?? null,
+        category_name_fr: row.category_name_fr ?? null,
+      })),
+      total_count: parseInt(summary.total_count || 0, 10),
+      total_amount: parseFloat(summary.total_amount || 0),
+      limit,
+      offset,
     };
   } finally {
     client.release();
@@ -754,6 +900,7 @@ module.exports = {
   getSpendingCategoryMappings,
   updateSpendingCategoryMapping,
   getSpendingCategoryBreakdown,
+  getSpendingCategoryTransactions,
   updateSpendingCategoryTargets,
   bulkAssignCategories,
   autoDetectSpendingCategory, // Export for testing

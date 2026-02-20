@@ -165,12 +165,12 @@ function getConfigHealthSummary() {
     }
   }
 
-  const envKey = process.env.CLARIFY_ENCRYPTION_KEY;
+  const envKey = process.env.SHEKELSYNC_ENCRYPTION_KEY;
   if (envKey && !/^[0-9a-f]{64}$/i.test(envKey)) {
     warnings.push({
       code: 'encryption.invalidEnvKey',
       severity: 'error',
-      message: 'CLARIFY_ENCRYPTION_KEY must be a 64-character hex string.',
+      message: 'SHEKELSYNC_ENCRYPTION_KEY must be a 64-character hex string.',
     });
   }
 

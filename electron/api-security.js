@@ -260,6 +260,9 @@ function rateLimitMiddleware(req, res, next) {
         : `Rate limit exceeded. Try again in ${retryAfter} seconds.`,
       reason: isScrapeEndpoint ? 'sync_rate_limit' : 'rate_limit',
       rateLimited: true,
+      limit: result.limit,
+      remaining: result.remaining,
+      resetAt: nextAllowedAt,
       retryAfter,
       nextAllowedAt,
     });

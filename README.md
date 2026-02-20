@@ -32,7 +32,7 @@ npm run dev:electron
 npm run dev:api
 ```
 
-On Linux, `npm run dev:electron` automatically falls back to `app/.env.local` for `CLARIFY_ENCRYPTION_KEY` when no OS keychain service is available (for example in WSL/headless sessions).
+On Linux, `npm run dev:electron` automatically falls back to `app/.env.local` for `SHEKELSYNC_ENCRYPTION_KEY` when no OS keychain service is available (for example in WSL/headless sessions).
 
 ## Tests
 
@@ -56,7 +56,7 @@ npm run init:sqlite
 ## Configuration
 
 Local desktop runs use `app/.env.local`.
-For production, set a strong `CLARIFY_ENCRYPTION_KEY` and keep `ALLOW_DEV_NO_ENCRYPTION=false`.
+For production, set a strong `SHEKELSYNC_ENCRYPTION_KEY` and keep `ALLOW_DEV_NO_ENCRYPTION=false`.
 
 ## Scraping and Compliance
 

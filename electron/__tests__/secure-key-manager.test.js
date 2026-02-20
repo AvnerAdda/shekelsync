@@ -40,7 +40,7 @@ describe('SecureKeyManager', () => {
   beforeEach(async () => {
     // Clear all mocks
     vi.clearAllMocks();
-    delete process.env.CLARIFY_ENCRYPTION_KEY;
+    delete process.env.SHEKELSYNC_ENCRYPTION_KEY;
     delete process.env.KEYTAR_DISABLE;
     delete process.env.ALLOW_INSECURE_ENV_KEY;
     globalThis.__SHEKELSYNC_KEYTAR__ = mockKeytar;
@@ -116,7 +116,7 @@ describe('SecureKeyManager', () => {
   describe('Key Retrieval - Environment Variable', () => {
     test('should use environment variable if set', async () => {
       const envKey = crypto.randomBytes(32).toString('hex');
-      process.env.CLARIFY_ENCRYPTION_KEY = envKey;
+      process.env.SHEKELSYNC_ENCRYPTION_KEY = envKey;
       process.env.ALLOW_INSECURE_ENV_KEY = 'true';
 
       const module = await import('../secure-key-manager.js');
@@ -129,7 +129,7 @@ describe('SecureKeyManager', () => {
 
     test('should cache key from environment', async () => {
       const envKey = crypto.randomBytes(32).toString('hex');
-      process.env.CLARIFY_ENCRYPTION_KEY = envKey;
+      process.env.SHEKELSYNC_ENCRYPTION_KEY = envKey;
       process.env.ALLOW_INSECURE_ENV_KEY = 'true';
 
       const module = await import('../secure-key-manager.js');
@@ -143,14 +143,14 @@ describe('SecureKeyManager', () => {
     });
 
     test('should reject invalid environment key', async () => {
-      process.env.CLARIFY_ENCRYPTION_KEY = 'invalid-key';
+      process.env.SHEKELSYNC_ENCRYPTION_KEY = 'invalid-key';
       process.env.ALLOW_INSECURE_ENV_KEY = 'true';
 
       const module = await import('../secure-key-manager.js');
       secureKeyManager = module.default || module;
 
       await expect(secureKeyManager.getKey()).rejects.toThrow(
-        'CLARIFY_ENCRYPTION_KEY environment variable is invalid'
+        'SHEKELSYNC_ENCRYPTION_KEY environment variable is invalid'
       );
     });
   });
@@ -297,7 +297,7 @@ describe('SecureKeyManager', () => {
     });
 
     test('should report available when env key is set', async () => {
-      process.env.CLARIFY_ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
+      process.env.SHEKELSYNC_ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
       process.env.ALLOW_INSECURE_ENV_KEY = 'true';
       const module = await import('../secure-key-manager.js');
       secureKeyManager = module.default || module;

@@ -1,5 +1,5 @@
 // Track if encryption key existed before our code ran (to detect external injection)
-const hadKeyAtStart = !!process.env.CLARIFY_ENCRYPTION_KEY;
+const hadKeyAtStart = !!process.env.SHEKELSYNC_ENCRYPTION_KEY;
 
 require('./setup-module-alias');
 
@@ -437,7 +437,7 @@ HOW TO FIX:
 1. Press Win+R, type "sysdm.cpl" and press Enter
 2. Click "Environment Variables" button
 3. In BOTH "User variables" and "System variables" sections:
-   - Find CLARIFY_ENCRYPTION_KEY
+   - Find SHEKELSYNC_ENCRYPTION_KEY
    - Select it and click "Delete"
 4. Click OK to close all dialogs
 5. Restart ShekelSync
@@ -449,7 +449,7 @@ ShekelSync securely stores encryption keys in Windows Credential Manager.`;
 
 HOW TO FIX:
 1. Open Terminal
-2. Run: launchctl unsetenv CLARIFY_ENCRYPTION_KEY
+2. Run: launchctl unsetenv SHEKELSYNC_ENCRYPTION_KEY
 3. Remove from ~/.zshrc or ~/.bash_profile if present
 4. Restart ShekelSync
 
@@ -460,15 +460,15 @@ WHY: In production, ShekelSync stores encryption keys in macOS Keychain.`;
 
 async function ensureEncryptionKey(config) {
   // If key exists but was set by US (not at script start), we're done
-  if (process.env.CLARIFY_ENCRYPTION_KEY && !hadKeyAtStart) {
+  if (process.env.SHEKELSYNC_ENCRYPTION_KEY && !hadKeyAtStart) {
     return;
   }
 
   // Check if key was injected externally (existed before our script started)
-  if (process.env.CLARIFY_ENCRYPTION_KEY && hadKeyAtStart) {
+  if (process.env.SHEKELSYNC_ENCRYPTION_KEY && hadKeyAtStart) {
     const envKeyAllowed = allowInsecureEnvKey || isLinux;
     if (!envKeyAllowed) {
-      const keyValue = process.env.CLARIFY_ENCRYPTION_KEY;
+      const keyValue = process.env.SHEKELSYNC_ENCRYPTION_KEY;
       const keyPreview = keyValue.length > 8
         ? `${keyValue.substring(0, 4)}...${keyValue.substring(keyValue.length - 4)}`
         : '(short key)';
@@ -497,7 +497,7 @@ Click "Exit" to close the app and manually remove the variable.${instructions}`,
       if (response === 0) {
         // User chose to clear and continue
         logger.info('User chose to clear environment key and use Credential Manager');
-        delete process.env.CLARIFY_ENCRYPTION_KEY;
+        delete process.env.SHEKELSYNC_ENCRYPTION_KEY;
         // Fall through to keychain initialization below
       } else {
         // User chose to exit
@@ -533,7 +533,7 @@ Click "Exit" to close the app and manually remove the variable.${instructions}`,
   // Use secure key manager to get or generate key from OS keychain
   try {
     const masterKey = await secureKeyManager.getKey();
-    process.env.CLARIFY_ENCRYPTION_KEY = masterKey;
+    process.env.SHEKELSYNC_ENCRYPTION_KEY = masterKey;
     logger.info('Encryption key loaded from secure storage');
 
     // SECURITY: Remove any old keys from config file if they exist

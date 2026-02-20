@@ -7,6 +7,33 @@ const esModuleMocks = vi.hoisted(() => ({
   linkMultipleTransactions: vi.fn(),
 }));
 
+const serviceStubs = vi.hoisted(() => ({
+  getExistingInvestments: vi.fn(),
+  getInvestmentHistory: vi.fn(),
+  getBankBalanceSummary: vi.fn(),
+}));
+
+vi.mock('../../services/investments/check-existing.js', () => ({
+  getExistingInvestments: serviceStubs.getExistingInvestments,
+  default: {
+    getExistingInvestments: serviceStubs.getExistingInvestments,
+  },
+}));
+
+vi.mock('../../services/investments/history.js', () => ({
+  getInvestmentHistory: serviceStubs.getInvestmentHistory,
+  default: {
+    getInvestmentHistory: serviceStubs.getInvestmentHistory,
+  },
+}));
+
+vi.mock('../../services/investments/bank-summary.js', () => ({
+  getBankBalanceSummary: serviceStubs.getBankBalanceSummary,
+  default: {
+    getBankBalanceSummary: serviceStubs.getBankBalanceSummary,
+  },
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const {
   createInvestmentsRouter,

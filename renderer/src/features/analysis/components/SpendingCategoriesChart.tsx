@@ -25,15 +25,20 @@ import {
 } from '@mui/icons-material';
 import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpendingCategories';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
-import type { SpendingAllocation, SpendingCategoryBreakdownItem } from '@renderer/types/spending-categories';
+import type {
+  SpendingAllocation,
+  SpendingCategoryBreakdownItem,
+} from '@renderer/types/spending-categories';
 import { useTranslation } from 'react-i18next';
 import { subDays, format } from 'date-fns';
+import SpendingCategoryTransactionsModal from './SpendingCategoryTransactionsModal';
 
 interface SpendingCategoriesChartProps {
   months?: number;
 }
 
 type TimeRangeOption = 'last30' | 'last60' | 'last90';
+type ViewMode = 'current' | 'incomeIndexed' | 'salaryIndexed';
 
 const SPENDING_CATEGORY_COLORS: Record<SpendingAllocation | 'other', string> = {
   essential: '#2196F3', // Blue
@@ -60,7 +65,8 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
   const { t } = useTranslation('translation', { keyPrefix: 'analysisPage.spendingChart' });
 
   const [timeRange, setTimeRange] = useState<TimeRangeOption>('last30');
-  const [viewMode, setViewMode] = useState<'current' | 'incomeIndexed'>('current');
+  const [viewMode, setViewMode] = useState<ViewMode>('current');
+  const [selectedCategory, setSelectedCategory] = useState<SpendingAllocation | null>(null);
 
   const timeRangeConfigs = useMemo<Record<TimeRangeOption, {
     label: string;
@@ -140,16 +146,28 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
   }
 
   const totalIncome = breakdown.total_income;
+  const totalSalary = breakdown.total_salary ?? 0;
   const hasIncome = totalIncome > 0;
+  const hasSalary = totalSalary > 0;
 
   const processedItems = breakdown.breakdown
     .filter(item => item.spending_category !== 'unallocated')
     .map((item) => {
       const label = t(`categories.${item.spending_category}`, { defaultValue: item.spending_category });
       const incomePercentage = hasIncome ? (item.total_amount / totalIncome) * 100 : 0;
-      const recommendedAmount = hasIncome ? (totalIncome * item.target_percentage) / 100 : 0;
-      const percentage = viewMode === 'incomeIndexed' ? incomePercentage : item.actual_percentage;
-      const displayAmount = viewMode === 'incomeIndexed' ? recommendedAmount : item.total_amount;
+      const salaryPercentage = hasSalary ? (item.total_amount / totalSalary) * 100 : 0;
+      const recommendedIncomeAmount = hasIncome ? (totalIncome * item.target_percentage) / 100 : 0;
+      const recommendedSalaryAmount = hasSalary ? (totalSalary * item.target_percentage) / 100 : 0;
+      const percentage = viewMode === 'incomeIndexed'
+        ? incomePercentage
+        : viewMode === 'salaryIndexed'
+          ? salaryPercentage
+          : item.actual_percentage;
+      const displayAmount = viewMode === 'incomeIndexed'
+        ? recommendedIncomeAmount
+        : viewMode === 'salaryIndexed'
+          ? recommendedSalaryAmount
+          : item.total_amount;
       const variance = percentage - item.target_percentage;
       const status: SpendingCategoryBreakdownItem['status'] = variance > 5 ? 'over' : variance < -5 ? 'under' : 'on_track';
 
@@ -157,7 +175,9 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
         ...item,
         label,
         incomePercentage,
-        recommendedAmount,
+        salaryPercentage,
+        recommendedIncomeAmount,
+        recommendedSalaryAmount,
         displayAmount,
         percentage,
         variance,
@@ -171,9 +191,35 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
     }
   };
 
-  const handleViewModeChange = (_: React.MouseEvent<HTMLElement>, newValue: 'current' | 'incomeIndexed' | null) => {
+  const handleViewModeChange = (_: React.MouseEvent<HTMLElement>, newValue: ViewMode | null) => {
     if (newValue) {
       setViewMode(newValue);
+    }
+  };
+
+  const handleCategoryCardClick = (spendingCategory: SpendingAllocation) => {
+    setSelectedCategory(spendingCategory);
+  };
+
+  const handleCategoryCardKeyDown = (event: React.KeyboardEvent, spendingCategory: SpendingAllocation) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleCategoryCardClick(spendingCategory);
+    }
+  };
+
+  const closeCategoryTransactionsModal = () => {
+    setSelectedCategory(null);
+  };
+
+  const selectedCategoryLabel = selectedCategory
+    ? t(`categories.${selectedCategory}`, { defaultValue: selectedCategory })
+    : '';
+
+  const handleDataChanged = () => {
+    const config = timeRangeConfigs[timeRange];
+    if (config) {
+      void fetchBreakdown(config.fetchParams);
     }
   };
 
@@ -243,13 +289,19 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <Typography variant="caption" color="text.secondary">
-            {viewMode === 'incomeIndexed'
-              ? (hasIncome
-                ? t('viewToggle.incomeHint', {
-                  amount: formatCurrency(totalIncome, { absolute: true, maximumFractionDigits: 0 }),
-                })
-                : t('viewToggle.noIncome'))
-              : t('viewToggle.currentHint')}
+            {viewMode === 'current'
+              ? t('viewToggle.currentHint')
+              : viewMode === 'incomeIndexed'
+                ? (hasIncome
+                  ? t('viewToggle.incomeHint', {
+                    amount: formatCurrency(totalIncome, { absolute: true, maximumFractionDigits: 0 }),
+                  })
+                  : t('viewToggle.noIncome'))
+                : (hasSalary
+                  ? t('viewToggle.salaryHint', {
+                    amount: formatCurrency(totalSalary, { absolute: true, maximumFractionDigits: 0 }),
+                  })
+                  : t('viewToggle.noSalary'))}
           </Typography>
           <ToggleButtonGroup
             size="small"
@@ -260,6 +312,7 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
           >
             <ToggleButton value="current">{t('viewToggle.current')}</ToggleButton>
             <ToggleButton value="incomeIndexed">{t('viewToggle.incomeIndexed')}</ToggleButton>
+            <ToggleButton value="salaryIndexed">{t('viewToggle.salaryIndexed')}</ToggleButton>
           </ToggleButtonGroup>
         </Box>
       </Box>
@@ -287,19 +340,30 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
 
                   return (
                     <Grid key={item.spending_category} size={{ xs: 12, md: 6 }}>
-                      <Box sx={{ 
-                        p: 2, 
-                        borderRadius: 3,
-                        bgcolor: (theme) => alpha(theme.palette.background.paper, 0.3),
-                        border: '1px solid',
-                        borderColor: (theme) => alpha(theme.palette.divider, 0.1),
-                        transition: 'all 0.2s',
-                        '&:hover': {
-                          bgcolor: (theme) => alpha(theme.palette.background.paper, 0.6),
-                          transform: 'translateY(-2px)',
-                          boxShadow: (theme) => `0 4px 12px 0 ${alpha(color, 0.1)}`
-                        }
-                      }}>
+                      <Box
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleCategoryCardClick(item.spending_category)}
+                        onKeyDown={(event) => handleCategoryCardKeyDown(event, item.spending_category)}
+                        sx={{
+                          p: 2,
+                          borderRadius: 3,
+                          bgcolor: (theme) => alpha(theme.palette.background.paper, 0.3),
+                          border: '1px solid',
+                          borderColor: (theme) => alpha(theme.palette.divider, 0.1),
+                          transition: 'all 0.2s',
+                          cursor: 'pointer',
+                          '&:hover': {
+                            bgcolor: (theme) => alpha(theme.palette.background.paper, 0.6),
+                            transform: 'translateY(-2px)',
+                            boxShadow: (theme) => `0 4px 12px 0 ${alpha(color, 0.1)}`
+                          },
+                          '&:focus-visible': {
+                            outline: `2px solid ${alpha(color, 0.6)}`,
+                            outlineOffset: 2,
+                          },
+                        }}
+                      >
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                             <Box sx={{ 
@@ -316,7 +380,7 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
                                 {item.label}
                               </Typography>
                               <Chip
-                                label={`${item.percentage.toFixed(0)}%${viewMode === 'incomeIndexed' ? ` ${t('labels.ofIncome')}` : ''}`}
+                                label={`${item.percentage.toFixed(0)}%${viewMode === 'incomeIndexed' ? ` ${t('labels.ofIncome')}` : viewMode === 'salaryIndexed' ? ` ${t('labels.ofSalary')}` : ''}`}
                                 size="small"
                                 sx={{ 
                                   height: 20, 
@@ -336,9 +400,11 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                               {viewMode === 'incomeIndexed'
                                 ? t('labels.incomeTarget', { value: item.target_percentage.toFixed(0) })
-                                : t('labels.target', { value: item.target_percentage.toFixed(0) })}
+                                : viewMode === 'salaryIndexed'
+                                  ? t('labels.salaryTarget', { value: item.target_percentage.toFixed(0) })
+                                  : t('labels.target', { value: item.target_percentage.toFixed(0) })}
                             </Typography>
-                            {viewMode === 'incomeIndexed' && (
+                            {viewMode !== 'current' && (
                               <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                                 {t('labels.currentSpend', {
                                   amount: formatCurrency(item.total_amount, { absolute: true, maximumFractionDigits: 0 }),
@@ -436,6 +502,17 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
           </Box>
         </CardContent>
       </Card>
+
+      <SpendingCategoryTransactionsModal
+        open={Boolean(selectedCategory)}
+        onClose={closeCategoryTransactionsModal}
+        spendingCategory={selectedCategory}
+        categoryLabel={selectedCategoryLabel}
+        timeRangeLabel={timeRangeLabel}
+        periodStart={breakdown?.period?.start ?? ''}
+        periodEnd={breakdown?.period?.end ?? ''}
+        onDataChanged={handleDataChanged}
+      />
     </Box>
   );
 };

@@ -95,6 +95,13 @@ function applySchemaUpgrades(db) {
     `);
   }
 
+  ensureColumnExists(
+    db,
+    'user_profile',
+    'guide_tips_dismissed',
+    "guide_tips_dismissed TEXT DEFAULT '[]'"
+  );
+
   const donationMetaColumns = getTableColumns(db, 'donation_meta');
   if (donationMetaColumns.length > 0) {
     db.exec(`
@@ -224,6 +231,7 @@ const TABLE_DEFINITIONS = [
       employment_status TEXT,
       onboarding_dismissed INTEGER NOT NULL DEFAULT 0 CHECK (onboarding_dismissed IN (0,1)),
       onboarding_dismissed_at TEXT,
+      guide_tips_dismissed TEXT DEFAULT '[]',
       last_active_at TEXT
     );`,
   `CREATE TABLE IF NOT EXISTS license (
@@ -976,13 +984,11 @@ const FTS5_STATEMENTS = [
   END;`,
 
   `CREATE TRIGGER IF NOT EXISTS transactions_fts_delete AFTER DELETE ON transactions BEGIN
-    INSERT INTO transactions_fts(transactions_fts, rowid, name, memo, vendor, merchant_name)
-    VALUES ('delete', OLD.rowid, OLD.name, OLD.memo, OLD.vendor, OLD.merchant_name);
+    DELETE FROM transactions_fts WHERE rowid = OLD.rowid;
   END;`,
 
   `CREATE TRIGGER IF NOT EXISTS transactions_fts_update AFTER UPDATE ON transactions BEGIN
-    INSERT INTO transactions_fts(transactions_fts, rowid, name, memo, vendor, merchant_name)
-    VALUES ('delete', OLD.rowid, OLD.name, OLD.memo, OLD.vendor, OLD.merchant_name);
+    DELETE FROM transactions_fts WHERE rowid = OLD.rowid;
     INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
     VALUES (NEW.rowid, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
   END;`,

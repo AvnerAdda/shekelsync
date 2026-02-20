@@ -22,7 +22,7 @@ describe('server encryption helpers', () => {
   });
 
   it('falls back to dev key when allowed', () => {
-    process.env.CLARIFY_ENCRYPTION_KEY = '';
+    process.env.SHEKELSYNC_ENCRYPTION_KEY = '';
     process.env.ALLOW_DEV_NO_ENCRYPTION = 'true';
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -34,7 +34,7 @@ describe('server encryption helpers', () => {
   });
 
   it('throws for invalid key length', () => {
-    process.env.CLARIFY_ENCRYPTION_KEY = '1234';
+    process.env.SHEKELSYNC_ENCRYPTION_KEY = '1234';
     const { encrypt } = reloadEncryption();
 
     expect(() => encrypt('oops')).toThrow(/64-character hex/);
@@ -42,7 +42,7 @@ describe('server encryption helpers', () => {
 
   it('encrypts and decrypts with provided key', () => {
     process.env.ALLOW_DEV_NO_ENCRYPTION = '';
-    process.env.CLARIFY_ENCRYPTION_KEY = 'a'.repeat(64);
+    process.env.SHEKELSYNC_ENCRYPTION_KEY = 'a'.repeat(64);
     const { encrypt, decrypt } = reloadEncryption();
 
     const cipher = encrypt('secret-text');

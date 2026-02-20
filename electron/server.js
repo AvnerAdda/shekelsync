@@ -234,6 +234,12 @@ async function setupAPIServer(mainWindow, options = {}) {
     }),
   );
 
+  // Guide tips (post-onboarding checklist) – lazy load
+  app.use(
+    '/api/guide-tips',
+    lazyRouter(() => require(resolveAppPath('server', 'routes', 'guide-tips.js')).createGuideTipsRouter()),
+  );
+
   // Scraping API routes (shared router)
   app.use('/api', createScrapingRouter({ mainWindow }));
 

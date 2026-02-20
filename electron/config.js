@@ -17,12 +17,12 @@ class ConfigManager {
 
   getEncryptionKey() {
     // Use the same encryption key from the environment (set by secure key manager)
-    const envKey = process.env.CLARIFY_ENCRYPTION_KEY;
+    const envKey = process.env.SHEKELSYNC_ENCRYPTION_KEY;
     if (envKey) {
       return Buffer.from(envKey, 'hex');
     }
 
-    throw new Error('CLARIFY_ENCRYPTION_KEY must be set before encrypting config.');
+    throw new Error('SHEKELSYNC_ENCRYPTION_KEY must be set before encrypting config.');
   }
 
   encrypt(text) {

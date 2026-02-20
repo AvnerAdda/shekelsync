@@ -9,7 +9,7 @@ services:
     environment:
       - USE_SQLITE=true
       - SQLITE_DB_PATH=../dist/clarify.sqlite
-      - CLARIFY_ENCRYPTION_KEY=${CLARIFY_ENCRYPTION_KEY}
+      - SHEKELSYNC_ENCRYPTION_KEY=${SHEKELSYNC_ENCRYPTION_KEY}
     ports:
       - "3000:3000"
     volumes:

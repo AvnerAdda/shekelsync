@@ -137,4 +137,13 @@ describe('sqlite-pool', () => {
 
     await expect(pool.query('SELECT $1, $2 FROM dual', [1])).rejects.toThrow(RangeError);
   });
+
+  it('builds transactions FTS triggers using row deletes for updates/removals', async () => {
+    await loadPool();
+
+    const execSql = (latestDb?.execCalls || []).join('\n');
+    expect(execSql).toContain('CREATE TRIGGER IF NOT EXISTS transactions_fts_delete');
+    expect(execSql).toContain('DELETE FROM transactions_fts');
+    expect(execSql).not.toContain('INSERT INTO transactions_fts(transactions_fts');
+  });
 });

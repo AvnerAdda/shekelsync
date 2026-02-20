@@ -77,6 +77,7 @@ afterEach(() => {
   donationsService.__resetDatabase?.();
   delete process.env.DONATION_URL;
   delete process.env.SUPPORTER_REQUIRE_AUTH;
+  delete process.env.SQLITE_DB_PATH;
 });
 
 describe('donations service', () => {
@@ -93,6 +94,20 @@ describe('donations service', () => {
     expect(result.currentMonthKey).toMatch(/^\d{4}-(0[1-9]|1[0-2])$/);
     expect(result.donationUrl).toContain('https://buymeacoffee.com/shekelsync');
     expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('grants demo bronze AI access when running against anonymized demo DB', async () => {
+    process.env.SQLITE_DB_PATH = '/tmp/clarify-anonymized.sqlite';
+
+    const result = await donationsService.getDonationStatus();
+
+    expect(result.hasDonated).toBe(true);
+    expect(result.tier).toBe('bronze');
+    expect(result.supportStatus).toBe('verified');
+    expect(result.currentPlanKey).toBe('bronze');
+    expect(result.canAccessAiAgent).toBe(true);
+    expect(result.aiAgentAccessLevel).toBe('standard');
+    expect(result.shouldShowMonthlyReminder).toBe(false);
   });
 
   it('records legacy manual donations locally when support intent is not used', async () => {

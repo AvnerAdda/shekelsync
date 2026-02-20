@@ -5,7 +5,7 @@
  * This is useful to backfill transactions if you suspect some were missed.
  *
  * Usage:
- *   CLARIFY_ENCRYPTION_KEY=... node scripts/scrape-last-2-months.js
+ *   SHEKELSYNC_ENCRYPTION_KEY=... node scripts/scrape-last-2-months.js
  *   node scripts/scrape-last-2-months.js --months 2
  *   node scripts/scrape-last-2-months.js --start-date 2025-11-01
  *   node scripts/scrape-last-2-months.js --vendor max
@@ -51,7 +51,7 @@ function printHelp() {
 Re-scrape saved vendor credentials for the last 2 months (or a custom window).
 
 Examples:
-  CLARIFY_ENCRYPTION_KEY=... node scripts/scrape-last-2-months.js
+  SHEKELSYNC_ENCRYPTION_KEY=... node scripts/scrape-last-2-months.js
   node scripts/scrape-last-2-months.js --months 2
   node scripts/scrape-last-2-months.js --start-date 2025-11-01
   node scripts/scrape-last-2-months.js --vendor hapoalim,visaCal
@@ -71,7 +71,7 @@ Options:
 
 Environment:
   SQLITE_DB_PATH         Path to SQLite DB (defaults to dist/clarify.sqlite if present)
-  CLARIFY_ENCRYPTION_KEY Required to decrypt credentials stored in vendor_credentials
+  SHEKELSYNC_ENCRYPTION_KEY Required to decrypt credentials stored in vendor_credentials
 `);
 }
 

@@ -28,6 +28,135 @@ const EXPENSE_CASE = `
   )
 `;
 
+function normalizeText(value, maxLen = 120) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.slice(0, maxLen);
+}
+
+function normalizeNumber(value) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function hasProfileData(profile = null) {
+  if (!profile || typeof profile !== 'object') {
+    return false;
+  }
+  return Boolean(
+    profile.name
+    || profile.maritalStatus
+    || profile.age !== null
+    || profile.occupation
+    || profile.employmentStatus
+    || profile.monthlyIncome !== null
+    || profile.location
+    || profile.familyStatus
+    || profile.industry
+    || profile.spouseName
+    || profile.spouseOccupation
+    || profile.spouseMonthlyIncome !== null
+    || profile.childrenCount !== null
+    || profile.householdSize !== null
+  );
+}
+
+async function getProfileContext(db) {
+  try {
+    const result = await db.query(`
+      SELECT
+        up.username,
+        up.marital_status,
+        up.age,
+        up.occupation,
+        up.monthly_income,
+        up.employment_status,
+        up.family_status,
+        up.location,
+        up.industry,
+        up.children_count,
+        up.household_size,
+        sp.name as spouse_name,
+        sp.occupation as spouse_occupation,
+        sp.monthly_income as spouse_monthly_income,
+        (
+          SELECT COUNT(*)
+          FROM children_profile cp
+          WHERE cp.user_profile_id = up.id
+        ) as children_count_actual
+      FROM user_profile up
+      LEFT JOIN spouse_profile sp ON sp.user_profile_id = up.id
+      ORDER BY up.id ASC
+      LIMIT 1
+    `);
+
+    const row = result.rows[0];
+    if (!row) {
+      return null;
+    }
+
+    const childrenCount = normalizeInt(row.children_count_actual ?? row.children_count);
+    const profile = {
+      name: normalizeText(row.username, 80),
+      maritalStatus: normalizeText(row.marital_status, 64),
+      age: normalizeInt(row.age),
+      occupation: normalizeText(row.occupation, 120),
+      employmentStatus: normalizeText(row.employment_status, 64),
+      monthlyIncome: normalizeNumber(row.monthly_income),
+      familyStatus: normalizeText(row.family_status, 120),
+      location: normalizeText(row.location, 120),
+      industry: normalizeText(row.industry, 120),
+      childrenCount,
+      householdSize: normalizeInt(row.household_size),
+      spouseName: normalizeText(row.spouse_name, 80),
+      spouseOccupation: normalizeText(row.spouse_occupation, 120),
+      spouseMonthlyIncome: normalizeNumber(row.spouse_monthly_income),
+    };
+
+    return hasProfileData(profile) ? profile : null;
+  } catch {
+    // Profile tables might not exist in older DBs.
+    return null;
+  }
+}
+
+function formatProfileSection(profile) {
+  if (!hasProfileData(profile)) {
+    return [];
+  }
+
+  const lines = ['\nUSER PROFILE:'];
+  if (profile.name) lines.push(`- Name: ${profile.name}`);
+  if (profile.maritalStatus) lines.push(`- Marital status: ${profile.maritalStatus}`);
+  if (profile.age !== null) lines.push(`- Age: ${profile.age}`);
+  if (profile.occupation) lines.push(`- Occupation: ${profile.occupation}`);
+  if (profile.employmentStatus) lines.push(`- Employment status: ${profile.employmentStatus}`);
+  if (profile.monthlyIncome !== null) {
+    lines.push(`- Reported monthly income: ₪${Math.round(profile.monthlyIncome).toLocaleString()}`);
+  }
+  if (profile.familyStatus) lines.push(`- Family status: ${profile.familyStatus}`);
+  if (profile.location) lines.push(`- Location: ${profile.location}`);
+  if (profile.industry) lines.push(`- Industry: ${profile.industry}`);
+  if (profile.householdSize !== null) lines.push(`- Household size: ${profile.householdSize}`);
+  if (profile.childrenCount !== null) lines.push(`- Children: ${profile.childrenCount}`);
+  if (profile.spouseName) lines.push(`- Spouse: ${profile.spouseName}`);
+  if (profile.spouseOccupation) lines.push(`- Spouse occupation: ${profile.spouseOccupation}`);
+  if (profile.spouseMonthlyIncome !== null) {
+    lines.push(`- Spouse monthly income: ₪${Math.round(profile.spouseMonthlyIncome).toLocaleString()}`);
+  }
+  return lines;
+}
+
 /**
  * Build financial context respecting user permissions
  * @param {Object} db - Database client
@@ -83,6 +212,7 @@ async function buildContext(db, permissions, options = {}) {
   };
 
   context.hasData = context.summary.transactionCount > 0;
+  context.profile = await getProfileContext(db);
 
   // Category breakdown (requires category permission)
   if (permissions.allowCategoryAccess) {
@@ -272,10 +402,18 @@ async function buildContext(db, permissions, options = {}) {
  */
 function formatContextForPrompt(context) {
   if (!context.hasData) {
+    const profileLines = formatProfileSection(context?.profile);
+    if (profileLines.length > 0) {
+      return `${profileLines.join('\n')}\n\nNo financial data available yet. The user needs to connect their accounts first.`;
+    }
     return 'No financial data available yet. The user needs to connect their accounts first.';
   }
 
   const parts = [];
+  const profileLines = formatProfileSection(context?.profile);
+  if (profileLines.length > 0) {
+    parts.push(...profileLines);
+  }
 
   // Summary
   parts.push(`FINANCIAL SUMMARY (Last ${context.summary.timeRange.months} months):`);
@@ -374,6 +512,30 @@ investment_accounts:
   - current_value (REAL) - current value
   - is_liquid (INTEGER) - 1 if liquid
   - is_active (INTEGER) - 1 if active
+
+user_profile:
+  - id (INTEGER PRIMARY KEY)
+  - username (TEXT) - user preferred name
+  - marital_status (TEXT)
+  - age (INTEGER)
+  - occupation (TEXT)
+  - monthly_income (REAL)
+  - employment_status (TEXT)
+  - family_status (TEXT)
+  - location (TEXT)
+  - industry (TEXT)
+
+spouse_profile:
+  - user_profile_id (INTEGER) - FK to user_profile
+  - name (TEXT)
+  - occupation (TEXT)
+  - monthly_income (REAL)
+
+children_profile:
+  - user_profile_id (INTEGER) - FK to user_profile
+  - name (TEXT)
+  - birth_date (TEXT)
+  - education_stage (TEXT)
 
 transaction_pairing_exclusions:
   - transaction_identifier (TEXT)

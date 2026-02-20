@@ -160,6 +160,7 @@ describe('data-anonymizer', () => {
       const context = {
         hasData: true,
         permissions: { read: true },
+        profile: { name: 'Dana', occupation: 'Engineer', monthlyIncome: 22000 },
         summary: { income: 5000 },
         categories: ['food'],
         budgets: [],
@@ -174,6 +175,7 @@ describe('data-anonymizer', () => {
 
       expect(result.hasData).toBe(true);
       expect(result.permissions).toEqual({ read: true });
+      expect(result.profile).toEqual({ name: 'Dana', occupation: 'Engineer', monthlyIncome: 22000 });
       expect(result.summary).toEqual({ income: 5000 });
       expect(result.recentTransactions[0].name).toBe('Merchant_1');
       expect(result.topMerchants[0].name).toBe('Merchant_1');

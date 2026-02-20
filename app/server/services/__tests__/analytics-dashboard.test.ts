@@ -32,8 +32,8 @@ describe('analytics dashboard service', () => {
     mockQuerySequence([
       {
         rows: [
-          { date: '2025-01-01', income: '100.50', expenses: '10.25' },
-          { date: '2025-01-02', income: '50', expenses: '20.75' },
+          { date: '2025-01-01', income: '100.50', expenses: '10.25', capital_returns: '0', card_repayments: '2.25' },
+          { date: '2025-01-02', income: '50', expenses: '20.75', capital_returns: '7.5', card_repayments: '0' },
         ],
       },
       {
@@ -153,8 +153,8 @@ describe('analytics dashboard service', () => {
     });
 
     expect(result.history).toEqual([
-      { date: '2025-01-01', income: 100.5, expenses: 10.25, bankBalance: 1200 },
-      { date: '2025-01-02', income: 50, expenses: 20.75, bankBalance: 1300.25 },
+      { date: '2025-01-01', income: 100.5, expenses: 10.25, capitalReturns: 0, cardRepayments: 2.25, bankBalance: 1200 },
+      { date: '2025-01-02', income: 50, expenses: 20.75, capitalReturns: 7.5, cardRepayments: 0, bankBalance: 1300.25 },
     ]);
 
     expect(result.breakdowns.byCategory).toEqual([
@@ -236,8 +236,8 @@ describe('analytics dashboard service', () => {
     mockQuerySequence([
       {
         rows: [
-          { date: '2025-02-01', income: '0', expenses: '0' },
-          { date: '2025-02-02', income: '0', expenses: '0' },
+          { date: '2025-02-01', income: '0', expenses: '0', capital_returns: '0', card_repayments: '0' },
+          { date: '2025-02-02', income: '0', expenses: '0', capital_returns: '0', card_repayments: '0' },
         ],
       },
       { rows: [] },
@@ -293,8 +293,8 @@ describe('analytics dashboard service', () => {
       availableBalance: 0,
     });
     expect(result.history).toEqual([
-      { date: '2025-02-01', income: 0, expenses: 0, bankBalance: 0 },
-      { date: '2025-02-02', income: 0, expenses: 0, bankBalance: 0 },
+      { date: '2025-02-01', income: 0, expenses: 0, capitalReturns: 0, cardRepayments: 0, bankBalance: 0 },
+      { date: '2025-02-02', income: 0, expenses: 0, capitalReturns: 0, cardRepayments: 0, bankBalance: 0 },
     ]);
     expect(result.breakdowns.byCategory).toEqual([]);
     expect(result.breakdowns.byVendor).toEqual([]);

@@ -8,6 +8,7 @@ const {
   SPECIAL_BANK_VENDORS,
   OTHER_BANK_VENDORS,
   SCRAPE_RATE_LIMIT_MS,
+  SCRAPE_RATE_LIMIT_MAX_ATTEMPTS,
 } = require('../../../utils/constants.js');
 const {
   resolveCategory,
@@ -211,9 +212,22 @@ function buildScraperOptions(options, isBank, executablePath, startDate) {
   const showBrowser =
     typeof options?.showBrowser === 'boolean' ? options.showBrowser : shouldShowBrowser;
 
-  // Use longer timeout for problematic scrapers (MAX and Discount)
-  const slowScrapers = ['max', 'discount'];
+  // Use longer timeout for problematic scrapers
+  const slowScrapers = ['max', 'discount', 'visaCal'];
   const timeout = slowScrapers.includes(options.companyId) ? MAX_TIMEOUT : DEFAULT_TIMEOUT;
+  const userPreparePage = typeof options?.preparePage === 'function' ? options.preparePage : null;
+
+  const preparePage = async (page) => {
+    if (typeof page?.setDefaultTimeout === 'function') {
+      page.setDefaultTimeout(timeout);
+    }
+    if (typeof page?.setDefaultNavigationTimeout === 'function') {
+      page.setDefaultNavigationTimeout(timeout);
+    }
+    if (userPreparePage) {
+      await userPreparePage(page);
+    }
+  };
 
   return {
     ...options,
@@ -222,6 +236,8 @@ function buildScraperOptions(options, isBank, executablePath, startDate) {
     showBrowser,
     verbose: true,
     timeout,
+    defaultTimeout: timeout,
+    preparePage,
     executablePath,
     args: [
       '--no-sandbox',
@@ -390,22 +406,38 @@ async function markCredentialScrapeStatus(client, credentialId, status) {
 }
 
 /**
- * Check if a credential was scraped recently (within the rate limit threshold)
+ * Check if a credential has exhausted scrape attempts in the current cooldown window.
  * @param {number} credentialId - The credential ID to check
  * @param {number} thresholdMs - Time threshold in milliseconds (default: 24 hours)
- * @returns {Promise<boolean>} True if scraped recently, false otherwise
+ * @param {number} maxAttempts - Maximum allowed attempts during the window
+ * @returns {Promise<boolean>} True when no more attempts are allowed, false otherwise
  */
-async function wasScrapedRecently(credentialId, thresholdMs = SCRAPE_RATE_LIMIT_MS) {
+async function wasScrapedRecently(
+  credentialId,
+  thresholdMs = SCRAPE_RATE_LIMIT_MS,
+  maxAttempts = SCRAPE_RATE_LIMIT_MAX_ATTEMPTS,
+) {
   if (!credentialId) return false;
+
+  const safeThresholdMs = Number.isFinite(thresholdMs) && thresholdMs > 0
+    ? thresholdMs
+    : SCRAPE_RATE_LIMIT_MS;
+  const safeMaxAttempts = Number.isFinite(maxAttempts) && maxAttempts > 0
+    ? Math.floor(maxAttempts)
+    : SCRAPE_RATE_LIMIT_MAX_ATTEMPTS;
+
   const client = await databaseRef.getClient();
   try {
+    const windowStartIso = new Date(Date.now() - safeThresholdMs).toISOString();
     const result = await client.query(
-      `SELECT last_scrape_attempt FROM vendor_credentials WHERE id = $1`,
-      [credentialId],
+      `SELECT COUNT(*) AS attempt_count
+         FROM scrape_events
+        WHERE credential_id = $1
+          AND created_at >= $2`,
+      [credentialId, windowStartIso],
     );
-    if (!result.rows[0]?.last_scrape_attempt) return false;
-    const lastAttempt = new Date(result.rows[0].last_scrape_attempt);
-    return (Date.now() - lastAttempt.getTime()) < thresholdMs;
+    const attemptCount = Number(result.rows[0]?.attempt_count || 0);
+    return attemptCount >= safeMaxAttempts;
   } finally {
     client.release();
   }

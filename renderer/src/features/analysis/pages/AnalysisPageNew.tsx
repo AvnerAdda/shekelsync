@@ -12,10 +12,22 @@ import {
   CircularProgress,
   Alert,
   Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  MenuItem,
+  Select,
   Skeleton,
+  TextField,
+  Tooltip,
   alpha,
 } from '@mui/material';
 import {
+  Add as AddIcon,
+  Close as CloseIcon,
   Dashboard as DashboardIcon,
   Lightbulb as ActionsIcon,
   PieChart as SpendingIcon,
@@ -32,6 +44,7 @@ import {
 import {
   BarChart as RechartsBarChart,
   Bar,
+  CartesianGrid,
   XAxis,
   YAxis,
   ResponsiveContainer,
@@ -53,8 +66,8 @@ import MakeItRealModal from '../components/MakeItRealModal';
 import SubscriptionsTab from '../components/SubscriptionsTab';
 import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@mui/material';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
+import { resolveLocalizedCategoryName } from '@renderer/shared/modals/category-hierarchy-helpers';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -96,7 +109,7 @@ interface PsychologicalInsights {
 
 interface BudgetOutlookItem {
   budgetId: number | null;
-  categoryDefinitionId: number;
+  categoryDefinitionId: number | null;
   categoryName: string;
   categoryNameEn?: string | null;
   categoryNameFr?: string | null;
@@ -104,6 +117,7 @@ interface BudgetOutlookItem {
   categoryColor?: string | null;
   parentCategoryId?: number | null;
   limit: number;
+  monthlyLimit?: number;
   actualSpent: number;
   forecasted: number;
   scenarios?: { p10: number; p50: number; p90: number } | null;
@@ -122,6 +136,180 @@ interface BudgetForecastSummary {
   exceeded: number;
   totalProjectedOverrun: number;
 }
+
+interface CategoryHierarchyItem {
+  id: number;
+  name: string;
+  name_en?: string | null;
+  name_fr?: string | null;
+  parent_id: number | null;
+  category_type: string;
+}
+
+interface CategoryHierarchyResponse {
+  categories?: CategoryHierarchyItem[];
+}
+
+interface CategoryTimelineRow {
+  amount: number | string;
+  year?: string | number | null;
+  month?: string | number | null;
+  year_month?: string | null;
+}
+
+interface CategoryTimelinePoint {
+  monthLabel: string;
+  amount: number;
+}
+
+type BudgetPreviewStatus = 'exceeded' | 'at_risk' | 'on_track';
+
+interface BudgetPreviewMetrics {
+  limit: number;
+  hasLimit: boolean;
+  actualSpent: number;
+  projectedTotal: number;
+  status: BudgetPreviewStatus;
+  risk: number;
+  utilization: number;
+  displayTarget: number;
+  actualPct: number;
+  overUnderDelta: number;
+}
+
+type StabilityBand = 'very_stable' | 'stable' | 'moving' | 'very_moving' | 'unknown';
+
+const TIMELINE_MONTH_LIMIT = 12;
+
+const getBudgetItemKey = (item: BudgetOutlookItem): string =>
+  item.categoryDefinitionId !== null && item.categoryDefinitionId !== undefined
+    ? `id:${item.categoryDefinitionId}`
+    : `name:${(item.categoryName || 'unknown').toLowerCase()}`;
+
+const parseLimitInput = (input: string): number | null => {
+  const normalized = input.replace(/,/g, '').trim();
+  if (!normalized) return null;
+  const value = Number.parseFloat(normalized);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value;
+};
+
+const clampRisk = (value: number): number => Math.min(1, Math.max(0, value));
+
+const getSuggestedLimit = (item: BudgetOutlookItem): number => {
+  const baseline = Number(item.scenarios?.p50 ?? item.projectedTotal ?? item.actualSpent ?? 0);
+  if (!Number.isFinite(baseline) || baseline <= 0) {
+    return 100;
+  }
+  return Math.max(1, Math.round(baseline));
+};
+
+const computeBudgetPreview = (
+  item: BudgetOutlookItem,
+  draftedLimit?: number | null,
+): BudgetPreviewMetrics => {
+  const sourceLimit = draftedLimit ?? item.monthlyLimit ?? item.limit;
+  const limit = Number.isFinite(sourceLimit) && sourceLimit > 0 ? Number(sourceLimit) : 0;
+  const hasLimit = limit > 0;
+
+  const actualSpent = Math.max(0, Number(item.actualSpent) || 0);
+  const projectedTotal = Math.max(
+    0,
+    Number(item.scenarios?.p50 ?? item.projectedTotal ?? item.actualSpent ?? 0) || 0,
+  );
+  const p10 = Math.max(0, Number(item.scenarios?.p10 ?? projectedTotal) || 0);
+  const p90 = Math.max(0, Number(item.scenarios?.p90 ?? projectedTotal) || 0);
+
+  let status: BudgetPreviewStatus = 'on_track';
+  let risk = 0;
+  let utilization = 0;
+
+  if (hasLimit) {
+    const projectedUtilization = limit > 0 ? projectedTotal / limit : 0;
+    const actualUtilization = limit > 0 ? actualSpent / limit : 0;
+
+    if (actualSpent >= limit) {
+      status = 'exceeded';
+      risk = 1;
+    } else if (projectedUtilization >= 1 || projectedUtilization >= 0.9 || actualUtilization >= 0.9) {
+      status = 'at_risk';
+      risk = clampRisk(projectedUtilization);
+    } else if (projectedUtilization >= 0.75) {
+      status = 'at_risk';
+      risk = clampRisk(projectedUtilization);
+    } else {
+      status = 'on_track';
+      risk = clampRisk(projectedUtilization * 0.5);
+    }
+
+    utilization = projectedUtilization * 100;
+  } else {
+    if (actualSpent > p90 && p90 > 0) {
+      status = 'exceeded';
+      risk = 1;
+    } else if (actualSpent > projectedTotal && projectedTotal > 0) {
+      status = 'at_risk';
+      risk = 0.7;
+    } else if (actualSpent > p10 && p10 > 0) {
+      status = 'at_risk';
+      risk = 0.4;
+    } else {
+      status = 'on_track';
+      risk = projectedTotal > 0 ? 0.2 : 0;
+    }
+
+    utilization = projectedTotal > 0 ? (actualSpent / projectedTotal) * 100 : 0;
+  }
+
+  const displayTarget = hasLimit ? limit : projectedTotal;
+  const actualPct = displayTarget > 0 ? (actualSpent / displayTarget) * 100 : 0;
+
+  return {
+    limit,
+    hasLimit,
+    actualSpent,
+    projectedTotal,
+    status,
+    risk: clampRisk(risk),
+    utilization,
+    displayTarget,
+    actualPct,
+    overUnderDelta: hasLimit ? projectedTotal - limit : 0,
+  };
+};
+
+const getStabilityBand = (item: BudgetOutlookItem): StabilityBand => {
+  const p50 = Number(item.scenarios?.p50 ?? item.projectedTotal ?? 0);
+  const p10 = Number(item.scenarios?.p10 ?? p50);
+  const p90 = Number(item.scenarios?.p90 ?? p50);
+
+  if (!Number.isFinite(p50) || p50 <= 0) {
+    return 'unknown';
+  }
+
+  const spreadRatio = Math.max(0, p90 - p10) / Math.max(1, p50);
+
+  if (spreadRatio <= 0.2) return 'very_stable';
+  if (spreadRatio <= 0.4) return 'stable';
+  if (spreadRatio <= 0.7) return 'moving';
+  return 'very_moving';
+};
+
+const formatTimelineLabel = (yearMonth: string | null | undefined, language: string): string => {
+  if (!yearMonth) return '';
+  const [monthPart, yearPart] = yearMonth.split('-');
+  const month = Number.parseInt(monthPart || '', 10);
+  const year = Number.parseInt(yearPart || '', 10);
+  if (Number.isNaN(month) || Number.isNaN(year)) return yearMonth;
+
+  const date = new Date(year, month - 1, 1);
+  if (Number.isNaN(date.getTime())) return yearMonth;
+
+  return date.toLocaleDateString(language || undefined, {
+    month: 'short',
+    year: '2-digit',
+  });
+};
 
 interface PersonalIntelligence extends FinancialHealthSnapshot {
   temporalIntelligence?: TemporalIntelligence | null;
@@ -189,6 +377,20 @@ const AnalysisPageNew: React.FC = () => {
   const [personalityModalOpen, setPersonalityModalOpen] = useState(false);
   const [futureModalOpen, setFutureModalOpen] = useState(false);
   const [realityModalOpen, setRealityModalOpen] = useState(false);
+  const [selectedBudgetKey, setSelectedBudgetKey] = useState<string | null>(null);
+  const [limitDrafts, setLimitDrafts] = useState<Record<string, string>>({});
+  const [savingBudgetKeys, setSavingBudgetKeys] = useState<Record<string, boolean>>({});
+  const [limitSaveError, setLimitSaveError] = useState<string | null>(null);
+  const [timelineByCategory, setTimelineByCategory] = useState<Record<string, CategoryTimelinePoint[]>>({});
+  const [timelineLoadingByCategory, setTimelineLoadingByCategory] = useState<Record<string, boolean>>({});
+  const [timelineErrorByCategory, setTimelineErrorByCategory] = useState<Record<string, string | null>>({});
+  const [addBudgetDialogOpen, setAddBudgetDialogOpen] = useState(false);
+  const [expenseCategories, setExpenseCategories] = useState<CategoryHierarchyItem[]>([]);
+  const [loadingExpenseCategories, setLoadingExpenseCategories] = useState(false);
+  const [addBudgetCategoryId, setAddBudgetCategoryId] = useState<number | ''>('');
+  const [addBudgetLimitInput, setAddBudgetLimitInput] = useState('');
+  const [addBudgetError, setAddBudgetError] = useState<string | null>(null);
+  const [addBudgetLoading, setAddBudgetLoading] = useState(false);
   
   const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
   const { formatCurrency } = useFinancePrivacy();
@@ -308,7 +510,7 @@ const AnalysisPageNew: React.FC = () => {
     }
   }, [isLocked, t]);
 
-  const fetchBudgetForecast = useCallback(async () => {
+  const fetchBudgetForecast = useCallback(async (options: { force?: boolean } = {}) => {
     if (isLocked) {
       return;
     }
@@ -316,7 +518,8 @@ const AnalysisPageNew: React.FC = () => {
     setBudgetForecastError(null);
 
     try {
-      const response = await apiClient.get<{ budgetOutlook?: BudgetOutlookItem[]; budgetSummary?: BudgetForecastSummary }>('/api/forecast/daily');
+      const endpoint = options.force ? '/api/forecast/daily?noCache=1' : '/api/forecast/daily';
+      const response = await apiClient.get<{ budgetOutlook?: BudgetOutlookItem[]; budgetSummary?: BudgetForecastSummary }>(endpoint);
       if (!response.ok) {
         throw new Error(t('errors.fetchFailed'));
       }
@@ -332,6 +535,19 @@ const AnalysisPageNew: React.FC = () => {
       }
       setBudgetOutlook(outlook);
       setBudgetSummary(summary);
+      setLimitDrafts((prev) => {
+        const next = { ...prev };
+        outlook.forEach((item) => {
+          const key = getBudgetItemKey(item);
+          const serverLimit = Number(item.monthlyLimit ?? item.limit);
+          const fallback = getSuggestedLimit(item);
+          const targetLimit = Number.isFinite(serverLimit) && serverLimit > 0 ? serverLimit : fallback;
+          if (options.force || next[key] === undefined || !next[key].trim()) {
+            next[key] = String(Math.round(targetLimit));
+          }
+        });
+        return next;
+      });
     } catch (err) {
       setBudgetForecastError(err instanceof Error ? err.message : t('errors.generic'));
       console.error('Error fetching budget forecast:', err);
@@ -347,7 +563,7 @@ const AnalysisPageNew: React.FC = () => {
   const handleRefreshAll = useCallback(() => {
     fetchIntelligence();
     if (fetchOnceRef.current.budget) {
-      fetchBudgetForecast();
+      fetchBudgetForecast({ force: true });
     }
     if (fetchOnceRef.current.temporal) {
       fetchTemporalData();
@@ -441,18 +657,89 @@ const AnalysisPageNew: React.FC = () => {
       ...(options?.showSign ? { showSign: true } : {}),
     });
 
-  const formatDateLabel = (value?: string | null) => {
-    if (!value) return null;
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return value;
-    return parsed.toLocaleDateString();
-  };
+  const normalizedLocale = locale.startsWith('fr')
+    ? 'fr'
+    : locale.startsWith('en')
+      ? 'en'
+      : 'he';
 
-  const getBudgetStatusColor = (status: BudgetOutlookItem['status']) => {
-    if (status === 'exceeded') return 'error';
-    if (status === 'at_risk') return 'warning';
-    return 'success';
-  };
+  const getBudgetCategoryName = useCallback((item: BudgetOutlookItem): string => (
+    resolveLocalizedCategoryName(
+      {
+        category_name: item.categoryName,
+        category_name_en: item.categoryNameEn,
+        category_name_fr: item.categoryNameFr,
+      },
+      normalizedLocale,
+    ) || item.categoryName
+  ), [normalizedLocale]);
+
+  const getBudgetStatusLabel = useCallback((status: BudgetPreviewStatus) => {
+    if (status === 'exceeded') return t('budgetForecast.status.exceeded', { defaultValue: 'Exceeded' });
+    if (status === 'at_risk') return t('budgetForecast.status.atRisk', { defaultValue: 'At risk' });
+    return t('budgetForecast.status.onTrack', { defaultValue: 'On track' });
+  }, [t]);
+
+  const getOverUnderLabel = useCallback((preview: BudgetPreviewMetrics) => {
+    if (!preview.hasLimit) {
+      return t('budgetForecast.overUnder.noBudget', { defaultValue: 'No budget set' });
+    }
+    if (Math.abs(preview.overUnderDelta) < 1) {
+      return t('budgetForecast.overUnder.breakEven', { defaultValue: 'On budget' });
+    }
+    if (preview.overUnderDelta > 0) {
+      return t('budgetForecast.overUnder.over', {
+        amount: formatCurrencyValue(preview.overUnderDelta, { maximumFractionDigits: 0 }),
+        defaultValue: 'Over by {{amount}}',
+      });
+    }
+    return t('budgetForecast.overUnder.under', {
+      amount: formatCurrencyValue(Math.abs(preview.overUnderDelta), { maximumFractionDigits: 0 }),
+      defaultValue: 'Under by {{amount}}',
+    });
+  }, [formatCurrencyValue, t]);
+
+  const getStabilityLabel = useCallback((band: StabilityBand) => {
+    if (band === 'very_stable') return t('budgetForecast.stability.veryStable', { defaultValue: 'Very stable' });
+    if (band === 'stable') return t('budgetForecast.stability.stable', { defaultValue: 'Stable' });
+    if (band === 'moving') return t('budgetForecast.stability.moving', { defaultValue: 'Moving' });
+    if (band === 'very_moving') return t('budgetForecast.stability.veryMoving', { defaultValue: 'Very moving' });
+    return t('budgetForecast.stability.unknown', { defaultValue: 'Not enough data' });
+  }, [t]);
+
+  const getStabilityDescription = useCallback((band: StabilityBand) => {
+    if (band === 'very_stable') {
+      return t('budgetForecast.stabilityDesc.veryStable', {
+        defaultValue: 'Spending is very predictable month to month.',
+      });
+    }
+    if (band === 'stable') {
+      return t('budgetForecast.stabilityDesc.stable', {
+        defaultValue: 'Spending usually stays in a narrow range.',
+      });
+    }
+    if (band === 'moving') {
+      return t('budgetForecast.stabilityDesc.moving', {
+        defaultValue: 'Spending can change a lot, so keep a larger buffer.',
+      });
+    }
+    if (band === 'very_moving') {
+      return t('budgetForecast.stabilityDesc.veryMoving', {
+        defaultValue: 'Spending swings heavily. Recheck this category often.',
+      });
+    }
+    return t('budgetForecast.stabilityDesc.unknown', {
+      defaultValue: 'Not enough history yet to judge stability.',
+    });
+  }, [t]);
+
+  const getStabilityChipColor = useCallback((band: StabilityBand): 'success' | 'info' | 'warning' | 'error' | 'default' => {
+    if (band === 'very_stable') return 'success';
+    if (band === 'stable') return 'info';
+    if (band === 'moving') return 'warning';
+    if (band === 'very_moving') return 'error';
+    return 'default';
+  }, []);
 
   const leafOutlook = useMemo(() => {
     const idsWithChildren = new Set<number | string>();
@@ -462,30 +749,316 @@ const AnalysisPageNew: React.FC = () => {
         idsWithChildren.add(String(item.parentCategoryId));
       }
     });
-    // Filter: only leaf categories (no children) with any activity (actual or forecasted)
-    return budgetOutlook.filter(
-      (item) =>
-        !idsWithChildren.has(item.categoryDefinitionId) &&
-        !idsWithChildren.has(String(item.categoryDefinitionId)) &&
-        (item.forecasted > 0 || item.actualSpent > 0)
-    );
+    // Show leaf categories with budget, actual spend, or forecast so empty-budget categories are still visible.
+    return budgetOutlook.filter((item) => {
+      const categoryId = item.categoryDefinitionId;
+      const monthlyLimit = Number(item.monthlyLimit ?? item.limit);
+      return (
+        !idsWithChildren.has(categoryId ?? '') &&
+        !idsWithChildren.has(String(categoryId ?? '')) &&
+        ((Number.isFinite(monthlyLimit) && monthlyLimit > 0) || item.forecasted > 0 || item.actualSpent > 0)
+      );
+    });
   }, [budgetOutlook]);
 
-  const getBudgetStatusLabel = (status: BudgetOutlookItem['status']) => {
-    if (status === 'exceeded') return t('budgetForecast.status.exceeded');
-    if (status === 'at_risk') return t('budgetForecast.status.atRisk');
-    return t('budgetForecast.status.onTrack');
-  };
+  const listedCategoryIds = useMemo(() => {
+    const ids = new Set<number>();
+    leafOutlook.forEach((item) => {
+      if (item.categoryDefinitionId !== null && item.categoryDefinitionId !== undefined) {
+        ids.add(item.categoryDefinitionId);
+      }
+    });
+    return ids;
+  }, [leafOutlook]);
 
-  const getOverUnderLabel = (item: BudgetOutlookItem) => {
-    if (!item.limit || item.limit <= 0) return t('budgetForecast.overUnder.noBudget');
-    const delta = item.projectedTotal - item.limit;
-    if (Math.abs(delta) < 1) return t('budgetForecast.overUnder.breakEven');
-    if (delta > 0) {
-      return t('budgetForecast.overUnder.over', { amount: formatCurrencyValue(delta, { maximumFractionDigits: 0 }) });
+  const getDraftLimitForItem = useCallback((item: BudgetOutlookItem) => {
+    const draft = limitDrafts[getBudgetItemKey(item)] || '';
+    return parseLimitInput(draft);
+  }, [limitDrafts]);
+
+  const getPreviewForItem = useCallback((item: BudgetOutlookItem) => (
+    computeBudgetPreview(item, getDraftLimitForItem(item))
+  ), [getDraftLimitForItem]);
+
+  const sortedLeafOutlook = useMemo(() => (
+    leafOutlook
+      .slice()
+      .sort((a, b) => {
+        const aPreview = getPreviewForItem(a);
+        const bPreview = getPreviewForItem(b);
+        const riskDelta = bPreview.risk - aPreview.risk;
+        if (Math.abs(riskDelta) > 0.001) return riskDelta;
+        return bPreview.utilization - aPreview.utilization;
+      })
+  ), [getPreviewForItem, leafOutlook]);
+
+  const selectedBudgetItem = useMemo(() => {
+    if (!selectedBudgetKey) return null;
+    return budgetOutlook.find((item) => getBudgetItemKey(item) === selectedBudgetKey) || null;
+  }, [budgetOutlook, selectedBudgetKey]);
+
+  const selectedBudgetPreview = useMemo(() => (
+    selectedBudgetItem ? getPreviewForItem(selectedBudgetItem) : null
+  ), [getPreviewForItem, selectedBudgetItem]);
+
+  const selectedStabilityBand = useMemo(() => (
+    selectedBudgetItem ? getStabilityBand(selectedBudgetItem) : 'unknown'
+  ), [selectedBudgetItem]);
+
+  const selectedTimeline = useMemo(() => (
+    selectedBudgetKey ? timelineByCategory[selectedBudgetKey] || [] : []
+  ), [selectedBudgetKey, timelineByCategory]);
+
+  const selectedTimelineLoading = selectedBudgetKey ? Boolean(timelineLoadingByCategory[selectedBudgetKey]) : false;
+  const selectedTimelineError = selectedBudgetKey ? timelineErrorByCategory[selectedBudgetKey] || null : null;
+  const selectedBudgetSaving = selectedBudgetKey ? Boolean(savingBudgetKeys[selectedBudgetKey]) : false;
+
+  const expenseCategoriesById = useMemo(
+    () => new Map(expenseCategories.map((category) => [category.id, category])),
+    [expenseCategories],
+  );
+
+  const getExpenseCategoryLabel = useCallback((category: CategoryHierarchyItem): string => {
+    const localized = resolveLocalizedCategoryName(
+      { name: category.name, name_en: category.name_en, name_fr: category.name_fr },
+      normalizedLocale,
+    ) || category.name;
+
+    if (!category.parent_id) {
+      return localized;
     }
-    return t('budgetForecast.overUnder.under', { amount: formatCurrencyValue(Math.abs(delta), { maximumFractionDigits: 0 }) });
-  };
+
+    const parent = expenseCategoriesById.get(category.parent_id);
+    if (!parent) {
+      return localized;
+    }
+
+    const parentName = resolveLocalizedCategoryName(
+      { name: parent.name, name_en: parent.name_en, name_fr: parent.name_fr },
+      normalizedLocale,
+    ) || parent.name;
+
+    return `${parentName} / ${localized}`;
+  }, [expenseCategoriesById, normalizedLocale]);
+
+  const addableExpenseCategories = useMemo(() => (
+    expenseCategories
+      .filter((category) => category.category_type === 'expense')
+      .filter((category) => !listedCategoryIds.has(category.id))
+      .slice()
+      .sort((a, b) => getExpenseCategoryLabel(a).localeCompare(getExpenseCategoryLabel(b), i18n.language || 'en'))
+  ), [expenseCategories, getExpenseCategoryLabel, i18n.language, listedCategoryIds]);
+
+  const handleBudgetCardClick = useCallback((item: BudgetOutlookItem) => {
+    const key = getBudgetItemKey(item);
+    setSelectedBudgetKey(key);
+    setLimitSaveError(null);
+    setLimitDrafts((prev) => {
+      if (prev[key] !== undefined && prev[key].trim()) {
+        return prev;
+      }
+      const serverLimit = Number(item.monthlyLimit ?? item.limit);
+      const fallback = getSuggestedLimit(item);
+      const value = Number.isFinite(serverLimit) && serverLimit > 0 ? serverLimit : fallback;
+      return { ...prev, [key]: String(Math.round(value)) };
+    });
+  }, []);
+
+  const closeBudgetDetails = useCallback(() => {
+    setSelectedBudgetKey(null);
+    setLimitSaveError(null);
+  }, []);
+
+  const handleLimitDraftChange = useCallback((item: BudgetOutlookItem, value: string) => {
+    const key = getBudgetItemKey(item);
+    setLimitDrafts((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const saveLimitForCategory = useCallback(async (item: BudgetOutlookItem) => {
+    const key = getBudgetItemKey(item);
+    const parsedLimit = parseLimitInput(limitDrafts[key] || '');
+
+    if (!parsedLimit) {
+      setLimitSaveError(t('budgetForecast.limitInputError', { defaultValue: 'Enter a limit greater than 0.' }));
+      return;
+    }
+
+    if (!item.categoryDefinitionId) {
+      setLimitSaveError(t('budgetForecast.limitCategoryError', {
+        defaultValue: 'This category cannot be budgeted because it has no category ID.',
+      }));
+      return;
+    }
+
+    setSavingBudgetKeys((prev) => ({ ...prev, [key]: true }));
+    setLimitSaveError(null);
+
+    try {
+      const payload = item.budgetId
+        ? { id: item.budgetId, budget_limit: parsedLimit }
+        : {
+          category_definition_id: item.categoryDefinitionId,
+          period_type: 'monthly',
+          budget_limit: parsedLimit,
+        };
+      const response = item.budgetId
+        ? await apiClient.put('/api/budgets', payload)
+        : await apiClient.post('/api/budgets', payload);
+
+      if (!response.ok) {
+        const responseData = response.data as { error?: string } | null;
+        throw new Error(responseData?.error || t('budgetForecast.limitSaveFailed', { defaultValue: 'Failed to save limit.' }));
+      }
+
+      setLimitDrafts((prev) => ({ ...prev, [key]: String(Math.round(parsedLimit)) }));
+      await fetchBudgetForecast({ force: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('errors.generic');
+      setLimitSaveError(message);
+      console.error('Failed to save budget limit:', err);
+    } finally {
+      setSavingBudgetKeys((prev) => ({ ...prev, [key]: false }));
+    }
+  }, [fetchBudgetForecast, limitDrafts, t]);
+
+  const fetchBudgetTimeline = useCallback(async (item: BudgetOutlookItem) => {
+    if (!item.categoryDefinitionId) {
+      return;
+    }
+    const key = getBudgetItemKey(item);
+    setTimelineLoadingByCategory((prev) => ({ ...prev, [key]: true }));
+    setTimelineErrorByCategory((prev) => ({ ...prev, [key]: null }));
+
+    try {
+      const params = new URLSearchParams({
+        categoryId: String(item.categoryDefinitionId),
+        month: String(TIMELINE_MONTH_LIMIT),
+        groupByYear: 'false',
+      });
+      const response = await apiClient.get(`/api/category_by_month?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(t('budgetForecast.timelineLoadFailed', { defaultValue: 'Failed to load category timeline.' }));
+      }
+
+      const rows = Array.isArray(response.data) ? (response.data as CategoryTimelineRow[]) : [];
+      const points = rows.map((row) => {
+        const yearMonth = row.year_month || `${String(row.month || '').padStart(2, '0')}-${String(row.year || '')}`;
+        return {
+          monthLabel: formatTimelineLabel(yearMonth, i18n.language || 'en'),
+          amount: Math.abs(Number(row.amount) || 0),
+        };
+      });
+
+      setTimelineByCategory((prev) => ({ ...prev, [key]: points }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('errors.generic');
+      setTimelineErrorByCategory((prev) => ({ ...prev, [key]: message }));
+      console.error('Failed to load budget timeline:', err);
+    } finally {
+      setTimelineLoadingByCategory((prev) => ({ ...prev, [key]: false }));
+    }
+  }, [i18n.language, t]);
+
+  useEffect(() => {
+    if (!selectedBudgetItem || !selectedBudgetKey) {
+      return;
+    }
+    if (!selectedBudgetItem.categoryDefinitionId) {
+      return;
+    }
+    if (timelineLoadingByCategory[selectedBudgetKey]) {
+      return;
+    }
+    if (timelineByCategory[selectedBudgetKey]) {
+      return;
+    }
+    void fetchBudgetTimeline(selectedBudgetItem);
+  }, [
+    fetchBudgetTimeline,
+    selectedBudgetItem,
+    selectedBudgetKey,
+    timelineByCategory,
+    timelineLoadingByCategory,
+  ]);
+
+  const loadExpenseCategories = useCallback(async () => {
+    if (loadingExpenseCategories) return;
+    setLoadingExpenseCategories(true);
+    setAddBudgetError(null);
+
+    try {
+      const response = await apiClient.get<CategoryHierarchyResponse>('/api/categories/hierarchy?type=expense');
+      if (!response.ok) {
+        throw new Error(t('budgetForecast.categoriesLoadFailed', { defaultValue: 'Failed to load categories.' }));
+      }
+      const categories = Array.isArray(response.data?.categories) ? response.data.categories : [];
+      setExpenseCategories(categories);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('errors.generic');
+      setAddBudgetError(message);
+      console.error('Failed to fetch expense categories:', err);
+    } finally {
+      setLoadingExpenseCategories(false);
+    }
+  }, [loadingExpenseCategories, t]);
+
+  const openAddBudgetDialog = useCallback(() => {
+    setAddBudgetDialogOpen(true);
+    setAddBudgetError(null);
+    if (expenseCategories.length === 0) {
+      void loadExpenseCategories();
+    }
+  }, [expenseCategories.length, loadExpenseCategories]);
+
+  const closeAddBudgetDialog = useCallback(() => {
+    setAddBudgetDialogOpen(false);
+    setAddBudgetCategoryId('');
+    setAddBudgetLimitInput('');
+    setAddBudgetError(null);
+  }, []);
+
+  const handleCreateAdditionalBudget = useCallback(async () => {
+    const parsedLimit = parseLimitInput(addBudgetLimitInput);
+    if (!addBudgetCategoryId) {
+      setAddBudgetError(t('budgetForecast.selectCategoryError', { defaultValue: 'Choose a category first.' }));
+      return;
+    }
+    if (!parsedLimit) {
+      setAddBudgetError(t('budgetForecast.limitInputError', { defaultValue: 'Enter a limit greater than 0.' }));
+      return;
+    }
+
+    setAddBudgetLoading(true);
+    setAddBudgetError(null);
+
+    try {
+      const response = await apiClient.post('/api/budgets', {
+        category_definition_id: addBudgetCategoryId,
+        period_type: 'monthly',
+        budget_limit: parsedLimit,
+      });
+
+      if (!response.ok) {
+        const responseData = response.data as { error?: string } | null;
+        throw new Error(responseData?.error || t('budgetForecast.addBudgetFailed', { defaultValue: 'Failed to add budget.' }));
+      }
+
+      closeAddBudgetDialog();
+      await fetchBudgetForecast({ force: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('errors.generic');
+      setAddBudgetError(message);
+      console.error('Failed to add additional budget category:', err);
+    } finally {
+      setAddBudgetLoading(false);
+    }
+  }, [
+    addBudgetCategoryId,
+    addBudgetLimitInput,
+    closeAddBudgetDialog,
+    fetchBudgetForecast,
+    t,
+  ]);
 
   const isRefreshing = loading || budgetForecastLoading || temporalLoading || behavioralLoading || futureLoading || timeValueLoading;
 
@@ -604,6 +1177,9 @@ const AnalysisPageNew: React.FC = () => {
     if (typeof value === 'number') return Math.round(value).toString();
     return value;
   };
+
+  const selectedSuggestedLimit = selectedBudgetItem ? getSuggestedLimit(selectedBudgetItem) : null;
+  const canCreateAdditionalBudget = addBudgetCategoryId !== '' && parseLimitInput(addBudgetLimitInput) !== null;
 
   if (isLocked) {
     return (
@@ -1259,15 +1835,25 @@ const AnalysisPageNew: React.FC = () => {
                   {t('budgetForecast.subtitleUnified')}
                 </Typography>
               </Box>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={budgetForecastLoading ? <CircularProgress size={16} aria-label={t('states.loading')} /> : <RefreshIcon />}
-                onClick={fetchBudgetForecast}
-                disabled={budgetForecastLoading}
-              >
-                {budgetForecastLoading ? t('actions.refreshing') : t('actions.refresh')}
-              </Button>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={openAddBudgetDialog}
+                >
+                  {t('budgetForecast.addBudget', { defaultValue: 'Add budget' })}
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={budgetForecastLoading ? <CircularProgress size={16} aria-label={t('states.loading')} /> : <RefreshIcon />}
+                  onClick={() => fetchBudgetForecast({ force: true })}
+                  disabled={budgetForecastLoading}
+                >
+                  {budgetForecastLoading ? t('actions.refreshing') : t('actions.refresh')}
+                </Button>
+              </Box>
             </Box>
 
             {budgetForecastError && (
@@ -1304,146 +1890,152 @@ const AnalysisPageNew: React.FC = () => {
                 <Typography variant="body2">
                   {t('budgetForecast.emptyDescription', { defaultValue: 'Create budgets for your spending categories to track and forecast your expenses.' })}
                 </Typography>
+                <Button
+                  size="small"
+                  variant="contained"
+                  sx={{ alignSelf: 'flex-start', mt: 1 }}
+                  onClick={openAddBudgetDialog}
+                  startIcon={<AddIcon />}
+                >
+                  {t('budgetForecast.addBudget', { defaultValue: 'Add budget' })}
+                </Button>
               </Alert>
-            ) : leafOutlook.length === 0 ? (
+            ) : sortedLeafOutlook.length === 0 ? (
               <Alert severity="info">{t('budgetForecast.noForecastedCategories', { defaultValue: 'No categories with active forecast data available.' })}</Alert>
             ) : (
               <Grid container spacing={2}>
-                {leafOutlook
-                  .slice()
-                  .sort((a, b) => {
-                    const riskDelta = b.risk - a.risk;
-                    if (Math.abs(riskDelta) > 0.001) return riskDelta;
-                    return b.utilization - a.utilization;
-                  })
-                  .map((item, idx) => {
-                    const isExceeded = item.status === 'exceeded';
-                    const isAtRisk = item.status === 'at_risk';
-                    const hasLimit = item.limit > 0;
-                    
-                    // Use limit for progress calculation since status is based on projected/limit
-                    const displayTarget = hasLimit ? item.limit : item.projectedTotal;
-                    const actualPct = displayTarget > 0 ? (item.actualSpent / displayTarget) * 100 : 0;
-                    
-                    const utilizationRatio = hasLimit && item.limit > 0 
-                      ? item.projectedTotal / item.limit 
-                      : actualPct / 100;
-                    const exceededLoops = Math.floor(utilizationRatio);
-                    const remainderPct = (utilizationRatio - exceededLoops) * 100;
-                    const displayProgress = isExceeded && exceededLoops >= 1 ? remainderPct : Math.min(actualPct, 100);
-                    
-                    // Display limit as target for budget categories, otherwise show projected total
-                    const displayAmount = hasLimit ? item.limit : item.projectedTotal;
-                    
-                    const categoryName = locale.startsWith('he')
-                      ? item.categoryName
-                      : locale.startsWith('fr')
-                      ? item.categoryNameFr || item.categoryNameEn || item.categoryName
-                      : item.categoryNameEn || item.categoryNameFr || item.categoryName;
-                    const statusColor = isExceeded ? '#dc2626' : isAtRisk ? '#d97706' : '#059669';
-                    
-                    const tooltipContent = item.scenarios ? (
-                      <Box sx={{ fontSize: '0.75rem', p: 1 }}>
-                        <Box sx={{ mb: 0.5 }}>
-                          <strong>Current:</strong> {formatCurrencyValue(item.actualSpent)}
-                        </Box>
-                        <Box sx={{ mb: 0.5, color: '#22c55e' }}>
-                          <strong>Best (P10):</strong> {formatCurrencyValue(item.scenarios.p10)}
-                        </Box>
-                        <Box sx={{ mb: 0.5, color: '#f59e0b' }}>
-                          <strong>Medium (P50):</strong> {formatCurrencyValue(item.scenarios.p50)}
-                        </Box>
-                        <Box sx={{ color: '#ef4444' }}>
-                          <strong>Bad (P90):</strong> {formatCurrencyValue(item.scenarios.p90)}
-                        </Box>
+                {sortedLeafOutlook.map((item) => {
+                  const itemKey = getBudgetItemKey(item);
+                  const preview = getPreviewForItem(item);
+                  const stabilityBand = getStabilityBand(item);
+                  const categoryName = getBudgetCategoryName(item);
+                  const riskPercent = Math.round(preview.risk * 100);
+                  const isExceeded = preview.status === 'exceeded';
+                  const isAtRisk = preview.status === 'at_risk';
+                  const statusColor = isExceeded ? '#dc2626' : isAtRisk ? '#d97706' : '#059669';
+                  const displayAmount = preview.hasLimit ? preview.limit : preview.projectedTotal;
+                  const tooltipContent = (
+                    <Box sx={{ fontSize: '0.75rem', p: 1 }}>
+                      <Box sx={{ mb: 0.5 }}>
+                        <strong>{t('budgetForecast.actualLabel', { defaultValue: 'Actual' })}:</strong> {formatCurrencyValue(item.actualSpent)}
                       </Box>
-                    ) : null;
+                      <Box sx={{ mb: 0.5, color: '#22c55e' }}>
+                        <strong>P10:</strong> {formatCurrencyValue(item.scenarios?.p10 ?? item.projectedTotal)}
+                      </Box>
+                      <Box sx={{ mb: 0.5, color: '#f59e0b' }}>
+                        <strong>P50:</strong> {formatCurrencyValue(item.scenarios?.p50 ?? item.projectedTotal)}
+                      </Box>
+                      <Box sx={{ color: '#ef4444', mb: 0.5 }}>
+                        <strong>P90:</strong> {formatCurrencyValue(item.scenarios?.p90 ?? item.projectedTotal)}
+                      </Box>
+                      <Box sx={{ color: 'text.secondary' }}>
+                        {t('budgetForecast.clickForDetails', {
+                          defaultValue: 'Click for timeline, limit editing and full details.',
+                        })}
+                      </Box>
+                    </Box>
+                  );
 
-                    return (
-                      <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={`${item.categoryDefinitionId ?? 'cat'}-${idx}`}>
-                        <Tooltip title={tooltipContent} enterDelay={200}>
+                  return (
+                    <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={itemKey}>
+                      <Tooltip title={tooltipContent} enterDelay={200}>
+                        <Box
+                          onClick={() => handleBudgetCardClick(item)}
+                          sx={{
+                            position: 'relative',
+                            p: 2,
+                            height: '100%',
+                            minHeight: 132,
+                            borderRadius: 4,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            overflow: 'hidden',
+                            bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+                            backdropFilter: 'blur(12px)',
+                            background: (theme) => `linear-gradient(90deg,
+                              ${alpha(statusColor, 0.14)} ${Math.min(preview.actualPct, 100)}%,
+                              ${alpha(theme.palette.background.paper, 0.4)} ${Math.min(preview.actualPct, 100)}%)`,
+                            border: '1px solid',
+                            borderColor: alpha(statusColor, 0.3),
+                            transition: 'all 0.3s ease-in-out',
+                            '&:hover': {
+                              transform: 'translateY(-4px)',
+                              boxShadow: (theme) => `0 8px 24px 0 ${alpha(statusColor, 0.2)}`,
+                              borderColor: statusColor,
+                            },
+                            cursor: 'pointer',
+                          }}
+                        >
                           <Box
                             sx={{
-                              position: 'relative',
-                              p: 2,
-                              height: '100%',
-                              minHeight: 110,
-                              borderRadius: 4,
-                              display: 'flex',
-                              flexDirection: 'column',
-                              justifyContent: 'space-between',
-                              overflow: 'hidden',
-                              bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
-                              backdropFilter: 'blur(12px)',
-                              background: (theme) => `linear-gradient(90deg, 
-                                ${alpha(statusColor, 0.15)} ${Math.min(actualPct, 100)}%, 
-                                ${alpha(theme.palette.background.paper, 0.4)} ${Math.min(actualPct, 100)}%)`,
-                              border: '1px solid',
-                              borderColor: alpha(statusColor, 0.3),
-                              transition: 'all 0.3s ease-in-out',
-                              '&:hover': { 
-                                transform: 'translateY(-4px)',
-                                boxShadow: (theme) => `0 8px 24px 0 ${alpha(statusColor, 0.2)}`,
-                                borderColor: statusColor,
-                              },
-                              cursor: 'help'
+                              position: 'absolute',
+                              right: -10,
+                              bottom: -15,
+                              opacity: 0.1,
+                              transform: 'rotate(-15deg)',
+                              pointerEvents: 'none',
+                              zIndex: 0,
                             }}
                           >
-                            {/* Background Icon (Watermark) */}
-                            <Box
-                              sx={{
-                                position: 'absolute',
-                                right: -10,
-                                bottom: -15,
-                                opacity: 0.1,
-                                transform: 'rotate(-15deg)',
-                                pointerEvents: 'none',
-                                zIndex: 0
-                              }}
-                            >
-                              {item.categoryIcon ? (
-                                <CategoryIcon iconName={item.categoryIcon} color={statusColor} size={100} />
-                              ) : (
-                                <Typography sx={{ fontSize: 80, fontWeight: 900, color: statusColor, opacity: 0.5 }}>
-                                  {categoryName?.slice(0, 1)}
-                                </Typography>
-                              )}
+                            {item.categoryIcon ? (
+                              <CategoryIcon iconName={item.categoryIcon} color={statusColor} size={100} />
+                            ) : (
+                              <Typography sx={{ fontSize: 80, fontWeight: 900, color: statusColor, opacity: 0.5 }}>
+                                {categoryName?.slice(0, 1)}
+                              </Typography>
+                            )}
+                          </Box>
+
+                          <Box sx={{ position: 'relative', zIndex: 1, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ maxWidth: '72%' }}>
+                              {categoryName}
+                            </Typography>
+                            <Typography variant="h6" fontWeight={800} sx={{ color: statusColor }}>
+                              {Math.round(preview.actualPct)}%
+                            </Typography>
+                          </Box>
+
+                          <Box sx={{ position: 'relative', zIndex: 1, width: '100%' }}>
+                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                              {formatCurrencyValue(preview.actualSpent, { maximumFractionDigits: 0 })} / {formatCurrencyValue(displayAmount, { maximumFractionDigits: 0 })}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {getOverUnderLabel(preview)}
+                            </Typography>
+
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: statusColor }} />
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: statusColor }}>
+                                {getBudgetStatusLabel(preview.status)} • {t('budgetForecast.riskLabel', {
+                                  value: riskPercent,
+                                  defaultValue: 'Risk {{value}}%',
+                                })}
+                              </Typography>
                             </Box>
 
-                            {/* Content - Top Row */}
-                            <Box sx={{ position: 'relative', zIndex: 1, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                              <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ maxWidth: '70%' }}>
-                                {categoryName}
-                              </Typography>
-                              <Typography variant="h6" fontWeight={800} sx={{ color: statusColor }}>
-                                {Math.round(actualPct)}%
-                              </Typography>
-                            </Box>
-
-                            {/* Content - Bottom Row */}
-                            <Box sx={{ position: 'relative', zIndex: 1, width: '100%' }}>
-                              <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                {formatCurrencyValue(item.actualSpent, { maximumFractionDigits: 0 })} / {formatCurrencyValue(displayAmount, { maximumFractionDigits: 0 })}
-                              </Typography>
-                              
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: statusColor }} />
-                                <Typography variant="caption" sx={{ fontWeight: 600, color: statusColor }}>
-                                  {isExceeded ? t('budgetForecast.exceeded', { defaultValue: 'Over Budget' }) : isAtRisk ? t('budgetForecast.atRisk', { defaultValue: 'At Risk' }) : t('budgetForecast.onTrack', { defaultValue: 'On Track' })}
-                                </Typography>
-                              </Box>
-
-                              {!hasLimit && (
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, fontStyle: 'italic' }}>
-                                  {t('budgetForecast.setLimit')}
-                                </Typography>
+                            <Box sx={{ mt: 0.75, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                              <Chip
+                                size="small"
+                                color={getStabilityChipColor(stabilityBand)}
+                                label={getStabilityLabel(stabilityBand)}
+                                sx={{ height: 20, fontSize: '0.7rem' }}
+                              />
+                              {!preview.hasLimit && (
+                                <Chip
+                                  size="small"
+                                  variant="outlined"
+                                  label={t('budgetForecast.setLimit', { defaultValue: 'Set a limit' })}
+                                  sx={{ height: 20, fontSize: '0.7rem' }}
+                                />
                               )}
                             </Box>
                           </Box>
-                        </Tooltip>
-                      </Grid>
-                    );
-                  })}
+                        </Box>
+                      </Tooltip>
+                    </Grid>
+                  );
+                })}
               </Grid>
             )}
           </Paper>
@@ -1484,6 +2076,291 @@ const AnalysisPageNew: React.FC = () => {
           <SubscriptionsTab />
         </Paper>
       </TabPanel>
+
+      <Dialog
+        open={Boolean(selectedBudgetItem)}
+        onClose={closeBudgetDetails}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle sx={{ pr: 6 }}>
+          {selectedBudgetItem
+            ? t('budgetForecast.detailsTitle', {
+              category: getBudgetCategoryName(selectedBudgetItem),
+              defaultValue: '{{category}} budget details',
+            })
+            : t('budgetForecast.detailsTitleFallback', { defaultValue: 'Budget details' })}
+          <IconButton
+            aria-label={t('budgetForecast.closeDetails', { defaultValue: 'Close budget details' })}
+            onClick={closeBudgetDetails}
+            sx={{ position: 'absolute', right: 8, top: 8 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedBudgetItem && selectedBudgetPreview ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {limitSaveError && (
+                <Alert severity="error">{limitSaveError}</Alert>
+              )}
+
+              <Grid container spacing={1.5}>
+                <Grid size={{ xs: 6, md: 3 }}>
+                  <Paper variant="outlined" sx={{ p: 1.5 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('budgetForecast.actualLabel', { defaultValue: 'Actual' })}
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700}>
+                      {formatCurrencyValue(selectedBudgetPreview.actualSpent, { maximumFractionDigits: 0 })}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid size={{ xs: 6, md: 3 }}>
+                  <Paper variant="outlined" sx={{ p: 1.5 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('budgetForecast.projectedTotalLabel', { defaultValue: 'Projected total' })}
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700}>
+                      {formatCurrencyValue(selectedBudgetPreview.projectedTotal, { maximumFractionDigits: 0 })}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid size={{ xs: 6, md: 3 }}>
+                  <Paper variant="outlined" sx={{ p: 1.5 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('budgetForecast.limitLabelShort', { defaultValue: 'Limit' })}
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700}>
+                      {selectedBudgetPreview.hasLimit
+                        ? formatCurrencyValue(selectedBudgetPreview.limit, { maximumFractionDigits: 0 })
+                        : t('budgetForecast.notSet', { defaultValue: 'Not set' })}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid size={{ xs: 6, md: 3 }}>
+                  <Paper variant="outlined" sx={{ p: 1.5 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('budgetForecast.riskNow', { defaultValue: 'Risk now' })}
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700}>
+                      {Math.round(selectedBudgetPreview.risk * 100)}%
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {getBudgetStatusLabel(selectedBudgetPreview.status)}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              <Alert
+                severity={
+                  selectedStabilityBand === 'very_moving'
+                    ? 'warning'
+                    : selectedStabilityBand === 'moving' || selectedStabilityBand === 'unknown'
+                      ? 'info'
+                      : 'success'
+                }
+              >
+                <Typography variant="body2" fontWeight={600}>
+                  {t('budgetForecast.stabilityLabel', { defaultValue: 'Stability' })}: {getStabilityLabel(selectedStabilityBand)}
+                </Typography>
+                <Typography variant="caption">
+                  {getStabilityDescription(selectedStabilityBand)}
+                </Typography>
+              </Alert>
+
+              <Paper variant="outlined" sx={{ p: 1.5 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  {t('budgetForecast.setLimitTitle', { defaultValue: 'Set monthly limit (live risk preview)' })}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <TextField
+                    size="small"
+                    label={t('budgetForecast.limitInputLabel', { defaultValue: 'Monthly limit' })}
+                    value={selectedBudgetKey ? limitDrafts[selectedBudgetKey] || '' : ''}
+                    onChange={(event) => {
+                      if (selectedBudgetItem) {
+                        handleLimitDraftChange(selectedBudgetItem, event.target.value);
+                      }
+                    }}
+                    disabled={!selectedBudgetItem.categoryDefinitionId || selectedBudgetSaving}
+                    inputProps={{ inputMode: 'decimal' }}
+                    sx={{ minWidth: 220 }}
+                  />
+                  <Button
+                    variant="contained"
+                    onClick={() => {
+                      if (selectedBudgetItem) {
+                        void saveLimitForCategory(selectedBudgetItem);
+                      }
+                    }}
+                    disabled={!selectedBudgetItem.categoryDefinitionId || selectedBudgetSaving}
+                  >
+                    {selectedBudgetSaving
+                      ? t('budgetForecast.savingLimit', { defaultValue: 'Saving...' })
+                      : t('budgetForecast.saveLimit', { defaultValue: 'Save limit' })}
+                  </Button>
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                  {t('budgetForecast.suggestedLimit', {
+                    value: formatCurrencyValue(selectedSuggestedLimit || 0, { maximumFractionDigits: 0 }),
+                    defaultValue: 'Suggested (most plausible): {{value}}',
+                  })}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  {t('budgetForecast.livePreview', {
+                    status: getBudgetStatusLabel(selectedBudgetPreview.status),
+                    risk: Math.round(selectedBudgetPreview.risk * 100),
+                    delta: getOverUnderLabel(selectedBudgetPreview),
+                    defaultValue: 'Live preview: {{status}} · Risk {{risk}}% · {{delta}}',
+                  })}
+                </Typography>
+              </Paper>
+
+              <Grid container spacing={1.5}>
+                <Grid size={{ xs: 4 }}>
+                  <Paper variant="outlined" sx={{ p: 1.25 }}>
+                    <Typography variant="caption" color="text.secondary">P10</Typography>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      {formatCurrencyValue(selectedBudgetItem.scenarios?.p10 ?? selectedBudgetItem.projectedTotal, { maximumFractionDigits: 0 })}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid size={{ xs: 4 }}>
+                  <Paper variant="outlined" sx={{ p: 1.25 }}>
+                    <Typography variant="caption" color="text.secondary">P50</Typography>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      {formatCurrencyValue(selectedBudgetItem.scenarios?.p50 ?? selectedBudgetItem.projectedTotal, { maximumFractionDigits: 0 })}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid size={{ xs: 4 }}>
+                  <Paper variant="outlined" sx={{ p: 1.25 }}>
+                    <Typography variant="caption" color="text.secondary">P90</Typography>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      {formatCurrencyValue(selectedBudgetItem.scenarios?.p90 ?? selectedBudgetItem.projectedTotal, { maximumFractionDigits: 0 })}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              <Paper variant="outlined" sx={{ p: 1.5 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  {t('budgetForecast.timelineTitle', { defaultValue: 'Spending timeline (last 12 months)' })}
+                </Typography>
+                {selectedTimelineLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress size={20} />
+                  </Box>
+                ) : selectedTimelineError ? (
+                  <Alert
+                    severity="warning"
+                    action={(
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          if (selectedBudgetItem) {
+                            void fetchBudgetTimeline(selectedBudgetItem);
+                          }
+                        }}
+                      >
+                        {t('actions.retry', { defaultValue: 'Retry' })}
+                      </Button>
+                    )}
+                  >
+                    {selectedTimelineError}
+                  </Alert>
+                ) : selectedTimeline.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {t('budgetForecast.noTimeline', { defaultValue: 'No timeline data yet for this category.' })}
+                  </Typography>
+                ) : (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={selectedTimeline}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="monthLabel" />
+                      <YAxis tickFormatter={(value) => formatCurrencyValue(Number(value) || 0, { maximumFractionDigits: 0 })} />
+                      <RechartsTooltip formatter={(value) => formatCurrencyValue(Number(value) || 0, { maximumFractionDigits: 0 })} />
+                      <Line
+                        type="monotone"
+                        dataKey="amount"
+                        stroke={theme.palette.primary.main}
+                        strokeWidth={2}
+                        dot={{ r: 2 }}
+                        activeDot={{ r: 4 }}
+                        name={t('budgetForecast.spent', { defaultValue: 'Spent' })}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </Paper>
+            </Box>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeBudgetDetails}>{t('budgetForecast.close', { defaultValue: 'Close' })}</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={addBudgetDialogOpen}
+        onClose={closeAddBudgetDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{t('budgetForecast.addBudgetDialogTitle', { defaultValue: 'Add budget to another category' })}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {addBudgetError && (
+              <Alert severity="error">{addBudgetError}</Alert>
+            )}
+            <Typography variant="body2" color="text.secondary">
+              {t('budgetForecast.addBudgetDialogHint', {
+                defaultValue: 'Choose an expense category that is not listed yet, then set a monthly limit.',
+              })}
+            </Typography>
+            <Select
+              size="small"
+              value={addBudgetCategoryId}
+              onChange={(event) => setAddBudgetCategoryId(event.target.value as number | '')}
+              displayEmpty
+              disabled={loadingExpenseCategories || addBudgetLoading}
+            >
+              <MenuItem value="">
+                <em>{t('budgetForecast.selectCategory', { defaultValue: 'Select category' })}</em>
+              </MenuItem>
+              {addableExpenseCategories.map((category) => (
+                <MenuItem key={category.id} value={category.id}>
+                  {getExpenseCategoryLabel(category)}
+                </MenuItem>
+              ))}
+            </Select>
+            <TextField
+              size="small"
+              label={t('budgetForecast.limitInputLabel', { defaultValue: 'Monthly limit' })}
+              value={addBudgetLimitInput}
+              onChange={(event) => setAddBudgetLimitInput(event.target.value)}
+              inputProps={{ inputMode: 'decimal' }}
+              disabled={addBudgetLoading}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeAddBudgetDialog} disabled={addBudgetLoading}>
+            {t('budgetForecast.cancel', { defaultValue: 'Cancel' })}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => void handleCreateAdditionalBudget()}
+            disabled={!canCreateAdditionalBudget || addBudgetLoading}
+          >
+            {addBudgetLoading
+              ? t('budgetForecast.addingBudget', { defaultValue: 'Adding...' })
+              : t('budgetForecast.addBudget', { defaultValue: 'Add budget' })}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Detail Modals */}
       <FinancialRhythmModal open={rhythmModalOpen} onClose={() => setRhythmModalOpen(false)} />

@@ -41,6 +41,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';
 import { useChatbotPermissions } from '@app/contexts/ChatbotPermissionsContext';
+import { useAuth } from '@app/contexts/AuthContext';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 import { useDonationStatus } from '@renderer/features/support';
 
@@ -148,6 +149,7 @@ const FinancialChatbot: React.FC = () => {
     allowCategoryAccess,
     allowAnalyticsAccess,
   } = useChatbotPermissions();
+  const { session } = useAuth();
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -199,23 +201,34 @@ const FinancialChatbot: React.FC = () => {
 
   const hasAnyPermission = allowTransactionAccess || allowCategoryAccess || allowAnalyticsAccess;
   const aiSupportLocked = supporterStatus ? !supporterStatus.canAccessAiAgent : false;
+  const userDisplayName = (() => {
+    if (typeof session?.user?.name === 'string' && session.user.name.trim().length > 0) {
+      return session.user.name.trim();
+    }
+    if (typeof session?.user?.email === 'string' && session.user.email.trim().length > 0) {
+      return session.user.email.trim().split('@')[0];
+    }
+    return null;
+  })();
 
   // Get greeting message
   const getGreetingMessage = useCallback((): Message => {
     const greetings = {
-      en: "Hello! I'm your AI-powered financial assistant. I can analyze your spending, find patterns, and provide personalized insights. How can I help you today?",
+      en: "Hi {{name}}! I'm your personal financial assistant. I'm here to help you understand your spending, spot useful patterns, and give advice tailored to you. What would you like to look at today?",
       he: "שלום! אני העוזר הפיננסי החכם שלך. אני יכול לנתח את ההוצאות שלך, למצוא דפוסים ולספק תובנות מותאמות אישית. איך אוכל לעזור לך היום?",
       fr: "Bonjour! Je suis votre assistant financier intelligent. Je peux analyser vos dépenses, trouver des tendances et fournir des insights personnalisés. Comment puis-je vous aider?",
     };
 
     const locale = i18n.language.substring(0, 2) as 'en' | 'he' | 'fr';
+    const template = greetings[locale] || greetings.en;
+    const content = template.replace('{{name}}', userDisplayName || 'there');
     return {
       id: 'greeting',
       role: 'assistant',
-      content: greetings[locale] || greetings.en,
+      content,
       timestamp: new Date(),
     };
-  }, [i18n.language]);
+  }, [i18n.language, userDisplayName]);
 
   // Initialize with greeting
   useEffect(() => {

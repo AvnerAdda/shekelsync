@@ -41,7 +41,7 @@ class SecurityStatusManager {
   async getEncryptionStatus() {
     try {
       const hasKey = await secureKeyManager.getKey();
-      const usesEnvKey = Boolean(process.env.CLARIFY_ENCRYPTION_KEY) &&
+      const usesEnvKey = Boolean(process.env.SHEKELSYNC_ENCRYPTION_KEY) &&
         (process.platform === 'linux' ||
           !secureKeyManager.keytarAvailable ||
           process.env.ALLOW_INSECURE_ENV_KEY === 'true');
