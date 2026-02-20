@@ -77,6 +77,7 @@ async function bulkScrape(options = {}) {
           vc.bank_account_number,
           vc.identification_code,
           vc.institution_id,
+          COALESCE(vc.updated_at, vc.created_at) AS credential_last_updated,
           COALESCE(last_scrapes.last_successful_scrape, vc.created_at) AS last_update
         FROM vendor_credentials vc
         LEFT JOIN (
@@ -87,8 +88,20 @@ async function bulkScrape(options = {}) {
           WHERE credential_id IS NOT NULL
           GROUP BY credential_id
         ) last_scrapes ON vc.id = last_scrapes.credential_id
-        WHERE COALESCE(last_scrapes.last_successful_scrape, vc.created_at) < $1
-          AND (vc.last_scrape_attempt IS NULL OR vc.last_scrape_attempt < $2)
+        WHERE (
+          -- Sync accounts that were never successfully scraped.
+          last_scrapes.last_successful_scrape IS NULL
+          -- Sync accounts with stale successful scrapes.
+          OR COALESCE(last_scrapes.last_successful_scrape, vc.created_at) < $1
+          -- Sync accounts whose credentials changed after their last successful scrape.
+          OR COALESCE(last_scrapes.last_successful_scrape, vc.created_at) < COALESCE(vc.updated_at, vc.created_at)
+        )
+          AND (
+            vc.last_scrape_attempt IS NULL
+            OR vc.last_scrape_attempt < $2
+            -- Allow an immediate retry if credentials were edited after the last attempt.
+            OR COALESCE(vc.updated_at, vc.created_at) > vc.last_scrape_attempt
+          )
         ORDER BY last_update ASC
       `,
       [thresholdDate, rateLimitDate],

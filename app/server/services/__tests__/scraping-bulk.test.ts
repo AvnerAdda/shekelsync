@@ -111,6 +111,11 @@ describe('bulk scrape service', () => {
 
     expect(capturedSql).toContain('GROUP BY credential_id');
     expect(capturedSql).toContain('vc.id = last_scrapes.credential_id');
+    expect(capturedSql).toMatch(/last_scrapes\.last_successful_scrape IS NULL/);
+    expect(capturedSql).toMatch(
+      /COALESCE\(last_scrapes\.last_successful_scrape, vc\.created_at\) < COALESCE\(vc\.updated_at, vc\.created_at\)/,
+    );
+    expect(capturedSql).toMatch(/COALESCE\(vc\.updated_at, vc\.created_at\) > vc\.last_scrape_attempt/);
     expect(runScrapeMock).toHaveBeenCalledTimes(1);
 
     const call = runScrapeMock.mock.calls[0][0];

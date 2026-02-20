@@ -128,12 +128,12 @@ describe('useDonationStatus', () => {
       okResponse({
         ...baseStatus,
         hasDonated: true,
-        tier: 'gold',
+        tier: 'one_time',
         supportStatus: 'verified',
         totalAmountUsd: 25,
         reminderShownThisMonth: true,
         shouldShowMonthlyReminder: false,
-        aiAgentAccessLevel: 'unlimited',
+        aiAgentAccessLevel: 'standard',
         canAccessAiAgent: true,
       }),
     );
@@ -152,7 +152,7 @@ describe('useDonationStatus', () => {
     await waitFor(() => {
       expect(result.current.supportStatus).toBe('verified');
       expect(result.current.hasDonated).toBe(true);
-      expect(result.current.tier).toBe('gold');
+      expect(result.current.tier).toBe('one_time');
     });
 
     expect(mockGet).toHaveBeenCalledTimes(2);

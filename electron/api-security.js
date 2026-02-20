@@ -23,6 +23,10 @@ const RATE_LIMITS = {
   'default': { max: 200, window: RATE_LIMIT_WINDOW_MS },
 };
 
+function isUnauthenticatedPath(path = '') {
+  return path === '/health' || path === '/healthz' || path === '/api/donations/stripe/webhook';
+}
+
 /**
  * Generate a secure API token
  */
@@ -163,8 +167,8 @@ function checkRateLimit(token, endpoint) {
  * Checks for valid API token in Authorization header
  */
 function authenticationMiddleware(req, res, next) {
-  // Skip auth for health check endpoints
-  if (req.path === '/health' || req.path === '/healthz') {
+  // Skip auth for health checks and signed Stripe webhook ingress.
+  if (isUnauthenticatedPath(req.path)) {
     return next();
   }
 
@@ -217,8 +221,8 @@ function authenticationMiddleware(req, res, next) {
  * Must be used after authentication middleware
  */
 function rateLimitMiddleware(req, res, next) {
-  // Skip rate limiting for health checks
-  if (req.path === '/health' || req.path === '/healthz') {
+  // Skip rate limiting for paths that bypass authentication.
+  if (isUnauthenticatedPath(req.path)) {
     return next();
   }
 

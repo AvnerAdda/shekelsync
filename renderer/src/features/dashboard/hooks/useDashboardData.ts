@@ -59,6 +59,8 @@ function fillMissingDates(
         expenses: null,
         capitalReturns: 0,
         cardRepayments: 0,
+        pairedCardExpenses: 0,
+        pairedCardRepayments: 0,
       });
     } else {
       filled.push({
@@ -67,6 +69,8 @@ function fillMissingDates(
         expenses: 0,
         capitalReturns: 0,
         cardRepayments: 0,
+        pairedCardExpenses: 0,
+        pairedCardRepayments: 0,
       });
     }
 

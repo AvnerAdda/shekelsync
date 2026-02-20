@@ -21,7 +21,7 @@ describe('Shared /api/chat routes', () => {
   const allowAiAccess = () =>
     vi.spyOn(donationsService, 'getDonationStatus').mockResolvedValue({
       canAccessAiAgent: true,
-      tier: 'bronze',
+      tier: 'one_time',
       supportStatus: 'verified',
     });
 
@@ -56,7 +56,7 @@ describe('Shared /api/chat routes', () => {
     expect(res.body.error).toMatch(/bad input/i);
   });
 
-  it('blocks chat when supporter plan is not verified', async () => {
+  it('blocks chat when donation is not verified', async () => {
     vi.spyOn(donationsService, 'getDonationStatus').mockResolvedValue({
       canAccessAiAgent: false,
       tier: 'none',
@@ -65,7 +65,7 @@ describe('Shared /api/chat routes', () => {
 
     const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(403);
 
-    expect(res.body.code).toBe('SUPPORT_PLAN_REQUIRED');
+    expect(res.body.code).toBe('DONATION_REQUIRED');
   });
 
   it('passes supporter context headers to donation-status lookup', async () => {
@@ -178,9 +178,9 @@ describe('Shared /api/chat routes', () => {
     vi.spyOn(donationsService, 'getDonationStatus').mockResolvedValue(null);
     const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(403);
 
-    expect(res.body.code).toBe('SUPPORT_PLAN_REQUIRED');
+    expect(res.body.code).toBe('DONATION_REQUIRED');
     expect(res.body.details).toEqual({
-      requiredPlan: 'bronze',
+      requiredDonation: true,
       currentTier: 'none',
       supportStatus: 'none',
     });

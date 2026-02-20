@@ -49,6 +49,21 @@ function buildCategoryBreakdown(rows) {
   return result;
 }
 
+const SALARY_MATCH_SQL = `
+  (
+    LOWER(COALESCE(cd.name, '')) LIKE '%salary%'
+    OR LOWER(COALESCE(cd.name_en, '')) LIKE '%salary%'
+    OR LOWER(COALESCE(cd.name_fr, '')) LIKE '%salaire%'
+    OR LOWER(COALESCE(cd.name, '')) LIKE '%משכורת%'
+    OR LOWER(COALESCE(cd.name, '')) LIKE '%שכר%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%salary%'
+    OR LOWER(COALESCE(parent_cd.name_en, '')) LIKE '%salary%'
+    OR LOWER(COALESCE(parent_cd.name_fr, '')) LIKE '%salaire%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%משכורת%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%שכר%'
+  )
+`;
+
 
 async function getDashboardAnalytics(query = {}) {
   const timerStart = performance.now();
@@ -105,7 +120,8 @@ async function getDashboardAnalytics(query = {}) {
   }
 
   const historyResult = await database.query(
-    `SELECT
+    `WITH base_history AS (
+      SELECT
         ${dateSelect},
         SUM(CASE
           WHEN (
@@ -126,12 +142,41 @@ async function getDashboardAnalytics(query = {}) {
           ELSE 0
         END) as capital_returns,
         SUM(CASE
+          WHEN t.price > 0
+            AND COALESCE(cd.is_counted_as_income, 1) = 1
+            AND (
+              cd.category_type = 'income'
+              OR cd.category_type IS NULL
+              OR COALESCE(cd.name, '') = $3
+            )
+            AND ${SALARY_MATCH_SQL}
+          THEN t.price
+          ELSE 0
+        END) as salary_income,
+        SUM(CASE
           WHEN (${creditCardRepaymentCondition}) AND t.price < 0
           THEN ABS(t.price)
           ELSE 0
-        END) as card_repayments
+        END) as card_repayments,
+        SUM(CASE
+          WHEN (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0))
+            AND t.price < 0
+            AND EXISTS (
+              SELECT 1
+              FROM account_pairings ap
+              WHERE ap.is_active = 1
+                AND ap.credit_card_vendor = t.vendor
+                AND (
+                  ap.credit_card_account_number IS NULL
+                  OR ap.credit_card_account_number = t.account_number
+                )
+            )
+          THEN ABS(t.price)
+          ELSE 0
+        END) as paired_card_expenses
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN category_definitions parent_cd ON parent_cd.id = cd.parent_id
       LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
         ON t.identifier = tpe.transaction_identifier
         AND t.vendor = tpe.transaction_vendor
@@ -139,7 +184,43 @@ async function getDashboardAnalytics(query = {}) {
         AND tpe.transaction_identifier IS NULL
         AND ${dialect.excludePikadon('t')}
       GROUP BY ${dateGroupBy}
-      ORDER BY date ASC`,
+    ),
+    paired_repayment_history AS (
+      SELECT
+        ${dateSelect},
+        SUM(CASE
+          WHEN (${creditCardRepaymentCondition}) AND t.price < 0
+          THEN ABS(t.price)
+          ELSE 0
+        END) as paired_card_repayments
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
+      WHERE t.date >= $1 AND t.date <= $2
+        AND tpe.transaction_identifier IS NOT NULL
+        AND ${dialect.excludePikadon('t')}
+      GROUP BY ${dateGroupBy}
+    ),
+    history_dates AS (
+      SELECT date FROM base_history
+      UNION
+      SELECT date FROM paired_repayment_history
+    )
+    SELECT
+      hd.date as date,
+      COALESCE(bh.income, 0) as income,
+      COALESCE(bh.expenses, 0) as expenses,
+      COALESCE(bh.capital_returns, 0) as capital_returns,
+      COALESCE(bh.salary_income, 0) as salary_income,
+      COALESCE(bh.card_repayments, 0) as card_repayments,
+      COALESCE(bh.paired_card_expenses, 0) as paired_card_expenses,
+      COALESCE(prh.paired_card_repayments, 0) as paired_card_repayments
+    FROM history_dates hd
+    LEFT JOIN base_history bh ON hd.date = bh.date
+    LEFT JOIN paired_repayment_history prh ON hd.date = prh.date
+    ORDER BY hd.date ASC`,
     [start, end, BANK_CATEGORY_NAME],
   );
 
@@ -500,6 +581,9 @@ async function getDashboardAnalytics(query = {}) {
       expenses: Number.parseFloat(row.expenses || 0),
       capitalReturns: Number.parseFloat(row.capital_returns || 0),
       cardRepayments: Number.parseFloat(row.card_repayments || 0),
+      pairedCardExpenses: Number.parseFloat(row.paired_card_expenses || 0),
+      pairedCardRepayments: Number.parseFloat(row.paired_card_repayments || 0),
+      salaryIncome: Number.parseFloat(row.salary_income || 0),
       // NEW: Add bank balance to history
       ...(includeSummary ? { bankBalance: balanceHistoryMap.get(row.date) || 0 } : {}),
     })),

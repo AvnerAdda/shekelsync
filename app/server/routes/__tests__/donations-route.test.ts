@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'crypto';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,6 +15,15 @@ function buildApp() {
   return app;
 }
 
+function createStripeSignature(secret: string, payload: unknown, timestamp = Math.floor(Date.now() / 1000)) {
+  const body = JSON.stringify(payload);
+  const digest = crypto
+    .createHmac('sha256', secret)
+    .update(`${timestamp}.${body}`, 'utf8')
+    .digest('hex');
+  return `t=${timestamp},v1=${digest}`;
+}
+
 describe('Electron /api/donations routes', () => {
   let app: express.Express;
 
@@ -23,6 +33,8 @@ describe('Electron /api/donations routes', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    delete process.env.SUPPORTER_SYNC_SECRET;
+    delete process.env.STRIPE_WEBHOOK_SECRET;
   });
 
   it('returns donation status payload', async () => {
@@ -50,11 +62,11 @@ describe('Electron /api/donations routes', () => {
 
     const res = await request(app)
       .post('/api/donations/intent')
-      .send({ planKey: 'bronze' })
+      .send({ source: 'support_modal' })
       .expect(200);
 
     expect(spy).toHaveBeenCalledWith(
-      { planKey: 'bronze' },
+      { source: 'support_modal' },
       {
         accessToken: null,
         userId: null,
@@ -65,6 +77,170 @@ describe('Electron /api/donations routes', () => {
     expect(res.body).toEqual({ success: true, data: payload });
   });
 
+  it('processes Stripe webhook and syncs supporter entitlement', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
+    const servicePayload = {
+      hasDonated: true,
+      tier: 'one_time',
+      supportStatus: 'verified',
+      canAccessAiAgent: true,
+    };
+    const spy = vi
+      .spyOn(donationsService, 'syncSupporterEntitlement')
+      .mockResolvedValue(servicePayload);
+
+    const eventPayload = {
+      id: 'evt_1',
+      type: 'checkout.session.completed',
+      created: 1770000000,
+      data: {
+        object: {
+          id: 'cs_test_1',
+          mode: 'payment',
+          payment_status: 'paid',
+          amount_total: 1275,
+          customer_email: 'member@example.com',
+          payment_intent: 'pi_test_1',
+          metadata: {
+            userId: 'user-22',
+          },
+        },
+      },
+    };
+    const signature = createStripeSignature(process.env.STRIPE_WEBHOOK_SECRET, eventPayload);
+
+    const res = await request(app)
+      .post('/api/donations/stripe/webhook')
+      .set('stripe-signature', signature)
+      .send(eventPayload)
+      .expect(200);
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-22',
+        email: 'member@example.com',
+        status: 'verified',
+        amountUsd: 12.75,
+        billingCycle: 'one_time',
+        provider: 'stripe',
+        providerReference: 'pi_test_1',
+      }),
+      {},
+    );
+    expect(res.body).toEqual({
+      success: true,
+      received: true,
+      processed: true,
+      eventType: 'checkout.session.completed',
+      data: servicePayload,
+    });
+  });
+
+  it('rejects Stripe webhook when signature is invalid', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
+    const spy = vi.spyOn(donationsService, 'syncSupporterEntitlement');
+    const eventPayload = {
+      id: 'evt_bad',
+      type: 'checkout.session.completed',
+      data: { object: { metadata: { userId: 'u-1' }, payment_status: 'paid', amount_total: 500 } },
+    };
+
+    const res = await request(app)
+      .post('/api/donations/stripe/webhook')
+      .set('stripe-signature', `t=${Math.floor(Date.now() / 1000)},v1=deadbeef`)
+      .send(eventPayload)
+      .expect(400);
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(res.body.code).toBe('STRIPE_SIGNATURE_INVALID');
+  });
+
+  it('ignores unsupported Stripe event types without syncing entitlements', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
+    const spy = vi.spyOn(donationsService, 'syncSupporterEntitlement');
+    const eventPayload = {
+      id: 'evt_ignored',
+      type: 'customer.created',
+      data: { object: { id: 'cus_1' } },
+    };
+    const signature = createStripeSignature(process.env.STRIPE_WEBHOOK_SECRET, eventPayload);
+
+    const res = await request(app)
+      .post('/api/donations/stripe/webhook')
+      .set('stripe-signature', signature)
+      .send(eventPayload)
+      .expect(200);
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(res.body).toEqual({
+      success: true,
+      received: true,
+      ignored: true,
+      reason: 'unsupported_event_type:customer.created',
+    });
+  });
+
+  it('syncs supporter entitlement when sync secret is valid', async () => {
+    process.env.SUPPORTER_SYNC_SECRET = 'sync-secret';
+    const payload = { hasDonated: true, tier: 'one_time', supportStatus: 'verified' };
+    const spy = vi
+      .spyOn(donationsService, 'syncSupporterEntitlement')
+      .mockResolvedValue(payload);
+
+    const res = await request(app)
+      .post('/api/donations/entitlement')
+      .set('x-supporter-sync-secret', 'sync-secret')
+      .set('x-auth-user-id', 'user-11')
+      .send({ userId: 'user-11', email: 'member@example.com', status: 'verified', amountUsd: 10 })
+      .expect(200);
+
+    expect(spy).toHaveBeenCalledWith(
+      { userId: 'user-11', email: 'member@example.com', status: 'verified', amountUsd: 10 },
+      {
+        accessToken: null,
+        userId: 'user-11',
+        email: null,
+        name: null,
+      },
+    );
+    expect(res.body).toEqual({ success: true, data: payload });
+  });
+
+  it('rejects entitlement sync when secret is missing from env', async () => {
+    const spy = vi.spyOn(donationsService, 'syncSupporterEntitlement');
+
+    const res = await request(app)
+      .post('/api/donations/entitlement')
+      .set('x-supporter-sync-secret', 'sync-secret')
+      .send({ status: 'verified', userId: 'u-1' })
+      .expect(503);
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(res.body).toEqual({
+      success: false,
+      error: 'SUPPORTER_SYNC_SECRET is not configured',
+      code: 'SUPPORT_SYNC_SECRET_MISSING',
+    });
+  });
+
+  it('rejects entitlement sync when provided secret is invalid', async () => {
+    process.env.SUPPORTER_SYNC_SECRET = 'sync-secret';
+    const spy = vi.spyOn(donationsService, 'syncSupporterEntitlement');
+
+    const res = await request(app)
+      .post('/api/donations/entitlement')
+      .set('x-supporter-sync-secret', 'wrong-secret')
+      .send({ status: 'verified', userId: 'u-1' })
+      .expect(401);
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(res.body).toEqual({
+      success: false,
+      error: 'Support entitlement sync is unauthorized',
+      code: 'SUPPORT_SYNC_UNAUTHORIZED',
+    });
+  });
+
   it('accepts wrapped payload format for intent compatibility', async () => {
     const payload = { hasDonated: false, tier: 'none', supportStatus: 'pending' };
     const spy = vi
@@ -73,11 +249,11 @@ describe('Electron /api/donations routes', () => {
 
     await request(app)
       .post('/api/donations')
-      .send({ payload: { planKey: 'silver' } })
+      .send({ payload: { source: 'legacy' } })
       .expect(200);
 
     expect(spy).toHaveBeenCalledWith(
-      { planKey: 'silver' },
+      { source: 'legacy' },
       {
         accessToken: null,
         userId: null,
@@ -87,7 +263,7 @@ describe('Electron /api/donations routes', () => {
     );
   });
 
-  it('uses legacy addDonationEvent path when amount payload is sent', async () => {
+  it('uses addDonationEvent path when amount payload is sent', async () => {
     const payload = { hasDonated: true, tier: 'one_time', supportStatus: 'verified' };
     const spy = vi
       .spyOn(donationsService, 'addDonationEvent')
@@ -135,18 +311,18 @@ describe('Electron /api/donations routes', () => {
   it('surfaces service errors with status code', async () => {
     vi.spyOn(donationsService, 'createSupportIntent').mockRejectedValue({
       status: 400,
-      message: 'planKey is required',
+      message: 'source is invalid',
       code: 'VALIDATION_FAILED',
     });
 
     const res = await request(app)
       .post('/api/donations')
-      .send({ planKey: null })
+      .send({ source: null })
       .expect(400);
 
     expect(res.body).toEqual({
       success: false,
-      error: 'planKey is required',
+      error: 'source is invalid',
       code: 'VALIDATION_FAILED',
     });
   });
@@ -171,7 +347,7 @@ describe('Electron /api/donations routes', () => {
 
     const res = await request(app)
       .post('/api/donations/intent')
-      .send({ planKey: 'bad' })
+      .send({})
       .expect(422);
 
     expect(res.body).toEqual({

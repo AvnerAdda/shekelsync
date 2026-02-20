@@ -62,7 +62,7 @@ describe('I18nProvider', () => {
     });
   });
 
-  it('falls back to the system locale when no preference is stored and marks RTL for Hebrew', async () => {
+  it('falls back to the system locale when no preference is stored and keeps layout LTR for Hebrew', async () => {
     mockNavigatorLocale('he-IL', ['he-IL', 'en-US']);
 
     render(
@@ -75,9 +75,9 @@ describe('I18nProvider', () => {
       expect(screen.getByTestId('locale').textContent).toBe('he');
     });
     expect(screen.getByTestId('detected-locale').textContent).toBe('he');
-    expect(screen.getByTestId('direction').textContent).toBe('rtl');
+    expect(screen.getByTestId('direction').textContent).toBe('ltr');
     await waitFor(() => {
-      expect(document.documentElement.dir).toBe('rtl');
+      expect(document.documentElement.dir).toBe('ltr');
     });
   });
 
@@ -121,7 +121,7 @@ describe('I18nProvider', () => {
 
     await waitFor(() => {
       expect(document.documentElement.lang).toBe('he');
-      expect(document.documentElement.dir).toBe('rtl');
+      expect(document.documentElement.dir).toBe('ltr');
     });
   });
 

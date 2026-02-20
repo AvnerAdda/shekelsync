@@ -23,7 +23,6 @@ vi.mock('@mui/material', () => {
         {children}
       </button>
     ),
-    Chip: ({ label }: { label?: React.ReactNode }) => <span>{label}</span>,
     CircularProgress: () => <span>loading</span>,
     Dialog: ({ open, children }: { open: boolean; children?: React.ReactNode }) => (open ? <div>{children}</div> : null),
     DialogActions: component('div'),
@@ -37,13 +36,6 @@ vi.mock('@mui/material', () => {
     Typography: ({ children, component: Component = 'span' }: { children?: React.ReactNode; component?: keyof JSX.IntrinsicElements }) => (
       <Component>{children}</Component>
     ),
-    useTheme: () => ({
-      palette: {
-        divider: '#ddd',
-        mode: 'light',
-        background: { paper: '#fff' },
-      },
-    }),
   };
 });
 
@@ -52,7 +44,6 @@ vi.mock('@mui/icons-material', () => ({
   Close: () => <span>close</span>,
   HourglassTop: () => <span>pending</span>,
   LocalCafe: () => <span>coffee</span>,
-  WorkspacePremium: () => <span>tier</span>,
 }));
 
 vi.mock('../hooks/useDonationStatus', () => ({
@@ -82,19 +73,7 @@ const baseStatus = {
   reminderShownThisMonth: false,
   shouldShowMonthlyReminder: true,
   donationUrl: 'https://buymeacoffee.com/shekelsync',
-  plans: [
-    {
-      key: 'bronze',
-      tier: 'bronze',
-      title: 'Bronze',
-      trialLabel: null,
-      priceLabel: '$5 / month',
-      billingCycle: 'monthly',
-      amountUsd: 5,
-      rewards: ['Access to AI Agent'],
-      aiAccessLevel: 'standard',
-    },
-  ],
+  plans: [],
 } as const;
 
 type DonationHookReturn = ReturnType<typeof useDonationStatus>;
@@ -133,15 +112,14 @@ describe('DonationModal', () => {
     render(<DonationModal open onClose={vi.fn()} />);
 
     expect(
-      screen.getByRole('heading', { name: /Buy Me a Coffee Support Program/i }),
+      screen.getByRole('heading', { name: /Support ShekelSync/i }),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('heading')).toHaveLength(1);
   });
 
-  it('submits selected plan and opens donation url', async () => {
+  it('opens donation flow and Buy Me a Coffee url', async () => {
     const nextStatus = {
       ...baseStatus,
-      pendingPlanKey: 'bronze',
       supportStatus: 'pending',
       donationUrl: 'https://buymeacoffee.com/shekelsync/new-link',
     };
@@ -159,11 +137,10 @@ describe('DonationModal', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Choose on Buy Me a Coffee' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Buy Me a Coffee' }));
 
     await waitFor(() => {
       expect(createSupportIntent).toHaveBeenCalledWith({
-        planKey: 'bronze',
         source: 'support_modal',
       });
     });
@@ -172,14 +149,14 @@ describe('DonationModal', () => {
     expect(onDonationRecorded).toHaveBeenCalledWith(nextStatus);
   });
 
-  it('shows action error when plan submission fails', async () => {
+  it('shows action error when support intent submission fails', async () => {
     setupHook({
       createSupportIntent: vi.fn().mockRejectedValue(new Error('intent failed')) as any,
     });
 
     render(<DonationModal open onClose={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Choose on Buy Me a Coffee' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Buy Me a Coffee' }));
 
     await waitFor(() => {
       expect(screen.getByText('intent failed')).toBeInTheDocument();

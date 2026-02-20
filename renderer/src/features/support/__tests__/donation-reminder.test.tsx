@@ -9,7 +9,6 @@ const translations: Record<string, string> = {
   'support.reminder.message': 'Monthly reminder message',
   'support.reminder.monthlyHint': 'Monthly hint',
   'support.reminder.actions.later': 'Maybe later',
-  'support.reminder.actions.choosePlan': 'Choose plan',
   'support.reminder.actions.donateNow': 'Donate now',
 };
 
@@ -20,12 +19,11 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('donation helper functions', () => {
-  it('maps totals to default fallback tiers', () => {
+  it('maps totals to generic supporter tier', () => {
     expect(getDonationTier(0)).toBe('none');
     expect(getDonationTier(2)).toBe('one_time');
-    expect(getDonationTier(5)).toBe('bronze');
-    expect(getDonationTier(10)).toBe('silver');
-    expect(getDonationTier(20)).toBe('gold');
+    expect(getDonationTier(5)).toBe('one_time');
+    expect(getDonationTier(20)).toBe('one_time');
   });
 
   it('creates a non-donor reminder default state', () => {
@@ -74,30 +72,6 @@ describe('DonationReminderDialog', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Donate now' }));
-
-    await waitFor(() => {
-      expect(onDismissForMonth).toHaveBeenCalledTimes(1);
-    });
-    expect(eventListener).toHaveBeenCalledTimes(1);
-
-    window.removeEventListener(DONATION_OPEN_MODAL_EVENT, eventListener as EventListener);
-  });
-
-  it('requests opening the donation modal when Choose plan is clicked', async () => {
-    const onDismissForMonth = vi.fn().mockResolvedValue(undefined);
-    const eventListener = vi.fn();
-
-    window.addEventListener(DONATION_OPEN_MODAL_EVENT, eventListener as EventListener);
-
-    render(
-      <DonationReminderDialog
-        open
-        status={createDefaultDonationStatus()}
-        onDismissForMonth={onDismissForMonth}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Choose plan' }));
 
     await waitFor(() => {
       expect(onDismissForMonth).toHaveBeenCalledTimes(1);

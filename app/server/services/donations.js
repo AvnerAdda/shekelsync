@@ -6,22 +6,8 @@ const database = require('./database.js');
 
 const DEFAULT_DONATION_URL = 'https://buymeacoffee.com/shekelsync';
 
-const DONATION_THRESHOLDS = Object.freeze({
-  bronze: 50,
-  silver: 150,
-  gold: 500,
-});
-
 const SUPPORTER_TIER_VALUES = Object.freeze([
   'none',
-  'one_time',
-  'bronze',
-  'silver',
-  'gold',
-  'lifetime',
-]);
-
-const PLAN_VALUES = Object.freeze([
   'one_time',
   'bronze',
   'silver',
@@ -36,95 +22,15 @@ const SUPPORT_VERIFICATION_VALUES = Object.freeze([
   'rejected',
 ]);
 
-const SUPPORTER_PLANS = Object.freeze([
-  {
-    key: 'bronze',
-    tier: 'bronze',
-    title: 'Bronze Level',
-    trialLabel: '7 days free trial',
-    priceLabel: '$5 per month',
-    billingCycle: 'monthly',
-    amountUsd: 5,
-    rewards: [
-      'Access to AI Agent',
-      'Support me on a monthly basis',
-      'Unlock exclusive posts and messages',
-      'Work in progress updates',
-      'Early access',
-    ],
-    aiAccessLevel: 'standard',
-  },
-  {
-    key: 'silver',
-    tier: 'silver',
-    title: 'Silver Level',
-    trialLabel: '7 days free trial',
-    priceLabel: '$10 per month',
-    billingCycle: 'monthly',
-    amountUsd: 10,
-    rewards: [
-      'Prioritary Feature Development',
-      'Extended Access to AI Agent',
-      'Support me on a monthly basis',
-      'Unlock exclusive posts and messages',
-      'Work in progress updates',
-      'Early access',
-    ],
-    aiAccessLevel: 'extended',
-  },
-  {
-    key: 'gold',
-    tier: 'gold',
-    title: 'Gold Level',
-    trialLabel: '7 days free trial',
-    priceLabel: '$20 per month',
-    billingCycle: 'monthly',
-    amountUsd: 20,
-    rewards: [
-      'Unlimited access to AI Agent',
-      'Prioritary Feature Development',
-      'Support me on a monthly basis',
-      'Unlock exclusive posts and messages',
-      'Early access',
-      'Work in progress updates',
-    ],
-    aiAccessLevel: 'unlimited',
-  },
-  {
-    key: 'lifetime',
-    tier: 'lifetime',
-    title: 'Lifetime Access',
-    trialLabel: null,
-    priceLabel: 'Lifetime access',
-    billingCycle: 'lifetime',
-    amountUsd: null,
-    rewards: [
-      'Prioritary Feature Development',
-      'Unlimited access to AI Agent',
-      'Lifetime discount on shop items',
-      'Lifetime access to exclusive content',
-      'Early access',
-      'Work in progress updates',
-    ],
-    aiAccessLevel: 'unlimited',
-  },
-  {
-    key: 'one_time',
-    tier: 'one_time',
-    title: 'One-Time Support',
-    trialLabel: null,
-    priceLabel: 'One-time payment',
-    billingCycle: 'one_time',
-    amountUsd: null,
-    rewards: [
-      'Support development with a one-time payment',
-      'Thank-you mention in supporter status',
-    ],
-    aiAccessLevel: 'none',
-  },
+const SUPPORT_SYNC_STATUS_VALUES = Object.freeze([
+  'pending',
+  'verified',
+  'rejected',
 ]);
 
-const PLAN_LOOKUP = new Map(SUPPORTER_PLANS.map((plan) => [plan.key, plan]));
+const DONATION_THRESHOLDS = Object.freeze({
+  supporter: 0.01,
+});
 
 let databaseRef = database;
 let donationSchemaEnsured = false;
@@ -206,7 +112,7 @@ function isMissingSupabaseTableError(message, tableName) {
   );
 }
 
-function resolveDonationUrl(planKey = null) {
+function resolveDonationUrl() {
   const configured = typeof process.env.DONATION_URL === 'string' ? process.env.DONATION_URL.trim() : '';
   const baseUrl = configured || DEFAULT_DONATION_URL;
 
@@ -214,9 +120,6 @@ function resolveDonationUrl(planKey = null) {
     const parsed = new URL(baseUrl);
     parsed.searchParams.set('utm_source', 'shekelsync');
     parsed.searchParams.set('utm_medium', 'desktop_app');
-    if (planKey && PLAN_LOOKUP.has(planKey)) {
-      parsed.searchParams.set('plan', planKey);
-    }
     return parsed.toString();
   } catch {
     return DEFAULT_DONATION_URL;
@@ -254,25 +157,21 @@ function normalizeAmount(rawValue) {
   return Math.round(parsed * 100) / 100;
 }
 
-function normalizePlanKey(rawValue) {
-  if (typeof rawValue !== 'string') {
-    throw createServiceError('planKey is required', 400);
-  }
-
-  const normalized = rawValue.trim().toLowerCase();
-  if (!PLAN_VALUES.includes(normalized)) {
-    throw createServiceError('planKey must be one of: one_time, bronze, silver, gold, lifetime', 400);
-  }
-
-  return normalized;
-}
-
 function normalizeDonationTier(rawValue) {
   if (typeof rawValue !== 'string') {
     return 'none';
   }
   const normalized = rawValue.trim().toLowerCase();
-  return SUPPORTER_TIER_VALUES.includes(normalized) ? normalized : 'none';
+  if (!SUPPORTER_TIER_VALUES.includes(normalized)) {
+    return 'none';
+  }
+
+  if (normalized === 'none') {
+    return 'none';
+  }
+
+  // Collapse legacy tiers to one generic supporter tier.
+  return 'one_time';
 }
 
 function normalizeSupportStatus(rawValue) {
@@ -297,6 +196,19 @@ function normalizeSupportStatus(rawValue) {
   return 'none';
 }
 
+function normalizeSupportSyncStatus(rawValue) {
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    throw createServiceError('status is required', 400);
+  }
+
+  const normalized = normalizeSupportStatus(rawValue);
+  if (!SUPPORT_SYNC_STATUS_VALUES.includes(normalized)) {
+    throw createServiceError('status must be one of: pending, verified, rejected', 400);
+  }
+
+  return normalized;
+}
+
 function normalizeBillingCycle(rawValue) {
   if (typeof rawValue !== 'string') {
     return null;
@@ -308,36 +220,31 @@ function normalizeBillingCycle(rawValue) {
   return null;
 }
 
-function getDonationTier(totalAmountIls) {
-  if (totalAmountIls >= DONATION_THRESHOLDS.gold) return 'gold';
-  if (totalAmountIls >= DONATION_THRESHOLDS.silver) return 'silver';
-  if (totalAmountIls >= DONATION_THRESHOLDS.bronze) return 'bronze';
-  return 'none';
+function normalizeAmountUsd(rawValue, fallbackValue = 0) {
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    return Number.isFinite(fallbackValue) ? Math.round(fallbackValue * 100) / 100 : 0;
+  }
+
+  const parsed = typeof rawValue === 'string' ? Number(rawValue.trim()) : Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw createServiceError('amountUsd must be a non-negative number', 400);
+  }
+  return Math.round(parsed * 100) / 100;
 }
 
-function getAiAccessLevelFromTier(tier, supportStatus = 'none') {
-  if (supportStatus !== 'verified') {
+function getDonationTier(totalAmountUsd) {
+  if (!Number.isFinite(totalAmountUsd) || totalAmountUsd <= 0) {
     return 'none';
   }
-
-  switch (tier) {
-    case 'gold':
-    case 'lifetime':
-      return 'unlimited';
-    case 'silver':
-      return 'extended';
-    case 'bronze':
-      return 'standard';
-    default:
-      return 'none';
-  }
+  return 'one_time';
 }
 
-function hasAiAccess(tier, supportStatus = 'none') {
-  if (supportStatus !== 'verified') {
-    return false;
-  }
-  return tier === 'bronze' || tier === 'silver' || tier === 'gold' || tier === 'lifetime';
+function getAiAccessLevel(hasDonated) {
+  return hasDonated ? 'standard' : 'none';
+}
+
+function hasAiAccess(hasDonated) {
+  return Boolean(hasDonated);
 }
 
 function isAnonymizedSqliteDatabase() {
@@ -353,24 +260,22 @@ function applyDemoAiAccessOverride(status) {
     return status;
   }
 
-  const bronzePlan = PLAN_LOOKUP.get('bronze');
-  const defaultAmountUsd = Number(bronzePlan?.amountUsd || 5);
   const totalAmountUsd = Number.isFinite(status.totalAmountUsd)
     ? Number(status.totalAmountUsd)
-    : defaultAmountUsd;
+    : 5;
 
   return {
     ...status,
     hasDonated: true,
-    tier: 'bronze',
+    tier: 'one_time',
     supportStatus: 'verified',
     totalAmountUsd: Math.max(0, Math.round(totalAmountUsd * 100) / 100),
-    currentPlanKey: 'bronze',
+    currentPlanKey: 'one_time',
     hasPendingVerification: false,
     pendingPlanKey: null,
-    billingCycle: bronzePlan?.billingCycle || 'monthly',
+    billingCycle: status.billingCycle || 'one_time',
     canAccessAiAgent: true,
-    aiAgentAccessLevel: bronzePlan?.aiAccessLevel || 'standard',
+    aiAgentAccessLevel: 'standard',
   };
 }
 
@@ -541,6 +446,27 @@ async function resolveRequesterIdentity(context = {}, options = {}) {
   return null;
 }
 
+async function resolveSupportTargetIdentity(payload = {}, context = {}) {
+  const payloadUserId = normalizeText(payload.userId, 255);
+  const payloadEmail = normalizeEmail(payload.email);
+  const payloadName = normalizeText(payload.name, 255);
+
+  const requesterIdentity = await resolveRequesterIdentity(context, { allowAnonymous: false });
+  const email = payloadEmail || requesterIdentity?.email || null;
+  const userId = payloadUserId || requesterIdentity?.userId || email;
+  const name = payloadName || requesterIdentity?.name || null;
+
+  if (!userId && !email) {
+    throw createServiceError('userId or email is required to sync supporter entitlement', 400);
+  }
+
+  return {
+    userId: userId || email,
+    email,
+    name,
+  };
+}
+
 async function ensureDonationSchema(client) {
   if (donationSchemaEnsured) {
     return;
@@ -619,34 +545,20 @@ async function getLegacyDonationSnapshot(client) {
     ? Math.round(totalAmountRaw * 100) / 100
     : 0;
 
-  if (totalAmountIls <= 0) {
-    return {
-      hasDonated: false,
-      tier: 'none',
-      supportStatus: 'none',
-      totalAmountUsd: 0,
-      currentPlanKey: null,
-      hasPendingVerification: false,
-      pendingPlanKey: null,
-      lastVerifiedAt: null,
-      billingCycle: null,
-      canAccessAiAgent: false,
-      aiAgentAccessLevel: 'none',
-    };
-  }
+  const hasDonated = totalAmountIls > 0;
 
   return {
-    hasDonated: true,
-    tier: 'one_time',
-    supportStatus: 'verified',
-    totalAmountUsd: totalAmountIls,
-    currentPlanKey: 'one_time',
+    hasDonated,
+    tier: hasDonated ? 'one_time' : 'none',
+    supportStatus: hasDonated ? 'verified' : 'none',
+    totalAmountUsd: hasDonated ? totalAmountIls : 0,
+    currentPlanKey: hasDonated ? 'one_time' : null,
     hasPendingVerification: false,
     pendingPlanKey: null,
     lastVerifiedAt: null,
-    billingCycle: 'one_time',
-    canAccessAiAgent: false,
-    aiAgentAccessLevel: 'none',
+    billingCycle: hasDonated ? 'one_time' : null,
+    canAccessAiAgent: hasAiAccess(hasDonated),
+    aiAgentAccessLevel: getAiAccessLevel(hasDonated),
   };
 }
 
@@ -737,29 +649,19 @@ async function fetchLatestPendingIntent(identity) {
 }
 
 function normalizeEntitlementSnapshot(entitlement, pendingIntent) {
-  const normalizedTier = normalizeDonationTier(entitlement?.tier);
-  const normalizedPlanKey = PLAN_VALUES.includes(entitlement?.plan_key)
-    ? entitlement.plan_key
-    : PLAN_VALUES.includes(entitlement?.plan)
-      ? entitlement.plan
-      : PLAN_VALUES.includes(pendingIntent?.plan_key)
-        ? pendingIntent.plan_key
-        : null;
-
   const normalizedStatus = normalizeSupportStatus(entitlement?.status || entitlement?.verification_status);
-  const hasVerified = normalizedStatus === 'verified' && normalizedTier !== 'none';
 
-  const planForTier = normalizedPlanKey && PLAN_LOOKUP.has(normalizedPlanKey)
-    ? PLAN_LOOKUP.get(normalizedPlanKey)
-    : SUPPORTER_PLANS.find((plan) => plan.tier === normalizedTier) || null;
+  let totalAmountUsd = Number.parseFloat(entitlement?.amount_usd || entitlement?.amount || 0);
+  if (!Number.isFinite(totalAmountUsd) || totalAmountUsd < 0) {
+    totalAmountUsd = 0;
+  }
 
-  const pendingPlanKey = PLAN_VALUES.includes(pendingIntent?.plan_key)
-    ? pendingIntent.plan_key
-    : null;
+  const hasVerified = normalizedStatus === 'verified';
+  const hasHistoricalDonation = hasVerified || totalAmountUsd > 0;
+  const hasPendingVerification = !hasHistoricalDonation
+    && (normalizedStatus === 'pending' || Boolean(pendingIntent));
 
-  const hasPendingVerification = !hasVerified && (normalizedStatus === 'pending' || Boolean(pendingPlanKey));
-
-  const supportStatus = hasVerified
+  const supportStatus = hasHistoricalDonation
     ? 'verified'
     : hasPendingVerification
       ? 'pending'
@@ -767,43 +669,58 @@ function normalizeEntitlementSnapshot(entitlement, pendingIntent) {
         ? 'rejected'
         : 'none';
 
-  const selectedTier = hasVerified ? normalizedTier : 'none';
-  const billingCycle = normalizeBillingCycle(entitlement?.billing_cycle) || planForTier?.billingCycle || null;
-
-  let totalAmountUsd = Number.parseFloat(entitlement?.amount_usd || entitlement?.amount || 0);
-  if (!Number.isFinite(totalAmountUsd) || totalAmountUsd < 0) {
-    totalAmountUsd = 0;
-  }
-  if (totalAmountUsd === 0 && hasVerified && planForTier && Number.isFinite(planForTier.amountUsd || NaN)) {
-    totalAmountUsd = Number(planForTier.amountUsd);
-  }
-
-  const aiAgentAccessLevel = getAiAccessLevelFromTier(selectedTier, supportStatus);
-
   return {
-    hasDonated: hasVerified,
-    tier: selectedTier,
+    hasDonated: hasHistoricalDonation,
+    tier: hasHistoricalDonation ? 'one_time' : 'none',
     supportStatus,
     totalAmountUsd: Math.round(totalAmountUsd * 100) / 100,
-    currentPlanKey: hasVerified
-      ? (PLAN_VALUES.includes(normalizedPlanKey) ? normalizedPlanKey : planForTier?.key || null)
-      : null,
+    currentPlanKey: hasHistoricalDonation ? 'one_time' : null,
     hasPendingVerification,
-    pendingPlanKey,
-    lastVerifiedAt: hasVerified
+    pendingPlanKey: hasPendingVerification ? 'one_time' : null,
+    lastVerifiedAt: hasHistoricalDonation
       ? normalizeText(entitlement?.verified_at || entitlement?.updated_at || entitlement?.created_at, 64)
       : null,
-    billingCycle,
-    canAccessAiAgent: hasAiAccess(selectedTier, supportStatus),
-    aiAgentAccessLevel,
+    billingCycle: hasHistoricalDonation
+      ? (normalizeBillingCycle(entitlement?.billing_cycle) || 'one_time')
+      : null,
+    canAccessAiAgent: hasAiAccess(hasHistoricalDonation),
+    aiAgentAccessLevel: getAiAccessLevel(hasHistoricalDonation),
+  };
+}
+
+function mergeSupportSnapshot(primary, fallback) {
+  const hasDonated = Boolean(primary?.hasDonated || fallback?.hasDonated);
+  const totalAmountUsd = Math.max(
+    Number.isFinite(primary?.totalAmountUsd) ? Number(primary.totalAmountUsd) : 0,
+    Number.isFinite(fallback?.totalAmountUsd) ? Number(fallback.totalAmountUsd) : 0,
+  );
+  const supportStatus = hasDonated
+    ? 'verified'
+    : normalizeSupportStatus(primary?.supportStatus || fallback?.supportStatus);
+  const hasPendingVerification = hasDonated
+    ? false
+    : Boolean(primary?.hasPendingVerification || fallback?.hasPendingVerification);
+
+  return {
+    hasDonated,
+    tier: hasDonated ? 'one_time' : 'none',
+    supportStatus,
+    totalAmountUsd,
+    currentPlanKey: hasDonated ? 'one_time' : null,
+    hasPendingVerification,
+    pendingPlanKey: hasPendingVerification ? 'one_time' : null,
+    lastVerifiedAt: primary?.lastVerifiedAt || fallback?.lastVerifiedAt || null,
+    billingCycle: hasDonated ? (primary?.billingCycle || fallback?.billingCycle || 'one_time') : null,
+    canAccessAiAgent: hasAiAccess(hasDonated),
+    aiAgentAccessLevel: getAiAccessLevel(hasDonated),
   };
 }
 
 async function getSupportStatusSnapshot(client, context = {}) {
   const identity = await resolveRequesterIdentity(context, { allowAnonymous: true });
+  const legacySnapshot = await getLegacyDonationSnapshot(client);
 
   if (!getSupabaseAdminClient() || !identity) {
-    const legacySnapshot = await getLegacyDonationSnapshot(client);
     return applyDemoAiAccessOverride(legacySnapshot);
   }
 
@@ -816,15 +733,16 @@ async function getSupportStatusSnapshot(client, context = {}) {
   } catch (error) {
     // If Supabase tables are unavailable, fall back to local legacy data.
     if (error?.code === 'SUPABASE_QUERY_FAILED') {
-      const legacySnapshot = await getLegacyDonationSnapshot(client);
       return applyDemoAiAccessOverride(legacySnapshot);
     }
     throw error;
   }
 
   const normalized = normalizeEntitlementSnapshot(entitlement, pendingIntent);
+  const merged = mergeSupportSnapshot(normalized, legacySnapshot);
+
   const withRequester = {
-    ...normalized,
+    ...merged,
     requester: {
       userId: identity.userId || null,
       email: identity.email || null,
@@ -838,7 +756,7 @@ function buildStatusPayload({
   reminder,
   support,
 }) {
-  const shouldShowMonthlyReminder = (support.supportStatus === 'none' || support.supportStatus === 'rejected')
+  const shouldShowMonthlyReminder = !support.hasDonated
     && !support.hasPendingVerification
     && !reminder.reminderShownThisMonth;
 
@@ -854,11 +772,11 @@ function buildStatusPayload({
     billingCycle: support.billingCycle || null,
     canAccessAiAgent: Boolean(support.canAccessAiAgent),
     aiAgentAccessLevel: support.aiAgentAccessLevel || 'none',
-    plans: SUPPORTER_PLANS,
+    plans: [],
     currentMonthKey: reminder.currentMonthKey,
     reminderShownThisMonth: reminder.reminderShownThisMonth,
     shouldShowMonthlyReminder,
-    donationUrl: resolveDonationUrl(support.currentPlanKey || support.pendingPlanKey || null),
+    donationUrl: resolveDonationUrl(),
   };
 }
 
@@ -879,13 +797,12 @@ async function getDonationStatus(context = {}) {
 }
 
 async function createSupportIntent(payload = {}, context = {}) {
-  const planKey = normalizePlanKey(payload.planKey);
   const note = normalizeText(payload.note, 1000);
   const source = normalizeText(payload.source, 64) || 'app_click';
 
   const identity = await resolveRequesterIdentity(context, { allowAnonymous: true });
   if (!identity) {
-    throw createServiceError('Please sign in before selecting a support plan.', 401, 'AUTH_REQUIRED');
+    throw createServiceError('Please sign in before opening the donation flow.', 401, 'AUTH_REQUIRED');
   }
 
   const supabase = getSupabaseAdminClient();
@@ -903,8 +820,8 @@ async function createSupportIntent(payload = {}, context = {}) {
   const { error } = await supabase.from(tableName).insert({
     user_id: identity.userId || identity.email,
     email: identity.email || null,
-    plan_key: planKey,
-    status: 'pending',
+    plan_key: 'one_time',
+    status: 'clicked',
     provider: 'buy_me_a_coffee',
     source,
     note,
@@ -926,14 +843,158 @@ async function createSupportIntent(payload = {}, context = {}) {
   const status = await getDonationStatus(context);
   return {
     ...status,
-    checkoutUrl: resolveDonationUrl(planKey),
+    checkoutUrl: resolveDonationUrl(),
   };
 }
 
+async function recordLocalVerifiedDonation(amountUsd, note = null) {
+  if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+    return;
+  }
+
+  await withClient(async (client) => {
+    await ensureDonationSchema(client);
+    await client.query(
+      `INSERT INTO donation_events (amount_ils, donated_at, note, source, created_at)
+       VALUES ($1, $2, $3, 'provider_sync', CURRENT_TIMESTAMP)`,
+      [amountUsd, new Date().toISOString(), normalizeText(note, 1000)],
+    );
+  });
+}
+
+async function syncSupporterEntitlement(payload = {}, context = {}) {
+  const supportStatus = normalizeSupportSyncStatus(payload.status || payload.supportStatus);
+  const source = normalizeText(payload.source, 64) || 'provider_sync';
+  const provider = normalizeText(payload.provider, 64) || 'buy_me_a_coffee';
+  const note = normalizeText(payload.note, 1000);
+  const providerReference = normalizeText(
+    payload.providerReference || payload.paymentReference || payload.transactionId,
+    255,
+  );
+
+  const identity = await resolveSupportTargetIdentity(payload, context);
+
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) {
+    throw createServiceError(
+      'Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to sync supporter entitlements.',
+      503,
+      'SUPABASE_NOT_CONFIGURED',
+    );
+  }
+
+  const now = new Date().toISOString();
+  const entitlementsTable = getEntitlementsTableName();
+  const intentsTable = getIntentsTableName();
+
+  let existingEntitlement = null;
+  try {
+    existingEntitlement = await fetchLatestEntitlement(identity);
+  } catch (error) {
+    if (error?.code !== 'SUPABASE_QUERY_FAILED') {
+      throw error;
+    }
+  }
+
+  const existingAmountRaw = Number.parseFloat(existingEntitlement?.amount_usd || existingEntitlement?.amount || 0);
+  const existingAmountUsd = Number.isFinite(existingAmountRaw) && existingAmountRaw > 0
+    ? Math.round(existingAmountRaw * 100) / 100
+    : 0;
+
+  const incomingAmountUsd = normalizeAmountUsd(payload.amountUsd, existingAmountUsd);
+  const hasDonated = supportStatus === 'verified' || existingAmountUsd > 0;
+  const amountUsd = supportStatus === 'verified'
+    ? incomingAmountUsd
+    : existingAmountUsd;
+  const tier = hasDonated ? 'one_time' : 'none';
+  const billingCycle = normalizeBillingCycle(payload.billingCycle)
+    || normalizeBillingCycle(existingEntitlement?.billing_cycle)
+    || (hasDonated ? 'one_time' : null);
+  const verifiedAt = hasDonated
+    ? normalizeText(payload.verifiedAt, 64) || now
+    : null;
+
+  const { error: entitlementError } = await supabase.from(entitlementsTable).upsert(
+    {
+      user_id: identity.userId,
+      email: identity.email || null,
+      tier,
+      plan_key: 'one_time',
+      status: supportStatus,
+      billing_cycle: billingCycle,
+      amount_usd: amountUsd,
+      provider,
+      provider_reference: providerReference,
+      verified_at: verifiedAt,
+      updated_at: now,
+    },
+    {
+      onConflict: 'user_id',
+    },
+  );
+
+  if (entitlementError) {
+    if (isMissingSupabaseTableError(entitlementError.message, entitlementsTable)) {
+      throw createServiceError(
+        `Missing Supabase table "${entitlementsTable}". Run SQL setup from docs/supabase-supporter-program.md and refresh the Supabase schema cache.`,
+        503,
+        'SUPABASE_SCHEMA_MISSING',
+      );
+    }
+    throw createServiceError(
+      `Failed to sync supporter entitlement: ${entitlementError.message}`,
+      502,
+      'SUPABASE_WRITE_FAILED',
+    );
+  }
+
+  const { error: intentError } = await supabase.from(intentsTable).insert({
+    user_id: identity.userId,
+    email: identity.email || null,
+    plan_key: 'one_time',
+    status: supportStatus,
+    provider,
+    source,
+    note,
+    created_at: now,
+    updated_at: now,
+  });
+
+  if (intentError) {
+    if (isMissingSupabaseTableError(intentError.message, intentsTable)) {
+      throw createServiceError(
+        `Missing Supabase table "${intentsTable}". Run SQL setup from docs/supabase-supporter-program.md and refresh the Supabase schema cache.`,
+        503,
+        'SUPABASE_SCHEMA_MISSING',
+      );
+    }
+    throw createServiceError(
+      `Failed to store supporter sync event: ${intentError.message}`,
+      502,
+      'SUPABASE_WRITE_FAILED',
+    );
+  }
+
+  if (hasDonated && amountUsd > 0) {
+    try {
+      await recordLocalVerifiedDonation(amountUsd, note || providerReference || `source:${source}`);
+    } catch (error) {
+      console.warn('Failed to record local verified donation snapshot:', error);
+    }
+  }
+
+  return getDonationStatus({
+    ...context,
+    userId: identity.userId,
+    email: identity.email || undefined,
+    name: identity.name || undefined,
+  });
+}
+
 async function addDonationEvent(payload = {}, context = {}) {
-  // Legacy compatibility path: manual amount recording when used by older clients/tests.
+  // Backward compatibility path for older clients that still send planKey.
   if (payload && Object.prototype.hasOwnProperty.call(payload, 'planKey')) {
-    return createSupportIntent(payload, context);
+    return createSupportIntent({}, context);
   }
 
   const amount = normalizeAmount(payload.amount);
@@ -975,6 +1036,7 @@ async function markMonthlyReminderShown(payload = {}, context = {}) {
 module.exports = {
   getDonationStatus,
   createSupportIntent,
+  syncSupporterEntitlement,
   addDonationEvent,
   markMonthlyReminderShown,
   __setDatabase,
@@ -984,6 +1046,6 @@ module.exports = {
   getCurrentMonthKey,
   DONATION_THRESHOLDS,
   DEFAULT_DONATION_URL,
-  SUPPORTER_PLANS,
+  SUPPORTER_PLANS: [],
 };
 module.exports.default = module.exports;

@@ -122,18 +122,18 @@
       "tooltipNoDonation": "Support ShekelSync with a donation",
       "tooltipWithTier": "{{tier}} · Total donated ₪{{amount}}",
       "buyMeCoffee": "Buy me a coffee",
-      "buyMeCoffeeVerified": "{{tier}} supporter",
-      "buyMeCoffeePending": "Support plan pending validation"
+      "buyMeCoffeeVerified": "Donation verified",
+      "buyMeCoffeePending": "Donation pending validation"
     },
     "program": {
-      "title": "Buy Me a Coffee Support Program",
-      "validationHint": "Support access is applied after payment validation in Supabase.",
+      "title": "Support ShekelSync",
+      "validationHint": "Any paid donation unlocks access automatically after sync.",
       "currentPlan": "Current plan: {{plan}}",
-      "intentSaved": "Plan selection recorded. We opened Buy Me a Coffee. Access updates after validation.",
-      "intentFailed": "Failed to record plan selection.",
+      "intentSaved": "Buy Me a Coffee opened. Access updates automatically after payment sync.",
+      "intentFailed": "Failed to open donation flow.",
       "currentButton": "Current Plan",
       "pendingButton": "Pending Validation",
-      "chooseButton": "Choose on Buy Me a Coffee",
+      "chooseButton": "Open Buy Me a Coffee",
       "actions": {
         "close": "Close"
       }
@@ -803,6 +803,7 @@
       "title": "Detected Patterns",
       "avgByPeriod": "Avg {{period}}",
       "savingsRate": "Savings Rate",
+      "savingsRateSalary": "Savings Rate (Salary)",
       "anomalies": "Anomalies",
       "spikes": "{{count}} spike{{count, plural, one {} other {s}}}"
     },
@@ -2219,13 +2220,17 @@
       "categories": "Categories"
     },
     "stats": {
-      "accounts": "{{count}} account{{count, plural, one {} other {s}}}",
+      "accounts": "{{count}} accounts",
+      "accounts_one": "{{count}} account",
+      "accounts_other": "{{count}} accounts",
       "accountsConnected": "accounts connected"
     },
     "popover": {
       "title": "Account Sync Status",
       "noAccounts": "No accounts configured",
-      "refreshStaleAccounts": "Refresh {{count}} stale account{{count, plural, one {} other {s}}}"
+      "refreshStaleAccounts": "Refresh {{count}} stale accounts",
+      "refreshStaleAccounts_one": "Refresh {{count}} stale account",
+      "refreshStaleAccounts_other": "Refresh {{count}} stale accounts"
     },
     "dbStatus": {
       "connected": "DB Connected",
@@ -2240,8 +2245,12 @@
     "sync": {
       "never": "Never",
       "justNow": "Just now",
-      "minutesAgo": "{{count}} minute{{count, plural, one {} other {s}}} ago",
-      "hoursAgo": "{{count}} hour{{count, plural, one {} other {s}}} ago",
+      "minutesAgo": "{{count}} minutes ago",
+      "minutesAgo_one": "{{count}} minute ago",
+      "minutesAgo_other": "{{count}} minutes ago",
+      "hoursAgo": "{{count}} hours ago",
+      "hoursAgo_one": "{{count}} hour ago",
+      "hoursAgo_other": "{{count}} hours ago",
       "yesterday": "Yesterday",
       "daysAgo": "{{count}} days ago"
     },

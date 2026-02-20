@@ -26,11 +26,11 @@ async function assertAiAgentAccess(req) {
     return status;
   }
 
-  const error = new Error('AI Agent requires a verified supporter plan (Bronze or higher).');
+  const error = new Error('AI Agent requires a verified donation.');
   error.status = 403;
-  error.code = 'SUPPORT_PLAN_REQUIRED';
+  error.code = 'DONATION_REQUIRED';
   error.details = {
-    requiredPlan: 'bronze',
+    requiredDonation: true,
     currentTier: status?.tier || 'none',
     supportStatus: status?.supportStatus || 'none',
   };

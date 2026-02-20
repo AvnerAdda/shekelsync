@@ -6,6 +6,8 @@ export interface DashboardHistoryEntry {
   expenses: number | null;
   capitalReturns?: number;
   cardRepayments?: number;
+  pairedCardExpenses?: number;
+  pairedCardRepayments?: number;
   bankBalance?: number;
 }
 

@@ -8,12 +8,10 @@ import {
   type DonationStatus,
   type DonationTier,
   type MarkReminderShownPayload,
-  type SupportPlan,
   type SupportVerificationStatus,
   getCurrentMonthKey,
   getDonationTier,
   isDonationTier,
-  isSupportPlanKey,
 } from '../types';
 
 interface ApiPayload<T> {
@@ -30,7 +28,7 @@ interface UseDonationStatusReturn {
   tier: DonationTier;
   supportStatus: SupportVerificationStatus;
   refresh: () => Promise<DonationStatus>;
-  createSupportIntent: (payload: CreateSupportIntentPayload) => Promise<DonationStatus>;
+  createSupportIntent: (payload?: CreateSupportIntentPayload) => Promise<DonationStatus>;
   addDonationEvent: (payload: AddDonationEventPayload) => Promise<DonationStatus>;
   markReminderShown: (payload?: MarkReminderShownPayload) => Promise<DonationStatus>;
 }
@@ -58,48 +56,14 @@ function normalizeSupportStatus(value: unknown): SupportVerificationStatus {
   return 'none';
 }
 
-function normalizeAiAccessLevel(value: unknown): DonationStatus['aiAgentAccessLevel'] {
-  if (value === 'standard' || value === 'extended' || value === 'unlimited' || value === 'none') {
-    return value;
+function normalizeAiAccessLevel(value: unknown, hasDonated: boolean): DonationStatus['aiAgentAccessLevel'] {
+  if (value === 'standard' || value === 'extended' || value === 'unlimited') {
+    return 'standard';
   }
-  return 'none';
-}
-
-function normalizeSupportPlan(raw: unknown): SupportPlan | null {
-  if (!isRecord(raw)) {
-    return null;
+  if (value === 'none') {
+    return 'none';
   }
-
-  const key = typeof raw.key === 'string' ? raw.key.trim().toLowerCase() : '';
-  if (!isSupportPlanKey(key)) {
-    return null;
-  }
-
-  const tier = typeof raw.tier === 'string' ? raw.tier.trim().toLowerCase() : key;
-  const billingCycleRaw = typeof raw.billingCycle === 'string' ? raw.billingCycle.trim().toLowerCase() : '';
-  const billingCycle = billingCycleRaw === 'monthly' || billingCycleRaw === 'lifetime' || billingCycleRaw === 'one_time'
-    ? billingCycleRaw
-    : key === 'lifetime'
-      ? 'lifetime'
-      : key === 'one_time'
-        ? 'one_time'
-        : 'monthly';
-
-  const rewardsRaw = Array.isArray(raw.rewards)
-    ? raw.rewards.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-    : [];
-
-  return {
-    key,
-    tier: isDonationTier(tier) && tier !== 'none' ? tier : key,
-    title: typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : key,
-    trialLabel: typeof raw.trialLabel === 'string' ? raw.trialLabel : null,
-    priceLabel: typeof raw.priceLabel === 'string' && raw.priceLabel.trim() ? raw.priceLabel.trim() : '',
-    billingCycle,
-    amountUsd: Number.isFinite(Number(raw.amountUsd)) ? Number(raw.amountUsd) : null,
-    rewards: rewardsRaw,
-    aiAccessLevel: normalizeAiAccessLevel(raw.aiAccessLevel),
-  };
+  return hasDonated ? 'standard' : 'none';
 }
 
 function normalizeDonationStatus(raw: unknown): DonationStatus {
@@ -125,6 +89,10 @@ function normalizeDonationStatus(raw: unknown): DonationStatus {
     ? tierCandidate
     : getDonationTier(totalAmountUsd);
 
+  const hasDonated = typeof raw.hasDonated === 'boolean'
+    ? raw.hasDonated
+    : supportStatus === 'verified' || totalAmountUsd > 0;
+
   const currentMonthKey = typeof raw.currentMonthKey === 'string' && raw.currentMonthKey.trim()
     ? raw.currentMonthKey
     : getCurrentMonthKey();
@@ -133,31 +101,18 @@ function normalizeDonationStatus(raw: unknown): DonationStatus {
     ? raw.reminderShownThisMonth
     : false;
 
-  const currentPlanKey = typeof raw.currentPlanKey === 'string' && isSupportPlanKey(raw.currentPlanKey)
-    ? raw.currentPlanKey
-    : null;
-
-  const pendingPlanKey = typeof raw.pendingPlanKey === 'string' && isSupportPlanKey(raw.pendingPlanKey)
-    ? raw.pendingPlanKey
-    : null;
-
-  const plansRaw = Array.isArray(raw.plans) ? raw.plans : [];
-  const normalizedPlans = plansRaw
-    .map((plan) => normalizeSupportPlan(plan))
-    .filter((plan): plan is SupportPlan => Boolean(plan));
+  const hasPendingVerification = typeof raw.hasPendingVerification === 'boolean'
+    ? raw.hasPendingVerification
+    : supportStatus === 'pending';
 
   return {
-    hasDonated: typeof raw.hasDonated === 'boolean'
-      ? raw.hasDonated
-      : supportStatus === 'verified' || totalAmountUsd > 0,
+    hasDonated,
     tier,
     supportStatus,
     totalAmountUsd,
-    currentPlanKey,
-    pendingPlanKey,
-    hasPendingVerification: typeof raw.hasPendingVerification === 'boolean'
-      ? raw.hasPendingVerification
-      : supportStatus === 'pending',
+    currentPlanKey: hasDonated ? 'one_time' : null,
+    pendingPlanKey: hasPendingVerification ? 'one_time' : null,
+    hasPendingVerification,
     lastVerifiedAt: typeof raw.lastVerifiedAt === 'string' && raw.lastVerifiedAt.trim()
       ? raw.lastVerifiedAt.trim()
       : null,
@@ -166,14 +121,14 @@ function normalizeDonationStatus(raw: unknown): DonationStatus {
       : null,
     canAccessAiAgent: typeof raw.canAccessAiAgent === 'boolean'
       ? raw.canAccessAiAgent
-      : supportStatus === 'verified' && (tier === 'bronze' || tier === 'silver' || tier === 'gold' || tier === 'lifetime'),
-    aiAgentAccessLevel: normalizeAiAccessLevel(raw.aiAgentAccessLevel),
-    plans: normalizedPlans.length > 0 ? normalizedPlans : defaults.plans,
+      : hasDonated,
+    aiAgentAccessLevel: normalizeAiAccessLevel(raw.aiAgentAccessLevel, hasDonated),
+    plans: [],
     currentMonthKey,
     reminderShownThisMonth,
     shouldShowMonthlyReminder: typeof raw.shouldShowMonthlyReminder === 'boolean'
       ? raw.shouldShowMonthlyReminder
-      : !Boolean(raw.hasDonated) && supportStatus !== 'pending' && !reminderShownThisMonth,
+      : !hasDonated && !hasPendingVerification && !reminderShownThisMonth,
     donationUrl: typeof raw.donationUrl === 'string' && raw.donationUrl.trim()
       ? raw.donationUrl.trim()
       : defaults.donationUrl,
@@ -231,7 +186,7 @@ export function useDonationStatus(): UseDonationStatusReturn {
     }
   }, []);
 
-  const createSupportIntent = useCallback(async (payload: CreateSupportIntentPayload) => {
+  const createSupportIntent = useCallback(async (payload: CreateSupportIntentPayload = {}) => {
     const response = await apiClient.post<ApiPayload<DonationStatus>, CreateSupportIntentPayload>(
       '/api/donations/intent',
       payload,
