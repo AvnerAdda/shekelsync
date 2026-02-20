@@ -10,6 +10,11 @@ import {
   ToggleButton,
   Alert,
   IconButton,
+  Popover,
+  FormGroup,
+  FormControlLabel,
+  Switch,
+  Divider,
 } from '@mui/material';
 import MuiTooltip from '@mui/material/Tooltip';
 import { ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ReferenceArea, ComposedChart, Area } from 'recharts';
@@ -19,6 +24,7 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import NotesIcon from '@mui/icons-material/Notes';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
+import TuneIcon from '@mui/icons-material/Tune';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
 import { useDashboardFilters } from '../DashboardFiltersContext';
@@ -71,11 +77,17 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 }) => {
   const theme = useTheme();
   const { aggregationPeriod, setAggregationPeriod, periodDays, setPeriodDays } = useDashboardFilters();
-  const anomalies = detectAnomalies(data.history);
   const { t } = useTranslation('translation', { keyPrefix: 'transactionHistory' });
 
   // Tab state
   const [activeTab, setActiveTab] = useState(0);
+
+  // Display options state
+  const [settingsAnchorEl, setSettingsAnchorEl] = useState<HTMLElement | null>(null);
+  const [includeCardRepayments, setIncludeCardRepayments] = useState(false);
+  const [includeCapitalReturns, setIncludeCapitalReturns] = useState(false);
+  const [showAverageGuides, setShowAverageGuides] = useState(true);
+  const [showForecastLines, setShowForecastLines] = useState(true);
   
   // Forecast state
   const [forecastData, setForecastData] = useState<any>(null);
@@ -85,6 +97,40 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   // Transaction Detail Modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionForModal | null>(null);
+
+  const settingsOpen = Boolean(settingsAnchorEl);
+
+  const getDisplayIncome = useCallback(
+    (item: any) => {
+      const baseIncome = item?.income || 0;
+      if (!includeCapitalReturns) return baseIncome;
+      return baseIncome + (item?.capitalReturns || 0);
+    },
+    [includeCapitalReturns],
+  );
+
+  const getDisplayExpenses = useCallback(
+    (item: any) => {
+      const baseExpenses = item?.expenses || 0;
+      if (includeCardRepayments) return baseExpenses;
+      return Math.max(0, baseExpenses - (item?.cardRepayments || 0));
+    },
+    [includeCardRepayments],
+  );
+
+  const chartHistory = React.useMemo(
+    () =>
+      (data.history || []).map((item: any) => ({
+        ...item,
+        income: getDisplayIncome(item),
+        expenses: getDisplayExpenses(item),
+      })),
+    [data.history, getDisplayExpenses, getDisplayIncome],
+  );
+
+  const anomalies = detectAnomalies(chartHistory);
+  const chartTotalIncome = chartHistory.reduce((sum: number, item: any) => sum + (item.income || 0), 0);
+  const chartTotalExpenses = chartHistory.reduce((sum: number, item: any) => sum + (item.expenses || 0), 0);
 
   const handleOpenTransactionDetail = (txn: any) => {
     setSelectedTransaction({
@@ -207,7 +253,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     const forecastEndDate = format(addDays(today, 30), 'yyyy-MM-dd');
     
     // Filter base historical data to the selected period
-    const baseHistoricalData = (data.history || []).filter((item: any) => 
+    const baseHistoricalData = chartHistory.filter((item: any) => 
       item.date >= periodStartDate && item.date <= todayStr
     );
 
@@ -341,7 +387,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     }
 
     return combinedData;
-  }, [data.history, forecastData, yAxisScale, getLogScaleData, aggregationPeriod, periodDays, gapPeriodInfo]);
+  }, [chartHistory, forecastData, yAxisScale, getLogScaleData, aggregationPeriod, periodDays, gapPeriodInfo]);
 
   // Get combined net position data (historical + forecast with P10/P50/P90 scenarios)
   // Shows last X days historical + 30 days forecast
@@ -567,12 +613,12 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 }
               }}
             >
-              <MuiTooltip title={shouldUseLogScale(data.history) && yAxisScale === 'linear' ? t('scales.logRecommendedHint') : t('scales.linear')}>
+              <MuiTooltip title={shouldUseLogScale(chartHistory) && yAxisScale === 'linear' ? t('scales.logRecommendedHint') : t('scales.linear')}>
                 <ToggleButton 
                   value="linear"
                   sx={{
                     position: 'relative',
-                    ...(shouldUseLogScale(data.history) && yAxisScale === 'linear' && {
+                    ...(shouldUseLogScale(chartHistory) && yAxisScale === 'linear' && {
                       '&::after': {
                         content: '"!"',
                         position: 'absolute',
@@ -667,16 +713,99 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               <ToggleButton value={60}>{t('periodDays.last60', { defaultValue: '60d' })}</ToggleButton>
               <ToggleButton value={90}>{t('periodDays.last90', { defaultValue: '90d' })}</ToggleButton>
             </ToggleButtonGroup>
+
+            <MuiTooltip title={t('settings.button', { defaultValue: 'Chart options' })}>
+              <IconButton
+                size="small"
+                onClick={(event) => setSettingsAnchorEl(event.currentTarget)}
+                sx={{
+                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                  color: 'text.secondary',
+                  borderRadius: '10px',
+                  '&:hover': {
+                    bgcolor: 'action.hover',
+                  },
+                }}
+              >
+                <TuneIcon fontSize="small" />
+              </IconButton>
+            </MuiTooltip>
           </Box>
         )}
       </Box>
+
+      <Popover
+        open={settingsOpen}
+        anchorEl={settingsAnchorEl}
+        onClose={() => setSettingsAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        PaperProps={{
+          sx: {
+            mt: 1,
+            px: 1.5,
+            py: 1,
+            minWidth: 260,
+            borderRadius: '12px',
+          },
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ px: 1, pt: 0.5, pb: 1 }}>
+          {t('settings.title', { defaultValue: 'Chart options' })}
+        </Typography>
+        <FormGroup sx={{ px: 0.5 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={includeCardRepayments}
+                onChange={(_, checked) => setIncludeCardRepayments(checked)}
+              />
+            }
+            label={t('settings.cardRepayments', { defaultValue: 'Include card repayments' })}
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={includeCapitalReturns}
+                onChange={(_, checked) => setIncludeCapitalReturns(checked)}
+              />
+            }
+            label={t('settings.capitalReturns', { defaultValue: 'Include capital returns' })}
+          />
+          <Divider sx={{ my: 0.5 }} />
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={showAverageGuides}
+                onChange={(_, checked) => setShowAverageGuides(checked)}
+              />
+            }
+            label={t('settings.avgGuides', { defaultValue: 'Show average guides' })}
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={showForecastLines}
+                onChange={(_, checked) => setShowForecastLines(checked)}
+                disabled={aggregationPeriod !== 'daily'}
+              />
+            }
+            label={t('settings.forecastLines', { defaultValue: 'Show forecast lines' })}
+          />
+        </FormGroup>
+      </Popover>
 
       {/* Tab 0: Daily Income vs Expenses with Forecast */}
       {activeTab === 0 && (
         <>
           {aggregationPeriod === 'daily' && forecastData && (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1, textAlign: 'center' }}>
-              {t('periodDays.showingLast', { count: periodDays, defaultValue: `Last ${periodDays} days` })} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })} — {t('forecast.forecastData')} shown as dashed lines
+              {t('periodDays.showingLast', { count: periodDays, defaultValue: `Last ${periodDays} days` })} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })}
+              {` — ${t('settings.forecastLines')}: ${showForecastLines ? t('settings.on', { defaultValue: 'On' }) : t('settings.off', { defaultValue: 'Off' })}`}
             </Typography>
           )}
           {aggregationPeriod !== 'daily' && (
@@ -759,8 +888,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           />
           <Legend />
 
-          {data.history.length > 0 && (() => {
-            const avgExpenses = data.history.reduce((sum: number, item: any) => sum + (item.expenses ?? 0), 0) / data.history.length;
+          {showAverageGuides && chartHistory.length > 0 && (() => {
+            const avgExpenses = chartTotalExpenses / chartHistory.length;
             const yValue = yAxisScale === 'log' && avgExpenses > 0 ? Math.log10(avgExpenses) : avgExpenses;
             return (
               <ReferenceLine
@@ -778,10 +907,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             );
           })()}
 
-          {data.history.length > 0 && data.history.some((h: any) => h.income > 0) && (() => {
-            const avgIncome =
-              data.history.reduce((sum: number, item: any) => sum + (item.income ?? 0), 0) /
-              data.history.filter((h: any) => h.income > 0).length;
+          {showAverageGuides && chartHistory.length > 0 && chartHistory.some((h: any) => h.income > 0) && (() => {
+            const positiveIncomeDays = chartHistory.filter((h: any) => h.income > 0).length;
+            const avgIncome = positiveIncomeDays > 0 ? (chartTotalIncome / positiveIncomeDays) : 0;
             const yValue = yAxisScale === 'log' && avgIncome > 0 ? Math.log10(avgIncome) : avgIncome;
             return (
               <ReferenceLine
@@ -838,33 +966,37 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             />
           )}
           {/* Forecast lines (dashed) - connect through nulls to draw continuous line from bridge point */}
-          <Line 
-            type="monotone" 
-            dataKey="forecastIncome" 
-            stroke={theme.palette.success.light} 
-            strokeWidth={2} 
-            strokeDasharray="5 5"
-            dot={(props: any) => {
-              // Don't render dot if value is invalid or coordinates are NaN
-              if (props.value === null || props.value === undefined || !Number.isFinite(props.cx) || !Number.isFinite(props.cy)) return null;
-              return <circle cx={props.cx} cy={props.cy} r={3} fill={theme.palette.success.light} />;
-            }}
-            name={`${t('forecast.income')} (${t('forecast.expected')})`}
-            connectNulls={true}
-          />
-          <Line 
-            type="monotone" 
-            dataKey="forecastExpenses" 
-            stroke={theme.palette.error.light} 
-            strokeWidth={2} 
-            strokeDasharray="5 5"
-            dot={(props: any) => {
-              if (props.value === null || props.value === undefined) return null;
-              return <circle cx={props.cx} cy={props.cy} r={3} fill={theme.palette.error.light} />;
-            }}
-            name={`${t('forecast.expenses')} (${t('forecast.expected')})`}
-            connectNulls={true}
-          />
+          {showForecastLines && (
+            <Line 
+              type="monotone" 
+              dataKey="forecastIncome" 
+              stroke={theme.palette.success.light} 
+              strokeWidth={2} 
+              strokeDasharray="5 5"
+              dot={(props: any) => {
+                // Don't render dot if value is invalid or coordinates are NaN
+                if (props.value === null || props.value === undefined || !Number.isFinite(props.cx) || !Number.isFinite(props.cy)) return null;
+                return <circle cx={props.cx} cy={props.cy} r={3} fill={theme.palette.success.light} />;
+              }}
+              name={`${t('forecast.income')} (${t('forecast.expected')})`}
+              connectNulls={true}
+            />
+          )}
+          {showForecastLines && (
+            <Line 
+              type="monotone" 
+              dataKey="forecastExpenses" 
+              stroke={theme.palette.error.light} 
+              strokeWidth={2} 
+              strokeDasharray="5 5"
+              dot={(props: any) => {
+                if (props.value === null || props.value === undefined) return null;
+                return <circle cx={props.cx} cy={props.cy} r={3} fill={theme.palette.error.light} />;
+              }}
+              name={`${t('forecast.expenses')} (${t('forecast.expected')})`}
+              connectNulls={true}
+            />
+          )}
         </ComposedChart>
       </ResponsiveContainer>
 
@@ -886,22 +1018,22 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 })}
               </Typography>
               <Typography variant="body2" fontWeight="medium">
-                ↓ {formatCurrencyValue(data.history.reduce((sum: number, item: any) => sum + (item.expenses ?? 0), 0) / data.history.length)}
+                ↓ {formatCurrencyValue(chartHistory.length > 0 ? chartTotalExpenses / chartHistory.length : 0)}
                 {' / '}
-                ↑ {formatCurrencyValue(data.history.reduce((sum: number, item: any) => sum + (item.income ?? 0), 0) / data.history.length)}
+                ↑ {formatCurrencyValue(chartHistory.length > 0 ? chartTotalIncome / chartHistory.length : 0)}
               </Typography>
             </Box>
-            {data.summary.totalIncome > 0 && (
+            {chartTotalIncome > 0 && (
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                   {t('patterns.savingsRate')}
                 </Typography>
                 <Typography variant="body2" fontWeight="medium" color={
-                  ((data.summary.totalIncome - data.summary.totalExpenses) / data.summary.totalIncome) > 0.2
+                  ((chartTotalIncome - chartTotalExpenses) / chartTotalIncome) > 0.2
                     ? 'success.main'
                     : 'error.main'
                 }>
-                  {(((data.summary.totalIncome - data.summary.totalExpenses) / data.summary.totalIncome) * 100).toFixed(1)}%
+                  {(((chartTotalIncome - chartTotalExpenses) / chartTotalIncome) * 100).toFixed(1)}%
                 </Typography>
               </Box>
             )}

@@ -2,6 +2,7 @@ const { performance } = require('node:perf_hooks');
 const actualDatabase = require('../database.js');
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
+const { getCreditCardRepaymentCategoryCondition } = require('../accounts/repayment-category.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
 const { recordDashboardMetric } = require('./metrics-store.js');
 const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
@@ -84,6 +85,7 @@ async function getDashboardAnalytics(query = {}) {
       return cached;
     }
   }
+  const creditCardRepaymentCondition = getCreditCardRepaymentCategoryCondition('cd');
 
   let dateGroupBy;
   let dateSelect;
@@ -117,7 +119,17 @@ async function getDashboardAnalytics(query = {}) {
           WHEN (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0))
             AND t.price < 0 THEN ABS(t.price)
           ELSE 0
-        END) as expenses
+        END) as expenses,
+        SUM(CASE
+          WHEN cd.category_type = 'income' AND t.price > 0 AND COALESCE(cd.is_counted_as_income, 1) = 0
+          THEN t.price
+          ELSE 0
+        END) as capital_returns,
+        SUM(CASE
+          WHEN (${creditCardRepaymentCondition}) AND t.price < 0
+          THEN ABS(t.price)
+          ELSE 0
+        END) as card_repayments
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
@@ -486,6 +498,8 @@ async function getDashboardAnalytics(query = {}) {
       date: row.date,
       income: Number.parseFloat(row.income || 0),
       expenses: Number.parseFloat(row.expenses || 0),
+      capitalReturns: Number.parseFloat(row.capital_returns || 0),
+      cardRepayments: Number.parseFloat(row.card_repayments || 0),
       // NEW: Add bank balance to history
       ...(includeSummary ? { bankBalance: balanceHistoryMap.get(row.date) || 0 } : {}),
     })),

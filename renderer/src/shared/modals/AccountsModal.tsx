@@ -481,7 +481,7 @@ export const buildInitialSyncPayload = (account: Account) => {
       companyId: account.vendor,
       startDate: startDate.toISOString(),
       combineInstallments: false,
-      showBrowser: true,
+      showBrowser: false,
       additionalTransactionInformation: true,
     },
     credentials: scrapeCredentials,
@@ -882,6 +882,14 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         );
       });
 
+      const retryLimitWarning = (
+        <Grid size={{ xs: 12 }} key={`${institution.vendor_code}-retry-limit-warning`}>
+          <Alert severity="warning" icon={<LockIcon fontSize="small" />}>
+            {t('helpers.retryLimitWarning')}
+          </Alert>
+        </Grid>
+      );
+
       if (!hasExplicitFields) {
         return [
           (
@@ -892,10 +900,11 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
             </Grid>
           ),
           ...inputs,
+          retryLimitWarning,
         ];
       }
 
-      return inputs;
+      return [...inputs, retryLimitWarning];
     },
     [newAccount, showNewAccountPassword, t],
   );
@@ -1668,7 +1677,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         companyId: selectedAccount.vendor,
         startDate: selectedAccount.suggestedStartDate ? new Date(selectedAccount.suggestedStartDate) : new Date(),
         combineInstallments: false,
-        showBrowser: true,
+        showBrowser: false,
         additionalTransactionInformation: true,
       },
       credentials: buildSyncCredentialsForSelectedAccount(

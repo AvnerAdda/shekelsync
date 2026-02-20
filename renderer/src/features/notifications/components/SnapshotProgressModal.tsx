@@ -78,6 +78,19 @@ function resolveLocale(language: string) {
   return 'en-US';
 }
 
+function parseSnapshotDate(value: string | null | undefined): Date | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  // Keep date rendering stable for legacy timestamp payloads by parsing date-only.
+  const datePrefixMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+  const normalized = datePrefixMatch ? `${datePrefixMatch[1]}T00:00:00` : trimmed;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
 const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({
   open,
   onClose,
@@ -97,15 +110,19 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({
 
   const formatCount = (value: number) => new Intl.NumberFormat(locale).format(value || 0);
 
-  const formatDateRange = (start: string, end: string) => {
+  const formatDateRange = (start: string | null | undefined, end: string | null | undefined) => {
     const formatter = new Intl.DateTimeFormat(locale, {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
     });
 
-    const startDate = new Date(`${start}T00:00:00`);
-    const endDate = new Date(`${end}T00:00:00`);
+    const startDate = parseSnapshotDate(start);
+    const endDate = parseSnapshotDate(end);
+    if (!startDate || !endDate) {
+      return t('insights.snapshot.modal.notAvailable');
+    }
+
     return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
   };
 
@@ -203,9 +220,13 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({
                     </Stack>
 
                     {previousMissing && (
-                      <Alert severity="info" sx={{ mt: 1.5 }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', mt: 1.5 }}
+                      >
                         {t('insights.snapshot.modal.insufficientHistory')}
-                      </Alert>
+                      </Typography>
                     )}
                   </CardContent>
                 </Card>

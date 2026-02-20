@@ -26,6 +26,16 @@ function safeDecrypt(value) {
 }
 
 function mapCredentialRow(row) {
+  const rawLastUpdate =
+    row.lastUpdate ??
+    row.lastupdate ??
+    row.lastscrapesuccess ??
+    row.last_scrape_success;
+  const rawLastScrapeStatus =
+    row.lastScrapeStatus ??
+    row.lastscrapestatus ??
+    row.last_scrape_status;
+
   const credential = {
     id: row.id,
     vendor: row.vendor,
@@ -41,8 +51,8 @@ function mapCredentialRow(row) {
     // Balance now comes from investment_holdings
     current_balance: row.current_balance !== undefined ? row.current_balance : (row.holding_balance || null),
     balance_updated_at: toUTCISOStringRef(row.balance_updated_at || row.holding_as_of_date),
-    lastUpdate: toUTCISOStringRef(row.lastscrapesuccess || row.lastupdate || row.last_scrape_success),
-    lastScrapeStatus: row.lastscrapestatus || row.last_scrape_status,
+    lastUpdate: toUTCISOStringRef(rawLastUpdate),
+    lastScrapeStatus: rawLastScrapeStatus,
     last_scrape_attempt: toUTCISOStringRef(row.last_scrape_attempt),
   };
 

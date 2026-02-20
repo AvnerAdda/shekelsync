@@ -10,11 +10,11 @@ function ensureKeyBuffer() {
     return encryptionKeyBuffer;
   }
 
-  const envKey = process.env.CLARIFY_ENCRYPTION_KEY;
+  const envKey = process.env.SHEKELSYNC_ENCRYPTION_KEY;
   if (envKey) {
     const keyBuffer = Buffer.from(envKey, 'hex');
     if (keyBuffer.length !== 32) {
-      throw new Error('CLARIFY_ENCRYPTION_KEY must be a 64-character hex string (32 bytes).');
+      throw new Error('SHEKELSYNC_ENCRYPTION_KEY must be a 64-character hex string (32 bytes).');
     }
     encryptionKeyBuffer = keyBuffer;
     return encryptionKeyBuffer;
@@ -27,7 +27,7 @@ function ensureKeyBuffer() {
   }
 
   throw new Error(
-    'CLARIFY_ENCRYPTION_KEY is required. The master encryption key must be set in the environment by the secure key manager.',
+    'SHEKELSYNC_ENCRYPTION_KEY is required. The master encryption key must be set in the environment by the secure key manager.',
   );
 }
 

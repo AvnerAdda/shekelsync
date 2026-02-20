@@ -64,6 +64,8 @@ async function fetchBankAccounts(client) {
   return { rows: [] };
 }
 
+let fetchBankAccountsImpl = fetchBankAccounts;
+
 async function fetchAssets(client) {
   const booleanTrue = dialect.useSqlite ? 1 : 'TRUE';
 
@@ -278,7 +280,7 @@ async function getInvestmentSummary(params = {}) {
   try {
     const [accountsResult, bankAccountsResult, assetsResult] = await Promise.all([
       fetchAccounts(client),
-      fetchBankAccounts(client),
+      fetchBankAccountsImpl(client),
       fetchAssets(client),
     ]);
 
@@ -429,8 +431,12 @@ module.exports = {
   __setDatabase(mockDatabase) {
     database = mockDatabase || actualDatabase;
   },
+  __setFetchBankAccountsForTests(fetcher) {
+    fetchBankAccountsImpl = typeof fetcher === 'function' ? fetcher : fetchBankAccounts;
+  },
   __resetDatabase() {
     database = actualDatabase;
+    fetchBankAccountsImpl = fetchBankAccounts;
   },
 };
 

@@ -231,6 +231,50 @@ describe('SnapshotProgressModal', () => {
     expect(screen.queryByText('Insufficient history for a full previous period comparison.')).not.toBeInTheDocument();
   });
 
+  it('falls back to N/A when date values are invalid instead of throwing', () => {
+    const dataWithInvalidDates: SnapshotProgressData = {
+      ...sampleData,
+      periods: [
+        {
+          ...sampleData.periods[0],
+          current: {
+            ...sampleData.periods[0].current,
+            range: '',
+            start: 'not-a-date',
+            end: '2025-08-16',
+          },
+          previous: {
+            ...sampleData.periods[0].previous,
+            txCount: 3,
+            range: '',
+            start: '2025-08-03T12:00:00.000Z',
+            end: '2025-08-09T12:00:00.000Z',
+          },
+          deltaNetPct: 42.1,
+        },
+      ],
+      sinceStart: {
+        ...sampleData.sinceStart,
+        startDate: '',
+        endDate: 'still-not-a-date',
+      },
+    };
+
+    expect(() => {
+      render(
+        <SnapshotProgressModal
+          open
+          onClose={() => {}}
+          data={dataWithInvalidDates}
+          loading={false}
+          error={null}
+        />,
+      );
+    }).not.toThrow();
+
+    expect(screen.getAllByText(/N\/A/).length).toBeGreaterThanOrEqual(2);
+  });
+
   it('invokes onClose when close button is clicked', () => {
     const onClose = vi.fn();
 

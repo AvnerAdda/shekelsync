@@ -83,7 +83,7 @@ class SecureKeyManager {
   /**
  * Get the master encryption key from secure storage
  * Priority:
- * 1. Environment variable (CLARIFY_ENCRYPTION_KEY) - only when ALLOW_INSECURE_ENV_KEY=true (tests/CI)
+ * 1. Environment variable (SHEKELSYNC_ENCRYPTION_KEY) - only when ALLOW_INSECURE_ENV_KEY=true (tests/CI)
  * 2. OS keychain (via keytar) - secure production storage
  * 3. Generate new key and store in keychain
  */
@@ -94,17 +94,17 @@ class SecureKeyManager {
     }
 
     // 1. Check environment variable (tests/CI only)
-    const envKey = process.env.CLARIFY_ENCRYPTION_KEY;
+    const envKey = process.env.SHEKELSYNC_ENCRYPTION_KEY;
     if (envKey) {
       const envKeyAllowed = allowEnvKey || isLinux;
       if (!envKeyAllowed) {
         throw new Error(
-          'CLARIFY_ENCRYPTION_KEY is set but environment keys are disabled. ' +
+          'SHEKELSYNC_ENCRYPTION_KEY is set but environment keys are disabled. ' +
           'Remove the env key and enable OS keychain storage.',
         );
       }
       if (!this.validateKey(envKey)) {
-        throw new Error('CLARIFY_ENCRYPTION_KEY environment variable is invalid. Must be a 64-character hex string (32 bytes).');
+        throw new Error('SHEKELSYNC_ENCRYPTION_KEY environment variable is invalid. Must be a 64-character hex string (32 bytes).');
       }
       console.log('[SecureKeyManager] Using encryption key from environment variable');
       this.cachedKey = envKey;
@@ -139,7 +139,7 @@ class SecureKeyManager {
       }
     } else {
       const message = isLinux
-        ? 'Cannot securely store encryption key. On Linux, set CLARIFY_ENCRYPTION_KEY or enable libsecret and a secret service.'
+        ? 'Cannot securely store encryption key. On Linux, set SHEKELSYNC_ENCRYPTION_KEY or enable libsecret and a secret service.'
         : 'Cannot securely store encryption key. Enable OS keychain support (install libsecret on Linux).';
       throw new Error(message);
     }
@@ -191,7 +191,7 @@ class SecureKeyManager {
    */
   isSecureStorageAvailable() {
     const envKeyAllowed = allowEnvKey || isLinux;
-    return this.keytarAvailable || (envKeyAllowed && Boolean(process.env.CLARIFY_ENCRYPTION_KEY));
+    return this.keytarAvailable || (envKeyAllowed && Boolean(process.env.SHEKELSYNC_ENCRYPTION_KEY));
   }
 
   /**

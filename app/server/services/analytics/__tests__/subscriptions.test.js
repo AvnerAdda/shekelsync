@@ -952,4 +952,296 @@ describe('subscriptions service', () => {
     );
     expect(refreshInsertCall?.[1]?.[6]).toBe('review');
   });
+
+  it('executes default recurring analyzer wrappers when dependencies are reset', async () => {
+    subscriptionsService.__resetDependencies();
+
+    const moduleHelpers = await import('node:module');
+    const requireFromTest = moduleHelpers.createRequire(import.meta.url);
+    const sharedDatabase = requireFromTest('../../database.js');
+    const recurringAnalyzer = requireFromTest('../recurring-analyzer.js');
+
+    const analyzeSpy = vi.spyOn(recurringAnalyzer, 'analyzeRecurringPatterns');
+    const normalizeSpy = vi.spyOn(recurringAnalyzer, 'normalizePatternKey');
+    const dominantSpy = vi.spyOn(recurringAnalyzer, 'selectDominantCluster');
+    const recurringDatabaseSpy = vi.spyOn(sharedDatabase, 'query').mockResolvedValue({ rows: [] });
+
+    const query = vi.fn(async (sql) => {
+      const text = String(sql);
+      if (text.includes('FROM subscriptions s')) {
+        return { rows: [] };
+      }
+      if (text.includes('SELECT id FROM subscriptions WHERE pattern_key = $1')) {
+        return { rows: [] };
+      }
+      if (text.startsWith('INSERT INTO subscriptions (') && text.includes('RETURNING id')) {
+        return { rows: [{ id: 888 }] };
+      }
+      if (text.includes('FROM subscription_alerts sa')) {
+        return { rows: [] };
+      }
+      if (text.includes('ORDER BY charge_date DESC')) {
+        return {
+          rows: [
+            { charge_date: '2026-02-01', amount: 30 },
+            { charge_date: '2026-01-01', amount: 20 },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+
+    subscriptionsService.__setDatabase({ query });
+
+    // Phase 1: exercise default analyzeRecurringPatterns wrapper.
+    await subscriptionsService.getSubscriptions({ locale: 'en' });
+
+    // Phase 2: keep default normalize/select wrappers while injecting patterns.
+    subscriptionsService.__setRecurringAnalyzer({
+      analyzeRecurringPatterns: async () => ({
+        patterns: [
+          {
+            pattern_key: 'default-wrapper-sub',
+            display_name: 'Default Wrapper Sub',
+            detected_frequency: 'monthly',
+            detected_amount: 20,
+            amount_is_fixed: true,
+            consistency_score: 0.9,
+            last_charge_date: '2026-02-01',
+            first_detected_date: '2025-01-01',
+            occurrence_count: 8,
+            total_spent: 160,
+          },
+        ],
+      }),
+    });
+
+    await subscriptionsService.addManualSubscription({
+      display_name: 'Wrapper Manual',
+      user_amount: 30,
+      user_frequency: 'monthly',
+    });
+    await subscriptionsService.getSubscriptionAlerts({ locale: 'en', include_dismissed: true });
+
+    expect(analyzeSpy).toHaveBeenCalled();
+    expect(normalizeSpy).toHaveBeenCalledWith('Wrapper Manual');
+    expect(dominantSpy).toHaveBeenCalled();
+    expect(recurringDatabaseSpy).toHaveBeenCalled();
+  });
+
+  it('skips detected and manual subscriptions when status/frequency filters do not match', async () => {
+    configureService({
+      patterns: [
+        {
+          pattern_key: 'detected-monthly',
+          display_name: 'Detected Monthly',
+          detected_frequency: 'monthly',
+          detected_amount: 25,
+          amount_is_fixed: true,
+          consistency_score: 0.8,
+          category_name: 'A',
+          category_name_en: 'A',
+          last_charge_date: '2026-02-01',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 6,
+          total_spent: 150,
+        },
+      ],
+      queryImpl: async (sql) => {
+        if (String(sql).includes('FROM subscriptions s')) {
+          return {
+            rows: [
+              {
+                id: 10,
+                pattern_key: 'manual-weekly',
+                display_name: 'Manual Weekly',
+                user_frequency: 'weekly',
+                user_amount: 15,
+                status: 'active',
+                is_manual: 1,
+                detected_amount: 0,
+              },
+            ],
+          };
+        }
+        return { rows: [] };
+      },
+    });
+
+    const frequencyFiltered = await subscriptionsService.getSubscriptions({
+      status: 'active',
+      frequency: 'yearly',
+      locale: 'en',
+    });
+    expect(frequencyFiltered.subscriptions).toEqual([]);
+
+    const statusFiltered = await subscriptionsService.getSubscriptions({
+      status: 'cancelled',
+      locale: 'en',
+    });
+    expect(statusFiltered.subscriptions).toEqual([]);
+  });
+
+  it('converts daily subscriptions to monthly totals in summary output', async () => {
+    configureService({
+      patterns: [
+        {
+          pattern_key: 'daily-coffee',
+          display_name: 'Daily Coffee',
+          detected_frequency: 'daily',
+          detected_amount: 5,
+          amount_is_fixed: true,
+          consistency_score: 0.9,
+          category_name: 'Food',
+          category_name_en: 'Food',
+          last_charge_date: '2026-02-09',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 60,
+          total_spent: 300,
+        },
+      ],
+      queryImpl: async () => ({ rows: [] }),
+    });
+
+    const summary = await subscriptionsService.getSubscriptionSummary({ locale: 'en' });
+    expect(summary.monthly_total).toBe(150);
+    expect(summary.yearly_total).toBe(1800);
+  });
+
+  it('ignores creep rows that do not map to tracked subscriptions', async () => {
+    configureService({
+      patterns: [
+        {
+          pattern_key: 'known-sub',
+          display_name: 'Known Sub',
+          detected_frequency: 'monthly',
+          detected_amount: 20,
+          amount_is_fixed: true,
+          consistency_score: 0.9,
+          category_name: 'A',
+          category_name_en: 'A',
+          last_charge_date: '2026-01-01',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 12,
+          total_spent: 240,
+        },
+      ],
+      normalizePatternKeyImpl: (value) => (value ? String(value).trim().toLowerCase() : ''),
+      queryImpl: async (sql) => {
+        const text = String(sql);
+        if (text.includes('FROM subscriptions s')) {
+          return { rows: [] };
+        }
+        if (text.includes("strftime('%Y-%m', t.date)")) {
+          return {
+            rows: [
+              { month: '2026-01', pattern_key: 'unknown-sub', monthly_amount: 99, charge_count: 1 },
+              { month: '2026-02', pattern_key: '   ', monthly_amount: 50, charge_count: 1 },
+            ],
+          };
+        }
+        return { rows: [] };
+      },
+    });
+
+    const creep = await subscriptionsService.getSubscriptionCreep({ months: 3 });
+    expect(creep.data).toEqual([]);
+    expect(creep.total_creep_percentage).toBe(0);
+  });
+
+  it('skips inactive and unnamed subscriptions when detecting new alerts', async () => {
+    const { query } = configureService({
+      patterns: [
+        {
+          pattern_key: 'paused-sub',
+          display_name: 'Paused Sub',
+          detected_frequency: 'monthly',
+          detected_amount: 40,
+          amount_is_fixed: true,
+          consistency_score: 0.9,
+          last_charge_date: '2026-01-01',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 8,
+          total_spent: 320,
+        },
+        {
+          pattern_key: 'no-name-sub',
+          display_name: null,
+          detected_frequency: 'monthly',
+          detected_amount: 30,
+          amount_is_fixed: true,
+          consistency_score: 0.9,
+          last_charge_date: '2026-01-01',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 8,
+          total_spent: 240,
+        },
+      ],
+      queryImpl: async (sql) => {
+        const text = String(sql);
+        if (text.includes('FROM subscriptions s')) {
+          return {
+            rows: [
+              { id: 1, pattern_key: 'paused-sub', status: 'paused', is_manual: 0, display_name: 'Paused Sub' },
+              { id: 2, pattern_key: 'no-name-sub', status: 'active', is_manual: 0, display_name: null },
+            ],
+          };
+        }
+        if (text.includes('FROM subscription_alerts sa')) {
+          return { rows: [] };
+        }
+        if (text.includes('ORDER BY charge_date DESC')) {
+          return { rows: [{ charge_date: '2026-02-01', amount: 40 }] };
+        }
+        return { rows: [] };
+      },
+    });
+
+    const result = await subscriptionsService.getSubscriptionAlerts({ locale: 'en' });
+    expect(result.total_count).toBe(0);
+    const priceQueries = query.mock.calls.filter(([sql]) => String(sql).includes('ORDER BY charge_date DESC'));
+    expect(priceQueries).toHaveLength(0);
+  });
+
+  it('filters out renewals when subscriptions are inactive or missing expected dates', async () => {
+    configureService({
+      patterns: [
+        {
+          pattern_key: 'inactive-renewal',
+          display_name: 'Inactive Renewal',
+          detected_frequency: 'weekly',
+          detected_amount: 10,
+          amount_is_fixed: true,
+          consistency_score: 0.8,
+          last_charge_date: '2026-02-10',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 6,
+          total_spent: 60,
+        },
+        {
+          pattern_key: 'variable-no-date',
+          display_name: 'Variable No Date',
+          detected_frequency: 'variable',
+          detected_amount: 10,
+          amount_is_fixed: false,
+          consistency_score: 0.5,
+          last_charge_date: '2026-02-10',
+          first_detected_date: '2025-01-01',
+          occurrence_count: 6,
+          total_spent: 60,
+        },
+      ],
+      queryImpl: async (sql) => {
+        if (String(sql).includes('FROM subscriptions s')) {
+          return {
+            rows: [{ id: 1, pattern_key: 'inactive-renewal', status: 'paused', is_manual: 0 }],
+          };
+        }
+        return { rows: [] };
+      },
+    });
+
+    const renewals = await subscriptionsService.getUpcomingRenewals({ days: 30, locale: 'en' });
+    expect(renewals.renewals).toEqual([]);
+  });
 });

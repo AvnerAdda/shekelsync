@@ -53,9 +53,21 @@ function fillMissingDates(
     if (dateMap.has(dateStr)) {
       filled.push(dateMap.get(dateStr)!);
     } else if (isFutureDate) {
-      filled.push({ date: dateStr, income: null, expenses: null });
+      filled.push({
+        date: dateStr,
+        income: null,
+        expenses: null,
+        capitalReturns: 0,
+        cardRepayments: 0,
+      });
     } else {
-      filled.push({ date: dateStr, income: 0, expenses: 0 });
+      filled.push({
+        date: dateStr,
+        income: 0,
+        expenses: 0,
+        capitalReturns: 0,
+        cardRepayments: 0,
+      });
     }
 
     current.setDate(current.getDate() + 1);

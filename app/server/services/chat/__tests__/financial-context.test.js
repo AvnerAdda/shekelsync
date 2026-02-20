@@ -41,7 +41,8 @@ describe('financial-context service', () => {
       totalIncome: 1200,
       totalExpenses: 450,
     });
-    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(context.profile).toBeNull();
+    expect(db.query).toHaveBeenCalledTimes(2);
   });
 
   it('builds full context when all permissions are enabled', async () => {
@@ -55,6 +56,27 @@ describe('financial-context service', () => {
               total_expenses: '800',
               earliest_date: '2025-01-01',
               latest_date: '2025-02-01',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              username: 'Dana',
+              marital_status: 'Married',
+              age: '35',
+              occupation: 'Engineer',
+              monthly_income: '22000',
+              employment_status: 'employed',
+              family_status: 'married_with_children',
+              location: 'Tel Aviv',
+              industry: 'Tech',
+              children_count: '2',
+              household_size: '4',
+              spouse_name: 'Alex',
+              spouse_occupation: 'Designer',
+              spouse_monthly_income: '9000',
+              children_count_actual: '2',
             },
           ],
         })
@@ -120,6 +142,22 @@ describe('financial-context service', () => {
     );
 
     expect(context.hasData).toBe(true);
+    expect(context.profile).toEqual({
+      name: 'Dana',
+      maritalStatus: 'Married',
+      age: 35,
+      occupation: 'Engineer',
+      employmentStatus: 'employed',
+      monthlyIncome: 22000,
+      familyStatus: 'married_with_children',
+      location: 'Tel Aviv',
+      industry: 'Tech',
+      childrenCount: 2,
+      householdSize: 4,
+      spouseName: 'Alex',
+      spouseOccupation: 'Designer',
+      spouseMonthlyIncome: 9000,
+    });
     expect(context.categories).toEqual([
       { name: 'Food', type: 'expense', totalExpenses: 520, count: 3 },
       { name: 'Uncategorized', type: null, totalExpenses: 180, count: 1 },
@@ -154,7 +192,7 @@ describe('financial-context service', () => {
       liquidValue: 10000,
       accountCount: 2,
     });
-    expect(db.query).toHaveBeenCalledTimes(7);
+    expect(db.query).toHaveBeenCalledTimes(8);
   });
 
   it('swallows investment-query failures while keeping analytics context', async () => {
@@ -170,6 +208,9 @@ describe('financial-context service', () => {
               latest_date: '2025-01-02',
             },
           ],
+        })
+        .mockResolvedValueOnce({
+          rows: [],
         })
         .mockResolvedValueOnce({
           rows: [{ month: '2025-01', income: '400', expenses: '100' }],
@@ -194,12 +235,18 @@ describe('financial-context service', () => {
       savingsRate: 75,
     });
     expect(context.investments).toBeUndefined();
-    expect(db.query).toHaveBeenCalledTimes(3);
+    expect(db.query).toHaveBeenCalledTimes(4);
   });
 
   it('formats prompt context with sections, status markers, and denied permission note', () => {
     const formatted = formatContextForPrompt({
       hasData: true,
+      profile: {
+        name: 'Dana',
+        occupation: 'Engineer',
+        monthlyIncome: 22000,
+        maritalStatus: 'Married',
+      },
       summary: {
         transactionCount: 10,
         totalIncome: 5000,
@@ -237,6 +284,10 @@ describe('financial-context service', () => {
       },
     });
 
+    expect(formatted).toContain('USER PROFILE:');
+    expect(formatted).toContain('Name: Dana');
+    expect(formatted).toContain('Occupation: Engineer');
+    expect(formatted).toContain('Reported monthly income: ₪22,000');
     expect(formatted).toContain('FINANCIAL SUMMARY (Last 3 months):');
     expect(formatted).toContain('TOP SPENDING CATEGORIES:');
     expect(formatted).toContain('BUDGET STATUS (This Month):');
@@ -254,10 +305,24 @@ describe('financial-context service', () => {
     expect(formatted).toContain('No financial data available yet');
   });
 
+  it('includes profile in no-data responses', () => {
+    const formatted = formatContextForPrompt({
+      hasData: false,
+      profile: {
+        name: 'Dana',
+        occupation: 'Engineer',
+      },
+    });
+    expect(formatted).toContain('USER PROFILE:');
+    expect(formatted).toContain('Name: Dana');
+    expect(formatted).toContain('No financial data available yet');
+  });
+
   it('returns schema description containing core tables and SQL guidance', () => {
     const schema = getSchemaDescription();
     expect(schema).toContain('transactions:');
     expect(schema).toContain('category_definitions:');
+    expect(schema).toContain('user_profile:');
     expect(schema).toContain('transaction_pairing_exclusions:');
     expect(schema).toContain('Always use parameterized-style placeholders ($1, $2)');
     expect(schema).toContain('Always use SQLite syntax');

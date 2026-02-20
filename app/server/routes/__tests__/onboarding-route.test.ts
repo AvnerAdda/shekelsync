@@ -2,6 +2,16 @@ import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const onboardingServiceMocks = vi.hoisted(() => ({
+  getOnboardingStatus: vi.fn(),
+  dismissOnboarding: vi.fn(),
+}));
+
+vi.mock('../../services/onboarding.js', () => ({
+  ...onboardingServiceMocks,
+  default: onboardingServiceMocks,
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { createOnboardingRouter } = require('../../routes/onboarding.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires

@@ -6,6 +6,11 @@
     "or": "או",
     "close": "סגור"
   },
+  "smartNotifications": {
+    "dismiss": "הסתר",
+    "dismissAll": "הסתר הכל",
+    "allGood": "הכל בסדר! אין התראות כרגע."
+  },
   "globalSearch": {
     "placeholder": "חיפוש עסקאות...",
     "hint": "Enter לבחירה, Escape לסגירה",
@@ -644,7 +649,7 @@
           "postgresMissing": "הגדרות PostgreSQL אינן מלאות."
         },
         "encryption": {
-          "invalidEnvKey": "CLARIFY_ENCRYPTION_KEY אינו תקין (נדרשים 64 תווי hex).",
+          "invalidEnvKey": "SHEKELSYNC_ENCRYPTION_KEY אינו תקין (נדרשים 64 תווי hex).",
           "allowDevNoEncryption": "ALLOW_DEV_NO_ENCRYPTION מופעל. יש לבטל בסביבת פרודקשן."
         },
         "security": {
@@ -744,6 +749,16 @@
       "last60": "60י",
       "last90": "90י",
       "showingLast": "{{count}} הימים האחרונים"
+    },
+    "settings": {
+      "button": "אפשרויות גרף",
+      "title": "אפשרויות גרף",
+      "cardRepayments": "כלול פירעונות כרטיס",
+      "capitalReturns": "כלול החזרי קרן",
+      "avgGuides": "הצג קווי ממוצע",
+      "forecastLines": "הצג קווי תחזית",
+      "on": "פעיל",
+      "off": "כבוי"
     },
     "tabs": {
       "history": "הכנסות והוצאות יומיות",
@@ -1370,9 +1385,12 @@
       "viewToggle": {
         "current": "הוצאה נוכחית",
         "incomeIndexed": "מנורמל להכנסה",
+        "salaryIndexed": "מנורמל לשכר",
         "currentHint": "מציג את החלוקה כחלק מסך ההוצאות",
         "incomeHint": "מנרמל את היעדים להכנסה ({{amount}} בתקופה זו)",
-        "noIncome": "אין הכנסה בתקופה זו"
+        "salaryHint": "מנרמל את היעדים לשכר ({{amount}} בתקופה זו)",
+        "noIncome": "אין הכנסה בתקופה זו",
+        "noSalary": "לא זוהה שכר בתקופה זו"
       },
       "empty": {
         "title": "אין נתוני הוצאה",
@@ -1389,13 +1407,39 @@
       "labels": {
         "target": "יעד: {{value}}%",
         "incomeTarget": "יעד להכנסה: {{value}}%",
+        "salaryTarget": "יעד לשכר: {{value}}%",
         "transactions_one": "עסקה אחת",
         "transactions_other": "{{count}} עסקאות",
         "totalSpending_one": "סך הוצאות (חודש {{count}})",
         "totalSpending_other": "סך הוצאות ({{count}} חודשים)",
         "totalSpendingRange": "סך הוצאות ({{range}})",
         "currentSpend": "הוצאה נוכחית: {{amount}}",
-        "ofIncome": "מההכנסה"
+        "ofIncome": "מההכנסה",
+        "ofSalary": "מהשכר"
+      },
+      "transactionModal": {
+        "title": "עסקאות בקטגוריית {{category}} ({{range}})",
+        "close": "סגור",
+        "loadError": "טעינת העסקאות נכשלה",
+        "empty": "לא נמצאו עסקאות לקטגוריה הזו בטווח שנבחר.",
+        "count_one": "עסקה אחת",
+        "count_other": "{{count}} עסקאות",
+        "total": "סה\"כ: {{amount}}",
+        "unknown": "עסקה לא מזוהה",
+        "unknownVendor": "ספק לא ידוע",
+        "reassignTransaction": "שיוך מחדש",
+        "reassignDialogTitle": "שיוך עסקה לקטגוריה אחרת",
+        "assignToCategory": "שייך לקטגוריה",
+        "selectCategory": "בחר קטגוריה",
+        "selectBucket": "העבר ל...",
+        "applyToAll": "החל על כל העסקאות עם שם זה",
+        "applyToAllHint": "יוצר כלל כך שעסקאות עתידיות ישויכו אוטומטית",
+        "reassign": "שייך מחדש",
+        "cancel": "ביטול",
+        "reassigning": "משייך...",
+        "moveTo": "העבר ל:",
+        "moveCategorySuccess": "הקטגוריה הועברה בהצלחה",
+        "moveCategoryError": "העברת הקטגוריה נכשלה"
       },
       "tooltips": {
         "overTarget": "חריגה מהיעד",
@@ -1850,6 +1894,19 @@
         "start": "התחל סנכרון"
       }
     },
+    "rateLimit": {
+      "attemptsRemaining": "ניסיונות הסנכרון שנותרו בחלון הזמן הזה: {{remaining}}/{{limit}}.",
+      "accountCooldownUntil": "החשבון הזה בתקופת צינון עד {{time}}.",
+      "accountCooldownRetryIn": "החשבון הזה בתקופת צינון. נסו שוב בעוד {{time}}.",
+      "blockedUntil": "הסנכרון חסום זמנית עד {{time}}.",
+      "blockedRetryIn": "הסנכרון חסום זמנית. נסו שוב בעוד {{time}}.",
+      "accountCooldownMessage": "החשבון הזה סונכרן לאחרונה והוא בתקופת צינון זמנית.",
+      "tooManyAttemptsMessage": "נשלחו יותר מדי ניסיונות סנכרון בפרק זמן קצר.",
+      "expectedReset": "זה מצב תקין והוא מתאפס אוטומטית.",
+      "remainingAttemptsDetail": "ניסיונות הסנכרון שנותרו בחלון הזמן הזה: {{remaining}}/{{limit}}.",
+      "tryAgainIn": "נסו שוב בעוד {{time}}.",
+      "nextRetryTime": "זמן הניסיון הבא: {{time}}."
+    },
     "errors": {
       "generic": "אירעה שגיאה",
       "loadInstitutions": "טעינת מוסדות נכשלה",
@@ -2298,7 +2355,8 @@
       "transactionsCount": "{{count}} {{count, plural, one {עסקה} other {עסקאות}}}",
       "knownInstitution": "בחרו מרשימה או השאירו ריק להזנת מוסד מותאם",
       "selectInstitution": "בחרו מוסד כדי לראות אילו פרטי התחברות נדרשים.",
-      "noSpecificCredentials": "אין דרישות התחברות ספציפיות. הזינו שם משתמש וסיסמה."
+      "noSpecificCredentials": "אין דרישות התחברות ספציפיות. הזינו שם משתמש וסיסמה.",
+      "retryLimitWarning": "לבנקים ולכרטיסי אשראי יש הגבלה על ניסיונות התחברות חוזרים. בדקו היטב את פרטי ההתחברות לפני השמירה כדי להימנע מחסימת סנכרון זמנית."
     },
     "wizard": {
       "chooseInstitutionTitle": "בחירת מוסד",
@@ -2597,6 +2655,85 @@
         "insufficientHistory": "אין היסטוריה מספקת להשוואה מלאה לתקופה קודמת.",
         "notAvailable": "לא זמין",
         "daysTracked": "{{count}} ימים במעקב"
+      }
+    }
+  },
+  "guideTips": {
+    "tooltip": "מדריך התחלה",
+    "header": "מדריך התחלה",
+    "progress": "{{done}}/{{total}} הושלמו",
+    "loading": "טוען טיפים...",
+    "skip": "דלג",
+    "tips": {
+      "add_bank": {
+        "title": "הוסף חשבון בנק",
+        "description": "חבר את חשבון הבנק שלך כדי להתחיל לעקוב אחרי עסקאות.",
+        "action": "הוסף בנק"
+      },
+      "add_credit_cards": {
+        "title": "הוסף כרטיסי אשראי",
+        "description": "יש לך {{count}} כרטיס(ים). הוסף עוד כדי לעקוב אחרי כל ההוצאות.",
+        "action": "הוסף כרטיס"
+      },
+      "pair_accounts": {
+        "title": "שייך חשבונות",
+        "description": "{{count}} כרטיס(ים) לא משויכים לחשבון בנק.",
+        "action": "שייך עכשיו"
+      },
+      "manage_categories": {
+        "title": "נהל קטגוריות",
+        "description": "בדוק והתאם את עץ הקטגוריות להרגלי ההוצאות שלך.",
+        "action": "נהל"
+      },
+      "categorize": {
+        "title": "סווג עסקאות",
+        "description": "{{count}} עסקה(ות) דורשות סיווג.",
+        "action": "סווג"
+      },
+      "create_rules": {
+        "title": "צור כללי סיווג",
+        "description": "יש לך {{count}} כלל(ים). צור כללים לסיווג אוטומטי של עסקאות.",
+        "action": "צור כללים"
+      },
+      "search_transactions": {
+        "title": "חפש עסקאות",
+        "description": "השתמש ב-Ctrl+K כדי לחפש במהירות כל עסקה בכל החשבונות.",
+        "action": "נסה חיפוש"
+      },
+      "categorize_investments": {
+        "title": "סווג עסקאות השקעה",
+        "description": "ודא שעסקאות השקעה מסווגות כראוי.",
+        "action": "סווג"
+      },
+      "add_investments": {
+        "title": "הוסף חשבונות השקעה",
+        "description": "יש לך {{count}} חשבון(ות) השקעה. עקוב אחרי ההשקעות שלך.",
+        "action": "הוסף חשבון"
+      },
+      "set_budgets": {
+        "title": "הגדר תקציבים",
+        "description": "יש לך {{count}} תקציב(ים). הגדר תקציבים לשליטה בהוצאות.",
+        "action": "הגדר תקציבים"
+      },
+      "add_notes_tags": {
+        "title": "הוסף הערות ותגיות",
+        "description": "{{notes}} הערה(ות), {{tags}} תגית(ות). הוסף הערות לעסקאות למעקב טוב יותר.",
+        "action": "הוסף הערות"
+      },
+      "try_chatbot": {
+        "title": "נסה צ'אטבוט AI",
+        "description": "שאל את עוזר ה-AI על הכספים שלך.",
+        "action": "פתח הגדרות"
+      },
+      "accept_quest": {
+        "title": "קבל משימה",
+        "description": "קיבלת {{count}} משימה(ות). קח על עצמך אתגרים פיננסיים.",
+        "action": "צפה במשימות"
+      },
+      "sync_reminder": {
+        "title": "סנכרן את החשבונות",
+        "description": "שמור על הנתונים שלך מעודכנים על ידי סנכרון קבוע.",
+        "action": "סנכרן עכשיו"
       }
     }
   }

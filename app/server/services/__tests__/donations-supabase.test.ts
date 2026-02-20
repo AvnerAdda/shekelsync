@@ -164,6 +164,7 @@ afterEach(() => {
   delete process.env.SUPABASE_ANON_KEY;
   delete process.env.SUPPORTER_REQUIRE_AUTH;
   delete process.env.DONATION_URL;
+  delete process.env.SQLITE_DB_PATH;
 });
 
 describe('donations service supabase flows', () => {
@@ -307,6 +308,46 @@ describe('donations service supabase flows', () => {
     expect(status.pendingPlanKey).toBe('bronze');
     expect(status.tier).toBe('none');
     expect(status.shouldShowMonthlyReminder).toBe(false);
+  });
+
+  it('grants demo bronze AI access for anonymized demo DB even when supporter status is pending', async () => {
+    const supabaseMock = createSupabaseClientMock({
+      onSelect: (call) => {
+        if (call.table === 'supporter_entitlements') {
+          return { data: [], error: null };
+        }
+        if (call.table === 'supporter_intents') {
+          return {
+            data: [
+              {
+                user_id: 'demo-user',
+                plan_key: 'bronze',
+                status: 'pending',
+                updated_at: '2026-02-09T00:00:00.000Z',
+              },
+            ],
+            error: null,
+          };
+        }
+        return { data: [], error: null };
+      },
+    });
+
+    const { service } = await setupDonationsService({
+      supabaseMock,
+      env: { SQLITE_DB_PATH: '/tmp/clarify-anonymized.sqlite' },
+    });
+
+    const status = await service.getDonationStatus({ userId: 'demo-user' });
+
+    expect(status.supportStatus).toBe('verified');
+    expect(status.hasDonated).toBe(true);
+    expect(status.tier).toBe('bronze');
+    expect(status.currentPlanKey).toBe('bronze');
+    expect(status.hasPendingVerification).toBe(false);
+    expect(status.pendingPlanKey).toBeNull();
+    expect(status.canAccessAiAgent).toBe(true);
+    expect(status.aiAgentAccessLevel).toBe('standard');
   });
 
   it('uses legacy anonymous fallback when authenticated identity is required but missing', async () => {

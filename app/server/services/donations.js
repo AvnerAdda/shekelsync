@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const os = require('os');
+const path = require('path');
 
 const database = require('./database.js');
 
@@ -337,6 +338,40 @@ function hasAiAccess(tier, supportStatus = 'none') {
     return false;
   }
   return tier === 'bronze' || tier === 'silver' || tier === 'gold' || tier === 'lifetime';
+}
+
+function isAnonymizedSqliteDatabase() {
+  const dbPath = normalizeText(process.env.SQLITE_DB_PATH, 2048);
+  if (!dbPath) {
+    return false;
+  }
+  return path.basename(String(dbPath)).toLowerCase().includes('anonymized');
+}
+
+function applyDemoAiAccessOverride(status) {
+  if (!status || !isAnonymizedSqliteDatabase() || status.canAccessAiAgent) {
+    return status;
+  }
+
+  const bronzePlan = PLAN_LOOKUP.get('bronze');
+  const defaultAmountUsd = Number(bronzePlan?.amountUsd || 5);
+  const totalAmountUsd = Number.isFinite(status.totalAmountUsd)
+    ? Number(status.totalAmountUsd)
+    : defaultAmountUsd;
+
+  return {
+    ...status,
+    hasDonated: true,
+    tier: 'bronze',
+    supportStatus: 'verified',
+    totalAmountUsd: Math.max(0, Math.round(totalAmountUsd * 100) / 100),
+    currentPlanKey: 'bronze',
+    hasPendingVerification: false,
+    pendingPlanKey: null,
+    billingCycle: bronzePlan?.billingCycle || 'monthly',
+    canAccessAiAgent: true,
+    aiAgentAccessLevel: bronzePlan?.aiAccessLevel || 'standard',
+  };
 }
 
 function getEntitlementsTableName() {
@@ -768,7 +803,8 @@ async function getSupportStatusSnapshot(client, context = {}) {
   const identity = await resolveRequesterIdentity(context, { allowAnonymous: true });
 
   if (!getSupabaseAdminClient() || !identity) {
-    return getLegacyDonationSnapshot(client);
+    const legacySnapshot = await getLegacyDonationSnapshot(client);
+    return applyDemoAiAccessOverride(legacySnapshot);
   }
 
   let entitlement = null;
@@ -780,14 +816,14 @@ async function getSupportStatusSnapshot(client, context = {}) {
   } catch (error) {
     // If Supabase tables are unavailable, fall back to local legacy data.
     if (error?.code === 'SUPABASE_QUERY_FAILED') {
-      return getLegacyDonationSnapshot(client);
+      const legacySnapshot = await getLegacyDonationSnapshot(client);
+      return applyDemoAiAccessOverride(legacySnapshot);
     }
     throw error;
   }
 
   const normalized = normalizeEntitlementSnapshot(entitlement, pendingIntent);
-
-  return {
+  const withRequester = {
     ...normalized,
     requester: {
       userId: identity.userId || null,
@@ -795,6 +831,7 @@ async function getSupportStatusSnapshot(client, context = {}) {
       verifiedByToken: Boolean(identity.verifiedByToken),
     },
   };
+  return applyDemoAiAccessOverride(withRequester);
 }
 
 function buildStatusPayload({

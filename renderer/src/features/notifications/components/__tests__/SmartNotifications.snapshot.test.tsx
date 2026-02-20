@@ -247,30 +247,6 @@ const snapshotProgressResponse = {
   },
 };
 
-const toIsoDate = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const computeExpectedTriggerKey = (now: Date) => {
-  const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-  startOfWeek.setHours(0, 0, 0, 0);
-
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfBiMonth = new Date(now.getFullYear(), Math.floor(now.getMonth() / 2) * 2, 1);
-  const startOfHalfYear = new Date(now.getFullYear(), now.getMonth() < 6 ? 0 : 6, 1);
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
-
-  const latestBoundary = [startOfWeek, startOfMonth, startOfBiMonth, startOfHalfYear, startOfYear].reduce((latest, candidate) =>
-    candidate.getTime() > latest.getTime() ? candidate : latest,
-  );
-
-  return toIsoDate(latestBoundary);
-};
-
 describe('SmartNotifications snapshot flow', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -293,7 +269,7 @@ describe('SmartNotifications snapshot flow', () => {
     vi.clearAllMocks();
   });
 
-  it('injects the synthetic snapshot alert when trigger key is unseen', async () => {
+  it('injects the synthetic snapshot alert', async () => {
     render(<SmartNotifications />);
 
     await waitFor(() => {
@@ -307,9 +283,8 @@ describe('SmartNotifications snapshot flow', () => {
     expect(screen.getByRole('button', { name: 'View Snapshot' })).toBeInTheDocument();
   });
 
-  it('does not inject a synthetic snapshot alert when current trigger was already seen', async () => {
-    const seenTriggerKey = computeExpectedTriggerKey(new Date());
-    window.localStorage.setItem(SNAPSHOT_SEEN_STORAGE_KEY, seenTriggerKey);
+  it('keeps injecting the synthetic snapshot alert even when a seen key exists', async () => {
+    window.localStorage.setItem(SNAPSHOT_SEEN_STORAGE_KEY, '2025-08-17');
 
     render(<SmartNotifications />);
 
@@ -319,11 +294,11 @@ describe('SmartNotifications snapshot flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
 
-    expect(screen.queryByText('See your progress across completed time periods.')).not.toBeInTheDocument();
+    expect(screen.getByText('See your progress across completed time periods.')).toBeInTheDocument();
     expect(screen.getByText('Budget warning')).toBeInTheDocument();
   });
 
-  it('writes seen key, opens snapshot modal, and removes synthetic alert after click', async () => {
+  it('marks snapshot as read, opens modal, and keeps synthetic alert available after click', async () => {
     render(<SmartNotifications />);
 
     await waitFor(() => {
@@ -347,7 +322,53 @@ describe('SmartNotifications snapshot flow', () => {
 
     fireEvent.click(alertsButton);
 
-    expect(screen.queryByText('See your progress across completed time periods.')).not.toBeInTheDocument();
+    expect(screen.getByText('See your progress across completed time periods.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View Snapshot' })).toBeInTheDocument();
+    expect(screen.getByText('1 Info')).toBeInTheDocument();
+  });
+
+  it('replaces stale snapshot notifications with the current synthetic snapshot', async () => {
+    const staleSnapshotNotification = {
+      id: 'snapshot_progress_2025-01-01',
+      type: 'snapshot_progress',
+      severity: 'warning',
+      title: 'Old Snapshot',
+      message: 'Old snapshot details',
+      data: {
+        triggerKey: '2025-01-01',
+      },
+      timestamp: '2025-01-01T09:00:00.000Z',
+      actionable: true,
+      actions: [
+        {
+          label: 'View Snapshot',
+          action: 'view_snapshot',
+          params: { triggerKey: '2025-01-01' },
+        },
+      ],
+    };
+
+    mockGet.mockImplementation((endpoint: string) => {
+      if (endpoint === '/api/notifications?limit=20') {
+        return Promise.resolve(createNotificationsResponse([staleSnapshotNotification, baseNotification]));
+      }
+      if (endpoint === '/api/notifications/snapshot-progress') {
+        return Promise.resolve(snapshotProgressResponse);
+      }
+      return Promise.resolve({ ok: true, data: { success: true } });
+    });
+
+    render(<SmartNotifications />);
+
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith('/api/notifications?limit=20');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
+
+    expect(screen.queryByText('Old Snapshot')).not.toBeInTheDocument();
+    expect(screen.queryByText('Old snapshot details')).not.toBeInTheDocument();
+    expect(screen.getByText('Progress Snapshot')).toBeInTheDocument();
   });
 
   it('shows API snapshot error details when fetch returns non-success', async () => {

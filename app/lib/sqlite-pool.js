@@ -112,6 +112,9 @@ function createSqlitePool(options = {}) {
     db.exec('DROP TRIGGER IF EXISTS trg_account_pairings_exclusions_delete');
     db.exec('DROP TRIGGER IF EXISTS trg_transactions_exclusions_insert');
     db.exec('DROP TRIGGER IF EXISTS trg_transactions_exclusions_update');
+    db.exec('DROP TRIGGER IF EXISTS transactions_fts_insert');
+    db.exec('DROP TRIGGER IF EXISTS transactions_fts_delete');
+    db.exec('DROP TRIGGER IF EXISTS transactions_fts_update');
 
     db.exec(`
       CREATE TRIGGER IF NOT EXISTS trg_account_pairings_exclusions_insert
@@ -242,6 +245,32 @@ function createSqlitePool(options = {}) {
             WHERE LOWER(NEW.name) LIKE '%' || LOWER(json_each.value) || '%'
           )
         ;
+      END;
+    `);
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS transactions_fts_insert
+      AFTER INSERT ON transactions
+      BEGIN
+        INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
+        VALUES (NEW.rowid, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
+      END;
+    `);
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS transactions_fts_delete
+      AFTER DELETE ON transactions
+      BEGIN
+        DELETE FROM transactions_fts
+        WHERE rowid = OLD.rowid;
+      END;
+    `);
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS transactions_fts_update
+      AFTER UPDATE ON transactions
+      BEGIN
+        DELETE FROM transactions_fts
+        WHERE rowid = OLD.rowid;
+        INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
+        VALUES (NEW.rowid, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
       END;
     `);
 
@@ -536,11 +565,17 @@ function createSqlitePool(options = {}) {
           VALUES (NEW.rowid, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
         END;
       `);
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS transactions_fts_delete AFTER DELETE ON transactions BEGIN
+          DELETE FROM transactions_fts
+          WHERE rowid = OLD.rowid;
+        END;
+      `);
       
       db.exec(`
         CREATE TRIGGER IF NOT EXISTS transactions_fts_update AFTER UPDATE ON transactions BEGIN
-          INSERT INTO transactions_fts(transactions_fts, rowid, name, memo, vendor, merchant_name)
-          VALUES ('delete', OLD.rowid, OLD.name, OLD.memo, OLD.vendor, OLD.merchant_name);
+          DELETE FROM transactions_fts
+          WHERE rowid = OLD.rowid;
           INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
           VALUES (NEW.rowid, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
         END;

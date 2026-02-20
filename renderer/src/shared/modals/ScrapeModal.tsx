@@ -73,6 +73,15 @@ interface SyncModalProps {
   initialConfig?: ScraperConfig;
 }
 
+interface SyncRateLimitState {
+  limit?: number;
+  remaining?: number;
+  resetAt?: string;
+  nextAllowedAt?: string;
+  retryAfter?: number;
+  reason?: string;
+}
+
 const createEmptyCredentials = () => ({
   password: '',
   nickname: '',
@@ -136,7 +145,7 @@ const createDefaultConfig = (): ScraperConfig => ({
     companyId: '',
     startDate: new Date(),
     combineInstallments: false,
-    showBrowser: true,
+    showBrowser: false,
     additionalTransactionInformation: true
   },
   credentials: createEmptyCredentials(),
@@ -176,10 +185,75 @@ function formatLocalTimestamp(value: unknown): string | null {
   return date.toLocaleString();
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function resolveRateLimitState(raw: unknown): SyncRateLimitState | null {
+  const payload = asRecord(raw);
+  if (!payload) {
+    return null;
+  }
+
+  const nestedRateLimit = asRecord(payload.rateLimit);
+  const source = nestedRateLimit || payload;
+  const limit = toFiniteNumber(source.limit);
+  const remaining = toFiniteNumber(source.remaining);
+  const retryAfter = toFiniteNumber(payload.retryAfter ?? source.retryAfter);
+  const resetAt = typeof source.resetAt === 'string' && source.resetAt.trim().length > 0
+    ? source.resetAt
+    : undefined;
+  const nextAllowedAt = typeof payload.nextAllowedAt === 'string' && payload.nextAllowedAt.trim().length > 0
+    ? payload.nextAllowedAt
+    : (typeof source.nextAllowedAt === 'string' && source.nextAllowedAt.trim().length > 0
+      ? source.nextAllowedAt
+      : undefined);
+  const reason = typeof payload.reason === 'string' && payload.reason.trim().length > 0
+    ? payload.reason
+    : undefined;
+
+  if (
+    limit === undefined &&
+    remaining === undefined &&
+    retryAfter === undefined &&
+    !resetAt &&
+    !nextAllowedAt &&
+    !reason
+  ) {
+    return null;
+  }
+
+  return {
+    limit,
+    remaining,
+    resetAt,
+    nextAllowedAt,
+    retryAfter,
+    reason,
+  };
+}
+
 export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onComplete, initialConfig }: SyncModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [rateLimitState, setRateLimitState] = useState<SyncRateLimitState | null>(null);
   const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
   const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>(undefined);
   const { showNotification } = useNotification();
@@ -222,6 +296,44 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
     const messagePart = latestEvent?.message ? ` – ${latestEvent.message}` : '';
     return `${t('status.inProgress')}${vendorPart}${messagePart}`;
   }, [isRunning, lastCompletedLabel, latestEvent?.vendor, latestEvent?.message, t]);
+
+  const rateLimitSummary = useMemo(() => {
+    if (!rateLimitState) {
+      return null;
+    }
+
+    const remaining = typeof rateLimitState.remaining === 'number'
+      ? Math.max(0, Math.floor(rateLimitState.remaining))
+      : null;
+    const limit = typeof rateLimitState.limit === 'number'
+      ? Math.max(0, Math.floor(rateLimitState.limit))
+      : null;
+    const retryIn = formatRetryAfter(rateLimitState.retryAfter);
+    const resetAt = formatLocalTimestamp(rateLimitState.nextAllowedAt || rateLimitState.resetAt);
+
+    const details = [];
+    if (remaining !== null && limit !== null) {
+      details.push(t('rateLimit.attemptsRemaining', { remaining, limit }));
+    }
+
+    if (rateLimitState.reason === 'account_recently_scraped') {
+      if (resetAt) {
+        details.push(t('rateLimit.accountCooldownUntil', { time: resetAt }));
+      } else if (retryIn) {
+        details.push(t('rateLimit.accountCooldownRetryIn', { time: retryIn }));
+      }
+    } else if (remaining === 0) {
+      if (resetAt) {
+        details.push(t('rateLimit.blockedUntil', { time: resetAt }));
+      } else if (retryIn) {
+        details.push(t('rateLimit.blockedRetryIn', { time: retryIn }));
+      }
+    }
+
+    return details.join(' ').trim() || null;
+  }, [rateLimitState, t]);
+
+  const rateLimitSeverity = rateLimitState?.remaining === 0 ? 'warning' : 'info';
 
   useEffect(() => {
     if (initialConfig) {
@@ -347,6 +459,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
       setError(null);
       setIsLoading(false);
       setShowPassword(false);
+      setRateLimitState(null);
     }
   }, [isOpen, initialConfig]);
 
@@ -371,12 +484,22 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
   const handleSync = async () => {
     setIsLoading(true);
     setError(null);
+    setRateLimitState(null);
     onStart?.();
 
     try {
       const response = await apiClient.post('/api/scrape', config);
+      const responseRateLimit = resolveRateLimitState(response.data);
+      if (responseRateLimit) {
+        setRateLimitState(responseRateLimit);
+      }
+
       if (!response.ok) {
         const errorData = response.data as any;
+        const errorRateLimit = resolveRateLimitState(errorData);
+        if (errorRateLimit) {
+          setRateLimitState(errorRateLimit);
+        }
 
         // Check for license read-only error
         const licenseCheck = isLicenseReadOnlyError(errorData);
@@ -391,18 +514,29 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
           const retryIn = formatRetryAfter(retryAfter);
           const nextAllowedAt = formatLocalTimestamp(errorData?.nextAllowedAt);
           const isAccountCooldown = errorData?.reason === 'account_recently_scraped';
+          const isKnownRateLimit = isAccountCooldown || errorData?.rateLimited === true;
+          const remainingAttempts =
+            typeof errorRateLimit?.remaining === 'number' && typeof errorRateLimit?.limit === 'number'
+              ? t('rateLimit.remainingAttemptsDetail', {
+                  remaining: Math.max(0, Math.floor(errorRateLimit.remaining)),
+                  limit: Math.max(0, Math.floor(errorRateLimit.limit)),
+                })
+              : null;
 
           const details = [
-            typeof errorData?.message === 'string' && errorData.message.trim().length > 0
-              ? errorData.message
-              : (isAccountCooldown
-                ? 'This account was synced recently and is temporarily cooling down.'
-                : 'Too many sync attempts were sent in a short time.'),
             isAccountCooldown
-              ? 'This is expected and resets automatically.'
+              ? t('rateLimit.accountCooldownMessage')
+              : (isKnownRateLimit
+                ? t('rateLimit.tooManyAttemptsMessage')
+                : (typeof errorData?.message === 'string' && errorData.message.trim().length > 0
+                ? errorData.message
+                : t('rateLimit.tooManyAttemptsMessage'))),
+            isAccountCooldown
+              ? t('rateLimit.expectedReset')
               : null,
-            retryIn ? `Please try again in ${retryIn}.` : null,
-            nextAllowedAt ? `Next retry time: ${nextAllowedAt}.` : null,
+            remainingAttempts,
+            retryIn ? t('rateLimit.tryAgainIn', { time: retryIn }) : null,
+            nextAllowedAt ? t('rateLimit.nextRetryTime', { time: nextAllowedAt }) : null,
           ]
             .filter(Boolean)
             .join(' ');
@@ -693,6 +827,14 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
             </Typography>
           )}
         </Alert>
+
+        {rateLimitSummary && (
+          <Alert severity={rateLimitSeverity} sx={{ mt: 2 }}>
+            <Typography variant="caption" color="text.secondary" display="block">
+              {rateLimitSummary}
+            </Typography>
+          </Alert>
+        )}
 
         {error && (
           <Alert severity="error" sx={{ mb: 2, mt: 2 }}>

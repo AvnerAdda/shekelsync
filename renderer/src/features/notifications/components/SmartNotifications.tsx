@@ -35,6 +35,8 @@ import {
   Category as CategoryIcon,
   CloudDone as SyncSuccessIcon,
   Lightbulb as LightbulbIcon,
+  DoneAll as DoneAllIcon,
+  VisibilityOff as DismissIcon,
 } from '@mui/icons-material';
 import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
 import { useNotification } from '../NotificationContext';
@@ -68,6 +70,24 @@ interface NotificationSummary {
 
 const SNAPSHOT_NOTIFICATION_TYPE = 'snapshot_progress';
 const SNAPSHOT_SEEN_STORAGE_KEY = 'smart_alert.snapshot_seen_trigger_key.v1';
+const DISMISSED_NOTIFICATIONS_KEY = 'smart_alert.dismissed_ids.v1';
+
+function loadDismissedIds(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(DISMISSED_NOTIFICATIONS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    }
+  } catch {
+    // ignore
+  }
+  return new Set();
+}
+
+function saveDismissedIds(ids: Set<string>) {
+  window.localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify([...ids]));
+}
 
 const toISODate = (date: Date) => {
   const year = date.getFullYear();
@@ -158,19 +178,39 @@ const SmartNotifications: React.FC = () => {
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const { showNotification } = useNotification();
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => loadDismissedIds());
 
   const open = Boolean(anchorEl);
   const INSIGHTS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-  const buildSnapshotAlert = (triggerKey: string): Notification => ({
+  const handleDismissNotification = (id: string) => {
+    setDismissedIds(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      saveDismissedIds(next);
+      return next;
+    });
+  };
+
+  const handleDismissAll = () => {
+    setDismissedIds(prev => {
+      const next = new Set(prev);
+      notifications.forEach(n => next.add(n.id));
+      saveDismissedIds(next);
+      return next;
+    });
+  };
+
+  const buildSnapshotAlert = (triggerKey: string, isRead = false): Notification => ({
     id: `snapshot_progress_${triggerKey}`,
     type: SNAPSHOT_NOTIFICATION_TYPE,
-    severity: 'warning',
+    severity: isRead ? 'info' : 'warning',
     title: t('insights.snapshot.alert.title'),
     message: t('insights.snapshot.alert.message'),
     data: {
       triggerKey,
       synthetic: true,
+      read: isRead,
     },
     timestamp: new Date().toISOString(),
     actionable: true,
@@ -201,10 +241,9 @@ const SmartNotifications: React.FC = () => {
         const baseNotifications = Array.isArray(data.data?.notifications) ? data.data.notifications : [];
         const triggerKey = computeSnapshotTriggerKey(new Date());
         const seenTriggerKey = window.localStorage.getItem(SNAPSHOT_SEEN_STORAGE_KEY);
-        const shouldInjectSnapshot = seenTriggerKey !== triggerKey;
-        const mergedNotifications = shouldInjectSnapshot
-          ? [buildSnapshotAlert(triggerKey), ...baseNotifications]
-          : baseNotifications;
+        const snapshotIsRead = seenTriggerKey === triggerKey;
+        const nonSnapshotNotifications = baseNotifications.filter((item: Notification) => item.type !== SNAPSHOT_NOTIFICATION_TYPE);
+        const mergedNotifications = [buildSnapshotAlert(triggerKey, snapshotIsRead), ...nonSnapshotNotifications];
 
         setNotifications(mergedNotifications);
         setSummary(buildNotificationSummary(mergedNotifications, data.data?.summary ?? null));
@@ -366,11 +405,11 @@ const SmartNotifications: React.FC = () => {
       case 'view_snapshot': {
         const triggerKey = params?.triggerKey || computeSnapshotTriggerKey(new Date());
         window.localStorage.setItem(SNAPSHOT_SEEN_STORAGE_KEY, triggerKey);
-
         setNotifications((previous) => {
-          const filtered = previous.filter((item) => item.type !== SNAPSHOT_NOTIFICATION_TYPE);
-          setSummary((currentSummary) => buildNotificationSummary(filtered, currentSummary));
-          return filtered;
+          const nonSnapshotNotifications = previous.filter((item) => item.type !== SNAPSHOT_NOTIFICATION_TYPE);
+          const updated = [buildSnapshotAlert(triggerKey, true), ...nonSnapshotNotifications];
+          setSummary((currentSummary) => buildNotificationSummary(updated, currentSummary));
+          return updated;
         });
 
         setSnapshotModalOpen(true);
@@ -426,8 +465,10 @@ const SmartNotifications: React.FC = () => {
     handleClose();
   };
 
-  const criticalCount = summary?.by_severity?.critical || 0;
-  const warningCount = summary?.by_severity?.warning || 0;
+  const visibleNotifications = notifications.filter(n => !dismissedIds.has(n.id));
+  const visibleSummary = buildNotificationSummary(visibleNotifications, null);
+  const criticalCount = visibleSummary.by_severity?.critical || 0;
+  const warningCount = visibleSummary.by_severity?.warning || 0;
   const totalAlerts = criticalCount + warningCount;
 
   return (
@@ -512,8 +553,8 @@ const SmartNotifications: React.FC = () => {
 
           {activeTab === 'alerts' && (
             <>
-              {summary && (
-                <Box sx={{ mb: 2 }}>
+              {visibleSummary && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Stack direction="row" spacing={1}>
                     {criticalCount > 0 && (
                       <Chip
@@ -533,28 +574,35 @@ const SmartNotifications: React.FC = () => {
                         variant="outlined"
                       />
                     )}
-                    {summary.by_severity.info > 0 && (
+                    {(visibleSummary.by_severity.info || 0) > 0 && (
                       <Chip
                         size="small"
                         icon={<InfoIcon />}
-                        label={`${summary.by_severity.info} Info`}
+                        label={`${visibleSummary.by_severity.info} Info`}
                         color="info"
                         variant="outlined"
                       />
                     )}
                   </Stack>
+                  {visibleNotifications.length > 0 && (
+                    <Tooltip title={t('smartNotifications.dismissAll', 'Dismiss all')}>
+                      <IconButton size="small" onClick={handleDismissAll}>
+                        <DoneAllIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                 </Box>
               )}
 
-              {notifications.length === 0 ? (
+              {visibleNotifications.length === 0 ? (
             <Alert severity="success" sx={{ textAlign: 'center' }}>
               <Typography variant="body2">
-                🎉 All good! No alerts at the moment.
+                {t('smartNotifications.allGood', 'All good! No alerts at the moment.')}
               </Typography>
             </Alert>
           ) : (
             <List sx={{ maxHeight: 400, overflow: 'auto', p: 0 }}>
-              {notifications.map((notification, index) => (
+              {visibleNotifications.map((notification, index) => (
                 <React.Fragment key={notification.id}>
                   <ListItem
                     sx={{
@@ -590,6 +638,16 @@ const SmartNotifications: React.FC = () => {
                           {formatTimestamp(notification.timestamp)}
                         </Typography>
                       </Box>
+
+                      <Tooltip title={t('smartNotifications.dismiss', 'Dismiss')}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDismissNotification(notification.id)}
+                          sx={{ opacity: 0.5, '&:hover': { opacity: 1 } }}
+                        >
+                          <DismissIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Tooltip>
                     </Box>
 
                     {notification.actionable && notification.actions && (
@@ -610,7 +668,7 @@ const SmartNotifications: React.FC = () => {
                       </Box>
                     )}
                   </ListItem>
-                  {index < notifications.length - 1 && <Divider />}
+                  {index < visibleNotifications.length - 1 && <Divider />}
                 </React.Fragment>
               ))}
             </List>

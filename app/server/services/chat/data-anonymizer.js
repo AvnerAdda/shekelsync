@@ -131,6 +131,7 @@ function anonymizeContext(context, anonymizer) {
     // Preserve all important context fields
     hasData: context.hasData,
     permissions: context.permissions,
+    profile: context.profile,
     summary: context.summary,
     categories: context.categories,
     budgets: context.budgets,

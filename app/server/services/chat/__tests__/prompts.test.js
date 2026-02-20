@@ -36,6 +36,22 @@ describe('chat prompts', () => {
     expect(prompt).toContain('SCHEMA BLOCK');
   });
 
+  it('includes personalization guidance when profile details are available', () => {
+    const prompt = getSystemPrompt(
+      'en',
+      'USER PROFILE:\n- Name: Dana',
+      'SCHEMA BLOCK',
+      {
+        allowTransactionAccess: true,
+        allowCategoryAccess: true,
+        allowAnalyticsAccess: true,
+      },
+    );
+
+    expect(prompt).toContain('If user profile details are available');
+    expect(prompt).toContain('address the user by their name');
+  });
+
   it('adds permission note when all permissions are disabled (en/he/fr)', () => {
     const perms = {
       allowTransactionAccess: false,

@@ -73,8 +73,37 @@ export interface SpendingCategoryBreakdownResponse {
   breakdown: SpendingCategoryBreakdownItem[];
   total_spending: number;
   total_income: number;
+  total_salary: number;
   targets: Record<SpendingCategory, number>;
   categories_by_allocation: Record<SpendingAllocation, CategoryWithSpending[]>;
+}
+
+export interface SpendingCategoryTransactionItem {
+  identifier: string;
+  vendor: string;
+  name: string;
+  date: string;
+  price: number;
+  account_number: string | null;
+  category_definition_id: number | null;
+  category_type: string | null;
+  status: string | null;
+  category_name: string | null;
+  category_name_en: string | null;
+  category_name_fr: string | null;
+}
+
+export interface SpendingCategoryTransactionsResponse {
+  period: {
+    start: string;
+    end: string;
+  };
+  spending_category: SpendingAllocation;
+  transactions: SpendingCategoryTransactionItem[];
+  total_count: number;
+  total_amount: number;
+  limit: number;
+  offset: number;
 }
 
 export interface SpendingCategoryMappingsResponse {

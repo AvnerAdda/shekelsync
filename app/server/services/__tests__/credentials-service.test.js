@@ -138,6 +138,24 @@ describe('credentials service', () => {
     expect(queryMock.mock.calls[0][1]).toEqual(['isracard']);
   });
 
+  it('maps sqlite alias casing for lastUpdate and lastScrapeStatus', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [
+        createCredentialRow({
+          last_scrape_success: null,
+          last_scrape_status: null,
+          lastUpdate: '2026-02-19T11:40:53.757Z',
+          lastScrapeStatus: 'success',
+        }),
+      ],
+    });
+
+    const result = await credentialsService.listCredentials();
+
+    expect(result[0].lastUpdate).toBe('utc:2026-02-19T11:40:53.757Z');
+    expect(result[0].lastScrapeStatus).toBe('success');
+  });
+
   it('throws sanitized decrypt error when encrypted value cannot be decrypted', async () => {
     queryMock.mockResolvedValueOnce({
       rows: [createCredentialRow({ username: 'bad-encrypted' })],

@@ -6,6 +6,11 @@
     "or": "ou",
     "close": "Fermer"
   },
+  "smartNotifications": {
+    "dismiss": "Masquer",
+    "dismissAll": "Tout masquer",
+    "allGood": "Tout va bien ! Aucune alerte pour le moment."
+  },
   "globalSearch": {
     "placeholder": "Rechercher des transactions...",
     "hint": "Appuyez sur Entrée pour sélectionner, Échap pour fermer",
@@ -631,7 +636,7 @@
           "postgresMissing": "La configuration PostgreSQL est incomplète."
         },
         "encryption": {
-          "invalidEnvKey": "CLARIFY_ENCRYPTION_KEY est invalide (64 caractères hexadécimaux requis).",
+          "invalidEnvKey": "SHEKELSYNC_ENCRYPTION_KEY est invalide (64 caractères hexadécimaux requis).",
           "allowDevNoEncryption": "ALLOW_DEV_NO_ENCRYPTION est activé. Désactivez-le en production."
         },
         "security": {
@@ -731,6 +736,16 @@
       "last60": "60j",
       "last90": "90j",
       "showingLast": "{{count}} derniers jours"
+    },
+    "settings": {
+      "button": "Options du graphique",
+      "title": "Options du graphique",
+      "cardRepayments": "Inclure les remboursements de carte",
+      "capitalReturns": "Inclure les retours de capital",
+      "avgGuides": "Afficher les guides de moyenne",
+      "forecastLines": "Afficher les lignes de prévision",
+      "on": "Activé",
+      "off": "Désactivé"
     },
     "tabs": {
       "history": "Revenus et dépenses quotidiens",
@@ -1357,9 +1372,12 @@
       "viewToggle": {
         "current": "Dépenses actuelles",
         "incomeIndexed": "Indexé sur le revenu",
+        "salaryIndexed": "Indexé sur le salaire",
         "currentHint": "Affiche la répartition comme part des dépenses totales",
         "incomeHint": "Indexe les objectifs sur le revenu ({{amount}} sur la période)",
-        "noIncome": "Aucun revenu enregistré pour cette période"
+        "salaryHint": "Indexe les objectifs sur le salaire ({{amount}} sur la période)",
+        "noIncome": "Aucun revenu enregistré pour cette période",
+        "noSalary": "Aucun salaire identifié pour cette période"
       },
       "empty": {
         "title": "Aucune donnée de dépense",
@@ -1376,13 +1394,39 @@
       "labels": {
         "target": "Objectif : {{value}}%",
         "incomeTarget": "Objectif de revenu : {{value}} %",
+        "salaryTarget": "Objectif de salaire : {{value}} %",
         "transactions_one": "1 transaction",
         "transactions_other": "{{count}} transactions",
         "totalSpending_one": "Dépenses totales ({{count}} mois)",
         "totalSpending_other": "Dépenses totales ({{count}} mois)",
         "totalSpendingRange": "Dépenses totales ({{range}})",
         "currentSpend": "Dépense actuelle : {{amount}}",
-        "ofIncome": "du revenu"
+        "ofIncome": "du revenu",
+        "ofSalary": "du salaire"
+      },
+      "transactionModal": {
+        "title": "Transactions de {{category}} ({{range}})",
+        "close": "Fermer",
+        "loadError": "Échec du chargement des transactions",
+        "empty": "Aucune transaction trouvée pour cette catégorie sur la période sélectionnée.",
+        "count_one": "1 transaction",
+        "count_other": "{{count}} transactions",
+        "total": "Total : {{amount}}",
+        "unknown": "Transaction inconnue",
+        "unknownVendor": "Commerçant inconnu",
+        "reassignTransaction": "Réattribuer la transaction",
+        "reassignDialogTitle": "Réattribuer la catégorie de la transaction",
+        "assignToCategory": "Attribuer à la catégorie",
+        "selectCategory": "Sélectionner une catégorie",
+        "selectBucket": "Déplacer vers...",
+        "applyToAll": "Appliquer à toutes les transactions avec ce nom",
+        "applyToAllHint": "Crée une règle pour catégoriser automatiquement les futures transactions",
+        "reassign": "Réattribuer",
+        "cancel": "Annuler",
+        "reassigning": "Réattribution...",
+        "moveTo": "Déplacer vers :",
+        "moveCategorySuccess": "Catégorie déplacée avec succès",
+        "moveCategoryError": "Échec du déplacement de la catégorie"
       },
       "tooltips": {
         "overTarget": "Au-dessus de l'objectif",
@@ -1837,6 +1881,19 @@
         "start": "Lancer la synchronisation"
       }
     },
+    "rateLimit": {
+      "attemptsRemaining": "Tentatives de synchronisation restantes dans cette fenêtre : {{remaining}}/{{limit}}.",
+      "accountCooldownUntil": "Ce compte est en période de refroidissement jusqu'à {{time}}.",
+      "accountCooldownRetryIn": "Ce compte est en période de refroidissement. Réessayez dans {{time}}.",
+      "blockedUntil": "La synchronisation est temporairement bloquée jusqu'à {{time}}.",
+      "blockedRetryIn": "La synchronisation est temporairement bloquée. Réessayez dans {{time}}.",
+      "accountCooldownMessage": "Ce compte a été synchronisé récemment et est temporairement en période de refroidissement.",
+      "tooManyAttemptsMessage": "Trop de tentatives de synchronisation ont été envoyées en peu de temps.",
+      "expectedReset": "C'est normal et cela se réinitialise automatiquement.",
+      "remainingAttemptsDetail": "Tentatives de synchronisation restantes dans cette fenêtre : {{remaining}}/{{limit}}.",
+      "tryAgainIn": "Veuillez réessayer dans {{time}}.",
+      "nextRetryTime": "Prochaine tentative : {{time}}."
+    },
     "errors": {
       "generic": "Une erreur s'est produite",
       "loadInstitutions": "Échec du chargement des institutions",
@@ -2285,7 +2342,8 @@
       "transactionsCount": "{{count}} transaction{{count, plural, one {} other {s}}}",
       "knownInstitution": "Sélectionnez dans le registre ou laissez vide pour une institution personnalisée",
       "selectInstitution": "Sélectionnez une institution pour voir les identifiants requis.",
-      "noSpecificCredentials": "Aucune exigence spécifique configurée. Fournissez un nom d'utilisateur et un mot de passe."
+      "noSpecificCredentials": "Aucune exigence spécifique configurée. Fournissez un nom d'utilisateur et un mot de passe.",
+      "retryLimitWarning": "Les banques et cartes limitent les tentatives de connexion répétées. Vérifiez bien vos identifiants avant d'enregistrer pour éviter un blocage temporaire de synchronisation."
     },
     "wizard": {
       "chooseInstitutionTitle": "Choisir une institution",
@@ -2584,6 +2642,85 @@
         "insufficientHistory": "Historique insuffisant pour comparer une période précédente complète.",
         "notAvailable": "N/D",
         "daysTracked": "{{count}} jours suivis"
+      }
+    }
+  },
+  "guideTips": {
+    "tooltip": "Guide de démarrage",
+    "header": "Guide de démarrage",
+    "progress": "{{done}}/{{total}} terminé(s)",
+    "loading": "Chargement des conseils...",
+    "skip": "Passer",
+    "tips": {
+      "add_bank": {
+        "title": "Ajouter un compte bancaire",
+        "description": "Connectez votre compte bancaire pour commencer le suivi des transactions.",
+        "action": "Ajouter banque"
+      },
+      "add_credit_cards": {
+        "title": "Ajouter des cartes de crédit",
+        "description": "Vous avez {{count}} carte(s). Ajoutez-en pour suivre toutes vos dépenses.",
+        "action": "Ajouter carte"
+      },
+      "pair_accounts": {
+        "title": "Associer les comptes",
+        "description": "{{count}} carte(s) non associée(s) à un compte bancaire.",
+        "action": "Associer"
+      },
+      "manage_categories": {
+        "title": "Gérer les catégories",
+        "description": "Vérifiez et personnalisez votre arborescence de catégories.",
+        "action": "Gérer"
+      },
+      "categorize": {
+        "title": "Catégoriser les transactions",
+        "description": "{{count}} transaction(s) à catégoriser.",
+        "action": "Catégoriser"
+      },
+      "create_rules": {
+        "title": "Créer des règles de catégorie",
+        "description": "Vous avez {{count}} règle(s). Créez des règles pour catégoriser automatiquement.",
+        "action": "Créer des règles"
+      },
+      "search_transactions": {
+        "title": "Rechercher des transactions",
+        "description": "Utilisez Ctrl+K pour rechercher rapidement une transaction.",
+        "action": "Essayer"
+      },
+      "categorize_investments": {
+        "title": "Catégoriser les investissements",
+        "description": "Assurez-vous que les transactions d'investissement sont bien catégorisées.",
+        "action": "Catégoriser"
+      },
+      "add_investments": {
+        "title": "Ajouter des comptes d'investissement",
+        "description": "Vous avez {{count}} compte(s) d'investissement. Suivez vos investissements.",
+        "action": "Ajouter compte"
+      },
+      "set_budgets": {
+        "title": "Configurer les budgets",
+        "description": "Vous avez {{count}} budget(s). Définissez des budgets pour contrôler vos dépenses.",
+        "action": "Définir budgets"
+      },
+      "add_notes_tags": {
+        "title": "Ajouter des notes et tags",
+        "description": "{{notes}} note(s), {{tags}} tag(s). Annotez les transactions pour un meilleur suivi.",
+        "action": "Ajouter notes"
+      },
+      "try_chatbot": {
+        "title": "Essayer le chatbot IA",
+        "description": "Posez des questions sur vos finances à l'assistant IA.",
+        "action": "Ouvrir paramètres"
+      },
+      "accept_quest": {
+        "title": "Accepter une quête",
+        "description": "Vous avez accepté {{count}} quête(s). Relevez des défis financiers.",
+        "action": "Voir quêtes"
+      },
+      "sync_reminder": {
+        "title": "Synchroniser vos comptes",
+        "description": "Gardez vos données à jour en synchronisant régulièrement.",
+        "action": "Synchroniser"
       }
     }
   }

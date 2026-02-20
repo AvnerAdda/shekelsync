@@ -139,8 +139,9 @@ function parseLocalDate(dateStr) {
 }
 
 function resolveForecastWindow(now, { includeToday, forecastDays, forecastMonths }) {
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startDate = includeToday
-    ? new Date(now)
+    ? todayStart
     : new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 
   if (typeof forecastDays === 'number') {

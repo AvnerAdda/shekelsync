@@ -7,7 +7,10 @@ const scrapeStatusService = require('../services/scraping/status.js');
 const { wasScrapedRecently } = require('../services/scraping/run.js');
 const { maybeRunAutoDetection } = require('../services/analytics/subscriptions.js');
 const databaseService = require('../services/database.js');
-const { SCRAPE_RATE_LIMIT_MS } = require('../../utils/constants.js');
+const {
+  SCRAPE_RATE_LIMIT_MS,
+  SCRAPE_RATE_LIMIT_MAX_ATTEMPTS,
+} = require('../../utils/constants.js');
 
 let CompanyTypes = {};
 try {
@@ -26,29 +29,75 @@ function createLogger(vendor) {
   };
 }
 
-async function resolveCredentialRateLimitDetails(credentialId, thresholdMs = SCRAPE_RATE_LIMIT_MS) {
+async function resolveCredentialRateLimitDetails(
+  credentialId,
+  thresholdMs = SCRAPE_RATE_LIMIT_MS,
+  maxAttempts = SCRAPE_RATE_LIMIT_MAX_ATTEMPTS,
+) {
   if (!credentialId) return null;
+
+  const safeThresholdMs = Number.isFinite(thresholdMs) && thresholdMs > 0
+    ? thresholdMs
+    : SCRAPE_RATE_LIMIT_MS;
+  const safeMaxAttempts = Number.isFinite(maxAttempts) && maxAttempts > 0
+    ? Math.floor(maxAttempts)
+    : SCRAPE_RATE_LIMIT_MAX_ATTEMPTS;
 
   let client = null;
   try {
     client = await databaseService.getClient();
-    const result = await client.query(
+    const windowStartIso = new Date(Date.now() - safeThresholdMs).toISOString();
+    const attemptsResult = await client.query(
+      `SELECT created_at
+         FROM scrape_events
+        WHERE credential_id = $1
+          AND created_at >= $2
+        ORDER BY created_at ASC`,
+      [credentialId, windowStartIso],
+    );
+    const attempts = Array.isArray(attemptsResult?.rows)
+      ? attemptsResult.rows
+        .map((row) => new Date(row.created_at))
+        .filter((date) => !Number.isNaN(date.getTime()))
+      : [];
+
+    if (attempts.length > 0) {
+      const oldestAttempt = attempts[0];
+      const latestAttempt = attempts[attempts.length - 1];
+      const nextAllowedAtMs = oldestAttempt.getTime() + safeThresholdMs;
+      const retryAfter = Math.max(0, Math.ceil((nextAllowedAtMs - Date.now()) / 1000));
+      const remaining = Math.max(0, safeMaxAttempts - attempts.length);
+
+      return {
+        retryAfter,
+        lastAttemptAt: latestAttempt.toISOString(),
+        nextAllowedAt: new Date(nextAllowedAtMs).toISOString(),
+        attemptCount: attempts.length,
+        maxAttempts: safeMaxAttempts,
+        remaining,
+      };
+    }
+
+    const fallbackResult = await client.query(
       'SELECT last_scrape_attempt FROM vendor_credentials WHERE id = $1',
       [credentialId],
     );
-    const lastAttemptRaw = result?.rows?.[0]?.last_scrape_attempt;
+    const lastAttemptRaw = fallbackResult?.rows?.[0]?.last_scrape_attempt;
     if (!lastAttemptRaw) return null;
 
     const lastAttempt = new Date(lastAttemptRaw);
     if (Number.isNaN(lastAttempt.getTime())) return null;
 
-    const nextAllowedAtMs = lastAttempt.getTime() + thresholdMs;
+    const nextAllowedAtMs = lastAttempt.getTime() + safeThresholdMs;
     const retryAfter = Math.max(0, Math.ceil((nextAllowedAtMs - Date.now()) / 1000));
 
     return {
       retryAfter,
       lastAttemptAt: lastAttempt.toISOString(),
       nextAllowedAt: new Date(nextAllowedAtMs).toISOString(),
+      attemptCount: 1,
+      maxAttempts: safeMaxAttempts,
+      remaining: Math.max(0, safeMaxAttempts - 1),
     };
   } catch {
     return null;
@@ -59,6 +108,29 @@ async function resolveCredentialRateLimitDetails(credentialId, thresholdMs = SCR
       // Ignore client release failures in best-effort metadata lookup.
     }
   }
+}
+
+function resolveRateLimitMetadata(res) {
+  if (!res || typeof res.get !== 'function') {
+    return null;
+  }
+
+  const limitRaw = res.get('X-RateLimit-Limit');
+  const remainingRaw = res.get('X-RateLimit-Remaining');
+  const resetRaw = res.get('X-RateLimit-Reset');
+
+  const limit = typeof limitRaw === 'string' ? Number.parseInt(limitRaw, 10) : NaN;
+  const remaining = typeof remainingRaw === 'string' ? Number.parseInt(remainingRaw, 10) : NaN;
+  const resetAt = typeof resetRaw === 'string' && resetRaw.trim().length > 0
+    ? resetRaw
+    : null;
+
+  const metadata = {};
+  if (Number.isFinite(limit)) metadata.limit = limit;
+  if (Number.isFinite(remaining)) metadata.remaining = remaining;
+  if (resetAt) metadata.resetAt = resetAt;
+
+  return Object.keys(metadata).length > 0 ? metadata : null;
 }
 
 function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
@@ -157,6 +229,11 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
           const fallbackRetryAfter = Math.ceil(SCRAPE_RATE_LIMIT_MS / 1000);
           const details = await resolveCredentialRateLimitDetails(dbId);
           const retryAfter = Number.isFinite(details?.retryAfter) ? details.retryAfter : fallbackRetryAfter;
+          const accountRateLimit = {
+            limit: SCRAPE_RATE_LIMIT_MAX_ATTEMPTS,
+            remaining: Number.isFinite(details?.remaining) ? details.remaining : 0,
+            resetAt: details?.nextAllowedAt || null,
+          };
           res.set('Retry-After', String(retryAfter));
           sendProgress({
             vendor,
@@ -174,6 +251,10 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
             retryAfter,
             nextAllowedAt: details?.nextAllowedAt || null,
             lastAttemptAt: details?.lastAttemptAt || null,
+            rateLimit: {
+              ...(resolveRateLimitMetadata(res) || {}),
+              ...accountRateLimit,
+            },
           });
         }
       }
@@ -212,6 +293,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
       res.status(200).json({
         ...result,
         transactionCount,
+        rateLimit: resolveRateLimitMetadata(res),
       });
     } catch (error) {
       console.error('Scrape API error:', error);
@@ -233,6 +315,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         message: error?.message || 'Internal server error',
         errorType: error?.errorType,
         error: error?.payload || error?.message,
+        rateLimit: resolveRateLimitMetadata(res),
       });
     }
   });
