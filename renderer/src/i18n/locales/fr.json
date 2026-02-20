@@ -105,18 +105,18 @@
       "tooltipNoDonation": "Soutenez ShekelSync avec un don",
       "tooltipWithTier": "{{tier}} · Total des dons ₪{{amount}}",
       "buyMeCoffee": "Offrez-moi un café",
-      "buyMeCoffeeVerified": "Soutien {{tier}}",
-      "buyMeCoffeePending": "Plan de soutien en attente de validation"
+      "buyMeCoffeeVerified": "Don validé",
+      "buyMeCoffeePending": "Don en attente de validation"
     },
     "program": {
-      "title": "Programme de soutien Buy Me a Coffee",
-      "validationHint": "L'accès des soutiens est appliqué après validation du paiement dans Supabase.",
+      "title": "Soutenir ShekelSync",
+      "validationHint": "Tout don payé débloque automatiquement l'accès après synchronisation.",
       "currentPlan": "Plan actuel : {{plan}}",
-      "intentSaved": "Votre choix de plan est enregistré. Buy Me a Coffee est ouvert. L'accès sera mis à jour après validation.",
-      "intentFailed": "Échec de l'enregistrement du plan.",
+      "intentSaved": "Buy Me a Coffee est ouvert. L'accès est mis à jour automatiquement après synchronisation du paiement.",
+      "intentFailed": "Impossible d'ouvrir le flux de don.",
       "currentButton": "Plan actuel",
       "pendingButton": "Validation en attente",
-      "chooseButton": "Choisir sur Buy Me a Coffee",
+      "chooseButton": "Ouvrir Buy Me a Coffee",
       "actions": {
         "close": "Fermer"
       }
@@ -789,6 +789,7 @@
       "title": "Schémas détectés",
       "avgByPeriod": "Moyenne {{period}}",
       "savingsRate": "Taux d'épargne",
+      "savingsRateSalary": "Taux d'épargne (Salaire)",
       "anomalies": "Anomalies",
       "spikes": "{{count}} pic{{count, plural, one {} other {s}}}"
     },
@@ -2157,13 +2158,17 @@
       "categories": "Catégories"
     },
     "stats": {
-      "accounts": "{{count}} compte{{count, plural, one {} other {s}}}",
+      "accounts": "{{count}} comptes",
+      "accounts_one": "{{count}} compte",
+      "accounts_other": "{{count}} comptes",
       "accountsConnected": "comptes connectés"
     },
     "popover": {
       "title": "Statut de synchronisation des comptes",
       "noAccounts": "Aucun compte configuré",
-      "refreshStaleAccounts": "Actualiser {{count}} compte{{count, plural, one {} other {s}}} en attente"
+      "refreshStaleAccounts": "Actualiser {{count}} comptes en attente",
+      "refreshStaleAccounts_one": "Actualiser {{count}} compte en attente",
+      "refreshStaleAccounts_other": "Actualiser {{count}} comptes en attente"
     },
     "dbStatus": {
       "connected": "BDD connectée",
@@ -2178,8 +2183,12 @@
     "sync": {
       "never": "Jamais",
       "justNow": "À l'instant",
-      "minutesAgo": "Il y a {{count}} minute{{count, plural, one {} other {s}}}",
-      "hoursAgo": "Il y a {{count}} heure{{count, plural, one {} other {s}}}",
+      "minutesAgo": "Il y a {{count}} minutes",
+      "minutesAgo_one": "Il y a {{count}} minute",
+      "minutesAgo_other": "Il y a {{count}} minutes",
+      "hoursAgo": "Il y a {{count}} heures",
+      "hoursAgo_one": "Il y a {{count}} heure",
+      "hoursAgo_other": "Il y a {{count}} heures",
       "yesterday": "Hier",
       "daysAgo": "Il y a {{count}} jours"
     },

@@ -96,27 +96,27 @@ describe('donations service', () => {
     expect(releaseMock).toHaveBeenCalledTimes(1);
   });
 
-  it('grants demo bronze AI access when running against anonymized demo DB', async () => {
+  it('grants demo supporter AI access when running against anonymized demo DB', async () => {
     process.env.SQLITE_DB_PATH = '/tmp/clarify-anonymized.sqlite';
 
     const result = await donationsService.getDonationStatus();
 
     expect(result.hasDonated).toBe(true);
-    expect(result.tier).toBe('bronze');
+    expect(result.tier).toBe('one_time');
     expect(result.supportStatus).toBe('verified');
-    expect(result.currentPlanKey).toBe('bronze');
+    expect(result.currentPlanKey).toBe('one_time');
     expect(result.canAccessAiAgent).toBe(true);
     expect(result.aiAgentAccessLevel).toBe('standard');
     expect(result.shouldShowMonthlyReminder).toBe(false);
   });
 
-  it('records legacy manual donations locally when support intent is not used', async () => {
-    const support = await donationsService.addDonationEvent({ amount: 60, note: 'First support' });
+  it('records local donations and grants AI access', async () => {
+    const support = await donationsService.addDonationEvent({ amount: 12.5, note: 'First support' });
 
-    expect(support.totalAmountUsd).toBe(60);
+    expect(support.totalAmountUsd).toBe(12.5);
     expect(support.tier).toBe('one_time');
     expect(support.supportStatus).toBe('verified');
-    expect(support.canAccessAiAgent).toBe(false);
+    expect(support.canAccessAiAgent).toBe(true);
     expect(support.shouldShowMonthlyReminder).toBe(false);
   });
 
@@ -150,7 +150,7 @@ describe('donations service', () => {
 
   it('allows anonymous support intent path when auth is not required', async () => {
     await expect(
-      donationsService.createSupportIntent({ planKey: 'bronze' }),
+      donationsService.createSupportIntent({}),
     ).rejects.toMatchObject({
       status: 503,
       code: 'SUPABASE_NOT_CONFIGURED',
@@ -161,10 +161,23 @@ describe('donations service', () => {
     process.env.SUPPORTER_REQUIRE_AUTH = 'true';
 
     await expect(
-      donationsService.createSupportIntent({ planKey: 'bronze' }),
+      donationsService.createSupportIntent({}),
     ).rejects.toMatchObject({
       status: 401,
       code: 'AUTH_REQUIRED',
+    });
+  });
+
+  it('requires supabase configuration to sync supporter entitlements', async () => {
+    await expect(
+      donationsService.syncSupporterEntitlement({
+        userId: 'user-10',
+        email: 'member@example.com',
+        status: 'verified',
+      }),
+    ).rejects.toMatchObject({
+      status: 503,
+      code: 'SUPABASE_NOT_CONFIGURED',
     });
   });
 });

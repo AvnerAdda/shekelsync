@@ -5,8 +5,6 @@ export type { UseDonationStatusReturn } from './hooks/useDonationStatus';
 export type {
   DonationTier,
   DonationStatus,
-  SupportPlan,
-  SupportPlanKey,
   SupportVerificationStatus,
   AiAgentAccessLevel,
   CreateSupportIntentPayload,

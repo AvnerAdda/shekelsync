@@ -116,6 +116,15 @@ describe('API Security', () => {
       expect(res.status).not.toHaveBeenCalled();
     });
 
+    test('should allow Stripe webhook path without auth header', () => {
+      req.path = '/api/donations/stripe/webhook';
+
+      authenticationMiddleware(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
     test('should reject request without Authorization header', () => {
       authenticationMiddleware(req, res, next);
 
@@ -265,6 +274,16 @@ describe('API Security', () => {
 
     test('should allow health check without rate limiting', () => {
       req.path = '/health';
+      delete req.apiToken;
+
+      rateLimitMiddleware(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    test('should allow Stripe webhook path without rate limiting token', () => {
+      req.path = '/api/donations/stripe/webhook';
       delete req.apiToken;
 
       rateLimitMiddleware(req, res, next);

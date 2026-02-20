@@ -99,8 +99,11 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   const { mode, setMode, actualTheme } = useThemeMode();
   const { locale, setLocale } = useLocaleSettings();
 
-  const openFeedbackPage = useCallback(() => {
-    const version = window.electronAPI?.app?.getVersion?.() ?? 'unknown';
+  const openFeedbackPage = useCallback(async () => {
+    const rawVersion = window.electronAPI?.app?.getVersion?.();
+    const version = typeof rawVersion === 'string'
+      ? rawVersion
+      : await Promise.resolve(rawVersion ?? 'unknown');
     const platform = window.electronAPI?.platform;
     const os = platform?.isWindows ? 'windows' : platform?.isMacOS ? 'macos' : platform?.isLinux ? 'linux' : 'unknown';
     const localePrefix = locale !== 'he' ? `${locale}/` : '';
@@ -514,17 +517,13 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
     }
   };
 
-  const currentSupportTierLabel = donationStatus?.tier && donationStatus.tier !== 'none'
-    ? t(`support.tiers.${donationStatus.tier}`, { defaultValue: donationStatus.tier })
-    : null;
-  const buyMeCoffeeTooltip = donationStatus?.supportStatus === 'verified' && currentSupportTierLabel
+  const buyMeCoffeeTooltip = donationStatus?.hasDonated
     ? t('support.titleBar.buyMeCoffeeVerified', {
-        defaultValue: '{{tier}} supporter',
-        tier: currentSupportTierLabel,
+        defaultValue: 'Donation verified',
       })
     : donationStatus?.supportStatus === 'pending'
       ? t('support.titleBar.buyMeCoffeePending', {
-          defaultValue: 'Support plan pending validation',
+          defaultValue: 'Donation pending validation',
         })
       : t('support.titleBar.buyMeCoffee');
   const supportButtonColor = donationStatus?.supportStatus === 'verified'

@@ -12,7 +12,8 @@ const installUpdate = vi.fn();
 
 let mockActualTheme: 'light' | 'dark' = 'light';
 let mockLocale: 'en' | 'he' | 'fr' = 'en';
-let mockDonationStatus: { tier: 'none' | 'bronze' | 'silver' | 'gold'; supportStatus: 'none' | 'verified' | 'pending' } = {
+let mockDonationStatus: { hasDonated: boolean; tier: 'none' | 'one_time'; supportStatus: 'none' | 'verified' | 'pending' } = {
+  hasDonated: false,
   tier: 'none',
   supportStatus: 'none',
 };
@@ -163,7 +164,7 @@ describe('TitleBar component', () => {
     installUpdate.mockReset();
     mockActualTheme = 'light';
     mockLocale = 'en';
-    mockDonationStatus = { tier: 'none', supportStatus: 'none' };
+    mockDonationStatus = { hasDonated: false, tier: 'none', supportStatus: 'none' };
     (window as any).electronAPI = buildElectronApi(false);
   });
 

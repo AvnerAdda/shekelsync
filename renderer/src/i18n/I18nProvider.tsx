@@ -45,7 +45,8 @@ export const I18nProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [locale, setLocaleState] = useState<SupportedLocale>(initialLocale);
   const [detectedLocale] = useState<SupportedLocale>(systemLocale);
 
-  const direction: 'ltr' | 'rtl' = locale === 'he' ? 'rtl' : 'ltr';
+  // Keep application layout LTR for all locales to avoid mirroring charts and numeric content.
+  const direction: 'ltr' = 'ltr';
 
   const i18nInstance = useMemo(() => initializeI18n(locale), [locale]);
 

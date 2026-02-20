@@ -22,20 +22,12 @@ interface DonationReminderDialogProps {
 
 const DonationReminderDialog: React.FC<DonationReminderDialogProps> = ({
   open,
-  status: _status,
   busy = false,
   onDismissForMonth,
 }) => {
   const { t } = useTranslation('translation');
 
-  const handleOpenDonationLink = async () => {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent(DONATION_OPEN_MODAL_EVENT));
-    }
-    await onDismissForMonth();
-  };
-
-  const handleOpenSupportModal = async () => {
+  const handleDonate = async () => {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent(DONATION_OPEN_MODAL_EVENT));
     }
@@ -66,10 +58,7 @@ const DonationReminderDialog: React.FC<DonationReminderDialogProps> = ({
         <Button onClick={() => onDismissForMonth()} disabled={busy}>
           {t('support.reminder.actions.later')}
         </Button>
-        <Button onClick={handleOpenSupportModal} disabled={busy}>
-          {t('support.reminder.actions.choosePlan', { defaultValue: 'Choose plan' })}
-        </Button>
-        <Button variant="contained" onClick={handleOpenDonationLink} disabled={busy} startIcon={<CoffeeIcon />}>
+        <Button variant="contained" onClick={handleDonate} disabled={busy} startIcon={<CoffeeIcon />}>
           {t('support.reminder.actions.donateNow')}
         </Button>
       </DialogActions>

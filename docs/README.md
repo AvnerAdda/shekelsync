@@ -15,7 +15,9 @@
 ### Runtime Configuration
 - Use `app/.env.local` for desktop runtime values.
 - Set `DONATION_URL` in `app/.env.local`.
-- For validated supporter plans, also set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` in `app/.env.local`.
+- For automatic supporter access after payment, also set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` in `app/.env.local`.
+- If you sync payment confirmations into the app via API, also set `SUPPORTER_SYNC_SECRET`.
+- For Stripe webhook ingestion, set `STRIPE_WEBHOOK_SECRET`.
 
 ---
 

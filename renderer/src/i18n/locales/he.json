@@ -118,18 +118,18 @@
       "tooltipNoDonation": "אפשר לתמוך ב‑ShekelSync באמצעות תרומה",
       "tooltipWithTier": "{{tier}} · סך תרומות ₪{{amount}}",
       "buyMeCoffee": "קנו לי קפה",
-      "buyMeCoffeeVerified": "תומך ברמת {{tier}}",
-      "buyMeCoffeePending": "תוכנית התמיכה ממתינה לאימות"
+      "buyMeCoffeeVerified": "התרומה אומתה",
+      "buyMeCoffeePending": "התרומה ממתינה לאימות"
     },
     "program": {
-      "title": "תוכנית התמיכה ב‑Buy Me a Coffee",
-      "validationHint": "תמיכה באפליקציה מופעלת לאחר אימות התשלום ב‑Supabase.",
+      "title": "תמיכה ב‑ShekelSync",
+      "validationHint": "כל תרומה ששולמה פותחת גישה אוטומטית לאחר סנכרון.",
       "currentPlan": "תוכנית נוכחית: {{plan}}",
-      "intentSaved": "בחירת התוכנית נשמרה ונפתח Buy Me a Coffee. הגישה תתעדכן לאחר אימות.",
-      "intentFailed": "שמירת בחירת התוכנית נכשלה.",
+      "intentSaved": "נפתח Buy Me a Coffee. הגישה תתעדכן אוטומטית אחרי סנכרון התשלום.",
+      "intentFailed": "פתיחת תהליך התרומה נכשלה.",
       "currentButton": "תוכנית נוכחית",
       "pendingButton": "ממתין לאימות",
-      "chooseButton": "בחר ב‑Buy Me a Coffee",
+      "chooseButton": "פתח Buy Me a Coffee",
       "actions": {
         "close": "סגור"
       }
@@ -802,6 +802,7 @@
       "title": "תבניות שזוהו",
       "avgByPeriod": "ממוצע {{period}}",
       "savingsRate": "שיעור חיסכון",
+      "savingsRateSalary": "שיעור חיסכון (משכורת)",
       "anomalies": "חריגות",
       "spikes": "{{count}} קפיצה"
     },
@@ -2170,13 +2171,17 @@
       "categories": "קטגוריות"
     },
     "stats": {
-      "accounts": "{{count}} חשבון{{count, plural, one {} other {ים}}}",
+      "accounts": "{{count}} חשבונות",
+      "accounts_one": "{{count}} חשבון",
+      "accounts_other": "{{count}} חשבונות",
       "accountsConnected": "חשבונות מחוברים"
     },
     "popover": {
       "title": "סטטוס סנכרון חשבונות",
       "noAccounts": "אין חשבונות מוגדרים",
-      "refreshStaleAccounts": "רענן {{count}} חשבון{{count, plural, one {} other {ים}}} מיושן"
+      "refreshStaleAccounts": "רענן {{count}} חשבונות מיושנים",
+      "refreshStaleAccounts_one": "רענן {{count}} חשבון מיושן",
+      "refreshStaleAccounts_other": "רענן {{count}} חשבונות מיושנים"
     },
     "dbStatus": {
       "connected": "בסיס הנתונים מחובר",
@@ -2192,7 +2197,11 @@
       "never": "מעולם לא",
       "justNow": "זה עתה",
       "minutesAgo": "לפני {{count}} דקות",
+      "minutesAgo_one": "לפני {{count}} דקה",
+      "minutesAgo_other": "לפני {{count}} דקות",
       "hoursAgo": "לפני {{count}} שעות",
+      "hoursAgo_one": "לפני {{count}} שעה",
+      "hoursAgo_other": "לפני {{count}} שעות",
       "yesterday": "אתמול",
       "daysAgo": "לפני {{count}} ימים"
     },

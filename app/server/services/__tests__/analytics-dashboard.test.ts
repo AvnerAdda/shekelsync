@@ -32,8 +32,26 @@ describe('analytics dashboard service', () => {
     mockQuerySequence([
       {
         rows: [
-          { date: '2025-01-01', income: '100.50', expenses: '10.25', capital_returns: '0', card_repayments: '2.25' },
-          { date: '2025-01-02', income: '50', expenses: '20.75', capital_returns: '7.5', card_repayments: '0' },
+          {
+            date: '2025-01-01',
+            income: '100.50',
+            expenses: '10.25',
+            capital_returns: '0',
+            salary_income: '80',
+            card_repayments: '2.25',
+            paired_card_expenses: '4.5',
+            paired_card_repayments: '1.5',
+          },
+          {
+            date: '2025-01-02',
+            income: '50',
+            expenses: '20.75',
+            capital_returns: '7.5',
+            salary_income: '20',
+            card_repayments: '0',
+            paired_card_expenses: '0',
+            paired_card_repayments: '0',
+          },
         ],
       },
       {
@@ -129,6 +147,12 @@ describe('analytics dashboard service', () => {
     expect(historyArgs[1]).toBeInstanceOf(Date);
     expect(historyArgs[1].toISOString().startsWith('2025-01-31')).toBe(true);
     expect(historyArgs[2]).toBe(BANK_CATEGORY_NAME);
+    const historySql = queryMock.mock.calls[0][0];
+    expect(historySql).toContain('as salary_income');
+    expect(historySql).toContain('as paired_card_expenses');
+    expect(historySql).toContain('as paired_card_repayments');
+    expect(historySql).toContain("LOWER(COALESCE(cd.name, '')) LIKE '%salary%'");
+    expect(historySql).not.toContain("LOWER(COALESCE(t.name, '')) LIKE '%salary%'");
     const summaryArgs = queryMock.mock.calls[4][1];
     expect(summaryArgs[2]).toBe(BANK_CATEGORY_NAME);
 
@@ -153,8 +177,28 @@ describe('analytics dashboard service', () => {
     });
 
     expect(result.history).toEqual([
-      { date: '2025-01-01', income: 100.5, expenses: 10.25, capitalReturns: 0, cardRepayments: 2.25, bankBalance: 1200 },
-      { date: '2025-01-02', income: 50, expenses: 20.75, capitalReturns: 7.5, cardRepayments: 0, bankBalance: 1300.25 },
+      {
+        date: '2025-01-01',
+        income: 100.5,
+        expenses: 10.25,
+        capitalReturns: 0,
+        salaryIncome: 80,
+        cardRepayments: 2.25,
+        pairedCardExpenses: 4.5,
+        pairedCardRepayments: 1.5,
+        bankBalance: 1200,
+      },
+      {
+        date: '2025-01-02',
+        income: 50,
+        expenses: 20.75,
+        capitalReturns: 7.5,
+        salaryIncome: 20,
+        cardRepayments: 0,
+        pairedCardExpenses: 0,
+        pairedCardRepayments: 0,
+        bankBalance: 1300.25,
+      },
     ]);
 
     expect(result.breakdowns.byCategory).toEqual([
@@ -236,8 +280,26 @@ describe('analytics dashboard service', () => {
     mockQuerySequence([
       {
         rows: [
-          { date: '2025-02-01', income: '0', expenses: '0', capital_returns: '0', card_repayments: '0' },
-          { date: '2025-02-02', income: '0', expenses: '0', capital_returns: '0', card_repayments: '0' },
+          {
+            date: '2025-02-01',
+            income: '0',
+            expenses: '0',
+            capital_returns: '0',
+            salary_income: '0',
+            card_repayments: '0',
+            paired_card_expenses: '0',
+            paired_card_repayments: '0',
+          },
+          {
+            date: '2025-02-02',
+            income: '0',
+            expenses: '0',
+            capital_returns: '0',
+            salary_income: '0',
+            card_repayments: '0',
+            paired_card_expenses: '0',
+            paired_card_repayments: '0',
+          },
         ],
       },
       { rows: [] },
@@ -293,8 +355,28 @@ describe('analytics dashboard service', () => {
       availableBalance: 0,
     });
     expect(result.history).toEqual([
-      { date: '2025-02-01', income: 0, expenses: 0, capitalReturns: 0, cardRepayments: 0, bankBalance: 0 },
-      { date: '2025-02-02', income: 0, expenses: 0, capitalReturns: 0, cardRepayments: 0, bankBalance: 0 },
+      {
+        date: '2025-02-01',
+        income: 0,
+        expenses: 0,
+        capitalReturns: 0,
+        salaryIncome: 0,
+        cardRepayments: 0,
+        pairedCardExpenses: 0,
+        pairedCardRepayments: 0,
+        bankBalance: 0,
+      },
+      {
+        date: '2025-02-02',
+        income: 0,
+        expenses: 0,
+        capitalReturns: 0,
+        salaryIncome: 0,
+        cardRepayments: 0,
+        pairedCardExpenses: 0,
+        pairedCardRepayments: 0,
+        bankBalance: 0,
+      },
     ]);
     expect(result.breakdowns.byCategory).toEqual([]);
     expect(result.breakdowns.byVendor).toEqual([]);

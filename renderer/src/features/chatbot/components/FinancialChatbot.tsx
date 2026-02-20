@@ -371,13 +371,11 @@ const FinancialChatbot: React.FC = () => {
           setIsLoading(false);
           return;
         }
-        const supportError = response.data as { code?: string; details?: { requiredPlan?: string } };
-        if (supportError?.code === 'SUPPORT_PLAN_REQUIRED') {
-          const requiredPlan = supportError?.details?.requiredPlan || 'bronze';
+        const supportError = response.data as { code?: string; details?: { requiredDonation?: boolean } };
+        if (supportError?.code === 'DONATION_REQUIRED') {
           throw new Error(
-            t('errors.supportPlanRequired', {
-              defaultValue: `AI Agent access requires a verified ${requiredPlan} supporter plan.`,
-              requiredPlan,
+            t('errors.donationRequired', {
+              defaultValue: 'AI Agent access requires a verified donation.',
             }),
           );
         }
@@ -834,8 +832,8 @@ const FinancialChatbot: React.FC = () => {
         {aiSupportLocked && (
           <Alert severity="info" icon={<LockIcon />} sx={{ mx: 2 }}>
             <Typography variant="body2" fontWeight="bold">
-              {t('errors.supportPlanRequired', {
-                defaultValue: 'AI Agent access requires a verified Bronze (or higher) supporter plan.',
+              {t('errors.donationRequired', {
+                defaultValue: 'AI Agent access requires a verified donation.',
               })}
             </Typography>
           </Alert>

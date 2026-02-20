@@ -112,8 +112,15 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const getDisplayExpenses = useCallback(
     (item: any) => {
       const baseExpenses = item?.expenses || 0;
-      if (includeCardRepayments) return baseExpenses;
-      return Math.max(0, baseExpenses - (item?.cardRepayments || 0));
+      if (!includeCardRepayments) {
+        return Math.max(0, baseExpenses - (item?.cardRepayments || 0));
+      }
+      return Math.max(
+        0,
+        baseExpenses
+          - (item?.pairedCardExpenses || 0)
+          + (item?.pairedCardRepayments || 0),
+      );
     },
     [includeCardRepayments],
   );
@@ -131,6 +138,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const anomalies = detectAnomalies(chartHistory);
   const chartTotalIncome = chartHistory.reduce((sum: number, item: any) => sum + (item.income || 0), 0);
   const chartTotalExpenses = chartHistory.reduce((sum: number, item: any) => sum + (item.expenses || 0), 0);
+  const chartTotalSalaryIncome = chartHistory.reduce((sum: number, item: any) => sum + (item.salaryIncome || 0), 0);
 
   const handleOpenTransactionDetail = (txn: any) => {
     setSelectedTransaction({
@@ -1034,6 +1042,20 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     : 'error.main'
                 }>
                   {(((chartTotalIncome - chartTotalExpenses) / chartTotalIncome) * 100).toFixed(1)}%
+                </Typography>
+              </Box>
+            )}
+            {chartTotalSalaryIncome > 0 && (
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  {t('patterns.savingsRateSalary')}
+                </Typography>
+                <Typography variant="body2" fontWeight="medium" color={
+                  ((chartTotalSalaryIncome - chartTotalExpenses) / chartTotalSalaryIncome) > 0.2
+                    ? 'success.main'
+                    : 'error.main'
+                }>
+                  {(((chartTotalSalaryIncome - chartTotalExpenses) / chartTotalSalaryIncome) * 100).toFixed(1)}%
                 </Typography>
               </Box>
             )}
