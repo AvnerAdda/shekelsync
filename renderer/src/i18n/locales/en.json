@@ -358,6 +358,9 @@
       "description": "Configure your AI financial assistant and control what data it can access. The chatbot never has access to your bank credentials or passwords.",
       "enable": "Enable AI Chatbot",
       "enableHint": "Show the chatbot button and allow AI assistant interactions",
+      "openAiApiKeyLabel": "OpenAI API Key",
+      "openAiApiKeyHint": "Add your OpenAI key (stored locally) to connect the chatbot.",
+      "openAiApiKeyRequired": "Add an OpenAI API key to start chatting.",
       "permissionsTitle": "Data Access Permissions",
       "permissionsDescription": "Grant the chatbot access to specific data to enable personalized insights.",
       "permissionsEnableFirst": "(Enable chatbot first to configure permissions)",
@@ -1842,7 +1845,9 @@
     },
     "warnings": {
       "title": "Limited Access",
-      "description": "Enable data permissions in Settings to use the chatbot features."
+      "description": "Enable data permissions in Settings to use the chatbot features.",
+      "missingApiKeyTitle": "OpenAI key required",
+      "missingApiKeyDescription": "Add your OpenAI API key in Settings to use the chatbot."
     },
     "suggestions": {
       "title": "Suggested questions:",
@@ -1855,11 +1860,13 @@
     },
     "input": {
       "placeholderEnabled": "Ask me something...",
-      "placeholderDisabled": "Enable permissions in Settings"
+      "placeholderDisabled": "Enable permissions in Settings",
+      "placeholderMissingApiKey": "Add OpenAI API key in Settings"
     },
     "hints": {
       "enabled": "Powered by AI - analyzes your financial data",
-      "disabled": "Grant data access permissions in Settings to use this feature"
+      "disabled": "Grant data access permissions in Settings to use this feature",
+      "missingApiKey": "Add your OpenAI API key in Settings to use this feature"
     },
     "actions": {
       "newChat": "New conversation",
@@ -2206,6 +2213,18 @@
         "saving": "Creating rule..."
       },
       "showingLatest": "Showing latest {{previewCount}} of {{total}} transactions."
+    },
+    "help": {
+      "title": "How Categorization Works",
+      "leafLevel": "Transactions must be assigned to the most specific (leaf) category — not a parent group. Only leaf-level assignments count as fully categorized.",
+      "income": "Positive transactions (money received) should be placed under the Income category type.",
+      "investment": "Negative transactions related to investments (stocks, pension, savings) should be placed under the Investment category type.",
+      "creditCard": "Credit Card Repayment",
+      "creditCardDetail": "Bank transactions that pay off your credit card bill must be categorized as Credit Card Repayment. The system pairs these with credit card transactions to avoid double-counting expenses.",
+      "createRule": "Create Rule (✨ button)",
+      "createRuleDetail": "Click the magic wand icon next to a transaction to create an automatic rule. All future transactions with the same name will be categorized automatically.",
+      "sortTip": "Tip: Use the \"Similar Transactions\" sort to group identical names together for faster bulk categorization.",
+      "gotIt": "Got it!"
     }
   },
   "sidebar": {

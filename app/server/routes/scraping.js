@@ -162,6 +162,9 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
     try {
       const { options, credentials } = req.body || {};
       const vendor = options?.companyId;
+      const fromSavedCredential =
+        credentials?.fromSavedCredential === true ||
+        String(credentials?.fromSavedCredential || '').toLowerCase() === 'true';
 
       if (!vendor || !credentials) {
         return res.status(400).json({
@@ -219,6 +222,22 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         } catch (lookupError) {
           logger.warn?.('Failed to lookup credential ID, scrape will proceed without it:', lookupError);
         }
+      }
+
+      if (fromSavedCredential && !dbId) {
+        sendProgress({
+          vendor,
+          status: 'failed',
+          progress: 100,
+          message: 'Saved account was not found. Please re-add this account before syncing.',
+          error: 'credential_not_found',
+        });
+
+        return res.status(409).json({
+          success: false,
+          message: 'Saved account was not found. Please re-add this account before syncing.',
+          reason: 'credential_not_found',
+        });
       }
 
       // Check rate limit (skip if force override is enabled)

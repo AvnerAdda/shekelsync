@@ -116,6 +116,7 @@ async function processMessage(payload = {}) {
     conversationId,
     permissions = {},
     locale = 'en',
+    openaiApiKey,
   } = payload;
 
   // Validate message
@@ -123,9 +124,11 @@ async function processMessage(payload = {}) {
     throw serviceError(400, 'Message is required');
   }
 
+  const resolvedOpenAiKey = typeof openaiApiKey === 'string' ? openaiApiKey.trim() : '';
+
   // Check if OpenAI is configured
   const openai = getOpenAIClient();
-  if (!openai.isConfigured()) {
+  if (!openai.isConfigured({ apiKey: resolvedOpenAiKey || undefined })) {
     throw serviceError(503, 'AI service not configured', 'OpenAI API key is missing');
   }
 
@@ -238,7 +241,7 @@ async function processMessage(payload = {}) {
       const result = await openai.createCompletion(
         messages,
         availableTools.length > 0 ? availableTools : null,
-        { model: 'gpt-4o-mini' }
+        { model: 'gpt-4o-mini', apiKey: resolvedOpenAiKey || undefined }
       );
 
       if (!result.success) {

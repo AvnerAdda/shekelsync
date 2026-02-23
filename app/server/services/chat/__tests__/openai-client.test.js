@@ -77,6 +77,15 @@ describe('openai-client', () => {
     expect(clientModule.isConfigured()).toBe(false);
     process.env.API_OPENAI_API_KEY = 'test-key';
     expect(clientModule.isConfigured()).toBe(true);
+    expect(clientModule.isConfigured({ apiKey: 'sk-user-key' })).toBe(true);
+  });
+
+  it('accepts request-level api keys without env configuration', async () => {
+    await withNodeLikeRuntime(() => {
+      const client = clientModule.getClient({ apiKey: 'sk-user-only' });
+      expect(client).toBeTruthy();
+      expect(clientModule.isConfigured({ apiKey: 'sk-user-only' })).toBe(true);
+    });
   });
 
   it('throws when API key is missing and caches client when configured', async () => {

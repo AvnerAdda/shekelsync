@@ -9,6 +9,8 @@ interface ChatbotPermissionsContextType {
   setAllowCategoryAccess: (allow: boolean) => void;
   allowAnalyticsAccess: boolean;
   setAllowAnalyticsAccess: (allow: boolean) => void;
+  openAiApiKey: string;
+  setOpenAiApiKey: (apiKey: string) => void;
 }
 
 const ChatbotPermissionsContext = createContext<ChatbotPermissionsContextType | undefined>(
@@ -29,6 +31,20 @@ const readStoredBoolean = (key: string, fallback: boolean): boolean => {
   }
 };
 
+const readStoredString = (key: string, fallback = ''): string => {
+  if (typeof window === 'undefined') {
+    return fallback;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(key);
+    return stored === null ? fallback : stored;
+  } catch (error) {
+    console.warn(`[ChatbotPermissionsContext] Failed to read "${key}" from localStorage`, error);
+    return fallback;
+  }
+};
+
 const persistBoolean = (key: string, value: boolean): void => {
   if (typeof window === 'undefined') {
     return;
@@ -36,6 +52,18 @@ const persistBoolean = (key: string, value: boolean): void => {
 
   try {
     window.localStorage.setItem(key, value.toString());
+  } catch (error) {
+    console.warn(`[ChatbotPermissionsContext] Failed to persist "${key}"`, error);
+  }
+};
+
+const persistString = (key: string, value: string): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(key, value);
   } catch (error) {
     console.warn(`[ChatbotPermissionsContext] Failed to persist "${key}"`, error);
   }
@@ -64,6 +92,9 @@ export const ChatbotPermissionsProvider: React.FC<{ children: React.ReactNode }>
   const [allowAnalyticsAccess, setAllowAnalyticsAccessState] = useState<boolean>(() =>
     readStoredBoolean('chatbot-analytics-access', false)
   );
+  const [openAiApiKey, setOpenAiApiKeyState] = useState<string>(() =>
+    readStoredString('chatbot-openai-api-key', '')
+  );
 
   const setChatbotEnabled = (enabled: boolean) => {
     setChatbotEnabledState(enabled);
@@ -85,6 +116,11 @@ export const ChatbotPermissionsProvider: React.FC<{ children: React.ReactNode }>
     persistBoolean('chatbot-analytics-access', allow);
   };
 
+  const setOpenAiApiKey = (apiKey: string) => {
+    setOpenAiApiKeyState(apiKey);
+    persistString('chatbot-openai-api-key', apiKey);
+  };
+
   return (
     <ChatbotPermissionsContext.Provider
       value={{
@@ -96,6 +132,8 @@ export const ChatbotPermissionsProvider: React.FC<{ children: React.ReactNode }>
         setAllowCategoryAccess,
         allowAnalyticsAccess,
         setAllowAnalyticsAccess,
+        openAiApiKey,
+        setOpenAiApiKey,
       }}
     >
       {children}

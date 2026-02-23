@@ -6,8 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const { createChatRouter } = require('../../routes/chat.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const chatService = require('../../services/chat.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const donationsService = require('../../services/donations.js');
 
 function buildApp() {
   const app = express();
@@ -18,12 +16,6 @@ function buildApp() {
 
 describe('Shared /api/chat routes', () => {
   let app: express.Express;
-  const allowAiAccess = () =>
-    vi.spyOn(donationsService, 'getDonationStatus').mockResolvedValue({
-      canAccessAiAgent: true,
-      tier: 'one_time',
-      supportStatus: 'verified',
-    });
 
   beforeEach(() => {
     app = buildApp();
@@ -34,18 +26,17 @@ describe('Shared /api/chat routes', () => {
   });
 
   it('processes chat messages', async () => {
-    allowAiAccess();
     const response = { reply: 'Hello there!' };
     const spy = vi.spyOn(chatService, 'processMessage').mockResolvedValue(response);
 
-    const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(200);
+    const payload = { message: 'Hi', openaiApiKey: 'sk-test-key' };
+    const res = await request(app).post('/api/chat').send(payload).expect(200);
 
     expect(res.body).toEqual(response);
-    expect(spy).toHaveBeenCalledWith({ message: 'Hi' });
+    expect(spy).toHaveBeenCalledWith(payload);
   });
 
   it('handles chat errors', async () => {
-    allowAiAccess();
     vi.spyOn(chatService, 'processMessage').mockRejectedValue({
       status: 422,
       message: 'Bad input',
@@ -56,41 +47,7 @@ describe('Shared /api/chat routes', () => {
     expect(res.body.error).toMatch(/bad input/i);
   });
 
-  it('blocks chat when donation is not verified', async () => {
-    vi.spyOn(donationsService, 'getDonationStatus').mockResolvedValue({
-      canAccessAiAgent: false,
-      tier: 'none',
-      supportStatus: 'none',
-    });
-
-    const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(403);
-
-    expect(res.body.code).toBe('DONATION_REQUIRED');
-  });
-
-  it('passes supporter context headers to donation-status lookup', async () => {
-    allowAiAccess();
-    vi.spyOn(chatService, 'processMessage').mockResolvedValue({ reply: 'ok' });
-
-    await request(app)
-      .post('/api/chat')
-      .set('x-auth-access-token', 'token-1')
-      .set('x-auth-user-id', 'u-123')
-      .set('x-auth-user-email', 'user@example.com')
-      .set('x-auth-user-name', 'Demo User')
-      .send({ message: 'Hi' })
-      .expect(200);
-
-    expect(donationsService.getDonationStatus).toHaveBeenCalledWith({
-      accessToken: 'token-1',
-      userId: 'u-123',
-      email: 'user@example.com',
-      name: 'Demo User',
-    });
-  });
-
   it('includes retryAfter when chat processing error provides it', async () => {
-    allowAiAccess();
     vi.spyOn(chatService, 'processMessage').mockRejectedValue({
       status: 429,
       message: 'Too many requests',
@@ -102,7 +59,6 @@ describe('Shared /api/chat routes', () => {
   });
 
   it('lists conversations with parsed query options', async () => {
-    allowAiAccess();
     const listSpy = vi.spyOn(chatService, 'listConversations').mockResolvedValue([{ id: 'conv-1' }]);
 
     const res = await request(app)
@@ -118,7 +74,6 @@ describe('Shared /api/chat routes', () => {
   });
 
   it('uses default conversation list options for invalid query params', async () => {
-    allowAiAccess();
     const listSpy = vi.spyOn(chatService, 'listConversations').mockResolvedValue([]);
 
     await request(app).get('/api/chat/conversations?limit=foo&offset=bar').expect(200);
@@ -130,7 +85,6 @@ describe('Shared /api/chat routes', () => {
   });
 
   it('handles conversation list errors', async () => {
-    allowAiAccess();
     vi.spyOn(chatService, 'listConversations').mockRejectedValue({
       status: 503,
       message: 'Service unavailable',
@@ -141,7 +95,6 @@ describe('Shared /api/chat routes', () => {
   });
 
   it('gets conversation history by id and handles missing history', async () => {
-    allowAiAccess();
     vi.spyOn(chatService, 'getConversationHistory').mockResolvedValue({
       id: 'conv-2',
       messages: [{ role: 'user', content: 'hello' }],
@@ -159,7 +112,6 @@ describe('Shared /api/chat routes', () => {
   });
 
   it('deletes conversation and surfaces delete failures', async () => {
-    allowAiAccess();
     const deleteSpy = vi.spyOn(chatService, 'deleteConversation').mockResolvedValue(undefined);
 
     const successRes = await request(app).delete('/api/chat/conversations/conv-3').expect(200);
@@ -172,17 +124,5 @@ describe('Shared /api/chat routes', () => {
     });
     const errorRes = await request(app).delete('/api/chat/conversations/conv-3').expect(500);
     expect(errorRes.body.error).toMatch(/delete failed/i);
-  });
-
-  it('uses none/default supporter details when donation status is missing', async () => {
-    vi.spyOn(donationsService, 'getDonationStatus').mockResolvedValue(null);
-    const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(403);
-
-    expect(res.body.code).toBe('DONATION_REQUIRED');
-    expect(res.body.details).toEqual({
-      requiredDonation: true,
-      currentTier: 'none',
-      supportStatus: 'none',
-    });
   });
 });

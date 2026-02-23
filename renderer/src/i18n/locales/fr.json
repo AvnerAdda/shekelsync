@@ -355,6 +355,9 @@
       "description": "Configurez votre assistant financier et contrôlez l'accès aux données. Le chatbot n'a jamais accès à vos identifiants bancaires.",
       "enable": "Activer le chatbot IA",
       "enableHint": "Afficher le bouton chatbot et autoriser les interactions",
+      "openAiApiKeyLabel": "Clé API OpenAI",
+      "openAiApiKeyHint": "Ajoutez votre clé OpenAI (stockée localement) pour connecter le chatbot.",
+      "openAiApiKeyRequired": "Ajoutez une clé API OpenAI pour commencer à discuter.",
       "permissionsTitle": "Autorisations d'accès aux données",
       "permissionsDescription": "Accordez l'accès aux données pour des insights personnalisés.",
       "permissionsEnableFirst": "(Activez le chatbot pour définir les autorisations)",
@@ -1826,7 +1829,9 @@
     },
     "warnings": {
       "title": "Accès limité",
-      "description": "Activez les autorisations de données dans les Paramètres pour utiliser le chatbot."
+      "description": "Activez les autorisations de données dans les Paramètres pour utiliser le chatbot.",
+      "missingApiKeyTitle": "Clé OpenAI requise",
+      "missingApiKeyDescription": "Ajoutez votre clé API OpenAI dans les Paramètres pour utiliser le chatbot."
     },
     "suggestions": {
       "title": "Questions suggérées :",
@@ -1839,11 +1844,13 @@
     },
     "input": {
       "placeholderEnabled": "Posez-moi une question...",
-      "placeholderDisabled": "Activez les autorisations dans Paramètres"
+      "placeholderDisabled": "Activez les autorisations dans Paramètres",
+      "placeholderMissingApiKey": "Ajoutez la clé API OpenAI dans Paramètres"
     },
     "hints": {
       "enabled": "Propulsé par l'IA - analyse vos données financières",
-      "disabled": "Autorisez l'accès aux données dans Paramètres pour utiliser cette fonctionnalité"
+      "disabled": "Autorisez l'accès aux données dans Paramètres pour utiliser cette fonctionnalité",
+      "missingApiKey": "Ajoutez votre clé API OpenAI dans Paramètres pour utiliser cette fonctionnalité"
     },
     "actions": {
       "newChat": "Nouvelle conversation",
@@ -2144,6 +2151,18 @@
         "saving": "Création de la règle..."
       },
       "showingLatest": "Affichage des {{previewCount}} dernières transactions sur {{total}}."
+    },
+    "help": {
+      "title": "Comment fonctionne la catégorisation",
+      "leafLevel": "Les transactions doivent être attribuées à la catégorie la plus spécifique (finale) — pas à un groupe parent. Seules les attributions au niveau final comptent comme entièrement catégorisées.",
+      "income": "Les transactions positives (argent reçu) doivent être placées sous le type de catégorie Revenus.",
+      "investment": "Les transactions négatives liées aux investissements (actions, retraite, épargne) doivent être placées sous le type de catégorie Investissements.",
+      "creditCard": "Remboursement de carte de crédit",
+      "creditCardDetail": "Les transactions bancaires qui remboursent votre facture de carte de crédit doivent être catégorisées comme Remboursement de carte de crédit. Le système les associe aux transactions de carte de crédit pour éviter le double comptage des dépenses.",
+      "createRule": "Créer une règle (bouton ✨)",
+      "createRuleDetail": "Cliquez sur l'icône baguette magique à côté d'une transaction pour créer une règle automatique. Toutes les futures transactions portant le même nom seront catégorisées automatiquement.",
+      "sortTip": "Astuce : Utilisez le tri « Transactions similaires » pour regrouper les noms identiques et catégoriser plus rapidement en lot.",
+      "gotIt": "Compris !"
     }
   },
   "sidebar": {

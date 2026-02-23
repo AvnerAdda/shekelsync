@@ -733,8 +733,8 @@ describe('scraping run service', () => {
       const maxOpts = internal.buildScraperOptions({ companyId: 'max' }, false, '/bin/chrome', start);
       expect(maxOpts.companyId).toBe('max');
       expect(maxOpts.showBrowser).toBe(true);
-      expect(maxOpts.timeout).toBe(300000);
-      expect(maxOpts.defaultTimeout).toBe(300000);
+      expect(maxOpts.timeout).toBe(180000);
+      expect(maxOpts.defaultTimeout).toBe(180000);
       expect(maxOpts.executablePath).toBe('/bin/chrome');
       expect(typeof maxOpts.preparePage).toBe('function');
 
@@ -750,15 +750,15 @@ describe('scraping run service', () => {
         undefined,
         start,
       );
-      expect(visaCalOpts.timeout).toBe(300000);
-      expect(visaCalOpts.defaultTimeout).toBe(300000);
+      expect(visaCalOpts.timeout).toBe(180000);
+      expect(visaCalOpts.defaultTimeout).toBe(180000);
       const fakePage = {
         setDefaultTimeout: vi.fn(),
         setDefaultNavigationTimeout: vi.fn(),
       };
       await visaCalOpts.preparePage(fakePage);
-      expect(fakePage.setDefaultTimeout).toHaveBeenCalledWith(300000);
-      expect(fakePage.setDefaultNavigationTimeout).toHaveBeenCalledWith(300000);
+      expect(fakePage.setDefaultTimeout).toHaveBeenCalledWith(180000);
+      expect(fakePage.setDefaultNavigationTimeout).toHaveBeenCalledWith(180000);
       expect(userPreparePage).toHaveBeenCalledWith(fakePage);
 
       expect(

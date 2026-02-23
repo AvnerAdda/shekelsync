@@ -37,7 +37,12 @@ import {
   LinearProgress,
   useTheme,
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { alpha, keyframes } from '@mui/material/styles';
+
+const helpGlow = keyframes`
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; filter: drop-shadow(0 0 4px currentColor); }
+`;
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -91,6 +96,7 @@ import {
   Clear as ClearIcon,
   Sort as SortIcon,
   SwapVert as SwapVertIcon,
+  HelpOutline as HelpOutlineIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import ModalHeader from './ModalHeader';
@@ -210,6 +216,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const theme = useTheme();
   const locale = useMemo(() => (i18n.language?.split('-')[0] || 'he') as 'he' | 'en' | 'fr', [i18n.language]);
   const [activeTab, setActiveTab] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
   useEffect(() => {
     if (open && initialTab !== undefined) setActiveTab(initialTab);
   }, [open, initialTab]);
@@ -242,7 +249,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     category_type: 'expense',
   });
   const [newRuleType, setNewRuleType] = useState<CategoryType>('expense');
-  const [newRuleParentId, setNewRuleParentId] = useState<number | null>(null);
   const [newRuleCategoryId, setNewRuleCategoryId] = useState<number | null>(null);
   const [isApplyingRules, setIsApplyingRules] = useState(false);
   const [ruleSearchQuery, setRuleSearchQuery] = useState<string>('');
@@ -1068,30 +1074,22 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   };
 
   const handleCreateRule = async () => {
-    if (!newRule.name_pattern?.trim() || !newRuleParentId) {
+    if (!newRule.name_pattern?.trim() || !newRuleCategoryId) {
       setError(t('errors.patternAndCategoryRequired'));
       return;
     }
 
-    const parentDefinition = categoryLookup.get(newRuleParentId);
-    if (!parentDefinition) {
-      setError(t('errors.categoryUnavailable'));
-      return;
-    }
-
-    const selectedCategoryId = newRuleCategoryId ?? newRuleParentId;
+    const selectedCategoryId = newRuleCategoryId;
 
     try {
       setLoading(true);
       setError(null);
 
       const response = await apiClient.post('/api/categorization_rules', {
-        payload: {
-          name_pattern: newRule.name_pattern,
-          category_definition_id: selectedCategoryId,
-          category_type: newRuleType,
-          is_active: true,
-        },
+        name_pattern: newRule.name_pattern,
+        category_definition_id: selectedCategoryId,
+        category_type: newRuleType,
+        is_active: true,
       });
 
       if (!response.ok) {
@@ -1109,7 +1107,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setSuccess(t('notifications.ruleCreated'));
       setNewRule({ name_pattern: '', category_type: 'expense' });
       setNewRuleType('expense');
-      setNewRuleParentId(null);
       setNewRuleCategoryId(null);
       await fetchRules();
 
@@ -3226,10 +3223,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   };
 
   const renderPatternRulesTab = () => {
-    const parentOptions = categoryRootsByType[newRuleType];
-    const parentDefinition = newRuleParentId ? categoryLookup.get(newRuleParentId) : undefined;
-    const childOptions = parentDefinition?.children ?? [];
-    const subcategoryValue = newRuleCategoryId ?? '';
     const filteredRules = rules.filter(rule => {
       if (!ruleSearchQuery.trim()) return true;
       const query = ruleSearchQuery.toLowerCase();
@@ -3271,7 +3264,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   label={t('rulesForm.fields.type')}
                   onChange={(e) => {
                     setNewRuleType(e.target.value as CategoryType);
-                    setNewRuleParentId(null);
                     setNewRuleCategoryId(null);
                   }}
                 >
@@ -3281,45 +3273,56 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 </Select>
               </FormControl>
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
+            <Grid size={{ xs: 12, md: 5 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>{t('rulesForm.fields.category')}</InputLabel>
                 <Select
-                  value={newRuleParentId ?? ''}
+                  value={newRuleCategoryId ?? ''}
                   label={t('rulesForm.fields.category')}
-                  onChange={(e) => {
-                    const value = e.target.value as string | number;
-                    setNewRuleParentId(value === '' ? null : Number(value));
-                    setNewRuleCategoryId(null);
-                  }}
-                >
-                  <MenuItem value="">{t('rulesForm.fields.selectCategory')}</MenuItem>
-                  {parentOptions.map((parent: CategoryDefinition) => (
-                    <MenuItem key={parent.id} value={parent.id}>
-                      {getLocalizedCategoryName(parent) || parent.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <FormControl fullWidth size="small" disabled={!newRuleParentId || childOptions.length === 0}>
-                <InputLabel>{t('rulesForm.fields.subcategory')}</InputLabel>
-                <Select
-                  value={subcategoryValue}
-                  label={t('rulesForm.fields.subcategory')}
                   onChange={(e) => {
                     const value = e.target.value as string | number;
                     setNewRuleCategoryId(value === '' ? null : Number(value));
                   }}
-                  displayEmpty
+                  MenuProps={{ PaperProps: { style: { maxHeight: 350 } } }}
                 >
-                  <MenuItem value="">{t('rulesForm.fields.none')}</MenuItem>
-                  {childOptions.map((child: CategoryDefinition) => (
-                    <MenuItem key={child.id} value={child.id}>
-                      {getLocalizedCategoryName(child) || child.name}
-                    </MenuItem>
-                  ))}
+                  <MenuItem value="">
+                    <em>{t('rulesForm.fields.selectCategory')}</em>
+                  </MenuItem>
+                  {(() => {
+                    const filteredCategories = categories.filter(
+                      (cat) => cat.category_type === newRuleType
+                    );
+                    const items: React.ReactElement[] = [];
+
+                    const renderOptions = (cats: CategoryDefinition[], depth: number = 0) => {
+                      cats.forEach((cat) => {
+                        items.push(
+                          <MenuItem
+                            key={cat.id}
+                            value={cat.id}
+                            sx={{ pl: 2 + depth * 2 }}
+                          >
+                            <Box display="flex" alignItems="center" gap={1}>
+                              {getCategoryIcon(cat)}
+                              <Typography
+                                sx={{
+                                  fontWeight: depth === 0 ? 600 : 400,
+                                }}
+                              >
+                                {getLocalizedCategoryName(cat) || cat.name}
+                              </Typography>
+                            </Box>
+                          </MenuItem>
+                        );
+                        if (cat.children && cat.children.length > 0) {
+                          renderOptions(cat.children, depth + 1);
+                        }
+                      });
+                    };
+
+                    renderOptions(filteredCategories);
+                    return items;
+                  })()}
                 </Select>
               </FormControl>
             </Grid>
@@ -3329,7 +3332,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 variant="contained"
                 startIcon={<AddIcon />}
                 onClick={handleCreateRule}
-                disabled={loading || !newRule.name_pattern || !newRuleParentId}
+                disabled={loading || !newRule.name_pattern || !newRuleCategoryId}
                 sx={{ height: '40px' }}
               >
                 {t('rulesForm.actions.add')}
@@ -3622,15 +3625,55 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
           </Alert>
         )}
 
-        <Tabs
-          value={activeTab}
-          onChange={(e, newValue) => setActiveTab(newValue)}
-          sx={{ mb: 3 }}
-        >
-          <Tab label={t('tabs.categorize')} />
-          <Tab label={t('tabs.hierarchy')} />
-          <Tab label={t('tabs.rules')} />
-        </Tabs>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+          <Tabs
+            value={activeTab}
+            onChange={(e, newValue) => setActiveTab(newValue)}
+            sx={{ flex: 1 }}
+          >
+            <Tab label={t('tabs.categorize')} />
+            <Tab label={t('tabs.hierarchy')} />
+            <Tab label={t('tabs.rules')} />
+          </Tabs>
+          <Tooltip title={t('help.title')}>
+            <IconButton
+              onClick={() => setHelpOpen(true)}
+              size="small"
+              sx={uncategorized && uncategorized.totalCount > 0 ? {
+                color: 'primary.main',
+                animation: `${helpGlow} 2.5s ease-in-out infinite`,
+              } : undefined}
+            >
+              <HelpOutlineIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        <Dialog open={helpOpen} onClose={() => setHelpOpen(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>{t('help.title')}</DialogTitle>
+          <DialogContent dividers>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Typography variant="body2">{t('help.leafLevel')}</Typography>
+              <Divider />
+              <Typography variant="body2">{t('help.income')}</Typography>
+              <Divider />
+              <Typography variant="body2">{t('help.investment')}</Typography>
+              <Divider />
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{t('help.creditCard')}</Typography>
+              <Typography variant="body2">{t('help.creditCardDetail')}</Typography>
+              <Divider />
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{t('help.createRule')}</Typography>
+              <Typography variant="body2">{t('help.createRuleDetail')}</Typography>
+              <Divider />
+              <Typography variant="body2" sx={{ fontStyle: 'italic' }}>{t('help.sortTip')}</Typography>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setHelpOpen(false)} variant="contained">
+              {t('help.gotIt')}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {activeTab === 0 && renderCategorizationTab()}
         {activeTab === 1 && renderCategoryTreeTab()}
