@@ -110,7 +110,15 @@ function resolveSqlitePath() {
     return process.env.SQLITE_DB_PATH;
   }
   if (app?.getPath) {
-    return path.join(app.getPath('userData'), 'clarify.sqlite');
+    const preferredPath = path.join(app.getPath('userData'), 'shekelsync.sqlite');
+    const legacyPath = path.join(app.getPath('userData'), 'clarify.sqlite');
+    if (fs.existsSync(preferredPath)) {
+      return preferredPath;
+    }
+    if (fs.existsSync(legacyPath)) {
+      return legacyPath;
+    }
+    return preferredPath;
   }
   return null;
 }

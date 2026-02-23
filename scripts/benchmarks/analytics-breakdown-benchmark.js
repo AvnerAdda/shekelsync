@@ -10,9 +10,13 @@ const path = require('path');
 const fs = require('fs');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
-const DEFAULT_DB_PATH = path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite');
-if (!process.env.SQLITE_DB_PATH && fs.existsSync(DEFAULT_DB_PATH)) {
-  process.env.SQLITE_DB_PATH = DEFAULT_DB_PATH;
+const DEFAULT_DB_PATHS = [
+  path.join(PROJECT_ROOT, 'dist', 'shekelsync.sqlite'),
+  path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite'),
+];
+const detectedDbPath = DEFAULT_DB_PATHS.find((candidate) => fs.existsSync(candidate));
+if (!process.env.SQLITE_DB_PATH && detectedDbPath) {
+  process.env.SQLITE_DB_PATH = detectedDbPath;
   process.env.USE_SQLITE = process.env.USE_SQLITE || 'true';
 }
 

@@ -6,7 +6,7 @@
  * and seeds public, non-sensitive reference data such as category definitions.
  *
  * Usage:
- *   node scripts/init_sqlite_db.js [--output dist/clarify.sqlite] [--force]
+ *   node scripts/init_sqlite_db.js [--output dist/shekelsync.sqlite] [--force]
  */
 
 const fs = require('fs');
@@ -32,7 +32,7 @@ function resolveDatabaseCtor(override) {
   return Database;
 }
 
-const DEFAULT_DB_PATH = path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite');
+const DEFAULT_DB_PATH = path.join(PROJECT_ROOT, 'dist', 'shekelsync.sqlite');
 
 function ensureColumnExists(db, tableName, columnName, definitionSql) {
   const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
@@ -153,7 +153,7 @@ function printHelp() {
   console.log(`Usage: node scripts/init_sqlite_db.js [options]
 
 Options:
-  -o, --output <path>   Output database file (default: dist/clarify.sqlite)
+  -o, --output <path>   Output database file (default: dist/shekelsync.sqlite)
   -f, --force           Overwrite existing database file
       --with-demo       Seed demo credentials/pairings (local QA only)
   -h, --help            Show this help message

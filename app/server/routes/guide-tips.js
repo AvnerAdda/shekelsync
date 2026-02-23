@@ -199,7 +199,7 @@ async function getGuideTipsStatus(client) {
     },
     {
       id: 'pair_accounts',
-      completed: unpairedCount === 0 && creditCardCount > 0,
+      completed: unpairedCount === 0,
       data: { unpairedCount },
     },
     {

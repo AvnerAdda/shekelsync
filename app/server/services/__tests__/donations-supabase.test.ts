@@ -434,7 +434,7 @@ describe('donations service supabase flows', () => {
 
     const { service } = await setupDonationsService({
       supabaseMock,
-      env: { SQLITE_DB_PATH: '/tmp/clarify-anonymized.sqlite' },
+      env: { SQLITE_DB_PATH: '/tmp/shekelsync-anonymized.sqlite' },
     });
 
     const status = await service.getDonationStatus({ userId: 'demo-user' });

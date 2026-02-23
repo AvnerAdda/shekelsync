@@ -7,7 +7,7 @@
  *
  * Env:
  *   LICENSE_SMOKE_TEST_EMAIL=you@example.com
- *   SQLITE_DB_PATH=/path/to/clarify.sqlite
+ *   SQLITE_DB_PATH=/path/to/shekelsync.sqlite
  */
 
 const path = require('path');

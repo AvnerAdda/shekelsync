@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const resolveBetterSqlite = require('./better-sqlite3-wrapper.js');
 
 const PLACEHOLDER_REGEX = /\$(\d+)/g;
@@ -34,13 +35,24 @@ function resolveDatabaseCtor(override) {
   return cachedDatabaseCtor;
 }
 
+function resolveDefaultSqlitePath(cwd = process.cwd()) {
+  const preferredPath = path.join(cwd, 'dist', 'shekelsync.sqlite');
+  const legacyPath = path.join(cwd, 'dist', 'clarify.sqlite');
+
+  if (fs.existsSync(preferredPath)) {
+    return preferredPath;
+  }
+  if (fs.existsSync(legacyPath)) {
+    return legacyPath;
+  }
+  return preferredPath;
+}
+
 function createSqlitePool(options = {}) {
   const dbPath =
     options.databasePath ||
     process.env.SQLITE_DB_PATH ||
-    path.join(process.cwd(), 'dist', 'clarify.sqlite');
-
-  const fs = require('fs');
+    resolveDefaultSqlitePath();
   if (!fs.existsSync(dbPath)) {
     const resolvedPath = path.resolve(dbPath);
     throw new Error(

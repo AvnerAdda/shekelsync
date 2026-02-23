@@ -21,7 +21,7 @@ describe('sqlite-pool edge cases', () => {
         }
         pragma() {}
       },
-      databasePath: 'dist/clarify.sqlite',
+      databasePath: 'dist/shekelsync.sqlite',
     });
 
     await expect(pool.query('SELECT * FROM t WHERE id=$1 AND name=$2', [1])).rejects.toThrow(
@@ -42,7 +42,7 @@ describe('sqlite-pool edge cases', () => {
         }
         pragma() {}
       },
-      databasePath: 'dist/clarify.sqlite',
+      databasePath: 'dist/shekelsync.sqlite',
     });
 
     const result = await pool.query('UPDATE t SET name=$1 WHERE id=$2 RETURNING id', ['x', 1]);
@@ -52,7 +52,7 @@ describe('sqlite-pool edge cases', () => {
   it('throws when database file does not exist', () => {
     expect(() =>
       createSqlitePool({
-        databasePath: '/tmp/non-existent-clarify.sqlite',
+        databasePath: '/tmp/non-existent-shekelsync.sqlite',
         databaseCtor: class FakeDb {
           prepare() {
             return { all: () => [] };

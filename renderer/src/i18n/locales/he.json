@@ -2732,7 +2732,7 @@
       "try_chatbot": {
         "title": "נסה צ'אטבוט AI",
         "description": "שאל את עוזר ה-AI על הכספים שלך.",
-        "action": "פתח הגדרות"
+        "action": "פתח צ'אט"
       },
       "accept_quest": {
         "title": "קבל משימה",

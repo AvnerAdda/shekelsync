@@ -68,6 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const [accountsModalOpen, setAccountsModalOpen] = useState(false);
   const [scrapeModalOpen, setScrapeModalOpen] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [categoryInitialTab, setCategoryInitialTab] = useState(0);
   interface AccountSyncStatus {
     id: string;
     vendor: string;
@@ -314,10 +315,28 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       fetchUncategorizedCount();
     };
 
+    const handleGuideOpenCategories = (event: Event) => {
+      const tab = (event as CustomEvent).detail?.tab as string | undefined;
+      const tabMap: Record<string, number> = {
+        categorize: 0,
+        categorize_investments: 0,
+        manage_categories: 1,
+        create_rules: 2,
+      };
+      setCategoryInitialTab(tabMap[tab ?? ''] ?? 0);
+      setCategoryModalOpen(true);
+    };
+
+    const handleGuideTriggerBulkSync = () => {
+      handleBulkRefresh();
+    };
+
     globalThis.addEventListener('openProfileSetup', handleOpenProfile);
     globalThis.addEventListener('openAccountsModal', handleOpenAccounts);
     globalThis.addEventListener('openScrapeModal', handleOpenScrape);
     globalThis.addEventListener('dataRefresh', handleDataRefresh);
+    globalThis.addEventListener('guideOpenCategoriesModal', handleGuideOpenCategories);
+    globalThis.addEventListener('guideTriggerBulkSync', handleGuideTriggerBulkSync);
 
     return () => {
       clearInterval(interval);
@@ -325,8 +344,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       globalThis.removeEventListener('openAccountsModal', handleOpenAccounts);
       globalThis.removeEventListener('openScrapeModal', handleOpenScrape);
       globalThis.removeEventListener('dataRefresh', handleDataRefresh);
+      globalThis.removeEventListener('guideOpenCategoriesModal', handleGuideOpenCategories);
+      globalThis.removeEventListener('guideTriggerBulkSync', handleGuideTriggerBulkSync);
     };
-  }, [fetchStats, checkDBStatus, fetchAccountStatus, fetchUncategorizedCount, onPageChange]);
+  }, [fetchStats, checkDBStatus, fetchAccountStatus, fetchUncategorizedCount, onPageChange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSyncIconClick = () => {
     const isSyncStale = stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS;
@@ -989,6 +1010,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
           fetchUncategorizedCount();
         }}
         onCategoriesUpdated={handleScrapeComplete}
+        initialTab={categoryInitialTab}
       />
 
       <LicenseReadOnlyAlert

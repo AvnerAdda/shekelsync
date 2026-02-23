@@ -44,7 +44,7 @@
    - Copy text columns into a temporary mapping table.
    - Drop redundant columns after verification.
    - Apply new constraints (`FOREIGN KEY`, `NOT NULL` where appropriate).
-2. Run migration against current `clarify.sqlite` and validate counts. *(script: `node scripts/migrate_schema_v2.js` — creates a timestamped backup automatically)*
+2. Run migration against current `shekelsync.sqlite` and validate counts. *(script: `node scripts/migrate_schema_v2.js` — creates a timestamped backup automatically)*
 
 ### Phase 4 – Clean-up & Verification
 

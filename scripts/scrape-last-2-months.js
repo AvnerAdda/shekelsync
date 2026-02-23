@@ -17,10 +17,14 @@ const fs = require('fs');
 const path = require('path');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const DEFAULT_DB_PATH = path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite');
+const DEFAULT_DB_PATHS = [
+  path.join(PROJECT_ROOT, 'dist', 'shekelsync.sqlite'),
+  path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite'),
+];
+const detectedDbPath = DEFAULT_DB_PATHS.find((candidate) => fs.existsSync(candidate));
 
-if (!process.env.SQLITE_DB_PATH && fs.existsSync(DEFAULT_DB_PATH)) {
-  process.env.SQLITE_DB_PATH = DEFAULT_DB_PATH;
+if (!process.env.SQLITE_DB_PATH && detectedDbPath) {
+  process.env.SQLITE_DB_PATH = detectedDbPath;
   process.env.USE_SQLITE = process.env.USE_SQLITE || 'true';
 }
 
@@ -70,7 +74,7 @@ Options:
   --help                 Show this help
 
 Environment:
-  SQLITE_DB_PATH         Path to SQLite DB (defaults to dist/clarify.sqlite if present)
+  SQLITE_DB_PATH         Path to SQLite DB (defaults to dist/shekelsync.sqlite, falls back to dist/clarify.sqlite)
   SHEKELSYNC_ENCRYPTION_KEY Required to decrypt credentials stored in vendor_credentials
 `);
 }

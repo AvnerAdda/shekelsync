@@ -40,11 +40,9 @@ import { useGuideTips, type GuideTip } from '../hooks/useGuideTips';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
 
 // Custom events to open modals from outside their component tree
-const GUIDE_OPEN_ACCOUNTS_MODAL = 'guideOpenAccountsModal';
-const GUIDE_OPEN_PAIRING_MODAL = 'guideOpenPairingModal';
 const GUIDE_OPEN_CATEGORIES_MODAL = 'guideOpenCategoriesModal';
 
-export { GUIDE_OPEN_ACCOUNTS_MODAL, GUIDE_OPEN_PAIRING_MODAL, GUIDE_OPEN_CATEGORIES_MODAL };
+export { GUIDE_OPEN_CATEGORIES_MODAL };
 
 interface TipConfig {
   icon: React.ReactElement;
@@ -96,13 +94,13 @@ const GuideTips: React.FC = () => {
 
     switch (tip.id) {
       case 'add_bank':
-        window.dispatchEvent(new CustomEvent(GUIDE_OPEN_ACCOUNTS_MODAL, { detail: { tab: 'bank' } }));
+        window.dispatchEvent(new CustomEvent('openAccountsModal', { detail: { tab: 'bank' } }));
         break;
       case 'add_credit_cards':
-        window.dispatchEvent(new CustomEvent(GUIDE_OPEN_ACCOUNTS_MODAL, { detail: { tab: 'credit' } }));
+        window.dispatchEvent(new CustomEvent('openAccountsModal', { detail: { tab: 'credit' } }));
         break;
       case 'pair_accounts':
-        window.dispatchEvent(new CustomEvent(GUIDE_OPEN_PAIRING_MODAL));
+        window.dispatchEvent(new CustomEvent('openAccountsModal'));
         break;
       case 'manage_categories':
       case 'categorize':
@@ -127,7 +125,7 @@ const GuideTips: React.FC = () => {
         navigate('/');
         break;
       case 'try_chatbot':
-        navigate('/settings');
+        window.dispatchEvent(new CustomEvent('openChatbotDrawer'));
         break;
       case 'accept_quest':
         navigate('/analysis');

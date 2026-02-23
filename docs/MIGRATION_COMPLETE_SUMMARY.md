@@ -24,7 +24,7 @@ The database optimization work is **complete**! All backend APIs and most fronte
 
 ### Database Scripts
 - **Legacy Cleanup Script:** ⚠️ Removed after cleanup was applied in the current schema snapshot
-- **Status:** ✅ **No cleanup required for current `dist/clarify.sqlite`**
+- **Status:** ✅ **No cleanup required for current `dist/shekelsync.sqlite`**
 
 ---
 
@@ -124,7 +124,7 @@ The current SQLite schema already excludes legacy category columns.
 
 ### Verify locally
 ```bash
-sqlite3 dist/clarify.sqlite ".schema transactions"
+sqlite3 dist/shekelsync.sqlite ".schema transactions"
 ```
 
 If you're working with an older database that still has legacy columns, create a one-off migration following the patterns in `docs/CATEGORY_SCHEMA_MIGRATION.md`, take a backup first, and validate by running the app and key dashboards.
@@ -237,6 +237,6 @@ You've successfully:
 Refer to:
 - **Full Guide:** `docs/CATEGORY_SCHEMA_MIGRATION.md`
   - **Git History:** `git log --oneline app/pages/api app/components`
- - **Backup Location:** `dist/clarify.sqlite.bak-*` (if you created one)
+ - **Backup Location:** `dist/shekelsync.sqlite.bak-*` (if you created one)
 
 **Success! 🚀**

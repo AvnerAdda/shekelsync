@@ -171,11 +171,23 @@ function consumeApprovedFileRead(filePath) {
   return true;
 }
 
+function resolveDefaultUserDataSqlitePath() {
+  const preferredPath = path.join(app.getPath('userData'), 'shekelsync.sqlite');
+  const legacyPath = path.join(app.getPath('userData'), 'clarify.sqlite');
+  if (fs.existsSync(preferredPath)) {
+    return preferredPath;
+  }
+  if (fs.existsSync(legacyPath)) {
+    return legacyPath;
+  }
+  return preferredPath;
+}
+
 function resolveSqlitePath() {
   return (
     dbManager.getSqlitePath?.() ||
     process.env.SQLITE_DB_PATH ||
-    path.join(app.getPath('userData'), 'clarify.sqlite')
+    resolveDefaultUserDataSqlitePath()
   );
 }
 
@@ -726,7 +738,7 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
       process.env.CLARIFY_DB_PORT = String(config.database.port ?? 5432);
     } else {
       process.env.USE_SQLITE = 'true';
-      const defaultSqlitePath = path.join(app.getPath('userData'), 'clarify.sqlite');
+      const defaultSqlitePath = resolveDefaultUserDataSqlitePath();
       const basePath = process.env.SQLITE_DB_PATH || config.database.path || defaultSqlitePath;
       process.env.SQLITE_DB_PATH = basePath;
       config.database.path = basePath;

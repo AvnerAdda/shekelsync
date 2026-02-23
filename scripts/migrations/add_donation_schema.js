@@ -3,7 +3,7 @@
  * Migration Script: Add donation tables for donation-first monetization.
  *
  * Usage:
- *   node scripts/migrations/add_donation_schema.js [--db dist/clarify.sqlite]
+ *   node scripts/migrations/add_donation_schema.js [--db dist/shekelsync.sqlite]
  */
 
 const fs = require('fs');
@@ -43,6 +43,7 @@ function resolvePath(input) {
 }
 
 const DEFAULT_DB_PATHS = [
+  path.join(PROJECT_ROOT, 'dist', 'shekelsync.sqlite'),
   path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite'),
   path.join(PROJECT_ROOT, 'dist', 'clarify.db'),
 ];

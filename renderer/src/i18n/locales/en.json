@@ -2781,7 +2781,7 @@
       "try_chatbot": {
         "title": "Try AI Chatbot",
         "description": "Ask the AI assistant about your finances.",
-        "action": "Open Settings"
+        "action": "Open Chat"
       },
       "accept_quest": {
         "title": "Accept a Quest",

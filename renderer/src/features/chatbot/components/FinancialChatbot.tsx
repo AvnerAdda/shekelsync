@@ -199,6 +199,12 @@ const FinancialChatbot: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const handleOpenChatbot = () => setIsOpen(true);
+    window.addEventListener('openChatbotDrawer', handleOpenChatbot);
+    return () => window.removeEventListener('openChatbotDrawer', handleOpenChatbot);
+  }, []);
+
   const hasAnyPermission = allowTransactionAccess || allowCategoryAccess || allowAnalyticsAccess;
   const aiSupportLocked = supporterStatus ? !supporterStatus.canAccessAiAgent : false;
   const userDisplayName = (() => {

@@ -3,7 +3,7 @@
  * Migration Script: Add subscription management tables and indexes.
  *
  * Usage:
- *   node scripts/migrations/add_subscriptions_schema.js [--db dist/clarify.db]
+ *   node scripts/migrations/add_subscriptions_schema.js [--db dist/shekelsync.sqlite]
  */
 
 const fs = require('fs');
@@ -38,8 +38,9 @@ function resolveDatabaseCtor() {
 }
 
 const DEFAULT_DB_PATHS = [
-  path.join(PROJECT_ROOT, 'dist', 'clarify.db'),
+  path.join(PROJECT_ROOT, 'dist', 'shekelsync.sqlite'),
   path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite'),
+  path.join(PROJECT_ROOT, 'dist', 'clarify.db'),
 ];
 
 function resolvePath(input) {

@@ -4,6 +4,7 @@
  */
 
 const path = require('path');
+const fs = require('fs');
 const Database = require('better-sqlite3');
 let databaseCtor = Database;
 
@@ -22,7 +23,18 @@ const MIN_EXPENSE_MONTHLY_OCCURRENCES = parsePositiveInt(process.env.FORECAST_MI
 const forecastResultCache = new Map();
 
 function resolveForecastDbPath() {
-  return process.env.SQLITE_DB_PATH || path.join(__dirname, '../../dist/clarify.sqlite');
+  if (process.env.SQLITE_DB_PATH) {
+    return process.env.SQLITE_DB_PATH;
+  }
+  const preferredDbPath = path.join(__dirname, '../../dist/shekelsync.sqlite');
+  const legacyDbPath = path.join(__dirname, '../../dist/clarify.sqlite');
+  if (fs.existsSync(preferredDbPath)) {
+    return preferredDbPath;
+  }
+  if (fs.existsSync(legacyDbPath)) {
+    return legacyDbPath;
+  }
+  return preferredDbPath;
 }
 
 function openForecastDb() {
