@@ -247,9 +247,16 @@ class DatabaseManager {
       });
 
       if (this.mode === 'sqlite') {
+        const preferredSqlitePath = path.join(app.getPath('userData'), 'shekelsync.sqlite');
+        const legacySqlitePath = path.join(app.getPath('userData'), 'clarify.sqlite');
+        const fallbackSqlitePath = fs.existsSync(preferredSqlitePath)
+          ? preferredSqlitePath
+          : fs.existsSync(legacySqlitePath)
+            ? legacySqlitePath
+            : preferredSqlitePath;
         const dbPath =
           process.env.SQLITE_DB_PATH ||
-          path.join(app.getPath('userData'), 'clarify.sqlite');
+          fallbackSqlitePath;
 
         if (!SqliteDatabase) {
           const betterSqlite = requireFromApp('better-sqlite3');

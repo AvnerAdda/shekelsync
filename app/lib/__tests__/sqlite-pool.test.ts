@@ -82,7 +82,7 @@ async function loadPool(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sqlite-pool-'));
-  dbPath = path.join(tmpDir, 'clarify.sqlite');
+  dbPath = path.join(tmpDir, 'shekelsync.sqlite');
   fs.writeFileSync(dbPath, '');
   latestDb = null;
 });

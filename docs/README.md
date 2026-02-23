@@ -41,7 +41,7 @@
 
 **Next Steps:**
 1. Read: `MIGRATION_COMPLETE_SUMMARY.md`
-2. Verify your local schema with `sqlite3 dist/clarify.sqlite ".schema transactions"`
+2. Verify your local schema with `sqlite3 dist/shekelsync.sqlite ".schema transactions"`
 3. If you have an older database, follow the migration guide to create a one-off migration
 
 ---
@@ -270,7 +270,7 @@ If issues occur after schema cleanup:
 ls -la dist/*.bak-*
 
 # Restore from backup
-cp dist/clarify.sqlite.bak-YYYYMMDDHHMMSS dist/clarify.sqlite
+cp dist/shekelsync.sqlite.bak-YYYYMMDDHHMMSS dist/shekelsync.sqlite
 
 # Restart application
 cd app && npm run dev
@@ -333,7 +333,7 @@ curl -X POST http://localhost:3000/api/budgets \
 ### Database Testing
 ```bash
 # Connect to SQLite database
-sqlite3 dist/clarify.sqlite
+sqlite3 dist/shekelsync.sqlite
 
 # Check category definitions
 SELECT * FROM category_definitions WHERE is_active = 1;

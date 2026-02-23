@@ -263,7 +263,7 @@ describe('scraping run service', () => {
     });
 
     it('simulates sync for anonymized demo DB and inserts a latest transaction', async () => {
-      process.env.SQLITE_DB_PATH = '/tmp/clarify-anonymized.sqlite';
+      process.env.SQLITE_DB_PATH = '/tmp/shekelsync-anonymized.sqlite';
 
       getLastTransactionDateMock.mockResolvedValue({
         lastTransactionDate: '2026-02-07T00:00:00.000Z',
@@ -669,7 +669,7 @@ describe('scraping run service', () => {
       expect(internal.resolvePrimaryAccountNumber({ card6Digits: ' 9999 ' })).toBe('9999');
       expect(internal.resolvePrimaryAccountNumber({})).toBe(null);
 
-      process.env.SQLITE_DB_PATH = '/tmp/clarify-anonymized.sqlite';
+      process.env.SQLITE_DB_PATH = '/tmp/shekelsync-anonymized.sqlite';
       expect(internal.isAnonymizedSqliteDatabase()).toBe(true);
       expect(internal.shouldSimulateDemoSync({}, { password: '' })).toBe(true);
       expect(internal.shouldSimulateDemoSync({ forceRealScrape: true }, { password: '' })).toBe(false);

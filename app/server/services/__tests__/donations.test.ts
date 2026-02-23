@@ -97,7 +97,7 @@ describe('donations service', () => {
   });
 
   it('grants demo supporter AI access when running against anonymized demo DB', async () => {
-    process.env.SQLITE_DB_PATH = '/tmp/clarify-anonymized.sqlite';
+    process.env.SQLITE_DB_PATH = '/tmp/shekelsync-anonymized.sqlite';
 
     const result = await donationsService.getDonationStatus();
 

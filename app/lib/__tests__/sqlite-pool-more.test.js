@@ -15,7 +15,7 @@ describe('sqlite-pool additional coverage', () => {
   it('normalizes booleans and rewrites positional placeholders for SELECT', async () => {
     const captured = { sql: '', params: [] };
     const pool = createSqlitePool({
-      databasePath: 'dist/clarify.sqlite',
+      databasePath: 'dist/shekelsync.sqlite',
       databaseCtor: class FakeDb {
         prepare(sql) {
           captured.sql = sql;
@@ -38,7 +38,7 @@ describe('sqlite-pool additional coverage', () => {
 
   it('returns rowCount from non-select statements using run()', async () => {
     const pool = createSqlitePool({
-      databasePath: 'dist/clarify.sqlite',
+      databasePath: 'dist/shekelsync.sqlite',
       databaseCtor: class FakeDb {
         prepare(sql) {
           return {
@@ -58,7 +58,7 @@ describe('sqlite-pool additional coverage', () => {
   it('executes transactional statements via exec', async () => {
     const execMock = vi.fn();
     const pool = createSqlitePool({
-      databasePath: 'dist/clarify.sqlite',
+      databasePath: 'dist/shekelsync.sqlite',
       databaseCtor: class FakeDb {
         exec(sql) {
           execMock(sql);
@@ -81,7 +81,7 @@ describe('sqlite-pool additional coverage', () => {
 
   it('throws when positional placeholders receive a non-array params object', async () => {
     const pool = createSqlitePool({
-      databasePath: 'dist/clarify.sqlite',
+      databasePath: 'dist/shekelsync.sqlite',
       databaseCtor: class FakeDb {
         prepare() {
           return {

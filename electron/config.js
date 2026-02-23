@@ -145,8 +145,14 @@ class ConfigManager {
 
   getDefaultConfig() {
     // SQLite-only configuration for Electron desktop app
-    const defaultSqlitePath =
-      process.env.SQLITE_DB_PATH || path.join(app.getPath('userData'), 'clarify.sqlite');
+    const preferredSqlitePath = path.join(app.getPath('userData'), 'shekelsync.sqlite');
+    const legacySqlitePath = path.join(app.getPath('userData'), 'clarify.sqlite');
+    const fallbackSqlitePath = fs.existsSync(preferredSqlitePath)
+      ? preferredSqlitePath
+      : fs.existsSync(legacySqlitePath)
+        ? legacySqlitePath
+        : preferredSqlitePath;
+    const defaultSqlitePath = process.env.SQLITE_DB_PATH || fallbackSqlitePath;
 
     return {
       database: {

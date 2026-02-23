@@ -1,9 +1,14 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const { generateDailyForecast } = require('../services/forecast.js');
 
 // Initialize database for category lookups
-const dbPath = process.env.SQLITE_DB_PATH || path.join(__dirname, '../../dist/clarify.sqlite');
+const preferredDbPath = path.join(__dirname, '../../dist/shekelsync.sqlite');
+const legacyDbPath = path.join(__dirname, '../../dist/clarify.sqlite');
+const dbPath =
+  process.env.SQLITE_DB_PATH ||
+  (fs.existsSync(preferredDbPath) ? preferredDbPath : fs.existsSync(legacyDbPath) ? legacyDbPath : preferredDbPath);
 let dbInstance = null;
 let Database = null;
 

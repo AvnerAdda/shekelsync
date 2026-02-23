@@ -22,6 +22,6 @@ ON scrape_events (credential_id, created_at DESC);
 
 -- Migration complete
 -- Next steps:
--- 1. Run this migration: sqlite3 dist/clarify.sqlite < scripts/migrations/add_credential_id_to_scrape_events.sql
+-- 1. Run this migration: sqlite3 dist/shekelsync.sqlite < scripts/migrations/add_credential_id_to_scrape_events.sql
 -- 2. Update scraping service to populate credential_id
 -- 3. Update last-update service to use credential_id for accurate status

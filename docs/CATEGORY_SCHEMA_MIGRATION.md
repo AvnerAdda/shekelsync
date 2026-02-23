@@ -230,7 +230,7 @@ The output should show all legacy columns have 0 non-null rows. If not, there's 
 node scripts/deprecate_legacy_category_columns.js --drop
 ```
 
-A backup will be created at `dist/clarify.sqlite.bak-YYYYMMDDHHMMSS` before any changes.
+A backup will be created at `dist/shekelsync.sqlite.bak-YYYYMMDDHHMMSS` before any changes.
 
 ### Step 4: Test Application
 After dropping columns:
@@ -245,7 +245,7 @@ After dropping columns:
 ### Rollback (If Needed)
 ```bash
 # If something breaks, restore from backup:
-cp dist/clarify.sqlite.bak-YYYYMMDDHHMMSS dist/clarify.sqlite
+cp dist/shekelsync.sqlite.bak-YYYYMMDDHHMMSS dist/shekelsync.sqlite
 ```
 
 ## Breaking Changes

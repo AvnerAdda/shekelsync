@@ -24,8 +24,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ==================== CONFIGURATION ====================
+const preferredDbPath = path.join(__dirname, '../../dist/shekelsync.sqlite');
+const legacyDbPath = path.join(__dirname, '../../dist/clarify.sqlite');
 const CONFIG = {
-  dbPath: path.join(__dirname, '../../dist/clarify.sqlite'),
+  dbPath: fs.existsSync(preferredDbPath) ? preferredDbPath : fs.existsSync(legacyDbPath) ? legacyDbPath : preferredDbPath,
   outputDir: path.join(__dirname),
   analysisMonths: 3,
   excludeOutliers: false,

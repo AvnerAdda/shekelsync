@@ -155,6 +155,11 @@ describe('analytics dashboard service', () => {
     expect(historySql).not.toContain("LOWER(COALESCE(t.name, '')) LIKE '%salary%'");
     const summaryArgs = queryMock.mock.calls[4][1];
     expect(summaryArgs[2]).toBe(BANK_CATEGORY_NAME);
+    const monthStartBalanceSql = String(queryMock.mock.calls[7][0]);
+    expect(monthStartBalanceSql).toContain('ih2.as_of_date <= $1');
+    const pendingCcDebtSql = String(queryMock.mock.calls[10][0]);
+    expect(pendingCcDebtSql).toContain('(lr.last_date IS NULL OR t.date > lr.last_date)');
+    expect(pendingCcDebtSql).not.toContain("cd.name = 'פרעון כרטיס אשראי'");
 
     expect(result.summary).toEqual({
       totalIncome: 500,
@@ -423,5 +428,55 @@ describe('analytics dashboard service', () => {
       netBalance: 500, // income - expenses (capital returns excluded)
       pikkadonBalance: 0,
     });
+  });
+
+  it('respects false query flags passed as strings', async () => {
+    mockQuerySequence([
+      {
+        rows: [
+          {
+            date: '2025-03-01',
+            income: '10',
+            expenses: '3',
+            capital_returns: '0',
+            salary_income: '0',
+            card_repayments: '0',
+            paired_card_expenses: '0',
+            paired_card_repayments: '0',
+          },
+        ],
+      },
+    ]);
+
+    const result = await getDashboardAnalytics({
+      startDate: '2025-03-01',
+      endDate: '2025-03-31',
+      includeBreakdowns: 'false',
+      includeSummary: 'false',
+      noCache: '1',
+    });
+
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(result.history).toEqual([
+      {
+        date: '2025-03-01',
+        income: 10,
+        expenses: 3,
+        capitalReturns: 0,
+        salaryIncome: 0,
+        cardRepayments: 0,
+        pairedCardExpenses: 0,
+        pairedCardRepayments: 0,
+      },
+    ]);
+    expect(result.summary).toMatchObject({
+      totalIncome: 0,
+      totalExpenses: 0,
+      pendingCCDebt: 0,
+    });
+    expect(result.breakdowns.byCategory).toEqual([]);
+    expect(result.breakdowns.byVendor).toEqual([]);
+    expect(result.breakdowns.byMonth).toEqual([]);
+    expect(result.breakdowns.byBankAccount).toEqual([]);
   });
 });

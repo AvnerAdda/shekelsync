@@ -26,7 +26,11 @@ const isDryRun = args.includes('--dry-run');
 const shouldDropColumns = args.includes('--drop-columns');
 
 // Get database path from environment or use default
-const dbPath = process.env.SQLITE_DB_PATH || path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite');
+const preferredDbPath = path.join(PROJECT_ROOT, 'dist', 'shekelsync.sqlite');
+const legacyDbPath = path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite');
+const dbPath =
+  process.env.SQLITE_DB_PATH ||
+  (fs.existsSync(preferredDbPath) ? preferredDbPath : fs.existsSync(legacyDbPath) ? legacyDbPath : preferredDbPath);
 
 console.log('\n=== Bank Balance Migration Script ===\n');
 console.log(`Database: ${dbPath}`);

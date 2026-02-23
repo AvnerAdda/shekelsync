@@ -6,7 +6,7 @@
  * Safely copies existing records, mapping email from email/teudat_zehut.
  *
  * Usage:
- *   node scripts/migrations/upgrade_license_email_only.js [--db dist/clarify.sqlite]
+ *   node scripts/migrations/upgrade_license_email_only.js [--db dist/shekelsync.sqlite]
  */
 
 const fs = require('fs');
@@ -40,6 +40,7 @@ function resolveDatabaseCtor() {
 }
 
 const DEFAULT_DB_PATHS = [
+  path.join(PROJECT_ROOT, 'dist', 'shekelsync.sqlite'),
   path.join(PROJECT_ROOT, 'dist', 'clarify.sqlite'),
   path.join(PROJECT_ROOT, 'dist', 'clarify.db'),
 ];

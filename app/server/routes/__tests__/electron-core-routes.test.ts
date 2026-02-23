@@ -165,7 +165,7 @@ describe('electron core routes', () => {
 
     process.env.SENTRY_DSN = 'https://example.ingest.sentry.io/123';
     process.env.CRASH_REPORTS_ENABLED = 'true';
-    process.env.SQLITE_DB_PATH = '/tmp/clarify.sqlite';
+    process.env.SQLITE_DB_PATH = '/tmp/shekelsync.sqlite';
 
     healthServiceMock.ping.mockResolvedValue({ ok: true, status: 'ok' });
     dbManagerMock.testConnection.mockResolvedValue({ success: true });
@@ -187,7 +187,7 @@ describe('electron core routes', () => {
     expect(res.result.body.database).toMatchObject({
       mode: expect.any(String),
       connected: true,
-      sqlitePath: 'clarify.sqlite',
+      sqlitePath: 'shekelsync.sqlite',
     });
     expect(res.result.body.metrics).toMatchObject({
       breakdown: {

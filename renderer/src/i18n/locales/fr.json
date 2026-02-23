@@ -2719,7 +2719,7 @@
       "try_chatbot": {
         "title": "Essayer le chatbot IA",
         "description": "Posez des questions sur vos finances à l'assistant IA.",
-        "action": "Ouvrir paramètres"
+        "action": "Ouvrir le chat"
       },
       "accept_quest": {
         "title": "Accepter une quête",

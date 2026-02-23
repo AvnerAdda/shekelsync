@@ -9,9 +9,18 @@
  * - Sample data for new features
  */
 const path = require('path');
+const fs = require('fs');
 const { execFileSync } = require('child_process');
 const Database = require(path.join(__dirname, '..', 'app', 'node_modules', 'better-sqlite3'));
-const DB_PATH = process.env.SQLITE_DB_PATH || path.join(__dirname, '..', 'dist', 'clarify-anonymized.sqlite');
+const preferredDemoDbPath = path.join(__dirname, '..', 'dist', 'shekelsync-anonymized.sqlite');
+const legacyDemoDbPath = path.join(__dirname, '..', 'dist', 'clarify-anonymized.sqlite');
+const DB_PATH =
+  process.env.SQLITE_DB_PATH ||
+  (fs.existsSync(preferredDemoDbPath)
+    ? preferredDemoDbPath
+    : fs.existsSync(legacyDemoDbPath)
+      ? legacyDemoDbPath
+      : preferredDemoDbPath);
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');

@@ -195,6 +195,7 @@ interface CategoryHierarchyModalProps {
   open: boolean;
   onClose: () => void;
   onCategoriesUpdated?: () => void;
+  initialTab?: number;
 }
 
 // Icon rendering is now handled by the CategoryIcon component which supports all Material-UI icons dynamically
@@ -203,11 +204,15 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   open,
   onClose,
   onCategoriesUpdated = () => {},
+  initialTab,
 }) => {
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'categoryHierarchy' });
   const theme = useTheme();
   const locale = useMemo(() => (i18n.language?.split('-')[0] || 'he') as 'he' | 'en' | 'fr', [i18n.language]);
   const [activeTab, setActiveTab] = useState(0);
+  useEffect(() => {
+    if (open && initialTab !== undefined) setActiveTab(initialTab);
+  }, [open, initialTab]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
