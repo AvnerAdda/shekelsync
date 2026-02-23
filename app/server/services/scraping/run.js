@@ -21,7 +21,7 @@ const { syncBankBalanceToInvestments, forwardFillForCredential } = require('../i
 const { getCreditCardRepaymentCategoryId } = require('../accounts/repayment-category.js');
 
 const DEFAULT_TIMEOUT = 120000; // 2 minutes
-const MAX_TIMEOUT = 300000; // 5 minutes for problematic scrapers
+const MAX_TIMEOUT = 180000; // 3 minutes for problematic scrapers
 const DEFAULT_LOOKBACK_MONTHS = 3;
 const DEMO_SYNC_MERCHANTS = {
   discount: ['רמי לוי', 'סופר פארם', 'WOLT', 'העברה לכרטיס אשראי'],

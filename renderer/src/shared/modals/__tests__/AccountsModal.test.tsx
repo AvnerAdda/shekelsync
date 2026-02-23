@@ -68,6 +68,7 @@ describe('buildInitialSyncPayload', () => {
 
     const payload = buildInitialSyncPayload({
       ...baseAccount,
+      id: 42,
       vendor: 'oneZero',
       username: 'test-user',
       userCode: '9999',
@@ -94,6 +95,8 @@ describe('buildInitialSyncPayload', () => {
       nationalID: '999',
       identification_code: 'CODE',
       nickname: 'My Card',
+      dbId: 42,
+      fromSavedCredential: true,
     });
   });
 });

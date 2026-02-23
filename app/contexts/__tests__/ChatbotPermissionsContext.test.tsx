@@ -22,6 +22,7 @@ describe('ChatbotPermissionsContext', () => {
     expect(result.current.allowTransactionAccess).toBe(false);
     expect(result.current.allowCategoryAccess).toBe(false);
     expect(result.current.allowAnalyticsAccess).toBe(false);
+    expect(result.current.openAiApiKey).toBe('');
   });
 
   it('initializes from persisted localStorage flags', () => {
@@ -29,6 +30,7 @@ describe('ChatbotPermissionsContext', () => {
     window.localStorage.setItem('chatbot-transaction-access', 'true');
     window.localStorage.setItem('chatbot-category-access', 'true');
     window.localStorage.setItem('chatbot-analytics-access', 'false');
+    window.localStorage.setItem('chatbot-openai-api-key', 'sk-test');
 
     const { result } = renderHook(() => useChatbotPermissions(), { wrapper });
 
@@ -36,6 +38,7 @@ describe('ChatbotPermissionsContext', () => {
     expect(result.current.allowTransactionAccess).toBe(true);
     expect(result.current.allowCategoryAccess).toBe(true);
     expect(result.current.allowAnalyticsAccess).toBe(false);
+    expect(result.current.openAiApiKey).toBe('sk-test');
   });
 
   it('treats non-true stored values as false', () => {
@@ -43,6 +46,7 @@ describe('ChatbotPermissionsContext', () => {
     window.localStorage.setItem('chatbot-transaction-access', '1');
     window.localStorage.setItem('chatbot-category-access', 'on');
     window.localStorage.setItem('chatbot-analytics-access', '');
+    window.localStorage.setItem('chatbot-openai-api-key', '');
 
     const { result } = renderHook(() => useChatbotPermissions(), { wrapper });
 
@@ -50,6 +54,7 @@ describe('ChatbotPermissionsContext', () => {
     expect(result.current.allowTransactionAccess).toBe(false);
     expect(result.current.allowCategoryAccess).toBe(false);
     expect(result.current.allowAnalyticsAccess).toBe(false);
+    expect(result.current.openAiApiKey).toBe('');
   });
 
   it('updates state and persists each toggle', () => {
@@ -60,17 +65,20 @@ describe('ChatbotPermissionsContext', () => {
       result.current.setAllowTransactionAccess(true);
       result.current.setAllowCategoryAccess(true);
       result.current.setAllowAnalyticsAccess(true);
+      result.current.setOpenAiApiKey('sk-xyz');
     });
 
     expect(result.current.chatbotEnabled).toBe(false);
     expect(result.current.allowTransactionAccess).toBe(true);
     expect(result.current.allowCategoryAccess).toBe(true);
     expect(result.current.allowAnalyticsAccess).toBe(true);
+    expect(result.current.openAiApiKey).toBe('sk-xyz');
 
     expect(window.localStorage.getItem('chatbot-enabled')).toBe('false');
     expect(window.localStorage.getItem('chatbot-transaction-access')).toBe('true');
     expect(window.localStorage.getItem('chatbot-category-access')).toBe('true');
     expect(window.localStorage.getItem('chatbot-analytics-access')).toBe('true');
+    expect(window.localStorage.getItem('chatbot-openai-api-key')).toBe('sk-xyz');
   });
 
   it('falls back to defaults when storage read throws', () => {
@@ -85,6 +93,7 @@ describe('ChatbotPermissionsContext', () => {
     expect(result.current.allowTransactionAccess).toBe(false);
     expect(result.current.allowCategoryAccess).toBe(false);
     expect(result.current.allowAnalyticsAccess).toBe(false);
+    expect(result.current.openAiApiKey).toBe('');
 
     expect(warnSpy).toHaveBeenCalled();
   });

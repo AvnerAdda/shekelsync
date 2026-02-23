@@ -410,10 +410,12 @@ const resolveAccountCredentialValue = (account: Account, fieldKey: string): stri
   }
 };
 
+type ScrapeCredentialPayload = Record<string, string | number | boolean>;
+
 const buildSyncCredentialsForSelectedAccount = (
   account: Account,
   credentialFieldList?: string[] | null,
-): Record<string, string> => {
+): ScrapeCredentialPayload => {
   const fallbackFields = [
     'username',
     'id',
@@ -428,7 +430,7 @@ const buildSyncCredentialsForSelectedAccount = (
       : fallbackFields;
   const fields = Array.from(new Set([...requiredFields, 'password']));
 
-  const credentials: Record<string, string> = {};
+  const credentials: ScrapeCredentialPayload = {};
   for (const fieldKey of fields) {
     const value = resolveAccountCredentialValue(account, fieldKey);
     if (typeof value === 'string' && value.trim().length > 0) {
@@ -461,7 +463,7 @@ const StyledTableRow = styled(TableRow)(({ theme }) => ({
 
 export const buildInitialSyncPayload = (account: Account) => {
   const startDate = startOfMonth(subMonths(new Date(), 3));
-  const scrapeCredentials: Record<string, string> = {};
+  const scrapeCredentials: ScrapeCredentialPayload = {};
 
   if (account.id_number) scrapeCredentials.id = account.id_number;
   if (account.password) scrapeCredentials.password = account.password;
@@ -475,6 +477,10 @@ export const buildInitialSyncPayload = (account: Account) => {
   if (account.nationalID) scrapeCredentials.nationalID = account.nationalID;
   if (account.identification_code) scrapeCredentials.identification_code = account.identification_code;
   scrapeCredentials.nickname = account.nickname ?? '';
+  if (typeof account.id === 'number' && account.id > 0) {
+    scrapeCredentials.dbId = account.id;
+    scrapeCredentials.fromSavedCredential = true;
+  }
 
   return {
     options: {
@@ -1173,13 +1179,19 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         throw new Error('Failed to add account');
       }
 
+      const createdCredential = (response.data || {}) as Partial<Account>;
+
       await fetchAccounts();
       await refetchOnboardingStatus();
 
       showNotification('Account added! Starting initial sync for last 3 months...', 'info');
       setIsSyncing(true);
 
-      const syncAccount = { ...accountPayload };
+      const syncAccount: Account = {
+        ...accountPayload,
+        ...createdCredential,
+        id: typeof createdCredential.id === 'number' ? createdCredential.id : accountPayload.id,
+      };
       syncTimeoutRef.current = setTimeout(async () => {
         try {
           const scrapeConfig = buildInitialSyncPayload(syncAccount);
@@ -1672,6 +1684,15 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
     const institution = institutionMap.get(selectedAccount.vendor);
 
+    const syncCredentials = buildSyncCredentialsForSelectedAccount(
+      selectedAccount,
+      institution?.credentialFieldList,
+    );
+    if (typeof selectedAccount.id === 'number' && selectedAccount.id > 0) {
+      syncCredentials.dbId = selectedAccount.id;
+      syncCredentials.fromSavedCredential = true;
+    }
+
     return {
       options: {
         companyId: selectedAccount.vendor,
@@ -1680,10 +1701,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         showBrowser: false,
         additionalTransactionInformation: true,
       },
-      credentials: buildSyncCredentialsForSelectedAccount(
-        selectedAccount,
-        institution?.credentialFieldList,
-      ),
+      credentials: syncCredentials,
     };
   }, [selectedAccount, institutionMap]);
 

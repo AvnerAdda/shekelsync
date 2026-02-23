@@ -1,41 +1,6 @@
 const express = require('express');
 
 const chatService = require('../services/chat.js');
-const donationsService = require('../services/donations.js');
-
-function getHeaderValue(headers, key) {
-  const value = headers?.[key];
-  if (Array.isArray(value)) {
-    return typeof value[0] === 'string' ? value[0] : null;
-  }
-  return typeof value === 'string' ? value : null;
-}
-
-function getSupporterContext(req) {
-  return {
-    accessToken: getHeaderValue(req.headers, 'x-auth-access-token'),
-    userId: getHeaderValue(req.headers, 'x-auth-user-id'),
-    email: getHeaderValue(req.headers, 'x-auth-user-email'),
-    name: getHeaderValue(req.headers, 'x-auth-user-name'),
-  };
-}
-
-async function assertAiAgentAccess(req) {
-  const status = await donationsService.getDonationStatus(getSupporterContext(req));
-  if (status?.canAccessAiAgent) {
-    return status;
-  }
-
-  const error = new Error('AI Agent requires a verified donation.');
-  error.status = 403;
-  error.code = 'DONATION_REQUIRED';
-  error.details = {
-    requiredDonation: true,
-    currentTier: status?.tier || 'none',
-    supportStatus: status?.supportStatus || 'none',
-  };
-  throw error;
-}
 
 function createChatRouter() {
   const router = express.Router();
@@ -43,7 +8,7 @@ function createChatRouter() {
   /**
    * POST /api/chat
    * Process a chat message
-   * Body: { message, conversationId?, permissions, locale? }
+   * Body: { message, conversationId?, permissions, locale?, openaiApiKey? }
    */
   router.post('/', async (req, res) => {
     console.log('[chat-route] Received request with body:', JSON.stringify({
@@ -53,7 +18,6 @@ function createChatRouter() {
       locale: req.body?.locale,
     }));
     try {
-      await assertAiAgentAccess(req);
       const result = await chatService.processMessage(req.body || {});
       res.json(result);
     } catch (error) {
@@ -74,7 +38,6 @@ function createChatRouter() {
    */
   router.get('/conversations', async (req, res) => {
     try {
-      await assertAiAgentAccess(req);
       const options = {
         limit: parseInt(req.query.limit, 10) || 20,
         offset: parseInt(req.query.offset, 10) || 0,
@@ -97,7 +60,6 @@ function createChatRouter() {
    */
   router.get('/conversations/:id', async (req, res) => {
     try {
-      await assertAiAgentAccess(req);
       const conversation = await chatService.getConversationHistory(req.params.id);
       res.json(conversation);
     } catch (error) {
@@ -114,7 +76,6 @@ function createChatRouter() {
    */
   router.delete('/conversations/:id', async (req, res) => {
     try {
-      await assertAiAgentAccess(req);
       await chatService.deleteConversation(req.params.id);
       res.json({ success: true });
     } catch (error) {

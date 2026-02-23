@@ -10,6 +10,7 @@ import {
   useTheme,
   Switch,
   FormControlLabel,
+  TextField,
 } from '@mui/material';
 import {
   Palette as ThemeIcon,
@@ -52,6 +53,8 @@ const SettingsPage: React.FC = () => {
     setAllowCategoryAccess,
     allowAnalyticsAccess,
     setAllowAnalyticsAccess,
+    openAiApiKey,
+    setOpenAiApiKey,
   } = useChatbotPermissions();
   const {
     telemetryEnabled,
@@ -308,6 +311,26 @@ const SettingsPage: React.FC = () => {
             }
           />
         </Box>
+
+        <TextField
+          fullWidth
+          type="password"
+          label={tSettings('chatbot.openAiApiKeyLabel')}
+          placeholder="sk-..."
+          value={openAiApiKey}
+          onChange={(event) => setOpenAiApiKey(event.target.value)}
+          helperText={tSettings('chatbot.openAiApiKeyHint')}
+          autoComplete="off"
+          sx={{ mb: 1 }}
+        />
+
+        {chatbotEnabled && !openAiApiKey.trim() && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            <Typography variant="body2">
+              {tSettings('chatbot.openAiApiKeyRequired')}
+            </Typography>
+          </Alert>
+        )}
 
         <Divider sx={{ my: 2 }} />
 

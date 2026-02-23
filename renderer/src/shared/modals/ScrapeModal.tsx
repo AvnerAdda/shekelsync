@@ -61,6 +61,10 @@ interface ScraperConfig {
     email?: string;
     otpCode?: string;
     otpToken?: string;
+
+    // Internal metadata for persisted credentials
+    dbId?: number;
+    fromSavedCredential?: boolean;
   };
 }
 
@@ -720,7 +724,7 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
     const hasExplicitFields = institutionFields.length > 0;
     const displayFields = hasExplicitFields
       ? Array.from(new Set([...institutionFields, 'password']))
-      : Object.keys(creds).filter((fieldKey) => fieldKey !== 'nickname');
+      : Object.keys(creds).filter((fieldKey) => !['nickname', 'dbId', 'fromSavedCredential'].includes(fieldKey));
     
     return (
       <>

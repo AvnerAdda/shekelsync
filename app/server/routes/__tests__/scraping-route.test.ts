@@ -151,6 +151,21 @@ describe('Shared /api/scrape routes', () => {
     expect(mockWasScrapedRecently).not.toHaveBeenCalled();
   });
 
+  it('returns 409 when syncing a saved account that no longer exists', async () => {
+    credentialsService.listCredentials.mockResolvedValue([]);
+
+    const res = await request(app)
+      .post('/api/scrape')
+      .send({
+        options: { companyId: 'isracard' },
+        credentials: { username: 'user@example.com', password: 'secret', fromSavedCredential: true },
+      })
+      .expect(409);
+
+    expect(res.body.reason).toBe('credential_not_found');
+    expect(mockRunScrape).not.toHaveBeenCalled();
+  });
+
   it('returns 429 when account is rate-limited and force is not enabled', async () => {
     mockWasScrapedRecently.mockResolvedValue(true);
 

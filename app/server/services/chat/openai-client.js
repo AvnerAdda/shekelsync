@@ -5,28 +5,39 @@
 
 const OpenAI = require('openai');
 
-let openaiClient = null;
+const openaiClients = new Map();
+
+function resolveApiKey(options = {}) {
+  const keyFromOptions = typeof options.apiKey === 'string' ? options.apiKey.trim() : '';
+  if (keyFromOptions) {
+    return keyFromOptions;
+  }
+
+  const keyFromEnv = typeof process.env.API_OPENAI_API_KEY === 'string'
+    ? process.env.API_OPENAI_API_KEY.trim()
+    : '';
+  return keyFromEnv;
+}
 
 /**
- * Initialize the OpenAI client with API key from environment
+ * Initialize the OpenAI client with API key from request or environment
  * @returns {OpenAI} The OpenAI client instance
  */
-function getClient() {
-  if (!openaiClient) {
-    const apiKey = process.env.API_OPENAI_API_KEY;
+function getClient(options = {}) {
+  const apiKey = resolveApiKey(options);
+  if (!apiKey) {
+    throw new Error('OpenAI API key not configured. Set API_OPENAI_API_KEY in environment.');
+  }
 
-    if (!apiKey) {
-      throw new Error('OpenAI API key not configured. Set API_OPENAI_API_KEY in environment.');
-    }
-
-    openaiClient = new OpenAI({
+  if (!openaiClients.has(apiKey)) {
+    openaiClients.set(apiKey, new OpenAI({
       apiKey,
       maxRetries: 3,
       timeout: 60000, // 60 second timeout
-    });
+    }));
   }
 
-  return openaiClient;
+  return openaiClients.get(apiKey);
 }
 
 /**
@@ -37,7 +48,7 @@ function getClient() {
  * @returns {Promise<Object>} The completion response
  */
 async function createCompletion(messages, tools = null, options = {}) {
-  const client = getClient();
+  const client = getClient({ apiKey: options.apiKey });
 
   const requestParams = {
     model: options.model || 'gpt-4o-mini',
@@ -153,13 +164,13 @@ function estimateTokens(text) {
  * Check if API key is configured
  * @returns {boolean} True if API key is available
  */
-function isConfigured() {
-  return !!process.env.API_OPENAI_API_KEY;
+function isConfigured(options = {}) {
+  return Boolean(resolveApiKey(options));
 }
 
 // For testing
 function __resetClient() {
-  openaiClient = null;
+  openaiClients.clear();
 }
 
 module.exports = {

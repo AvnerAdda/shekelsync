@@ -43,7 +43,6 @@ import { apiClient } from '@/lib/api-client';
 import { useChatbotPermissions } from '@app/contexts/ChatbotPermissionsContext';
 import { useAuth } from '@app/contexts/AuthContext';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
-import { useDonationStatus } from '@renderer/features/support';
 
 // Styled markdown container for assistant messages
 const MarkdownContent = styled(Box)(({ theme }) => ({
@@ -148,6 +147,7 @@ const FinancialChatbot: React.FC = () => {
     allowTransactionAccess,
     allowCategoryAccess,
     allowAnalyticsAccess,
+    openAiApiKey,
   } = useChatbotPermissions();
   const { session } = useAuth();
 
@@ -163,7 +163,6 @@ const FinancialChatbot: React.FC = () => {
   const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
   const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
   const [drawerWidth, setDrawerWidth] = useState(420);
-  const { status: supporterStatus } = useDonationStatus();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
@@ -206,7 +205,8 @@ const FinancialChatbot: React.FC = () => {
   }, []);
 
   const hasAnyPermission = allowTransactionAccess || allowCategoryAccess || allowAnalyticsAccess;
-  const aiSupportLocked = supporterStatus ? !supporterStatus.canAccessAiAgent : false;
+  const hasOpenAiApiKey = openAiApiKey.trim().length > 0;
+  const canUseChatbot = hasAnyPermission && hasOpenAiApiKey;
   const userDisplayName = (() => {
     if (typeof session?.user?.name === 'string' && session.user.name.trim().length > 0) {
       return session.user.name.trim();
@@ -342,7 +342,7 @@ const FinancialChatbot: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || isLoading || !hasAnyPermission || aiSupportLocked) return;
+    if (!inputValue.trim() || isLoading || !canUseChatbot) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -365,6 +365,7 @@ const FinancialChatbot: React.FC = () => {
           allowCategoryAccess,
           allowAnalyticsAccess,
         },
+        openaiApiKey: openAiApiKey.trim(),
         locale: i18n.language.substring(0, 2),
       });
 
@@ -376,14 +377,6 @@ const FinancialChatbot: React.FC = () => {
           setLicenseAlertOpen(true);
           setIsLoading(false);
           return;
-        }
-        const supportError = response.data as { code?: string; details?: { requiredDonation?: boolean } };
-        if (supportError?.code === 'DONATION_REQUIRED') {
-          throw new Error(
-            t('errors.donationRequired', {
-              defaultValue: 'AI Agent access requires a verified donation.',
-            }),
-          );
         }
         const errorData = response.data as { error?: string; retryAfter?: number };
         throw new Error(errorData?.error || 'Failed to get response');
@@ -835,18 +828,19 @@ const FinancialChatbot: React.FC = () => {
         )}
 
         {/* Suggested Questions */}
-        {aiSupportLocked && (
+        {!hasOpenAiApiKey && (
           <Alert severity="info" icon={<LockIcon />} sx={{ mx: 2 }}>
             <Typography variant="body2" fontWeight="bold">
-              {t('errors.donationRequired', {
-                defaultValue: 'AI Agent access requires a verified donation.',
-              })}
+              {t('warnings.missingApiKeyTitle')}
+            </Typography>
+            <Typography variant="caption">
+              {t('warnings.missingApiKeyDescription')}
             </Typography>
           </Alert>
         )}
 
         {/* Suggested Questions */}
-        {messages.length === 1 && hasAnyPermission && !aiSupportLocked && (
+        {messages.length === 1 && canUseChatbot && (
           <Box
             sx={{
               p: 2,
@@ -904,11 +898,17 @@ const FinancialChatbot: React.FC = () => {
               fullWidth
               multiline
               maxRows={3}
-              placeholder={hasAnyPermission && !aiSupportLocked ? t('input.placeholderEnabled') : t('input.placeholderDisabled')}
+              placeholder={
+                canUseChatbot
+                  ? t('input.placeholderEnabled')
+                  : hasAnyPermission
+                    ? t('input.placeholderMissingApiKey')
+                    : t('input.placeholderDisabled')
+              }
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
-              disabled={isLoading || !hasAnyPermission || aiSupportLocked}
+              disabled={isLoading || !canUseChatbot}
               size="small"
               sx={{
                 '& .MuiOutlinedInput-root': {
@@ -932,7 +932,7 @@ const FinancialChatbot: React.FC = () => {
             <IconButton
               color="primary"
               onClick={handleSendMessage}
-              disabled={!inputValue.trim() || isLoading || !hasAnyPermission || aiSupportLocked}
+              disabled={!inputValue.trim() || isLoading || !canUseChatbot}
               sx={{
                 bgcolor: 'transparent',
                 background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
@@ -954,7 +954,7 @@ const FinancialChatbot: React.FC = () => {
             </IconButton>
           </Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, ml: 1, fontSize: '0.7rem' }}>
-            {hasAnyPermission && !aiSupportLocked ? t('hints.enabled') : t('hints.disabled')}
+            {canUseChatbot ? t('hints.enabled') : hasAnyPermission ? t('hints.missingApiKey') : t('hints.disabled')}
           </Typography>
         </Box>
       </Drawer>
