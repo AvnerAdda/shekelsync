@@ -849,11 +849,11 @@ describe('scraping run service', () => {
       const internal = (runService as any)._internal;
       const logger = buildLogger();
       const originalRequire = Module.prototype.require;
-      const requireSpy = vi.spyOn(Module.prototype, 'require').mockImplementation(function (id: string) {
+      const requireSpy = vi.spyOn(Module.prototype, 'require').mockImplementation(function (id: string, ...rest: any[]) {
         if (id === 'puppeteer') {
           throw new Error('puppeteer missing');
         }
-        return originalRequire.apply(this, arguments as any);
+        return originalRequire.call(this, id, ...rest);
       });
 
       try {
@@ -1620,7 +1620,7 @@ describe('scraping run service', () => {
         getClient: vi.fn().mockResolvedValue(localClient),
       };
 
-      const requireSpy = vi.spyOn(Module.prototype, 'require').mockImplementation(function (id: string) {
+      const requireSpy = vi.spyOn(Module.prototype, 'require').mockImplementation(function (id: string, ...rest: any[]) {
         if (id === '../database.js') {
           return localDb;
         }
@@ -1646,7 +1646,7 @@ describe('scraping run service', () => {
             getLastTransactionDate: getLastTxnStub,
           };
         }
-        return originalRequire.apply(this, arguments as any);
+        return originalRequire.call(this, id, ...rest);
       });
 
       try {
@@ -1727,7 +1727,7 @@ describe('scraping run service', () => {
         getClient: vi.fn().mockResolvedValue(localClient),
       };
 
-      const requireSpy = vi.spyOn(Module.prototype, 'require').mockImplementation(function (id: string) {
+      const requireSpy = vi.spyOn(Module.prototype, 'require').mockImplementation(function (id: string, ...rest: any[]) {
         if (id === '../database.js') {
           return localDb;
         }
@@ -1759,7 +1759,7 @@ describe('scraping run service', () => {
             createScraper: vi.fn(),
           };
         }
-        return originalRequire.apply(this, arguments as any);
+        return originalRequire.call(this, id, ...rest);
       });
 
       try {

@@ -12,8 +12,12 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@mui/material', () => {
-  const component = (tag: any) =>
-    ({ children }: { children?: React.ReactNode }) => React.createElement(tag, null, children);
+  const component = (tag: any) => {
+    const MockComponent = ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(tag, null, children);
+    MockComponent.displayName = `MockMui${String(tag)}`;
+    return MockComponent;
+  };
 
   return {
     Alert: component('div'),

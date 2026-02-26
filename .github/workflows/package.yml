@@ -31,13 +31,13 @@ jobs:
           cache: 'npm'
 
       - name: Install root dependencies
-        run: npm install
+        run: npm ci
 
       - name: Install app dependencies
-        run: npm --prefix app install
+        run: npm --prefix app ci
 
       - name: Install renderer dependencies
-        run: npm --prefix renderer install
+        run: npm --prefix renderer ci
 
       - name: Prepare Windows signing
         if: matrix.os == 'windows-latest'
@@ -126,22 +126,15 @@ jobs:
         shell: bash
         env:
           CUSTOM_GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
-          DEFAULT_GH_TOKEN: ${{ github.token }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
         run: |
-          if [ -n "$CUSTOM_GH_TOKEN" ]; then
+          if [ -n "$CUSTOM_GH_TOKEN" ] && [ "$GITHUB_EVENT_NAME" = "push" ] && [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             export GH_TOKEN="$CUSTOM_GH_TOKEN"
-            echo "Using GH_RELEASE_TOKEN secret for release publishing."
-          else
-            export GH_TOKEN="$DEFAULT_GH_TOKEN"
-            echo "Using default GITHUB_TOKEN for release publishing."
-          fi
-
-          if [ -n "$GH_TOKEN" ] && [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            echo "Detected tag push with publishing credentials; running release build."
+            echo "Using GH_RELEASE_TOKEN secret for release publishing on tag push."
             npm --prefix app run release
           else
-            echo "Publishing disabled (missing GH_TOKEN or manual workflow); generating unsigned artifacts only."
+            echo "Publishing disabled (missing GH_RELEASE_TOKEN or non-tag/manual run); generating unsigned artifacts only."
             npm --prefix app run dist
           fi
 
