@@ -3,9 +3,6 @@
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Set OpenAI API key for tests
-process.env.API_OPENAI_API_KEY = 'test-key-for-testing';
-
 // Use vi.hoisted to create mocks that are hoisted before imports
 const mocks = vi.hoisted(() => {
   return {
