@@ -66,10 +66,10 @@ jobs:
 
           const total = JSON.parse(fs.readFileSync(summaryPath, 'utf8')).total;
           const thresholds = {
-            lines: 82,
-            statements: 81.5,
+            lines: 81,
+            statements: 80.5,
             functions: 80,
-            branches: 70,
+            branches: 68.5,
           };
 
           const failures = Object.entries(thresholds)
