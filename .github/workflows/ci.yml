@@ -2,11 +2,20 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -18,15 +27,19 @@ jobs:
         with:
           node-version: '22.12.0'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+            renderer/package-lock.json
 
       - name: Install root dependencies
-        run: npm install
+        run: npm ci
 
       - name: Install app dependencies
-        run: npm --prefix app install
+        run: npm --prefix app ci
 
       - name: Install renderer dependencies
-        run: npm --prefix renderer install
+        run: npm --prefix renderer ci
 
       - name: Lint
         run: npm --prefix app run lint
@@ -34,8 +47,47 @@ jobs:
       - name: Typecheck
         run: npm --prefix app run typecheck
 
-      - name: Run test suite
-        run: npm run test:ci
+      - name: Run app tests with coverage
+        run: npm --prefix app run test:coverage
+
+      - name: Run renderer unit tests
+        run: npm --prefix renderer run test:unit
+
+      - name: Enforce coverage thresholds
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const summaryPath = 'app/coverage/coverage-summary.json';
+
+          if (!fs.existsSync(summaryPath)) {
+            console.error(`Coverage summary not found: ${summaryPath}`);
+            process.exit(1);
+          }
+
+          const total = JSON.parse(fs.readFileSync(summaryPath, 'utf8')).total;
+          const thresholds = {
+            lines: 82,
+            statements: 81.5,
+            functions: 80,
+            branches: 70,
+          };
+
+          const failures = Object.entries(thresholds)
+            .filter(([metric, min]) => Number(total?.[metric]?.pct ?? 0) < min)
+            .map(([metric, min]) => `${metric} ${Number(total?.[metric]?.pct ?? 0)}% < ${min}%`);
+
+          console.log(
+            `Coverage totals: lines=${total.lines.pct}% statements=${total.statements.pct}% functions=${total.functions.pct}% branches=${total.branches.pct}%`
+          );
+
+          if (failures.length > 0) {
+            console.error('Coverage threshold check failed:');
+            failures.forEach((item) => console.error(`- ${item}`));
+            process.exit(1);
+          }
+
+          console.log('Coverage thresholds satisfied.');
+          NODE
 
       - name: Upload coverage report
         if: always()

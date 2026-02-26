@@ -6,27 +6,30 @@
 const OpenAI = require('openai');
 
 const openaiClients = new Map();
+const DEFAULT_MAX_TOKENS = 1200;
+const HARD_MAX_TOKENS = 1500;
 
 function resolveApiKey(options = {}) {
   const keyFromOptions = typeof options.apiKey === 'string' ? options.apiKey.trim() : '';
-  if (keyFromOptions) {
-    return keyFromOptions;
-  }
+  return keyFromOptions;
+}
 
-  const keyFromEnv = typeof process.env.API_OPENAI_API_KEY === 'string'
-    ? process.env.API_OPENAI_API_KEY.trim()
-    : '';
-  return keyFromEnv;
+function normalizeMaxTokens(value) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_MAX_TOKENS;
+  }
+  return Math.min(parsed, HARD_MAX_TOKENS);
 }
 
 /**
- * Initialize the OpenAI client with API key from request or environment
+ * Initialize the OpenAI client with API key from request options
  * @returns {OpenAI} The OpenAI client instance
  */
 function getClient(options = {}) {
   const apiKey = resolveApiKey(options);
   if (!apiKey) {
-    throw new Error('OpenAI API key not configured. Set API_OPENAI_API_KEY in environment.');
+    throw new Error('OpenAI API key not configured. Provide apiKey in request options.');
   }
 
   if (!openaiClients.has(apiKey)) {
@@ -54,7 +57,7 @@ async function createCompletion(messages, tools = null, options = {}) {
     model: options.model || 'gpt-4o-mini',
     messages,
     temperature: options.temperature ?? 0.7,
-    max_tokens: options.maxTokens || 4096,
+    max_tokens: normalizeMaxTokens(options.maxTokens),
   };
 
   if (tools && tools.length > 0) {
