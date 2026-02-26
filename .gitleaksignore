@@ -1,0 +1,10 @@
+9644f087bad1fd191a5b0ce0b8d6e0b98631bb7e:app/lib/server/__tests__/error-sanitizer.test.js:generic-api-key:261
+a9b3b42e4e29513b13d902770490ff80a98c6d77:renderer/src/features/analysis/pages/AnalysisPageNew.tsx:generic-api-key:482
+3ab4400a9bbf2b9994d249a67d4babaf8461a72e:renderer/src/features/analysis/components/PersonalizedFutureModal.tsx:generic-api-key:186
+3ab4400a9bbf2b9994d249a67d4babaf8461a72e:renderer/src/features/analysis/components/PersonalizedFutureModal.tsx:generic-api-key:196
+3ab4400a9bbf2b9994d249a67d4babaf8461a72e:renderer/src/features/analysis/components/PersonalizedFutureModal.tsx:generic-api-key:206
+de767ae16b4919fa3b163eb893d737a23e089bcc:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:777
+de767ae16b4919fa3b163eb893d737a23e089bcc:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:807
+de767ae16b4919fa3b163eb893d737a23e089bcc:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:818
+de767ae16b4919fa3b163eb893d737a23e089bcc:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:829
+982c980fada304ec227963aae1be8cb68fe25492:.env.example:generic-api-key:14

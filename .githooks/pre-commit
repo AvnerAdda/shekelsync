@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+"$REPO_ROOT/scripts/run-gitleaks.sh" git --pre-commit --redact --staged --verbose

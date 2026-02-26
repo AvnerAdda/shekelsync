@@ -14,6 +14,8 @@
     "audit:security": "npm audit --audit-level=moderate && npm run test:security:coverage",
     "icons:icns": "node scripts/generate-icns.js",
     "logs:bundle": "node scripts/collect-logs.js",
+    "secrets:scan": "bash scripts/run-gitleaks.sh git --redact --verbose",
+    "hooks:install": "bash scripts/install-git-hooks.sh",
     "benchmark:check": "node scripts/benchmarks/assert-benchmarks.js",
     "smoke:license:ipc": "node scripts/license-ipc-smoke.js",
     "migrate:license:email-only": "node scripts/migrations/upgrade_license_email_only.js"
