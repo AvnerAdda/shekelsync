@@ -1235,9 +1235,6 @@ app.whenReady().then(async () => {
   if (shouldEnableAutoUpdate()) {
     console.log('Auto-updater enabled, checking for updates...');
     logger.info('Auto-updater enabled, checking for updates');
-    
-    // Start checking for updates
-    autoUpdater.checkForUpdatesAndNotify();
 
     autoUpdater.on('checking-for-update', () => {
       console.log('Checking for update...');
@@ -1307,6 +1304,13 @@ app.whenReady().then(async () => {
           releaseDate: info.releaseDate,
         });
       }
+    });
+
+    // Prevent an unhandled rejection when GitHub releases are not yet configured.
+    autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+      logger.warn('Auto-updater initial check rejected', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     });
 
   } else if (!isDev && autoUpdater) {

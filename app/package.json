@@ -212,7 +212,8 @@
     "publish": {
       "provider": "github",
       "owner": "AvnerAdda",
-      "repo": "shekelsync"
+      "repo": "shekelsync",
+      "releaseType": "release"
     }
   }
 }
