@@ -40,18 +40,23 @@ jobs:
         run: npm --prefix renderer install
 
       - name: Prepare Windows signing
-        if: matrix.os == 'windows-latest' && secrets.WINDOWS_CERT_PFX != ''
+        if: matrix.os == 'windows-latest'
         shell: bash
         env:
           WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
+          if [ -z "$WINDOWS_CERT_PFX" ]; then
+            echo "WINDOWS_CERT_PFX not configured; skipping Windows signing setup."
+            exit 0
+          fi
+
           node -e "require('fs').writeFileSync('windows-cert.pfx', Buffer.from(process.env.WINDOWS_CERT_PFX, 'base64'))"
           echo "WIN_CSC_LINK=$(pwd)/windows-cert.pfx" >> $GITHUB_ENV
           echo "WIN_CSC_KEY_PASSWORD=$WINDOWS_CERT_PASSWORD" >> $GITHUB_ENV
 
       - name: Prepare macOS signing and notarization
-        if: matrix.os == 'macos-latest' && secrets.MACOS_CERT_P12 != ''
+        if: matrix.os == 'macos-latest'
         shell: bash
         env:
           MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
@@ -60,6 +65,11 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          if [ -z "$MACOS_CERT_P12" ]; then
+            echo "MACOS_CERT_P12 not configured; skipping macOS signing setup."
+            exit 0
+          fi
+
           node -e "require('fs').writeFileSync('macos-cert.p12', Buffer.from(process.env.MACOS_CERT_P12, 'base64'))"
           echo "CSC_LINK=$(pwd)/macos-cert.p12" >> $GITHUB_ENV
           echo "CSC_KEY_PASSWORD=$MACOS_CERT_PASSWORD" >> $GITHUB_ENV
@@ -77,12 +87,17 @@ jobs:
           fi
 
       - name: Prepare Linux signing
-        if: matrix.os == 'ubuntu-latest' && secrets.LINUX_GPG_KEY != ''
+        if: matrix.os == 'ubuntu-latest'
         shell: bash
         env:
           LINUX_GPG_KEY: ${{ secrets.LINUX_GPG_KEY }}
           LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
         run: |
+          if [ -z "$LINUX_GPG_KEY" ]; then
+            echo "LINUX_GPG_KEY not configured; skipping Linux signing setup."
+            exit 0
+          fi
+
           node -e "require('fs').writeFileSync('linux-gpg.key', Buffer.from(process.env.LINUX_GPG_KEY, 'base64'))"
           echo "CSC_IDENTITY_AUTO_DISCOVERY=true" >> $GITHUB_ENV
           echo "CSC_KEY_PASSWORD=$LINUX_GPG_PASSPHRASE" >> $GITHUB_ENV
