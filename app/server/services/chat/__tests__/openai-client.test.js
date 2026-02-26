@@ -55,28 +55,17 @@ function withNodeLikeRuntime(fn) {
 }
 
 describe('openai-client', () => {
-  let originalApiKey;
-
   beforeEach(() => {
-    originalApiKey = process.env.API_OPENAI_API_KEY;
-    delete process.env.API_OPENAI_API_KEY;
     clientModule.__resetClient();
   });
 
   afterEach(() => {
-    if (typeof originalApiKey === 'undefined') {
-      delete process.env.API_OPENAI_API_KEY;
-    } else {
-      process.env.API_OPENAI_API_KEY = originalApiKey;
-    }
     clientModule.__resetClient();
     vi.restoreAllMocks();
   });
 
-  it('reports configuration state based on API key env var', () => {
+  it('reports configuration state based on request-level API key', () => {
     expect(clientModule.isConfigured()).toBe(false);
-    process.env.API_OPENAI_API_KEY = 'test-key';
-    expect(clientModule.isConfigured()).toBe(true);
     expect(clientModule.isConfigured({ apiKey: 'sk-user-key' })).toBe(true);
   });
 
@@ -91,19 +80,16 @@ describe('openai-client', () => {
   it('throws when API key is missing and caches client when configured', async () => {
     expect(() => clientModule.getClient()).toThrow('OpenAI API key not configured');
 
-    process.env.API_OPENAI_API_KEY = 'test-key';
     await withNodeLikeRuntime(() => {
-      const first = clientModule.getClient();
-      const second = clientModule.getClient();
+      const first = clientModule.getClient({ apiKey: 'test-key' });
+      const second = clientModule.getClient({ apiKey: 'test-key' });
       expect(first).toBe(second);
     });
   });
 
   it('creates completions with defaults and optional tools payload', async () => {
-    process.env.API_OPENAI_API_KEY = 'test-key';
-
     await withNodeLikeRuntime(async () => {
-      const rawClient = clientModule.getClient();
+      const rawClient = clientModule.getClient({ apiKey: 'test-key' });
       const createSpy = vi
         .spyOn(rawClient.chat.completions, 'create')
         .mockResolvedValue({
@@ -112,7 +98,11 @@ describe('openai-client', () => {
           model: 'gpt-4o-mini',
         });
 
-      const withoutTools = await clientModule.createCompletion([{ role: 'user', content: 'hi' }]);
+      const withoutTools = await clientModule.createCompletion(
+        [{ role: 'user', content: 'hi' }],
+        null,
+        { apiKey: 'test-key' },
+      );
       expect(withoutTools).toEqual({
         success: true,
         message: { role: 'assistant', content: 'hello' },
@@ -124,13 +114,14 @@ describe('openai-client', () => {
         model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: 'hi' }],
         temperature: 0.7,
-        max_tokens: 4096,
+        max_tokens: 1200,
       });
 
       await clientModule.createCompletion(
         [{ role: 'user', content: 'tools please' }],
         [{ type: 'function', function: { name: 'demo_tool' } }],
         {
+          apiKey: 'test-key',
           model: 'gpt-4.1-mini',
           temperature: 0.1,
           maxTokens: 256,
@@ -146,21 +137,35 @@ describe('openai-client', () => {
         tools: [{ type: 'function', function: { name: 'demo_tool' } }],
         tool_choice: 'required',
       });
+
+      await clientModule.createCompletion(
+        [{ role: 'user', content: 'cap test' }],
+        null,
+        { apiKey: 'test-key', maxTokens: 99999 },
+      );
+      expect(createSpy).toHaveBeenLastCalledWith({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: 'cap test' }],
+        temperature: 0.7,
+        max_tokens: 1500,
+      });
     });
   });
 
   it('maps completion errors through handleOpenAIError', async () => {
-    process.env.API_OPENAI_API_KEY = 'test-key';
-
     await withNodeLikeRuntime(async () => {
-      const rawClient = clientModule.getClient();
+      const rawClient = clientModule.getClient({ apiKey: 'test-key' });
       vi.spyOn(rawClient.chat.completions, 'create').mockRejectedValue({
         status: 429,
         headers: { 'retry-after': '45' },
         message: 'rate limit',
       });
 
-      const out = await clientModule.createCompletion([{ role: 'user', content: 'hello' }]);
+      const out = await clientModule.createCompletion(
+        [{ role: 'user', content: 'hello' }],
+        null,
+        { apiKey: 'test-key' },
+      );
       expect(out).toEqual({
         success: false,
         error: 'rate_limited',
@@ -235,11 +240,10 @@ describe('openai-client', () => {
   });
 
   it('resets cached client instance for tests', async () => {
-    process.env.API_OPENAI_API_KEY = 'test-key';
     await withNodeLikeRuntime(() => {
-      const first = clientModule.getClient();
+      const first = clientModule.getClient({ apiKey: 'test-key' });
       clientModule.__resetClient();
-      const second = clientModule.getClient();
+      const second = clientModule.getClient({ apiKey: 'test-key' });
       expect(first).not.toBe(second);
     });
   });

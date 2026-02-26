@@ -18,10 +18,29 @@ const {
 const { buildContext, formatContextForPrompt, getSchemaDescription } = require('./chat/financial-context.js');
 const { TOOLS, getSystemPrompt, getErrorMessage } = require('./chat/prompts.js');
 
+const IS_TEST_ENV = process.env.NODE_ENV === 'test';
+const CHAT_MODEL = 'gpt-4o-mini';
+const DEFAULT_MAX_REQUESTS_PER_MINUTE = IS_TEST_ENV ? 1000 : 6;
+const DEFAULT_HISTORY_MESSAGE_LIMIT = 10;
+const DEFAULT_MAX_TOOL_ATTEMPTS = 3;
+const DEFAULT_MAX_TOKENS_PER_COMPLETION = 1200;
+const DEFAULT_MAX_TOTAL_TOKENS_PER_REQUEST = IS_TEST_ENV ? 100000 : 3000;
+
+function parsePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
 // Rate limiting state
 const rateLimiter = {
   requests: new Map(),
-  maxRequestsPerMinute: 20,
+  maxRequestsPerMinute: parsePositiveInt(
+    process.env.OPENAI_MAX_REQUESTS_PER_MINUTE,
+    DEFAULT_MAX_REQUESTS_PER_MINUTE,
+  ),
 
   checkLimit() {
     const key = 'global'; // Single user app
@@ -120,11 +139,27 @@ async function processMessage(payload = {}) {
   } = payload;
 
   // Validate message
-  if (!message || typeof message !== 'string') {
+  if (!message || typeof message !== 'string' || !message.trim()) {
     throw serviceError(400, 'Message is required');
   }
 
   const resolvedOpenAiKey = typeof openaiApiKey === 'string' ? openaiApiKey.trim() : '';
+  const historyLimit = parsePositiveInt(
+    process.env.OPENAI_HISTORY_MESSAGE_LIMIT,
+    DEFAULT_HISTORY_MESSAGE_LIMIT,
+  );
+  const maxToolAttempts = parsePositiveInt(
+    process.env.OPENAI_MAX_TOOL_ATTEMPTS,
+    DEFAULT_MAX_TOOL_ATTEMPTS,
+  );
+  const maxTokensPerCompletion = parsePositiveInt(
+    process.env.OPENAI_MAX_TOKENS_PER_COMPLETION,
+    DEFAULT_MAX_TOKENS_PER_COMPLETION,
+  );
+  const maxTotalTokensPerRequest = parsePositiveInt(
+    process.env.OPENAI_MAX_TOTAL_TOKENS_PER_REQUEST,
+    DEFAULT_MAX_TOTAL_TOKENS_PER_REQUEST,
+  );
 
   // Check if OpenAI is configured
   const openai = getOpenAIClient();
@@ -197,7 +232,7 @@ async function processMessage(payload = {}) {
 
     // Get conversation history
     const historyMessages = conversationId
-      ? await getMessagesForAPI(client, conversationId, 20)
+      ? await getMessagesForAPI(client, conversationId, historyLimit)
       : [];
 
     // Build messages array for OpenAI
@@ -233,7 +268,7 @@ async function processMessage(payload = {}) {
 
     // Call OpenAI (with potential tool call loop)
     let attempts = 0;
-    const maxAttempts = 5; // Prevent infinite loops
+    const maxAttempts = maxToolAttempts; // Prevent infinite loops
 
     while (attempts < maxAttempts) {
       attempts++;
@@ -241,7 +276,11 @@ async function processMessage(payload = {}) {
       const result = await openai.createCompletion(
         messages,
         availableTools.length > 0 ? availableTools : null,
-        { model: 'gpt-4o-mini', apiKey: resolvedOpenAiKey || undefined }
+        {
+          model: CHAT_MODEL,
+          apiKey: resolvedOpenAiKey || undefined,
+          maxTokens: maxTokensPerCompletion,
+        },
       );
 
       if (!result.success) {
@@ -249,6 +288,12 @@ async function processMessage(payload = {}) {
       }
 
       totalTokensUsed += result.usage?.total_tokens || 0;
+      if (totalTokensUsed > maxTotalTokensPerRequest) {
+        throw serviceError(429, getErrorMessage('rate_limited', locale), {
+          retryAfter: 60,
+          reason: 'token_budget_exceeded',
+        });
+      }
 
       // Check for tool calls
       if (result.message.tool_calls && result.message.tool_calls.length > 0) {
@@ -330,7 +375,7 @@ async function processMessage(payload = {}) {
       isNewConversation,
       timestamp: new Date().toISOString(),
       metadata: {
-        model: 'gpt-4o-mini',
+        model: CHAT_MODEL,
         tokensUsed: totalTokensUsed,
         toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined,
         contextIncluded: {
