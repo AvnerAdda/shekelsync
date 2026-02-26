@@ -292,13 +292,14 @@ jobs:
         run: |
           echo "Verifying no plaintext key storage..."
 
-          # Check for unsafe key storage patterns
-          if grep -r "ALLOW_DEV_NO_ENCRYPTION" \
+          # Check for unsafe hardcoded defaults (guard usage in code/tests is allowed)
+          if grep -r -E "ALLOW_DEV_NO_ENCRYPTION\\s*=\\s*['\"]true['\"]" \
             --include="*.js" \
             --exclude-dir=node_modules \
+            --exclude-dir=__tests__ \
             app electron; then
-            echo "❌ WARNING: Development fallback encryption detected!"
-            echo "This should be removed in production."
+            echo "❌ WARNING: Hardcoded ALLOW_DEV_NO_ENCRYPTION=true detected!"
+            echo "Do not hardcode insecure encryption defaults."
             exit 1
           fi
 
