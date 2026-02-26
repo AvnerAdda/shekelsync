@@ -104,6 +104,7 @@ jobs:
           echo "CSC_LINK=$(pwd)/linux-gpg.key" >> $GITHUB_ENV
 
       - name: Show signing configuration summary
+        shell: bash
         run: |
           echo "Signing summary:"
           if [ -n "$WIN_CSC_LINK" ]; then
