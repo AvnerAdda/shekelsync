@@ -289,6 +289,9 @@ const AUTO_UPDATE_ENV_FLAG = 'ENABLE_AUTO_UPDATE';
 if (typeof process.env[AUTO_UPDATE_ENV_FLAG] === 'undefined') {
   process.env[AUTO_UPDATE_ENV_FLAG] = isDev ? 'false' : 'true';
 }
+if (!isDev && process.env[AUTO_UPDATE_ENV_FLAG] !== 'true') {
+  process.env[AUTO_UPDATE_ENV_FLAG] = 'true';
+}
 
 function shouldEnableAutoUpdate() {
   return !isDev && autoUpdater && process.env[AUTO_UPDATE_ENV_FLAG] === 'true';
@@ -1308,6 +1311,7 @@ app.whenReady().then(async () => {
         });
       }
     });
+
   } else if (!isDev && autoUpdater) {
     logger.info(`Auto-updater disabled; set ${AUTO_UPDATE_ENV_FLAG}=true to enable.`);
   }

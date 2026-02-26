@@ -1,5 +1,11 @@
 # ShekelSync (Finance-Israel)
 
+[![Latest Release](https://img.shields.io/github/v/release/AvnerAdda/shekelsync?display_name=tag)](https://github.com/AvnerAdda/shekelsync/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/AvnerAdda/shekelsync/ci.yml?label=CI)](https://github.com/AvnerAdda/shekelsync/actions/workflows/ci.yml)
+[![Security Audit](https://img.shields.io/github/actions/workflow/status/AvnerAdda/shekelsync/security-audit.yml?label=Security%20Audit)](https://github.com/AvnerAdda/shekelsync/actions/workflows/security-audit.yml)
+[![Secret Scan](https://img.shields.io/github/actions/workflow/status/AvnerAdda/shekelsync/secret-scan.yml?label=Secret%20Scan)](https://github.com/AvnerAdda/shekelsync/actions/workflows/secret-scan.yml)
+[![GitHub Stars](https://img.shields.io/github/stars/AvnerAdda/shekelsync?style=social)](https://github.com/AvnerAdda/shekelsync/stargazers)
+
 Personal finance tracker for Israeli banks and credit cards, built as an Electron desktop app with a local API and a Vite-powered renderer.
 
 ## Repo Layout
@@ -46,6 +52,15 @@ npm test
 npm --prefix app run dist
 ```
 
+## Releases
+
+- Tagged pushes matching `v*` trigger the cross-platform package workflow (`.github/workflows/package.yml`).
+- The package workflow builds distributables for Linux, macOS, and Windows.
+- When signing/notarization secrets are configured, the workflow applies platform signing.
+- On tag pushes with `GH_RELEASE_TOKEN`, `npm --prefix app run release` is used to publish release assets.
+- On manual runs or missing token/secrets, unsigned artifacts are still generated and uploaded.
+- Published releases: https://github.com/AvnerAdda/shekelsync/releases
+
 ## Database
 
 ```bash
@@ -71,6 +86,9 @@ You are responsible for lawful and compliant use in your jurisdiction.
 ## Security
 
 - Report vulnerabilities privately; see `SECURITY.md`.
+- Security audit workflow runs on push/PR and weekly on Mondays at 09:00 UTC (`.github/workflows/security-audit.yml`).
+- Secret scanning runs with gitleaks on push/PR/manual dispatch (`.github/workflows/secret-scan.yml`).
+- CI gates tests and quality checks on push/PR (`.github/workflows/ci.yml`).
 - Never commit credentials, private keys, or production `.env` files.
 - Enable local secret scanning hooks: `npm run hooks:install`
 - Run a manual full secret scan: `npm run secrets:scan`
