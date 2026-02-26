@@ -106,6 +106,8 @@ vi.mock('@mui/icons-material', () => {
     Category: icon('Category'),
     CloudDone: icon('CloudDone'),
     Lightbulb: icon('Lightbulb'),
+    DoneAll: icon('DoneAll'),
+    VisibilityOff: icon('VisibilityOff'),
   };
 });
 
