@@ -8,6 +8,7 @@
     "dev:electron:anonymized": "SQLITE_DB_PATH=$(pwd)/dist/shekelsync-anonymized.sqlite USE_SQLITE=true node scripts/dev-electron.js",
     "dev:electron:real": "SQLITE_DB_PATH=$(pwd)/dist/shekelsync.sqlite USE_SQLITE=true node scripts/dev-electron.js",
     "test": "npm --prefix app run test:coverage && npm --prefix renderer run test:unit && npm --prefix renderer run test:e2e",
+    "test:ci": "npm --prefix app run test:coverage && npm --prefix renderer run test:unit",
     "test:security": "npm --prefix app run test",
     "test:security:coverage": "npm --prefix app run test:coverage",
     "test:security:watch": "npm --prefix app exec -- vitest watch",
