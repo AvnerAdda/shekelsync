@@ -68,6 +68,10 @@ vi.mock('@renderer/features/notifications/components/SmartNotifications', () => 
   default: () => <div data-testid="smart-notifications" />,
 }));
 
+vi.mock('@renderer/features/guide-tips/components/GuideTips', () => ({
+  default: () => <div data-testid="guide-tips" />,
+}));
+
 vi.mock('../UpdateButton', () => ({
   default: () => <button type="button">update-button</button>,
 }));
