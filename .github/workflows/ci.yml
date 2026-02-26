@@ -28,9 +28,6 @@ jobs:
       - name: Install renderer dependencies
         run: npm --prefix renderer install
 
-      - name: Install Playwright browsers
-        run: npx --yes playwright install --with-deps
-
       - name: Lint
         run: npm --prefix app run lint
 
@@ -38,7 +35,7 @@ jobs:
         run: npm --prefix app run typecheck
 
       - name: Run test suite
-        run: npm run test
+        run: npm run test:ci
 
       - name: Upload coverage report
         if: always()
