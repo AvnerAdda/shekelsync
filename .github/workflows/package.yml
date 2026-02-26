@@ -1,7 +1,13 @@
 name: Package
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -35,6 +41,17 @@ jobs:
 
       - name: Install renderer dependencies
         run: npm --prefix renderer ci
+
+      - name: Validate tag matches app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          APP_VERSION="$(node -p "require('./app/package.json').version")"
+          if [ "$TAG_VERSION" != "$APP_VERSION" ]; then
+            echo "Tag/version mismatch: tag is v$TAG_VERSION but app/package.json version is $APP_VERSION"
+            exit 1
+          fi
 
       - name: Prepare Windows signing
         if: matrix.os == 'windows-latest'
@@ -124,15 +141,20 @@ jobs:
         shell: bash
         env:
           CUSTOM_GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REF: ${{ github.ref }}
         run: |
-          if [ -n "$CUSTOM_GH_TOKEN" ] && [ "$GITHUB_EVENT_NAME" = "push" ] && [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            export GH_TOKEN="$CUSTOM_GH_TOKEN"
-            echo "Using GH_RELEASE_TOKEN secret for release publishing on tag push."
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            if [ -n "$CUSTOM_GH_TOKEN" ]; then
+              export GH_TOKEN="$CUSTOM_GH_TOKEN"
+              echo "Using GH_RELEASE_TOKEN for release publishing."
+            else
+              export GH_TOKEN="$GITHUB_TOKEN"
+              echo "GH_RELEASE_TOKEN is not set; using default GITHUB_TOKEN for release publishing."
+            fi
             npm --prefix app run release
           else
-            echo "Publishing disabled (missing GH_RELEASE_TOKEN or non-tag/manual run); generating unsigned artifacts only."
+            echo "Non-tag ref detected; generating unsigned artifacts only."
             npm --prefix app run dist
           fi
 
