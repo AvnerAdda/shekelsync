@@ -12,21 +12,60 @@ const {
   SCRAPE_RATE_LIMIT_MAX_ATTEMPTS,
 } = require('../../utils/constants.js');
 
-let CompanyTypes = {};
+let appLogger = null;
 try {
-  ({ CompanyTypes } = require('israeli-bank-scrapers'));
-} catch (error) {
-  console.warn('[ScrapingRouter] Failed to load CompanyTypes from israeli-bank-scrapers.', error);
+  ({ logger: appLogger } = require('../../../electron/logger.js'));
+} catch {
+  appLogger = null;
+}
+
+function stringifyLogArg(value) {
+  if (value instanceof Error) {
+    return value.stack || value.message;
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function emitLog(level, prefix, args = []) {
+  const normalizedLevel = level === 'log' ? 'info' : level;
+  const consoleLevel = normalizedLevel === 'info' ? 'log' : normalizedLevel;
+  if (typeof console[consoleLevel] === 'function') {
+    console[consoleLevel](prefix, ...args);
+  } else {
+    console.log(prefix, ...args);
+  }
+
+  if (appLogger && typeof appLogger[normalizedLevel] === 'function') {
+    const message = args.map(stringifyLogArg).join(' ');
+    appLogger[normalizedLevel](`${prefix}${message ? ` ${message}` : ''}`);
+  }
 }
 
 function createLogger(vendor) {
   const prefix = vendor ? `[Scrape:${vendor}]` : '[Scrape]';
   return {
-    log: (...args) => console.log(prefix, ...args),
-    info: (...args) => console.info(prefix, ...args),
-    warn: (...args) => console.warn(prefix, ...args),
-    error: (...args) => console.error(prefix, ...args),
+    log: (...args) => emitLog('info', prefix, args),
+    info: (...args) => emitLog('info', prefix, args),
+    warn: (...args) => emitLog('warn', prefix, args),
+    error: (...args) => emitLog('error', prefix, args),
+    debug: (...args) => emitLog('debug', prefix, args),
   };
+}
+
+const routeLogger = createLogger('router');
+
+let CompanyTypes = {};
+try {
+  ({ CompanyTypes } = require('israeli-bank-scrapers'));
+} catch (error) {
+  routeLogger.warn('Failed to load CompanyTypes from israeli-bank-scrapers.', error);
 }
 
 async function resolveCredentialRateLimitDetails(
@@ -153,7 +192,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
       try {
         mainWindow.webContents.send('scrape:progress', payload);
       } catch (error) {
-        console.error('[Scrape] Failed to emit progress to renderer', error);
+        routeLogger.error('Failed to emit progress to renderer', error);
       }
     }
   };
@@ -306,7 +345,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
 
       maybeRunAutoDetection({ locale: req.locale, defaultStatus: 'review' })
         .catch((detectError) => {
-          console.warn('[Scrape] Auto-detection failed:', detectError?.message || detectError);
+          logger.warn?.('Auto-detection failed:', detectError?.message || detectError);
         });
 
       res.status(200).json({
@@ -315,7 +354,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         rateLimit: resolveRateLimitMetadata(res),
       });
     } catch (error) {
-      console.error('Scrape API error:', error);
+      routeLogger.error('Scrape API error:', error);
       const vendor = req.body?.options?.companyId;
 
       if (vendor) {
@@ -384,12 +423,12 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
 
       maybeRunAutoDetection({ locale: req.locale, defaultStatus: 'review' })
         .catch((detectError) => {
-          console.warn('[Bulk Scrape] Auto-detection failed:', detectError?.message || detectError);
+          routeLogger.warn('Auto-detection failed:', detectError?.message || detectError);
         });
 
       res.status(200).json(result);
     } catch (error) {
-      console.error('[Bulk Scrape] API error:', error);
+      routeLogger.error('Bulk scrape API error:', error);
       sendProgress({
         vendor: 'bulk',
         status: 'failed',
@@ -412,7 +451,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         events,
       });
     } catch (error) {
-      console.error('Get scrape events error:', error);
+      routeLogger.error('Get scrape events error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to fetch scrape events',
@@ -429,7 +468,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         event,
       });
     } catch (error) {
-      console.error('Get scrape status error:', error);
+      routeLogger.error('Get scrape status error:', error);
       res.status(error?.status || 500).json({
         success: false,
         message: error?.message || 'Failed to fetch scrape status',
@@ -463,7 +502,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         isSupported: true,
       });
     } catch (error) {
-      console.error('Test scraper error:', error);
+      routeLogger.error('Test scraper error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to test scraper configuration',
