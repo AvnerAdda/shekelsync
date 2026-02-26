@@ -7,59 +7,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  preflight:
-    name: Verify signing secrets
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
-      - name: Check required repository secrets
-        shell: bash
-        env:
-          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
-          LINUX_GPG_KEY: ${{ secrets.LINUX_GPG_KEY }}
-          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
-        run: |
-          set -euo pipefail
-
-          required=(WINDOWS_CERT_PFX WINDOWS_CERT_PASSWORD)
-          optional=(LINUX_GPG_KEY LINUX_GPG_PASSPHRASE)
-
-          missing=()
-          for name in "${required[@]}"; do
-            value=$(eval "printf '%s' \"\${$name-}\"")
-            if [ -z "$value" ]; then
-              missing+=("$name")
-            fi
-          done
-
-          if [ "${#missing[@]}" -gt 0 ]; then
-            echo "::error::Missing required secrets: ${missing[*]}"
-            echo "Populate these secrets via the secrets vault sync (see docs/secrets-vault.md) before tagging a release."
-            exit 1
-          fi
-
-          missing_optional=()
-          for name in "${optional[@]}"; do
-            value=$(eval "printf '%s' \"\${$name-}\"")
-            if [ -z "$value" ]; then
-              missing_optional+=("$name")
-            fi
-          done
-
-          if [ "${#missing_optional[@]}" -gt 0 ]; then
-            echo "::warning::Optional secrets not configured: ${missing_optional[*]}"
-          fi
-
   build:
     name: Build Electron (${{ matrix.os }})
-    needs: [preflight]
-    if: needs.preflight.result == 'success' || needs.preflight.result == 'skipped'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     env:
       ALLOW_DEV_NO_ENCRYPTION: 'true'
@@ -86,32 +40,72 @@ jobs:
         run: npm --prefix renderer install
 
       - name: Prepare Windows signing
-        if: matrix.os == 'windows-latest' && secrets.WINDOWS_CERT_PFX
+        if: matrix.os == 'windows-latest' && secrets.WINDOWS_CERT_PFX != ''
         shell: bash
         env:
           WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          echo "$WINDOWS_CERT_PFX" | base64 --decode > windows-cert.pfx
+          node -e "require('fs').writeFileSync('windows-cert.pfx', Buffer.from(process.env.WINDOWS_CERT_PFX, 'base64'))"
           echo "WIN_CSC_LINK=$(pwd)/windows-cert.pfx" >> $GITHUB_ENV
           echo "WIN_CSC_KEY_PASSWORD=$WINDOWS_CERT_PASSWORD" >> $GITHUB_ENV
 
+      - name: Prepare macOS signing and notarization
+        if: matrix.os == 'macos-latest' && secrets.MACOS_CERT_P12 != ''
+        shell: bash
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          node -e "require('fs').writeFileSync('macos-cert.p12', Buffer.from(process.env.MACOS_CERT_P12, 'base64'))"
+          echo "CSC_LINK=$(pwd)/macos-cert.p12" >> $GITHUB_ENV
+          echo "CSC_KEY_PASSWORD=$MACOS_CERT_PASSWORD" >> $GITHUB_ENV
+
+          if [ -n "$APPLE_ID" ]; then
+            echo "APPLE_ID=$APPLE_ID" >> $GITHUB_ENV
+          fi
+
+          if [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
+            echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD" >> $GITHUB_ENV
+          fi
+
+          if [ -n "$APPLE_TEAM_ID" ]; then
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> $GITHUB_ENV
+          fi
+
       - name: Prepare Linux signing
-        if: matrix.os == 'ubuntu-latest' && secrets.LINUX_GPG_KEY
+        if: matrix.os == 'ubuntu-latest' && secrets.LINUX_GPG_KEY != ''
         shell: bash
         env:
           LINUX_GPG_KEY: ${{ secrets.LINUX_GPG_KEY }}
           LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
         run: |
-          echo "$LINUX_GPG_KEY" | base64 --decode > linux-gpg.key
+          node -e "require('fs').writeFileSync('linux-gpg.key', Buffer.from(process.env.LINUX_GPG_KEY, 'base64'))"
           echo "CSC_IDENTITY_AUTO_DISCOVERY=true" >> $GITHUB_ENV
           echo "CSC_KEY_PASSWORD=$LINUX_GPG_PASSPHRASE" >> $GITHUB_ENV
           echo "CSC_LINK=$(pwd)/linux-gpg.key" >> $GITHUB_ENV
 
       - name: Show signing configuration summary
         run: |
-          echo "Signing enabled?" \
-          && if [ -n "$CSC_LINK" ]; then echo "  using $CSC_LINK"; else echo "  no signing secrets detected"; fi
+          echo "Signing summary:"
+          if [ -n "$WIN_CSC_LINK" ]; then
+            echo "  Windows signing: configured"
+          else
+            echo "  Windows signing: not configured"
+          fi
+          if [ -n "$CSC_LINK" ]; then
+            echo "  macOS/Linux signing: configured via CSC_LINK"
+          else
+            echo "  macOS/Linux signing: not configured"
+          fi
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "  macOS notarization: configured"
+          else
+            echo "  macOS notarization: not configured"
+          fi
 
       - name: Build Electron distributable
         shell: bash

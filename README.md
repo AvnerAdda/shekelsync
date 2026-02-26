@@ -72,6 +72,8 @@ You are responsible for lawful and compliant use in your jurisdiction.
 
 - Report vulnerabilities privately; see `SECURITY.md`.
 - Never commit credentials, private keys, or production `.env` files.
+- Enable local secret scanning hooks: `npm run hooks:install`
+- Run a manual full secret scan: `npm run secrets:scan`
 
 ## Community
 
