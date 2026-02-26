@@ -287,7 +287,7 @@ try {
 
 const AUTO_UPDATE_ENV_FLAG = 'ENABLE_AUTO_UPDATE';
 if (typeof process.env[AUTO_UPDATE_ENV_FLAG] === 'undefined') {
-  process.env[AUTO_UPDATE_ENV_FLAG] = 'false';
+  process.env[AUTO_UPDATE_ENV_FLAG] = isDev ? 'false' : 'true';
 }
 
 function shouldEnableAutoUpdate() {
