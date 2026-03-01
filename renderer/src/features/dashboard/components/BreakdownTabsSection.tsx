@@ -55,7 +55,7 @@ const PortfolioPieChart: React.FC<PortfolioPieChartProps> = ({
         background: alpha(theme.palette.background.paper, 0.4),
         backdropFilter: 'blur(10px)',
         border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-        borderRadius: 3,
+        borderRadius: 2.5,
         boxShadow: theme.shadows[4],
         transition: 'transform 0.2s, box-shadow 0.2s',
         '&:hover': {

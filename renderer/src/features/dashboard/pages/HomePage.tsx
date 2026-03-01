@@ -18,10 +18,9 @@ import { DashboardFiltersProvider, useDashboardFilters } from '@renderer/feature
 import DashboardSummarySection from '@renderer/features/dashboard/components/DashboardSummarySection';
 import TransactionHistorySection from '@renderer/features/dashboard/components/TransactionHistorySection';
 import BreakdownTabsSection from '@renderer/features/dashboard/components/BreakdownTabsSection';
+import { CHART_COLORS } from '@renderer/shared/chart-colors';
 
 type YAxisScale = 'linear' | 'log';
-
-const CHART_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF6B9D'];
 
 const DashboardHomeContent: React.FC = () => {
   const { t } = useTranslation('translation', { keyPrefix: 'dashboardHome' });
@@ -121,6 +120,7 @@ const DashboardHomeContent: React.FC = () => {
   const {
     breakdownData,
     breakdownLoading,
+    breakdownErrors,
     fetchBreakdown,
     refreshBreakdowns,
   } = useBreakdownData({
@@ -132,6 +132,7 @@ const DashboardHomeContent: React.FC = () => {
   const {
     breakdownData: fallbackBreakdownData,
     breakdownLoading: fallbackBreakdownLoading,
+    breakdownErrors: fallbackBreakdownErrors,
     fetchBreakdown: fetchFallbackBreakdown,
     refreshBreakdowns: refreshFallbackBreakdowns,
   } = useBreakdownData({
@@ -141,28 +142,19 @@ const DashboardHomeContent: React.FC = () => {
   });
 
   const handleChartAreaClick = (data: any) => {
-    console.log('Chart area click - data:', data);
-    // For chart area click, use activeLabel which has the date
     if (data && data.activeLabel) {
       const clickedDate = data.activeLabel;
-      console.log('Clicked date:', clickedDate);
 
-      // Check if this is a future date (forecasted) by comparing to today
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const clickedDateObj = parseLocalDate(clickedDate);
       clickedDateObj.setHours(0, 0, 0, 0);
 
       const isForecastDate = clickedDateObj > today;
-      console.log('Is forecast date:', isForecastDate);
 
       if (isForecastDate) {
-        // For forecast dates, just set the hovered date
-        // The TransactionHistorySection will handle showing forecast predictions
         setHoveredDate(clickedDate);
       } else {
-        // For historical dates, fetch actual transactions
-        console.log('Fetching transactions for date:', clickedDate);
         fetchTransactionsByDate(clickedDate);
         setHoveredDate(clickedDate);
       }
@@ -196,9 +188,7 @@ const DashboardHomeContent: React.FC = () => {
         fill={props.stroke}
         style={{ cursor: 'pointer' }}
         onClick={() => {
-          console.log('Custom dot clicked, payload:', payload);
           if (payload && payload.date) {
-            // Check if this is a future date (forecasted)
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const clickedDateObj = parseLocalDate(payload.date);
@@ -206,11 +196,8 @@ const DashboardHomeContent: React.FC = () => {
             const isForecastDate = clickedDateObj > today;
 
             if (isForecastDate) {
-              // For forecast dates, just set the hovered date
               setHoveredDate(payload.date);
             } else {
-              // For historical dates, fetch actual transactions
-              console.log('Fetching transactions for date:', payload.date);
               fetchTransactionsByDate(payload.date);
               setHoveredDate(payload.date);
             }
@@ -389,20 +376,30 @@ const DashboardHomeContent: React.FC = () => {
   useEffect(() => {
     if (selectedBreakdownType === 'investment') {
       if (fallbackEnabled) {
-        if (!fallbackBreakdownData.investment && !fallbackBreakdownLoading.investment) {
+        if (
+          !fallbackBreakdownData.investment &&
+          !fallbackBreakdownLoading.investment &&
+          !fallbackBreakdownErrors.investment
+        ) {
           void fetchFallbackBreakdown('investment');
         }
-      } else if (!breakdownData.investment && !breakdownLoading.investment) {
+      } else if (
+        !breakdownData.investment &&
+        !breakdownLoading.investment &&
+        !breakdownErrors.investment
+      ) {
         void fetchBreakdown('investment');
       }
     }
   }, [
     fallbackBreakdownData.investment,
+    fallbackBreakdownErrors.investment,
     fallbackBreakdownLoading.investment,
     fallbackEnabled,
     fetchBreakdown,
     fetchFallbackBreakdown,
     breakdownData.investment,
+    breakdownErrors.investment,
     breakdownLoading.investment,
     selectedBreakdownType,
   ]);
@@ -410,16 +407,26 @@ const DashboardHomeContent: React.FC = () => {
   // Fetch expense breakdown for SummaryCards Financial Health metrics
   useEffect(() => {
     if (fallbackEnabled) {
-      if (!fallbackBreakdownData.expense && !fallbackBreakdownLoading.expense) {
+      if (
+        !fallbackBreakdownData.expense &&
+        !fallbackBreakdownLoading.expense &&
+        !fallbackBreakdownErrors.expense
+      ) {
         void fetchFallbackBreakdown('expense');
       }
-    } else if (!breakdownData.expense && !breakdownLoading.expense) {
+    } else if (
+      !breakdownData.expense &&
+      !breakdownLoading.expense &&
+      !breakdownErrors.expense
+    ) {
       void fetchBreakdown('expense');
     }
   }, [
     breakdownData.expense,
+    breakdownErrors.expense,
     breakdownLoading.expense,
     fallbackBreakdownData.expense,
+    fallbackBreakdownErrors.expense,
     fallbackBreakdownLoading.expense,
     fallbackEnabled,
     fetchBreakdown,

@@ -12,16 +12,16 @@ interface AllocationDonutChartProps {
 }
 
 const CHART_COLORS = [
-  '#8B5CF6', // Purple
+  '#3ea54d', // Brand green
+  '#00897B', // Teal
+  '#e88b78', // Brand peach
   '#F97316', // Orange
   '#06B6D4', // Cyan
-  '#10B981', // Green
-  '#F59E0B', // Amber
+  '#F4A261', // Warm amber
+  '#26A69A', // Teal light
+  '#78e88b', // Brand green light
   '#EF4444', // Red
-  '#EC4899', // Pink
-  '#6366F1', // Indigo
-  '#84CC16', // Lime
-  '#14B8A6', // Teal
+  '#14B8A6', // Teal dark
 ];
 
 const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioData }) => {

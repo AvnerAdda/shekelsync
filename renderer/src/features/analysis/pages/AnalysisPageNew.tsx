@@ -518,7 +518,7 @@ const AnalysisPageNew: React.FC = () => {
     setBudgetForecastError(null);
 
     try {
-      const endpoint = options.force ? '/api/forecast/daily?noCache=1' : '/api/forecast/daily';
+      const endpoint = options.force ? '/api/forecast/daily?days=30&noCache=1' : '/api/forecast/daily?days=30';
       const response = await apiClient.get<{ budgetOutlook?: BudgetOutlookItem[]; budgetSummary?: BudgetForecastSummary }>(endpoint);
       if (!response.ok) {
         throw new Error(t('errors.fetchFailed'));
@@ -560,10 +560,10 @@ const AnalysisPageNew: React.FC = () => {
     setCurrentTab(newValue);
   };
 
-  const handleRefreshAll = useCallback(() => {
+  const runRefreshAll = useCallback((forceBudget: boolean) => {
     fetchIntelligence();
     if (fetchOnceRef.current.budget) {
-      fetchBudgetForecast({ force: true });
+      fetchBudgetForecast(forceBudget ? { force: true } : {});
     }
     if (fetchOnceRef.current.temporal) {
       fetchTemporalData();
@@ -579,13 +579,17 @@ const AnalysisPageNew: React.FC = () => {
     }
   }, [fetchBehavioralData, fetchBudgetForecast, fetchFutureData, fetchIntelligence, fetchTemporalData, fetchTimeValueData]);
 
+  const handleRefreshAll = useCallback(() => {
+    runRefreshAll(true);
+  }, [runRefreshAll]);
+
   useEffect(() => {
     const handleDataRefresh = () => {
-      handleRefreshAll();
+      runRefreshAll(false);
     };
     window.addEventListener('dataRefresh', handleDataRefresh);
     return () => window.removeEventListener('dataRefresh', handleDataRefresh);
-  }, [handleRefreshAll]);
+  }, [runRefreshAll]);
 
   useEffect(() => {
     if (isLocked) {

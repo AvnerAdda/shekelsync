@@ -25,7 +25,6 @@ import {
   Description as FileIcon,
   Edit as EditIcon,
   Visibility as ViewIcon,
-  Navigation as GoIcon,
   Help as HelpIcon,
   FiberNew as NewIcon,
   FolderOpen as OpenIcon,
@@ -40,7 +39,6 @@ import {
   ZoomIn as ZoomInIcon,
   ZoomOut as ZoomOutIcon,
   SettingsBackupRestore as ResetIcon,
-  Dashboard as DashboardIcon,
   Analytics as AnalyticsIcon,
   TrendingUp as InvestmentsIcon,
   Settings as SettingsIcon,
@@ -360,18 +358,6 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
     handleMenuClose();
 
     switch (action) {
-      case 'go-dashboard':
-        navigate('/');
-        break;
-      case 'go-analysis':
-        navigate('/analysis');
-        break;
-      case 'go-investments':
-        navigate('/investments');
-        break;
-      case 'go-settings':
-        navigate('/settings');
-        break;
       case 'view-zoom-in':
         if (window.electronAPI?.window?.zoomIn) {
           window.electronAPI.window.zoomIn().catch(console.error);
@@ -399,7 +385,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         handleClose();
         break;
       default:
-        console.log('Menu action:', action);
+        break;
     }
   };
 
@@ -467,25 +453,6 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
           <MenuItem key="view-reset" onClick={() => handleMenuAction('view-reset')}>
             <ListItemIcon><ResetIcon fontSize="small" /></ListItemIcon>
             <ListItemText>{t('titleBar.menu.items.resetZoom')}</ListItemText>
-          </MenuItem>,
-        ];
-      case 'go':
-        return [
-          <MenuItem key="go-dashboard" onClick={() => handleMenuAction('go-dashboard')}>
-            <ListItemIcon><DashboardIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>{t('titleBar.menu.items.dashboard')}</ListItemText>
-          </MenuItem>,
-          <MenuItem key="go-analysis" onClick={() => handleMenuAction('go-analysis')}>
-            <ListItemIcon><AnalyticsIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>{t('titleBar.menu.items.analysis')}</ListItemText>
-          </MenuItem>,
-          <MenuItem key="go-investments" onClick={() => handleMenuAction('go-investments')}>
-            <ListItemIcon><InvestmentsIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>{t('titleBar.menu.items.investments')}</ListItemText>
-          </MenuItem>,
-          <MenuItem key="go-settings" onClick={() => handleMenuAction('go-settings')}>
-            <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>{t('titleBar.menu.items.settings')}</ListItemText>
           </MenuItem>,
         ];
       case 'help':
@@ -620,10 +587,6 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
               <MenuItem key="view" onClick={() => setActiveSubmenu('view')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
                 <ListItemIcon><ViewIcon fontSize="small" /></ListItemIcon>
                 <ListItemText primary={t('titleBar.menu.view')} />
-              </MenuItem>,
-              <MenuItem key="go" onClick={() => setActiveSubmenu('go')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
-                <ListItemIcon><GoIcon fontSize="small" /></ListItemIcon>
-                <ListItemText primary={t('titleBar.menu.go')} />
               </MenuItem>,
               <MenuItem key="help" onClick={() => setActiveSubmenu('help')} dense sx={{ py: 1, borderRadius: 1, mx: 0.5 }}>
                 <ListItemIcon><HelpIcon fontSize="small" /></ListItemIcon>
