@@ -94,16 +94,16 @@ export const ThemeContextProvider: React.FC<ThemeContextProviderProps> = ({
       palette: {
         mode: actualTheme,
         primary: {
-          main: '#c8facf',
-          light: '#f8fef9',
-          dark: '#9cf5aa',
-          contrastText: '#000000',
+          main: actualTheme === 'dark' ? '#c8facf' : '#3ea54d',
+          light: actualTheme === 'dark' ? '#f8fef9' : '#78e88b',
+          dark: actualTheme === 'dark' ? '#9cf5aa' : '#286b33',
+          contrastText: actualTheme === 'dark' ? '#000000' : '#ffffff',
         },
         secondary: {
-          main: '#facfc8',
-          light: '#fef9f8',
-          dark: '#f5aa9c',
-          contrastText: '#000000',
+          main: actualTheme === 'dark' ? '#facfc8' : '#a54d3e',
+          light: actualTheme === 'dark' ? '#fef9f8' : '#e88b78',
+          dark: actualTheme === 'dark' ? '#f5aa9c' : '#6b3328',
+          contrastText: actualTheme === 'dark' ? '#000000' : '#ffffff',
         },
         background: {
           default: actualTheme === 'dark' ? '#0a0a0a' : '#ffffff',
@@ -116,7 +116,7 @@ export const ThemeContextProvider: React.FC<ThemeContextProviderProps> = ({
         divider: actualTheme === 'dark' ? '#404040' : '#d3d3d3',
       },
       typography: {
-        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+        fontFamily: "'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         h1: {
           fontWeight: 800,
           fontSize: `${3.5 * fontSizeMultiplier}rem`,

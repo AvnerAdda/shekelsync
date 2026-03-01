@@ -1,7 +1,4 @@
-@import '@fontsource/roboto/latin-300.css';
-@import '@fontsource/roboto/latin-400.css';
-@import '@fontsource/roboto/latin-500.css';
-@import '@fontsource/roboto/latin-700.css';
+@import '@fontsource-variable/inter';
 @import '@app/styles/globals.css';
 
 /* Custom window styling for Electron frameless window - updated */
@@ -27,8 +24,7 @@ html, body {
   overflow: auto;
   border-radius: 12px;
   transition: border-radius 0.2s ease, box-shadow 0.2s ease;
-  background: radial-gradient(circle at top, rgba(200, 250, 207, 0.15), rgba(10, 10, 10, 0.85)),
-    linear-gradient(135deg, #0a0a0a, #131a13);
+  background: transparent;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 

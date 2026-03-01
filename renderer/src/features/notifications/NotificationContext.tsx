@@ -42,11 +42,9 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
         autoHideDuration={6000}
         onClose={handleClose}
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-        sx={{
-          '& .MuiSnackbar-root': {
-            zIndex: 9999,
-          },
-        }}
+        sx={(theme) => ({
+          zIndex: theme.zIndex.snackbar,
+        })}
       >
         <Alert
           onClose={handleClose}

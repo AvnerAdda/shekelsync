@@ -189,7 +189,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         noPension: !hasPension
       });
 
-      console.log('[Sidebar] Account alerts:', { noBank: !hasBank, noCredit: !hasCredit, noPension: !hasPension });
     } catch (error) {
       console.error('Error fetching account status:', error);
     }
@@ -202,7 +201,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         const data = response.data as any;
         const totalUncategorized = data.uncategorized?.totalCount || 0;
         setUncategorizedCount(totalUncategorized);
-        console.log('[Sidebar] Uncategorized count:', totalUncategorized);
       }
     } catch (error) {
       console.error('Error fetching uncategorized count:', error);
@@ -445,33 +443,16 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
           },
         }}
       >
-        {/* Header */}
+        {/* Header - collapse toggle only (branding is in TitleBar) */}
         <Box
           sx={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: open ? 'space-between' : 'center',
-            padding: '24px 20px',
-            minHeight: 80,
+            justifyContent: 'center',
+            padding: '16px 20px',
+            minHeight: 56,
           }}
         >
-          {open && (
-            <Typography
-              variant="h5"
-              sx={{
-                fontWeight: 800,
-                background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-                backgroundClip: 'text',
-                textFillColor: 'transparent',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                letterSpacing: '-0.5px',
-                fontSize: '1.5rem',
-              }}
-            >
-              {/* ShekelSync */}
-            </Typography>
-          )}
           <Tooltip title={open ? t('tooltips.collapseSidebar', 'Collapse sidebar') : t('tooltips.expandSidebar')} placement="right">
             <IconButton
               onClick={handleDrawerToggle}
@@ -481,7 +462,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
               sx={{
                 color: theme.palette.text.secondary,
                 transition: 'all 0.2s',
-                backgroundColor: open ? 'transparent' : alpha(theme.palette.primary.main, 0.08),
+                backgroundColor: alpha(theme.palette.primary.main, 0.08),
                 '&:hover': {
                   color: theme.palette.primary.main,
                   backgroundColor: alpha(theme.palette.primary.main, 0.1),
@@ -664,10 +645,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1 }}>
-                      Accounts
+                      {t('stats.accounts', 'Accounts')}
                     </Typography>
                     <Typography variant="body2" fontWeight={600}>
-                      {stats.totalAccounts} Connected
+                      {stats.totalAccounts} {t('stats.connected', 'Connected')}
                     </Typography>
                   </Box>
                 </Box>
@@ -729,7 +710,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1 }}>
-                      Last Sync
+                      {t('stats.lastSync', 'Last Sync')}
                     </Typography>
                     <Typography
                       variant="body2"
@@ -863,7 +844,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1 }}>
-                      Database
+                      {t('stats.database', 'Database')}
                     </Typography>
                     <Typography variant="body2" fontWeight={600} color={
                       stats.dbStatus === 'connected' ? 'success.main' : 
@@ -960,14 +941,18 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             </Tooltip>
 
             {/* Database Status */}
-            <Box sx={{
-              width: 10,
-              height: 10,
-              borderRadius: '50%',
-              backgroundColor: stats.dbStatus === 'connected' ? 'success.main' : 'error.main',
-              mt: 1,
-              boxShadow: `0 0 8px ${alpha(stats.dbStatus === 'connected' ? theme.palette.success.main : theme.palette.error.main, 0.5)}`
-            }} />
+            <Box
+              role="status"
+              aria-label={`${t('stats.database', 'Database')}: ${stats.dbStatus === 'connected' ? t('dbStatus.connected') : t('dbStatus.disconnected')}`}
+              sx={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                backgroundColor: stats.dbStatus === 'connected' ? 'success.main' : 'error.main',
+                mt: 1,
+                boxShadow: `0 0 8px ${alpha(stats.dbStatus === 'connected' ? theme.palette.success.main : theme.palette.error.main, 0.5)}`
+              }}
+            />
           </Box>
         )}
       </Drawer>

@@ -235,15 +235,11 @@ useEffect(() => {
       })) || [];
 
       // Call API to create account + holding + link transactions
-      console.log('Creating account with data:', { accountDetails, holdingDetails, transactions: transactions.length });
-
       const response = await apiClient.post('/api/investments/suggestions/create-from-suggestion', {
         accountDetails,
         holdingDetails,
         transactions
       });
-
-      console.log('Response status:', response.status);
 
       if (!response.ok) {
         // Check for license read-only error

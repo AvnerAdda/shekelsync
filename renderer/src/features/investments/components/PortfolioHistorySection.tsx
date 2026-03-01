@@ -40,7 +40,7 @@ interface PortfolioHistorySectionProps {
 
 // Color palette for charts
 const CHART_COLORS = [
-  '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#a05195', '#d45087', '#f95d6a', '#ff7c43', '#ffa600'
+  '#3ea54d', '#00897B', '#e88b78', '#F97316', '#F4A261', '#26A69A', '#06B6D4', '#78e88b', '#EF4444', '#14B8A6', '#286b33', '#6b3328', '#F59E0B'
 ];
 
 // Helper to get localized category label
