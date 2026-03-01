@@ -128,4 +128,36 @@ describe('last-update', () => {
     const result = await service.listAccountLastUpdates();
     expect(result[0].accountNumbers).toEqual(['111111', '222222', '333333']);
   });
+
+  it('falls back to legacy query when schema mismatch is detected', async () => {
+    const querySpy = vi.spyOn(database, 'query')
+      .mockRejectedValueOnce(new Error('SQLITE_ERROR: no such column: vc.card6_digits'))
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 8,
+            vendor: 'discount',
+            nickname: 'discount',
+            card6_digits: null,
+            bank_account_number: null,
+            last_update: '2026-02-01T00:00:00Z',
+            last_scrape_status: 'never',
+            account_numbers: null,
+            institution_id: null,
+          },
+        ],
+      });
+
+    const result = await service.listAccountLastUpdates();
+
+    expect(querySpy).toHaveBeenCalledTimes(2);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: 8,
+      vendor: 'discount',
+      nickname: 'discount',
+      lastScrapeStatus: 'never',
+      institution: null,
+    });
+  });
 });
