@@ -16,6 +16,7 @@ import {
   Tabs,
   Divider,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import type { ChipProps } from '@mui/material';
 import {
   EmojiEvents as TrophyIcon,
@@ -133,7 +134,7 @@ const QuestsPanel: React.FC = () => {
     const progressPct = levelProgress.progress_pct || 0;
 
     return (
-      <Card sx={{ mb: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+      <Card sx={{ mb: 2, background: 'linear-gradient(135deg, #286b33 0%, #3ea54d 50%, #6b3328 100%)' }}>
         <CardContent>
           <Stack direction="row" spacing={3} alignItems="center" justifyContent="space-between">
             {/* Level */}
@@ -234,6 +235,11 @@ const QuestsPanel: React.FC = () => {
           border: '1px solid',
           borderColor: isAccepted ? 'primary.main' : 'divider',
           opacity: isLoading ? 0.7 : 1,
+          transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+          '&:hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: (theme) => `0 8px 24px ${alpha(theme.palette.common.black, 0.1)}`,
+          },
         }}
       >
         <CardContent>
@@ -337,6 +343,7 @@ const QuestsPanel: React.FC = () => {
                 <Tooltip title={t('actions.verify')}>
                   <IconButton
                     color="primary"
+                    aria-label={t('actions.verify')}
                     onClick={() => handleVerify(quest.id)}
                     disabled={isLoading}
                   >
@@ -348,6 +355,7 @@ const QuestsPanel: React.FC = () => {
                   <Tooltip title={t('actions.accept')}>
                     <IconButton
                       color="primary"
+                      aria-label={t('actions.accept')}
                       onClick={() => handleAccept(quest.id)}
                       disabled={isLoading}
                     >
@@ -357,6 +365,7 @@ const QuestsPanel: React.FC = () => {
                   <Tooltip title={t('actions.decline')}>
                     <IconButton
                       color="default"
+                      aria-label={t('actions.decline')}
                       onClick={() => handleDecline(quest.id)}
                       disabled={isLoading}
                     >

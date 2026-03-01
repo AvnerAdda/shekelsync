@@ -36,6 +36,7 @@ const translations: Record<string, string> = {
   'titleBar.tooltips.restoreWindow': 'Restore window',
   'titleBar.tooltips.closeWindow': 'Close window',
   'titleBar.search.placeholder': 'Search sections...',
+  'titleBar.search.options.analysis': 'Analysis',
   'support.titleBar.buyMeCoffee': 'Buy me a coffee',
   'common.languages.he': 'Hebrew',
   'common.languages.en': 'English',
@@ -172,12 +173,11 @@ describe('TitleBar component', () => {
     (window as any).electronAPI = buildElectronApi(false);
   });
 
-  it('navigates to analysis from menu go submenu', async () => {
+  it('navigates to analysis from search selection', async () => {
     await renderTitleBar({ sessionDisplayName: 'Demo User', authLoading: false });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Go' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Analysis' }));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'analysis' } });
+    fireEvent.click(await screen.findByText('Analysis'));
 
     expect(navigate).toHaveBeenCalledWith('/analysis');
   });

@@ -235,8 +235,6 @@ export default function InvestmentAccountSuggestionsCard({
     setLinkingInProgress(true);
 
     try {
-      console.log('Linking transactions to account:', accountId, 'Transactions:', suggestion.transactions);
-
       let successCount = 0;
       for (const txn of suggestion.transactions) {
         const payload = {
@@ -247,11 +245,7 @@ export default function InvestmentAccountSuggestionsCard({
           confidence: 0.9
         };
 
-        console.log('Linking transaction:', payload);
-
         const response = await apiClient.post('/api/investments/transaction-links', payload);
-
-        console.log('Link response:', response);
 
         if (response.ok) {
           successCount++;

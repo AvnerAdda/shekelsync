@@ -135,28 +135,6 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     categoryCount,
   });
 
-  // Debug logging
-  console.log('SummaryCards Financial Health Metrics:', {
-    totalIncome,
-    totalExpenses,
-    absExpenses,
-    currentBankBalance,
-    absCurrentBalance,
-    categoryCount,
-    topCategories,
-    absTopCategoryAmount,
-    hasRealBreakdownData,
-    rawSavingsRate: rawSavingsRate.toFixed(3),
-    savingsScore,
-    diversityScore,
-    impulseControl,
-    runwayDays: runwayDays.toFixed(1),
-    runwayScore,
-    pendingExpenses,
-    pendingCreatesCashFlowDeficit,
-    pendingOverdrawsBank,
-    projectedBankBalanceAfterPending,
-  });
 
   const SPENDING_CATEGORY_COLORS: Record<SpendingCategory, string> = {
     essential: '#2196F3',
@@ -196,7 +174,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     let isMounted = true;
     const fetchForecastData = async () => {
       try {
-        const response = await apiClient.get<{ budgetOutlook?: Array<{ actualSpent: number; forecasted: number; status: string }> }>('/api/forecast/daily');
+        const response = await apiClient.get<{ budgetOutlook?: Array<{ actualSpent: number; forecasted: number; status: string }> }>('/api/forecast/daily?days=30');
         if (response.ok && isMounted) {
           const outlook = response.data?.budgetOutlook || [];
           // Filter to only categories with activity
@@ -306,7 +284,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   const formatCurrencyValue = (amount: number) =>
     formatCurrency(amount, { absolute: true, maximumFractionDigits: 0 });
 
-  const PIE_COLORS = ['#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0', '#00BCD4'];
+  const PIE_COLORS = ['#3ea54d', '#00897B', '#e88b78', '#F97316', '#F4A261', '#26A69A'];
 
   const cards = [
     {
@@ -647,9 +625,9 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     <Grid container spacing={3}>
       {cards.map((card) => (
         <Grid size={{ xs: 12, md: 4 }} key={card.id}>
-          <Card sx={{ 
+          <Card sx={{
             height: '100%',
-            borderRadius: 4,
+            borderRadius: 2.5,
             backgroundColor: theme.palette.mode === 'dark' ? 'rgba(30, 30, 30, 0.6)' : 'rgba(255, 255, 255, 0.6)',
             backdropFilter: 'blur(20px)',
             border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,

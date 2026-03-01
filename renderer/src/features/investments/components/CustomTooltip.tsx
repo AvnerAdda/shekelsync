@@ -89,7 +89,7 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({
         maxWidth: 300,
         backgroundColor: alpha(theme.palette.background.paper, 0.98),
         border: `1px solid ${theme.palette.divider}`,
-        borderRadius: 1,
+        borderRadius: 2,
       }}
     >
       {/* Title/Label */}

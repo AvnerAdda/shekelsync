@@ -93,6 +93,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const [forecastData, setForecastData] = useState<any>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
   const [forecastError, setForecastError] = useState<string | null>(null);
+  const forecastRequestInFlightRef = React.useRef(false);
 
   // Transaction Detail Modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -162,36 +163,50 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   };
 
   // Fetch forecast data - always 30 days ahead
+  const buildForecastErrorMessage = useCallback((response: { status: number; statusText: string; data?: unknown }) => {
+    const payload = (response.data ?? null) as { message?: string; retryAfter?: number } | null;
+    if (response.status === 429) {
+      const retryAfter = Number(payload?.retryAfter);
+      if (Number.isFinite(retryAfter) && retryAfter > 0) {
+        return `Rate limit exceeded. Try again in ${Math.ceil(retryAfter)} seconds.`;
+      }
+      return payload?.message || 'Rate limit exceeded. Try again shortly.';
+    }
+    if (payload?.message && payload.message.trim()) {
+      return payload.message;
+    }
+    if (response.statusText) {
+      return `Failed to fetch forecast: ${response.statusText}`;
+    }
+    return `Failed to fetch forecast: HTTP ${response.status}`;
+  }, []);
+
   const fetchForecast = useCallback(async () => {
+    if (forecastRequestInFlightRef.current) {
+      return;
+    }
+    forecastRequestInFlightRef.current = true;
     setForecastLoading(true);
     setForecastError(null);
     try {
-      console.log('[TransactionHistory] Fetching forecast data from /api/forecast/daily?days=30');
       const response = await apiClient.get<any>('/api/forecast/daily?days=30');
-      console.log('[TransactionHistory] Forecast response:', { ok: response.ok, status: response.status, hasData: !!response.data });
-      if (!response.ok) throw new Error(`Failed to fetch forecast: ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(buildForecastErrorMessage(response));
+      }
       setForecastData(response.data);
-      console.log('[TransactionHistory] Forecast data set successfully');
     } catch (err) {
       console.error('[TransactionHistory] Forecast fetch error:', err);
       setForecastError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setForecastLoading(false);
+      forecastRequestInFlightRef.current = false;
     }
-  }, []);
+  }, [buildForecastErrorMessage]);
 
   useEffect(() => {
-    // Fetch forecast data on mount if not already loaded
-    console.log('[TransactionHistory useEffect]', {
-      hasForecastData: !!forecastData,
-      forecastLoading,
-      dailyForecastsCount: forecastData?.dailyForecasts?.length
-    });
-    if (!forecastData && !forecastLoading) {
-      console.log('[TransactionHistory] Triggering forecast fetch from useEffect');
-      fetchForecast();
-    }
-  }, [forecastData, forecastLoading, fetchForecast]);
+    // Avoid implicit retry loops: retries should be user-initiated from the alert action.
+    void fetchForecast();
+  }, [fetchForecast]);
 
   // Calculate cumulative net position data (historical only, filtered by periodDays)
   const getNetPositionData = useCallback(() => {
@@ -265,22 +280,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       item.date >= periodStartDate && item.date <= todayStr
     );
 
-    console.log('[getDailyIncomeExpenseData]', {
-      aggregationPeriod,
-      periodDays,
-      periodStartDate,
-      forecastEndDate,
-      hasForecastData: !!forecastData,
-      hasDailyForecasts: !!forecastData?.dailyForecasts,
-      forecastLength: forecastData?.dailyForecasts?.length,
-      historicalLength: baseHistoricalData.length,
-      yAxisScale,
-      gapPeriodInfo
-    });
-
     // Only add forecast data in daily aggregation mode
     if (aggregationPeriod !== 'daily' || !forecastData?.dailyForecasts) {
-      console.log('[getDailyIncomeExpenseData] Not showing forecast - returning historical only');
       const transformedData = yAxisScale === 'log' ? getLogScaleData(baseHistoricalData) : baseHistoricalData;
       return transformedData.map((item: any) => ({
         ...item,
@@ -349,17 +350,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         originalForecastIncome: d.income || 0,
         originalForecastExpenses: d.expenses || 0,
       }));
-
-    console.log('[getDailyIncomeExpenseData] Combining data:', {
-      actualEndDate,
-      gapPeriodInfo,
-      historicalCount: historicalData.length,
-      forecastCount: forecastEntries.length,
-      totalCount: historicalData.length + forecastEntries.length,
-      lastActualDate: actualEndDate,
-      firstForecastDate: forecastEntries[0]?.date,
-      sampleForecast: forecastEntries[0]
-    });
 
     const combinedData = [...historicalData, ...forecastEntries];
 
@@ -505,18 +495,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         };
       });
 
-    console.log('[getCombinedNetPositionData] Combined data:', {
-      historicalCount: historicalData.length,
-      forecastCount: forecastEntries.length,
-      gapPeriodInfo,
-      lastHistoricalCumulative: startingCumulative,
-      finalExpected: expectedCumulative,
-      finalP10: p10Cumulative,
-      finalP50: p50Cumulative,
-      finalP90: p90Cumulative,
-      sampleForecast: forecastEntries[forecastEntries.length - 1]
-    });
-
     return [...historicalData, ...forecastEntries];
   }, [getNetPositionData, forecastData, aggregationPeriod, gapPeriodInfo]);
 
@@ -529,7 +507,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           ? 'linear-gradient(135deg, rgba(30, 30, 30, 0.6) 0%, rgba(20, 20, 20, 0.4) 100%)'
           : 'linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.6) 100%)',
         backdropFilter: 'blur(20px)',
-        borderRadius: '24px',
+        borderRadius: '20px',
         border: `1px solid ${theme.palette.divider}`,
         boxShadow: theme.palette.mode === 'dark'
           ? '0 8px 32px 0 rgba(0, 0, 0, 0.3)'

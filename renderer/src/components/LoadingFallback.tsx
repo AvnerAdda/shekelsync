@@ -14,7 +14,8 @@ export const LoadingFallback: React.FC<LoadingFallbackProps> = ({
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        height: '100vh',
+        height: '100%',
+        minHeight: 'calc(100vh - 64px)',
         gap: 2,
       }}
     >

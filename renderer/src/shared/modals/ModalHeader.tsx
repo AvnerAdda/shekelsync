@@ -20,8 +20,8 @@ export default function ModalHeader({ title, onClose, actions }: ModalHeaderProp
         alignItems: 'center',
         padding: '24px',
         background: (theme) => theme.palette.mode === 'dark'
-          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%)'
-          : 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.02) 100%)',
+          ? 'linear-gradient(135deg, rgba(200, 250, 207, 0.08) 0%, rgba(250, 207, 200, 0.04) 100%)'
+          : 'linear-gradient(135deg, rgba(200, 250, 207, 0.15) 0%, rgba(250, 207, 200, 0.08) 100%)',
         borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
         position: 'relative',
         '&::before': {
@@ -31,9 +31,7 @@ export default function ModalHeader({ title, onClose, actions }: ModalHeaderProp
           left: 0,
           right: 0,
           height: '2px',
-          background: (theme) => theme.palette.mode === 'dark'
-            ? 'linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)'
-            : 'linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)',
+          background: 'linear-gradient(90deg, #9cf5aa 0%, #f5aa9c 100%)',
         },
       }}
     >

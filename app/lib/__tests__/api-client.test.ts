@@ -13,6 +13,12 @@ describe('api-client', () => {
   const originalDocument = (global as any).document;
   const getAuthorizationHeaderMock = vi.mocked(getAuthorizationHeader);
   const getSessionMock = vi.mocked(getSession);
+  const jsonResponse = (body: unknown, status = 200, statusText = 'OK') => ({
+    status,
+    statusText,
+    ok: status >= 200 && status < 300,
+    text: async () => JSON.stringify(body),
+  });
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -272,5 +278,52 @@ describe('api-client', () => {
 
     const options = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(options?.body).toBe('plain-body');
+  });
+
+  it('coalesces concurrent forecast requests into a single network call', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ forecastId: 'coalesced' }));
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    const [first, second] = await Promise.all([
+      apiClient.get('/api/forecast/daily?days=90'),
+      apiClient.get('/api/forecast/daily?days=90'),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(first.data).toEqual({ forecastId: 'coalesced' });
+    expect(second.data).toEqual({ forecastId: 'coalesced' });
+  });
+
+  it('serves forecast responses from short-lived cache', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ forecastId: 'cached' }));
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    const first = await apiClient.get('/api/forecast/daily?days=91');
+    const second = await apiClient.get('/api/forecast/daily?days=91');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(first.data).toEqual({ forecastId: 'cached' });
+    expect(second.data).toEqual({ forecastId: 'cached' });
+  });
+
+  it('bypasses forecast cache with noCache and refreshes cache for later reads', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ forecastId: 'stale' }))
+      .mockResolvedValueOnce(jsonResponse({ forecastId: 'fresh' }));
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    const initial = await apiClient.get('/api/forecast/daily?days=92');
+    const forced = await apiClient.get('/api/forecast/daily?days=92&noCache=1');
+    const cachedAfterForced = await apiClient.get('/api/forecast/daily?days=92');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(initial.data).toEqual({ forecastId: 'stale' });
+    expect(forced.data).toEqual({ forecastId: 'fresh' });
+    expect(cachedAfterForced.data).toEqual({ forecastId: 'fresh' });
   });
 });

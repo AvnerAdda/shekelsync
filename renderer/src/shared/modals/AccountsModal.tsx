@@ -501,9 +501,9 @@ const SectionHeader = styled(Box)(({ theme }) => ({
   padding: '20px 24px 16px 24px',
   marginBottom: '24px',
   borderBottom: `2px solid ${theme.palette.divider}`,
-  background: theme.palette.mode === 'dark' 
-    ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%)'
-    : 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.02) 100%)',
+  background: theme.palette.mode === 'dark'
+    ? 'linear-gradient(135deg, rgba(200, 250, 207, 0.08) 0%, rgba(250, 207, 200, 0.04) 100%)'
+    : 'linear-gradient(135deg, rgba(200, 250, 207, 0.15) 0%, rgba(250, 207, 200, 0.08) 100%)',
   borderRadius: '12px 12px 0 0',
   marginLeft: '-16px',
   marginRight: '-16px',
@@ -519,9 +519,7 @@ const SectionHeader = styled(Box)(({ theme }) => ({
     left: 0,
     right: 0,
     height: '3px',
-    background: theme.palette.mode === 'dark'
-      ? 'linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)'
-      : 'linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)',
+    background: 'linear-gradient(90deg, #9cf5aa 0%, #f5aa9c 100%)',
   },
   '& .MuiTypography-root': {
     fontWeight: 700,
@@ -983,7 +981,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         };
       });
 
-      console.log('Fetched accounts with updates:', mergedAccounts);
       setAccounts(mergedAccounts);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -1196,13 +1193,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         try {
           const scrapeConfig = buildInitialSyncPayload(syncAccount);
           const syncStartDate = new Date(scrapeConfig.options.startDate);
-
-          console.log(
-            '[Auto-sync] Starting 3-month sync for:',
-            syncAccount.vendor,
-            'from:',
-            syncStartDate.toISOString(),
-          );
 
           showNotification('Syncing transactions... This may take a few minutes.', 'info');
 
@@ -1646,7 +1636,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   };
 
   const handleSync = async (account: Account) => {
-    console.log('Selected account for syncing:', account);
     setSelectedAccount(account);
 
     // Fetch the last transaction date for this vendor to set as default start date
@@ -1654,7 +1643,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       const response = await apiClient.get(`/api/accounts/last-transaction-date?vendor=${account.vendor}`);
       if (response.ok) {
         const data = response.data as any;
-        console.log(`Auto-setting start date for ${account.vendor}:`, data.message);
 
         // Update the account with the suggested start date
         setSelectedAccount({
@@ -1887,12 +1875,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
 
     return { text, color };
   };
-
-  useEffect(() => {
-    if (selectedAccount) {
-      console.log('Selected account changed:', selectedAccount);
-    }
-  }, [selectedAccount]);
 
   // Separate accounts by type
   const bankAccounts = accounts.filter((account) => isAccountOfType(account, 'bank'));

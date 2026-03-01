@@ -262,7 +262,6 @@ const SmartNotifications: React.FC = () => {
       const now = new Date();
       const cacheAge = now.getTime() - insightsCacheTime.getTime();
       if (cacheAge < INSIGHTS_CACHE_DURATION) {
-        console.log('Using cached insights data');
         return;
       }
     }
@@ -435,32 +434,20 @@ const SmartNotifications: React.FC = () => {
         break;
       }
       case 'view_category':
-        // Navigate to category view
-        console.log('Navigate to category:', params?.category_definition_id || params?.category);
         break;
       case 'edit_budget':
-        // Open budget editing
-        console.log('Edit budget for:', params?.category_definition_id || params?.category);
         break;
       case 'view_transaction':
-        // Navigate to transaction details
-        console.log('View transaction:', params?.id);
         break;
       case 'view_budgets':
-        // Navigate to budgets page
-        console.log('Navigate to budgets');
         break;
       case 'view_analytics':
-        // Navigate to analytics
-        console.log('Navigate to analytics');
         break;
       case 'view_uncategorized':
-        // Navigate to transactions with uncategorized filter
         window.dispatchEvent(new CustomEvent('navigateToUncategorized'));
-        console.log('Navigate to uncategorized transactions');
         break;
       default:
-        console.log('Unknown action:', action, params);
+        break;
     }
     handleClose();
   };

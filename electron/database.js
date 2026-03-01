@@ -187,6 +187,30 @@ function hasMinimumSchema(dbPath, databaseCtor) {
   }
 }
 
+function createPreReinitializeBackup(dbPath) {
+  const parsedPath = path.parse(dbPath);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupDir = path.join(parsedPath.dir, 'backups');
+  const backupPath = path.join(
+    backupDir,
+    `${parsedPath.name || 'shekelsync'}-pre-reinit-${timestamp}${parsedPath.ext || '.sqlite'}`,
+  );
+
+  fs.mkdirSync(backupDir, { recursive: true });
+  fs.copyFileSync(dbPath, backupPath);
+
+  const walPath = `${dbPath}-wal`;
+  const shmPath = `${dbPath}-shm`;
+  if (fs.existsSync(walPath)) {
+    fs.copyFileSync(walPath, `${backupPath}-wal`);
+  }
+  if (fs.existsSync(shmPath)) {
+    fs.copyFileSync(shmPath, `${backupPath}-shm`);
+  }
+
+  return backupPath;
+}
+
 function initializeSqliteIfMissing(dbPath, databaseCtor) {
   const initPath = resolveSqliteInitPath();
   if (!initPath) {
@@ -215,7 +239,19 @@ function initializeSqliteIfMissing(dbPath, databaseCtor) {
     return;
   }
 
-  console.warn('[SQLite Init] Existing database is missing required schema tables. Reinitializing schema.', { dbPath });
+  let backupPath = null;
+  try {
+    backupPath = createPreReinitializeBackup(dbPath);
+  } catch (error) {
+    throw new Error(
+      `SQLite database is missing required schema tables and backup creation failed: ${error.message}`,
+    );
+  }
+
+  console.warn(
+    '[SQLite Init] Existing database is missing required schema tables. Reinitializing schema after backup.',
+    { dbPath, backupPath },
+  );
   initialize(true);
 }
 

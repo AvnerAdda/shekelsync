@@ -5,14 +5,14 @@ import DonutLargeIcon from '@mui/icons-material/DonutLarge';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, SunburstChart } from 'recharts';
 import { CategoryType, ChartDisplayMode, FormatCurrencyFn, OverviewDataItem, SunburstDataNode, Subcategory } from '../types';
 import { getBreakdownStrings } from '../strings';
+import { PIE_COLORS } from '@renderer/shared/chart-colors';
+import CategoryIcon from './CategoryIcon';
 
 interface CategoryViewProps {
   data: OverviewDataItem[];
   categoryType: CategoryType;
   formatCurrencyValue: FormatCurrencyFn;
 }
-
-const PIE_COLORS = ['#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0', '#00BCD4'];
 
 function convertSubcategory(sub: Subcategory, parentColor: string): SunburstDataNode {
   const subColor = sub.color || parentColor;
@@ -79,6 +79,42 @@ const CategoryView: React.FC<CategoryViewProps> = ({ data, categoryType, formatC
   const totalValue = data.reduce((sum, item) => sum + item.value, 0);
 
   const sunburstData = useMemo(() => toSunburstData(data), [data]);
+
+  const sunburstIcons = useMemo(() => {
+    if (totalValue === 0) return [];
+
+    const INNER_RADIUS = 50;
+    const OUTER_RADIUS = 180;
+    const treeDepth = data.some(d => d.subcategories && d.subcategories.length > 0) ? 2 : 1;
+    const thickness = (OUTER_RADIUS - INNER_RADIUS) / treeDepth;
+    const midRadius = INNER_RADIUS + thickness / 2;
+    const MIN_ANGLE_DEG = 20;
+    const ICON_SIZE = 22;
+
+    let currentAngle = 0; // in radians
+    return data.map((item, index) => {
+      const fraction = item.value / totalValue;
+      const angleSpan = fraction * 360;
+      const startAngle = currentAngle;
+      currentAngle += angleSpan;
+
+      if (angleSpan < MIN_ANGLE_DEG) return null;
+
+      const midAngleDeg = startAngle + angleSpan / 2 - 90; // -90 to start from top
+      const midAngleRad = (midAngleDeg * Math.PI) / 180;
+      const x = Math.cos(midAngleRad) * midRadius;
+      const y = Math.sin(midAngleRad) * midRadius;
+
+      return {
+        key: item.name,
+        x,
+        y,
+        icon: item.icon,
+        color: item.color || PIE_COLORS[index % PIE_COLORS.length],
+        size: ICON_SIZE,
+      };
+    }).filter(Boolean) as { key: string; x: number; y: number; icon: string | null | undefined; color: string; size: number }[];
+  }, [data, totalValue]);
 
   const handleChartTypeChange = (_event: React.MouseEvent<HTMLElement>, newType: ChartDisplayMode | null) => {
     if (newType !== null) {
@@ -166,31 +202,51 @@ const CategoryView: React.FC<CategoryViewProps> = ({ data, categoryType, formatC
             </Box>
           </>
         ) : (
-          <ResponsiveContainer width="100%" height={400}>
-            <SunburstChart
-              data={sunburstData}
-              dataKey="value"
-              innerRadius={50}
-              fill={theme.palette.primary.main}
-              stroke={theme.palette.background.paper}
-              textOptions={{ fill: 'transparent' }}
-            >
-              <RechartsTooltip
-                formatter={(value: number | undefined) => value != null ? formatCurrencyValue(value) : ''}
-                contentStyle={{
-                  backgroundColor: alpha(theme.palette.background.paper, 0.9),
-                  backdropFilter: 'blur(10px)',
-                  borderRadius: 12,
-                  border: `1px solid ${alpha(theme.palette.common.white, 0.1)}`,
-                  color: theme.palette.text.primary,
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                  padding: '8px 12px',
+          <>
+            <ResponsiveContainer width="100%" height={400}>
+              <SunburstChart
+                data={sunburstData}
+                dataKey="value"
+                innerRadius={50}
+                fill={theme.palette.primary.main}
+                stroke={theme.palette.background.paper}
+                textOptions={{ fill: 'transparent' }}
+              >
+                <RechartsTooltip
+                  formatter={(value: number | undefined) => value != null ? formatCurrencyValue(value) : ''}
+                  contentStyle={{
+                    backgroundColor: alpha(theme.palette.background.paper, 0.9),
+                    backdropFilter: 'blur(10px)',
+                    borderRadius: 12,
+                    border: `1px solid ${alpha(theme.palette.common.white, 0.1)}`,
+                    color: theme.palette.text.primary,
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                    padding: '8px 12px',
+                  }}
+                  itemStyle={{ color: theme.palette.text.primary, fontSize: '0.875rem', fontWeight: 600 }}
+                  labelStyle={{ color: theme.palette.text.secondary, fontSize: '0.75rem', marginBottom: '4px' }}
+                />
+              </SunburstChart>
+            </ResponsiveContainer>
+            {/* Category icon overlay for sunburst parent sectors */}
+            {sunburstIcons.map(({ key, x, y, icon, color, size }) => (
+              <Box
+                key={key}
+                sx={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`,
+                  pointerEvents: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
-                itemStyle={{ color: theme.palette.text.primary, fontSize: '0.875rem', fontWeight: 600 }}
-                labelStyle={{ color: theme.palette.text.secondary, fontSize: '0.75rem', marginBottom: '4px' }}
-              />
-            </SunburstChart>
-          </ResponsiveContainer>
+              >
+                <CategoryIcon iconName={icon} color={color} size={size} />
+              </Box>
+            ))}
+          </>
         )}
       </Box>
     </Box>
