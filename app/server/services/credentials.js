@@ -65,11 +65,22 @@ function mapCredentialRow(row) {
   return credential;
 }
 
+function isSchemaMismatchError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    message.includes('no such column') ||
+    message.includes('no such table') ||
+    message.includes('has no column named') ||
+    (message.includes('column') && message.includes('does not exist'))
+  );
+}
+
 async function listCredentials(params = {}) {
   const { vendor } = params;
   const { INSTITUTION_JOIN_VENDOR_CRED, INSTITUTION_SELECT_FIELDS } = institutionsModuleRef;
 
   let sql;
+  let legacySql;
   let sqlParams = [];
 
   if (vendor) {
@@ -104,6 +115,31 @@ async function listCredentials(params = {}) {
       ORDER BY vc.created_at DESC
     `;
     sqlParams = [vendor];
+    legacySql = `
+      SELECT
+        vc.id,
+        vc.vendor,
+        NULL as institution_id,
+        NULL as username,
+        NULL as password,
+        NULL as id_number,
+        NULL as card6_digits,
+        NULL as identification_code,
+        NULL as nickname,
+        NULL as bank_account_number,
+        NULL as created_at,
+        NULL as current_balance,
+        NULL as balance_updated_at,
+        NULL as last_scrape_attempt,
+        NULL as last_scrape_success,
+        'never' as lastScrapeStatus,
+        NULL as lastUpdate,
+        NULL as holding_balance,
+        NULL as holding_as_of_date
+      FROM vendor_credentials vc
+      WHERE vc.vendor = $1
+      ORDER BY vc.vendor
+    `;
   } else {
     sql = `
       SELECT vc.*,
@@ -134,9 +170,46 @@ async function listCredentials(params = {}) {
       ) bank_acc ON bank_acc.notes LIKE '%credential_id:' || vc.id || '%'
       ORDER BY vc.vendor
     `;
+    legacySql = `
+      SELECT
+        vc.id,
+        vc.vendor,
+        NULL as institution_id,
+        NULL as username,
+        NULL as password,
+        NULL as id_number,
+        NULL as card6_digits,
+        NULL as identification_code,
+        NULL as nickname,
+        NULL as bank_account_number,
+        NULL as created_at,
+        NULL as current_balance,
+        NULL as balance_updated_at,
+        NULL as last_scrape_attempt,
+        NULL as last_scrape_success,
+        'never' as lastScrapeStatus,
+        NULL as lastUpdate,
+        NULL as holding_balance,
+        NULL as holding_as_of_date
+      FROM vendor_credentials vc
+      ORDER BY vc.vendor
+    `;
   }
 
-  const result = await database.query(sql, sqlParams);
+  let result;
+  try {
+    result = await database.query(sql, sqlParams);
+  } catch (error) {
+    if (!isSchemaMismatchError(error)) {
+      throw error;
+    }
+    console.warn(
+      '[credentials] Falling back to legacy credentials query due to schema mismatch:',
+      error?.message || error,
+    );
+    result = await database.query(legacySql, sqlParams);
+  }
+
   return result.rows.map(mapCredentialRow);
 }
 

@@ -956,13 +956,19 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const fetchAccounts = useCallback(async () => {
     try {
       setIsLoading(true);
+      let accountsWithUpdates: any[] = [];
       const accountsResponse = await apiClient.get('/api/accounts/last-update');
-      if (!accountsResponse.ok) {
-        throw new Error(accountsResponse.statusText || 'Failed to fetch accounts');
+      if (accountsResponse.ok) {
+        accountsWithUpdates = Array.isArray(accountsResponse.data)
+          ? accountsResponse.data
+          : [];
+      } else {
+        console.warn(
+          '[AccountsModal] Failed to fetch account last-update metadata:',
+          accountsResponse.status,
+          accountsResponse.data,
+        );
       }
-      const accountsWithUpdates = Array.isArray(accountsResponse.data)
-        ? accountsResponse.data
-        : [];
 
       const credentialsResponse = await apiClient.get('/api/credentials');
       if (!credentialsResponse.ok) {
@@ -971,15 +977,22 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       const credentialsData = credentialsResponse.data as any;
       const credentials = Array.isArray(credentialsData) ? credentialsData : credentialsData?.items ?? [];
 
-      const mergedAccounts = accountsWithUpdates.map((account: any) => {
-        const credential = credentials.find((c: any) => c.id === account.id);
-        return {
+      const mergedAccounts = accountsWithUpdates.length > 0
+        ? accountsWithUpdates.map((account: any) => {
+          const credential = credentials.find((c: any) => c.id === account.id);
+          return {
+            ...credential,
+            lastUpdate: account.lastUpdate,
+            lastScrapeStatus: account.lastScrapeStatus,
+            accountNumbers: account.accountNumbers || [], // Include account numbers from transactions
+          };
+        })
+        : credentials.map((credential: any) => ({
           ...credential,
-          lastUpdate: account.lastUpdate,
-          lastScrapeStatus: account.lastScrapeStatus,
-          accountNumbers: account.accountNumbers || [], // Include account numbers from transactions
-        };
-      });
+          lastUpdate: credential.lastUpdate || credential.last_scrape_success || credential.created_at || null,
+          lastScrapeStatus: credential.lastScrapeStatus || credential.last_scrape_status || 'never',
+          accountNumbers: [],
+        }));
 
       setAccounts(mergedAccounts);
     } catch (err) {

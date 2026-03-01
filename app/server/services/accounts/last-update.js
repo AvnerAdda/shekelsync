@@ -1,9 +1,7 @@
 const database = require('../database.js');
 const { toUTCISOString } = require('../../../lib/server/time-utils.js');
 
-async function listAccountLastUpdates() {
-  const result = await database.query(
-    `
+const PRIMARY_LAST_UPDATE_SQL = `
       SELECT
         vc.id,
         vc.vendor,
@@ -57,8 +55,53 @@ async function listAccountLastUpdates() {
         GROUP BY t.vendor, t.vendor_nickname
       ) account_numbers ON vc.vendor = account_numbers.vendor AND vc.nickname = account_numbers.vendor_nickname
       ORDER BY vc.nickname ASC
-    `,
+    `;
+
+const LEGACY_LAST_UPDATE_SQL = `
+      SELECT
+        vc.id,
+        vc.vendor,
+        vc.vendor AS nickname,
+        NULL AS card6_digits,
+        NULL AS bank_account_number,
+        vc.created_at AS last_update,
+        'never' AS last_scrape_status,
+        NULL AS account_numbers,
+        NULL AS institution_id,
+        NULL AS institution_vendor_code,
+        NULL AS institution_name_he,
+        NULL AS institution_name_en,
+        NULL AS institution_logo,
+        NULL AS institution_type
+      FROM vendor_credentials vc
+      ORDER BY vc.vendor ASC
+    `;
+
+function isSchemaMismatchError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    message.includes('no such column') ||
+    message.includes('no such table') ||
+    message.includes('has no column named') ||
+    message.includes('column') && message.includes('does not exist')
   );
+}
+
+async function listAccountLastUpdates() {
+  let result;
+  try {
+    result = await database.query(PRIMARY_LAST_UPDATE_SQL);
+  } catch (error) {
+    if (!isSchemaMismatchError(error)) {
+      throw error;
+    }
+
+    console.warn(
+      '[accounts/last-update] Falling back to legacy query due to schema mismatch:',
+      error?.message || error,
+    );
+    result = await database.query(LEGACY_LAST_UPDATE_SQL);
+  }
 
   return result.rows.map((row) => {
     // Merge account numbers from transactions and card6_digits/bank_account_number

@@ -156,6 +156,33 @@ describe('credentials service', () => {
     expect(result[0].lastScrapeStatus).toBe('success');
   });
 
+  it('falls back to legacy query when schema mismatch is detected', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    queryMock
+      .mockRejectedValueOnce(new Error('SQLITE_ERROR: no such column: vc.institution_id'))
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 88,
+            vendor: 'legacy-bank',
+            lastScrapeStatus: 'never',
+          },
+        ],
+      });
+
+    const result = await credentialsService.listCredentials();
+
+    expect(queryMock).toHaveBeenCalledTimes(2);
+    expect(String(queryMock.mock.calls[1][0])).not.toContain('LEFT JOIN institution_nodes');
+    expect(result[0]).toMatchObject({
+      id: 88,
+      vendor: 'legacy-bank',
+      lastScrapeStatus: 'never',
+    });
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
   it('throws sanitized decrypt error when encrypted value cannot be decrypted', async () => {
     queryMock.mockResolvedValueOnce({
       rows: [createCredentialRow({ username: 'bad-encrypted' })],
