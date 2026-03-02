@@ -1,4 +1,4 @@
-const { CompanyTypes, createScraper } = require('israeli-bank-scrapers');
+const { CompanyTypes, createScraper } = require('israeli-bank-scrapers-core');
 const crypto = require('crypto');
 const path = require('path');
 const baseDatabase = require('../database.js');
@@ -158,13 +158,42 @@ function resolveTriggeredBy(credentials) {
 }
 
 async function getPuppeteerExecutable(logger = console) {
-  try {
-    const puppeteer = require('puppeteer');
-    return puppeteer.executablePath();
-  } catch (error) {
-    logger?.warn?.('Could not resolve Puppeteer Chrome executable, falling back to default');
-    return undefined;
+  const fs = require('fs');
+
+  // Using israeli-bank-scrapers-core with puppeteer-core — no bundled Chromium.
+  // Resolve a system-installed Chrome/Chromium browser.
+  const systemPaths = process.platform === 'darwin'
+    ? [
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+        '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      ]
+    : process.platform === 'win32'
+      ? [
+          'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+          'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+          `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
+        ]
+      : [
+          '/usr/bin/google-chrome',
+          '/usr/bin/google-chrome-stable',
+          '/usr/bin/chromium-browser',
+          '/usr/bin/chromium',
+        ];
+
+  for (const chromePath of systemPaths) {
+    try {
+      if (chromePath && fs.existsSync(chromePath)) {
+        logger?.info?.(`Using system Chrome: ${chromePath}`);
+        return chromePath;
+      }
+    } catch {
+      // skip inaccessible paths
+    }
   }
+
+  logger?.error?.('No Chrome/Chromium browser found. Please install Google Chrome to enable bank syncing.');
+  return undefined;
 }
 
 async function resolveStartDate(input, credentials) {
@@ -1109,6 +1138,12 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
     await client.query('BEGIN');
 
     const executablePath = await getPuppeteerExecutable(logger);
+    if (!executablePath) {
+      throw createHttpError(500,
+        'No Chrome or Chromium browser found. Please install Google Chrome to enable bank syncing.',
+        { errorType: 'browserNotFound' }
+      );
+    }
     const scraperOptions = buildScraperOptions(options, isBank, executablePath, resolvedStartDate);
     const scraperCredentials = prepareScraperCredentials(companyType, options, credentials);
 

@@ -49,8 +49,8 @@ vi.mock('../../../../lib/create-db-pool.js', () => ({
   default: vi.fn(),
 }));
 
-// Mock israeli-bank-scrapers
-vi.mock('israeli-bank-scrapers', () => ({
+// Mock israeli-bank-scrapers-core
+vi.mock('israeli-bank-scrapers-core', () => ({
   CompanyTypes: {
     hapoalim: 'hapoalim',
     leumi: 'leumi',
@@ -845,25 +845,21 @@ describe('scraping run service', () => {
       }
     });
 
-    it('falls back when puppeteer executable resolution throws', async () => {
+    it('returns undefined when no system Chrome is found', async () => {
       const internal = (runService as any)._internal;
       const logger = buildLogger();
-      const originalRequire = Module.prototype.require;
-      const requireSpy = vi.spyOn(Module.prototype, 'require').mockImplementation(function (id: string, ...rest: any[]) {
-        if (id === 'puppeteer') {
-          throw new Error('puppeteer missing');
-        }
-        return originalRequire.call(this, id, ...rest);
-      });
+      const fs = require('fs');
+      // Mock fs.existsSync to return false for all system Chrome paths
+      const existsSyncSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(false);
 
       try {
         const executablePath = await internal.getPuppeteerExecutable(logger);
         expect(executablePath).toBeUndefined();
-        expect(logger.warn).toHaveBeenCalledWith(
-          'Could not resolve Puppeteer Chrome executable, falling back to default',
+        expect(logger.error).toHaveBeenCalledWith(
+          'No Chrome/Chromium browser found. Please install Google Chrome to enable bank syncing.',
         );
       } finally {
-        requireSpy.mockRestore();
+        existsSyncSpy.mockRestore();
       }
     });
 
@@ -1624,7 +1620,7 @@ describe('scraping run service', () => {
         if (id === '../database.js') {
           return localDb;
         }
-        if (id === 'israeli-bank-scrapers') {
+        if (id === 'israeli-bank-scrapers-core') {
           return {
             CompanyTypes: {
               hapoalim: 'hapoalim',
@@ -1751,7 +1747,7 @@ describe('scraping run service', () => {
             }),
           };
         }
-        if (id === 'israeli-bank-scrapers') {
+        if (id === 'israeli-bank-scrapers-core') {
           return {
             CompanyTypes: {
               hapoalim: 'hapoalim',

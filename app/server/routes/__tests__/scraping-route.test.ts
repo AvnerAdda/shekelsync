@@ -8,7 +8,7 @@ const mockListScrapeEvents = vi.fn();
 const mockGetScrapeStatusById = vi.fn();
 const mockWasScrapedRecently = vi.fn();
 
-vi.mock('israeli-bank-scrapers', () => ({
+vi.mock('israeli-bank-scrapers-core', () => ({
   CompanyTypes: {
     isracard: 'isracard',
     visaCal: 'visaCal',

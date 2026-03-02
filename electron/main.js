@@ -1707,10 +1707,10 @@ ipcMain.handle('scrape:test', async (event, companyId) => {
     const path = require('path');
     let CompanyTypes;
     try {
-      const scraperModule = requireFromApp('israeli-bank-scrapers');
+      const scraperModule = requireFromApp('israeli-bank-scrapers-core');
       CompanyTypes = scraperModule.CompanyTypes;
     } catch (error) {
-      const scraperModule = require('israeli-bank-scrapers');
+      const scraperModule = require('israeli-bank-scrapers-core');
       CompanyTypes = scraperModule.CompanyTypes;
     }
     const companyType = CompanyTypes[companyId];
