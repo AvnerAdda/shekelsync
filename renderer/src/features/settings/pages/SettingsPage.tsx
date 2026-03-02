@@ -63,6 +63,33 @@ const SettingsPage: React.FC = () => {
     error: telemetryError,
     setTelemetryEnabled,
   } = useTelemetry();
+  const [appVersion, setAppVersion] = React.useState('unknown');
+
+  React.useEffect(() => {
+    let active = true;
+
+    const loadAppVersion = async () => {
+      try {
+        const rawVersion = await window.electronAPI?.app?.getVersion?.();
+        const normalizedVersion = typeof rawVersion === 'string' && rawVersion.trim().length > 0
+          ? rawVersion.trim()
+          : 'unknown';
+
+        if (active) {
+          setAppVersion(normalizedVersion);
+        }
+      } catch {
+        if (active) {
+          setAppVersion('unknown');
+        }
+      }
+    };
+
+    void loadAppVersion();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const languageOptions = [
     { code: 'he', label: tCommon('languages.he') },
@@ -82,6 +109,9 @@ const SettingsPage: React.FC = () => {
   };
 
   const detectedLanguageLabel = languageOptions.find((lang) => lang.code === detectedLocale)?.label ?? tCommon('language');
+  const appTagVersion = appVersion !== 'unknown' && !appVersion.startsWith('v')
+    ? `v${appVersion}`
+    : appVersion;
 
   const handleLanguageChange = (newLocale: SupportedLocale | null) => {
     if (newLocale) {
@@ -477,7 +507,7 @@ const SettingsPage: React.FC = () => {
           About ShekelSync
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          Version: 2.0.0 (Personal Intelligence Edition)
+          Version: {appTagVersion} (Personal Intelligence Edition)
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
           ShekelSync is a personal finance tracking application for Israeli bank accounts and credit cards.
