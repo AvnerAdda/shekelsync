@@ -1,21 +1,21 @@
 const path = require('path');
 const { requireFromApp } = require('./paths');
 
-// Load israeli-bank-scrapers from app directory
+// Load israeli-bank-scrapers-core from app directory
 let CompanyTypes, createScraper;
 try {
-  const scraperModule = requireFromApp('israeli-bank-scrapers');
+  const scraperModule = requireFromApp('israeli-bank-scrapers-core');
   CompanyTypes = scraperModule.CompanyTypes;
   createScraper = scraperModule.createScraper;
 } catch (error) {
-  console.error('Failed to load israeli-bank-scrapers:', error.message);
+  console.error('Failed to load israeli-bank-scrapers-core:', error.message);
   // Fallback - try global installation
   try {
-    const scraperModule = require('israeli-bank-scrapers');
+    const scraperModule = require('israeli-bank-scrapers-core');
     CompanyTypes = scraperModule.CompanyTypes;
     createScraper = scraperModule.createScraper;
   } catch (fallbackError) {
-    console.error('israeli-bank-scrapers not available:', fallbackError.message);
+    console.error('israeli-bank-scrapers-core not available:', fallbackError.message);
   }
 }
 const crypto = require('crypto');
@@ -423,14 +423,36 @@ class ElectronScraper {
         verbose: true,
         timeout: 120000, // 2 minutes timeout
         executablePath: (() => {
-          try {
-            // Try to get Puppeteer's bundled Chrome first
-            const puppeteer = requireFromApp('puppeteer');
-            return puppeteer.executablePath();
-          } catch (error) {
-            console.warn('Could not find Puppeteer Chrome in Electron, using default');
-            return undefined; // Let israeli-bank-scrapers find its own browser
+          // Using israeli-bank-scrapers-core with puppeteer-core — find system Chrome
+          const fs = require('fs');
+          const systemPaths = process.platform === 'darwin'
+            ? [
+                '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+                '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+                '/Applications/Chromium.app/Contents/MacOS/Chromium',
+              ]
+            : process.platform === 'win32'
+              ? [
+                  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+                  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+                  `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
+                ]
+              : [
+                  '/usr/bin/google-chrome',
+                  '/usr/bin/google-chrome-stable',
+                  '/usr/bin/chromium-browser',
+                  '/usr/bin/chromium',
+                ];
+          for (const chromePath of systemPaths) {
+            try {
+              if (chromePath && fs.existsSync(chromePath)) {
+                console.log(`Using system Chrome: ${chromePath}`);
+                return chromePath;
+              }
+            } catch { /* skip */ }
           }
+          console.warn('No system Chrome found — scraping may fail');
+          return undefined;
         })(),
         args: [
           '--no-sandbox',

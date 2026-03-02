@@ -14,7 +14,8 @@ const {
 
 let appLogger = null;
 try {
-  ({ logger: appLogger } = require('../../../electron/logger.js'));
+  const { resolveElectronPath } = require('../../lib/resolve-electron-path.js');
+  ({ logger: appLogger } = require(resolveElectronPath('logger.js')));
 } catch {
   appLogger = null;
 }
@@ -63,7 +64,7 @@ const routeLogger = createLogger('router');
 
 let CompanyTypes = {};
 try {
-  ({ CompanyTypes } = require('israeli-bank-scrapers'));
+  ({ CompanyTypes } = require('israeli-bank-scrapers-core'));
 } catch (error) {
   routeLogger.warn('Failed to load CompanyTypes from israeli-bank-scrapers.', error);
 }
