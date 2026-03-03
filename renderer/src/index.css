@@ -70,16 +70,19 @@ body.window-maximized #root {
   }
 }
 
-/* Smooth window transitions */
-* {
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-/* Allow text selection in input fields */
+/* Allow text selection throughout the app by default */
+body,
+#root,
 input,
 textarea,
 [contenteditable] {
   -webkit-user-select: text;
   user-select: text;
+}
+
+/* Keep class-based drag regions non-selectable when used */
+.draggable,
+.draggable * {
+  -webkit-user-select: none;
+  user-select: none;
 }

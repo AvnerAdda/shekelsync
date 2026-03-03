@@ -648,7 +648,7 @@
           "sandboxDisabled": "Le sandbox Electron est désactivé. Réactivez-le en production."
         },
         "updates": {
-          "disabled": "Les mises à jour automatiques sont désactivées. Définissez ENABLE_AUTO_UPDATE=true."
+          "disabled": "Les mises à jour automatiques sont désactivées via ENABLE_AUTO_UPDATE=false."
         }
       },
       "errors": {

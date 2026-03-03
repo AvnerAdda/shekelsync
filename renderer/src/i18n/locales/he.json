@@ -661,7 +661,7 @@
           "sandboxDisabled": "הסנדבוקס של Electron מושבת. יש להפעיל בפרודקשן."
         },
         "updates": {
-          "disabled": "עדכונים אוטומטיים מושבתים. הגדירו ENABLE_AUTO_UPDATE=true."
+          "disabled": "עדכונים אוטומטיים מושבתים דרך ENABLE_AUTO_UPDATE=false."
         }
       },
       "errors": {

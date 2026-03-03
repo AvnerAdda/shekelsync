@@ -11,6 +11,13 @@ const CONFIDENCE_UPDATE_BULK_EXPR = dialect.useSqlite
   ? 'CASE WHEN confidence_score IS NULL OR confidence_score < $3 THEN $3 ELSE confidence_score END'
   : 'GREATEST(confidence_score, $3)';
 
+function containsInsensitive(column, placeholder) {
+  if (dialect.useSqlite) {
+    return `${column} LIKE '%' || ${placeholder} || '%'`;
+  }
+  return `LOWER(${column}) LIKE '%' || LOWER(${placeholder}) || '%'`;
+}
+
 let database = actualDatabase;
 let resolveCategoryFn = actualResolveCategory;
 
@@ -40,7 +47,7 @@ async function categorizeTransaction(payload = {}) {
        LEFT JOIN category_definitions cd ON cd.id = cr.category_definition_id
        LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
        WHERE cr.is_active = true
-         AND $1 LIKE '%' || cr.name_pattern || '%'
+         AND ${containsInsensitive('$1', 'cr.name_pattern')}
        ORDER BY
          LENGTH(cr.name_pattern) DESC,
          cr.priority DESC
@@ -199,7 +206,7 @@ async function bulkCategorizeTransactions(providedClient = null) {
                 merchant_name = name,
                 auto_categorized = true,
                 confidence_score = ${CONFIDENCE_UPDATE_BULK_EXPR}
-          WHERE name LIKE '%' || $1 || '%'
+          WHERE ${containsInsensitive('name', '$1')}
             AND category_definition_id NOT IN (
               SELECT id FROM category_definitions
               WHERE name = $4 OR category_type = 'income'

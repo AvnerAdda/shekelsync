@@ -1,7 +1,15 @@
 const actualDatabase = require('../database.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
+const { dialect } = require('../../../lib/sql-dialect.js');
 
 let database = actualDatabase;
+
+function likeInsensitive(column, placeholder) {
+  if (dialect.useSqlite) {
+    return `${column} LIKE ${placeholder}`;
+  }
+  return `LOWER(${column}) LIKE LOWER(${placeholder})`;
+}
 
 function serviceError(status, message) {
   const error = new Error(message);
@@ -303,7 +311,7 @@ async function createAutoRule(payload = {}) {
           WHEN COALESCE(confidence_score, 0) > $4 THEN confidence_score
           ELSE $4
         END
-      WHERE name LIKE $1
+      WHERE ${likeInsensitive('name', '$1')}
         ${priceCondition}
     `,
     [pattern, categoryDefinitionId, appliedCategoryType, confidence],
@@ -364,7 +372,7 @@ async function previewRuleMatches(params = {}) {
        FROM transactions t
        LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
        LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
-       WHERE t.name LIKE $1
+       WHERE ${likeInsensitive('t.name', '$1')}
        ORDER BY t.date DESC
        LIMIT $2`,
       [patternWithWildcards, safeLimit],
@@ -372,7 +380,7 @@ async function previewRuleMatches(params = {}) {
     database.query(
       `SELECT COUNT(*) AS total
          FROM transactions
-        WHERE name LIKE $1`
+        WHERE ${likeInsensitive('name', '$1')}`
       , [patternWithWildcards],
     ),
   ]);
@@ -498,7 +506,7 @@ async function applyCategorizationRules() {
             category_type = $3,
             auto_categorized = true,
             confidence_score = MAX(confidence_score, $4)
-          WHERE name LIKE $1
+          WHERE ${likeInsensitive('name', '$1')}
             ${priceCondition}
             AND (
               category_definition_id IS NULL

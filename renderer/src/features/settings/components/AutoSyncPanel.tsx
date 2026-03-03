@@ -156,7 +156,9 @@ const AutoSyncPanel: React.FC = () => {
   const handleSyncNow = useCallback(async () => {
     setSyncing(true);
     try {
-      const response = await apiClient.post('/api/scrape/bulk', {});
+      const response = await apiClient.post('/api/scrape/bulk', {
+        showBrowser: Boolean(backgroundSync.showBrowserOnSync),
+      });
       if (!response.ok) {
         const licenseCheck = isLicenseReadOnlyError(response.data);
         if (licenseCheck.isReadOnly) {
@@ -180,7 +182,7 @@ const AutoSyncPanel: React.FC = () => {
     } finally {
       setSyncing(false);
     }
-  }, [showNotification, t]);
+  }, [backgroundSync.showBrowserOnSync, showNotification, t]);
 
   const lastRunLabel = useMemo(() => {
     if (!backgroundSync.lastRunAt) {

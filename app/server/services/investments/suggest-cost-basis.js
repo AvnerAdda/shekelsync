@@ -1,6 +1,7 @@
 const path = require('path');
 const { pathToFileURL } = require('url');
 const actualDatabase = require('../database.js');
+const { dialect } = require('../../../lib/sql-dialect.js');
 let database = actualDatabase;
 
 function serviceError(status, message) {
@@ -88,7 +89,11 @@ async function suggestCostBasis(params = {}) {
   }
 
   const patternConditions = patterns
-    .map((_, index) => `name LIKE $${index + 2}`)
+    .map((_, index) => (
+      dialect.useSqlite
+        ? `name LIKE $${index + 2}`
+        : `LOWER(name) LIKE LOWER($${index + 2})`
+    ))
     .join(' OR ');
 
   const transactionsQuery = `

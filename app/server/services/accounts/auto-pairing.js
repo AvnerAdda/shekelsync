@@ -1,6 +1,7 @@
 const database = require('../database.js');
 const pairingsServiceModule = require('./pairings.js');
 const repaymentCategoryModule = require('./repayment-category.js');
+const { dialect } = require('../../../lib/sql-dialect.js');
 let pairingsServiceRef = pairingsServiceModule;
 let repaymentCategoryRef = repaymentCategoryModule;
 
@@ -13,6 +14,13 @@ const VENDOR_KEYWORDS = {
   leumi: ['לאומי כרט', 'leumi card'],
   diners: ['דיינרס', 'diners'],
 };
+
+function containsInsensitive(column, placeholder) {
+  if (dialect.useSqlite) {
+    return `${column} LIKE '%' || ${placeholder} || '%'`;
+  }
+  return `LOWER(${column}) LIKE '%' || LOWER(${placeholder}) || '%'`;
+}
 
 async function getCCFeesCategoryId(client) {
   try {
@@ -767,7 +775,7 @@ async function applyPairingToTransactions({
     const params = [bankVendor];
     const conditions = matchPatterns.map((pattern, idx) => {
       params.push(String(pattern));
-      return `name LIKE '%' || $${idx + 2} || '%'`;
+      return containsInsensitive('name', `$${idx + 2}`);
     });
 
     // Add the category ID as a parameter
