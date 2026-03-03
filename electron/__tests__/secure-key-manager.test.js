@@ -255,7 +255,7 @@ describe('SecureKeyManager', () => {
       secureKeyManager = module.default || module;
 
       await expect(secureKeyManager.rotateKey()).rejects.toThrow(
-        'Key rotation requires keychain support'
+        'Key rotation failed: could not store in keychain or safeStorage'
       );
     });
   });

@@ -19,6 +19,7 @@ const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const { getInstitutionById, mapInstitutionToVendorCode } = require('../institutions.js');
 const { syncBankBalanceToInvestments, forwardFillForCredential } = require('../investments/balance-sync.js');
 const { getCreditCardRepaymentCategoryId } = require('../accounts/repayment-category.js');
+const { dialect } = require('../../../lib/sql-dialect.js');
 
 const DEFAULT_TIMEOUT = 120000; // 2 minutes
 const MAX_TIMEOUT = 180000; // 3 minutes for problematic scrapers
@@ -155,6 +156,20 @@ function getCredentialAuditLabel(credentials) {
 
 function resolveTriggeredBy(credentials) {
   return getCredentialAuditLabel(credentials);
+}
+
+function containsInsensitive(column, placeholder) {
+  if (dialect.useSqlite) {
+    return `${column} LIKE '%' || ${placeholder} || '%'`;
+  }
+  return `LOWER(${column}) LIKE '%' || LOWER(${placeholder}) || '%'`;
+}
+
+function likeInsensitive(column, placeholder) {
+  if (dialect.useSqlite) {
+    return `${column} LIKE ${placeholder}`;
+  }
+  return `LOWER(${column}) LIKE LOWER(${placeholder})`;
 }
 
 async function getPuppeteerExecutable(logger = console) {
@@ -816,7 +831,7 @@ async function applyCategorizationRules(client) {
                WHEN confidence_score IS NULL OR confidence_score < $3 THEN $3
                ELSE confidence_score
              END
-       WHERE LOWER(name) LIKE LOWER($1)
+       WHERE ${likeInsensitive('name', '$1')}
          AND (
            category_definition_id IS NULL
            OR category_definition_id NOT IN (
@@ -876,8 +891,8 @@ async function applyAccountPairings(client) {
 
     const params = [bankVendor];
     const conditions = matchPatterns.map((pattern, idx) => {
-      params.push(pattern.toLowerCase());
-      return `LOWER(name) LIKE '%' || $${idx + 2} || '%'`;
+      params.push(pattern);
+      return containsInsensitive('name', `$${idx + 2}`);
     });
 
     // Add the category ID as a parameter

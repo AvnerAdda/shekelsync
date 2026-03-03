@@ -454,19 +454,21 @@ describe('categorization rules service', () => {
               category_type: 'expense',
             },
           ],
-        })
-        .mockResolvedValueOnce({ rows: [{ id: 999 }] }) // bank category id
+        }) // rules query
         .mockResolvedValueOnce({
           rows: [
             {
               id: 200,
               name: 'Streaming Services',
               category_type: 'expense',
+              parent_id: null,
+              depth_level: 2,
               parent_name: 'Entertainment',
             },
           ],
-        })
-        .mockResolvedValueOnce({ rowCount: 3 });
+        }) // all categories query
+        .mockResolvedValueOnce({ rows: [{ id: 999 }] }) // bank category id
+        .mockResolvedValueOnce({ rowCount: 3 }); // update
 
       const result = await rulesService.applyCategorizationRules();
 
@@ -499,19 +501,20 @@ describe('categorization rules service', () => {
               category_type: null,
             },
           ],
-        })
-        .mockResolvedValueOnce({ rows: [] }) // no bank category
+        }) // rules query
         .mockResolvedValueOnce({
-          rows: [{ id: 7, name: 'Salary', category_type: 'income', parent_name: null }],
-        }) // fallback category lookup
-        .mockResolvedValueOnce({ rowCount: 2 }) // update for income rule
-        .mockResolvedValueOnce({ rows: [] }); // missing explicit category id => skipped
+          rows: [
+            { id: 7, name: 'Salary', category_type: 'income', parent_id: null, depth_level: 2, parent_name: null },
+          ],
+        }) // all categories query (only Salary exists, 999 missing → rule 2 skipped)
+        .mockResolvedValueOnce({ rows: [] }) // no bank category
+        .mockResolvedValueOnce({ rowCount: 2 }); // update for income rule
 
       const result = await rulesService.applyCategorizationRules();
 
       expect(result).toEqual({
         success: true,
-        rulesApplied: 2,
+        rulesApplied: 1,
         transactionsUpdated: 2,
       });
       const updateSql = String(clientQueryMock.mock.calls[3][0]);

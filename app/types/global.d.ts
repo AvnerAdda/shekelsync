@@ -59,6 +59,7 @@ declare global {
     runOnStartup?: boolean;
     keepRunningInTray?: boolean;
     headless?: boolean;
+    showBrowserOnSync?: boolean;
     lastRunAt?: string;
     lastResult?: {
       status: 'success' | 'failed' | 'skipped' | 'blocked';

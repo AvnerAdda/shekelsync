@@ -286,12 +286,10 @@ try {
 }
 
 const AUTO_UPDATE_ENV_FLAG = 'ENABLE_AUTO_UPDATE';
-if (typeof process.env[AUTO_UPDATE_ENV_FLAG] === 'undefined') {
-  process.env[AUTO_UPDATE_ENV_FLAG] = 'false';
-}
 
 function shouldEnableAutoUpdate() {
-  return !isDev && autoUpdater && process.env[AUTO_UPDATE_ENV_FLAG] === 'true';
+  // Enable auto-updates by default in packaged apps. Allow explicit opt-out via ENABLE_AUTO_UPDATE=false.
+  return !isDev && autoUpdater && process.env[AUTO_UPDATE_ENV_FLAG] !== 'false';
 }
 
 const MIGRATION_ENV_FLAG = 'ALLOW_DB_MIGRATE';
@@ -535,7 +533,7 @@ Click "Exit" to close the app and manually remove the variable.${instructions}`,
     throw new Error('Keychain disabled by environment.');
   }
 
-  if (!secureKeyManager.keytarAvailable && !allowInsecureEnvKey && !isLinux) {
+  if (!secureKeyManager.isSecureStorageAvailable() && !allowInsecureEnvKey && !isLinux) {
     abortForSecurity(
       'OS keychain storage is required. Install and enable the system keychain (Credential Manager/Keychain/libsecret) and restart.',
     );

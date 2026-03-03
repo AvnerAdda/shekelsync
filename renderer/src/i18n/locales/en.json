@@ -313,6 +313,8 @@
         "monthly": "Monthly"
       },
       "keepRunningLabel": "Keep running in tray when window closes",
+      "showBrowserLabel": "Show browser window during sync",
+      "showBrowserHint": "Opens Chrome visibly so you can watch the sync progress",
       "headlessLabel": "Run silently (headless)",
       "actions": {
         "syncNow": "Sync now"
@@ -649,7 +651,7 @@
           "sandboxDisabled": "Electron sandbox is disabled. Re-enable for production builds."
         },
         "updates": {
-          "disabled": "Auto-updates are disabled. Set ENABLE_AUTO_UPDATE=true to enable."
+          "disabled": "Auto-updates are disabled via ENABLE_AUTO_UPDATE=false."
         }
       },
       "errors": {

@@ -1,62 +1,56 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import {
-  Box,
-  IconButton,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
-  Divider,
-  Typography,
-  Chip,
-  useTheme,
-  Tooltip,
-  Autocomplete,
-  TextField,
-  InputAdornment,
-  Paper,
-} from '@mui/material';
-import { alpha } from '@mui/material/styles';
-import {
-  Menu as MenuIcon,
-  Close as CloseIcon,
-  Minimize as MinimizeIcon,
-  CropSquare as MaximizeIcon,
-  Description as FileIcon,
-  Edit as EditIcon,
-  Visibility as ViewIcon,
-  Help as HelpIcon,
-  FiberNew as NewIcon,
-  FolderOpen as OpenIcon,
-  Save as SaveIcon,
-  ExitToApp as ExitIcon,
-  Undo as UndoIcon,
-  Redo as RedoIcon,
-  ContentCut as CutIcon,
-  ContentCopy as CopyIcon,
-  ContentPaste as PasteIcon,
-  Fullscreen as FullscreenIcon,
-  ZoomIn as ZoomInIcon,
-  ZoomOut as ZoomOutIcon,
-  SettingsBackupRestore as ResetIcon,
-  Analytics as AnalyticsIcon,
-  TrendingUp as InvestmentsIcon,
-  Settings as SettingsIcon,
-  MenuBook as DocsIcon,
-  Info as AboutIcon,
-  BugReport as DiagnosticsIcon,
-  FolderOpen as FolderIcon,
-  FileDownload as FileDownloadIcon,
-  LightMode as LightModeIcon,
-  DarkMode as DarkModeIcon,
-  Translate as TranslateIcon,
-  Search as SearchIcon,
-  Home as HomeIcon,
-  AccountBalance as AccountsIcon,
-  Category as CategoryIcon,
-  LocalCafe as CoffeeIcon,
-  Feedback as FeedbackIcon,
-} from '@mui/icons-material';
+import Autocomplete from '@mui/material/Autocomplete';
+import Box from '@mui/material/Box';
+import Chip from '@mui/material/Chip';
+import Divider from '@mui/material/Divider';
+import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import Paper from '@mui/material/Paper';
+import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
+import Typography from '@mui/material/Typography';
+import { alpha, useTheme } from '@mui/material/styles';
+import AboutIcon from '@mui/icons-material/Info';
+import AccountsIcon from '@mui/icons-material/AccountBalance';
+import AnalyticsIcon from '@mui/icons-material/Analytics';
+import CategoryIcon from '@mui/icons-material/Category';
+import CloseIcon from '@mui/icons-material/Close';
+import CoffeeIcon from '@mui/icons-material/LocalCafe';
+import CopyIcon from '@mui/icons-material/ContentCopy';
+import CutIcon from '@mui/icons-material/ContentCut';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import DiagnosticsIcon from '@mui/icons-material/BugReport';
+import DocsIcon from '@mui/icons-material/MenuBook';
+import EditIcon from '@mui/icons-material/Edit';
+import ExitIcon from '@mui/icons-material/ExitToApp';
+import FeedbackIcon from '@mui/icons-material/Feedback';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import FileIcon from '@mui/icons-material/Description';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import HelpIcon from '@mui/icons-material/Help';
+import HomeIcon from '@mui/icons-material/Home';
+import InvestmentsIcon from '@mui/icons-material/TrendingUp';
+import LightModeIcon from '@mui/icons-material/LightMode';
+import MaximizeIcon from '@mui/icons-material/CropSquare';
+import MenuIcon from '@mui/icons-material/Menu';
+import MinimizeIcon from '@mui/icons-material/Minimize';
+import NewIcon from '@mui/icons-material/FiberNew';
+import PasteIcon from '@mui/icons-material/ContentPaste';
+import RedoIcon from '@mui/icons-material/Redo';
+import ResetIcon from '@mui/icons-material/SettingsBackupRestore';
+import SaveIcon from '@mui/icons-material/Save';
+import SearchIcon from '@mui/icons-material/Search';
+import SettingsIcon from '@mui/icons-material/Settings';
+import TranslateIcon from '@mui/icons-material/Translate';
+import UndoIcon from '@mui/icons-material/Undo';
+import ViewIcon from '@mui/icons-material/Visibility';
+import ZoomInIcon from '@mui/icons-material/ZoomIn';
+import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import logoUrl from '@app/public/logo.svg?url';
@@ -398,7 +392,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
             <ListItemText>{t('titleBar.menu.items.new')}</ListItemText>
           </MenuItem>,
           <MenuItem key="file-open" onClick={() => handleMenuAction('file-open')}>
-            <ListItemIcon><OpenIcon fontSize="small" /></ListItemIcon>
+            <ListItemIcon><FolderOpenIcon fontSize="small" /></ListItemIcon>
             <ListItemText>{t('titleBar.menu.items.open')}</ListItemText>
           </MenuItem>,
           <MenuItem key="file-save" onClick={() => handleMenuAction('file-save')}>
@@ -462,7 +456,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
             <ListItemText>{t('titleBar.menu.items.documentation')}</ListItemText>
           </MenuItem>,
           <MenuItem key="help-open-logs" onClick={() => handleMenuAction('help-open-logs')}>
-            <ListItemIcon><FolderIcon fontSize="small" /></ListItemIcon>
+            <ListItemIcon><FolderOpenIcon fontSize="small" /></ListItemIcon>
             <ListItemText>{t('titleBar.menu.items.openLogs')}</ListItemText>
           </MenuItem>,
           <MenuItem key="help-export-diagnostics" onClick={() => handleMenuAction('help-export-diagnostics')}>
