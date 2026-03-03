@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Badge from '@mui/material/Badge';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import { alpha, useTheme } from '@mui/material/styles';
 import ShieldIcon from '@mui/icons-material/Shield';
-import { apiClient } from '@/lib/api-client';
+import { useSecurity } from '@renderer/features/security/contexts/SecurityContext';
 
 interface SecurityIndicatorProps {
   onClick?: () => void;
@@ -46,34 +46,14 @@ export function getSecurityTooltip(level: SecurityLevel): string {
 
 const SecurityIndicator: React.FC<SecurityIndicatorProps> = ({ onClick }) => {
   const theme = useTheme();
-  const [securityLevel, setSecurityLevel] = useState<SecurityLevel>('unknown');
-  const [tooltip, setTooltip] = useState('Loading security status...');
+  const { summary, loading, error } = useSecurity();
 
-  const fetchSecurityStatus = async () => {
-    try {
-      const response = await apiClient.get('/api/security/summary');
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch security summary');
-      }
-
-      const level = parseSecuritySummaryLevel(response.data);
-      setSecurityLevel(level);
-      setTooltip(getSecurityTooltip(level));
-    } catch (err) {
-      console.error('[SecurityIndicator] Error fetching status:', err);
-      setSecurityLevel('unknown');
-      setTooltip('Security status unavailable');
-    }
-  };
-
-  useEffect(() => {
-    fetchSecurityStatus();
-
-    // Refresh every 60 seconds
-    const interval = setInterval(fetchSecurityStatus, 60000);
-    return () => clearInterval(interval);
-  }, []);
+  const securityLevel: SecurityLevel = summary?.level ?? 'unknown';
+  const tooltip = error
+    ? 'Security status unavailable'
+    : loading && !summary
+      ? 'Loading security status...'
+      : getSecurityTooltip(securityLevel);
 
   const getSecurityColor = () => {
     switch (securityLevel) {

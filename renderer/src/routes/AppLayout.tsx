@@ -209,8 +209,8 @@ const AppLayout: React.FC = () => {
           animation: 'pulse 8s ease-in-out infinite',
         },
         '@keyframes pulse': {
-          '0%, 100%': { opacity: 0.6, transform: 'scale(1)' },
-          '50%': { opacity: 1, transform: 'scale(1.05)' },
+          '0%, 100%': { opacity: 0.6 },
+          '50%': { opacity: 1 },
         },
       }}
     >

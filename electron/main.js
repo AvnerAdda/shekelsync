@@ -356,7 +356,6 @@ async function runLicenseIpcSmokeTest(email) {
       sandbox: true,
       preload: path.join(__dirname, 'preload.js'),
       webSecurity: true,
-      backgroundThrottling: false,
     },
   });
 
@@ -1064,7 +1063,6 @@ async function createWindow() {
       // Performance optimizations
       experimentalFeatures: false,
       spellcheck: false,
-      backgroundThrottling: false,
       allowRunningInsecureContent: false
     },
     icon: getIconPath(),

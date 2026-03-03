@@ -1,5 +1,6 @@
 export { default as DonationModal } from './components/DonationModal';
 export { default as DonationReminderDialog } from './components/DonationReminderDialog';
+export { DonationStatusProvider } from './contexts/DonationStatusContext';
 export { useDonationStatus } from './hooks/useDonationStatus';
 export type { UseDonationStatusReturn } from './hooks/useDonationStatus';
 export type {
