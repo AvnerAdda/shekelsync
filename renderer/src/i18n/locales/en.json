@@ -313,6 +313,8 @@
         "monthly": "Monthly"
       },
       "keepRunningLabel": "Keep running in tray when window closes",
+      "showBrowserLabel": "Show browser window during sync",
+      "showBrowserHint": "Opens Chrome visibly so you can watch the sync progress",
       "headlessLabel": "Run silently (headless)",
       "actions": {
         "syncNow": "Sync now"

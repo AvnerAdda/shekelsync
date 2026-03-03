@@ -17,7 +17,7 @@ function createCredentialsRouter() {
 
   router.get('/', async (req, res) => {
     try {
-      const credentials = await credentialsService.listCredentials(req.query || {});
+      const credentials = await credentialsService.listCredentials({ ...req.query, skipDecrypt: true });
       logCredentialAccess({
         action: 'list',
         count: credentials.length,

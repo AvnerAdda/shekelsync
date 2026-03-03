@@ -766,8 +766,8 @@ async function applyPairingToTransactions({
 
     const params = [bankVendor];
     const conditions = matchPatterns.map((pattern, idx) => {
-      params.push(String(pattern).toLowerCase());
-      return `LOWER(name) LIKE '%' || $${idx + 2} || '%'`;
+      params.push(String(pattern));
+      return `name LIKE '%' || $${idx + 2} || '%'`;
     });
 
     // Add the category ID as a parameter

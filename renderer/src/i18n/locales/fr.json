@@ -310,6 +310,8 @@
         "monthly": "Mensuel"
       },
       "keepRunningLabel": "Continuer à fonctionner dans le tray lorsque la fenêtre est fermée",
+      "showBrowserLabel": "Afficher la fenêtre du navigateur pendant la synchronisation",
+      "showBrowserHint": "Ouvre Chrome de manière visible pour suivre la progression de la synchronisation",
       "headlessLabel": "Exécuter silencieusement (sans interface)",
       "actions": {
         "syncNow": "Synchroniser maintenant"

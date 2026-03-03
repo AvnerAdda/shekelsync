@@ -885,6 +885,7 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_date ON transactions (vendor, date);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_datetime ON transactions (vendor, transaction_datetime DESC);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_nickname ON transactions (vendor, vendor_nickname);',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_name ON transactions (name COLLATE NOCASE);',
   // Composite indexes for common query patterns
   'CREATE INDEX IF NOT EXISTS idx_transactions_vendor_date_category ON transactions (vendor, date DESC, category_definition_id);',
   'CREATE INDEX IF NOT EXISTS idx_transactions_status_date_vendor ON transactions (status, date DESC, vendor);',

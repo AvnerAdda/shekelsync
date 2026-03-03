@@ -88,7 +88,7 @@ async function suggestCostBasis(params = {}) {
   }
 
   const patternConditions = patterns
-    .map((_, index) => `LOWER(name) LIKE $${index + 2}`)
+    .map((_, index) => `name LIKE $${index + 2}`)
     .join(' OR ');
 
   const transactionsQuery = `

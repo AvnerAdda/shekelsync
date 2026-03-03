@@ -40,7 +40,7 @@ async function categorizeTransaction(payload = {}) {
        LEFT JOIN category_definitions cd ON cd.id = cr.category_definition_id
        LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
        WHERE cr.is_active = true
-         AND LOWER($1) LIKE '%' || LOWER(cr.name_pattern) || '%'
+         AND $1 LIKE '%' || cr.name_pattern || '%'
        ORDER BY
          LENGTH(cr.name_pattern) DESC,
          cr.priority DESC
@@ -199,7 +199,7 @@ async function bulkCategorizeTransactions(providedClient = null) {
                 merchant_name = name,
                 auto_categorized = true,
                 confidence_score = ${CONFIDENCE_UPDATE_BULK_EXPR}
-          WHERE LOWER(name) LIKE '%' || LOWER($1) || '%'
+          WHERE name LIKE '%' || $1 || '%'
             AND category_definition_id NOT IN (
               SELECT id FROM category_definitions
               WHERE name = $4 OR category_type = 'income'

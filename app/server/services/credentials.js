@@ -25,7 +25,7 @@ function safeDecrypt(value) {
   }
 }
 
-function mapCredentialRow(row) {
+function mapCommonFields(row) {
   const rawLastUpdate =
     row.lastUpdate ??
     row.lastupdate ??
@@ -40,15 +40,10 @@ function mapCredentialRow(row) {
     id: row.id,
     vendor: row.vendor,
     institution_id: row.institution_id,
-    username: safeDecrypt(row.username),
-    password: safeDecrypt(row.password),
-    id_number: safeDecrypt(row.id_number),
     card6_digits: row.card6_digits,
-    identification_code: safeDecrypt(row.identification_code),
     nickname: row.nickname,
     bank_account_number: row.bank_account_number,
     created_at: toUTCISOStringRef(row.created_at),
-    // Balance now comes from investment_holdings
     current_balance: row.current_balance !== undefined ? row.current_balance : (row.holding_balance || null),
     balance_updated_at: toUTCISOStringRef(row.balance_updated_at || row.holding_as_of_date),
     lastUpdate: toUTCISOStringRef(rawLastUpdate),
@@ -56,12 +51,29 @@ function mapCredentialRow(row) {
     last_scrape_attempt: toUTCISOStringRef(row.last_scrape_attempt),
   };
 
-  // Add institution object if available
   const institution = buildInstitutionFromRowRef(row);
   if (institution) {
     credential.institution = institution;
   }
 
+  return credential;
+}
+
+function mapCredentialRow(row) {
+  const credential = mapCommonFields(row);
+  credential.username = safeDecrypt(row.username);
+  credential.password = safeDecrypt(row.password);
+  credential.id_number = safeDecrypt(row.id_number);
+  credential.identification_code = safeDecrypt(row.identification_code);
+  return credential;
+}
+
+function mapCredentialRowLight(row) {
+  const credential = mapCommonFields(row);
+  credential.username = null;
+  credential.password = null;
+  credential.id_number = null;
+  credential.identification_code = null;
   return credential;
 }
 
@@ -210,7 +222,8 @@ async function listCredentials(params = {}) {
     result = await database.query(legacySql, sqlParams);
   }
 
-  return result.rows.map(mapCredentialRow);
+  const mapper = params.skipDecrypt ? mapCredentialRowLight : mapCredentialRow;
+  return result.rows.map(mapper);
 }
 
 function buildEncryptedPayload(payload = {}) {

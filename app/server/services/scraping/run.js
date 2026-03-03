@@ -816,7 +816,7 @@ async function applyCategorizationRules(client) {
                WHEN confidence_score IS NULL OR confidence_score < $3 THEN $3
                ELSE confidence_score
              END
-       WHERE LOWER(name) LIKE LOWER($1)
+       WHERE name LIKE $1
          AND (
            category_definition_id IS NULL
            OR category_definition_id NOT IN (
@@ -876,8 +876,8 @@ async function applyAccountPairings(client) {
 
     const params = [bankVendor];
     const conditions = matchPatterns.map((pattern, idx) => {
-      params.push(pattern.toLowerCase());
-      return `LOWER(name) LIKE '%' || $${idx + 2} || '%'`;
+      params.push(pattern);
+      return `name LIKE '%' || $${idx + 2} || '%'`;
     });
 
     // Add the category ID as a parameter

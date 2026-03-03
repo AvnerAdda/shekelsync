@@ -1513,7 +1513,7 @@ async function verifyQuestCompletion(questId, manualResult = null) {
             SELECT COUNT(*) as cnt
             FROM transactions
             WHERE date >= $1 AND date <= $2
-              AND LOWER(name) LIKE '%' || $3 || '%'
+              AND name LIKE '%' || $3 || '%'
               AND price < 0
           `, [
             quest.accepted_at.split('T')[0],
@@ -1765,7 +1765,7 @@ async function getActiveQuests(params = {}) {
             SELECT COUNT(*) as cnt
             FROM transactions
             WHERE date >= $1
-              AND LOWER(name) LIKE '%' || $2 || '%'
+              AND name LIKE '%' || $2 || '%'
               AND price < 0
           `, [startDate.split('T')[0], criteria.merchant_pattern]);
 

@@ -303,7 +303,7 @@ async function createAutoRule(payload = {}) {
           WHEN COALESCE(confidence_score, 0) > $4 THEN confidence_score
           ELSE $4
         END
-      WHERE LOWER(name) LIKE LOWER($1)
+      WHERE name LIKE $1
         ${priceCondition}
     `,
     [pattern, categoryDefinitionId, appliedCategoryType, confidence],
@@ -364,7 +364,7 @@ async function previewRuleMatches(params = {}) {
        FROM transactions t
        LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
        LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
-       WHERE LOWER(t.name) LIKE LOWER($1)
+       WHERE t.name LIKE $1
        ORDER BY t.date DESC
        LIMIT $2`,
       [patternWithWildcards, safeLimit],
@@ -372,7 +372,7 @@ async function previewRuleMatches(params = {}) {
     database.query(
       `SELECT COUNT(*) AS total
          FROM transactions
-        WHERE LOWER(name) LIKE LOWER($1)`
+        WHERE name LIKE $1`
       , [patternWithWildcards],
     ),
   ]);
@@ -404,19 +404,39 @@ async function applyCategorizationRules() {
   const client = await database.getClient();
 
   try {
-    const rulesResult = await client.query(
-      `
-        SELECT
-          id,
-          name_pattern,
-          target_category,
-          category_definition_id,
-          category_type
-        FROM categorization_rules
-        WHERE is_active = true
-        ORDER BY priority DESC, id
-      `,
-    );
+    // Fetch rules and all category definitions in parallel (2 queries instead of N+2)
+    const [rulesResult, allCategoriesResult, bankCategoryResult] = await Promise.all([
+      client.query(
+        `
+          SELECT
+            id,
+            name_pattern,
+            target_category,
+            category_definition_id,
+            category_type
+          FROM categorization_rules
+          WHERE is_active = true
+          ORDER BY priority DESC, id
+        `,
+      ),
+      client.query(
+        `
+          SELECT
+            cd.id,
+            cd.name,
+            cd.category_type,
+            cd.parent_id,
+            cd.depth_level,
+            parent.name AS parent_name
+          FROM category_definitions cd
+          LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+        `,
+      ),
+      client.query(
+        `SELECT id FROM category_definitions WHERE name = $1 LIMIT 1`,
+        [BANK_CATEGORY_NAME],
+      ),
+    ]);
 
     const rules = rulesResult.rows;
 
@@ -428,63 +448,38 @@ async function applyCategorizationRules() {
       };
     }
 
-    const bankCategoryResult = await client.query(
-      `
-        SELECT id
-        FROM category_definitions
-        WHERE name = $1
-        LIMIT 1
-      `,
-      [BANK_CATEGORY_NAME],
-    );
     const bankCategoryId = bankCategoryResult.rows[0]?.id ?? null;
 
-    let totalUpdated = 0;
+    // Build lookup maps for category definitions
+    const categoriesById = new Map();
+    const categoriesByNameLower = new Map();
+    for (const cat of allCategoriesResult.rows) {
+      categoriesById.set(cat.id, cat);
+      categoriesByNameLower.set(String(cat.name).toLowerCase(), cat);
+    }
 
+    // Pre-resolve each rule's category (in-memory, no DB queries)
+    const resolvedRules = [];
     for (const rule of rules) {
-      const pattern = `%${rule.name_pattern}%`;
       let categoryId = rule.category_definition_id || null;
       let categoryRecord = null;
 
       if (categoryId) {
-        const recordResult = await client.query(
-          `
-            SELECT
-              cd.id,
-              cd.name,
-              cd.category_type,
-              cd.parent_id,
-              parent.name AS parent_name
-            FROM category_definitions cd
-            LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-            WHERE cd.id = $1
-          `,
-          [categoryId],
-        );
-        categoryRecord = recordResult.rows[0] || null;
+        categoryRecord = categoriesById.get(categoryId) || null;
       } else if (rule.target_category) {
-        const fallbackResult = await client.query(
-          `
-            SELECT
-              cd.id,
-              cd.name,
-              cd.category_type,
-              cd.parent_id,
-              parent.name AS parent_name
-            FROM category_definitions cd
-            LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-            WHERE LOWER(cd.name) = LOWER($1)
-            LIMIT 1
-          `,
-          [rule.target_category],
-        );
-        categoryRecord = fallbackResult.rows[0] || null;
+        categoryRecord = categoriesByNameLower.get(rule.target_category.toLowerCase()) || null;
         categoryId = categoryRecord?.id || null;
       }
 
-      if (!categoryRecord || !categoryId) {
-        continue;
+      if (categoryRecord && categoryId) {
+        resolvedRules.push({ rule, categoryId, categoryRecord });
       }
+    }
+
+    // Apply each resolved rule (1 UPDATE per rule — unavoidable due to per-rule pattern + category)
+    let totalUpdated = 0;
+    for (const { rule, categoryId, categoryRecord } of resolvedRules) {
+      const pattern = `%${rule.name_pattern}%`;
 
       const priceCondition =
         categoryRecord.category_type === 'income'
@@ -503,15 +498,14 @@ async function applyCategorizationRules() {
             category_type = $3,
             auto_categorized = true,
             confidence_score = MAX(confidence_score, $4)
-          WHERE LOWER(name) LIKE LOWER($1)
+          WHERE name LIKE $1
             ${priceCondition}
             AND (
               category_definition_id IS NULL
               OR ($5 IS NOT NULL AND category_definition_id = $5)
               OR auto_categorized = true
               OR category_definition_id IN (
-                SELECT id FROM category_definitions
-                WHERE depth_level < 2
+                SELECT id FROM category_definitions WHERE depth_level < 2
               )
             )
         `,
@@ -523,7 +517,7 @@ async function applyCategorizationRules() {
 
     return {
       success: true,
-      rulesApplied: rules.length,
+      rulesApplied: resolvedRules.length,
       transactionsUpdated: totalUpdated,
     };
   } finally {

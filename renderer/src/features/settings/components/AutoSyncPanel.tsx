@@ -35,6 +35,7 @@ interface BackgroundSyncSettings {
   runOnStartup: boolean;
   keepRunningInTray: boolean;
   headless: boolean;
+  showBrowserOnSync: boolean;
   lastRunAt?: string;
   lastResult?: {
     status: 'success' | 'failed' | 'skipped' | 'blocked';
@@ -54,6 +55,7 @@ const DEFAULT_SETTINGS: BackgroundSyncSettings = {
   runOnStartup: true,
   keepRunningInTray: true,
   headless: true,
+  showBrowserOnSync: false,
 };
 
 const INTERVAL_OPTIONS: Array<{ value: IntervalHours; labelKey: string; display: string }> = [
@@ -404,6 +406,24 @@ const AutoSyncPanel: React.FC = () => {
             );
           })}
         </Stack>
+      </Box>
+
+      {/* Show Browser Toggle (applies to manual sync) */}
+      <Box sx={{ mb: 2 }}>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={backgroundSync.showBrowserOnSync}
+              onChange={(event) => updateBackgroundSync({ showBrowserOnSync: event.target.checked })}
+              disabled={saving}
+              size="small"
+            />
+          }
+          label={t('showBrowserLabel')}
+        />
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 6 }}>
+          {t('showBrowserHint')}
+        </Typography>
       </Box>
 
       {/* Advanced Settings (Collapsible) */}
