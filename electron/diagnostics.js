@@ -200,12 +200,12 @@ function getConfigHealthSummary() {
     });
   }
 
-  const autoUpdateEnabled = process.env.ENABLE_AUTO_UPDATE === 'true';
+  const autoUpdateEnabled = process.env.ENABLE_AUTO_UPDATE !== 'false';
   if (app?.isPackaged && !autoUpdateEnabled) {
     warnings.push({
       code: 'updates.disabled',
       severity: 'info',
-      message: 'Auto-updates are disabled (ENABLE_AUTO_UPDATE=false).',
+      message: 'Auto-updates are disabled via ENABLE_AUTO_UPDATE=false.',
     });
   }
 

@@ -1,42 +1,38 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Drawer,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  IconButton,
-  Box,
-  useTheme,
-  useMediaQuery,
-  Typography,
-  Divider,
-  Button,
-  Tooltip,
-  Badge,
-  CircularProgress,
-  Popover,
-} from '@mui/material';
+import Badge from '@mui/material/Badge';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import CircularProgress from '@mui/material/CircularProgress';
+import Divider from '@mui/material/Divider';
+import Drawer from '@mui/material/Drawer';
+import IconButton from '@mui/material/IconButton';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
+import Popover from '@mui/material/Popover';
+import Tooltip from '@mui/material/Tooltip';
+import Typography from '@mui/material/Typography';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import { alpha } from '@mui/material/styles';
-import {
-  Home as HomeIcon,
-  TrendingUp as AnalysisIcon,
-  ShowChart as InvestmentIcon,
-  Settings as SettingsIcon,
-  Menu as MenuIcon,
-  ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon,
-  Add as AddIcon,
-  Sync as SyncIcon,
-  Category as CategoryIcon,
-  AccountBalance as AccountIcon,
-  Storage as StorageIcon,
-  CheckCircle as CheckIcon,
-  Error as ErrorIcon,
-  WarningAmber as WarningAmberIcon,
-  Lock as LockIcon,
-} from '@mui/icons-material';
+import AccountIcon from '@mui/icons-material/AccountBalance';
+import AddIcon from '@mui/icons-material/Add';
+import CategoryIcon from '@mui/icons-material/Category';
+import CheckIcon from '@mui/icons-material/CheckCircle';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ErrorIcon from '@mui/icons-material/Error';
+import HomeIcon from '@mui/icons-material/Home';
+import InvestmentIcon from '@mui/icons-material/ShowChart';
+import LockIcon from '@mui/icons-material/Lock';
+import MenuIcon from '@mui/icons-material/Menu';
+import AnalysisIcon from '@mui/icons-material/TrendingUp';
+import SettingsIcon from '@mui/icons-material/Settings';
+import StorageIcon from '@mui/icons-material/Storage';
+import SyncIcon from '@mui/icons-material/Sync';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useTranslation } from 'react-i18next';
 import AccountsModal from '@renderer/shared/modals/AccountsModal';
 import ScrapeModal from '@renderer/shared/modals/ScrapeModal';

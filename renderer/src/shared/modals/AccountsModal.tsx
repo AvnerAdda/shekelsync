@@ -1556,38 +1556,37 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     const requiresBankAccountNumber = required.has('bankAccountNumber');
     const requiresExtraCode =
       required.has('num') || required.has('nationalID') || required.has('identification_code') || required.has('otpToken');
+    const loginIdentifierChanged =
+      credentialsUpdateDraft.loginIdentifier !== credentialsUpdateInitial.loginIdentifier;
+    const idChanged = credentialsUpdateDraft.id !== credentialsUpdateInitial.id;
+    const card6DigitsChanged =
+      credentialsUpdateDraft.card6Digits !== credentialsUpdateInitial.card6Digits;
+    const bankAccountNumberChanged =
+      credentialsUpdateDraft.bankAccountNumber !== credentialsUpdateInitial.bankAccountNumber;
+    const extraCodeChanged =
+      credentialsUpdateDraft.extraCode !== credentialsUpdateInitial.extraCode;
 
-    const effectivePassword =
-      credentialsUpdateDraft.password?.trim().length > 0
-        ? credentialsUpdateDraft.password
-        : (credentialsUpdateAccount.password ?? '');
-
-    if (requiresLoginIdentifier && credentialsUpdateDraft.loginIdentifier.trim().length === 0) {
+    if (requiresLoginIdentifier && loginIdentifierChanged && credentialsUpdateDraft.loginIdentifier.trim().length === 0) {
       setCredentialsUpdateError(t('credentialsUpdate.validation.loginIdentifierRequired'));
       return;
     }
 
-    if (effectivePassword.trim().length === 0) {
-      setCredentialsUpdateError(t('credentialsUpdate.validation.passwordRequired'));
-      return;
-    }
-
-    if (requiresId && credentialsUpdateDraft.id.trim().length === 0) {
+    if (requiresId && idChanged && credentialsUpdateDraft.id.trim().length === 0) {
       setCredentialsUpdateError(t('credentialsUpdate.validation.idRequired'));
       return;
     }
 
-    if (requiresCard6Digits && credentialsUpdateDraft.card6Digits.trim().length === 0) {
+    if (requiresCard6Digits && card6DigitsChanged && credentialsUpdateDraft.card6Digits.trim().length === 0) {
       setCredentialsUpdateError(t('credentialsUpdate.validation.card6DigitsRequired'));
       return;
     }
 
-    if (requiresBankAccountNumber && credentialsUpdateDraft.bankAccountNumber.trim().length === 0) {
+    if (requiresBankAccountNumber && bankAccountNumberChanged && credentialsUpdateDraft.bankAccountNumber.trim().length === 0) {
       setCredentialsUpdateError(t('credentialsUpdate.validation.bankAccountNumberRequired'));
       return;
     }
 
-    if (requiresExtraCode && credentialsUpdateDraft.extraCode.trim().length === 0) {
+    if (requiresExtraCode && extraCodeChanged && credentialsUpdateDraft.extraCode.trim().length === 0) {
       setCredentialsUpdateError(t('credentialsUpdate.validation.extraCodeRequired'));
       return;
     }

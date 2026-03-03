@@ -381,6 +381,8 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
 
   router.post('/scrape/bulk', async (req, res) => {
     try {
+      const showBrowser = req.body?.showBrowser === true || String(req.body?.showBrowser || '').toLowerCase() === 'true';
+
       sendProgress({
         vendor: 'bulk',
         status: 'starting',
@@ -390,6 +392,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
 
       const result = await bulkScrapeFn({
         logger: createLogger('bulk'),
+        showBrowser,
         createLogger: (vendor) => createLogger(`bulk:${vendor}`),
         onAccountStart: ({ account, index, total }) => {
           sendProgress({

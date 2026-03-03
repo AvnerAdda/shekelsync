@@ -32,7 +32,7 @@ describe('Shared /api/credentials routes', () => {
     const res = await request(app).get('/api/credentials?vendor=isracard').expect(200);
 
     expect(res.body).toEqual(credentials);
-    expect(spy).toHaveBeenCalledWith({ vendor: 'isracard' });
+    expect(spy).toHaveBeenCalledWith({ vendor: 'isracard', skipDecrypt: true });
   });
 
   it('creates a credential', async () => {

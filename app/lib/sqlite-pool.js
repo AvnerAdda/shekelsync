@@ -116,6 +116,7 @@ function createSqlitePool(options = {}) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_category_def ON transactions (category_definition_id);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_vendor_date ON transactions (vendor, date);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_vendor ON transactions (vendor);');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_name ON transactions (name COLLATE NOCASE);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_category_definitions_type ON category_definitions (category_type);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_category_definitions_parent ON category_definitions (parent_id);');
 

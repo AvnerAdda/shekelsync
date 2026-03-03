@@ -13,8 +13,16 @@ const actualDatabase = require('../database.js');
 const { resolveLocale, getLocalizedCategoryName, getQuestText, getLocalizedPeriodLabel, getLocalizedAverageLabel } = require('../../../lib/server/locale-utils.js');
 const forecastService = require('../forecast.js');
 const { getBehavioralPatterns } = require('./behavioral.js');
+const { dialect } = require('../../../lib/sql-dialect.js');
 
 let database = actualDatabase;
+
+function containsInsensitive(column, placeholder) {
+  if (dialect.useSqlite) {
+    return `${column} LIKE '%' || ${placeholder} || '%'`;
+  }
+  return `LOWER(${column}) LIKE '%' || LOWER(${placeholder}) || '%'`;
+}
 
 // Flag to track if trigger cleanup has been performed
 let triggerCleanupDone = false;
@@ -1513,7 +1521,7 @@ async function verifyQuestCompletion(questId, manualResult = null) {
             SELECT COUNT(*) as cnt
             FROM transactions
             WHERE date >= $1 AND date <= $2
-              AND LOWER(name) LIKE '%' || $3 || '%'
+              AND ${containsInsensitive('name', '$3')}
               AND price < 0
           `, [
             quest.accepted_at.split('T')[0],
@@ -1765,7 +1773,7 @@ async function getActiveQuests(params = {}) {
             SELECT COUNT(*) as cnt
             FROM transactions
             WHERE date >= $1
-              AND LOWER(name) LIKE '%' || $2 || '%'
+              AND ${containsInsensitive('name', '$2')}
               AND price < 0
           `, [startDate.split('T')[0], criteria.merchant_pattern]);
 

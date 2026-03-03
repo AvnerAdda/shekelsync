@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { IconButton, Tooltip, Badge, alpha, useTheme } from '@mui/material';
-import { Shield as ShieldIcon } from '@mui/icons-material';
+import Badge from '@mui/material/Badge';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import { alpha, useTheme } from '@mui/material/styles';
+import ShieldIcon from '@mui/icons-material/Shield';
 import { apiClient } from '@/lib/api-client';
 
 interface SecurityIndicatorProps {

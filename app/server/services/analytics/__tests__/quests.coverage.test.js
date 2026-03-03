@@ -800,7 +800,7 @@ describe('quest generation and lifecycle coverage', () => {
           ],
         },
       },
-      { match: /SELECT COUNT\(\*\) as cnt[\s\S]*LOWER\(name\) LIKE/, result: { rows: [{ cnt: 1 }] } },
+      { match: /SELECT COUNT\(\*\) as cnt[\s\S]*name LIKE/, result: { rows: [{ cnt: 1 }] } },
       { match: /SELECT total_points FROM user_quest_stats WHERE id = 1/, result: { rows: [{ total_points: 420 }] } },
     ]);
     setMockDatabase(merchantClient);
@@ -928,7 +928,7 @@ describe('quest query views and stats coverage', () => {
           ],
         },
       },
-      { match: /SELECT COUNT\(\*\) as cnt[\s\S]*LOWER\(name\) LIKE/, result: { rows: [{ cnt: 3 }] } },
+      { match: /SELECT COUNT\(\*\) as cnt[\s\S]*name LIKE/, result: { rows: [{ cnt: 3 }] } },
     ]);
     setMockDatabase(merchantClient);
 

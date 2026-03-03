@@ -263,7 +263,9 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
   const { showNotification } = useNotification();
   const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'scrapeModal' });
+  const settingsBridge = typeof window !== 'undefined' ? window.electronAPI?.settings : undefined;
   const [config, setConfig] = useState<ScraperConfig>(initialConfig || createDefaultConfig());
+  const [showBrowserOnSync, setShowBrowserOnSync] = useState(false);
   const [institutions, setInstitutions] = useState<InstitutionMetadata[]>([]);
   const [institutionsLoading, setInstitutionsLoading] = useState(false);
   const [institutionsError, setInstitutionsError] = useState<string | null>(null);
@@ -344,6 +346,42 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
       setConfig(initialConfig);
     }
   }, [initialConfig]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+    let cancelled = false;
+
+    const loadShowBrowser = async () => {
+      try {
+        if (!settingsBridge?.get) return;
+        const response = await settingsBridge.get();
+        if (cancelled) return;
+        const value = (response?.settings as any)?.backgroundSync?.showBrowserOnSync;
+        if (typeof value === 'boolean') {
+          setShowBrowserOnSync(value);
+        }
+      } catch {
+        // keep default (false)
+      }
+    };
+
+    loadShowBrowser();
+
+    const unsubscribe = settingsBridge?.onChange?.((nextSettings: any) => {
+      if (cancelled) return;
+      const value = nextSettings?.backgroundSync?.showBrowserOnSync;
+      if (typeof value === 'boolean') {
+        setShowBrowserOnSync(value);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [isOpen, settingsBridge]);
 
   useEffect(() => {
     let isMounted = true;
@@ -492,7 +530,11 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
     onStart?.();
 
     try {
-      const response = await apiClient.post('/api/scrape', config);
+      const scrapeConfig = {
+        ...config,
+        options: { ...config.options, showBrowser: showBrowserOnSync },
+      };
+      const response = await apiClient.post('/api/scrape', scrapeConfig);
       const responseRateLimit = resolveRateLimitState(response.data);
       if (responseRateLimit) {
         setRateLimitState(responseRateLimit);
