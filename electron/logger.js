@@ -40,7 +40,7 @@ function getLogFilePath() {
 
 function ensureLogDirectory() {
   const logDir = getLogDirectory();
-  electronLog.transports.file.resolvePath = () => path.join(logDir, 'main.log');
+  electronLog.transports.file.resolvePathFn = () => path.join(logDir, 'main.log');
 }
 
 ensureLogDirectory();
@@ -49,7 +49,14 @@ electronLog.transports.file.level = 'info';
 electronLog.transports.file.format = '{text}\n';
 electronLog.transports.console.format = '{text}';
 electronLog.transports.file.maxSize = 5 * 1024 * 1024;
-electronLog.transports.file.archiveLog = (filePath) => {
+electronLog.transports.file.archiveLogFn = (oldLogFile) => {
+  const filePath =
+    typeof oldLogFile === 'string'
+      ? oldLogFile
+      : oldLogFile?.path || oldLogFile?.toString?.();
+  if (!filePath) {
+    return;
+  }
   try {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const archivePath = `${filePath}.${timestamp}.log`;

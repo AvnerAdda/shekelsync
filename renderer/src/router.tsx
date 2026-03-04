@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactElement } from 'react';
 import { createHashRouter } from 'react-router-dom';
 import AppLayout from './routes/AppLayout';
 import LoadingFallback from './components/LoadingFallback';
+import RouteErrorBoundary from './components/RouteErrorBoundary';
 
 const HomePage = lazy(() => import('@renderer/features/dashboard/pages/HomePage'));
 const AnalysisPageNew = lazy(() => import('@renderer/features/analysis/pages/AnalysisPageNew'));
@@ -26,6 +27,7 @@ export const router = createHashRouter([
   {
     path: '/',
     element: <AppLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       { path: '/', element: <DashboardRoute /> },
       { path: '/analysis', element: <AnalysisRoute /> },

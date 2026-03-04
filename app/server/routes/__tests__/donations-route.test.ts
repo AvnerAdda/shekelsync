@@ -5,13 +5,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { createDonationsRouter } = require('../../routes/donations.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const donationsService = require('../../services/donations.js');
+
+const donationsService = {
+  getDonationStatus: vi.fn(),
+  createSupportIntent: vi.fn(),
+  syncSupporterEntitlement: vi.fn(),
+  addDonationEvent: vi.fn(),
+  markMonthlyReminderShown: vi.fn(),
+};
 
 function buildApp() {
   const app = express();
   app.use(express.json());
-  app.use('/api/donations', createDonationsRouter());
+  app.use('/api/donations', createDonationsRouter({
+    services: {
+      donationsService,
+    },
+  }));
   return app;
 }
 
@@ -28,6 +38,11 @@ describe('Electron /api/donations routes', () => {
   let app: express.Express;
 
   beforeEach(() => {
+    donationsService.getDonationStatus.mockReset();
+    donationsService.createSupportIntent.mockReset();
+    donationsService.syncSupporterEntitlement.mockReset();
+    donationsService.addDonationEvent.mockReset();
+    donationsService.markMonthlyReminderShown.mockReset();
     app = buildApp();
   });
 
@@ -39,9 +54,7 @@ describe('Electron /api/donations routes', () => {
 
   it('returns donation status payload', async () => {
     const payload = { hasDonated: false, tier: 'none', supportStatus: 'none' };
-    const spy = vi
-      .spyOn(donationsService, 'getDonationStatus')
-      .mockResolvedValue(payload);
+    const spy = donationsService.getDonationStatus.mockResolvedValue(payload);
 
     const res = await request(app).get('/api/donations/status').expect(200);
 
@@ -56,9 +69,7 @@ describe('Electron /api/donations routes', () => {
 
   it('records a support intent from request body', async () => {
     const payload = { hasDonated: false, tier: 'none', supportStatus: 'pending' };
-    const spy = vi
-      .spyOn(donationsService, 'createSupportIntent')
-      .mockResolvedValue(payload);
+    const spy = donationsService.createSupportIntent.mockResolvedValue(payload);
 
     const res = await request(app)
       .post('/api/donations/intent')
@@ -85,9 +96,7 @@ describe('Electron /api/donations routes', () => {
       supportStatus: 'verified',
       canAccessAiAgent: true,
     };
-    const spy = vi
-      .spyOn(donationsService, 'syncSupporterEntitlement')
-      .mockResolvedValue(servicePayload);
+    const spy = donationsService.syncSupporterEntitlement.mockResolvedValue(servicePayload);
 
     const eventPayload = {
       id: 'evt_1',
@@ -138,7 +147,7 @@ describe('Electron /api/donations routes', () => {
 
   it('rejects Stripe webhook when signature is invalid', async () => {
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
-    const spy = vi.spyOn(donationsService, 'syncSupporterEntitlement');
+    const spy = donationsService.syncSupporterEntitlement;
     const eventPayload = {
       id: 'evt_bad',
       type: 'checkout.session.completed',
@@ -157,7 +166,7 @@ describe('Electron /api/donations routes', () => {
 
   it('ignores unsupported Stripe event types without syncing entitlements', async () => {
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
-    const spy = vi.spyOn(donationsService, 'syncSupporterEntitlement');
+    const spy = donationsService.syncSupporterEntitlement;
     const eventPayload = {
       id: 'evt_ignored',
       type: 'customer.created',
@@ -183,9 +192,7 @@ describe('Electron /api/donations routes', () => {
   it('syncs supporter entitlement when sync secret is valid', async () => {
     process.env.SUPPORTER_SYNC_SECRET = 'sync-secret';
     const payload = { hasDonated: true, tier: 'one_time', supportStatus: 'verified' };
-    const spy = vi
-      .spyOn(donationsService, 'syncSupporterEntitlement')
-      .mockResolvedValue(payload);
+    const spy = donationsService.syncSupporterEntitlement.mockResolvedValue(payload);
 
     const res = await request(app)
       .post('/api/donations/entitlement')
@@ -207,7 +214,7 @@ describe('Electron /api/donations routes', () => {
   });
 
   it('rejects entitlement sync when secret is missing from env', async () => {
-    const spy = vi.spyOn(donationsService, 'syncSupporterEntitlement');
+    const spy = donationsService.syncSupporterEntitlement;
 
     const res = await request(app)
       .post('/api/donations/entitlement')
@@ -225,7 +232,7 @@ describe('Electron /api/donations routes', () => {
 
   it('rejects entitlement sync when provided secret is invalid', async () => {
     process.env.SUPPORTER_SYNC_SECRET = 'sync-secret';
-    const spy = vi.spyOn(donationsService, 'syncSupporterEntitlement');
+    const spy = donationsService.syncSupporterEntitlement;
 
     const res = await request(app)
       .post('/api/donations/entitlement')
@@ -243,9 +250,7 @@ describe('Electron /api/donations routes', () => {
 
   it('accepts wrapped payload format for intent compatibility', async () => {
     const payload = { hasDonated: false, tier: 'none', supportStatus: 'pending' };
-    const spy = vi
-      .spyOn(donationsService, 'createSupportIntent')
-      .mockResolvedValue(payload);
+    const spy = donationsService.createSupportIntent.mockResolvedValue(payload);
 
     await request(app)
       .post('/api/donations')
@@ -265,9 +270,7 @@ describe('Electron /api/donations routes', () => {
 
   it('uses addDonationEvent path when amount payload is sent', async () => {
     const payload = { hasDonated: true, tier: 'one_time', supportStatus: 'verified' };
-    const spy = vi
-      .spyOn(donationsService, 'addDonationEvent')
-      .mockResolvedValue(payload);
+    const spy = donationsService.addDonationEvent.mockResolvedValue(payload);
 
     await request(app)
       .post('/api/donations')
@@ -287,9 +290,7 @@ describe('Electron /api/donations routes', () => {
 
   it('marks reminder as shown', async () => {
     const payload = { reminderShownThisMonth: true, shouldShowMonthlyReminder: false };
-    const spy = vi
-      .spyOn(donationsService, 'markMonthlyReminderShown')
-      .mockResolvedValue(payload);
+    const spy = donationsService.markMonthlyReminderShown.mockResolvedValue(payload);
 
     const res = await request(app)
       .post('/api/donations/reminder-shown')
@@ -309,7 +310,7 @@ describe('Electron /api/donations routes', () => {
   });
 
   it('surfaces service errors with status code', async () => {
-    vi.spyOn(donationsService, 'createSupportIntent').mockRejectedValue({
+    donationsService.createSupportIntent.mockRejectedValue({
       status: 400,
       message: 'source is invalid',
       code: 'VALIDATION_FAILED',
@@ -328,7 +329,7 @@ describe('Electron /api/donations routes', () => {
   });
 
   it('surfaces status route errors', async () => {
-    vi.spyOn(donationsService, 'getDonationStatus').mockRejectedValue(new Error('status unavailable'));
+    donationsService.getDonationStatus.mockRejectedValue(new Error('status unavailable'));
 
     const res = await request(app).get('/api/donations/status').expect(500);
 
@@ -339,7 +340,7 @@ describe('Electron /api/donations routes', () => {
   });
 
   it('surfaces intent route errors with status and code', async () => {
-    vi.spyOn(donationsService, 'createSupportIntent').mockRejectedValue({
+    donationsService.createSupportIntent.mockRejectedValue({
       status: 422,
       message: 'intent invalid',
       code: 'INTENT_INVALID',
@@ -358,7 +359,7 @@ describe('Electron /api/donations routes', () => {
   });
 
   it('surfaces reminder route errors', async () => {
-    vi.spyOn(donationsService, 'markMonthlyReminderShown').mockRejectedValue({
+    donationsService.markMonthlyReminderShown.mockRejectedValue({
       message: 'reminder failed',
     });
 

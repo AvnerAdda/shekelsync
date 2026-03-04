@@ -499,7 +499,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
       role="banner"
       onDoubleClick={isMacOS ? undefined : handleMaximize}
       sx={{
-        position: 'fixed',
+        position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
@@ -512,8 +512,8 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         WebkitBackdropFilter: 'blur(20px)',
         boxShadow: `0 4px 30px ${alpha(theme.palette.common.black, 0.1)}`,
         borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-        borderTopLeftRadius: 'inherit',
-        borderTopRightRadius: 'inherit',
+        borderTopLeftRadius: 'var(--app-window-radius, 12px)',
+        borderTopRightRadius: 'var(--app-window-radius, 12px)',
         overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',

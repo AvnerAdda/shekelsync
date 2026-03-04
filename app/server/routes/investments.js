@@ -1,19 +1,5 @@
 const express = require('express');
 
-const checkExistingService = require('../services/investments/check-existing.js');
-const historyService = require('../services/investments/history.js');
-const patternsService = require('../services/investments/patterns.js');
-const pendingSuggestionsService = require('../services/investments/pending-suggestions.js');
-const costBasisService = require('../services/investments/suggest-cost-basis.js');
-const accountsService = require('../services/investments/accounts.js');
-const assetsService = require('../services/investments/assets.js');
-const holdingsService = require('../services/investments/holdings.js');
-const summaryService = require('../services/investments/summary.js');
-const bankSummaryService = require('../services/investments/bank-summary.js');
-const suggestionAnalyzerCJS = require('../services/investments/suggestion-analyzer-cjs.js');
-const manualMatchingService = require('../services/investments/manual-matching.js');
-const pikadonService = require('../services/investments/pikadon.js');
-
 // Dynamic imports for ES modules
 let suggestionAnalyzer;
 let autoLinker;
@@ -41,7 +27,22 @@ function __resetESModulesForTests() {
   autoLinker = null;
 }
 
-function createInvestmentsRouter() {
+function createInvestmentsRouter({ services = {} } = {}) {
+  const checkExistingService = services.checkExistingService || require('../services/investments/check-existing.js');
+  const historyService = services.historyService || require('../services/investments/history.js');
+  const patternsService = services.patternsService || require('../services/investments/patterns.js');
+  const pendingSuggestionsService = services.pendingSuggestionsService || require('../services/investments/pending-suggestions.js');
+  const costBasisService = services.costBasisService || require('../services/investments/suggest-cost-basis.js');
+  const accountsService = services.accountsService || require('../services/investments/accounts.js');
+  const assetsService = services.assetsService || require('../services/investments/assets.js');
+  const holdingsService = services.holdingsService || require('../services/investments/holdings.js');
+  const summaryService = services.summaryService || require('../services/investments/summary.js');
+  const bankSummaryService = services.bankSummaryService || require('../services/investments/bank-summary.js');
+  const suggestionAnalyzerCJS = services.suggestionAnalyzerCJS || require('../services/investments/suggestion-analyzer-cjs.js');
+  const manualMatchingService = services.manualMatchingService || require('../services/investments/manual-matching.js');
+  const pikadonService = services.pikadonService || require('../services/investments/pikadon.js');
+  const databaseService = services.databaseService || require('../services/database.js');
+
   const router = express.Router();
 
   router.get('/check-existing', async (req, res) => {
@@ -442,8 +443,7 @@ function createInvestmentsRouter() {
         });
       }
 
-      const database = require('../services/database.js');
-      const pool = database;
+      const pool = databaseService;
 
       let dismissedCount = 0;
 
@@ -508,8 +508,7 @@ function createInvestmentsRouter() {
         });
       }
 
-      const database = require('../services/database.js');
-      const pool = database;
+      const pool = databaseService;
 
       // First, get the transaction date
       const txnQuery = `
@@ -592,8 +591,7 @@ function createInvestmentsRouter() {
         });
       }
 
-      const database = require('../services/database.js');
-      const pool = database;
+      const pool = databaseService;
 
       const query = `
         SELECT
@@ -639,8 +637,7 @@ function createInvestmentsRouter() {
         });
       }
 
-      const database = require('../services/database.js');
-      const pool = database;
+      const pool = databaseService;
 
       const deleteQuery = `
         DELETE FROM transaction_account_links

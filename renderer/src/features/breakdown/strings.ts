@@ -6,6 +6,9 @@ interface TimelineStrings {
   income: string;
   fallbackLegend: string;
   hint: string;
+  simpleMode: string;
+  cumulativeMode: string;
+  cumulativeCategoryMode: string;
 }
 
 interface GeneralBreakdownStrings {
@@ -77,6 +80,9 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
       income: 'Revenus',
       fallbackLegend: 'Total',
       hint: 'Cliquez pour explorer ou voir les détails',
+      simpleMode: 'Simple',
+      cumulativeMode: 'Cumulatif',
+      cumulativeCategoryMode: 'Cumulatif par catégorie',
     },
     general: {
       transactions: 'transactions',
@@ -142,6 +148,9 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
       income: 'Income',
       fallbackLegend: 'Total',
       hint: 'Click to drill down or view details',
+      simpleMode: 'Simple',
+      cumulativeMode: 'Cumulative',
+      cumulativeCategoryMode: 'Cumulative Category',
     },
     general: {
       transactions: 'transactions',
@@ -207,6 +216,9 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
       income: 'הכנסה',
       fallbackLegend: 'סה״כ',
       hint: 'לחצו להעמקה או לצפייה בפרטים',
+      simpleMode: 'פשוט',
+      cumulativeMode: 'מצטבר',
+      cumulativeCategoryMode: 'מצטבר לפי קטגוריה',
     },
     general: {
       transactions: 'עסקאות',

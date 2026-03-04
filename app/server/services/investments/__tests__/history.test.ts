@@ -276,6 +276,69 @@ describe('investment history service', () => {
     });
   });
 
+  it('supports all explicit timeRange presets', async () => {
+    queryMock.mockResolvedValue({ rows: [] });
+
+    const expectations: Array<[string, string | null | string[]]> = [
+      ['1d', '2026-02-09'],
+      ['1w', '2026-02-03'],
+      ['1m', '2026-01-10'],
+      ['2m', '2025-12-10'],
+      ['3m', '2025-11-10'],
+      ['6m', ['2025-08-09', '2025-08-10']],
+      ['1y', ['2025-02-09', '2025-02-10']],
+      ['ytd', '2026-01-01'],
+      ['all', null],
+    ];
+
+    for (const [timeRange, startDate] of expectations) {
+      const result = await getInvestmentHistory({ timeRange });
+      if (Array.isArray(startDate)) {
+        expect(startDate).toContain(result.startDate);
+      } else {
+        expect(result.startDate).toBe(startDate);
+      }
+    }
+  });
+
+  it('includes per-account histories when includeAccounts is boolean true', async () => {
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            snapshot_date: '2026-02-10',
+            current_value: '120',
+            cost_basis: '100',
+            account_id: 1,
+            account_name: 'Brokerage',
+            account_type: 'brokerage',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            snapshot_date: '2026-02-03',
+            current_value: '110',
+            cost_basis: '90',
+            account_id: 1,
+            account_name: 'Brokerage',
+            account_type: 'brokerage',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await getInvestmentHistory({
+      timeRange: '1w',
+      includeAccounts: true,
+    });
+
+    expect(Array.isArray(result.accounts)).toBe(true);
+    expect(result.accounts).toHaveLength(1);
+    expect(result.accounts[0]).toMatchObject({ accountId: 1 });
+  });
+
   it('prioritizes accountId over accountIds when both are supplied', async () => {
     queryMock
       .mockResolvedValueOnce({

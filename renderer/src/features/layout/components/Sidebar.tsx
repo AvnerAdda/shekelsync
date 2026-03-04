@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -60,6 +60,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefresh }) => {
+  const onPageChangeRef = useRef(onPageChange);
   const [open, setOpen] = useState(true);
   const [accountsModalOpen, setAccountsModalOpen] = useState(false);
   const [scrapeModalOpen, setScrapeModalOpen] = useState(false);
@@ -95,6 +96,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { latestEvent: scrapeEvent } = useScrapeProgress();
+
+  useEffect(() => {
+    onPageChangeRef.current = onPageChange;
+  }, [onPageChange]);
 
   const menuItems = useMemo(
     () => [
@@ -204,14 +209,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   }, []);
 
   const handleScrapeComplete = useCallback(() => {
-    fetchStats();
-    fetchAccountStatus();
-    fetchUncategorizedCount();
-    if (typeof window !== 'undefined') {
+    // A single global refresh event fans out to Sidebar + active pages.
+    if (onDataRefresh) {
+      onDataRefresh();
+    } else if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('dataRefresh'));
     }
-    onDataRefresh?.();
-  }, [fetchStats, fetchAccountStatus, fetchUncategorizedCount, onDataRefresh]);
+  }, [onDataRefresh]);
 
   useEffect(() => {
     if (!scrapeEvent || !scrapeEvent.status) {
@@ -286,12 +290,27 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     checkDBStatus();
     fetchAccountStatus();
     fetchUncategorizedCount();
-    const interval = setInterval(checkDBStatus, 30000); // Check DB every 30s
+    const checkDbStatusIfVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+      checkDBStatus();
+    };
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        checkDBStatus();
+      }
+    };
+
+    const interval = setInterval(checkDbStatusIfVisible, 30000); // Check DB every 30s
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
 
     // Listen for onboarding custom events
     const handleOpenProfile = () => {
       // Navigate to settings page where profile setup should be
-      onPageChange('settings');
+      onPageChangeRef.current('settings');
     };
 
     const handleOpenAccounts = () => {
@@ -334,6 +353,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
 
     return () => {
       clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
       globalThis.removeEventListener('openProfileSetup', handleOpenProfile);
       globalThis.removeEventListener('openAccountsModal', handleOpenAccounts);
       globalThis.removeEventListener('openScrapeModal', handleOpenScrape);
@@ -341,7 +363,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       globalThis.removeEventListener('guideOpenCategoriesModal', handleGuideOpenCategories);
       globalThis.removeEventListener('guideTriggerBulkSync', handleGuideTriggerBulkSync);
     };
-  }, [fetchStats, checkDBStatus, fetchAccountStatus, fetchUncategorizedCount, onPageChange]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchStats, checkDBStatus, fetchAccountStatus, fetchUncategorizedCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSyncIconClick = () => {
     const isSyncStale = stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS;
@@ -422,7 +444,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
           width: drawerWidth,
           flexShrink: 0,
           '& .MuiDrawer-paper': {
+            position: isMobile ? 'fixed' : 'relative',
+            top: 0,
+            left: 0,
             width: drawerWidth,
+            height: '100%',
             boxSizing: 'border-box',
             transition: theme.transitions.create('width', {
               easing: theme.transitions.easing.sharp,
@@ -435,7 +461,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             borderRight: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
             backdropFilter: 'blur(12px)',
             paddingTop: '64px', // Account for TitleBar height
-            borderBottomLeftRadius: 'inherit',
+            borderTopLeftRadius: 'var(--app-window-radius, 12px)',
+            borderBottomLeftRadius: 'var(--app-window-radius, 12px)',
           },
         }}
       >

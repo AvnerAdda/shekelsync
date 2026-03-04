@@ -6,6 +6,24 @@
     "or": "או",
     "close": "סגור"
   },
+  "routeError": {
+    "titles": {
+      "notFound": "העמוד לא נמצא",
+      "server": "שגיאת שרת",
+      "navigation": "שגיאת ניווט",
+      "unexpected": "משהו השתבש"
+    },
+    "messages": {
+      "notFound": "העמוד שביקשתם לא קיים או שכבר אינו זמין.",
+      "requestFailed": "הבקשה נכשלה עם קוד מצב {{status}}.",
+      "renderFailure": "אירעה שגיאה לא צפויה בעת הצגת המסך הזה.",
+      "loadFailure": "אירעה שגיאה לא צפויה בעת טעינת העמוד."
+    },
+    "actions": {
+      "goToDashboard": "מעבר ללוח הבקרה",
+      "reloadApp": "טעינה מחדש של האפליקציה"
+    }
+  },
   "smartNotifications": {
     "dismiss": "הסתר",
     "dismissAll": "הסתר הכל",
@@ -577,7 +595,9 @@
         }
       },
       "children": {
-        "count": "{{count}} {{count, plural, one {ילד} other {ילדים}}}",
+        "count": "{{count}} ילדים",
+        "count_one": "{{count}} ילד",
+        "count_other": "{{count}} ילדים",
         "empty": "לא נוספו ילדים. לחצו על + להוספת ילד ראשון.",
         "unnamed": "ילד {{index}}",
         "age": "גיל: {{age}}",
@@ -809,7 +829,9 @@
       "savingsRate": "שיעור חיסכון",
       "savingsRateSalary": "שיעור חיסכון (משכורת)",
       "anomalies": "חריגות",
-      "spikes": "{{count}} קפיצה"
+      "spikes": "{{count}} קפיצות",
+      "spikes_one": "{{count}} קפיצה",
+      "spikes_other": "{{count}} קפיצות"
     },
     "transactionsOn": "עסקאות ב-{{date}} ({{count}} עסקאות):",
     "noTransactionsForDate": "לא נמצאו עסקאות לתאריך זה."
@@ -1990,12 +2012,16 @@
       "pending": "השינויים נשמרו. רעננו את הניתוחים כדי לעדכן תחזיות."
     },
     "tree": {
-      "txnCount": "{{count}} {{count, plural, one {עסקה} other {עסקאות}}}"
+      "txnCount": "{{count}} עסקאות",
+      "txnCount_one": "{{count}} עסקה",
+      "txnCount_other": "{{count}} עסקאות"
     },
     "summary": {
       "title": "עסקאות לשיוך קטגוריה",
       "allDone": "🎉 כל העסקאות משויכות לקטגוריות סופיות!",
-      "pendingCount": "{{countDisplay}} {{count, plural, one {עסקה} other {עסקאות}}} ממתינות לשיוך",
+      "pendingCount": "{{countDisplay}} עסקאות ממתינות לשיוך",
+      "pendingCount_one": "{{countDisplay}} עסקה ממתינה לשיוך",
+      "pendingCount_other": "{{countDisplay}} עסקאות ממתינות לשיוך",
       "totalPending": "סה\"כ בהמתנה: {{amount}}",
       "progress": "התקדמות שיוך קטגוריות",
       "incomplete": "{{formattedCount}} לא הושלמו"
@@ -2055,9 +2081,9 @@
       "categoryUpdated": "הקטגוריה עודכנה בהצלחה",
       "categoryDeleted": "הקטגוריה נמחקה בהצלחה",
       "ruleCreated": "הכלל נוצר בהצלחה",
-      "ruleStatusUpdated": "הכלל {{status, select, activated {הופעל} deactivated {הושבת} other {עודכן}}} בהצלחה",
+      "ruleStatusUpdated": "סטטוס הכלל עודכן בהצלחה",
       "ruleDeleted": "הכלל נמחק בהצלחה",
-      "rulesApplied": "הוחלו בהצלחה {{rules}} כלל{{rules, plural, one {} other {ים}}} על {{transactions}} עסקה{{transactions, plural, one {} other {ות}}}",
+      "rulesApplied": "הוחלו בהצלחה {{rules}} כלל(ים) על {{transactions}} עסקה/עסקאות",
       "transactionRemoved": "העסקה הוסרה מהקטגוריה",
       "transactionMoved": "העסקה הועברה ל{{category}}"
     },
@@ -2081,7 +2107,9 @@
     },
     "transactions": {
       "title": "עסקאות {{name}}",
-      "count": "{{count}} {{count, plural, one {עסקה} other {עסקאות}}}",
+      "count": "{{count}} עסקאות",
+      "count_one": "{{count}} עסקה",
+      "count_other": "{{count}} עסקאות",
       "none": "לא נמצאו עסקאות עבור קטגוריה זו.",
       "loading": "טוען עסקאות...",
       "unknown": "עסקה לא ידועה",
@@ -2097,7 +2125,9 @@
         "pattern": "תבנית בית עסק",
         "patternPlaceholder": "לדוגמה: 'starbucks' או 'interactive broker'",
         "patternHelper": "תבנית לחיפוש בשם העסקה (לא תלוי רישיות)",
-        "patternPreview": "יתאים ל-{{count}} {{count, plural, one {עסקה} other {עסקאות}}}",
+        "patternPreview": "יתאים ל-{{count}} עסקאות",
+        "patternPreview_one": "יתאים ל-{{count}} עסקה",
+        "patternPreview_other": "יתאים ל-{{count}} עסקאות",
         "type": "סוג",
         "category": "קטגוריה",
         "selectCategory": "בחרו קטגוריה",
@@ -2114,7 +2144,9 @@
         "applyToExisting": "החילו כללים על עסקאות קיימות"
       },
       "preview": {
-        "title": "תצוגה מקדימה: {{count}} {{count, plural, one {עסקה} other {עסקאות}}} יושפעו",
+        "title": "תצוגה מקדימה: {{count}} עסקאות יושפעו",
+        "title_one": "תצוגה מקדימה: {{count}} עסקה תושפע",
+        "title_other": "תצוגה מקדימה: {{count}} עסקאות יושפעו",
         "more": "...ועוד {{count}}"
       }
     },
@@ -2125,7 +2157,9 @@
       "empty": "אין כללים עדיין. הוסיפו כלל ראשון למעלה כדי לשייך עסקאות אוטומטית.",
       "ifContains": "אם העסקה מכילה \"{{pattern}}\"",
       "then": "אז שייכו לקטגוריה:",
-      "txnCount": "{{count}} {{count, plural, one {עסקה} other {עסקאות}}}",
+      "txnCount": "{{count}} עסקאות",
+      "txnCount_one": "{{count}} עסקה",
+      "txnCount_other": "{{count}} עסקאות",
       "unknownCategory": "לא ידועה",
       "status": {
         "active": "פעיל",
@@ -2154,7 +2188,9 @@
       "income": "הכנסות"
     },
     "uncategorized": {
-      "similar": "{{count}} {{count, plural, one {עסקה דומה} other {עסקאות דומות}}}",
+      "similar": "{{count}} עסקאות דומות",
+      "similar_one": "{{count}} עסקה דומה",
+      "similar_other": "{{count}} עסקאות דומות",
       "needsRefinement": "דורש פירוט נוסף",
       "parentAssigned": "העסקה כבר משויכת לקטגוריה-אב. בחרו תת-קטגוריה סופית כדי להשלים.",
       "assign": {
@@ -2192,7 +2228,7 @@
       "categories": "קטגוריות"
     },
     "stats": {
-      "accounts": "{{count}} חשבונות",
+      "accounts": "חשבונות",
       "accounts_one": "{{count}} חשבון",
       "accounts_other": "{{count}} חשבונות",
       "accountsConnected": "חשבונות מחוברים"
@@ -2382,7 +2418,9 @@
     "helpers": {
       "foundInTransactions": "✓ נמצא בעסקאות!",
       "investmentFallback": "השקעה",
-      "transactionsCount": "{{count}} {{count, plural, one {עסקה} other {עסקאות}}}",
+      "transactionsCount": "{{count}} עסקאות",
+      "transactionsCount_one": "{{count}} עסקה",
+      "transactionsCount_other": "{{count}} עסקאות",
       "knownInstitution": "בחרו מרשימה או השאירו ריק להזנת מוסד מותאם",
       "selectInstitution": "בחרו מוסד כדי לראות אילו פרטי התחברות נדרשים.",
       "noSpecificCredentials": "אין דרישות התחברות ספציפיות. הזינו שם משתמש וסיסמה.",

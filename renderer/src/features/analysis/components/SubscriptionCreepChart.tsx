@@ -159,8 +159,8 @@ const SubscriptionCreepChart: React.FC<SubscriptionCreepChartProps> = ({
         </Stack>
 
         {/* Chart */}
-        <Box sx={{ height: 200, minHeight: 200, minWidth: 0 }}>
-          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+        <Box sx={{ minWidth: 0 }}>
+          <ResponsiveContainer width="100%" height={200} minHeight={200} minWidth={0}>
             <AreaChart
               data={chartData}
               margin={{ top: 10, right: 10, left: 0, bottom: 0 }}

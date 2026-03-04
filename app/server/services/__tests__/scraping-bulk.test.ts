@@ -303,4 +303,75 @@ describe('bulk scrape service', () => {
     expect(releaseMock).toHaveBeenCalledTimes(1);
     expect(runScrapeMock).not.toHaveBeenCalled();
   });
+
+  it('handles sparse logger objects and skips bulk mode when pool helpers are unavailable', async () => {
+    configureService({
+      staleAccounts: [makeAccount({ id: 44, vendor: 'leumi' })],
+      runScrapeImpl: async () => ({
+        success: true,
+        message: 'ok',
+        accounts: null,
+      }),
+      pool: {},
+    });
+
+    const result = await bulkScrapeService.bulkScrape({
+      logger: {} as any,
+      showBrowser: 'yes' as any,
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      totalProcessed: 1,
+      successCount: 1,
+      failureCount: 0,
+      totalTransactions: 0,
+    });
+    expect(enterBulkModeMock).not.toHaveBeenCalled();
+    expect(exitBulkModeMock).not.toHaveBeenCalled();
+    expect(releaseMock).toHaveBeenCalledTimes(1);
+    expect(runScrapeMock.mock.calls[0][0].options.showBrowser).toBe(true);
+  });
+
+  it('skips client.release call when the DB client does not expose release', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    getClientMock.mockResolvedValueOnce({ query: queryMock });
+
+    bulkScrapeService.__setDatabaseForTests({
+      getClient: getClientMock,
+      _pool: {},
+    });
+    bulkScrapeService.__setScrapingServiceForTests({ runScrape: runScrapeMock });
+
+    const result = await bulkScrapeService.bulkScrape({ logger: null });
+
+    expect(result.totalProcessed).toBe(0);
+    expect(releaseMock).not.toHaveBeenCalled();
+  });
+
+  it('runs finally cleanup with only exitBulkMode available when bulk mode is active', async () => {
+    const pool = {
+      enterBulkMode: vi.fn(),
+      exitBulkMode: vi.fn(),
+      isBulkModeActive: vi.fn(() => true),
+    };
+
+    configureService({
+      staleAccounts: [makeAccount({ id: 91, vendor: 'leumi' })],
+      pool,
+    });
+
+    await expect(
+      bulkScrapeService.bulkScrape({
+        logger: null,
+        onAccountStart: () => {
+          throw new Error('stop-now');
+        },
+      }),
+    ).rejects.toThrow('stop-now');
+
+    expect(pool.enterBulkMode).toHaveBeenCalledTimes(1);
+    expect(pool.exitBulkMode).toHaveBeenCalledTimes(1);
+    expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
 });

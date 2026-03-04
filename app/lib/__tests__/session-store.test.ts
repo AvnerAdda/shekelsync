@@ -101,6 +101,25 @@ describe('session-store', () => {
     expect(result).toEqual(session);
   });
 
+  it('setSession falls back when bridge returns unsuccessful result', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const setSessionMock = vi.fn().mockResolvedValue({ success: false, error: 'denied' });
+    (window as any).electronAPI = { auth: { setSession: setSessionMock } };
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+
+    const result = await setSession(session);
+
+    expect(setSessionMock).toHaveBeenCalledWith(session);
+    expect(window.localStorage.setItem).toHaveBeenCalledWith('clarify.auth.session', JSON.stringify(session));
+    expect(dispatchSpy).toHaveBeenCalled();
+    expect(result).toEqual(session);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[session-store] setSession failed, falling back to localStorage:',
+      expect.any(Error),
+    );
+    warnSpy.mockRestore();
+  });
+
   it('clearSession clears storage and notifies listeners', async () => {
     const clearMock = vi.fn().mockResolvedValue({ success: true });
     (window as any).electronAPI = { auth: { clearSession: clearMock } };
@@ -149,6 +168,33 @@ describe('session-store', () => {
     expect(window.localStorage.removeItem).toHaveBeenCalledWith('clarify.auth.session');
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+
+  it('clearSession falls back when bridge returns unsuccessful result', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const clearMock = vi.fn().mockResolvedValue({ success: false, error: 'denied' });
+    (window as any).electronAPI = { auth: { clearSession: clearMock } };
+
+    await clearSession();
+
+    expect(clearMock).toHaveBeenCalled();
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith('clarify.auth.session');
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[session-store] clearSession failed, falling back to localStorage:',
+      expect.any(Error),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('subscribeToSessionChanges returns noop when no event target is available', () => {
+    (window as any).electronAPI = undefined;
+    (window as any).addEventListener = undefined;
+    (window as any).removeEventListener = undefined;
+
+    const unsubscribe = subscribeToSessionChanges(vi.fn());
+
+    expect(typeof unsubscribe).toBe('function');
+    expect(() => unsubscribe()).not.toThrow();
   });
 
   it('getAuthorizationHeader returns token header when session exists', async () => {

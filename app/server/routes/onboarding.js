@@ -1,8 +1,7 @@
 const express = require('express');
 
-const onboardingService = require('../services/onboarding.js');
-
-function createOnboardingRouter() {
+function createOnboardingRouter({ services = {} } = {}) {
+  const onboardingService = services.onboardingService || require('../services/onboarding.js');
   const router = express.Router();
 
   router.get('/status', async (_req, res) => {

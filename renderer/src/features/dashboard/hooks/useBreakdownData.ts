@@ -21,6 +21,7 @@ interface UseBreakdownDataResult {
 const TYPES: BreakdownType[] = ['expense', 'income', 'investment'];
 const DEFAULT_INITIAL_TYPES: BreakdownType[] = ['expense', 'income'];
 export const BREAKDOWN_CACHE_TTL_MS = 60_000;
+const BREAKDOWN_TRANSACTIONS_MODE = '1';
 
 type CacheEntry = {
   data: any;
@@ -30,7 +31,7 @@ type CacheEntry = {
 const breakdownCache = new Map<string, CacheEntry>();
 
 export function makeCacheKey(type: BreakdownType, start: Date, end: Date, locale: string): string {
-  return `${type}:${start.toISOString()}:${end.toISOString()}:${locale}`;
+  return `${type}:${start.toISOString()}:${end.toISOString()}:${locale}:tx${BREAKDOWN_TRANSACTIONS_MODE}`;
 }
 
 export function createInitialState<T>(value: T): Record<BreakdownType, T> {
@@ -94,7 +95,7 @@ export function useBreakdownData({
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
     });
-    params.append('includeTransactions', '0');
+    params.append('includeTransactions', BREAKDOWN_TRANSACTIONS_MODE);
     if (locale) {
       params.append('locale', locale);
     }
