@@ -1,10 +1,5 @@
 const express = require('express');
 
-const runScrapeService = require('../services/scraping/run.js');
-const bulkScrapeService = require('../services/scraping/bulk.js');
-const scrapeEventsService = require('../services/scraping/events.js');
-const scrapeStatusService = require('../services/scraping/status.js');
-const { wasScrapedRecently } = require('../services/scraping/run.js');
 const { maybeRunAutoDetection } = require('../services/analytics/subscriptions.js');
 const databaseService = require('../services/database.js');
 const {
@@ -174,12 +169,13 @@ function resolveRateLimitMetadata(res) {
 }
 
 function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
+  const getRunScrapeService = () => require('../services/scraping/run.js');
   const {
-    runScrape: runScrapeFn = runScrapeService.runScrape,
-    bulkScrape: bulkScrapeFn = bulkScrapeService.bulkScrape,
-    listScrapeEvents: listScrapeEventsFn = scrapeEventsService.listScrapeEvents,
-    getScrapeStatusById: getScrapeStatusByIdFn = scrapeStatusService.getScrapeStatusById,
-    wasScrapedRecently: wasScrapedRecentlyFn = wasScrapedRecently,
+    runScrape: runScrapeFn = getRunScrapeService().runScrape,
+    bulkScrape: bulkScrapeFn = require('../services/scraping/bulk.js').bulkScrape,
+    listScrapeEvents: listScrapeEventsFn = require('../services/scraping/events.js').listScrapeEvents,
+    getScrapeStatusById: getScrapeStatusByIdFn = require('../services/scraping/status.js').getScrapeStatusById,
+    wasScrapedRecently: wasScrapedRecentlyFn = getRunScrapeService().wasScrapedRecently,
   } = services;
 
   const router = express.Router();

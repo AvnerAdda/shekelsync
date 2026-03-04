@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -59,7 +59,7 @@ const SecurityStatusCard: React.FC<SecurityStatusCardProps> = ({ onViewDetails }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSecurityStatus = async () => {
+  const fetchSecurityStatus = useCallback(async () => {
     try {
       setLoading(true);
       const response = await apiClient.get('/api/security/status');
@@ -77,15 +77,37 @@ const SecurityStatusCard: React.FC<SecurityStatusCardProps> = ({ onViewDetails }
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchSecurityStatus();
+    const fetchSecurityStatusIfVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+      fetchSecurityStatus();
+    };
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchSecurityStatus();
+      }
+    };
+
+    fetchSecurityStatusIfVisible();
 
     // Refresh every 30 seconds
-    const interval = setInterval(fetchSecurityStatus, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    const interval = setInterval(fetchSecurityStatusIfVisible, 30000);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
+  }, [fetchSecurityStatus]);
 
   const getSecurityLevel = () => {
     if (!status) return 'unknown';

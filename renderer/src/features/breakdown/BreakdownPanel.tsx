@@ -106,6 +106,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
   const categoryBreakdown = breakdowns?.byCategory ?? [];
   const vendorBreakdown = breakdowns?.byVendor ?? [];
   const monthlyBreakdown = breakdowns?.byMonth ?? [];
+  const dailyBreakdown = breakdowns?.byDay ?? [];
 
   const config = {
     expense: {
@@ -342,7 +343,19 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
           />
         )}
         {view === 'timeline' && (
-          <TimelineView data={monthlyBreakdown} categoryType={categoryType} title={currentConfig.title} formatCurrencyValue={formatCurrencyValue} />
+          <TimelineView
+            monthlyData={monthlyBreakdown}
+            dailyData={dailyBreakdown}
+            transactions={transactions}
+            categoryBreakdown={categoryBreakdown}
+            currentLevel={currentLevel}
+            currentData={currentData}
+            startDate={startDate}
+            endDate={endDate}
+            categoryType={categoryType}
+            title={currentConfig.title}
+            formatCurrencyValue={formatCurrencyValue}
+          />
         )}
       </Paper>
 

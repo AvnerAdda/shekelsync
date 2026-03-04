@@ -30,10 +30,20 @@ describe('sql-dialect', () => {
       "strftime('%Y-%m-%d %H:%M', created_at)",
     );
     expect(dialect.extract('dow', 'created_at')).toBe("CAST(strftime('%w', created_at) AS INTEGER)");
+    expect(dialect.extract('hour', 'created_at')).toBe("CAST(strftime('%H', created_at) AS INTEGER)");
+    expect(dialect.extract('day', 'created_at')).toBe("CAST(strftime('%d', created_at) AS INTEGER)");
+    expect(dialect.extract('month', 'created_at')).toBe("CAST(strftime('%m', created_at) AS INTEGER)");
+    expect(dialect.extract('year', 'created_at')).toBe("CAST(strftime('%Y', created_at) AS INTEGER)");
     expect(dialect.extract('quarter', 'created_at')).toBe("CAST(strftime('%q', created_at) AS INTEGER)");
     expect(dialect.castNumeric('amount')).toBe('CAST(amount AS REAL)');
     expect(dialect.likeInsensitive('name', "'foo'")).toBe("LOWER(name) LIKE LOWER('foo')");
     expect(dialect.excludePikadon('t')).toBe('(t.is_pikadon_related IS NULL OR t.is_pikadon_related = 0)');
+    expect(dialect.ftsSearch('t', '?')).toContain('transactions_fts MATCH ?');
+    expect(dialect.patternMatch('t.name', 'r.pattern')).toBe("LOWER(t.name) LIKE '%' || LOWER(r.pattern) || '%'");
+    expect(dialect.prepareFtsQuery('  grocery+market  "weekly"  ')).toBe('"grocery"* "market"* "weekly"*');
+    expect(dialect.prepareFtsQuery('')).toBe('');
+    expect(dialect.prepareFtsQuery(null)).toBe('');
+    expect(dialect.prepareFtsQuery('*** + :')).toBe('');
   });
 
   it('formats helpers for postgres', () => {
@@ -43,5 +53,11 @@ describe('sql-dialect', () => {
     expect(dialect.toChar('created_at', 'YYYY-MM')).toBe("TO_CHAR(created_at, 'YYYY-MM')");
     expect(dialect.extract('year', 'created_at')).toBe('EXTRACT(YEAR FROM created_at)');
     expect(dialect.castNumeric('amount')).toBe('amount::numeric');
+    expect(dialect.ftsSearch('t', '$1')).toBe(
+      "(t.name ILIKE '%' || $1 || '%' OR t.memo ILIKE '%' || $1 || '%' OR t.vendor ILIKE '%' || $1 || '%' OR t.merchant_name ILIKE '%' || $1 || '%')",
+    );
+    expect(dialect.ftsSearch('t', '$1', ['name', 'memo'])).toBe(
+      "(t.name ILIKE '%' || $1 || '%' OR t.memo ILIKE '%' || $1 || '%')",
+    );
   });
 });

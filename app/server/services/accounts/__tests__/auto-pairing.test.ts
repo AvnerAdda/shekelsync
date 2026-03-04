@@ -634,6 +634,299 @@ describe('auto-pairing service', () => {
 
       expect(result.periodMonths).toBe(3);
     });
+
+    it('marks early-cycle discrepancies as incomplete history when cycle is near earliest cc history', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-20T00:00:00.000Z'));
+
+      mockClient.query
+        // CC fees category
+        .mockResolvedValueOnce({ rows: [{ id: 5 }] })
+        // Earliest cycle date
+        .mockResolvedValueOnce({ rows: [{ min_date: '2026-02-01' }] })
+        // Bank repayments
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'bank-1',
+              vendor: 'hapoalim',
+              name: 'ישראכרט 5678',
+              price: -900,
+              date: '2026-02-05',
+              repayment_date: '2026-02-05',
+              account_number: '9876',
+            },
+          ],
+        })
+        // account_pairings lookup
+        .mockResolvedValueOnce({ rows: [] })
+        // CC cycle rows -> force missing_cc_cycle
+        .mockResolvedValueOnce({ rows: [] });
+
+      const result = await autoPairingService.calculateDiscrepancy({
+        bankVendor: 'hapoalim',
+        bankAccountNumber: '9876',
+        ccVendor: 'isracard',
+        ccAccountNumber: '5678',
+      });
+
+      expect(result?.cycles[0]?.status).toBe('incomplete_history');
+      expect(result?.exists).toBe(false);
+      vi.useRealTimers();
+    });
+
+    it('marks very recent cycle discrepancies as incomplete history', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-10T00:00:00.000Z'));
+
+      mockClient.query
+        // CC fees category
+        .mockResolvedValueOnce({ rows: [{ id: 5 }] })
+        // Earliest cycle date missing
+        .mockResolvedValueOnce({ rows: [{}] })
+        // Bank repayments
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'bank-2',
+              vendor: 'hapoalim',
+              name: 'ישראכרט 5678',
+              price: -1200,
+              date: '2026-02-06',
+              repayment_date: '2026-02-06',
+              account_number: '9876',
+            },
+          ],
+        })
+        // account_pairings lookup
+        .mockResolvedValueOnce({ rows: [] })
+        // CC cycle rows -> force missing_cc_cycle
+        .mockResolvedValueOnce({ rows: [] });
+
+      const result = await autoPairingService.calculateDiscrepancy({
+        bankVendor: 'hapoalim',
+        bankAccountNumber: '9876',
+        ccVendor: 'isracard',
+        ccAccountNumber: '5678',
+      });
+
+      expect(result?.cycles[0]?.status).toBe('incomplete_history');
+      expect(result?.exists).toBe(false);
+      vi.useRealTimers();
+    });
+
+    it('flags large positive mismatch as large_discrepancy', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-03-20T00:00:00.000Z'));
+
+      mockClient.query
+        // CC fees category
+        .mockResolvedValueOnce({ rows: [{ id: 5 }] })
+        // Earliest cycle date missing
+        .mockResolvedValueOnce({ rows: [{}] })
+        // Bank repayments
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'bank-large-gap',
+              vendor: 'hapoalim',
+              name: 'ישראכרט 5678',
+              price: -1000,
+              date: '2025-12-06',
+              repayment_date: '2025-12-06',
+              account_number: '9876',
+            },
+          ],
+        })
+        // account_pairings lookup
+        .mockResolvedValueOnce({ rows: [] })
+        // CC cycle rows
+        .mockResolvedValueOnce({
+          rows: [{ account_number: '5678', total: 100, txn_count: 1 }],
+        });
+
+      const result = await autoPairingService.calculateDiscrepancy({
+        bankVendor: 'hapoalim',
+        bankAccountNumber: '9876',
+        ccVendor: 'isracard',
+        ccAccountNumber: '5678',
+      });
+
+      expect(result?.cycles[0]?.status).toBe('large_discrepancy');
+      expect(result?.exists).toBe(true);
+      vi.useRealTimers();
+    });
+
+    it('flags negative mismatch as cc_over_bank when cc cycle total is higher', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-03-20T00:00:00.000Z'));
+
+      mockClient.query
+        // CC fees category
+        .mockResolvedValueOnce({ rows: [{ id: 5 }] })
+        // Earliest cycle date missing
+        .mockResolvedValueOnce({ rows: [{}] })
+        // Bank repayments
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'bank-cc-over',
+              vendor: 'hapoalim',
+              name: 'ישראכרט 5678',
+              price: -1000,
+              date: '2025-12-07',
+              repayment_date: '2025-12-07',
+              account_number: '9876',
+            },
+          ],
+        })
+        // account_pairings lookup
+        .mockResolvedValueOnce({ rows: [] })
+        // CC cycle rows
+        .mockResolvedValueOnce({
+          rows: [{ account_number: '5678', total: 1300, txn_count: 1 }],
+        });
+
+      const result = await autoPairingService.calculateDiscrepancy({
+        bankVendor: 'hapoalim',
+        bankAccountNumber: '9876',
+        ccVendor: 'isracard',
+        ccAccountNumber: '5678',
+      });
+
+      expect(result?.cycles[0]?.status).toBe('cc_over_bank');
+      expect(result?.exists).toBe(true);
+      vi.useRealTimers();
+    });
+
+    it('keeps missing_cc_cycle status when repayment date is invalid and skips grace-date logic', async () => {
+      mockClient.query
+        // CC fees category
+        .mockResolvedValueOnce({ rows: [{ id: 5 }] })
+        // Earliest cycle date missing
+        .mockResolvedValueOnce({ rows: [{}] })
+        // Bank repayments with invalid cycle date key
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'bank-invalid-cycle',
+              vendor: 'hapoalim',
+              name: 'ישראכרט 5678',
+              price: -1000,
+              date: '2025-12-08',
+              repayment_date: 'not-a-date',
+              account_number: '9876',
+            },
+          ],
+        })
+        // account_pairings lookup
+        .mockResolvedValueOnce({ rows: [] })
+        // CC cycle rows missing
+        .mockResolvedValueOnce({ rows: [] });
+
+      const result = await autoPairingService.calculateDiscrepancy({
+        bankVendor: 'hapoalim',
+        bankAccountNumber: '9876',
+        ccVendor: 'isracard',
+        ccAccountNumber: '5678',
+      });
+
+      expect(result?.cycles[0]?.status).toBe('missing_cc_cycle');
+      expect(result?.exists).toBe(true);
+    });
+
+    it('falls back to no matches in allocated mode when repayment names have no signal and no cycle totals', async () => {
+      mockClient.query
+        // CC fees category
+        .mockResolvedValueOnce({ rows: [{ id: 5 }] })
+        // Earliest cycle date
+        .mockResolvedValueOnce({ rows: [{ min_date: '2025-01-01' }] })
+        // Bank repayments
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'bank-alloc-none',
+              vendor: 'hapoalim',
+              name: 'monthly transfer',
+              price: -800,
+              date: '2025-12-09',
+              repayment_date: '2025-12-09',
+              account_number: '9876',
+            },
+          ],
+        })
+        // Active pairings for same bank/vendor with 2 CC accounts
+        .mockResolvedValueOnce({
+          rows: [
+            { credit_card_account_number: '5678' },
+            { credit_card_account_number: '9999' },
+          ],
+        })
+        // CC totals by account/date missing -> bestAccount remains null for no-signal repayments
+        .mockResolvedValueOnce({ rows: [] });
+
+      const result = await autoPairingService.calculateDiscrepancy({
+        bankVendor: 'hapoalim',
+        bankAccountNumber: '9876',
+        ccVendor: 'isracard',
+        ccAccountNumber: '5678',
+      });
+
+      expect(result).toMatchObject({
+        exists: false,
+        method: 'allocated',
+      });
+      expect(result.reason).toContain('No bank repayments found matching this credit card');
+    });
+
+    it('drops no-signal allocated repayments when the best assignment still has large mismatch', async () => {
+      mockClient.query
+        // CC fees category
+        .mockResolvedValueOnce({ rows: [{ id: 5 }] })
+        // Earliest cycle date
+        .mockResolvedValueOnce({ rows: [{ min_date: '2025-01-01' }] })
+        // Bank repayments
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'bank-alloc-large-diff',
+              vendor: 'hapoalim',
+              name: 'generic transfer',
+              price: -1000,
+              date: '2025-12-10',
+              repayment_date: '2025-12-10',
+              account_number: '9876',
+            },
+          ],
+        })
+        // Active pairings for same bank/vendor with 2 CC accounts
+        .mockResolvedValueOnce({
+          rows: [
+            { credit_card_account_number: '5678' },
+            { credit_card_account_number: '9999' },
+          ],
+        })
+        // CC totals by account/date exist, but still far from repayment amount
+        .mockResolvedValueOnce({
+          rows: [
+            { account_number: '5678', cycle_date: '2025-12-10', total: 100 },
+            { account_number: '9999', cycle_date: '2025-12-10', total: 200 },
+          ],
+        });
+
+      const result = await autoPairingService.calculateDiscrepancy({
+        bankVendor: 'hapoalim',
+        bankAccountNumber: '9876',
+        ccVendor: 'isracard',
+        ccAccountNumber: '5678',
+      });
+
+      expect(result).toMatchObject({
+        exists: false,
+        method: 'allocated',
+      });
+      expect(result.reason).toContain('No bank repayments found matching this credit card');
+    });
   });
 
   describe('autoPairCreditCard', () => {
@@ -740,6 +1033,129 @@ describe('auto-pairing service', () => {
       expect(result.pairing.id).toBe(77);
       expect(updatePairingMock).toHaveBeenCalledTimes(1);
       expect(createPairingMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps existing active pairing unchanged (no create/update)', async () => {
+      listPairingsMock.mockResolvedValueOnce([
+        {
+          id: 88,
+          creditCardVendor: 'isracard',
+          creditCardAccountNumber: '12345678',
+          bankVendor: 'hapoalim',
+          bankAccountNumber: '9876',
+          isActive: true,
+        },
+      ]);
+
+      mockClient.query
+        // findBestBankAccount query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'tx-1',
+              vendor: 'hapoalim',
+              account_number: '9876',
+              name: 'ישראכרט 5678',
+              price: -1200,
+              date: '2025-01-02',
+            },
+          ],
+        })
+        // discrepancy: cc fees category
+        .mockResolvedValueOnce({ rows: [] })
+        // discrepancy: earliest cycle
+        .mockResolvedValueOnce({ rows: [] })
+        // discrepancy: bank repayments
+        .mockResolvedValueOnce({ rows: [] })
+        // discrepancy: account_pairings lookup for shared allocation
+        .mockResolvedValueOnce({ rows: [] });
+
+      const result = await autoPairingService.autoPairCreditCard({
+        creditCardVendor: 'isracard',
+        creditCardAccountNumber: '12345678',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.wasCreated).toBe(false);
+      expect(result.pairing.id).toBe(88);
+      expect(updatePairingMock).not.toHaveBeenCalled();
+      expect(createPairingMock).not.toHaveBeenCalled();
+    });
+
+    it('includes appliedTransactions when applyTransactions is enabled', async () => {
+      mockClient.query
+        // findBestBankAccount query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'tx-1',
+              vendor: 'hapoalim',
+              account_number: '9876',
+              name: 'ישראכרט 5678',
+              price: -1200,
+              date: '2025-01-02',
+            },
+          ],
+        })
+        // applyPairingToTransactions update query
+        .mockResolvedValueOnce({ rowCount: 2, rows: [] })
+        // applyPairingToTransactions log insert
+        .mockResolvedValueOnce({ rowCount: 1, rows: [] })
+        // discrepancy: cc fees category
+        .mockResolvedValueOnce({ rows: [] })
+        // discrepancy: earliest cycle
+        .mockResolvedValueOnce({ rows: [] })
+        // discrepancy: bank repayments
+        .mockResolvedValueOnce({ rows: [] });
+
+      const result = await autoPairingService.autoPairCreditCard({
+        creditCardVendor: 'isracard',
+        creditCardAccountNumber: '12345678',
+        applyTransactions: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.appliedTransactions).toEqual({ transactionsUpdated: 2 });
+    });
+
+    it('continues when applyTransactions fails and logs warning', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      getCreditCardRepaymentCategoryIdMock.mockRejectedValueOnce(new Error('apply failed'));
+
+      mockClient.query
+        // findBestBankAccount query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'tx-1',
+              vendor: 'hapoalim',
+              account_number: '9876',
+              name: 'ישראכרט 5678',
+              price: -1200,
+              date: '2025-01-02',
+            },
+          ],
+        })
+        // discrepancy: cc fees category
+        .mockResolvedValueOnce({ rows: [] })
+        // discrepancy: earliest cycle
+        .mockResolvedValueOnce({ rows: [] })
+        // discrepancy: bank repayments
+        .mockResolvedValueOnce({ rows: [] });
+
+      const result = await autoPairingService.autoPairCreditCard({
+        creditCardVendor: 'isracard',
+        creditCardAccountNumber: '12345678',
+        applyTransactions: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.appliedTransactions).toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[auto-pairing] Failed to apply pairing to existing transactions',
+        expect.any(Error),
+      );
+      warnSpy.mockRestore();
     });
 
     it('releases client on error', async () => {

@@ -10,6 +10,24 @@
     "or": "or",
     "close": "Close"
   },
+  "routeError": {
+    "titles": {
+      "notFound": "Page not found",
+      "server": "Server error",
+      "navigation": "Navigation error",
+      "unexpected": "Something went wrong"
+    },
+    "messages": {
+      "notFound": "The page you requested does not exist or is no longer available.",
+      "requestFailed": "Request failed with status {{status}}.",
+      "renderFailure": "An unexpected error occurred while rendering this screen.",
+      "loadFailure": "An unexpected error occurred while loading this page."
+    },
+    "actions": {
+      "goToDashboard": "Go to dashboard",
+      "reloadApp": "Reload app"
+    }
+  },
   "smartNotifications": {
     "dismiss": "Dismiss",
     "dismissAll": "Dismiss all",
@@ -502,7 +520,8 @@
         }
       },
       "children": {
-        "count": "{{count}} {{count, plural, one {child} other {children}}}",
+        "count_one": "{{count}} child",
+        "count_other": "{{count}} children",
         "empty": "No children added yet. Click the + button to add your first child.",
         "unnamed": "Child {{index}}",
         "age": "Age: {{age}} years old",
@@ -810,7 +829,8 @@
       "savingsRate": "Savings Rate",
       "savingsRateSalary": "Savings Rate (Salary)",
       "anomalies": "Anomalies",
-      "spikes": "{{count}} spike{{count, plural, one {} other {s}}}"
+      "spikes_one": "{{count}} spike",
+      "spikes_other": "{{count}} spikes"
     },
     "transactionsOn": "Transactions on {{date}} ({{count}} transactions):",
     "noTransactionsForDate": "No transactions found for this date."
@@ -2004,7 +2024,8 @@
       "title": "Pattern Matching Rules",
       "description": "Patterns define which transactions belong to which accounts. Use <code>%</code> as a wildcard.<br />Example: <code>%deposit%</code> matches any transaction containing \"deposit\".",
       "empty": "No investment accounts found. Create an account to add patterns.",
-      "chipCount": "{{count}} pattern{{count, plural, one {} other {s}}}",
+      "chipCount_one": "{{count}} pattern",
+      "chipCount_other": "{{count}} patterns",
       "notifications": {
         "missingPattern": "Please enter a pattern",
         "added": "Pattern added successfully",
@@ -2044,7 +2065,8 @@
     "summary": {
       "title": "Transactions to Categorize",
       "allDone": "🎉 All transactions are properly categorized to leaf categories!",
-      "pendingCount": "{{countDisplay}} transaction{{count, plural, one {} other {s}}} awaiting categorization",
+      "pendingCount_one": "{{countDisplay}} transaction awaiting categorization",
+      "pendingCount_other": "{{countDisplay}} transactions awaiting categorization",
       "totalPending": "Total pending: {{amount}}",
       "progress": "Categorization Progress",
       "incomplete": "{{formattedCount}} incomplete"
@@ -2104,9 +2126,9 @@
       "categoryUpdated": "Category updated successfully",
       "categoryDeleted": "Category deleted successfully",
       "ruleCreated": "Rule created successfully",
-      "ruleStatusUpdated": "Rule {{status, select, activated {activated} deactivated {deactivated} other {updated}}} successfully",
+      "ruleStatusUpdated": "Rule {{status}} successfully",
       "ruleDeleted": "Rule deleted successfully",
-      "rulesApplied": "Successfully applied {{rules}} rule{{rules, plural, one {} other {s}}} to {{transactions}} transaction{{transactions, plural, one {} other {s}}}",
+      "rulesApplied": "Successfully applied {{rules}} rule(s) to {{transactions}} transaction(s)",
       "transactionRemoved": "Transaction removed from category",
       "transactionMoved": "Transaction moved to {{category}}"
     },
@@ -2130,7 +2152,8 @@
     },
     "transactions": {
       "title": "{{name}} Transactions",
-      "count": "{{count}} transaction{{count, plural, one {} other {s}}}",
+      "count_one": "{{count}} transaction",
+      "count_other": "{{count}} transactions",
       "none": "No transactions found for this category.",
       "loading": "Loading transactions...",
       "unknown": "Unknown transaction",
@@ -2146,7 +2169,8 @@
         "pattern": "Merchant Pattern",
         "patternPlaceholder": "e.g., 'starbucks' or 'interactive broker'",
         "patternHelper": "Pattern to match in transaction name (case-insensitive)",
-        "patternPreview": "Will match {{count}} transaction{{count, plural, one {} other {s}}}",
+        "patternPreview_one": "Will match {{count}} transaction",
+        "patternPreview_other": "Will match {{count}} transactions",
         "type": "Type",
         "category": "Category",
         "selectCategory": "Select category",
@@ -2163,7 +2187,8 @@
         "applyToExisting": "Apply Rules to Existing Transactions"
       },
       "preview": {
-        "title": "Preview: {{count}} transaction{{count, plural, one {} other {s}}} will be affected",
+        "title_one": "Preview: {{count}} transaction will be affected",
+        "title_other": "Preview: {{count}} transactions will be affected",
         "more": "...and {{count}} more"
       }
     },
@@ -2203,7 +2228,8 @@
       "income": "Income"
     },
     "uncategorized": {
-      "similar": "{{count}} similar transaction{{count, plural, one {} other {s}}}",
+      "similar_one": "{{count}} similar transaction",
+      "similar_other": "{{count}} similar transactions",
       "needsRefinement": "Needs refinement",
       "parentAssigned": "Already assigned to a parent category. Select a final subcategory to finish.",
       "assign": {
@@ -2241,7 +2267,7 @@
       "categories": "Categories"
     },
     "stats": {
-      "accounts": "{{count}} accounts",
+      "accounts": "Accounts",
       "accounts_one": "{{count}} account",
       "accounts_other": "{{count}} accounts",
       "accountsConnected": "accounts connected"

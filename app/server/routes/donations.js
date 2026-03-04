@@ -1,6 +1,5 @@
 const crypto = require('crypto');
 const express = require('express');
-const donationsService = require('../services/donations.js');
 
 const STRIPE_TOLERANCE_SECONDS = 300;
 
@@ -393,7 +392,8 @@ function assertSupporterSyncAuthorized(req) {
   }
 }
 
-function createDonationsRouter() {
+function createDonationsRouter({ services = {} } = {}) {
+  const donationsService = services.donationsService || require('../services/donations.js');
   const router = express.Router();
 
   router.get('/status', async (req, res) => {
