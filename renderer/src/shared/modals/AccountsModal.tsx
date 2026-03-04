@@ -1258,7 +1258,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
   const handleSmartFormSuccess = () => {
     // Refresh investment accounts and suggestions
     fetchInvestmentAccounts();
-    window.dispatchEvent(new CustomEvent('dataRefresh'));
     setShowSmartForm(false);
     setSelectedSuggestion(null);
   };
@@ -2973,7 +2972,6 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                 <InvestmentAccountSuggestionsCard
                   onSuggestionCreated={() => {
                     fetchInvestmentAccounts();
-                    window.dispatchEvent(new CustomEvent('dataRefresh'));
                   }}
                   onCreateAccountClick={handleSuggestionClick}
                 />

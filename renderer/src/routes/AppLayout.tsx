@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   useTheme,
@@ -39,6 +39,7 @@ const AppLayout: React.FC = () => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [donationReminderOpen, setDonationReminderOpen] = useState(false);
   const [donationReminderBusy, setDonationReminderBusy] = useState(false);
+  const pendingDataRefreshRef = useRef(false);
   const sessionDisplayName = session?.user?.name || session?.user?.email || null;
   const { status: donationStatus, loading: donationStatusLoading, markReminderShown } = useDonationStatus();
 
@@ -59,9 +60,35 @@ const AppLayout: React.FC = () => {
     setDonationReminderOpen(false);
   }, [donationStatus, donationStatusLoading]);
 
-  const handleDataRefresh = useCallback(() => {
+  const dispatchDataRefresh = useCallback(() => {
     window.dispatchEvent(new Event('dataRefresh'));
   }, []);
+
+  const handleDataRefresh = useCallback(() => {
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      pendingDataRefreshRef.current = true;
+      return;
+    }
+    dispatchDataRefresh();
+  }, [dispatchDataRefresh]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && pendingDataRefreshRef.current) {
+        pendingDataRefreshRef.current = false;
+        dispatchDataRefresh();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [dispatchDataRefresh]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -182,9 +209,11 @@ const AppLayout: React.FC = () => {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '100vh',
+        height: '100vh',
+        boxSizing: 'border-box',
+        pt: 8,
         position: 'relative',
-        borderRadius: 'inherit',
+        borderRadius: 'var(--app-window-radius, 12px)',
         overflow: 'hidden',
         background: theme.palette.mode === 'dark'
           ? `
@@ -197,21 +226,6 @@ const AppLayout: React.FC = () => {
             radial-gradient(ellipse at 80% 80%, rgba(250,207,200,0.4) 0%, transparent 50%),
             #f8fef9
           `,
-        backgroundAttachment: 'fixed',
-        '&::before': {
-          content: '""',
-          position: 'fixed',
-          inset: 0,
-          pointerEvents: 'none',
-          background: theme.palette.mode === 'dark'
-            ? 'radial-gradient(circle at 50% 50%, rgba(62,165,77,0.08) 0%, transparent 70%)'
-            : 'radial-gradient(circle at 50% 50%, rgba(200,250,207,0.2) 0%, transparent 70%)',
-          animation: 'pulse 8s ease-in-out infinite',
-        },
-        '@keyframes pulse': {
-          '0%, 100%': { opacity: 0.6, transform: 'scale(1)' },
-          '50%': { opacity: 1, transform: 'scale(1.05)' },
-        },
       }}
     >
       <TitleBar
@@ -219,7 +233,7 @@ const AppLayout: React.FC = () => {
         authLoading={authLoading}
       />
 
-      <Box sx={{ display: 'flex', flexGrow: 1, mt: 8, overflow: 'hidden' }}>
+      <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
         <Sidebar
           currentPage={currentPage}
           onPageChange={handlePageChange}

@@ -66,9 +66,31 @@ export function useGuideTips(): UseGuideTipsResult {
   }, [fetchStatus]);
 
   useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, REFRESH_INTERVAL);
-    return () => clearInterval(interval);
+    const fetchStatusIfVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+      fetchStatus();
+    };
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchStatus();
+      }
+    };
+
+    fetchStatusIfVisible();
+    const interval = setInterval(fetchStatusIfVisible, REFRESH_INTERVAL);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
   }, [fetchStatus]);
 
   const pendingCount = tips.filter(t => !t.completed).length;

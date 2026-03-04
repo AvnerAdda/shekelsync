@@ -1,8 +1,7 @@
 const express = require('express');
 
-const dataExportService = require('../services/data/export.js');
-
-function createDataExportRouter() {
+function createDataExportRouter({ services = {} } = {}) {
+  const dataExportService = services.dataExportService || require('../services/data/export.js');
   const router = express.Router();
 
   router.get('/export', async (req, res) => {

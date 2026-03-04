@@ -12,6 +12,7 @@ const queryMock = vi.fn();
 const releaseMock = vi.fn();
 const mockClient = { query: queryMock, release: releaseMock };
 const getClientMock = vi.fn(async () => mockClient);
+const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 const originalFlag = process.env.ALLOW_DB_MIGRATE;
 
 beforeAll(async () => {
@@ -31,6 +32,7 @@ describe('migrations service', () => {
     queryMock.mockReset();
     releaseMock.mockReset();
     getClientMock.mockClear();
+    consoleErrorSpy.mockClear();
     migrationsService.__setMigrationEnabledForTests(false);
   });
 
@@ -92,5 +94,61 @@ describe('migrations service', () => {
     expect(queryMock).toHaveBeenCalledWith('BEGIN');
     expect(queryMock).toHaveBeenCalledWith('ROLLBACK');
     expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws a 404 when migration file is missing', async () => {
+    existsSyncSpy.mockReturnValue(false);
+
+    await expect(migrationsService.runInvestmentsMigration()).rejects.toMatchObject({
+      status: 404,
+      message: expect.stringContaining('Migration file not found'),
+    });
+
+    expect(readFileSyncSpy).not.toHaveBeenCalled();
+    expect(getClientMock).not.toHaveBeenCalled();
+  });
+
+  it('throws a structured error when database client is unavailable', async () => {
+    existsSyncSpy.mockImplementation((file) => String(file).endsWith('migration_investments.sql'));
+    readFileSyncSpy.mockReturnValueOnce('SELECT 1;');
+    migrationsService.__setDatabaseForTests({ getClient: vi.fn(async () => null) });
+
+    await expect(migrationsService.runInvestmentsMigration()).rejects.toMatchObject({
+      status: 500,
+      details: 'Database client unavailable',
+    });
+  });
+
+  it('throws a structured error when client.query is missing', async () => {
+    existsSyncSpy.mockImplementation((file) => String(file).endsWith('migration_investments.sql'));
+    readFileSyncSpy.mockReturnValueOnce('SELECT 1;');
+    migrationsService.__setDatabaseForTests({ getClient: vi.fn(async () => ({ release: vi.fn() })) });
+
+    await expect(migrationsService.runInvestmentsMigration()).rejects.toMatchObject({
+      status: 500,
+      details: 'Database client does not expose query()',
+    });
+  });
+
+  it('logs rollback failure and still throws migration error', async () => {
+    existsSyncSpy.mockImplementation((file) => String(file).endsWith('migration_investments.sql'));
+    readFileSyncSpy.mockReturnValueOnce('SELECT 1;');
+    queryMock.mockImplementation(async (sql) => {
+      if (sql === 'BEGIN') {
+        return {};
+      }
+      if (sql === 'ROLLBACK') {
+        throw new Error('rollback failed');
+      }
+      throw new Error('query failed');
+    });
+
+    await expect(migrationsService.runInvestmentsMigration()).rejects.toMatchObject({
+      status: 500,
+      details: 'query failed',
+    });
+
+    expect(queryMock).toHaveBeenCalledWith('ROLLBACK');
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Migration rollback failed:', expect.any(Error));
   });
 });

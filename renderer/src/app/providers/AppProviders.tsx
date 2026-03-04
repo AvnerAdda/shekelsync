@@ -5,6 +5,8 @@ import { ChatbotPermissionsProvider } from '@app/contexts/ChatbotPermissionsCont
 import { NotificationProvider } from '@renderer/features/notifications/NotificationContext';
 import { OnboardingProvider } from '@app/contexts/OnboardingContext';
 import { TelemetryProvider } from '@app/contexts/TelemetryContext';
+import { SecurityProvider } from '@renderer/features/security/contexts/SecurityContext';
+import { DonationStatusProvider } from '@renderer/features/support/contexts/DonationStatusContext';
 import type { PropsWithChildren } from 'react';
 import { I18nProvider, useLocaleSettings } from '@renderer/i18n/I18nProvider';
 
@@ -18,7 +20,11 @@ const ConnectedProviders: React.FC<PropsWithChildren> = ({ children }) => {
           <ChatbotPermissionsProvider>
             <NotificationProvider>
               <TelemetryProvider>
-                <OnboardingProvider>{children}</OnboardingProvider>
+                <SecurityProvider>
+                  <DonationStatusProvider>
+                    <OnboardingProvider>{children}</OnboardingProvider>
+                  </DonationStatusProvider>
+                </SecurityProvider>
               </TelemetryProvider>
             </NotificationProvider>
           </ChatbotPermissionsProvider>

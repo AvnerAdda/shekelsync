@@ -7,33 +7,6 @@ const esModuleMocks = vi.hoisted(() => ({
   linkMultipleTransactions: vi.fn(),
 }));
 
-const serviceStubs = vi.hoisted(() => ({
-  getExistingInvestments: vi.fn(),
-  getInvestmentHistory: vi.fn(),
-  getBankBalanceSummary: vi.fn(),
-}));
-
-vi.mock('../../services/investments/check-existing.js', () => ({
-  getExistingInvestments: serviceStubs.getExistingInvestments,
-  default: {
-    getExistingInvestments: serviceStubs.getExistingInvestments,
-  },
-}));
-
-vi.mock('../../services/investments/history.js', () => ({
-  getInvestmentHistory: serviceStubs.getInvestmentHistory,
-  default: {
-    getInvestmentHistory: serviceStubs.getInvestmentHistory,
-  },
-}));
-
-vi.mock('../../services/investments/bank-summary.js', () => ({
-  getBankBalanceSummary: serviceStubs.getBankBalanceSummary,
-  default: {
-    getBankBalanceSummary: serviceStubs.getBankBalanceSummary,
-  },
-}));
-
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const {
   createInvestmentsRouter,
@@ -41,40 +14,102 @@ const {
   __resetESModulesForTests,
 } = require('../../routes/investments.js');
 
-// Services
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const patternsService = require('../../services/investments/patterns.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const pendingSuggestionsService = require('../../services/investments/pending-suggestions.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const costBasisService = require('../../services/investments/suggest-cost-basis.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const accountsService = require('../../services/investments/accounts.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const checkExistingService = require('../../services/investments/check-existing.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const historyService = require('../../services/investments/history.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const assetsService = require('../../services/investments/assets.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const holdingsService = require('../../services/investments/holdings.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const summaryService = require('../../services/investments/summary.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const manualMatchingService = require('../../services/investments/manual-matching.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const bankSummaryService = require('../../services/investments/bank-summary.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const suggestionAnalyzerCJS = require('../../services/investments/suggestion-analyzer-cjs.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const database = require('../../services/database.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const pikadonService = require('../../services/investments/pikadon.js');
+const routeServices = {
+  patternsService: {
+    listPatterns: vi.fn(),
+    createPattern: vi.fn(),
+    removePattern: vi.fn(),
+  },
+  pendingSuggestionsService: {
+    listPendingSuggestions: vi.fn(),
+    applySuggestionAction: vi.fn(),
+  },
+  costBasisService: {
+    suggestCostBasis: vi.fn(),
+  },
+  accountsService: {
+    listAccounts: vi.fn(),
+    createAccount: vi.fn(),
+    updateAccount: vi.fn(),
+    deactivateAccount: vi.fn(),
+  },
+  checkExistingService: {
+    getExistingInvestments: vi.fn(),
+  },
+  historyService: {
+    getInvestmentHistory: vi.fn(),
+  },
+  assetsService: {
+    listAssets: vi.fn(),
+    createAsset: vi.fn(),
+    updateAsset: vi.fn(),
+    deactivateAsset: vi.fn(),
+  },
+  holdingsService: {
+    listHoldings: vi.fn(),
+    upsertHolding: vi.fn(),
+    deleteHolding: vi.fn(),
+  },
+  summaryService: {
+    getInvestmentSummary: vi.fn(),
+  },
+  manualMatchingService: {
+    getUnmatchedRepayments: vi.fn(),
+    getAvailableExpenses: vi.fn(),
+    getAvailableProcessedDates: vi.fn(),
+    getBankRepaymentsForProcessedDate: vi.fn(),
+    saveManualMatch: vi.fn(),
+    getMatchingStats: vi.fn(),
+    getWeeklyMatchingStats: vi.fn(),
+    findMatchingCombinations: vi.fn(),
+  },
+  bankSummaryService: {
+    getBankBalanceSummary: vi.fn(),
+  },
+  suggestionAnalyzerCJS: {
+    analyzeInvestmentTransactions: vi.fn(),
+  },
+  databaseService: {
+    query: vi.fn(),
+  },
+  pikadonService: {
+    listPikadon: vi.fn(),
+    getPikadonSummary: vi.fn(),
+    detectPikadonPairs: vi.fn(),
+    getPikadonInterestIncome: vi.fn(),
+    getPikadonMaturityBreakdown: vi.fn(),
+    autoDetectPikadonEvents: vi.fn(),
+    autoSetupPikadon: vi.fn(),
+    createPikadon: vi.fn(),
+    linkReturnTransaction: vi.fn(),
+    updatePikadonStatus: vi.fn(),
+    deletePikadon: vi.fn(),
+    rolloverPikadon: vi.fn(),
+    getRolloverChain: vi.fn(),
+  },
+};
+
+const patternsService = routeServices.patternsService;
+const pendingSuggestionsService = routeServices.pendingSuggestionsService;
+const costBasisService = routeServices.costBasisService;
+const accountsService = routeServices.accountsService;
+const checkExistingService = routeServices.checkExistingService;
+const historyService = routeServices.historyService;
+const assetsService = routeServices.assetsService;
+const holdingsService = routeServices.holdingsService;
+const summaryService = routeServices.summaryService;
+const manualMatchingService = routeServices.manualMatchingService;
+const bankSummaryService = routeServices.bankSummaryService;
+const suggestionAnalyzerCJS = routeServices.suggestionAnalyzerCJS;
+const database = routeServices.databaseService;
+const pikadonService = routeServices.pikadonService;
 
 function buildApp() {
   const app = express();
   app.use(express.json());
-  app.use('/api/investments', createInvestmentsRouter());
+  app.use('/api/investments', createInvestmentsRouter({
+    services: routeServices,
+  }));
   return app;
 }
 
@@ -82,6 +117,14 @@ describe('Shared /api/investments routes', () => {
   let app: express.Express;
 
   beforeEach(() => {
+    Object.values(routeServices).forEach((service) => {
+      Object.values(service).forEach((fn) => {
+        if (typeof fn === 'function' && 'mockReset' in fn) {
+          (fn as any).mockReset();
+        }
+      });
+    });
+
     __setESModulesForTests({
       suggestionAnalyzer: {
         analyzeInvestmentTransactions: esModuleMocks.analyzeInvestmentTransactions,

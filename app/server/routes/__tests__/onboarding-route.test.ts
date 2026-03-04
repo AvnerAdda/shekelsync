@@ -2,24 +2,21 @@ import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const onboardingServiceMocks = vi.hoisted(() => ({
-  getOnboardingStatus: vi.fn(),
-  dismissOnboarding: vi.fn(),
-}));
-
-vi.mock('../../services/onboarding.js', () => ({
-  ...onboardingServiceMocks,
-  default: onboardingServiceMocks,
-}));
-
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { createOnboardingRouter } = require('../../routes/onboarding.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const onboardingService = require('../../services/onboarding.js');
+
+const onboardingServiceMocks = {
+  getOnboardingStatus: vi.fn(),
+  dismissOnboarding: vi.fn(),
+};
 
 function buildApp() {
   const app = express();
-  app.use('/api/onboarding', createOnboardingRouter());
+  app.use('/api/onboarding', createOnboardingRouter({
+    services: {
+      onboardingService: onboardingServiceMocks,
+    },
+  }));
   return app;
 }
 
@@ -27,6 +24,8 @@ describe('Electron /api/onboarding routes', () => {
   let app: express.Express;
 
   beforeEach(() => {
+    onboardingServiceMocks.getOnboardingStatus.mockReset();
+    onboardingServiceMocks.dismissOnboarding.mockReset();
     app = buildApp();
   });
 
@@ -36,9 +35,7 @@ describe('Electron /api/onboarding routes', () => {
 
   it('returns onboarding status', async () => {
     const status = { hasAccounts: true };
-    const spy = vi
-      .spyOn(onboardingService, 'getOnboardingStatus')
-      .mockResolvedValue(status);
+    const spy = onboardingServiceMocks.getOnboardingStatus.mockResolvedValue(status);
 
     const res = await request(app).get('/api/onboarding/status').expect(200);
 
@@ -48,9 +45,7 @@ describe('Electron /api/onboarding routes', () => {
 
   it('dismisses onboarding', async () => {
     const payload = { success: true };
-    const spy = vi
-      .spyOn(onboardingService, 'dismissOnboarding')
-      .mockResolvedValue(payload);
+    const spy = onboardingServiceMocks.dismissOnboarding.mockResolvedValue(payload);
 
     const res = await request(app).post('/api/onboarding/dismiss').expect(200);
 
@@ -59,7 +54,7 @@ describe('Electron /api/onboarding routes', () => {
   });
 
   it('handles errors gracefully', async () => {
-    vi.spyOn(onboardingService, 'getOnboardingStatus').mockRejectedValue(
+    onboardingServiceMocks.getOnboardingStatus.mockRejectedValue(
       new Error('boom'),
     );
 
@@ -69,7 +64,7 @@ describe('Electron /api/onboarding routes', () => {
   });
 
   it('returns 500 when dismiss onboarding fails', async () => {
-    vi.spyOn(onboardingService, 'dismissOnboarding').mockRejectedValue(
+    onboardingServiceMocks.dismissOnboarding.mockRejectedValue(
       new Error('dismiss failed'),
     );
 

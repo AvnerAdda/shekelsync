@@ -60,10 +60,18 @@ export interface MonthlyBreakdownItem {
   outflow?: number;
 }
 
+export interface DailyBreakdownItem {
+  date: string;
+  total: number;
+  inflow?: number;
+  outflow?: number;
+}
+
 export interface BreakdownData {
   byCategory: CategoryBreakdownItem[];
   byVendor: VendorBreakdownItem[];
   byMonth: MonthlyBreakdownItem[];
+  byDay?: DailyBreakdownItem[];
 }
 
 export interface BreakdownSummary {

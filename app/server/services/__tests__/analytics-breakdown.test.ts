@@ -21,6 +21,8 @@ describe('breakdown analytics trends', () => {
       .mockResolvedValueOnce({ rows: [] })
       // month totals
       .mockResolvedValueOnce({ rows: [] })
+      // day totals
+      .mockResolvedValueOnce({ rows: [] })
       // summary
       .mockResolvedValueOnce({ rows: [{ count: '0', total: '0', min: '0', max: '0' }] });
   };
@@ -136,6 +138,15 @@ describe('breakdown analytics trends', () => {
           },
         ],
       })
+      // day totals
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            date: '2025-01-10',
+            total_amount: '100',
+          },
+        ],
+      })
       // summary
       .mockResolvedValueOnce({
         rows: [
@@ -154,7 +165,7 @@ describe('breakdown analytics trends', () => {
       endDate: '2025-01-31',
     });
 
-    expect(queryMock).toHaveBeenCalledTimes(8);
+    expect(queryMock).toHaveBeenCalledTimes(9);
     const category = result.breakdowns.byCategory[0];
     expect(category.previousTotal).toBe(300);
     expect(category.previousCount).toBe(3);
@@ -241,6 +252,15 @@ describe('breakdown analytics trends', () => {
         rows: [
           {
             month: '2025-02',
+            total_amount: '50',
+          },
+        ],
+      })
+      // day totals
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            date: '2025-02-10',
             total_amount: '50',
           },
         ],
@@ -413,6 +433,10 @@ describe('breakdown analytics trends', () => {
     expect(result.transactions).toHaveLength(2);
     expect(result.transactions[0].date).toBeInstanceOf(Date);
     expect(result.breakdowns.byMonth).toEqual([{ month: '2025-01', total: 1200, inflow: 1200, outflow: 0 }]);
+    expect(result.breakdowns.byDay).toEqual([
+      { date: '2025-01-15', total: 1000, inflow: 1000, outflow: 0 },
+      { date: '2025-01-20', total: 200, inflow: 200, outflow: 0 },
+    ]);
 
     const category = result.breakdowns.byCategory[0];
     expect(category.category).toBe('Salary');
@@ -471,6 +495,9 @@ describe('breakdown analytics trends', () => {
         rows: [{ month: '2025-04', total_amount: '150' }],
       })
       .mockResolvedValueOnce({
+        rows: [{ date: '2025-04-15', total_amount: '150' }],
+      })
+      .mockResolvedValueOnce({
         rows: [{ count: '1', total: '150', min: '150', max: '150' }],
       });
 
@@ -503,14 +530,14 @@ describe('breakdown analytics trends', () => {
         startDate: '2025-05-01',
         endDate: '2025-05-31',
       });
-      expect(queryMock).toHaveBeenCalledTimes(8);
+      expect(queryMock).toHaveBeenCalledTimes(9);
 
       await breakdown({
         type: 'expense',
         startDate: '2025-05-01',
         endDate: '2025-05-31',
       });
-      expect(queryMock).toHaveBeenCalledTimes(8);
+      expect(queryMock).toHaveBeenCalledTimes(9);
 
       await breakdown({
         type: 'expense',
@@ -518,7 +545,7 @@ describe('breakdown analytics trends', () => {
         endDate: '2025-05-31',
         noCache: '1',
       });
-      expect(queryMock).toHaveBeenCalledTimes(16);
+      expect(queryMock).toHaveBeenCalledTimes(18);
     } finally {
       process.env.NODE_ENV = originalNodeEnv;
     }

@@ -15,22 +15,6 @@ vi.mock('israeli-bank-scrapers-core', () => ({
   },
 }));
 
-vi.mock('../../services/scraping/run.js', () => {
-  const runScrape = vi.fn();
-  const wasScrapedRecently = vi.fn();
-
-  return {
-    runScrape,
-    wasScrapedRecently,
-    __setDatabaseForTests: vi.fn(),
-    __resetDatabaseForTests: vi.fn(),
-    default: {
-      runScrape,
-      wasScrapedRecently,
-    },
-  };
-});
-
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { createScrapingRouter } = require('../../routes/scraping.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires

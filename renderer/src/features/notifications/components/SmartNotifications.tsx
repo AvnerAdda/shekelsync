@@ -224,11 +224,33 @@ const SmartNotifications: React.FC = () => {
   });
 
   useEffect(() => {
-    fetchNotifications();
+    const fetchNotificationsIfVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+      fetchNotifications();
+    };
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchNotifications();
+      }
+    };
+
+    fetchNotificationsIfVisible();
 
     // Set up periodic refresh (every 5 minutes)
-    const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchNotificationsIfVisible, 5 * 60 * 1000);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
   }, []);
 
   const fetchNotifications = async () => {

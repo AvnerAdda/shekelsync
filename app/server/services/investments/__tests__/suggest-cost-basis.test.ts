@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { dialect } from '../../../../lib/sql-dialect.js';
 
 const queryMock = vi.fn();
 
@@ -166,5 +167,46 @@ describe('suggest cost basis service', () => {
 
     const [, txnParams] = queryMock.mock.calls[1];
     expect(txnParams).toContain('%investment%');
+  });
+
+  it('coerces invalid transaction prices to zero when computing suggestion totals', async () => {
+    const originalUseSqlite = dialect.useSqlite;
+
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            account_id: 11,
+            account_name: 'Bridge Portfolio',
+            account_type: 'brokerage',
+            cost_basis: '500',
+            as_of_date: '2025-01-01',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            identifier: 'txn-1',
+            vendor: 'leumi',
+            name: 'Bridge Portfolio movement',
+            price: 'not-a-number',
+            date: '2025-01-10',
+            category_type: 'investment',
+          },
+        ],
+      });
+
+    try {
+      const result = await suggestCostBasis({ account_id: 11 });
+      const [transactionsSql] = queryMock.mock.calls[1];
+
+      expect(transactionsSql).toContain('name LIKE $2');
+      expect(result.transactions.all[0].price).toBe(0);
+      expect(result.suggestion.total_deposits).toBe(0);
+      expect(result.suggestion.total_withdrawals).toBe(0);
+    } finally {
+      dialect.useSqlite = originalUseSqlite;
+    }
   });
 });

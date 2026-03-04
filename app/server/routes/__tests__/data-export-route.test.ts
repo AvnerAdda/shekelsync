@@ -4,12 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { createDataExportRouter } = require('../../routes/data-export.js');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const dataExportService = require('../../services/data/export.js');
+
+const dataExportService = {
+  exportData: vi.fn(),
+};
 
 function buildApp() {
   const app = express();
-  app.use('/api/data', createDataExportRouter());
+  app.use('/api/data', createDataExportRouter({
+    services: {
+      dataExportService,
+    },
+  }));
   return app;
 }
 
@@ -17,6 +23,7 @@ describe('Electron /api/data/export route', () => {
   let app: express.Express;
 
   beforeEach(() => {
+    dataExportService.exportData.mockReset();
     app = buildApp();
   });
 
@@ -31,9 +38,7 @@ describe('Electron /api/data/export route', () => {
       filename: 'clarify-export-transactions.json',
       body: { ok: true, items: [] },
     };
-    const spy = vi
-      .spyOn(dataExportService, 'exportData')
-      .mockResolvedValue(payload);
+    const spy = dataExportService.exportData.mockResolvedValue(payload);
 
     const res = await request(app)
       .get('/api/data/export?format=json&dataType=transactions')
@@ -57,14 +62,14 @@ describe('Electron /api/data/export route', () => {
       },
       message: 'boom',
     };
-    vi.spyOn(dataExportService, 'exportData').mockRejectedValue(errorPayload);
+    dataExportService.exportData.mockRejectedValue(errorPayload);
 
     const res = await request(app).get('/api/data/export').expect(500);
     expect(res.body).toEqual(errorPayload);
   });
 
   it('returns 400 on invalid export parameters', async () => {
-    vi.spyOn(dataExportService, 'exportData').mockRejectedValue({
+    dataExportService.exportData.mockRejectedValue({
       error: { code: 'VALIDATION_ERROR', message: 'invalid format' },
     });
 
@@ -73,7 +78,7 @@ describe('Electron /api/data/export route', () => {
   });
 
   it('sends non-json export payloads', async () => {
-    vi.spyOn(dataExportService, 'exportData').mockResolvedValue({
+    dataExportService.exportData.mockResolvedValue({
       format: 'csv',
       contentType: 'text/csv',
       filename: 'export.csv',
@@ -88,7 +93,7 @@ describe('Electron /api/data/export route', () => {
   });
 
   it('returns generic 500 payload when error is not structured', async () => {
-    vi.spyOn(dataExportService, 'exportData').mockRejectedValue(new Error('plain failure'));
+    dataExportService.exportData.mockRejectedValue(new Error('plain failure'));
 
     const res = await request(app).get('/api/data/export').expect(500);
 

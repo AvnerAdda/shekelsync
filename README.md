@@ -44,6 +44,8 @@ npm run dev:api
 
 On Linux, `npm run dev:electron` automatically falls back to `app/.env.local` for `SHEKELSYNC_ENCRYPTION_KEY` when no OS keychain service is available (for example in WSL/headless sessions).
 
+Performance note: when the app window is minimized/hidden, renderer polling and ambient UI animation are paused and resume on focus to reduce idle CPU usage.
+
 ## Tests
 
 ```bash

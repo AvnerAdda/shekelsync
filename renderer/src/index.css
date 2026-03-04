@@ -3,6 +3,7 @@
 
 /* Custom window styling for Electron frameless window - updated */
 html, body {
+  --app-window-radius: 12px;
   margin: 0 !important;
   padding: 0 !important;
   overflow: hidden;
@@ -21,8 +22,9 @@ html, body {
   width: 100vw;
   min-height: 100vh;
   min-width: 100vw;
-  overflow: auto;
-  border-radius: 12px;
+  overflow: hidden;
+  border-radius: var(--app-window-radius);
+  clip-path: inset(0 round var(--app-window-radius));
   transition: border-radius 0.2s ease, box-shadow 0.2s ease;
   background: transparent;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
@@ -35,18 +37,23 @@ body.window-restored {
 body.window-restored #root {
   height: 100vh !important;
   width: 100vw !important;
-  border-radius: 12px;
+  overflow: hidden;
+  border-radius: var(--app-window-radius);
+  clip-path: inset(0 round var(--app-window-radius));
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
   background-clip: border-box;
 }
 
 body.window-maximized {
+  --app-window-radius: 0px;
   padding: 0 !important;
   margin: 0 !important;
 }
 
 body.window-maximized #root {
-  border-radius: 0 !important;
+  border-radius: var(--app-window-radius) !important;
+  clip-path: inset(0 round var(--app-window-radius)) !important;
+  overflow: hidden !important;
   padding: 0 !important;
   margin: 0 !important;
   box-shadow: none !important;

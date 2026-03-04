@@ -6,6 +6,24 @@
     "or": "ou",
     "close": "Fermer"
   },
+  "routeError": {
+    "titles": {
+      "notFound": "Page introuvable",
+      "server": "Erreur serveur",
+      "navigation": "Erreur de navigation",
+      "unexpected": "Une erreur s'est produite"
+    },
+    "messages": {
+      "notFound": "La page demandée n'existe pas ou n'est plus disponible.",
+      "requestFailed": "La requête a échoué avec le statut {{status}}.",
+      "renderFailure": "Une erreur inattendue s'est produite lors de l'affichage de cet écran.",
+      "loadFailure": "Une erreur inattendue s'est produite lors du chargement de cette page."
+    },
+    "actions": {
+      "goToDashboard": "Aller au tableau de bord",
+      "reloadApp": "Recharger l'application"
+    }
+  },
   "smartNotifications": {
     "dismiss": "Masquer",
     "dismissAll": "Tout masquer",
@@ -233,7 +251,8 @@
       "title": "Règles de correspondance de motifs",
       "description": "Les motifs définissent quelles transactions appartiennent à quels comptes. Utilisez <code>%</code> comme caractère générique.<br />Exemple : <code>%dépôt%</code> correspond à toute transaction contenant \"dépôt\".",
       "empty": "Aucun compte d'investissement trouvé. Créez un compte pour ajouter des motifs.",
-      "chipCount": "{{count}} motif{{count, plural, one {} other {s}}}",
+      "chipCount_one": "{{count}} motif",
+      "chipCount_other": "{{count}} motifs",
       "notifications": {
         "missingPattern": "Veuillez saisir un motif",
         "added": "Motif ajouté avec succès",
@@ -564,7 +583,8 @@
         }
       },
       "children": {
-        "count": "{{count}} {{count, plural, one {enfant} other {enfants}}}",
+        "count_one": "{{count}} enfant",
+        "count_other": "{{count}} enfants",
         "empty": "Aucun enfant ajouté. Cliquez sur + pour ajouter votre premier enfant.",
         "unnamed": "Enfant {{index}}",
         "age": "Âge : {{age}} ans",
@@ -796,7 +816,8 @@
       "savingsRate": "Taux d'épargne",
       "savingsRateSalary": "Taux d'épargne (Salaire)",
       "anomalies": "Anomalies",
-      "spikes": "{{count}} pic{{count, plural, one {} other {s}}}"
+      "spikes_one": "{{count}} pic",
+      "spikes_other": "{{count}} pics"
     },
     "transactionsOn": "Transactions du {{date}} ({{count}} transactions) :",
     "noTransactionsForDate": "Aucune transaction pour cette date."
@@ -1982,10 +2003,12 @@
     "summary": {
       "title": "Transactions à catégoriser",
       "allDone": "🎉 Toutes les transactions sont correctement catégorisées dans des catégories finales !",
-      "pendingCount": "{{countDisplay}} transaction{{count, plural, one {} other {s}}} en attente de catégorisation",
+      "pendingCount_one": "{{countDisplay}} transaction en attente de catégorisation",
+      "pendingCount_other": "{{countDisplay}} transactions en attente de catégorisation",
       "totalPending": "Total en attente : {{amount}}",
       "progress": "Progression de la catégorisation",
-      "incomplete": "{{count, plural, one {{formattedCount}} incomplète other {{formattedCount}} incomplètes}}"
+      "incomplete_one": "{{formattedCount}} incomplète",
+      "incomplete_other": "{{formattedCount}} incomplètes"
     },
     "sort": {
       "label": "Trier par",
@@ -2042,9 +2065,9 @@
       "categoryUpdated": "Catégorie mise à jour avec succès",
       "categoryDeleted": "Catégorie supprimée avec succès",
       "ruleCreated": "Règle créée avec succès",
-      "ruleStatusUpdated": "Règle {{status, select, activated {activée} deactivated {désactivée} other {mise à jour}}} avec succès",
+      "ruleStatusUpdated": "Statut de la règle mis à jour avec succès",
       "ruleDeleted": "Règle supprimée avec succès",
-      "rulesApplied": "{{rules}} règle{{rules, plural, one {} other {s}}} appliquée{{rules, plural, one {} other {s}}} avec succès à {{transactions}} transaction{{transactions, plural, one {} other {s}}}",
+      "rulesApplied": "Application réussie de {{rules}} règle(s) à {{transactions}} transaction(s).",
       "transactionRemoved": "Transaction retirée de la catégorie",
       "transactionMoved": "Transaction déplacée vers {{category}}"
     },
@@ -2068,7 +2091,8 @@
     },
     "transactions": {
       "title": "Transactions {{name}}",
-      "count": "{{count}} transaction{{count, plural, one {} other {s}}}",
+      "count_one": "{{count}} transaction",
+      "count_other": "{{count}} transactions",
       "none": "Aucune transaction trouvee pour cette categorie.",
       "loading": "Chargement des transactions...",
       "unknown": "Transaction inconnue",
@@ -2084,7 +2108,8 @@
         "pattern": "Motif marchand",
         "patternPlaceholder": "ex. 'starbucks' ou 'interactive broker'",
         "patternHelper": "Motif à rechercher dans le nom de transaction (insensible à la casse)",
-        "patternPreview": "Correspondra à {{count}} transaction{{count, plural, one {} other {s}}}",
+        "patternPreview_one": "Correspondra à {{count}} transaction",
+        "patternPreview_other": "Correspondra à {{count}} transactions",
         "type": "Type",
         "category": "Catégorie",
         "selectCategory": "Sélectionnez une catégorie",
@@ -2101,7 +2126,8 @@
         "applyToExisting": "Appliquer les règles aux transactions existantes"
       },
       "preview": {
-        "title": "Aperçu : {{count}} transaction{{count, plural, one {} other {s}}} seront affectées",
+        "title_one": "Aperçu : {{count}} transaction sera affectée",
+        "title_other": "Aperçu : {{count}} transactions seront affectées",
         "more": "...et {{count}} de plus"
       }
     },
@@ -2141,7 +2167,8 @@
       "income": "Revenus"
     },
     "uncategorized": {
-      "similar": "{{count}} transaction{{count, plural, one { similaire} other {s similaires}}}",
+      "similar_one": "{{count}} transaction similaire",
+      "similar_other": "{{count}} transactions similaires",
       "needsRefinement": "À affiner",
       "parentAssigned": "Déjà attribuée à une catégorie parente. Choisissez une sous-catégorie finale pour terminer.",
       "assign": {
@@ -2179,7 +2206,7 @@
       "categories": "Catégories"
     },
     "stats": {
-      "accounts": "{{count}} comptes",
+      "accounts": "Comptes",
       "accounts_one": "{{count}} compte",
       "accounts_other": "{{count}} comptes",
       "accountsConnected": "comptes connectés"
@@ -2369,7 +2396,8 @@
     "helpers": {
       "foundInTransactions": "✓ Trouvé dans les transactions !",
       "investmentFallback": "Investissement",
-      "transactionsCount": "{{count}} transaction{{count, plural, one {} other {s}}}",
+      "transactionsCount_one": "{{count}} transaction",
+      "transactionsCount_other": "{{count}} transactions",
       "knownInstitution": "Sélectionnez dans le registre ou laissez vide pour une institution personnalisée",
       "selectInstitution": "Sélectionnez une institution pour voir les identifiants requis.",
       "noSpecificCredentials": "Aucune exigence spécifique configurée. Fournissez un nom d'utilisateur et un mot de passe.",

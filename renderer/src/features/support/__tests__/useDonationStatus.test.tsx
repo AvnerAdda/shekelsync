@@ -1,6 +1,8 @@
+import React from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DONATION_STATUS_CHANGED_EVENT } from '../constants';
+import { DonationStatusProvider } from '../contexts/DonationStatusContext';
 import { useDonationStatus } from '../hooks/useDonationStatus';
 
 const mockGet = vi.fn();
@@ -12,6 +14,10 @@ vi.mock('@/lib/api-client', () => ({
     post: (...args: unknown[]) => mockPost(...args),
   },
 }));
+
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <DonationStatusProvider>{children}</DonationStatusProvider>
+);
 
 const baseStatus = {
   hasDonated: false,
@@ -49,7 +55,7 @@ describe('useDonationStatus', () => {
       }),
     );
 
-    const { result } = renderHook(() => useDonationStatus());
+    const { result } = renderHook(() => useDonationStatus(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -67,7 +73,7 @@ describe('useDonationStatus', () => {
   it('stores a safe fallback when the initial refresh fails', async () => {
     mockGet.mockRejectedValueOnce(new Error('network down'));
 
-    const { result } = renderHook(() => useDonationStatus());
+    const { result } = renderHook(() => useDonationStatus(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -92,7 +98,7 @@ describe('useDonationStatus', () => {
     mockPost.mockResolvedValueOnce(okResponse(updatedStatus));
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
 
-    const { result } = renderHook(() => useDonationStatus());
+    const { result } = renderHook(() => useDonationStatus(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -138,7 +144,7 @@ describe('useDonationStatus', () => {
       }),
     );
 
-    const { result } = renderHook(() => useDonationStatus());
+    const { result } = renderHook(() => useDonationStatus(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);

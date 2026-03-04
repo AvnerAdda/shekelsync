@@ -83,7 +83,8 @@ vi.mock('@renderer/shared/modals/ScrapeModal', () => ({
 }));
 
 vi.mock('@renderer/shared/modals/CategoryHierarchyModal', () => ({
-  default: ({ open }: { open: boolean }) => (open ? <div>categories-modal-open</div> : null),
+  default: ({ open, initialTab }: { open: boolean; initialTab?: number }) =>
+    open ? <div data-testid="categories-modal">{`categories-modal-open:${initialTab ?? 0}`}</div> : null,
 }));
 
 vi.mock('@renderer/shared/components/LicenseReadOnlyAlert', () => ({
@@ -123,10 +124,11 @@ function setupDefaultApiMocks() {
 }
 
 async function renderSidebar(props: React.ComponentProps<typeof Sidebar>) {
+  const view = render(<Sidebar {...props} />);
   await act(async () => {
-    render(<Sidebar {...props} />);
     await Promise.resolve();
   });
+  return view;
 }
 
 describe('Sidebar component', () => {
@@ -285,5 +287,165 @@ describe('Sidebar component', () => {
       window.dispatchEvent(new CustomEvent('openProfileSetup'));
     });
     expect(onPageChange).toHaveBeenCalledWith('settings');
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('openScrapeModal'));
+    });
+    await waitFor(() => {
+      expect(screen.getByText('scrape-modal-open')).toBeInTheDocument();
+    });
+  });
+
+  it('opens categories modal on guided event with requested tab', async () => {
+    const onPageChange = vi.fn();
+
+    await renderSidebar({ currentPage: 'home', onPageChange });
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('guideOpenCategoriesModal', { detail: { tab: 'create_rules' } }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('categories-modal')).toHaveTextContent('categories-modal-open:2');
+    });
+  });
+
+  it('defers onDataRefresh until scrape completion event when bridge exists', async () => {
+    const onPageChange = vi.fn();
+    const onDataRefresh = vi.fn();
+    (window as any).electronAPI = { events: { onScrapeProgress: vi.fn() } };
+
+    const view = await renderSidebar({ currentPage: 'home', onPageChange, onDataRefresh });
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('guideTriggerBulkSync'));
+    });
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith('/api/scrape/bulk', {});
+    });
+    expect(onDataRefresh).not.toHaveBeenCalled();
+
+    mockScrapeEvent = { status: 'completed' };
+    view.rerender(<Sidebar currentPage="home" onPageChange={onPageChange} onDataRefresh={onDataRefresh} />);
+
+    await waitFor(() => {
+      expect(onDataRefresh).toHaveBeenCalled();
+    });
+  });
+
+  it('opens accounts modal when sync is not stale', async () => {
+    const onPageChange = vi.fn();
+    mockCredentials = [
+      {
+        id: 'cred-fresh',
+        vendor: 'hapoalim',
+        nickname: 'Fresh Account',
+        lastUpdate: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+        institution_id: 30,
+        institution: { institution_type: 'bank' },
+      },
+    ];
+
+    await renderSidebar({ currentPage: 'home', onPageChange });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Click to sync accounts' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('accounts-modal-open')).toBeInTheDocument();
+    });
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('shows backend message when bulk refresh returns success=false', async () => {
+    const onPageChange = vi.fn();
+    mockCredentials = [
+      {
+        id: 'cred-stale-3',
+        vendor: 'leumi',
+        nickname: 'Stale 3',
+        lastUpdate: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
+        institution_id: 31,
+        institution: { institution_type: 'bank' },
+      },
+    ];
+    mockPost.mockResolvedValue({
+      ok: true,
+      data: {
+        success: false,
+        message: 'Partial failure',
+      },
+    });
+
+    await renderSidebar({ currentPage: 'home', onPageChange });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Click to sync accounts' }));
+
+    await waitFor(() => {
+      expect(showNotification).toHaveBeenCalledWith('Partial failure', 'error');
+    });
+  });
+
+  it('dispatches dataRefresh when sync succeeds without onDataRefresh callback', async () => {
+    const onPageChange = vi.fn();
+    const dataRefreshListener = vi.fn();
+    window.addEventListener('dataRefresh', dataRefreshListener);
+    mockCredentials = [
+      {
+        id: 'cred-stale-4',
+        vendor: 'discount',
+        nickname: 'Stale 4',
+        lastUpdate: new Date(Date.now() - 80 * 60 * 60 * 1000).toISOString(),
+        institution_id: 32,
+        institution: { institution_type: 'bank' },
+      },
+    ];
+    mockPost.mockResolvedValue({
+      ok: true,
+      data: {
+        success: true,
+        totalProcessed: 0,
+        successCount: 0,
+        totalTransactions: 0,
+      },
+    });
+
+    await renderSidebar({ currentPage: 'home', onPageChange });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Click to sync accounts' }));
+
+    await waitFor(() => {
+      expect(showNotification).toHaveBeenCalledWith('All accounts are up to date', 'success');
+    });
+    await waitFor(() => {
+      expect(dataRefreshListener).toHaveBeenCalled();
+    });
+
+    window.removeEventListener('dataRefresh', dataRefreshListener);
+  });
+
+  it('shows fallback error notification when bulk refresh throws', async () => {
+    const onPageChange = vi.fn();
+    mockCredentials = [
+      {
+        id: 'cred-stale-5',
+        vendor: 'isracard',
+        nickname: 'Stale 5',
+        lastUpdate: new Date(Date.now() - 90 * 60 * 60 * 1000).toISOString(),
+        institution_id: 33,
+        institution: { institution_type: 'credit_card' },
+      },
+    ];
+    mockPost.mockRejectedValue(new Error('network down'));
+
+    await renderSidebar({ currentPage: 'home', onPageChange });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Click to sync accounts' }));
+
+    await waitFor(() => {
+      expect(showNotification).toHaveBeenCalledWith('Bulk sync failed', 'error');
+    });
   });
 });

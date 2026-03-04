@@ -182,6 +182,7 @@ async function getBreakdownAnalytics(query = {}) {
   const vendorMap = new Map();
   const vendorHistoryMap = new Map();
   const monthMap = new Map();
+  const dayMap = new Map();
 
   let transactions = [];
   let totalAmount = 0;
@@ -326,6 +327,7 @@ async function getBreakdownAnalytics(query = {}) {
       const isPending = processedDate ? new Date(processedDate) > now : false;
 
       const monthKey = tx.date.toISOString().slice(0, 7);
+      const dayKey = tx.date.toISOString().slice(0, 10);
 
       const parentKey = tx.parent_id ?? tx.parent_name ?? 'Uncategorized';
       if (!categoryMap.has(parentKey)) {
@@ -419,6 +421,11 @@ async function getBreakdownAnalytics(query = {}) {
         monthMap.set(monthKey, { month: monthKey, total: 0 });
       }
       monthMap.get(monthKey).total += amount;
+
+      if (!dayMap.has(dayKey)) {
+        dayMap.set(dayKey, { date: dayKey, total: 0 });
+      }
+      dayMap.get(dayKey).total += amount;
     });
   } else {
     const categoryBaseCte = `WITH RECURSIVE category_tree AS (
@@ -697,6 +704,17 @@ async function getBreakdownAnalytics(query = {}) {
       [startStr, endStr, config.categoryType],
     );
 
+    const dayTotalsResult = await database.query(
+      `${baseCte}
+      SELECT
+        strftime('%Y-%m-%d', d.date) as date,
+        SUM(${amountExpression}) as total_amount
+      FROM deduped d
+      GROUP BY date
+      ORDER BY date`,
+      [startStr, endStr, config.categoryType],
+    );
+
     const summaryResult = await database.query(
       `${baseCte}
       SELECT
@@ -735,6 +753,10 @@ async function getBreakdownAnalytics(query = {}) {
 
     for (const row of monthTotalsResult.rows) {
       monthMap.set(row.month, { month: row.month, total: Number.parseFloat(row.total_amount || 0) });
+    }
+
+    for (const row of dayTotalsResult.rows) {
+      dayMap.set(row.date, { date: row.date, total: Number.parseFloat(row.total_amount || 0) });
     }
 
     const summaryRow = summaryResult.rows[0] || {};
@@ -814,6 +836,14 @@ async function getBreakdownAnalytics(query = {}) {
       outflow: type === 'expense' ? row.total : 0,
     }));
 
+  const byDay = Array.from(dayMap.values())
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((row) => ({
+      ...row,
+      inflow: type === 'expense' ? 0 : row.total,
+      outflow: type === 'expense' ? row.total : 0,
+    }));
+
   const response = {
     dateRange: { start, end },
     summary: {
@@ -827,6 +857,7 @@ async function getBreakdownAnalytics(query = {}) {
       byCategory,
       byVendor,
       byMonth,
+      byDay,
     },
   };
   if (includeTransactionsFlag) {

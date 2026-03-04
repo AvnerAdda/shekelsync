@@ -146,13 +146,34 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({
 
   // Auto-refresh interval
   useEffect(() => {
-    if (autoRefreshInterval > 0) {
-      const interval = setInterval(() => {
-        refresh();
-      }, autoRefreshInterval);
-
-      return () => clearInterval(interval);
+    if (autoRefreshInterval <= 0) {
+      return;
     }
+
+    const refreshIfVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+      refresh();
+    };
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        refresh();
+      }
+    };
+
+    const interval = setInterval(refreshIfVisible, autoRefreshInterval);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
   }, [autoRefreshInterval, refresh]);
 
   const value: SecurityContextValue = {

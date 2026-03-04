@@ -221,11 +221,30 @@ export function useLicense(): UseLicenseReturn {
   useEffect(() => {
     if (!getLicenseBridge()?.validateOnline) return;
 
-    const interval = setInterval(() => {
+    const validateOnlineIfVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
       validateOnline().catch(console.error);
-    }, 30 * 60 * 1000);
+    };
 
-    return () => clearInterval(interval);
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        validateOnline().catch(console.error);
+      }
+    };
+
+    const interval = setInterval(validateOnlineIfVisible, 30 * 60 * 1000);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
   }, [getLicenseBridge, validateOnline]);
 
   // Derived states
