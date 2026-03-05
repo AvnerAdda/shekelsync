@@ -102,6 +102,27 @@ const INVESTMENT_INFLOW_SQL = `
   (cd.category_type = 'investment' AND t.price > 0)
 `;
 
+const PAIRED_REPAYMENT_COVERAGE_SQL = `
+  EXISTS (
+    SELECT 1
+    FROM transaction_pairing_exclusions tpe_cov
+    JOIN account_pairings ap_cov ON ap_cov.id = tpe_cov.pairing_id
+    WHERE tpe_cov.transaction_identifier = t.identifier
+      AND tpe_cov.transaction_vendor = t.vendor
+      AND ap_cov.is_active = 1
+      AND EXISTS (
+        SELECT 1
+        FROM transactions cc_t
+        WHERE cc_t.vendor = ap_cov.credit_card_vendor
+          AND cc_t.price < 0
+          AND (
+            ap_cov.credit_card_account_number IS NULL
+            OR cc_t.account_number = ap_cov.credit_card_account_number
+          )
+      )
+  )
+`;
+
 function parseBooleanParam(value, defaultValue = false) {
   if (value === undefined || value === null || value === '') {
     return defaultValue;
@@ -221,7 +242,9 @@ async function getDashboardAnalytics(query = {}) {
       SELECT
         ${dateSelect},
         SUM(CASE
-          WHEN (${creditCardRepaymentCondition}) AND t.price < 0
+          WHEN (${creditCardRepaymentCondition})
+            AND t.price < 0
+            AND ${PAIRED_REPAYMENT_COVERAGE_SQL}
           THEN ABS(t.price)
           ELSE 0
         END) as paired_card_repayments

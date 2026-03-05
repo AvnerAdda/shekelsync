@@ -76,6 +76,7 @@ app/scripts/
 
 # Scripts - ignore demo/dev-only files, keep essential ones
 scripts/secrets-map.json
+scripts/send-launch-email-test.js
 
 linux-gpg.key
 app/shekelsync.pfx

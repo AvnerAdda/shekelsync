@@ -2073,10 +2073,30 @@ ipcMain.handle('updater:checkForUpdates', async () => {
   if (!shouldEnableAutoUpdate() || !autoUpdater) {
     return { success: false, error: 'Auto-updater not available' };
   }
-  
+
   try {
+    const normalizeVersion = (version) => {
+      if (typeof version !== 'string') {
+        return '';
+      }
+      return version.trim().toLowerCase().replace(/^v/, '').split('+')[0];
+    };
+
+    const currentVersion = app.getVersion();
     const result = await autoUpdater.checkForUpdates();
-    return { success: true, updateInfo: result?.updateInfo || null };
+    const updateInfo = result?.updateInfo || null;
+    const explicitAvailability = typeof result?.isUpdateAvailable === 'boolean' ? result.isUpdateAvailable : null;
+    const inferredAvailability =
+      Boolean(updateInfo?.version) &&
+      normalizeVersion(updateInfo.version) !== normalizeVersion(currentVersion);
+    const isUpdateAvailable = explicitAvailability ?? inferredAvailability;
+
+    return {
+      success: true,
+      currentVersion,
+      isUpdateAvailable,
+      updateInfo: isUpdateAvailable ? updateInfo : null,
+    };
   } catch (error) {
     console.error('Manual update check failed:', error);
     return { success: false, error: error.message };

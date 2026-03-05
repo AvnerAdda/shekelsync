@@ -1974,7 +1974,7 @@
       "cancel": "Annuler"
     },
     "security": {
-      "localStorageWarning": "Vos identifiants sont stockés localement sur votre appareil et chiffrés. Aucune donnée n'est envoyée à des serveurs externes."
+      "localStorageWarning": "Vos identifiants sont stockés localement sur votre appareil et chiffrés au repos. Pendant la synchronisation, ils sont utilisés pour se connecter directement à votre banque/émetteur de carte."
     }
   },
   "categoryHierarchy": {
@@ -2465,7 +2465,7 @@
         "saveFailed": "Échec de la mise à jour des identifiants"
       },
       "security": {
-        "localStorageWarning": "Vos identifiants sont stockés localement sur votre appareil et chiffrés. Aucune donnée n'est envoyée à des serveurs externes."
+        "localStorageWarning": "Vos identifiants sont stockés localement sur votre appareil et chiffrés au repos. Pendant la synchronisation, ils sont utilisés pour se connecter directement à votre banque/émetteur de carte."
       }
     },
     "valueModal": {

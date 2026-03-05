@@ -36,7 +36,12 @@ class BiometricAuthManager {
     const script = [
       'Add-Type -AssemblyName System.Runtime.WindowsRuntime;',
       '$null = [Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime];',
-      '$availability = [Windows.Security.Credentials.UI.UserConsentVerifier]::CheckAvailabilityAsync().GetAwaiter().GetResult();',
+      '$asTaskMethod = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq "AsTask" -and $_.IsGenericMethod -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq "IAsyncOperation`1" } | Select-Object -First 1;',
+      'if (-not $asTaskMethod) { throw "Unable to find WinRT AsTask adapter."; }',
+      '$availabilityOp = [Windows.Security.Credentials.UI.UserConsentVerifier]::CheckAvailabilityAsync();',
+      '$availabilityTask = $asTaskMethod.MakeGenericMethod([Windows.Security.Credentials.UI.UserConsentVerifierAvailability]).Invoke($null, @($availabilityOp));',
+      '$availabilityTask.Wait();',
+      '$availability = $availabilityTask.Result;',
       'Write-Output $availability.ToString();',
     ].join(' ');
 
@@ -69,7 +74,12 @@ class BiometricAuthManager {
     const script = [
       'Add-Type -AssemblyName System.Runtime.WindowsRuntime;',
       '$null = [Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime];',
-      '$result = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync($env:SHEKELSYNC_AUTH_REASON).GetAwaiter().GetResult();',
+      '$asTaskMethod = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq "AsTask" -and $_.IsGenericMethod -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq "IAsyncOperation`1" } | Select-Object -First 1;',
+      'if (-not $asTaskMethod) { throw "Unable to find WinRT AsTask adapter."; }',
+      '$verificationOp = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync($env:SHEKELSYNC_AUTH_REASON);',
+      '$verificationTask = $asTaskMethod.MakeGenericMethod([Windows.Security.Credentials.UI.UserConsentVerificationResult]).Invoke($null, @($verificationOp));',
+      '$verificationTask.Wait();',
+      '$result = $verificationTask.Result;',
       'Write-Output $result.ToString();',
     ].join(' ');
 

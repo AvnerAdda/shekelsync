@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,9 @@ import {
   Alert,
 } from '@mui/material';
 import ModalHeader from './ModalHeader';
+import PairingMatchDetailsModal from './PairingMatchDetailsModal';
 import { apiClient } from '@/lib/api-client';
+import type { PairingMatchDetailsResponse, PairingMatchSummary } from '@renderer/types/accounts';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 
 interface Account {
@@ -61,6 +63,8 @@ interface AutoPairingBatchResult {
   reason?: string;
 }
 
+type PairingForDetails = NonNullable<AutoPairResult['pairing']>;
+
 interface AccountPairingModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -73,6 +77,14 @@ const statusMeta = {
   missing: { label: 'Missing', color: 'warning' },
   error: { label: 'Error', color: 'error' },
 } as const;
+
+const RELOAD_MONTHS_BACK = 6;
+
+interface PairingStatsState {
+  loading: boolean;
+  summary?: PairingMatchSummary;
+  error?: string;
+}
 
 function extractAccountNumbers(account: Account): string[] {
   const fromTransactions = Array.isArray(account.accountNumbers)
@@ -122,20 +134,50 @@ function getAccountDisplayName(account: Account): string {
   return parts.join(' - ');
 }
 
+function buildCreditCardAccountsSignature(accounts: Account[]): string {
+  return accounts
+    .map((account) => {
+      const numbers = extractAccountNumbers(account).sort().join(',');
+      return [
+        account.id,
+        account.vendor,
+        account.nickname || '',
+        account.card6_digits || '',
+        account.account_number || '',
+        numbers,
+      ].join('::');
+    })
+    .sort()
+    .join('||');
+}
+
 export default function AccountPairingModal({
   isOpen,
   onClose,
   creditCardAccounts = [],
 }: AccountPairingModalProps) {
+  const wasOpenRef = useRef(false);
+  const lastAccountSignatureRef = useRef('');
+  const pairingStatsByIdRef = useRef<Record<number, PairingStatsState>>({});
+  const accountSignature = useMemo(
+    () => buildCreditCardAccountsSignature(creditCardAccounts),
+    [creditCardAccounts],
+  );
   const [expandedAccounts, setExpandedAccounts] = useState<Account[]>([]);
   const [existingPairings, setExistingPairings] = useState<Pairing[]>([]);
   const [pairingsLoaded, setPairingsLoaded] = useState(false);
   const [autoPairingBatchLoading, setAutoPairingBatchLoading] = useState(false);
   const [autoPairingBatchDone, setAutoPairingBatchDone] = useState(false);
   const [autoPairingBatchResults, setAutoPairingBatchResults] = useState<AutoPairingBatchResult[]>([]);
+  const [selectedPairingForDetails, setSelectedPairingForDetails] = useState<PairingForDetails | null>(null);
+  const [pairingStatsById, setPairingStatsById] = useState<Record<number, PairingStatsState>>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
   const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
+
+  useEffect(() => {
+    pairingStatsByIdRef.current = pairingStatsById;
+  }, [pairingStatsById]);
 
   const expandCreditCardAccounts = useCallback(() => {
     const expanded: Account[] = [];
@@ -289,24 +331,58 @@ export default function AccountPairingModal({
   }, [autoPairingBatchLoading, expandedAccounts, findActivePairingForAccount]);
 
   useEffect(() => {
-    if (!isOpen) {
+    const wasOpen = wasOpenRef.current;
+
+    if (isOpen && !wasOpen) {
+      lastAccountSignatureRef.current = accountSignature;
+      setAutoPairingBatchDone(false);
+      setAutoPairingBatchResults([]);
+      setAutoPairingBatchLoading(false);
+      setSelectedPairingForDetails(null);
+      setPairingStatsById({});
+      pairingStatsByIdRef.current = {};
+      setErrorMessage(null);
+      expandCreditCardAccounts();
+      fetchExistingPairings();
+      wasOpenRef.current = true;
+      return;
+    }
+
+    if (!isOpen && wasOpen) {
       setExpandedAccounts([]);
       setExistingPairings([]);
       setAutoPairingBatchDone(false);
       setAutoPairingBatchResults([]);
       setAutoPairingBatchLoading(false);
       setPairingsLoaded(false);
+      setSelectedPairingForDetails(null);
+      setPairingStatsById({});
+      pairingStatsByIdRef.current = {};
       setErrorMessage(null);
+      lastAccountSignatureRef.current = '';
+      wasOpenRef.current = false;
+    }
+  }, [isOpen, accountSignature, expandCreditCardAccounts, fetchExistingPairings]);
+
+  useEffect(() => {
+    if (!isOpen || !wasOpenRef.current) {
+      return;
+    }
+    if (lastAccountSignatureRef.current === accountSignature) {
       return;
     }
 
+    lastAccountSignatureRef.current = accountSignature;
     setAutoPairingBatchDone(false);
     setAutoPairingBatchResults([]);
     setAutoPairingBatchLoading(false);
+    setSelectedPairingForDetails(null);
+    setPairingStatsById({});
+    pairingStatsByIdRef.current = {};
     setErrorMessage(null);
     expandCreditCardAccounts();
     fetchExistingPairings();
-  }, [isOpen, expandCreditCardAccounts, fetchExistingPairings]);
+  }, [isOpen, accountSignature, expandCreditCardAccounts, fetchExistingPairings]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -330,16 +406,99 @@ export default function AccountPairingModal({
     handleAutoPairAll,
   ]);
 
+  useEffect(() => {
+    if (!isOpen || !autoPairingBatchDone || autoPairingBatchLoading) {
+      return;
+    }
+
+    const pairingIds = Array.from(new Set(
+      autoPairingBatchResults
+        .filter((result) => Boolean(result.pairing) && (result.status === 'paired' || result.status === 'existing'))
+        .map((result) => result.pairing?.id)
+        .filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0),
+    ));
+
+    const currentStats = pairingStatsByIdRef.current;
+    const idsToFetch = pairingIds.filter((pairingId) => !currentStats[pairingId]);
+    if (idsToFetch.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    setPairingStatsById((prev) => {
+      const next = { ...prev };
+      idsToFetch.forEach((pairingId) => {
+        if (!next[pairingId]) {
+          next[pairingId] = { loading: true };
+        }
+      });
+      return next;
+    });
+
+    Promise.all(idsToFetch.map(async (pairingId) => {
+      try {
+        const response = await apiClient.get<PairingMatchDetailsResponse | { error?: string }>(
+          `/api/accounts/pairing/${pairingId}/match-details?monthsBack=${RELOAD_MONTHS_BACK}`,
+        );
+
+        if (!response.ok) {
+          const apiError = typeof response.data === 'object' && response.data && 'error' in response.data
+            ? String(response.data.error || 'Stats unavailable')
+            : 'Stats unavailable';
+          throw new Error(apiError);
+        }
+
+        return {
+          pairingId,
+          loading: false,
+          summary: (response.data as PairingMatchDetailsResponse).summary,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Stats unavailable';
+        return {
+          pairingId,
+          loading: false,
+          error: message,
+        };
+      }
+    })).then((results) => {
+      if (cancelled) return;
+      setPairingStatsById((prev) => {
+        const next = { ...prev };
+        results.forEach((result) => {
+          next[result.pairingId] = result;
+        });
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, autoPairingBatchDone, autoPairingBatchLoading, autoPairingBatchResults]);
+
   const handleClose = () => {
     setAutoPairingBatchDone(false);
     setAutoPairingBatchResults([]);
     setAutoPairingBatchLoading(false);
+    setSelectedPairingForDetails(null);
     setErrorMessage(null);
     onClose();
   };
 
+  const handleDialogClose = (
+    _event: object,
+    reason: 'backdropClick' | 'escapeKeyDown',
+  ) => {
+    if (reason === 'backdropClick') {
+      return;
+    }
+    handleClose();
+  };
+
   return (
-    <Dialog open={isOpen} onClose={handleClose} maxWidth="md" fullWidth>
+    <Dialog open={isOpen} onClose={handleDialogClose} maxWidth="md" fullWidth>
       <ModalHeader title="Account Pairing" onClose={handleClose} />
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -365,12 +524,60 @@ export default function AccountPairingModal({
                 ? `${result.pairing.bankVendor}${result.pairing.bankAccountNumber ? ` • ${result.pairing.bankAccountNumber}` : ''}`
                 : 'No bank match';
               const primary = `${getAccountDisplayName(result.account)} → ${bankLabel}`;
+              const isDetailsAvailable = Boolean(result.pairing) && (result.status === 'paired' || result.status === 'existing');
+              const secondaryText = result.reason
+                || (result.status === 'existing' ? 'Pairing already exists' : '')
+                || (isDetailsAvailable ? 'Click to view transaction matching details' : '');
+              const statsState = result.pairing ? pairingStatsById[result.pairing.id] : undefined;
 
               return (
-                <ListItem key={result.key} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mb: 1 }}>
+                <ListItem
+                  key={result.key}
+                  onClick={isDetailsAvailable ? () => {
+                    if (result.pairing) {
+                      setSelectedPairingForDetails(result.pairing);
+                    }
+                  } : undefined}
+                  sx={{
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    mb: 1,
+                    ...(isDetailsAvailable ? {
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: 'action.hover' },
+                    } : {}),
+                  }}
+                >
                   <ListItemText
                     primary={primary}
-                    secondary={result.reason || (result.status === 'existing' ? 'Pairing already exists' : '')}
+                    secondaryTypographyProps={{ component: 'div' }}
+                    secondary={(
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                        {secondaryText ? (
+                          <Typography variant="body2" color="text.secondary">{secondaryText}</Typography>
+                        ) : null}
+                        {isDetailsAvailable ? (
+                          statsState?.loading ? (
+                            <Typography variant="caption" color="text.secondary">Loading match stats...</Typography>
+                          ) : statsState?.summary ? (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                              <Chip label={`Cycles: ${statsState.summary.cyclesCount}`} size="small" variant="outlined" />
+                              <Chip label={`Repayments: ${statsState.summary.repaymentCount}`} size="small" variant="outlined" />
+                              <Chip label={`Card Txns: ${statsState.summary.cardTransactionCount}`} size="small" variant="outlined" />
+                              <Chip label={`Bank Total: ${new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(statsState.summary.totalBankAmount)}`} size="small" variant="outlined" />
+                              <Chip label={`Card Total: ${new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(statsState.summary.totalCardAmount)}`} size="small" variant="outlined" />
+                              <Chip label={`Matched: ${statsState.summary.statusCounts.matched}`} size="small" color="success" variant="outlined" />
+                              <Chip label={`Partial: ${statsState.summary.statusCounts.partial}`} size="small" color="warning" variant="outlined" />
+                              <Chip label={`Unmatched: ${statsState.summary.statusCounts.unmatched}`} size="small" color="error" variant="outlined" />
+                              <Chip label={`Ambiguous: ${statsState.summary.statusCounts.ambiguous}`} size="small" color="info" variant="outlined" />
+                            </Box>
+                          ) : statsState?.error ? (
+                            <Typography variant="caption" color="warning.main">Match stats unavailable</Typography>
+                          ) : null
+                        ) : null}
+                      </Box>
+                    )}
                   />
                   <Chip label={meta.label} size="small" color={meta.color} sx={{ ml: 2 }} />
                 </ListItem>
@@ -387,6 +594,12 @@ export default function AccountPairingModal({
         open={licenseAlertOpen}
         onClose={() => setLicenseAlertOpen(false)}
         reason={licenseAlertReason}
+      />
+
+      <PairingMatchDetailsModal
+        isOpen={Boolean(selectedPairingForDetails)}
+        onClose={() => setSelectedPairingForDetails(null)}
+        pairing={selectedPairingForDetails}
       />
     </Dialog>
   );

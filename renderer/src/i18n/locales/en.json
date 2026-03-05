@@ -1989,7 +1989,7 @@
       "cancel": "Cancel"
     },
     "security": {
-      "localStorageWarning": "Your credentials are stored locally on your device and encrypted. No data is sent to external servers."
+      "localStorageWarning": "Your credentials are stored locally on your device and encrypted at rest. During sync, they are used to sign in directly to your bank/card provider."
     }
   },
   "investmentAccountsModal": {
@@ -2525,7 +2525,7 @@
         "saveFailed": "Failed to update credentials"
       },
       "security": {
-        "localStorageWarning": "Your credentials are stored locally on your device and encrypted. No data is sent to external servers."
+        "localStorageWarning": "Your credentials are stored locally on your device and encrypted at rest. During sync, they are used to sign in directly to your bank/card provider."
       }
     },
     "valueModal": {

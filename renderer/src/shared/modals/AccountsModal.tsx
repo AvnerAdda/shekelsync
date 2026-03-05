@@ -52,6 +52,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import HistoryIcon from '@mui/icons-material/History';
 import CircularProgress from '@mui/material/CircularProgress';
 import SyncModal from './ScrapeModal';
 import AccountPairingModal from './AccountPairingModal';
@@ -100,6 +101,9 @@ const BANK_VENDOR_LABELS: Record<string, string> = {
   pagi: 'Pagi',
   oneZero: 'One Zero',
 };
+
+const STANDARD_SYNC_OVERLAP_DAYS = 7;
+const RECOVERY_SYNC_OVERLAP_DAYS = 100;
 
 const toFallbackInstitution = (vendor: string, type: 'bank' | 'credit_card'): InstitutionMetadata => {
   const label = type === 'bank'
@@ -1646,12 +1650,18 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     }
   };
 
-  const handleSync = async (account: Account) => {
+  const handleSync = async (account: Account, { recovery = false }: { recovery?: boolean } = {}) => {
     setSelectedAccount(account);
 
     // Fetch the last transaction date for this vendor to set as default start date
     try {
-      const response = await apiClient.get(`/api/accounts/last-transaction-date?vendor=${account.vendor}`);
+      const overlapDays = recovery ? RECOVERY_SYNC_OVERLAP_DAYS : STANDARD_SYNC_OVERLAP_DAYS;
+      const params = new URLSearchParams({ vendor: account.vendor });
+      params.set('overlapDays', String(overlapDays));
+      if (account.nickname && account.nickname.trim().length > 0) {
+        params.set('credentialNickname', account.nickname.trim());
+      }
+      const response = await apiClient.get(`/api/accounts/last-transaction-date?${params.toString()}`);
       if (response.ok) {
         const data = response.data as any;
 
@@ -2243,6 +2253,24 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
                           }}
                         >
                           {isSyncing ? <CircularProgress size={16} /> : <SyncIcon fontSize="small" />}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title={isSyncing ? t('tooltips.syncInProgress') : 'Recovery sync (last 100 days)'}>
+                      <span>
+                        <IconButton
+                          onClick={() => handleSync(account, { recovery: true })}
+                          color="secondary"
+                          disabled={isSyncing}
+                          size="small"
+                          sx={{
+                            transition: 'all 0.2s ease-in-out',
+                            '&:hover': {
+                              transform: 'scale(1.1)',
+                            },
+                          }}
+                        >
+                          <HistoryIcon fontSize="small" />
                         </IconButton>
                       </span>
                     </Tooltip>

@@ -12,12 +12,20 @@ interface UpdateProgressInfo {
 interface UpdateCheckResult {
   success: boolean;
   error?: string;
-  updateInfo?: UpdateInfo;
+  updateInfo?: UpdateInfo | null;
+  isUpdateAvailable?: boolean;
+  currentVersion?: string;
 }
 
 interface UpdateActionResult {
   success: boolean;
   error?: string;
+}
+
+interface UpdateRuntimeInfo {
+  autoUpdateEnabled: boolean;
+  currentVersion: string;
+  platform: string;
 }
 
 interface UpdateManagerReturn {
@@ -38,7 +46,24 @@ export const useUpdateManager = (): UpdateManagerReturn => {
   });
 
   const cleanupRef = useRef<Array<() => void>>([]);
+  const currentVersionRef = useRef<string | null>(null);
   const { showNotification } = useNotification();
+
+  const normalizeVersion = useCallback((version?: string): string => {
+    if (typeof version !== 'string') {
+      return '';
+    }
+    return version.trim().toLowerCase().replace(/^v/, '').split('+')[0];
+  }, []);
+
+  const isSameVersion = useCallback(
+    (left?: string | null, right?: string | null): boolean => {
+      const normalizedLeft = normalizeVersion(left ?? '');
+      const normalizedRight = normalizeVersion(right ?? '');
+      return Boolean(normalizedLeft && normalizedRight) && normalizedLeft === normalizedRight;
+    },
+    [normalizeVersion]
+  );
 
   // Helper function to safely call electron APIs
   const safeElectronCall = useCallback(async <T,>(
@@ -76,16 +101,26 @@ export const useUpdateManager = (): UpdateManagerReturn => {
       { success: false, error: 'Auto-updater not available' }
     );
 
-    if (result?.success && result.updateInfo) {
+    if (result?.currentVersion) {
+      currentVersionRef.current = result.currentVersion;
+    }
+
+    const inferredAvailability =
+      Boolean(result?.updateInfo?.version) &&
+      !isSameVersion(result?.currentVersion ?? currentVersionRef.current, result?.updateInfo?.version);
+    const isUpdateAvailable = result?.isUpdateAvailable ?? inferredAvailability;
+
+    if (result?.success && isUpdateAvailable && result.updateInfo) {
       setUpdateState(prev => ({
         ...prev,
         status: 'available',
         updateInfo: result.updateInfo ?? null,
       }));
-    } else if (result?.success && !result.updateInfo) {
+    } else if (result?.success) {
       setUpdateState(prev => ({ 
         ...prev, 
         status: 'not-available',
+        updateInfo: null,
         error: null,
       }));
     } else {
@@ -95,7 +130,7 @@ export const useUpdateManager = (): UpdateManagerReturn => {
         error: result?.error || 'Failed to check for updates',
       }));
     }
-  }, [safeElectronCall]);
+  }, [safeElectronCall, isSameVersion]);
 
   // Download update
   const downloadUpdate = useCallback(async () => {
@@ -183,6 +218,15 @@ export const useUpdateManager = (): UpdateManagerReturn => {
     // Update available
     if (eventsApi.onUpdateAvailable) {
       const unsubscribe = eventsApi.onUpdateAvailable((info: UpdateInfo) => {
+        if (isSameVersion(currentVersionRef.current, info?.version)) {
+          setUpdateState(prev => ({
+            ...prev,
+            status: 'not-available',
+            updateInfo: null,
+            error: null,
+          }));
+          return;
+        }
         setUpdateState(prev => ({
           ...prev,
           status: 'available',
@@ -205,6 +249,7 @@ export const useUpdateManager = (): UpdateManagerReturn => {
         setUpdateState(prev => ({ 
           ...prev, 
           status: 'not-available',
+          updateInfo: null,
           error: null,
         }));
       });
@@ -271,7 +316,21 @@ export const useUpdateManager = (): UpdateManagerReturn => {
       cleanup.forEach(fn => fn());
       cleanupRef.current = [];
     };
-  }, []);
+  }, [showNotification, isSameVersion]);
+
+  useEffect(() => {
+    const updaterApi = typeof window === 'undefined' ? undefined : window.electronAPI?.updater;
+    if (!updaterApi?.getUpdateInfo) {
+      return;
+    }
+    const getUpdateInfoFn = updaterApi.getUpdateInfo;
+
+    safeElectronCall<UpdateRuntimeInfo | null>(() => getUpdateInfoFn(), null).then((info) => {
+      if (info?.currentVersion) {
+        currentVersionRef.current = info.currentVersion;
+      }
+    });
+  }, [safeElectronCall]);
 
   // Cleanup on unmount
   useEffect(() => {
