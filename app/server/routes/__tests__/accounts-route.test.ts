@@ -25,6 +25,8 @@ const creditCardDetectorService = require('../../services/accounts/credit-card-d
 const autoPairingService = require('../../services/accounts/auto-pairing.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const discrepancyService = require('../../services/accounts/discrepancy.js');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pairingMatchDetailsService = require('../../services/accounts/pairing-match-details.js');
 
 function buildApp() {
   const app = express();
@@ -231,6 +233,63 @@ describe('Electron /api/accounts routes', () => {
 
     const res = await request(app).post('/api/accounts/calculate-discrepancy').send({ pairingId: 3 }).expect(422);
     expect(res.body.error).toBe('invalid pairing');
+  });
+
+  it('returns pairing match details for a valid pairing id', async () => {
+    const payload = {
+      pairing: { id: 15 },
+      summary: { cyclesCount: 1 },
+      cycles: [{ cycleDate: '2026-02-09', repayments: [], cardTransactions: [] }],
+    };
+    const spy = vi.spyOn(pairingMatchDetailsService, 'getPairingMatchDetails').mockResolvedValue(payload);
+
+    const res = await request(app)
+      .get('/api/accounts/pairing/15/match-details?monthsBack=6&cycleDate=2026-02-09')
+      .expect(200);
+
+    expect(res.body).toEqual(payload);
+    expect(spy).toHaveBeenCalledWith({ pairingId: 15, monthsBack: 6, cycleDate: '2026-02-09' });
+  });
+
+  it('validates match details query params before calling service', async () => {
+    const spy = vi.spyOn(pairingMatchDetailsService, 'getPairingMatchDetails').mockResolvedValue({
+      pairing: {},
+      summary: {},
+      cycles: [],
+    });
+
+    const invalidId = await request(app).get('/api/accounts/pairing/abc/match-details').expect(400);
+    expect(invalidId.body.error).toContain('pairingId');
+
+    const invalidMixedId = await request(app).get('/api/accounts/pairing/10abc/match-details').expect(400);
+    expect(invalidMixedId.body.error).toContain('pairingId');
+
+    const invalidMonthsBack = await request(app)
+      .get('/api/accounts/pairing/10/match-details?monthsBack=0')
+      .expect(400);
+    expect(invalidMonthsBack.body.error).toContain('monthsBack');
+
+    const invalidMixedMonthsBack = await request(app)
+      .get('/api/accounts/pairing/10/match-details?monthsBack=6abc')
+      .expect(400);
+    expect(invalidMixedMonthsBack.body.error).toContain('monthsBack');
+
+    const invalidCycleDate = await request(app)
+      .get('/api/accounts/pairing/10/match-details?cycleDate=2026/02/09')
+      .expect(400);
+    expect(invalidCycleDate.body.error).toContain('cycleDate');
+
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('handles pairing match details service errors', async () => {
+    vi.spyOn(pairingMatchDetailsService, 'getPairingMatchDetails').mockRejectedValue({
+      statusCode: 503,
+      message: 'pairing details unavailable',
+    });
+
+    const res = await request(app).get('/api/accounts/pairing/15/match-details').expect(503);
+    expect(res.body.error).toBe('pairing details unavailable');
   });
 
   it('resolves discrepancy using route param pairing id', async () => {

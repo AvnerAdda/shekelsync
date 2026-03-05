@@ -151,6 +151,8 @@ describe('analytics dashboard service', () => {
     expect(historySql).toContain('as salary_income');
     expect(historySql).toContain('as paired_card_expenses');
     expect(historySql).toContain('as paired_card_repayments');
+    expect(historySql).toContain('FROM transaction_pairing_exclusions tpe_cov');
+    expect(historySql).toContain('cc_t.vendor = ap_cov.credit_card_vendor');
     expect(historySql).toContain("LOWER(COALESCE(cd.name, '')) LIKE '%salary%'");
     expect(historySql).not.toContain("LOWER(COALESCE(t.name, '')) LIKE '%salary%'");
     const summaryArgs = queryMock.mock.calls[4][1];
