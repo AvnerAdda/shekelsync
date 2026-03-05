@@ -269,7 +269,13 @@ declare global {
   }
 
   interface ElectronUpdaterApi {
-    checkForUpdates?: () => Promise<{ success: boolean; error?: string; updateInfo?: UpdateInfo }>;
+    checkForUpdates?: () => Promise<{
+      success: boolean;
+      error?: string;
+      updateInfo?: UpdateInfo | null;
+      isUpdateAvailable?: boolean;
+      currentVersion?: string;
+    }>;
     downloadUpdate?: () => Promise<{ success: boolean; error?: string }>;
     quitAndInstall?: () => Promise<{ success: boolean; error?: string }>;
     getUpdateInfo?: () => Promise<{

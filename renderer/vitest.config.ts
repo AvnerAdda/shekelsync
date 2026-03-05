@@ -52,6 +52,8 @@ export default defineProject({
     include: [
       'src/hooks/**/__tests__/**/*.{test,spec}.{ts,tsx}',
       'src/features/**/__tests__/**/*.{test,spec}.{ts,tsx}',
+      'src/shared/modals/**/__tests__/AccountPairingModal.test.tsx',
+      'src/shared/modals/**/__tests__/PairingMatchDetailsModal.test.tsx',
     ],
     exclude: ['tests/**', 'node_modules/**', 'src/components/**', 'src/routes/**', 'src/pages/**'],
     coverage: {

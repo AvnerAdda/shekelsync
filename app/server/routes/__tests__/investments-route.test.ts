@@ -53,16 +53,6 @@ const routeServices = {
   summaryService: {
     getInvestmentSummary: vi.fn(),
   },
-  manualMatchingService: {
-    getUnmatchedRepayments: vi.fn(),
-    getAvailableExpenses: vi.fn(),
-    getAvailableProcessedDates: vi.fn(),
-    getBankRepaymentsForProcessedDate: vi.fn(),
-    saveManualMatch: vi.fn(),
-    getMatchingStats: vi.fn(),
-    getWeeklyMatchingStats: vi.fn(),
-    findMatchingCombinations: vi.fn(),
-  },
   bankSummaryService: {
     getBankBalanceSummary: vi.fn(),
   },
@@ -98,7 +88,6 @@ const historyService = routeServices.historyService;
 const assetsService = routeServices.assetsService;
 const holdingsService = routeServices.holdingsService;
 const summaryService = routeServices.summaryService;
-const manualMatchingService = routeServices.manualMatchingService;
 const bankSummaryService = routeServices.bankSummaryService;
 const suggestionAnalyzerCJS = routeServices.suggestionAnalyzerCJS;
 const database = routeServices.databaseService;
@@ -321,48 +310,6 @@ describe('Shared /api/investments routes', () => {
     expect(resDelete.body.error).toMatch(/transaction_vendor/);
   });
 
-  it('returns 400 when manual matching required params are missing', async () => {
-    const unmatched = await request(app).get('/api/investments/manual-matching/unmatched-repayments').expect(400);
-    expect(unmatched.body.error).toMatch(/Missing required parameters/);
-
-    const available = await request(app).get('/api/investments/manual-matching/available-expenses').expect(400);
-    expect(available.body.error).toMatch(/Missing required parameters/);
-  });
-
-  it('validates and saves manual matches with parsed tolerance', async () => {
-    const missing = await request(app)
-      .post('/api/investments/manual-matching/save-match')
-      .send({ repaymentTxnId: 'r-1' })
-      .expect(400);
-    expect(missing.body.error).toMatch(/Missing required parameters/);
-
-    const saveSpy = vi.spyOn(manualMatchingService, 'saveManualMatch').mockResolvedValue({
-      matchId: 'm-1',
-      matchedCount: 2,
-    });
-
-    const ok = await request(app)
-      .post('/api/investments/manual-matching/save-match')
-      .send({
-        repaymentTxnId: 'r-1',
-        repaymentVendor: 'hapoalim',
-        repaymentDate: '2025-01-31',
-        repaymentAmount: 1234,
-        ccVendor: 'isracard',
-        expenses: [{ identifier: 'tx-1', vendor: 'isracard', amount: 1234 }],
-        tolerance: '2.5',
-      })
-      .expect(200);
-
-    expect(ok.body.success).toBe(true);
-    expect(ok.body.matchId).toBe('m-1');
-    expect(saveSpy).toHaveBeenCalledWith(expect.objectContaining({
-      repaymentTxnId: 'r-1',
-      cardNumber: null,
-      tolerance: 2.5,
-    }));
-  });
-
   it('returns 400 for invalid suggestions dismiss payload', async () => {
     const res = await request(app).post('/api/investments/suggestions/dismiss').send({}).expect(400);
     expect(res.body.error).toMatch(/transactionIdentifiers/);
@@ -478,39 +425,6 @@ describe('Shared /api/investments routes', () => {
       .expect(404);
 
     expect(res.body.error).toMatch(/Transaction not found/);
-  });
-
-  it('validates and returns processed-dates for manual matching', async () => {
-    const missing = await request(app)
-      .get('/api/investments/manual-matching/processed-dates')
-      .expect(400);
-    expect(missing.body.error).toMatch(/creditCardVendor/);
-
-    vi.spyOn(manualMatchingService, 'getAvailableProcessedDates').mockResolvedValue(['2025-01-01']);
-
-    const ok = await request(app)
-      .get('/api/investments/manual-matching/processed-dates?creditCardVendor=isracard')
-      .expect(200);
-
-    expect(ok.body.success).toBe(true);
-    expect(ok.body.count).toBe(1);
-    expect(ok.body.processedDates).toEqual(['2025-01-01']);
-  });
-
-  it('returns 400 for invalid matchPatterns JSON before calling manual matching service', async () => {
-    const spy = vi.spyOn(manualMatchingService, 'getUnmatchedRepayments').mockResolvedValue([]);
-
-    const res = await request(app)
-      .get('/api/investments/manual-matching/unmatched-repayments')
-      .query({
-        creditCardVendor: 'isracard',
-        bankVendor: 'hapoalim',
-        matchPatterns: 'not-json',
-      })
-      .expect(400);
-
-    expect(res.body.error).toMatch(/Invalid matchPatterns format/);
-    expect(spy).not.toHaveBeenCalled();
   });
 
   it('returns pikadon payloads', async () => {
@@ -655,169 +569,6 @@ describe('Shared /api/investments routes', () => {
     expect(failed.body.error).toBe('Failed to create investment account');
   });
 
-  it('returns available expenses and bank repayments with parsed matchPatterns', async () => {
-    const expensesSpy = vi.spyOn(manualMatchingService, 'getAvailableExpenses').mockResolvedValue([
-      { identifier: 'txn-exp-1', amount: 300 },
-    ]);
-
-    const withSmartDate = await request(app)
-      .get('/api/investments/manual-matching/available-expenses')
-      .query({
-        repaymentDate: '2025-01-31',
-        creditCardVendor: 'isracard',
-        creditCardAccountNumber: '1234',
-        processedDate: '2025-01-15',
-      })
-      .expect(200);
-
-    expect(withSmartDate.body.success).toBe(true);
-    expect(withSmartDate.body.smartDateUsed).toBe(true);
-    expect(expensesSpy).toHaveBeenCalledWith({
-      repaymentDate: '2025-01-31',
-      creditCardAccountNumber: '1234',
-      creditCardVendor: 'isracard',
-      processedDate: '2025-01-15',
-    });
-
-    const withoutSmartDate = await request(app)
-      .get('/api/investments/manual-matching/available-expenses')
-      .query({
-        repaymentDate: '2025-01-31',
-        creditCardVendor: 'isracard',
-      })
-      .expect(200);
-    expect(withoutSmartDate.body.smartDateUsed).toBe(false);
-
-    const invalidPatterns = await request(app)
-      .get('/api/investments/manual-matching/bank-repayments-for-date')
-      .query({
-        processedDate: '2025-01-15',
-        bankVendor: 'hapoalim',
-        matchPatterns: 'not-json',
-      })
-      .expect(400);
-    expect(invalidPatterns.body.error).toMatch(/Invalid matchPatterns format/i);
-
-    const repaymentsSpy = vi.spyOn(manualMatchingService, 'getBankRepaymentsForProcessedDate').mockResolvedValue({
-      repayments: [{ identifier: 'bank-1', amount: 300 }],
-      count: 1,
-    });
-
-    const repayments = await request(app)
-      .get('/api/investments/manual-matching/bank-repayments-for-date')
-      .query({
-        processedDate: '2025-01-15',
-        bankVendor: 'hapoalim',
-        matchPatterns: JSON.stringify(['monthly-repayment']),
-      })
-      .expect(200);
-
-    expect(repayments.body.success).toBe(true);
-    expect(repayments.body.count).toBe(1);
-    expect(repaymentsSpy).toHaveBeenCalledWith({
-      processedDate: '2025-01-15',
-      bankVendor: 'hapoalim',
-      bankAccountNumber: null,
-      matchPatterns: ['monthly-repayment'],
-    });
-  });
-
-  it('validates and returns manual matching stats and weekly stats', async () => {
-    const missingStats = await request(app)
-      .get('/api/investments/manual-matching/stats')
-      .expect(400);
-    expect(missingStats.body.error).toMatch(/bankVendor/i);
-
-    const statsSpy = vi.spyOn(manualMatchingService, 'getMatchingStats').mockResolvedValue({
-      matchedCount: 12,
-      unmatchedCount: 2,
-    });
-
-    const stats = await request(app)
-      .get('/api/investments/manual-matching/stats?bankVendor=hapoalim')
-      .expect(200);
-    expect(stats.body.success).toBe(true);
-    expect(stats.body.stats.matchedCount).toBe(12);
-    expect(statsSpy).toHaveBeenCalledWith({ bankVendor: 'hapoalim', bankAccountNumber: null });
-
-    const invalidWeekly = await request(app)
-      .get('/api/investments/manual-matching/weekly-stats')
-      .query({
-        creditCardVendor: 'isracard',
-        bankVendor: 'hapoalim',
-        matchPatterns: 'invalid-json',
-      })
-      .expect(400);
-    expect(invalidWeekly.body.error).toMatch(/Invalid matchPatterns format/i);
-
-    const weeklySpy = vi.spyOn(manualMatchingService, 'getWeeklyMatchingStats').mockResolvedValue([
-      { weekStart: '2025-01-01', matchedCount: 2 },
-      { weekStart: '2025-01-08', matchedCount: 1 },
-    ]);
-
-    const weekly = await request(app)
-      .get('/api/investments/manual-matching/weekly-stats')
-      .query({
-        creditCardVendor: 'isracard',
-        bankVendor: 'hapoalim',
-        matchPatterns: JSON.stringify(['monthly-repayment']),
-        startDate: '2025-01-01',
-        endDate: '2025-01-31',
-      })
-      .expect(200);
-
-    expect(weekly.body.success).toBe(true);
-    expect(weekly.body.count).toBe(2);
-    expect(weeklySpy).toHaveBeenCalledWith({
-      creditCardAccountNumber: '',
-      creditCardVendor: 'isracard',
-      bankVendor: 'hapoalim',
-      bankAccountNumber: null,
-      matchPatterns: ['monthly-repayment'],
-      startDate: '2025-01-01',
-      endDate: '2025-01-31',
-    });
-  });
-
-  it('validates and finds manual matching combinations with parsed numeric and boolean values', async () => {
-    const missing = await request(app)
-      .get('/api/investments/manual-matching/find-combinations')
-      .expect(400);
-    expect(missing.body.error).toMatch(/Missing required parameters/i);
-
-    const combinationsSpy = vi
-      .spyOn(manualMatchingService, 'findMatchingCombinations')
-      .mockResolvedValue([{ ids: ['tx-1', 'tx-2'], total: 500 }]);
-
-    const ok = await request(app)
-      .get('/api/investments/manual-matching/find-combinations')
-      .query({
-        repaymentTxnId: 'rep-1',
-        repaymentDate: '2025-01-31',
-        repaymentAmount: '500.5',
-        creditCardVendor: 'isracard',
-        tolerance: '1.5',
-        maxCombinationSize: '4',
-        includeMatched: 'true',
-        processedDate: '2025-01-15',
-      })
-      .expect(200);
-
-    expect(ok.body.success).toBe(true);
-    expect(ok.body.count).toBe(1);
-    expect(combinationsSpy).toHaveBeenCalledWith({
-      repaymentTxnId: 'rep-1',
-      repaymentDate: '2025-01-31',
-      repaymentAmount: 500.5,
-      creditCardAccountNumber: '',
-      creditCardVendor: 'isracard',
-      tolerance: 1.5,
-      maxCombinationSize: 4,
-      includeMatched: true,
-      processedDate: '2025-01-15',
-    });
-  });
-
   it('surfaces service errors for standard investment endpoints', async () => {
     vi.spyOn(checkExistingService, 'getExistingInvestments').mockRejectedValueOnce({
       statusCode: 502,
@@ -942,112 +693,6 @@ describe('Shared /api/investments routes', () => {
       .delete('/api/investments/transaction-links?transaction_identifier=tx-1&transaction_vendor=v-1')
       .expect(501);
     expect(deleteLinkError.body.error).toBe('link delete failed');
-  });
-
-  it('surfaces manual matching service errors across endpoints', async () => {
-    vi.spyOn(manualMatchingService, 'getUnmatchedRepayments').mockRejectedValueOnce({
-      statusCode: 503,
-      message: 'unmatched failed',
-    });
-    const unmatchedError = await request(app)
-      .get('/api/investments/manual-matching/unmatched-repayments')
-      .query({
-        creditCardVendor: 'isracard',
-        bankVendor: 'hapoalim',
-      })
-      .expect(503);
-    expect(unmatchedError.body.error).toBe('unmatched failed');
-
-    vi.spyOn(manualMatchingService, 'getAvailableExpenses').mockRejectedValueOnce({
-      statusCode: 500,
-      message: 'expenses failed',
-    });
-    const expensesError = await request(app)
-      .get('/api/investments/manual-matching/available-expenses')
-      .query({
-        repaymentDate: '2025-01-31',
-        creditCardVendor: 'isracard',
-      })
-      .expect(500);
-    expect(expensesError.body.error).toBe('expenses failed');
-
-    vi.spyOn(manualMatchingService, 'getAvailableProcessedDates').mockRejectedValueOnce({
-      statusCode: 500,
-      message: 'processed dates failed',
-    });
-    const processedDatesError = await request(app)
-      .get('/api/investments/manual-matching/processed-dates')
-      .query({ creditCardVendor: 'isracard' })
-      .expect(500);
-    expect(processedDatesError.body.error).toBe('processed dates failed');
-
-    vi.spyOn(manualMatchingService, 'getBankRepaymentsForProcessedDate').mockRejectedValueOnce({
-      statusCode: 500,
-      message: 'bank repayments failed',
-    });
-    const bankRepaymentsError = await request(app)
-      .get('/api/investments/manual-matching/bank-repayments-for-date')
-      .query({
-        processedDate: '2025-01-15',
-        bankVendor: 'hapoalim',
-      })
-      .expect(500);
-    expect(bankRepaymentsError.body.error).toBe('bank repayments failed');
-
-    vi.spyOn(manualMatchingService, 'saveManualMatch').mockRejectedValueOnce({
-      statusCode: 500,
-      message: 'save failed',
-    });
-    const saveError = await request(app)
-      .post('/api/investments/manual-matching/save-match')
-      .send({
-        repaymentTxnId: 'r-1',
-        repaymentVendor: 'vendor-1',
-        repaymentDate: '2025-01-31',
-        repaymentAmount: 100,
-        ccVendor: 'isracard',
-        expenses: [],
-      })
-      .expect(500);
-    expect(saveError.body.error).toBe('save failed');
-
-    vi.spyOn(manualMatchingService, 'getMatchingStats').mockRejectedValueOnce({
-      statusCode: 500,
-      message: 'stats failed',
-    });
-    const statsError = await request(app)
-      .get('/api/investments/manual-matching/stats')
-      .query({ bankVendor: 'hapoalim' })
-      .expect(500);
-    expect(statsError.body.error).toBe('stats failed');
-
-    vi.spyOn(manualMatchingService, 'getWeeklyMatchingStats').mockRejectedValueOnce({
-      statusCode: 500,
-      message: 'weekly failed',
-    });
-    const weeklyError = await request(app)
-      .get('/api/investments/manual-matching/weekly-stats')
-      .query({
-        creditCardVendor: 'isracard',
-        bankVendor: 'hapoalim',
-      })
-      .expect(500);
-    expect(weeklyError.body.error).toBe('weekly failed');
-
-    vi.spyOn(manualMatchingService, 'findMatchingCombinations').mockRejectedValueOnce({
-      statusCode: 500,
-      message: 'combinations failed',
-    });
-    const combinationsError = await request(app)
-      .get('/api/investments/manual-matching/find-combinations')
-      .query({
-        repaymentTxnId: 'r-1',
-        repaymentDate: '2025-01-31',
-        repaymentAmount: '200',
-        creditCardVendor: 'isracard',
-      })
-      .expect(500);
-    expect(combinationsError.body.error).toBe('combinations failed');
   });
 
   it('exposes extended pikadon endpoints for analytics and lifecycle actions', async () => {

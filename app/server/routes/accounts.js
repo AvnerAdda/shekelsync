@@ -9,6 +9,7 @@ const smartMatchService = require('../services/accounts/smart-match.js');
 const creditCardDetectorService = require('../services/accounts/credit-card-detector.js');
 const autoPairingService = require('../services/accounts/auto-pairing.js');
 const discrepancyService = require('../services/accounts/discrepancy.js');
+const pairingMatchDetailsService = require('../services/accounts/pairing-match-details.js');
 
 function handleServiceError(res, error, fallbackMessage) {
   const status = error?.status || error?.statusCode || 500;
@@ -17,6 +18,15 @@ function handleServiceError(res, error, fallbackMessage) {
     error: error?.message || fallbackMessage || 'Internal server error',
     ...(error?.existingId ? { existingId: error.existingId } : {}),
   });
+}
+
+function parseStrictPositiveInteger(value) {
+  const normalized = String(value ?? '').trim();
+  if (!/^\d+$/.test(normalized)) {
+    return null;
+  }
+  const parsed = Number.parseInt(normalized, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function createAccountsRouter() {
@@ -170,6 +180,49 @@ function createAccountsRouter() {
     } catch (error) {
       console.error('Calculate discrepancy error:', error);
       handleServiceError(res, error, 'Failed to calculate discrepancy');
+    }
+  });
+
+  // Fetch transaction-level match details for a pairing
+  router.get('/pairing/:id/match-details', async (req, res) => {
+    const pairingId = parseStrictPositiveInteger(req.params.id);
+    if (!pairingId) {
+      return res.status(400).json({
+        success: false,
+        error: 'pairingId must be a positive integer',
+      });
+    }
+
+    const { monthsBack, cycleDate } = req.query || {};
+    let parsedMonthsBack;
+    if (monthsBack !== undefined) {
+      parsedMonthsBack = parseStrictPositiveInteger(monthsBack);
+      if (!parsedMonthsBack || parsedMonthsBack > 36) {
+        return res.status(400).json({
+          success: false,
+          error: 'monthsBack must be an integer between 1 and 36',
+        });
+      }
+    }
+
+    const parsedCycleDate = cycleDate === undefined ? null : String(cycleDate);
+    if (parsedCycleDate && !/^\d{4}-\d{2}-\d{2}$/.test(parsedCycleDate)) {
+      return res.status(400).json({
+        success: false,
+        error: 'cycleDate must be in YYYY-MM-DD format',
+      });
+    }
+
+    try {
+      const result = await pairingMatchDetailsService.getPairingMatchDetails({
+        pairingId,
+        ...(parsedMonthsBack !== undefined ? { monthsBack: parsedMonthsBack } : {}),
+        ...(parsedCycleDate ? { cycleDate: parsedCycleDate } : {}),
+      });
+      res.json(result);
+    } catch (error) {
+      console.error('Pairing match details error:', error);
+      handleServiceError(res, error, 'Failed to fetch pairing match details');
     }
   });
 

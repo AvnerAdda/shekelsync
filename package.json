@@ -14,6 +14,7 @@
     "test:security:watch": "npm --prefix app exec -- vitest watch",
     "audit:security": "npm audit --audit-level=moderate && npm run test:security:coverage",
     "icons:icns": "node scripts/generate-icns.js",
+    "migrate:drop-legacy-manual-matching": "node scripts/migrations/drop_legacy_manual_matching_table.js",
     "logs:bundle": "node scripts/collect-logs.js",
     "secrets:scan": "bash scripts/run-gitleaks.sh git --redact --verbose",
     "hooks:install": "bash scripts/install-git-hooks.sh",
