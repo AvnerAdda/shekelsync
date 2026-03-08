@@ -12,6 +12,7 @@ import { useWaterfallData } from '@renderer/features/dashboard/hooks/useWaterfal
 import { useBreakdownData } from '@renderer/features/dashboard/hooks/useBreakdownData';
 import { useAccountSignals } from '@renderer/features/dashboard/hooks/useAccountSignals';
 import { useTransactionsByDate } from '@renderer/features/dashboard/hooks/useTransactionsByDate';
+import { useCurrentMonthPairingGap } from '@renderer/shared/hooks/useCurrentMonthPairingGap';
 import { PortfolioBreakdownItem } from '@renderer/types/investments';
 import { AggregationPeriod } from '@renderer/types/dashboard';
 import { DashboardFiltersProvider, useDashboardFilters } from '@renderer/features/dashboard/DashboardFiltersContext';
@@ -49,7 +50,7 @@ const DashboardHomeContent: React.FC = () => {
     return new Date(year, month - 1, day);
   };
 
-  const { startDate, endDate, aggregationPeriod, hoveredDate, setHoveredDate } = useDashboardFilters();
+  const { startDate, endDate, aggregationPeriod, hoveredDate, setHoveredDate, periodDays } = useDashboardFilters();
   const [compareToLastMonth, setCompareToLastMonth] = useState<boolean>(false);
   const [selectedBreakdownType, setSelectedBreakdownType] = useState<'overall' | 'expense' | 'income' | 'investment'>('overall');
   const {
@@ -62,6 +63,11 @@ const DashboardHomeContent: React.FC = () => {
     loading: loadingTransactions,
     fetchByDate: fetchTransactionsByDate,
   } = useTransactionsByDate();
+  const {
+    data: pairingGapData,
+    loading: pairingGapLoading,
+    refresh: refreshPairingGap,
+  } = useCurrentMonthPairingGap({ days: 30, enabled: periodDays === 30 });
   const [yAxisScale, setYAxisScale] = useState<YAxisScale>('linear');
   const [fallbackEnabled, setFallbackEnabled] = useState(false);
   const theme = useTheme();
@@ -330,6 +336,7 @@ const DashboardHomeContent: React.FC = () => {
     const handleDataRefresh = () => {
       refreshDashboard();
       refreshPortfolio();
+      refreshPairingGap();
 
       if (fallbackEnabled) {
         refreshFallbackBreakdowns(['expense', 'income']);
@@ -365,6 +372,7 @@ const DashboardHomeContent: React.FC = () => {
     refreshAccountSignals,
     refreshBreakdowns,
     refreshDashboard,
+    refreshPairingGap,
     refreshFallbackBreakdowns,
     refreshFallbackWaterfall,
     refreshPortfolio,
@@ -606,6 +614,10 @@ const DashboardHomeContent: React.FC = () => {
         hasBankAccounts={hasBankAccounts}
         compareToLastMonth={compareToLastMonth}
         onToggleCompare={toggleCompareLastMonth}
+        pairingGap={pairingGapData}
+        pairingGapLoading={pairingGapLoading}
+        isCurrentMonthWindow={periodDays === 30}
+        pairingGapExpensesBase={Number(data?.summary?.totalExpenses || 0)}
       />
 
       <Box id="transactions">

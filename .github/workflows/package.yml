@@ -164,3 +164,24 @@ jobs:
         with:
           name: electron-dist-${{ matrix.os }}
           path: dist/**
+
+  normalize-release-title:
+    name: Normalize Release Title
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure release title matches tag
+        env:
+          GH_RELEASE_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          if [ -n "$GH_RELEASE_TOKEN" ]; then
+            export GH_TOKEN="$GH_RELEASE_TOKEN"
+          else
+            export GH_TOKEN="$GITHUB_TOKEN"
+          fi
+
+          echo "Normalizing release title for tag: $TAG_NAME"
+          gh release edit "$TAG_NAME" --title "$TAG_NAME"

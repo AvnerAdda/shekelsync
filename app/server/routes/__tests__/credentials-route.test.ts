@@ -70,6 +70,34 @@ describe('Shared /api/credentials routes', () => {
     expect(spy).toHaveBeenCalledWith({ id: 42, password: 'new-secret' });
   });
 
+  it('updates a credential with AccountsModal edit payload fields', async () => {
+    const payload = { id: 42, vendor: 'visaCal' };
+    const spy = vi.spyOn(credentialsService, 'updateCredential').mockResolvedValue(payload);
+
+    const res = await request(app)
+      .put('/api/credentials/42')
+      .send({
+        username: 'updated-user',
+        id_number: '123456789',
+        card6_digits: '654321',
+        bank_account_number: '111222',
+        identification_code: '778899',
+        password: 'updated-password',
+      })
+      .expect(200);
+
+    expect(res.body).toEqual(payload);
+    expect(spy).toHaveBeenCalledWith({
+      id: 42,
+      username: 'updated-user',
+      id_number: '123456789',
+      card6_digits: '654321',
+      bank_account_number: '111222',
+      identification_code: '778899',
+      password: 'updated-password',
+    });
+  });
+
   it('handles credential creation errors', async () => {
     vi.spyOn(credentialsService, 'createCredential').mockRejectedValue(new Error('boom'));
 

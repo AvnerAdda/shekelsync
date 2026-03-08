@@ -119,6 +119,39 @@ describe('Shared /api/scrape routes', () => {
     expect(mockRunScrape.mock.calls[0][0].credentials.dbId).toBe(77);
   });
 
+  it('hydrates saved credential fields by dbId before calling runScrape', async () => {
+    mockRunScrape.mockResolvedValue({ success: true, accounts: [] });
+    mockWasScrapedRecently.mockResolvedValue(false);
+    credentialsService.listCredentials.mockResolvedValue([
+      {
+        id: 2,
+        vendor: 'visaCal',
+        username: 'cal-user',
+        password: 'cal-pass',
+        id_number: null,
+        identification_code: null,
+        card6_digits: null,
+        bank_account_number: null,
+        nickname: 'Avner Cal',
+      },
+    ]);
+
+    await request(app)
+      .post('/api/scrape')
+      .send({
+        options: { companyId: 'visaCal' },
+        credentials: { dbId: 2, fromSavedCredential: true, nickname: 'Avner Cal' },
+      })
+      .expect(200);
+
+    const sentCredentials = mockRunScrape.mock.calls[0][0].credentials;
+    expect(sentCredentials.dbId).toBe(2);
+    expect(sentCredentials.username).toBe('cal-user');
+    expect(sentCredentials.password).toBe('cal-pass');
+    expect(sentCredentials.userCode).toBe('cal-user');
+    expect(sentCredentials.email).toBe('cal-user');
+  });
+
   it('continues without dbId when credential lookup fails', async () => {
     mockRunScrape.mockResolvedValue({ success: true, accounts: [] });
     credentialsService.listCredentials.mockRejectedValue(new Error('lookup failed'));
@@ -143,6 +176,21 @@ describe('Shared /api/scrape routes', () => {
       .send({
         options: { companyId: 'isracard' },
         credentials: { username: 'user@example.com', password: 'secret', fromSavedCredential: true },
+      })
+      .expect(409);
+
+    expect(res.body.reason).toBe('credential_not_found');
+    expect(mockRunScrape).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 when provided dbId from saved account no longer exists', async () => {
+    credentialsService.listCredentials.mockResolvedValue([]);
+
+    const res = await request(app)
+      .post('/api/scrape')
+      .send({
+        options: { companyId: 'visaCal' },
+        credentials: { dbId: 2, fromSavedCredential: true },
       })
       .expect(409);
 

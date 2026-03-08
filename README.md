@@ -64,6 +64,7 @@ npm --prefix app run dist
 - The package workflow builds distributables for Linux, macOS, and Windows.
 - When signing/notarization secrets are configured, the workflow applies platform signing.
 - Build artifacts are uploaded for each workflow run (unsigned when signing secrets are not provided).
+- Before tagging a release, run migration review: `npm run release:migrations:check`.
 - Published releases: https://github.com/AvnerAdda/shekelsync/releases
 
 ## Database
