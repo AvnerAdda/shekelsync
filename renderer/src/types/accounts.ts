@@ -101,3 +101,40 @@ export interface PairingMatchDetailsResponse {
   acknowledged: boolean;
   generatedAt: string;
 }
+
+export interface CurrentMonthPairingGapCycle {
+  cycleDate: string;
+  status: PairingCycleStatus | string | null;
+  bankAmount: number;
+  cardAmount: number;
+  missingAmount: number;
+}
+
+export interface CurrentMonthPairingGapPairing {
+  pairingId: number;
+  creditCardVendor: string;
+  creditCardAccountNumber: string | null;
+  bankVendor: string;
+  bankAccountNumber: string | null;
+  bankAmount: number;
+  cardAmount: number;
+  missingAmount: number;
+  affectedCyclesCount: number;
+  cycles: CurrentMonthPairingGapCycle[];
+}
+
+export interface CurrentMonthPairingGapResponse {
+  windowDays: number;
+  windowStartDate: string;
+  windowEndDate: string;
+  tolerance: number;
+  totals: {
+    bankAmount: number;
+    cardAmount: number;
+    missingAmount: number;
+    affectedPairingsCount: number;
+    affectedCyclesCount: number;
+  };
+  pairings: CurrentMonthPairingGapPairing[];
+  generatedAt: string;
+}
