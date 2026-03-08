@@ -43,6 +43,7 @@ import { STALE_SYNC_THRESHOLD_MS } from '@app/utils/constants';
 import { apiClient } from '@/lib/api-client';
 import { useScrapeProgress } from '@/hooks/useScrapeProgress';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
+import { useCurrentMonthPairingGap } from '@renderer/shared/hooks/useCurrentMonthPairingGap';
 import {
   formatSidebarAccountLastSync,
   formatSidebarLastSync,
@@ -93,6 +94,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const { showNotification } = useNotification();
   const { getPageAccessStatus } = useOnboarding();
   const { t } = useTranslation('translation', { keyPrefix: 'sidebar' });
+  const {
+    data: pairingGapData,
+    loading: pairingGapLoading,
+    refresh: refreshPairingGap,
+  } = useCurrentMonthPairingGap({ days: 30 });
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { latestEvent: scrapeEvent } = useScrapeProgress();
@@ -326,6 +332,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       fetchStats();
       fetchAccountStatus();
       fetchUncategorizedCount();
+      refreshPairingGap();
     };
 
     const handleGuideOpenCategories = (event: Event) => {
@@ -363,7 +370,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       globalThis.removeEventListener('guideOpenCategoriesModal', handleGuideOpenCategories);
       globalThis.removeEventListener('guideTriggerBulkSync', handleGuideTriggerBulkSync);
     };
-  }, [fetchStats, checkDBStatus, fetchAccountStatus, fetchUncategorizedCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchStats, checkDBStatus, fetchAccountStatus, fetchUncategorizedCount, refreshPairingGap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSyncIconClick = () => {
     const isSyncStale = stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS;
@@ -431,6 +438,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const staleAccounts = accountSyncStatuses.filter(
     (account) => account.status === 'orange' || account.status === 'red'
   );
+  const hasPairingGapWarning = !pairingGapLoading && Number(pairingGapData?.totals?.missingAmount || 0) > 2;
+  const hasAddAccountWarning =
+    accountAlerts.noBank || accountAlerts.noCredit || accountAlerts.noPension || hasPairingGapWarning;
+  const addAccountTooltip = hasPairingGapWarning
+    ? t(
+      'tooltips.addAccountPairingGap',
+      'Current month may be missing card transactions. Open Account Pairing for unmatched cards and run Recovery Sync (100 days).',
+    )
+    : t('tooltips.addAccount');
 
   const drawerWidth = open ? DRAWER_WIDTH : DRAWER_WIDTH_COLLAPSED;
 
@@ -583,36 +599,38 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             <Box sx={{ p: 2.5 }}>
               {/* Action Buttons */}
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
-                <Badge
-                  badgeContent={(accountAlerts.noBank || accountAlerts.noCredit || accountAlerts.noPension) ? <WarningAmberIcon sx={{ fontSize: 14 }} /> : null}
-                  color="warning"
-                  overlap="circular"
-                  anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-                  sx={{ width: '100%' }}
-                >
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => setAccountsModalOpen(true)}
-                    fullWidth
-                    aria-label={t('actions.addAccount')}
-                    sx={{
-                      borderRadius: 3,
-                      py: 1,
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
-                      background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-                      color: theme.palette.primary.contrastText,
-                      '&:hover': {
-                        background: `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
-                        boxShadow: `0 6px 16px ${alpha(theme.palette.primary.main, 0.4)}`,
-                      }
-                    }}
+                <Tooltip title={addAccountTooltip} placement="right">
+                  <Badge
+                    badgeContent={hasAddAccountWarning ? <WarningAmberIcon sx={{ fontSize: 14 }} /> : null}
+                    color="warning"
+                    overlap="circular"
+                    anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                    sx={{ width: '100%' }}
                   >
-                    {t('actions.addAccount')}
-                  </Button>
-                </Badge>
+                    <Button
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      onClick={() => setAccountsModalOpen(true)}
+                      fullWidth
+                      aria-label={t('actions.addAccount')}
+                      sx={{
+                        borderRadius: 3,
+                        py: 1,
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
+                        background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+                        color: theme.palette.primary.contrastText,
+                        '&:hover': {
+                          background: `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
+                          boxShadow: `0 6px 16px ${alpha(theme.palette.primary.main, 0.4)}`,
+                        }
+                      }}
+                    >
+                      {t('actions.addAccount')}
+                    </Button>
+                  </Badge>
+                </Tooltip>
                 <Badge
                   badgeContent={uncategorizedCount > 0 ? <WarningAmberIcon sx={{ fontSize: 14 }} /> : null}
                   color="warning"
@@ -906,7 +924,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             </Tooltip>
 
             {/* Add Account Button */}
-            <Tooltip title={t('tooltips.addAccount')} placement="right">
+            <Tooltip title={addAccountTooltip} placement="right">
               <IconButton
                 size="small"
                 onClick={() => setAccountsModalOpen(true)}
@@ -917,7 +935,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                 }}
               >
                 <Badge
-                  badgeContent={(accountAlerts.noBank || accountAlerts.noCredit || accountAlerts.noPension) ? <WarningAmberIcon sx={{ fontSize: 10 }} /> : null}
+                  badgeContent={hasAddAccountWarning ? <WarningAmberIcon sx={{ fontSize: 10 }} /> : null}
                   color="warning"
                 >
                   <AddIcon />
