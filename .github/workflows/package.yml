@@ -184,4 +184,4 @@ jobs:
           fi
 
           echo "Normalizing release title for tag: $TAG_NAME"
-          gh release edit "$TAG_NAME" --title "$TAG_NAME"
+          gh release edit "$TAG_NAME" --repo "$GITHUB_REPOSITORY" --title "$TAG_NAME"
