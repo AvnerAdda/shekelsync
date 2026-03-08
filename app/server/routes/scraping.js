@@ -168,6 +168,45 @@ function resolveRateLimitMetadata(res) {
   return Object.keys(metadata).length > 0 ? metadata : null;
 }
 
+function hasCredentialValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  return true;
+}
+
+function withFallbackValue(primary, fallback) {
+  return hasCredentialValue(primary) ? primary : fallback;
+}
+
+function mergeCredentialsWithSaved(payload = {}, saved = {}) {
+  const savedUsername = saved.username;
+  const savedId = saved.id_number;
+  const savedIdentification = saved.identification_code;
+  const savedCard6Digits = saved.card6_digits;
+  const savedBankAccountNumber = saved.bank_account_number;
+
+  return {
+    ...payload,
+    username: withFallbackValue(payload.username, savedUsername),
+    userCode: withFallbackValue(payload.userCode, savedUsername),
+    email: withFallbackValue(payload.email, savedUsername),
+    password: withFallbackValue(payload.password, saved.password),
+    id: withFallbackValue(payload.id, savedId),
+    id_number: withFallbackValue(payload.id_number, savedId),
+    card6Digits: withFallbackValue(payload.card6Digits, savedCard6Digits),
+    card6_digits: withFallbackValue(payload.card6_digits, savedCard6Digits),
+    bankAccountNumber: withFallbackValue(payload.bankAccountNumber, savedBankAccountNumber),
+    bank_account_number: withFallbackValue(payload.bank_account_number, savedBankAccountNumber),
+    identification_code: withFallbackValue(payload.identification_code, savedIdentification),
+    num: withFallbackValue(payload.num, savedIdentification),
+    nationalID: withFallbackValue(payload.nationalID, savedIdentification),
+    otpToken: withFallbackValue(payload.otpToken, savedIdentification),
+    nickname: withFallbackValue(payload.nickname, saved.nickname),
+    institution_id: withFallbackValue(payload.institution_id, saved.institution_id),
+    vendor: withFallbackValue(payload.vendor, saved.vendor),
+  };
+}
+
 function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
   const getRunScrapeService = () => require('../services/scraping/run.js');
   const {
@@ -196,7 +235,9 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
 
   router.post('/scrape', async (req, res) => {
     try {
-      const { options, credentials } = req.body || {};
+      const body = req.body || {};
+      const options = body.options;
+      let credentials = body.credentials;
       const vendor = options?.companyId;
       const fromSavedCredential =
         credentials?.fromSavedCredential === true ||
@@ -220,10 +261,12 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
 
       // Try to look up the credential ID from the database for scrape event tracking
       let dbId = credentials?.dbId ?? null;
+      let dbCredentials = null;
+
       if (!dbId) {
         try {
           const credentialsService = require('../services/credentials.js');
-          const dbCredentials = await credentialsService.listCredentials({ vendor });
+          dbCredentials = await credentialsService.listCredentials({ vendor });
 
           if (Array.isArray(dbCredentials) && dbCredentials.length > 0) {
             const nickname = credentials?.nickname ? String(credentials.nickname) : null;
@@ -257,6 +300,38 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
           }
         } catch (lookupError) {
           logger.warn?.('Failed to lookup credential ID, scrape will proceed without it:', lookupError);
+        }
+      }
+
+      if (dbId) {
+        try {
+          if (!Array.isArray(dbCredentials)) {
+            const credentialsService = require('../services/credentials.js');
+            dbCredentials = await credentialsService.listCredentials({ vendor });
+          }
+
+          if (Array.isArray(dbCredentials)) {
+            const matchedCredential = dbCredentials.find((entry) => Number(entry?.id) === Number(dbId));
+            if (matchedCredential) {
+              credentials = mergeCredentialsWithSaved(credentials, matchedCredential);
+            } else if (fromSavedCredential) {
+              sendProgress({
+                vendor,
+                status: 'failed',
+                progress: 100,
+                message: 'Saved account was not found. Please re-add this account before syncing.',
+                error: 'credential_not_found',
+              });
+
+              return res.status(409).json({
+                success: false,
+                message: 'Saved account was not found. Please re-add this account before syncing.',
+                reason: 'credential_not_found',
+              });
+            }
+          }
+        } catch (hydrateError) {
+          logger.warn?.('Failed to hydrate saved credential details; using request payload only:', hydrateError);
         }
       }
 
