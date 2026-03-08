@@ -12,6 +12,7 @@ let mockCredentials: any[] = [];
 let mockInvestmentAccounts: any[] = [];
 let mockUncategorizedCount = 0;
 let mockPingOk = true;
+let mockPairingGap: any = null;
 let mockScrapeEvent: any = null;
 let mockLicenseCheck = { isReadOnly: false, reason: undefined as string | undefined };
 
@@ -23,6 +24,7 @@ const translations: Record<string, string> = {
   'tooltips.collapseSidebar': 'Collapse sidebar',
   'tooltips.expandSidebar': 'Expand sidebar',
   'tooltips.addAccount': 'Add account',
+  'tooltips.addAccountPairingGap': 'Current month may be missing card transactions. Open Account Pairing for unmatched cards and run Recovery Sync (100 days).',
   'tooltips.categories': 'Categories',
   'actions.addAccount': 'Add Account',
   'actions.categories': 'Categories',
@@ -108,6 +110,9 @@ function setupDefaultApiMocks() {
     if (endpoint === '/api/categories/hierarchy') {
       return Promise.resolve({ ok: true, data: { uncategorized: { totalCount: mockUncategorizedCount } } });
     }
+    if (endpoint === '/api/accounts/pairing/current-month-gap?days=30') {
+      return Promise.resolve({ ok: true, data: mockPairingGap });
+    }
 
     return Promise.resolve({ ok: true, data: {} });
   });
@@ -142,6 +147,21 @@ describe('Sidebar component', () => {
     mockLicenseCheck = { isReadOnly: false, reason: undefined };
     mockPingOk = true;
     mockUncategorizedCount = 0;
+    mockPairingGap = {
+      windowDays: 30,
+      windowStartDate: '2026-02-08',
+      windowEndDate: '2026-03-08',
+      tolerance: 2,
+      totals: {
+        bankAmount: 0,
+        cardAmount: 0,
+        missingAmount: 0,
+        affectedPairingsCount: 0,
+        affectedCyclesCount: 0,
+      },
+      pairings: [],
+      generatedAt: '2026-03-08T00:00:00.000Z',
+    };
 
     mockCredentials = [
       {
@@ -447,5 +467,38 @@ describe('Sidebar component', () => {
     await waitFor(() => {
       expect(showNotification).toHaveBeenCalledWith('Bulk sync failed', 'error');
     });
+  });
+
+  it('shows add-account pairing gap guidance when current-month missing amount exists', async () => {
+    const onPageChange = vi.fn();
+    mockPairingGap = {
+      windowDays: 30,
+      windowStartDate: '2026-02-08',
+      windowEndDate: '2026-03-08',
+      tolerance: 2,
+      totals: {
+        bankAmount: 1000,
+        cardAmount: 900,
+        missingAmount: 100,
+        affectedPairingsCount: 1,
+        affectedCyclesCount: 1,
+      },
+      pairings: [{ pairingId: 1, missingAmount: 100 }],
+      generatedAt: '2026-03-08T00:00:00.000Z',
+    };
+
+    await renderSidebar({ currentPage: 'home', onPageChange });
+
+    const addAccountButton = screen.getByRole('button', { name: 'Add Account' });
+    fireEvent.mouseOver(addAccountButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Current month may be missing card transactions. Open Account Pairing for unmatched cards and run Recovery Sync (100 days).',
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('WarningAmberIcon')).toBeInTheDocument();
   });
 });

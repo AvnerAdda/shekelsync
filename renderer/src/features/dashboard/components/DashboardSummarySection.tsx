@@ -1,12 +1,10 @@
 import React from 'react';
-import { Box, Paper, Typography, Button, Alert, AlertTitle } from '@mui/material';
+import { Box, Typography, Button, Alert, AlertTitle } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import ShowChartIcon from '@mui/icons-material/ShowChart';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { format, subMonths } from 'date-fns';
 import SummaryCards from './SummaryCards';
-import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
+import type { CurrentMonthPairingGapResponse } from '@renderer/types/accounts';
 import {
   buildDashboardTopCategories,
   getDashboardCategoryCount,
@@ -23,6 +21,10 @@ interface DashboardSummarySectionProps {
   hasBankAccounts: boolean | null;
   compareToLastMonth: boolean;
   onToggleCompare: () => void;
+  pairingGap?: CurrentMonthPairingGapResponse | null;
+  pairingGapLoading?: boolean;
+  isCurrentMonthWindow?: boolean;
+  pairingGapExpensesBase?: number | null;
 }
 
 const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
@@ -33,13 +35,34 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
   budgetUsage,
   breakdownData,
   hasBankAccounts,
-  compareToLastMonth,
-  onToggleCompare,
+  compareToLastMonth: _compareToLastMonth,
+  onToggleCompare: _onToggleCompare,
+  pairingGap,
+  pairingGapLoading = false,
+  isCurrentMonthWindow = false,
+  pairingGapExpensesBase = null,
 }) => {
-  const { startDate, endDate } = useDashboardFilters();
   const { t } = useTranslation('translation', { keyPrefix: 'dashboard.summarySection' });
   const theme = useTheme();
   const hasAnyTransactions = hasDashboardSummaryActivity(data?.summary);
+  const missingAmount = Number(pairingGap?.totals?.missingAmount || 0);
+  const totalExpensesBase = Number(pairingGapExpensesBase ?? data?.summary?.totalExpenses ?? 0);
+  const missingPercentage = totalExpensesBase > 0
+    ? Math.round((missingAmount / totalExpensesBase) * 1000) / 10
+    : 0;
+  const shouldShowPairingGapAlert = isCurrentMonthWindow && !pairingGapLoading && missingAmount > 2;
+  const formattedMissingAmount = new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'ILS',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(missingAmount);
+
+  const handleOpenAccounts = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('openAccountsModal'));
+    }
+  };
 
   return (
     <>
@@ -71,6 +94,42 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
           categoryCount={getDashboardCategoryCount(breakdownData)}
         />
       </Box>
+
+      {shouldShowPairingGapAlert && (
+        <Alert
+          severity="warning"
+          sx={{
+            mb: 3,
+            borderRadius: 3,
+            backgroundColor: alpha(theme.palette.warning.main, 0.12),
+            border: `1px solid ${alpha(theme.palette.warning.main, 0.35)}`,
+            '& .MuiAlert-icon': {
+              color: theme.palette.warning.main,
+            },
+          }}
+          action={(
+            <Button
+              size="small"
+              color="warning"
+              variant="outlined"
+              onClick={handleOpenAccounts}
+            >
+              {t('pairingGap.action', { defaultValue: 'Open Accounts' })}
+            </Button>
+          )}
+        >
+          <AlertTitle sx={{ fontWeight: 600 }}>
+            {t('pairingGap.title', { defaultValue: 'Missing credit card transactions detected' })}
+          </AlertTitle>
+          <Typography variant="body2">
+            {t('pairingGap.description', {
+              defaultValue: 'Missing {{amount}} this month ({{percent}}% of expenses). Open Account Pairing, inspect unmatched accounts, and run Recovery Sync (100 days).',
+              amount: formattedMissingAmount,
+              percent: missingPercentage,
+            })}
+          </Typography>
+        </Alert>
+      )}
 
       {data.summary.totalIncome === 0 && !hasAnyTransactions && hasBankAccounts !== null && (
         <Alert 
