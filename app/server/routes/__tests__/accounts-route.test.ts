@@ -27,6 +27,8 @@ const autoPairingService = require('../../services/accounts/auto-pairing.js');
 const discrepancyService = require('../../services/accounts/discrepancy.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pairingMatchDetailsService = require('../../services/accounts/pairing-match-details.js');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const currentMonthPairingGapService = require('../../services/accounts/current-month-pairing-gap.js');
 
 function buildApp() {
   const app = express();
@@ -233,6 +235,69 @@ describe('Electron /api/accounts routes', () => {
 
     const res = await request(app).post('/api/accounts/calculate-discrepancy').send({ pairingId: 3 }).expect(422);
     expect(res.body.error).toBe('invalid pairing');
+  });
+
+  it('returns current month pairing gap summary', async () => {
+    const payload = {
+      windowDays: 30,
+      windowStartDate: '2026-02-08',
+      windowEndDate: '2026-03-08',
+      tolerance: 2,
+      totals: {
+        bankAmount: 1000,
+        cardAmount: 900,
+        missingAmount: 100,
+        affectedPairingsCount: 1,
+        affectedCyclesCount: 1,
+      },
+      pairings: [{ pairingId: 12, missingAmount: 100 }],
+      generatedAt: '2026-03-08T00:00:00.000Z',
+    };
+    const spy = vi
+      .spyOn(currentMonthPairingGapService, 'getCurrentMonthPairingGap')
+      .mockResolvedValue(payload);
+
+    const res = await request(app)
+      .get('/api/accounts/pairing/current-month-gap?days=30')
+      .expect(200);
+
+    expect(res.body).toEqual(payload);
+    expect(spy).toHaveBeenCalledWith({ days: 30 });
+  });
+
+  it('validates current month pairing gap days param', async () => {
+    const spy = vi
+      .spyOn(currentMonthPairingGapService, 'getCurrentMonthPairingGap')
+      .mockResolvedValue({});
+
+    const zeroDays = await request(app)
+      .get('/api/accounts/pairing/current-month-gap?days=0')
+      .expect(400);
+    expect(zeroDays.body.error).toContain('days');
+
+    const invalidMixed = await request(app)
+      .get('/api/accounts/pairing/current-month-gap?days=10abc')
+      .expect(400);
+    expect(invalidMixed.body.error).toContain('days');
+
+    const outOfRange = await request(app)
+      .get('/api/accounts/pairing/current-month-gap?days=31')
+      .expect(400);
+    expect(outOfRange.body.error).toContain('days');
+
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('handles current month pairing gap service errors', async () => {
+    vi.spyOn(currentMonthPairingGapService, 'getCurrentMonthPairingGap').mockRejectedValue({
+      status: 503,
+      message: 'pairing gap unavailable',
+    });
+
+    const res = await request(app)
+      .get('/api/accounts/pairing/current-month-gap')
+      .expect(503);
+    expect(res.body.error).toBe('pairing gap unavailable');
   });
 
   it('returns pairing match details for a valid pairing id', async () => {

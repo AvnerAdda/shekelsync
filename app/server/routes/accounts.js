@@ -10,6 +10,7 @@ const creditCardDetectorService = require('../services/accounts/credit-card-dete
 const autoPairingService = require('../services/accounts/auto-pairing.js');
 const discrepancyService = require('../services/accounts/discrepancy.js');
 const pairingMatchDetailsService = require('../services/accounts/pairing-match-details.js');
+const currentMonthPairingGapService = require('../services/accounts/current-month-pairing-gap.js');
 
 function handleServiceError(res, error, fallbackMessage) {
   const status = error?.status || error?.statusCode || 500;
@@ -180,6 +181,31 @@ function createAccountsRouter() {
     } catch (error) {
       console.error('Calculate discrepancy error:', error);
       handleServiceError(res, error, 'Failed to calculate discrepancy');
+    }
+  });
+
+  // Summarize missing pairing amounts in the current 30-day window
+  router.get('/pairing/current-month-gap', async (req, res) => {
+    const { days } = req.query || {};
+    let parsedDays;
+    if (days !== undefined) {
+      parsedDays = parseStrictPositiveInteger(days);
+      if (!parsedDays || parsedDays > 30) {
+        return res.status(400).json({
+          success: false,
+          error: 'days must be an integer between 1 and 30',
+        });
+      }
+    }
+
+    try {
+      const result = await currentMonthPairingGapService.getCurrentMonthPairingGap({
+        ...(parsedDays !== undefined ? { days: parsedDays } : {}),
+      });
+      res.json(result);
+    } catch (error) {
+      console.error('Current month pairing gap error:', error);
+      handleServiceError(res, error, 'Failed to fetch current month pairing gap');
     }
   });
 
