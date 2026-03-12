@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Box,
   Tabs,
@@ -68,6 +69,15 @@ import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
 import { resolveLocalizedCategoryName } from '@renderer/shared/modals/category-hierarchy-helpers';
+import { type VariabilityType } from '@renderer/types/spending-categories';
+import {
+  buildBudgetVariabilitySnapshot,
+  buildCategoryVariabilityIndex,
+  type CategoryVariabilityLike,
+  getLatestMomentumChange,
+  getVariabilitySummaryCounts,
+  resolveBudgetDeepLinkTarget,
+} from '../utils/budget-forecast-helpers';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -162,6 +172,43 @@ interface CategoryTimelinePoint {
   amount: number;
 }
 
+interface CategoryVariabilityBreakdownPoint {
+  month: string;
+  amount: number;
+  transaction_count: number;
+}
+
+interface CategoryVariabilityChange {
+  month: string;
+  amount: number;
+  change: number;
+}
+
+interface CategoryVariabilityAnalysis {
+  category_id: number;
+  category_name: string;
+  category_name_en?: string | null;
+  category_name_fr?: string | null;
+  variability_type: VariabilityType;
+  coefficient_of_variation: number;
+  avg_monthly: number;
+  std_dev: number;
+  min_monthly: number;
+  max_monthly: number;
+  latest_month: number;
+  latest_vs_avg_percent: number;
+  confidence: number;
+  months_analyzed: number;
+  monthly_breakdown: CategoryVariabilityBreakdownPoint[];
+  mom_changes: CategoryVariabilityChange[];
+}
+
+interface CategoryVariabilitySummary {
+  total_categories: number;
+  analyzed_months: number;
+  by_type: Record<VariabilityType, number>;
+}
+
 type BudgetPreviewStatus = 'exceeded' | 'at_risk' | 'on_track';
 
 interface BudgetPreviewMetrics {
@@ -180,6 +227,14 @@ interface BudgetPreviewMetrics {
 type StabilityBand = 'very_stable' | 'stable' | 'moving' | 'very_moving' | 'unknown';
 
 const TIMELINE_MONTH_LIMIT = 12;
+const ANALYSIS_TAB_INDEX: Record<string, number> = {
+  dashboard: 0,
+  actions: 1,
+  spending: 2,
+  budget: 3,
+  scoring: 4,
+  subscriptions: 5,
+};
 
 const getBudgetItemKey = (item: BudgetOutlookItem): string =>
   item.categoryDefinitionId !== null && item.categoryDefinitionId !== undefined
@@ -311,6 +366,21 @@ const formatTimelineLabel = (yearMonth: string | null | undefined, language: str
   });
 };
 
+const formatYearMonthLabel = (yearMonth: string | null | undefined, language: string): string => {
+  if (!yearMonth) return '';
+  const [yearPart, monthPart] = yearMonth.split('-');
+  const year = Number.parseInt(yearPart || '', 10);
+  const month = Number.parseInt(monthPart || '', 10);
+  if (Number.isNaN(month) || Number.isNaN(year)) return yearMonth;
+
+  const date = new Date(year, month - 1, 1);
+  if (Number.isNaN(date.getTime())) return yearMonth;
+
+  return date.toLocaleDateString(language || undefined, {
+    month: 'short',
+  });
+};
+
 interface PersonalIntelligence extends FinancialHealthSnapshot {
   temporalIntelligence?: TemporalIntelligence | null;
   behavioralIntelligence?: BehavioralIntelligence | null;
@@ -347,6 +417,7 @@ function TabPanel(props: TabPanelProps) {
 }
 
 const AnalysisPageNew: React.FC = () => {
+  const location = useLocation();
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'analysisPage' });
   const isHebrew = i18n.language === 'he';
@@ -391,6 +462,11 @@ const AnalysisPageNew: React.FC = () => {
   const [addBudgetLimitInput, setAddBudgetLimitInput] = useState('');
   const [addBudgetError, setAddBudgetError] = useState<string | null>(null);
   const [addBudgetLoading, setAddBudgetLoading] = useState(false);
+  const [categoryVariability, setCategoryVariability] = useState<CategoryVariabilityAnalysis[]>([]);
+  const [categoryVariabilitySummary, setCategoryVariabilitySummary] = useState<CategoryVariabilitySummary | null>(null);
+  const [categoryVariabilityLoading, setCategoryVariabilityLoading] = useState(false);
+  const [categoryVariabilityError, setCategoryVariabilityError] = useState<string | null>(null);
+  const [savingVariabilityCategoryIds, setSavingVariabilityCategoryIds] = useState<Record<number, boolean>>({});
   
   const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
   const { formatCurrency } = useFinancePrivacy();
@@ -403,7 +479,9 @@ const AnalysisPageNew: React.FC = () => {
     future: false,
     timeValue: false,
     budget: false,
+    variability: false,
   });
+  const handledBudgetDeepLinkRef = useRef<string | null>(null);
 
   // Helper function to format hour based on locale
   const formatHour = (hour: number): string => {
@@ -556,14 +634,53 @@ const AnalysisPageNew: React.FC = () => {
     }
   }, [isLocked, t]);
 
+  const fetchCategoryVariability = useCallback(async () => {
+    if (isLocked) {
+      return;
+    }
+
+    setCategoryVariabilityLoading(true);
+    setCategoryVariabilityError(null);
+
+    try {
+      const response = await apiClient.get<{
+        analyses?: CategoryVariabilityAnalysis[];
+        summary?: CategoryVariabilitySummary;
+      }>('/api/category-variability?months=6');
+      if (!response.ok) {
+        throw new Error(t('budgetForecast.variability.loadFailed', { defaultValue: 'Failed to load category variability.' }));
+      }
+      setCategoryVariability(Array.isArray(response.data?.analyses) ? response.data.analyses : []);
+      setCategoryVariabilitySummary(response.data?.summary || null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('errors.generic');
+      setCategoryVariabilityError(message);
+      console.error('Error fetching category variability:', err);
+    } finally {
+      setCategoryVariabilityLoading(false);
+    }
+  }, [isLocked, t]);
+
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue);
   };
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const requestedTab = searchParams.get('tab') || '';
+    const nextTab = ANALYSIS_TAB_INDEX[requestedTab];
+    if (typeof nextTab === 'number' && nextTab !== currentTab) {
+      setCurrentTab(nextTab);
+    }
+  }, [currentTab, location.search]);
 
   const runRefreshAll = useCallback((forceBudget: boolean) => {
     fetchIntelligence();
     if (fetchOnceRef.current.budget) {
       fetchBudgetForecast(forceBudget ? { force: true } : {});
+    }
+    if (fetchOnceRef.current.variability) {
+      fetchCategoryVariability();
     }
     if (fetchOnceRef.current.temporal) {
       fetchTemporalData();
@@ -577,7 +694,15 @@ const AnalysisPageNew: React.FC = () => {
     if (fetchOnceRef.current.timeValue) {
       fetchTimeValueData();
     }
-  }, [fetchBehavioralData, fetchBudgetForecast, fetchFutureData, fetchIntelligence, fetchTemporalData, fetchTimeValueData]);
+  }, [
+    fetchBehavioralData,
+    fetchBudgetForecast,
+    fetchCategoryVariability,
+    fetchFutureData,
+    fetchIntelligence,
+    fetchTemporalData,
+    fetchTimeValueData,
+  ]);
 
   const handleRefreshAll = useCallback(() => {
     runRefreshAll(true);
@@ -637,12 +762,18 @@ const AnalysisPageNew: React.FC = () => {
       fetchBudgetForecast();
     }
 
+    if (currentTab === 3 && !fetchOnceRef.current.variability) {
+      fetchOnceRef.current.variability = true;
+      fetchCategoryVariability();
+    }
+
     return () => {
       timers.forEach(clearTimeout);
     };
   }, [
     currentTab,
     fetchBehavioralData,
+    fetchCategoryVariability,
     fetchBudgetForecast,
     fetchFutureData,
     fetchTemporalData,
@@ -677,6 +808,81 @@ const AnalysisPageNew: React.FC = () => {
       normalizedLocale,
     ) || item.categoryName
   ), [normalizedLocale]);
+
+  const variabilitySummaryCounts = useMemo(
+    () => getVariabilitySummaryCounts(categoryVariability),
+    [categoryVariability],
+  );
+
+  const variabilityByCategoryId = useMemo(
+    () => buildCategoryVariabilityIndex(categoryVariability),
+    [categoryVariability],
+  );
+
+  const getVariabilityLabel = useCallback((value: VariabilityType) => {
+    if (value === 'fixed') {
+      return t('budgetForecast.variability.types.fixed', { defaultValue: 'Fixed' });
+    }
+    if (value === 'seasonal') {
+      return t('budgetForecast.variability.types.seasonal', { defaultValue: 'Seasonal' });
+    }
+    return t('budgetForecast.variability.types.variable', { defaultValue: 'Variable' });
+  }, [t]);
+
+  const getVariabilityChipColor = useCallback((value: VariabilityType): 'success' | 'warning' | 'info' => {
+    if (value === 'fixed') {
+      return 'success';
+    }
+    if (value === 'seasonal') {
+      return 'info';
+    }
+    return 'warning';
+  }, []);
+
+  const formatVariabilityDelta = useCallback((value: number) => (
+    `${value > 0 ? '+' : ''}${Math.round(value)}%`
+  ), []);
+
+  const buildVariabilitySparkline = useCallback((analysis: CategoryVariabilityLike | null | undefined) => (
+    analysis?.monthly_breakdown.map((point) => ({
+      month: formatYearMonthLabel(point.month, i18n.language || 'en'),
+      amount: point.amount,
+    })) || []
+  ), [i18n.language]);
+
+  const handleVariabilityOverride = useCallback(async (
+    categoryId: number,
+    nextType: VariabilityType,
+  ) => {
+    const previousType = categoryVariability.find((item) => item.category_id === categoryId)?.variability_type;
+    if (!previousType || previousType === nextType) {
+      return;
+    }
+
+    setSavingVariabilityCategoryIds((prev) => ({ ...prev, [categoryId]: true }));
+    setCategoryVariabilityError(null);
+    setCategoryVariability((prev) => prev.map((item) => (
+      item.category_id === categoryId ? { ...item, variability_type: nextType } : item
+    )));
+
+    try {
+      const response = await apiClient.put(`/api/spending-categories/mapping/${categoryId}`, {
+        variabilityType: nextType,
+      });
+      if (!response.ok) {
+        throw new Error(t('budgetForecast.variability.saveFailed', { defaultValue: 'Failed to save variability override.' }));
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('errors.generic');
+      setCategoryVariability((prev) => prev.map((item) => (
+        item.category_id === categoryId ? { ...item, variability_type: previousType } : item
+      )));
+      setCategoryVariabilityError(message);
+      console.error('Failed to save variability override:', err);
+    } finally {
+      setSavingVariabilityCategoryIds((prev) => ({ ...prev, [categoryId]: false }));
+    }
+  }, [categoryVariability, t]);
 
   const getBudgetStatusLabel = useCallback((status: BudgetPreviewStatus) => {
     if (status === 'exceeded') return t('budgetForecast.status.exceeded', { defaultValue: 'Exceeded' });
@@ -801,6 +1007,13 @@ const AnalysisPageNew: React.FC = () => {
     return budgetOutlook.find((item) => getBudgetItemKey(item) === selectedBudgetKey) || null;
   }, [budgetOutlook, selectedBudgetKey]);
 
+  const selectedBudgetVariability = useMemo(() => {
+    if (!selectedBudgetItem?.categoryDefinitionId) {
+      return null;
+    }
+    return variabilityByCategoryId.get(selectedBudgetItem.categoryDefinitionId) || null;
+  }, [selectedBudgetItem, variabilityByCategoryId]);
+
   const selectedBudgetPreview = useMemo(() => (
     selectedBudgetItem ? getPreviewForItem(selectedBudgetItem) : null
   ), [getPreviewForItem, selectedBudgetItem]);
@@ -816,6 +1029,9 @@ const AnalysisPageNew: React.FC = () => {
   const selectedTimelineLoading = selectedBudgetKey ? Boolean(timelineLoadingByCategory[selectedBudgetKey]) : false;
   const selectedTimelineError = selectedBudgetKey ? timelineErrorByCategory[selectedBudgetKey] || null : null;
   const selectedBudgetSaving = selectedBudgetKey ? Boolean(savingBudgetKeys[selectedBudgetKey]) : false;
+  const selectedVariabilitySaving = selectedBudgetItem?.categoryDefinitionId
+    ? Boolean(savingVariabilityCategoryIds[selectedBudgetItem.categoryDefinitionId])
+    : false;
 
   const expenseCategoriesById = useMemo(
     () => new Map(expenseCategories.map((category) => [category.id, category])),
@@ -1006,9 +1222,11 @@ const AnalysisPageNew: React.FC = () => {
     }
   }, [loadingExpenseCategories, t]);
 
-  const openAddBudgetDialog = useCallback(() => {
+  const openAddBudgetDialog = useCallback((options: { categoryId?: number | '' } = {}) => {
     setAddBudgetDialogOpen(true);
     setAddBudgetError(null);
+    setAddBudgetCategoryId(options.categoryId ?? '');
+    setAddBudgetLimitInput('');
     if (expenseCategories.length === 0) {
       void loadExpenseCategories();
     }
@@ -1062,6 +1280,50 @@ const AnalysisPageNew: React.FC = () => {
     closeAddBudgetDialog,
     fetchBudgetForecast,
     t,
+  ]);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const resolution = resolveBudgetDeepLinkTarget({
+      requestedTab: searchParams.get('tab'),
+      currentTab,
+      categoryDefinitionParam: searchParams.get('categoryDefinitionId'),
+      budgetAction: searchParams.get('budgetAction') || 'details',
+      budgetOutlook,
+    });
+
+    if (!resolution) {
+      return;
+    }
+
+    if (handledBudgetDeepLinkRef.current === location.search) {
+      return;
+    }
+
+    if (!fetchOnceRef.current.budget || (budgetForecastLoading && budgetOutlook.length === 0)) {
+      return;
+    }
+
+    if (resolution.kind === 'details') {
+      const matchingBudget = budgetOutlook.find(
+        (item) => item.categoryDefinitionId === resolution.categoryDefinitionId,
+      );
+      if (matchingBudget) {
+        handleBudgetCardClick(matchingBudget);
+        handledBudgetDeepLinkRef.current = location.search;
+        return;
+      }
+    }
+
+    openAddBudgetDialog({ categoryId: resolution.categoryDefinitionId });
+    handledBudgetDeepLinkRef.current = location.search;
+  }, [
+    budgetForecastLoading,
+    budgetOutlook,
+    currentTab,
+    handleBudgetCardClick,
+    location.search,
+    openAddBudgetDialog,
   ]);
 
   const isRefreshing = loading || budgetForecastLoading || temporalLoading || behavioralLoading || futureLoading || timeValueLoading;
@@ -1844,7 +2106,7 @@ const AnalysisPageNew: React.FC = () => {
                   variant="contained"
                   size="small"
                   startIcon={<AddIcon />}
-                  onClick={openAddBudgetDialog}
+                  onClick={() => openAddBudgetDialog()}
                 >
                   {t('budgetForecast.addBudget', { defaultValue: 'Add budget' })}
                 </Button>
@@ -1864,6 +2126,53 @@ const AnalysisPageNew: React.FC = () => {
               <Alert severity="error" sx={{ mb: 2 }}>
                 {budgetForecastError}
               </Alert>
+            )}
+
+            {(categoryVariabilityLoading || categoryVariability.length > 0 || categoryVariabilityError) && (
+              <Box sx={{ mb: 2.5 }}>
+                {categoryVariabilityError && (
+                  <Alert severity="warning" sx={{ mb: 1.5 }}>
+                    {categoryVariabilityError}
+                  </Alert>
+                )}
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 0.75 }}>
+                  <Chip
+                    label={t('budgetForecast.variability.summary.fixed', {
+                      count: variabilitySummaryCounts.fixed,
+                      defaultValue: 'Fixed {{count}}',
+                    })}
+                    color="success"
+                    variant="outlined"
+                    size="small"
+                  />
+                  <Chip
+                    label={t('budgetForecast.variability.summary.variable', {
+                      count: variabilitySummaryCounts.variable,
+                      defaultValue: 'Variable {{count}}',
+                    })}
+                    color="warning"
+                    variant="outlined"
+                    size="small"
+                  />
+                  <Chip
+                    label={t('budgetForecast.variability.summary.seasonal', {
+                      count: variabilitySummaryCounts.seasonal,
+                      defaultValue: 'Seasonal {{count}}',
+                    })}
+                    color="info"
+                    variant="outlined"
+                    size="small"
+                  />
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {categoryVariabilityLoading && categoryVariability.length === 0
+                    ? t('actions.refreshing')
+                    : t('budgetForecast.variability.subtitle', {
+                      count: categoryVariabilitySummary?.analyzed_months ?? 6,
+                      defaultValue: 'See which categories behave like fixed costs, flexible spend, or seasonal spikes over the last {{count}} months.',
+                    })}
+                </Typography>
+              </Box>
             )}
 
             {budgetForecastLoading && budgetOutlook.length === 0 ? (
@@ -1898,7 +2207,7 @@ const AnalysisPageNew: React.FC = () => {
                   size="small"
                   variant="contained"
                   sx={{ alignSelf: 'flex-start', mt: 1 }}
-                  onClick={openAddBudgetDialog}
+                  onClick={() => openAddBudgetDialog()}
                   startIcon={<AddIcon />}
                 >
                   {t('budgetForecast.addBudget', { defaultValue: 'Add budget' })}
@@ -1911,6 +2220,10 @@ const AnalysisPageNew: React.FC = () => {
                 {sortedLeafOutlook.map((item) => {
                   const itemKey = getBudgetItemKey(item);
                   const preview = getPreviewForItem(item);
+                  const variability = item.categoryDefinitionId
+                    ? variabilityByCategoryId.get(item.categoryDefinitionId)
+                    : undefined;
+                  const variabilitySparkline = buildVariabilitySparkline(variability);
                   const stabilityBand = getStabilityBand(item);
                   const categoryName = getBudgetCategoryName(item);
                   const riskPercent = Math.round(preview.risk * 100);
@@ -1932,6 +2245,20 @@ const AnalysisPageNew: React.FC = () => {
                       <Box sx={{ color: '#ef4444', mb: 0.5 }}>
                         <strong>P90:</strong> {formatCurrencyValue(item.scenarios?.p90 ?? item.projectedTotal)}
                       </Box>
+                      {variability && (
+                        <>
+                          <Box sx={{ mb: 0.5 }}>
+                            <strong>{t('budgetForecast.variability.title', { defaultValue: 'Category variability' })}:</strong>{' '}
+                            {getVariabilityLabel(variability.variability_type)}
+                          </Box>
+                          <Box sx={{ mb: 0.5 }}>
+                            <strong>{t('budgetForecast.variability.latestVsAverage', {
+                              delta: formatVariabilityDelta(variability.latest_vs_avg_percent),
+                              defaultValue: 'Latest vs avg: {{delta}}',
+                            })}</strong>
+                          </Box>
+                        </>
+                      )}
                       <Box sx={{ color: 'text.secondary' }}>
                         {t('budgetForecast.clickForDetails', {
                           defaultValue: 'Click for timeline, limit editing and full details.',
@@ -1949,7 +2276,7 @@ const AnalysisPageNew: React.FC = () => {
                             position: 'relative',
                             p: 2,
                             height: '100%',
-                            minHeight: 132,
+                            minHeight: variability ? 188 : 132,
                             borderRadius: 4,
                             display: 'flex',
                             flexDirection: 'column',
@@ -2034,6 +2361,59 @@ const AnalysisPageNew: React.FC = () => {
                                 />
                               )}
                             </Box>
+
+                            {variability && (
+                              <Box
+                                sx={{
+                                  mt: 1,
+                                  pt: 1,
+                                  borderTop: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+                                }}
+                              >
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'center' }}>
+                                  <Chip
+                                    size="small"
+                                    color={getVariabilityChipColor(variability.variability_type)}
+                                    label={getVariabilityLabel(variability.variability_type)}
+                                    sx={{ height: 20, fontSize: '0.68rem' }}
+                                  />
+                                  <Typography variant="caption" color="text.secondary">
+                                    {t('budgetForecast.variability.confidence', {
+                                      value: Math.round(variability.confidence * 100),
+                                      defaultValue: 'Confidence {{value}}%',
+                                    })}
+                                  </Typography>
+                                </Box>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    display: 'block',
+                                    mt: 0.5,
+                                    color: Math.abs(variability.latest_vs_avg_percent) >= 20
+                                      ? statusColor
+                                      : theme.palette.text.secondary,
+                                  }}
+                                >
+                                  {t('budgetForecast.variability.latestVsAverage', {
+                                    delta: formatVariabilityDelta(variability.latest_vs_avg_percent),
+                                    defaultValue: 'Latest vs avg: {{delta}}',
+                                  })}
+                                </Typography>
+                                <Box sx={{ height: 28, mt: 0.5 }}>
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={variabilitySparkline} margin={{ top: 2, bottom: 2, left: 0, right: 0 }}>
+                                      <Line
+                                        type="monotone"
+                                        dataKey="amount"
+                                        stroke={theme.palette.primary.main}
+                                        strokeWidth={2}
+                                        dot={false}
+                                      />
+                                    </LineChart>
+                                  </ResponsiveContainer>
+                                </Box>
+                              </Box>
+                            )}
                           </Box>
                         </Box>
                       </Tooltip>
@@ -2043,6 +2423,7 @@ const AnalysisPageNew: React.FC = () => {
               </Grid>
             )}
           </Paper>
+
         </Box>
       </TabPanel>
 
@@ -2173,6 +2554,120 @@ const AnalysisPageNew: React.FC = () => {
                   {getStabilityDescription(selectedStabilityBand)}
                 </Typography>
               </Alert>
+
+              <Paper variant="outlined" sx={{ p: 1.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5, alignItems: 'flex-start', flexWrap: 'wrap', mb: 1.25 }}>
+                  <Box>
+                    <Typography variant="subtitle2">
+                      {t('budgetForecast.variability.title', { defaultValue: 'Category variability' })}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('budgetForecast.variability.timelineBridge', {
+                        count: categoryVariabilitySummary?.analyzed_months ?? 6,
+                        defaultValue: 'Use this as context for reading the spending timeline below over the last {{count}} months.',
+                      })}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={categoryVariabilityLoading ? <CircularProgress size={14} /> : <RefreshIcon />}
+                      onClick={() => void fetchCategoryVariability()}
+                      disabled={categoryVariabilityLoading}
+                    >
+                      {categoryVariabilityLoading
+                        ? t('actions.refreshing')
+                        : t('actions.refresh')}
+                    </Button>
+                    {selectedBudgetItem.categoryDefinitionId ? (
+                      <Select
+                        size="small"
+                        value={selectedBudgetVariability?.variability_type || 'variable'}
+                        disabled={selectedVariabilitySaving}
+                        onChange={(event) => void handleVariabilityOverride(
+                          selectedBudgetItem.categoryDefinitionId as number,
+                          event.target.value as VariabilityType,
+                        )}
+                      >
+                        <MenuItem value="fixed">{getVariabilityLabel('fixed')}</MenuItem>
+                        <MenuItem value="variable">{getVariabilityLabel('variable')}</MenuItem>
+                        <MenuItem value="seasonal">{getVariabilityLabel('seasonal')}</MenuItem>
+                      </Select>
+                    ) : null}
+                  </Box>
+                </Box>
+
+                {selectedBudgetVariability ? (
+                  <>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.25 }}>
+                      <Chip
+                        size="small"
+                        color={getVariabilityChipColor(selectedBudgetVariability.variability_type)}
+                        label={getVariabilityLabel(selectedBudgetVariability.variability_type)}
+                      />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={t('budgetForecast.variability.avgMonthly', {
+                          amount: formatCurrencyValue(selectedBudgetVariability.avg_monthly, { maximumFractionDigits: 0 }),
+                          defaultValue: 'Avg monthly: {{amount}}',
+                        })}
+                      />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={t('budgetForecast.variability.latestVsAverage', {
+                          delta: formatVariabilityDelta(selectedBudgetVariability.latest_vs_avg_percent),
+                          defaultValue: 'Latest vs avg: {{delta}}',
+                        })}
+                      />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={t('budgetForecast.variability.confidence', {
+                          value: Math.round(selectedBudgetVariability.confidence * 100),
+                          defaultValue: 'Confidence {{value}}%',
+                        })}
+                      />
+                      {buildBudgetVariabilitySnapshot(
+                        selectedBudgetItem.categoryDefinitionId,
+                        variabilityByCategoryId,
+                      )?.hasSeasonalPattern && (
+                        <Chip
+                          size="small"
+                          color="info"
+                          label={t('budgetForecast.variability.flags.seasonal', { defaultValue: 'Seasonal pattern' })}
+                        />
+                      )}
+                      {buildBudgetVariabilitySnapshot(
+                        selectedBudgetItem.categoryDefinitionId,
+                        variabilityByCategoryId,
+                      )?.hasLargeMomentumShift && (
+                        <Chip
+                          size="small"
+                          color="warning"
+                          label={t('budgetForecast.variability.flags.momShift', {
+                            delta: formatVariabilityDelta(getLatestMomentumChange(selectedBudgetVariability)),
+                            defaultValue: 'MoM shift {{delta}}',
+                          })}
+                        />
+                      )}
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('budgetForecast.variability.timelineBridgeHint', {
+                        defaultValue: 'The monthly curve stays in the timeline section below so the history appears only once.',
+                      })}
+                    </Typography>
+                  </>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    {t('budgetForecast.variability.empty', {
+                      defaultValue: 'Not enough recurring category history yet to analyze variability.',
+                    })}
+                  </Typography>
+                )}
+              </Paper>
 
               <Paper variant="outlined" sx={{ p: 1.5 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>

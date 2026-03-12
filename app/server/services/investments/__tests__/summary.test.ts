@@ -7,6 +7,15 @@ let summaryService: any;
 let getInvestmentSummary: (params?: Record<string, unknown>) => Promise<any>;
 let clearInstitutionsCache: () => void;
 
+function isStandardSnapshotQuery(sql: string) {
+  return sql.includes('WITH ranked_standard AS');
+}
+
+function isActivePikadonSnapshotQuery(sql: string) {
+  return sql.includes("ih.holding_type = 'pikadon'")
+    && sql.includes('GROUP BY ih.account_id');
+}
+
 beforeAll(async () => {
   const module = await import('../summary.js');
   summaryService = module.default ?? module;
@@ -86,6 +95,44 @@ describe('investment summary service', () => {
         };
       }
 
+      if (isStandardSnapshotQuery(sql)) {
+        return {
+          rows: [
+            {
+              id: 11,
+              account_id: 1,
+              holding_type: 'standard',
+              status: 'active',
+              current_value: '1200',
+              cost_basis: '1000',
+              as_of_date: '2026-01-31',
+            },
+            {
+              id: 12,
+              account_id: 2,
+              holding_type: 'standard',
+              status: 'active',
+              current_value: '800',
+              cost_basis: '900',
+              as_of_date: '2026-02-01',
+            },
+            {
+              id: 13,
+              account_id: 3,
+              holding_type: 'standard',
+              status: 'active',
+              current_value: '0',
+              cost_basis: '0',
+              as_of_date: null,
+            },
+          ],
+        };
+      }
+
+      if (isActivePikadonSnapshotQuery(sql)) {
+        return { rows: [] };
+      }
+
       if (sql.includes('FROM investment_assets iasset')) {
         return {
           rows: [
@@ -109,6 +156,10 @@ describe('investment summary service', () => {
             },
           ],
         };
+      }
+
+      if (sql.includes('FROM transaction_account_links tal')) {
+        return { rows: [] };
       }
 
       if (sql.includes('FROM institution_nodes') && sql.includes('ORDER BY category, display_order')) {
@@ -181,10 +232,191 @@ describe('investment summary service', () => {
     expect(releaseMock).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps bank balances in the portfolio total but labels cash separately from savings', async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM investment_accounts ia')) {
+        return {
+          rows: [
+            {
+              id: 1,
+              account_name: 'Main Bank',
+              account_type: 'bank_balance',
+              investment_category: 'cash',
+              current_value: '25476.03',
+              cost_basis: '25476.03',
+              as_of_date: '2026-03-10',
+              institution_id: null,
+            },
+            {
+              id: 2,
+              account_name: 'Pikadon',
+              account_type: 'savings',
+              investment_category: 'liquid',
+              current_value: '680000',
+              cost_basis: '680000',
+              as_of_date: '2026-03-10',
+              institution_id: null,
+            },
+          ],
+        };
+      }
+
+      if (isStandardSnapshotQuery(sql)) {
+        return {
+          rows: [
+            {
+              id: 21,
+              account_id: 1,
+              holding_type: 'standard',
+              status: 'active',
+              current_value: '25476.03',
+              cost_basis: '25476.03',
+              as_of_date: '2026-03-10',
+            },
+            {
+              id: 22,
+              account_id: 2,
+              holding_type: 'standard',
+              status: 'active',
+              current_value: '680000',
+              cost_basis: '680000',
+              as_of_date: '2026-03-10',
+            },
+          ],
+        };
+      }
+
+      if (isActivePikadonSnapshotQuery(sql)) {
+        return { rows: [] };
+      }
+
+      if (sql.includes('FROM investment_assets iasset')) {
+        return { rows: [] };
+      }
+
+      if (sql.includes('FROM transaction_account_links tal')) {
+        return { rows: [] };
+      }
+
+      if (sql.includes('FROM institution_nodes') && sql.includes('ORDER BY category, display_order')) {
+        return { rows: [] };
+      }
+
+      if (sql.includes('FROM institution_nodes') && sql.includes('WHERE vendor_code = $1')) {
+        return { rows: [] };
+      }
+
+      if (sql.includes('SUM(current_value) AS total_value')) {
+        return { rows: [] };
+      }
+
+      throw new Error(`Unexpected query in cash label summary test: ${sql.slice(0, 80)}`);
+    });
+
+    const result = await getInvestmentSummary({ historyMonths: 1 });
+
+    expect(result.summary.totalPortfolioValue).toBeCloseTo(705476.03, 6);
+    expect(result.breakdown.find((entry: any) => entry.type === 'bank_balance')).toMatchObject({
+      name: 'Available Cash',
+      category: 'liquid',
+      totalValue: 25476.03,
+    });
+    expect(result.breakdown.find((entry: any) => entry.type === 'savings')).toMatchObject({
+      name: 'Savings & Term Deposits',
+      category: 'liquid',
+      totalValue: 680000,
+    });
+    expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not backfill linked pikadon deposits during summary reads', async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM investment_accounts ia')) {
+        return {
+          rows: [
+            {
+              id: 2,
+              account_name: 'Pikadon',
+              account_type: 'savings',
+              investment_category: 'liquid',
+              institution_id: null,
+            },
+          ],
+        };
+      }
+
+      if (isStandardSnapshotQuery(sql)) {
+        return { rows: [] };
+      }
+
+      if (isActivePikadonSnapshotQuery(sql)) {
+        return { rows: [] };
+      }
+
+      if (sql.includes('FROM investment_assets iasset')) {
+        return { rows: [] };
+      }
+
+      if (sql.includes('FROM transaction_account_links tal')) {
+        return {
+          rows: [
+            {
+              account_id: 2,
+              identifier: 'pik-1',
+              vendor: 'discount',
+              date: '2026-03-09T22:00:00.000Z',
+              transaction_datetime: '2026-03-09T22:00:00.000Z',
+              name: 'הפקדה לפיקדון שבועי',
+              memo: '',
+              price: '-680000',
+              category_type: 'investment',
+              category_name: 'Contribution',
+              category_name_en: 'Contribution',
+              category_name_fr: null,
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('FROM institution_nodes') && sql.includes('WHERE vendor_code = $1')) {
+        return { rows: [] };
+      }
+
+      if (sql.includes('SUM(current_value) AS total_value')) {
+        return {
+          rows: [
+            { month: '2026-03-01T00:00:00.000Z', total_value: '680000', total_cost_basis: '680000' },
+          ],
+        };
+      }
+
+      throw new Error(`Unexpected query in summary backfill test: ${sql.slice(0, 120)}`);
+    });
+
+    const result = await getInvestmentSummary({ historyMonths: 1 });
+
+    expect(result.summary).toMatchObject({
+      totalPortfolioValue: 0,
+      totalCostBasis: 0,
+      totalAccounts: 1,
+      accountsWithValues: 0,
+    });
+    expect(result.accounts[0]).toMatchObject({
+      account_name: 'Pikadon',
+      account_type: 'savings',
+      current_value: null,
+      cost_basis: null,
+      uses_pikadon_rollup: false,
+    });
+    expect(queryMock.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO investment_holdings'))).toBe(false);
+    expect(queryMock.mock.calls.some(([sql]) => String(sql).includes('UPDATE transactions SET is_pikadon_related = 1'))).toBe(false);
+  });
+
   it('returns zeroed summary when accounts and history are empty', async () => {
     queryMock.mockImplementation(async (sql: string) => {
       if (sql.includes('FROM investment_accounts ia')) return { rows: [] };
       if (sql.includes('FROM investment_assets iasset')) return { rows: [] };
+      if (sql.includes('FROM transaction_account_links tal')) return { rows: [] };
       if (sql.includes('SUM(current_value) AS total_value')) return { rows: [] };
       throw new Error(`Unexpected query in empty summary test: ${sql.slice(0, 80)}`);
     });
@@ -231,6 +463,24 @@ describe('investment summary service', () => {
           ],
         };
       }
+      if (isStandardSnapshotQuery(sql)) {
+        return {
+          rows: [
+            {
+              id: 31,
+              account_id: 10,
+              holding_type: 'standard',
+              status: 'active',
+              current_value: null,
+              cost_basis: null,
+              as_of_date: '2026-02-10',
+            },
+          ],
+        };
+      }
+      if (isActivePikadonSnapshotQuery(sql)) {
+        return { rows: [] };
+      }
       if (sql.includes('FROM investment_assets iasset')) {
         return {
           rows: [
@@ -245,6 +495,9 @@ describe('investment summary service', () => {
             },
           ],
         };
+      }
+      if (sql.includes('FROM transaction_account_links tal')) {
+        return { rows: [] };
       }
       if (sql.includes('FROM institution_nodes') && sql.includes('ORDER BY category, display_order')) {
         return { rows: [] };
@@ -330,6 +583,7 @@ describe('investment summary service', () => {
     queryMock.mockImplementation(async (sql: string) => {
       if (sql.includes('FROM investment_accounts ia')) return { rows: [] };
       if (sql.includes('FROM investment_assets iasset')) return { rows: [] };
+      if (sql.includes('FROM transaction_account_links tal')) return { rows: [] };
       if (sql.includes('FROM institution_nodes') && sql.includes('ORDER BY category, display_order')) {
         return {
           rows: [{ id: 7, vendor_code: 'hapoalim', display_name_en: 'Hapoalim' }],
@@ -370,5 +624,140 @@ describe('investment summary service', () => {
     });
     expect(result.accounts).toEqual([]);
     expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls account values forward from linked investment contributions after the last snapshot', async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM investment_accounts ia')) {
+        return {
+          rows: [
+            {
+              id: 2,
+              account_name: 'פיקדונות',
+              account_type: 'savings',
+              investment_category: 'liquid',
+              current_value: '300',
+              cost_basis: '300',
+              as_of_date: '2026-02-23',
+              institution_id: null,
+            },
+            {
+              id: 3,
+              account_name: 'קופות גמל',
+              account_type: 'study_fund',
+              investment_category: 'restricted',
+              current_value: '6000',
+              cost_basis: '6000',
+              as_of_date: '2026-02-23',
+              institution_id: null,
+            },
+          ],
+        };
+      }
+
+      if (isStandardSnapshotQuery(sql)) {
+        return {
+          rows: [
+            {
+              id: 41,
+              account_id: 2,
+              holding_type: 'standard',
+              status: 'active',
+              current_value: '300',
+              cost_basis: '300',
+              as_of_date: '2026-02-23',
+            },
+            {
+              id: 42,
+              account_id: 3,
+              holding_type: 'standard',
+              status: 'active',
+              current_value: '6000',
+              cost_basis: '6000',
+              as_of_date: '2026-02-23',
+            },
+          ],
+        };
+      }
+
+      if (isActivePikadonSnapshotQuery(sql)) {
+        return { rows: [] };
+      }
+
+      if (sql.includes('FROM investment_assets iasset')) {
+        return { rows: [] };
+      }
+
+      if (sql.includes('FROM transaction_account_links tal')) {
+        return {
+          rows: [
+            {
+              account_id: 2,
+              identifier: 'pik-1',
+              vendor: 'discount',
+              date: '2026-03-09T22:00:00.000Z',
+              transaction_datetime: '2026-03-09T22:00:00.000Z',
+              name: 'Monthly investment contribution',
+              memo: '',
+              price: '-680000',
+              category_type: 'investment',
+              category_name: 'Contribution',
+              category_name_en: 'Contribution',
+              category_name_fr: null,
+            },
+            {
+              account_id: 3,
+              identifier: 'fund-1',
+              vendor: 'discount',
+              date: '2026-03-01T22:00:00.000Z',
+              transaction_datetime: '2026-03-01T22:00:00.000Z',
+              name: 'קופת גמל ל חיוב',
+              memo: '',
+              price: '-2000',
+              category_type: 'investment',
+              category_name: 'קופות גמל',
+              category_name_en: 'Study & Provident Funds',
+              category_name_fr: null,
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('FROM institution_nodes') && sql.includes('ORDER BY category, display_order')) {
+        return { rows: [] };
+      }
+
+      if (sql.includes('FROM institution_nodes') && sql.includes('WHERE vendor_code = $1')) {
+        return { rows: [] };
+      }
+
+      if (sql.includes('SUM(current_value) AS total_value')) {
+        return { rows: [] };
+      }
+
+      throw new Error(`Unexpected query in roll-forward summary test: ${sql.slice(0, 80)}`);
+    });
+
+    const result = await getInvestmentSummary({ historyMonths: 1 });
+
+    expect(result.summary).toMatchObject({
+      totalPortfolioValue: 688300,
+      totalCostBasis: 688300,
+      newestUpdateDate: '2026-03-10',
+    });
+    expect(result.liquidAccounts[0]).toMatchObject({
+      id: 2,
+      current_value: 680300,
+      cost_basis: 680300,
+      as_of_date: '2026-03-10',
+      linked_contribution_adjustment: 680000,
+    });
+    expect(result.restrictedAccounts[0]).toMatchObject({
+      id: 3,
+      current_value: 8000,
+      cost_basis: 8000,
+      as_of_date: '2026-03-02',
+      linked_contribution_adjustment: 2000,
+    });
   });
 });

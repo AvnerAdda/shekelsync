@@ -6,6 +6,19 @@ let historyService: any;
 let getInvestmentHistory: (params?: Record<string, unknown>) => Promise<any>;
 let clearInstitutionsCache: () => void;
 
+function isStandardHistoryQuery(sql: string) {
+  return sql.includes("COALESCE(ih.holding_type, 'standard') <> 'pikadon'")
+    && !sql.includes('WITH ranked_baseline AS');
+}
+
+function isBaselineHistoryQuery(sql: string) {
+  return sql.includes('WITH ranked_baseline AS');
+}
+
+function isPikadonHistoryQuery(sql: string) {
+  return sql.includes("ih.holding_type = 'pikadon'");
+}
+
 beforeAll(async () => {
   const module = await import('../history.js');
   historyService = module.default ?? module;
@@ -33,11 +46,15 @@ afterEach(() => {
 
 describe('investment history service', () => {
   it('returns an empty payload when no history rows exist', async () => {
-    queryMock.mockResolvedValueOnce({ rows: [] });
+    queryMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
 
     const result = await getInvestmentHistory({ timeRange: 'all' });
 
-    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(queryMock).toHaveBeenCalledTimes(2);
+    expect(isStandardHistoryQuery(String(queryMock.mock.calls[0][0]))).toBe(true);
+    expect(isPikadonHistoryQuery(String(queryMock.mock.calls[1][0]))).toBe(true);
     expect(result).toEqual({
       success: true,
       timeRange: 'all',
@@ -47,11 +64,25 @@ describe('investment history service', () => {
     });
   });
 
-  it('returns forward-filled data for a single account using baseline snapshots', async () => {
+  it('returns forward-filled data for a single account using holding snapshots', async () => {
     queryMock
       .mockResolvedValueOnce({
         rows: [
           {
+            id: 1,
+            holding_type: 'standard',
+            status: 'active',
+            snapshot_date: '2026-02-02',
+            current_value: '95',
+            cost_basis: '90',
+            account_id: 1,
+            account_name: 'Main',
+            account_type: 'brokerage',
+          },
+          {
+            id: 2,
+            holding_type: 'standard',
+            status: 'active',
             snapshot_date: '2026-02-05',
             current_value: '100',
             cost_basis: '90',
@@ -61,23 +92,17 @@ describe('investment history service', () => {
           },
         ],
       })
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            snapshot_date: '2026-02-02',
-            current_value: '95',
-            cost_basis: '90',
-            account_id: 1,
-            account_name: 'Main',
-            account_type: 'brokerage',
-          },
-        ],
-      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
     const result = await getInvestmentHistory({ accountId: 1, timeRange: '1w' });
 
-    expect(queryMock).toHaveBeenCalledTimes(3);
+    expect(queryMock).toHaveBeenCalledTimes(5);
+    expect(isStandardHistoryQuery(String(queryMock.mock.calls[0][0]))).toBe(true);
+    expect(isBaselineHistoryQuery(String(queryMock.mock.calls[1][0]))).toBe(true);
+    expect(isPikadonHistoryQuery(String(queryMock.mock.calls[2][0]))).toBe(true);
     expect(result.dataPoints).toBe(result.history.length);
     expect(result.history.length).toBeGreaterThanOrEqual(7);
     expect(result.history[0]).toMatchObject({
@@ -85,9 +110,142 @@ describe('investment history service', () => {
       currentValue: 95,
       costBasis: 90,
     });
-    const updatedPoint = result.history.find((point: any) => point.date === '2026-02-05');
-    expect(updatedPoint).toMatchObject({ currentValue: 100, costBasis: 90 });
-    expect(result.history.at(-1).date >= result.startDate).toBe(true);
+    expect(result.history.find((point: any) => point.date === '2026-02-05')).toMatchObject({
+      currentValue: 100,
+      costBasis: 90,
+    });
+  });
+
+  it('adds active pikadon balances on top of standard snapshots for mixed accounts', async () => {
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 1,
+            holding_type: 'standard',
+            status: 'active',
+            snapshot_date: '2026-02-03',
+            current_value: '100',
+            cost_basis: '90',
+            account_id: 1,
+            account_name: 'Mixed Savings',
+            account_type: 'savings',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 2,
+            holding_type: 'pikadon',
+            status: 'active',
+            snapshot_date: '2026-02-03',
+            return_date: null,
+            current_value: '50',
+            cost_basis: '50',
+            account_id: 1,
+            account_name: 'Mixed Savings',
+            account_type: 'savings',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await getInvestmentHistory({ accountId: 1, timeRange: '1w' });
+
+    expect(result.history[0]).toMatchObject({
+      date: result.startDate,
+      currentValue: 150,
+      costBasis: 140,
+    });
+  });
+
+  it('appends synthetic history points for linked non-pikadon contributions after the last snapshot', async () => {
+    vi.setSystemTime(new Date('2026-03-10T12:00:00.000Z'));
+
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 1,
+            holding_type: 'standard',
+            status: 'active',
+            snapshot_date: '2026-02-23',
+            current_value: '300',
+            cost_basis: '300',
+            account_id: 2,
+            account_name: 'פיקדונות',
+            account_type: 'savings',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            account_id: 2,
+            identifier: 'contrib-1',
+            vendor: 'discount',
+            date: '2026-03-09T22:00:00.000Z',
+            transaction_datetime: '2026-03-09T22:00:00.000Z',
+            name: 'Monthly investment contribution',
+            memo: '',
+            price: '-680000',
+            category_type: 'investment',
+            category_name: 'Contribution',
+            category_name_en: 'Contribution',
+            category_name_fr: null,
+          },
+        ],
+      });
+
+    const result = await getInvestmentHistory({ accountId: 2, timeRange: '1m' });
+
+    expect(result.history.some((point: any) => point.date === '2026-03-10')).toBe(true);
+    expect(result.history.at(-1)).toMatchObject({
+      date: '2026-03-10',
+      currentValue: 680300,
+      costBasis: 680300,
+    });
+  });
+
+  it('keeps pre-window pikadon deposits in view until the in-window return date', async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 12,
+            holding_type: 'pikadon',
+            status: 'returned',
+            snapshot_date: '2026-01-15',
+            return_date: '2026-02-05',
+            current_value: '1000',
+            cost_basis: '1000',
+            account_id: 4,
+            account_name: 'Pikadon Ladder',
+            account_type: 'savings',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await getInvestmentHistory({ accountId: 4, timeRange: '1w' });
+
+    expect(result.history.find((point: any) => point.date === '2026-02-03')).toMatchObject({
+      currentValue: 1000,
+      costBasis: 1000,
+    });
+    expect(result.history.find((point: any) => point.date === '2026-02-05')).toMatchObject({
+      currentValue: 0,
+      costBasis: 0,
+    });
   });
 
   it('aggregates multiple accounts and includes per-account histories when requested', async () => {
@@ -95,6 +253,20 @@ describe('investment history service', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            id: 1,
+            holding_type: 'standard',
+            status: 'active',
+            snapshot_date: '2026-02-03',
+            current_value: '110',
+            cost_basis: '95',
+            account_id: 1,
+            account_name: 'Brokerage',
+            account_type: 'brokerage',
+          },
+          {
+            id: 2,
+            holding_type: 'standard',
+            status: 'active',
             snapshot_date: '2026-02-10',
             current_value: '120',
             cost_basis: '100',
@@ -103,6 +275,20 @@ describe('investment history service', () => {
             account_type: 'brokerage',
           },
           {
+            id: 3,
+            holding_type: 'standard',
+            status: 'active',
+            snapshot_date: '2026-02-03',
+            current_value: '75',
+            cost_basis: '70',
+            account_id: 2,
+            account_name: 'Pension',
+            account_type: 'pension',
+          },
+          {
+            id: 4,
+            holding_type: 'standard',
+            status: 'active',
             snapshot_date: '2026-02-10',
             current_value: '80',
             cost_basis: '70',
@@ -112,26 +298,8 @@ describe('investment history service', () => {
           },
         ],
       })
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            snapshot_date: '2026-02-03',
-            current_value: '110',
-            cost_basis: '95',
-            account_id: 1,
-            account_name: 'Brokerage',
-            account_type: 'brokerage',
-          },
-          {
-            snapshot_date: '2026-02-03',
-            current_value: '75',
-            cost_basis: '70',
-            account_id: 2,
-            account_name: 'Pension',
-            account_type: 'pension',
-          },
-        ],
-      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
         rows: [
           {
@@ -140,7 +308,8 @@ describe('investment history service', () => {
             display_name_en: 'Pension Co',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });
 
     const result = await getInvestmentHistory({
       timeRange: '1w',
@@ -149,17 +318,20 @@ describe('investment history service', () => {
 
     expect(result.dataPoints).toBe(result.history.length);
     expect(result.history.length).toBeGreaterThanOrEqual(7);
-    const latestPoint = result.history.at(-1);
-    expect(latestPoint.accountCount).toBe(2);
-    expect([185, 200]).toContain(latestPoint.currentValue);
-    expect([165, 170]).toContain(latestPoint.costBasis);
+    expect(result.history.at(-1)).toMatchObject({
+      accountCount: 2,
+      currentValue: 200,
+      costBasis: 170,
+    });
     expect(result.accounts).toHaveLength(2);
     expect(result.accounts[0].accountId).toBe(1);
     expect(result.accounts[1].accountId).toBe(2);
   });
 
   it('builds IN filtering when accountIds are provided', async () => {
-    queryMock.mockResolvedValueOnce({ rows: [] });
+    queryMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
 
     await getInvestmentHistory({
       timeRange: 'all',
@@ -168,17 +340,18 @@ describe('investment history service', () => {
 
     const [sql, params] = queryMock.mock.calls[0];
     expect(sql).toContain('ih.account_id IN ($1,$2)');
-    expect(params).toEqual([3, 4]);
+    expect(params).toEqual([3, 4, '2026-02-10']);
   });
 
-  it('returns empty payload when start-date queries have no baseline and no in-range rows', async () => {
+  it('returns empty payload when no rows exist inside the requested window', async () => {
     queryMock
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
     const result = await getInvestmentHistory({ timeRange: '1w' });
 
-    expect(queryMock).toHaveBeenCalledTimes(2);
+    expect(queryMock).toHaveBeenCalledTimes(3);
     expect(result.success).toBe(true);
     expect(result.history).toEqual([]);
     expect(result.dataPoints).toBe(0);
@@ -190,6 +363,9 @@ describe('investment history service', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            id: 5,
+            holding_type: 'standard',
+            status: 'active',
             snapshot_date: '2026-02-10',
             current_value: '200',
             cost_basis: '150',
@@ -213,6 +389,8 @@ describe('investment history service', () => {
         ],
       })
       .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
     const result = await getInvestmentHistory({
@@ -234,6 +412,20 @@ describe('investment history service', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            id: 6,
+            holding_type: 'standard',
+            status: 'active',
+            snapshot_date: '2025-11-12',
+            current_value: '80',
+            cost_basis: '80',
+            account_id: 9,
+            account_name: 'Fallback Account',
+            account_type: 'pension',
+          },
+          {
+            id: 7,
+            holding_type: 'standard',
+            status: 'active',
             snapshot_date: '2026-02-10',
             current_value: '90',
             cost_basis: '80',
@@ -243,18 +435,8 @@ describe('investment history service', () => {
           },
         ],
       })
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            snapshot_date: '2025-11-12',
-            current_value: '80',
-            cost_basis: '80',
-            account_id: 9,
-            account_name: 'Fallback Account',
-            account_type: 'pension',
-          },
-        ],
-      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
         rows: [
           {
@@ -264,7 +446,8 @@ describe('investment history service', () => {
             institution_type: 'pension',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });
 
     const result = await getInvestmentHistory({ timeRange: 'weird-range' });
 
@@ -306,6 +489,20 @@ describe('investment history service', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            id: 8,
+            holding_type: 'standard',
+            status: 'active',
+            snapshot_date: '2026-02-03',
+            current_value: '110',
+            cost_basis: '90',
+            account_id: 1,
+            account_name: 'Brokerage',
+            account_type: 'brokerage',
+          },
+          {
+            id: 9,
+            holding_type: 'standard',
+            status: 'active',
             snapshot_date: '2026-02-10',
             current_value: '120',
             cost_basis: '100',
@@ -315,18 +512,9 @@ describe('investment history service', () => {
           },
         ],
       })
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            snapshot_date: '2026-02-03',
-            current_value: '110',
-            cost_basis: '90',
-            account_id: 1,
-            account_name: 'Brokerage',
-            account_type: 'brokerage',
-          },
-        ],
-      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
     const result = await getInvestmentHistory({
@@ -344,6 +532,9 @@ describe('investment history service', () => {
       .mockResolvedValueOnce({
         rows: [
           {
+            id: 10,
+            holding_type: 'standard',
+            status: 'active',
             snapshot_date: '2026-02-10',
             current_value: '50',
             cost_basis: '40',
@@ -354,6 +545,8 @@ describe('investment history service', () => {
         ],
       })
       .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
     await getInvestmentHistory({
@@ -362,9 +555,8 @@ describe('investment history service', () => {
       accountIds: [1, 2, 3],
     });
 
-    const [sql, params] = queryMock.mock.calls[0];
+    const [sql] = queryMock.mock.calls[0];
     expect(sql).toContain('ih.account_id = $1');
     expect(sql).not.toContain('ih.account_id IN');
-    expect(params[0]).toBe(5);
   });
 });

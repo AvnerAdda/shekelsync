@@ -29,10 +29,19 @@ import {
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import { apiClient } from '@/lib/api-client';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
+import type {
+  PendingPikadonSetup,
+  PikadonDetailsInput,
+} from '@renderer/types/investments';
+import PikadonSetupDialog from './PikadonSetupDialog';
+import {
+  buildPikadonCandidateFromSuggestionTransaction,
+} from './pikadon-linking';
 import {
   findMatchingInvestmentAccounts,
   getInvestmentSuggestionKey,
 } from './investment-account-suggestions-helpers';
+import { linkSuggestionTransactionsBatch } from './investment-account-link-batch';
 
 interface Transaction {
   transactionIdentifier: string;
@@ -83,6 +92,13 @@ interface GroupedSuggestion {
   matchingAccounts?: InvestmentAccount[];
 }
 
+interface PendingLinkBatch {
+  accountId: number;
+  accountName: string;
+  suggestion: GroupedSuggestion;
+  pikadonItems: PendingPikadonSetup[];
+}
+
 const ACCOUNT_TYPE_ICONS: Record<string, string> = {
   pension: '💼',
   provident: '🎓',
@@ -120,6 +136,7 @@ export default function InvestmentAccountSuggestionsCard({
   const [linkingInProgress, setLinkingInProgress] = useState(false);
   const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
   const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
+  const [pendingLinkBatch, setPendingLinkBatch] = useState<PendingLinkBatch | null>(null);
 
   useEffect(() => {
     fetchSuggestions();
@@ -230,56 +247,72 @@ export default function InvestmentAccountSuggestionsCard({
     setLinkMenuAnchor(null);
   };
 
-  const handleLinkToAccount = async (suggestion: GroupedSuggestion, accountId: number) => {
-    handleCloseLinkMenu();
+  const executeLinkBatch = async (
+    suggestion: GroupedSuggestion,
+    accountId: number,
+    detailsByKey: Record<string, PikadonDetailsInput> = {},
+  ) => {
     setLinkingInProgress(true);
 
     try {
-      let successCount = 0;
-      for (const txn of suggestion.transactions) {
-        const payload = {
-          transaction_identifier: txn.transactionIdentifier,
-          transaction_vendor: txn.transactionVendor,
-          account_id: accountId,
-          link_method: 'manual_suggestion',
-          confidence: 0.9
-        };
+      const batchResult = await linkSuggestionTransactionsBatch({
+        transactions: suggestion.transactions,
+        accountId,
+        detailsByKey,
+        postLink: (payload) => apiClient.post('/api/investments/transaction-links', payload),
+      });
 
-        const response = await apiClient.post('/api/investments/transaction-links', payload);
-
-        if (response.ok) {
-          successCount++;
-        } else {
-          // Check for license read-only error
-          const licenseCheck = isLicenseReadOnlyError(response.data);
-          if (licenseCheck.isReadOnly) {
-            setLicenseAlertReason(licenseCheck.reason);
-            setLicenseAlertOpen(true);
-            setLinkingInProgress(false);
-            return;
-          }
-          console.error('Failed to link transaction:', response);
+      if (!batchResult.ok) {
+        const licenseCheck = isLicenseReadOnlyError(batchResult.response.data);
+        if (licenseCheck.isReadOnly) {
+          setLicenseAlertReason(licenseCheck.reason);
+          setLicenseAlertOpen(true);
+          return;
         }
+
+        const errorMessage =
+          (batchResult.response.data as { error?: string } | null)?.error
+          || 'Failed to link transactions';
+        throw new Error(errorMessage);
       }
 
-      if (successCount > 0) {
-        showNotification(`Successfully linked ${successCount} transaction${successCount > 1 ? 's' : ''} to account`, 'success');
-
-        // Refresh data
-        await fetchSuggestions();
-        if (onSuggestionCreated) {
-          onSuggestionCreated();
-        }
-        window.dispatchEvent(new CustomEvent('dataRefresh'));
-      } else {
-        showNotification('Failed to link transactions', 'error');
+      showNotification(
+        `Successfully linked ${suggestion.transactions.length} transaction${suggestion.transactions.length > 1 ? 's' : ''} to account`,
+        'success',
+      );
+      if (onSuggestionCreated) {
+        onSuggestionCreated();
       }
+      window.dispatchEvent(new CustomEvent('dataRefresh'));
     } catch (error: any) {
       console.error('Error linking transactions:', error);
-      showNotification('Failed to link transactions: ' + (error.message || 'Unknown error'), 'error');
+      window.dispatchEvent(new CustomEvent('dataRefresh'));
+      showNotification(`Failed to link transactions: ${error.message || 'Unknown error'}`, 'error');
     } finally {
       setLinkingInProgress(false);
+      setPendingLinkBatch(null);
     }
+  };
+
+  const handleLinkToAccount = async (suggestion: GroupedSuggestion, accountId: number) => {
+    handleCloseLinkMenu();
+
+    const account = investmentAccounts.find((candidate) => candidate.id === accountId);
+    const pikadonItems = suggestion.transactions
+      .map((txn) => buildPikadonCandidateFromSuggestionTransaction(txn, accountId, account?.account_name))
+      .filter((candidate): candidate is PendingPikadonSetup => Boolean(candidate));
+
+    if (pikadonItems.length > 0) {
+      setPendingLinkBatch({
+        accountId,
+        accountName: account?.account_name || 'Investment account',
+        suggestion,
+        pikadonItems,
+      });
+      return;
+    }
+
+    await executeLinkBatch(suggestion, accountId);
   };
 
   if (loading) {
@@ -456,6 +489,25 @@ export default function InvestmentAccountSuggestionsCard({
           </Stack>
         </CardContent>
       </Card>
+
+      <PikadonSetupDialog
+        open={Boolean(pendingLinkBatch)}
+        title={pendingLinkBatch ? `Complete pikadon setup for ${pendingLinkBatch.accountName}` : 'Complete pikadon setup'}
+        items={pendingLinkBatch?.pikadonItems || []}
+        loading={linkingInProgress}
+        saveLabel="Save and link"
+        onClose={() => setPendingLinkBatch(null)}
+        onSubmit={async (detailsByKey) => {
+          if (!pendingLinkBatch) {
+            return;
+          }
+          await executeLinkBatch(
+            pendingLinkBatch.suggestion,
+            pendingLinkBatch.accountId,
+            detailsByKey,
+          );
+        }}
+      />
 
       {/* Link Menu */}
       <Menu

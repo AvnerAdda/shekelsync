@@ -34,7 +34,9 @@ import StorageIcon from '@mui/icons-material/Storage';
 import SyncIcon from '@mui/icons-material/Sync';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useTranslation } from 'react-i18next';
-import AccountsModal from '@renderer/shared/modals/AccountsModal';
+import AccountsModal, {
+  type AccountsModalOpenRequest,
+} from '@renderer/shared/modals/AccountsModal';
 import ScrapeModal from '@renderer/shared/modals/ScrapeModal';
 import CategoryHierarchyModal from '@renderer/shared/modals/CategoryHierarchyModal';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
@@ -60,13 +62,28 @@ interface SidebarProps {
   onDataRefresh?: () => void;
 }
 
+interface CategoryModalEventDetail {
+  tab?: string;
+  vendor?: string;
+  transaction?: {
+    identifier?: string;
+    vendor?: string;
+  };
+}
+
 const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefresh }) => {
   const onPageChangeRef = useRef(onPageChange);
   const [open, setOpen] = useState(true);
   const [accountsModalOpen, setAccountsModalOpen] = useState(false);
+  const [accountsModalRequest, setAccountsModalRequest] = useState<AccountsModalOpenRequest | null>(null);
   const [scrapeModalOpen, setScrapeModalOpen] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryInitialTab, setCategoryInitialTab] = useState(0);
+  const [categoryInitialRuleVendor, setCategoryInitialRuleVendor] = useState<string | null>(null);
+  const [categoryFocusedTransaction, setCategoryFocusedTransaction] = useState<{
+    identifier: string;
+    vendor: string;
+  } | null>(null);
   interface AccountSyncStatus {
     id: string;
     vendor: string;
@@ -102,6 +119,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { latestEvent: scrapeEvent } = useScrapeProgress();
+  const reduceVisualEffects = window.electronAPI?.platform?.reduceVisualEffects === true;
+
+  const openAccountsModal = useCallback((request: AccountsModalOpenRequest | null = null) => {
+    setAccountsModalRequest(request);
+    setAccountsModalOpen(true);
+  }, []);
 
   useEffect(() => {
     onPageChangeRef.current = onPageChange;
@@ -291,6 +314,27 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     }
   };
 
+  const openCategoriesModal = useCallback((detail: CategoryModalEventDetail = {}) => {
+    const tabMap: Record<string, number> = {
+      categorize: 0,
+      categorize_investments: 0,
+      manage_categories: 1,
+      create_rules: 2,
+      rules: 2,
+    };
+    const identifier = detail.transaction?.identifier?.trim();
+    const vendor = detail.transaction?.vendor?.trim();
+
+    setCategoryInitialTab(tabMap[detail.tab ?? ''] ?? 0);
+    setCategoryInitialRuleVendor(detail.vendor?.trim() || null);
+    setCategoryFocusedTransaction(
+      identifier && vendor
+        ? { identifier, vendor }
+        : null,
+    );
+    setCategoryModalOpen(true);
+  }, []);
+
   useEffect(() => {
     fetchStats();
     checkDBStatus();
@@ -319,8 +363,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       onPageChangeRef.current('settings');
     };
 
-    const handleOpenAccounts = () => {
-      setAccountsModalOpen(true);
+    const handleOpenAccounts = (event: Event) => {
+      openAccountsModal((event as CustomEvent<AccountsModalOpenRequest>).detail || null);
     };
 
     const handleOpenScrape = () => {
@@ -336,19 +380,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     };
 
     const handleGuideOpenCategories = (event: Event) => {
-      const tab = (event as CustomEvent).detail?.tab as string | undefined;
-      const tabMap: Record<string, number> = {
-        categorize: 0,
-        categorize_investments: 0,
-        manage_categories: 1,
-        create_rules: 2,
-      };
-      setCategoryInitialTab(tabMap[tab ?? ''] ?? 0);
-      setCategoryModalOpen(true);
+      openCategoriesModal((event as CustomEvent<CategoryModalEventDetail>).detail || {});
     };
 
     const handleGuideTriggerBulkSync = () => {
       handleBulkRefresh();
+    };
+
+    const handleOpenCategoriesModal = (event: Event) => {
+      openCategoriesModal((event as CustomEvent<CategoryModalEventDetail>).detail || {});
     };
 
     globalThis.addEventListener('openProfileSetup', handleOpenProfile);
@@ -357,6 +397,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     globalThis.addEventListener('dataRefresh', handleDataRefresh);
     globalThis.addEventListener('guideOpenCategoriesModal', handleGuideOpenCategories);
     globalThis.addEventListener('guideTriggerBulkSync', handleGuideTriggerBulkSync);
+    globalThis.addEventListener('openCategoriesModal', handleOpenCategoriesModal);
 
     return () => {
       clearInterval(interval);
@@ -369,8 +410,17 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       globalThis.removeEventListener('dataRefresh', handleDataRefresh);
       globalThis.removeEventListener('guideOpenCategoriesModal', handleGuideOpenCategories);
       globalThis.removeEventListener('guideTriggerBulkSync', handleGuideTriggerBulkSync);
+      globalThis.removeEventListener('openCategoriesModal', handleOpenCategoriesModal);
     };
-  }, [fetchStats, checkDBStatus, fetchAccountStatus, fetchUncategorizedCount, refreshPairingGap]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    fetchStats,
+    checkDBStatus,
+    fetchAccountStatus,
+    fetchUncategorizedCount,
+    openAccountsModal,
+    openCategoriesModal,
+    refreshPairingGap,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSyncIconClick = () => {
     const isSyncStale = stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS;
@@ -380,7 +430,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       handleBulkRefresh();
     } else {
       // Otherwise, open accounts modal
-      setAccountsModalOpen(true);
+      openAccountsModal();
     }
   };
 
@@ -473,9 +523,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             overflowX: 'hidden',
             display: 'flex',
             flexDirection: 'column',
-            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(10, 10, 10, 0.95)' : '#ffffff',
+            backgroundColor: reduceVisualEffects
+              ? theme.palette.background.paper
+              : theme.palette.mode === 'dark'
+                ? 'rgba(10, 10, 10, 0.95)'
+                : '#ffffff',
             borderRight: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            backdropFilter: 'blur(12px)',
+            backdropFilter: reduceVisualEffects ? 'none' : 'blur(12px)',
             paddingTop: '64px', // Account for TitleBar height
             borderTopLeftRadius: 'var(--app-window-radius, 12px)',
             borderBottomLeftRadius: 'var(--app-window-radius, 12px)',
@@ -610,7 +664,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     <Button
                       variant="contained"
                       startIcon={<AddIcon />}
-                      onClick={() => setAccountsModalOpen(true)}
+                      onClick={() => openAccountsModal()}
                       fullWidth
                       aria-label={t('actions.addAccount')}
                       sx={{
@@ -927,7 +981,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             <Tooltip title={addAccountTooltip} placement="right">
               <IconButton
                 size="small"
-                onClick={() => setAccountsModalOpen(true)}
+                onClick={() => openAccountsModal()}
                 sx={{
                   backgroundColor: alpha(theme.palette.primary.main, 0.1),
                   color: theme.palette.primary.main,
@@ -1016,7 +1070,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       {/* Modals */}
       <AccountsModal
         isOpen={accountsModalOpen}
+        openRequest={accountsModalRequest}
         onClose={() => {
+          setAccountsModalRequest(null);
           setAccountsModalOpen(false);
           fetchStats();
           fetchAccountStatus();
@@ -1033,10 +1089,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         open={categoryModalOpen}
         onClose={() => {
           setCategoryModalOpen(false);
+          setCategoryInitialRuleVendor(null);
+          setCategoryFocusedTransaction(null);
           fetchUncategorizedCount();
         }}
         onCategoriesUpdated={handleScrapeComplete}
         initialTab={categoryInitialTab}
+        initialRuleVendor={categoryInitialRuleVendor}
+        focusedTransaction={categoryFocusedTransaction}
       />
 
       <LicenseReadOnlyAlert

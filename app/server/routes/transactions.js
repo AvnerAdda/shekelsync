@@ -99,6 +99,23 @@ async function searchTransactions(req, res) {
   }
 }
 
+async function getTransaction(req, res) {
+  const id = req.params?.id || req.query?.id;
+
+  if (!id) {
+    res.status(400).json({ error: 'ID parameter is required' });
+    return;
+  }
+
+  try {
+    const result = await transactionsList.getTransactionById(id);
+    res.json(result);
+  } catch (error) {
+    console.error('Get transaction error:', error);
+    sendError(res, error, 'Failed to fetch transaction');
+  }
+}
+
 async function createManualTransaction(req, res) {
   try {
     const result = await transactionsAdminService.createManualTransaction(req.body || {});
@@ -172,6 +189,7 @@ module.exports = {
   getMonthByCategories,
   getRecentTransactions,
   searchTransactions,
+  getTransaction,
   createManualTransaction,
   updateTransaction,
   deleteTransaction,

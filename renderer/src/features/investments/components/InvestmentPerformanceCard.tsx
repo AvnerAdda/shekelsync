@@ -25,6 +25,7 @@ interface InvestmentPerformanceCardProps {
   account: InvestmentAccountSummary;
   history: PortfolioHistoryPoint[];
   color: string;
+  onClick?: (account: InvestmentAccountSummary) => void;
 }
 
 const getAccountIcon = (accountType: string, category?: string | null) => {
@@ -42,6 +43,7 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
   account,
   history,
   color,
+  onClick,
 }) => {
   const theme = useTheme();
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
@@ -103,14 +105,15 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
         flexDirection: 'column',
         gap: 1,
         transition: 'transform 0.2s, box-shadow 0.2s',
-        cursor: 'pointer',
+        cursor: onClick ? 'pointer' : 'default',
         border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
         '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: theme.shadows[4],
+          transform: onClick ? 'translateY(-2px)' : 'none',
+          boxShadow: onClick ? theme.shadows[4] : 'none',
           borderColor: alpha(theme.palette.divider, 0.2),
         },
       }}
+      onClick={() => onClick?.(account)}
     >
       {/* Header with Icon and Name */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

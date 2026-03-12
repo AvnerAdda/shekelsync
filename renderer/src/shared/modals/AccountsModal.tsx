@@ -59,6 +59,7 @@ import AccountPairingModal from './AccountPairingModal';
 import InvestmentAccountSuggestionsCard from '@renderer/features/investments/components/InvestmentAccountSuggestionsCard';
 import CreditCardSuggestionsCard from '@renderer/features/investments/components/CreditCardSuggestionsCard';
 import SmartInvestmentAccountForm from '@renderer/features/investments/components/SmartInvestmentAccountForm';
+import { getCreatedInvestmentAccountId } from '@renderer/features/investments/utils/account-response';
 import {
   CREDIT_CARD_VENDORS,
   BANK_VENDORS,
@@ -340,6 +341,14 @@ interface InvestmentAccount {
 interface AccountsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  openRequest?: AccountsModalOpenRequest | null;
+}
+
+export type AccountsModalTabRequest = 'bank' | 'credit' | 'banking' | 'investments';
+
+export interface AccountsModalOpenRequest {
+  tab?: AccountsModalTabRequest;
+  addFlow?: boolean;
 }
 
 export const getBankingAccountValidationError = (
@@ -553,7 +562,7 @@ const AccountSection = styled(Box)(({ theme }) => ({
   },
 }));
 
-export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
+export default function AccountsModal({ isOpen, onClose, openRequest }: AccountsModalProps) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([]);
   const [institutions, setInstitutions] = useState<InstitutionMetadata[]>([]);
@@ -1078,7 +1087,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
     setError(null);
   };
 
-  const beginAddAccountFlow = () => {
+  const beginAddAccountFlow = useCallback(() => {
     setError(null);
     setAddInstitutionPath([]);
     setExpandedForm(null);
@@ -1100,7 +1109,24 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       asOfDate: new Date().toISOString().split('T')[0],
     });
     setIsAdding(true);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen || !openRequest) {
+      return;
+    }
+
+    if (openRequest.tab) {
+      setActiveTab(openRequest.tab === 'investments' ? 1 : 0);
+    }
+
+    if (openRequest.addFlow) {
+      beginAddAccountFlow();
+      return;
+    }
+
+    setError(null);
+  }, [beginAddAccountFlow, isOpen, openRequest]);
 
   const institutionSelectLevels = useMemo(() => {
     const levels: Array<{
@@ -1307,8 +1333,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
       const response = await apiClient.post('/api/investments/accounts', newInvestmentAccount);
 
       if (response.ok) {
-        const data = response.data as any;
-        const newAccountId = data.id;
+        const newAccountId = getCreatedInvestmentAccountId(response.data);
 
         // Create initial holding if initial value is provided
         if (newAccountId && initialValue.currentValue) {
@@ -1780,6 +1805,7 @@ export default function AccountsModal({ isOpen, onClose }: AccountsModalProps) {
         });
         // Refresh investment accounts to show updated values
         fetchInvestmentAccounts();
+        window.dispatchEvent(new CustomEvent('dataRefresh'));
       } else {
         const errorData = (response.data as any) || {};
         // Check for license read-only error
