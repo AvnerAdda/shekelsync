@@ -27,6 +27,7 @@ const {
   resolveRendererPath,
   requireFromApp,
 } = require('./paths');
+const { inspectMacAutoUpdateCodeSignature } = require(resolveAppPath('lib', 'macos-auto-update-signing.js'));
 const {
   logger,
   recordRendererLog,
@@ -298,10 +299,67 @@ try {
 }
 
 const AUTO_UPDATE_ENV_FLAG = 'ENABLE_AUTO_UPDATE';
+let cachedAutoUpdateAvailability = null;
+
+function getAutoUpdateAvailability() {
+  if (cachedAutoUpdateAvailability) {
+    return cachedAutoUpdateAvailability;
+  }
+
+  if (isDev) {
+    cachedAutoUpdateAvailability = {
+      enabled: false,
+      reason: 'Auto-updater is disabled in development mode.',
+    };
+    return cachedAutoUpdateAvailability;
+  }
+
+  if (!autoUpdater) {
+    cachedAutoUpdateAvailability = {
+      enabled: false,
+      reason: 'Auto-updater module is not available.',
+    };
+    return cachedAutoUpdateAvailability;
+  }
+
+  if (process.env[AUTO_UPDATE_ENV_FLAG] === 'false') {
+    cachedAutoUpdateAvailability = {
+      enabled: false,
+      reason: `Auto-updater is disabled by ${AUTO_UPDATE_ENV_FLAG}=false.`,
+    };
+    return cachedAutoUpdateAvailability;
+  }
+
+  if (isMac) {
+    const signingStatus = inspectMacAutoUpdateCodeSignature({
+      platform: process.platform,
+      isPackaged,
+      executablePath: process.execPath,
+    });
+
+    if (!signingStatus.eligible) {
+      logger.warn('Disabling macOS auto-update because the installed app is not Developer ID signed.', {
+        reason: signingStatus.reason,
+        bundlePath: signingStatus.bundlePath,
+        signature: signingStatus.details,
+      });
+      cachedAutoUpdateAvailability = {
+        enabled: false,
+        reason: signingStatus.reason,
+      };
+      return cachedAutoUpdateAvailability;
+    }
+  }
+
+  cachedAutoUpdateAvailability = {
+    enabled: true,
+    reason: null,
+  };
+  return cachedAutoUpdateAvailability;
+}
 
 function shouldEnableAutoUpdate() {
-  // Enable auto-updates by default in packaged apps. Allow explicit opt-out via ENABLE_AUTO_UPDATE=false.
-  return !isDev && autoUpdater && process.env[AUTO_UPDATE_ENV_FLAG] !== 'false';
+  return getAutoUpdateAvailability().enabled;
 }
 
 const MIGRATION_ENV_FLAG = 'ALLOW_DB_MIGRATE';
@@ -1340,7 +1398,11 @@ app.whenReady().then(async () => {
     });
 
   } else if (!isDev && autoUpdater) {
-    logger.info(`Auto-updater disabled; set ${AUTO_UPDATE_ENV_FLAG}=true to enable.`);
+    const availability = getAutoUpdateAvailability();
+    logger.info('Auto-updater disabled.', {
+      reason: availability.reason,
+      envFlag: AUTO_UPDATE_ENV_FLAG,
+    });
   }
 });
 
@@ -2100,8 +2162,9 @@ ipcMain.handle('app:relaunch', (event) => {
 
 // Update-related handlers
 ipcMain.handle('updater:checkForUpdates', async () => {
-  if (!shouldEnableAutoUpdate() || !autoUpdater) {
-    return { success: false, error: 'Auto-updater not available' };
+  const availability = getAutoUpdateAvailability();
+  if (!availability.enabled || !autoUpdater) {
+    return { success: false, error: availability.reason || 'Auto-updater not available' };
   }
 
   try {
@@ -2134,8 +2197,9 @@ ipcMain.handle('updater:checkForUpdates', async () => {
 });
 
 ipcMain.handle('updater:downloadUpdate', async () => {
-  if (!shouldEnableAutoUpdate() || !autoUpdater) {
-    return { success: false, error: 'Auto-updater not available' };
+  const availability = getAutoUpdateAvailability();
+  if (!availability.enabled || !autoUpdater) {
+    return { success: false, error: availability.reason || 'Auto-updater not available' };
   }
   
   try {
@@ -2148,8 +2212,9 @@ ipcMain.handle('updater:downloadUpdate', async () => {
 });
 
 ipcMain.handle('updater:quitAndInstall', async () => {
-  if (!shouldEnableAutoUpdate() || !autoUpdater) {
-    return { success: false, error: 'Auto-updater not available' };
+  const availability = getAutoUpdateAvailability();
+  if (!availability.enabled || !autoUpdater) {
+    return { success: false, error: availability.reason || 'Auto-updater not available' };
   }
   
   try {
@@ -2162,10 +2227,12 @@ ipcMain.handle('updater:quitAndInstall', async () => {
 });
 
 ipcMain.handle('updater:getUpdateInfo', async () => {
+  const availability = getAutoUpdateAvailability();
   return {
-    autoUpdateEnabled: shouldEnableAutoUpdate(),
+    autoUpdateEnabled: availability.enabled,
     currentVersion: app.getVersion(),
     platform: process.platform,
+    reason: availability.reason,
   };
 });
 
