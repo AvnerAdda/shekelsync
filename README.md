@@ -78,6 +78,7 @@ npm run init:sqlite
 
 Local desktop runs use `app/.env.local`.
 For production, set a strong `SHEKELSYNC_ENCRYPTION_KEY` and keep `ALLOW_DEV_NO_ENCRYPTION=false`.
+For safety, existing SQLite files are not auto-reinitialized when schema validation fails (to avoid accidental data loss). To force reinitialization, set `SQLITE_AUTO_REINIT_ON_SCHEMA_MISMATCH=true`.
 
 ## Scraping and Compliance
 
