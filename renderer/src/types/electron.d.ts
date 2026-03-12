@@ -172,6 +172,7 @@ interface PlatformApi {
   isWindows: boolean;
   isMacOS: boolean;
   isLinux: boolean;
+  reduceVisualEffects: boolean;
 }
 
 interface DevApi {

@@ -456,17 +456,77 @@ const SmartNotifications: React.FC = () => {
         break;
       }
       case 'view_category':
+        window.dispatchEvent(new CustomEvent('navigateTo', {
+          detail: {
+            path: '/analysis',
+            search: `tab=budget&categoryDefinitionId=${encodeURIComponent(String(params?.categoryDefinitionId || ''))}&budgetAction=details`,
+          },
+        }));
         break;
       case 'edit_budget':
+        window.dispatchEvent(new CustomEvent('navigateTo', {
+          detail: {
+            path: '/analysis',
+            search: `tab=budget&categoryDefinitionId=${encodeURIComponent(String(params?.categoryDefinitionId || ''))}&budgetAction=details`,
+          },
+        }));
         break;
       case 'view_transaction':
+        window.dispatchEvent(new CustomEvent('openTransactionDetail', {
+          detail: {
+            identifier: params?.id,
+            vendor: params?.vendor,
+          },
+        }));
         break;
       case 'view_budgets':
+        window.dispatchEvent(new CustomEvent('navigateTo', {
+          detail: {
+            path: '/analysis',
+            search: 'tab=budget',
+          },
+        }));
         break;
       case 'view_analytics':
+        window.dispatchEvent(new CustomEvent('navigateTo', {
+          detail: {
+            path: '/analysis',
+            search: 'tab=spending',
+          },
+        }));
+        break;
+      case 'categorize_transaction':
+        window.dispatchEvent(new CustomEvent('openCategoriesModal', {
+          detail: {
+            tab: 'categorize',
+            transaction: {
+              identifier: params?.id,
+              vendor: params?.vendor,
+            },
+          },
+        }));
+        break;
+      case 'view_vendor':
+        window.dispatchEvent(new CustomEvent('openTransactionSearch', {
+          detail: {
+            vendor: params?.vendor,
+          },
+        }));
+        break;
+      case 'create_rule':
+        window.dispatchEvent(new CustomEvent('openCategoriesModal', {
+          detail: {
+            tab: 'create_rules',
+            vendor: params?.vendor,
+          },
+        }));
         break;
       case 'view_uncategorized':
-        window.dispatchEvent(new CustomEvent('navigateToUncategorized'));
+        window.dispatchEvent(new CustomEvent('openCategoriesModal', {
+          detail: {
+            tab: 'categorize',
+          },
+        }));
         break;
       default:
         break;

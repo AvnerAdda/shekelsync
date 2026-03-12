@@ -5,8 +5,356 @@
     <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- <title>ShekelSync</title> -->
+    <script>
+      (() => {
+        try {
+          const savedMode = localStorage.getItem('theme-mode');
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          const startupTheme = savedMode === 'light' || savedMode === 'dark'
+            ? savedMode
+            : prefersDark ? 'dark' : 'light';
+
+          document.documentElement.dataset.startupTheme = startupTheme;
+        } catch {
+          document.documentElement.dataset.startupTheme = 'dark';
+        }
+      })();
+    </script>
+    <style>
+      :root {
+        --startup-radius: 12px;
+        --startup-accent-green: #a8f0b5;
+        --startup-accent-peach: #f0b5a8;
+        --startup-shell-bg:
+          radial-gradient(circle at 18% 16%, rgba(168, 240, 181, 0.24), transparent 30%),
+          radial-gradient(circle at 82% 18%, rgba(240, 181, 168, 0.2), transparent 26%),
+          radial-gradient(circle at 50% 100%, rgba(62, 165, 77, 0.14), transparent 28%),
+          linear-gradient(180deg, #12181d 0%, #090c0f 100%);
+        --startup-shell-border: rgba(255, 255, 255, 0.06);
+        --startup-shell-text: rgba(255, 255, 255, 0.94);
+        --startup-shell-muted: rgba(255, 255, 255, 0.6);
+        --startup-panel-bg: rgba(10, 14, 17, 0.76);
+        --startup-panel-border: rgba(255, 255, 255, 0.08);
+        --startup-panel-shadow:
+          0 30px 70px rgba(0, 0, 0, 0.42),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+        --startup-logo-frame-bg: linear-gradient(145deg, rgba(7, 11, 14, 0.96), rgba(25, 32, 36, 0.9));
+        --startup-loader-track: rgba(255, 255, 255, 0.08);
+        --startup-loader-glow: rgba(168, 240, 181, 0.2);
+      }
+
+      html[data-startup-theme='dark'] {
+        color-scheme: dark;
+      }
+
+      html[data-startup-theme='light'] {
+        color-scheme: light;
+        --startup-shell-bg:
+          radial-gradient(circle at 15% 18%, rgba(62, 165, 77, 0.2), transparent 28%),
+          radial-gradient(circle at 84% 12%, rgba(165, 77, 62, 0.18), transparent 24%),
+          radial-gradient(circle at 50% 110%, rgba(168, 240, 181, 0.28), transparent 32%),
+          linear-gradient(180deg, #fcfdfb 0%, #f4f7f3 100%);
+        --startup-shell-border: rgba(15, 20, 24, 0.08);
+        --startup-shell-text: #18281c;
+        --startup-shell-muted: rgba(24, 40, 28, 0.66);
+        --startup-panel-bg: rgba(255, 255, 255, 0.74);
+        --startup-panel-border: rgba(24, 40, 28, 0.1);
+        --startup-panel-shadow:
+          0 24px 60px rgba(19, 35, 21, 0.12),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+        --startup-logo-frame-bg: linear-gradient(145deg, rgba(15, 20, 24, 0.96), rgba(35, 41, 46, 0.9));
+        --startup-loader-track: rgba(24, 40, 28, 0.1);
+        --startup-loader-glow: rgba(62, 165, 77, 0.14);
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }
+
+      body[data-app-ready='true'] #startup-shell {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      #startup-shell {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--startup-radius);
+        background: var(--startup-shell-bg);
+        box-shadow:
+          0 18px 48px rgba(0, 0, 0, 0.34),
+          inset 0 0 0 1px var(--startup-shell-border);
+        color: var(--startup-shell-text);
+        transition: opacity 180ms ease;
+      }
+
+      #startup-shell::before,
+      #startup-shell::after {
+        content: '';
+        position: absolute;
+        border-radius: 999px;
+        filter: blur(72px);
+        opacity: 0.5;
+        pointer-events: none;
+      }
+
+      #startup-shell::before {
+        width: min(30vw, 340px);
+        height: min(30vw, 340px);
+        top: 8%;
+        left: 10%;
+        background: rgba(168, 240, 181, 0.22);
+      }
+
+      #startup-shell::after {
+        width: min(28vw, 320px);
+        height: min(28vw, 320px);
+        right: 10%;
+        bottom: 8%;
+        background: rgba(240, 181, 168, 0.18);
+      }
+
+      .startup-shell__panel {
+        position: relative;
+        width: min(440px, calc(100vw - 48px));
+        padding: 28px 28px 24px;
+        border-radius: 28px;
+        border: 1px solid var(--startup-panel-border);
+        background: var(--startup-panel-bg);
+        box-shadow: var(--startup-panel-shadow);
+        -webkit-backdrop-filter: blur(22px);
+        backdrop-filter: blur(22px);
+        overflow: hidden;
+      }
+
+      .startup-shell__panel::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent 34%),
+          linear-gradient(315deg, rgba(168, 240, 181, 0.08), transparent 42%);
+        pointer-events: none;
+      }
+
+      .startup-shell__content {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        font-family:
+          'Inter Variable',
+          'Inter',
+          'Segoe UI',
+          sans-serif;
+        text-align: center;
+      }
+
+      .startup-shell__logo-frame {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 146px;
+        height: 146px;
+        border-radius: 36px;
+        background: var(--startup-logo-frame-bg);
+        box-shadow:
+          0 22px 50px rgba(0, 0, 0, 0.28),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+        animation: startup-float 3.6s ease-in-out infinite;
+      }
+
+      .startup-shell__logo-frame::before {
+        content: '';
+        position: absolute;
+        inset: 16px;
+        border-radius: 28px;
+        background:
+          radial-gradient(circle at 30% 30%, rgba(240, 181, 168, 0.16), transparent 42%),
+          radial-gradient(circle at 72% 68%, rgba(168, 240, 181, 0.2), transparent 44%);
+        opacity: 0.95;
+      }
+
+      .startup-shell__logo {
+        position: relative;
+        width: 104px;
+        height: auto;
+        filter:
+          drop-shadow(0 10px 18px rgba(0, 0, 0, 0.22))
+          drop-shadow(0 0 22px rgba(168, 240, 181, 0.08));
+      }
+
+      .startup-shell__eyebrow {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--startup-shell-muted);
+      }
+
+      .startup-shell__label {
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        line-height: 1;
+      }
+
+      .startup-shell__status {
+        max-width: 32ch;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--startup-shell-muted);
+      }
+
+      .startup-shell__loader {
+        position: relative;
+        width: min(240px, 68vw);
+        height: 10px;
+        border-radius: 999px;
+        background: var(--startup-loader-track);
+        overflow: hidden;
+        box-shadow:
+          inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+          0 0 24px var(--startup-loader-glow);
+      }
+
+      .startup-shell__loader::before,
+      .startup-shell__loader::after {
+        content: '';
+        position: absolute;
+        top: 1px;
+        bottom: 1px;
+        border-radius: inherit;
+      }
+
+      .startup-shell__loader::before {
+        width: 42%;
+        left: -42%;
+        background: linear-gradient(
+          90deg,
+          rgba(240, 181, 168, 0.92) 0%,
+          rgba(214, 222, 199, 0.92) 52%,
+          rgba(168, 240, 181, 0.96) 100%
+        );
+        animation: startup-slide 1.8s cubic-bezier(0.37, 0, 0.22, 1) infinite;
+      }
+
+      .startup-shell__loader::after {
+        width: 24%;
+        right: -24%;
+        background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.32) 100%);
+        animation: startup-shimmer 1.8s cubic-bezier(0.37, 0, 0.22, 1) infinite;
+      }
+
+      .startup-shell__caption {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--startup-shell-muted);
+        letter-spacing: 0.04em;
+      }
+
+      .startup-shell__caption-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--startup-accent-peach) 0%, var(--startup-accent-green) 100%);
+        box-shadow: 0 0 16px rgba(168, 240, 181, 0.24);
+        animation: startup-blink 1.6s ease-in-out infinite;
+      }
+
+      html.reduce-visual-effects #startup-shell,
+      html.reduce-visual-effects #startup-shell * {
+        animation: none !important;
+        transition: none !important;
+      }
+
+      @keyframes startup-slide {
+        0% {
+          transform: translateX(0);
+        }
+
+        100% {
+          transform: translateX(340%);
+        }
+      }
+
+      @keyframes startup-shimmer {
+        0% {
+          transform: translateX(0);
+          opacity: 0;
+        }
+
+        35%,
+        100% {
+          transform: translateX(-420%);
+          opacity: 1;
+        }
+      }
+
+      @keyframes startup-float {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+
+        50% {
+          transform: translateY(-4px);
+        }
+      }
+
+      @keyframes startup-blink {
+        0%,
+        100% {
+          opacity: 0.72;
+          transform: scale(1);
+        }
+
+        50% {
+          opacity: 1;
+          transform: scale(1.14);
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="startup-shell" aria-hidden="true">
+      <div class="startup-shell__panel">
+        <div class="startup-shell__content">
+          <div class="startup-shell__logo-frame">
+            <svg
+              class="startup-shell__logo"
+              viewBox="0 0 366 327"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path d="M178.875 38.75c29.868.041 54.41 7.893 76.125 25.25 1.98 1.32 3.96 2.64 6 4 0 .66 0 1.32 0 2 .66 0 1.32 0 2 0 2.583 2.437 4.764 5.247 7 8 .669.821 1.338 1.642 2.027 2.488 9.726 12.6 16.683 29.307 14.973 45.512-.33.66-.66 1.32-1 2-4.862.194-8.441-.36-13-2-.098-1.039-.196-2.078-.297-3.148-1.299-12.564-4.467-23.802-12.355-33.984-1.348-1.867-1.348-1.867-1.348-3.867-.99-.33-1.98-.66-3-1 0-.66 0-1.32 0-2-.66 0-1.32 0-2 0-1.625-1.375-1.625-1.375-3-3 0-.66 0-1.32 0-2-.549-.253-1.098-.505-1.664-.766-2.747-1.451-5.174-3.191-7.711-4.984-13.729-9.169-31.921-15.923-48.625-16.25-.666-.019-1.332-.038-2.018-.058-25.48-.666-51.45 3.592-71.661 20.27-2.32 1.789-2.32 1.789-4.32 1.789-.33.99-.66 1.98-1 3-.66 0-1.32 0-2 0 0 .66 0 1.32 0 2-.66 0-1.32 0-2 0-.262.567-.523 1.134-.793 1.719-1.305 2.466-2.844 4.551-4.52 6.781-9.739 13.736-13.11 30.153-10.317 46.695 2.18 9.403 6.793 17.231 12.629 24.805.606.801 1.212 1.601 1.836 2.426 15.151 18.508 40.758 27.404 63.754 30.309 4.922.383 9.809.364 14.742.238 2.668.027 2.668.027 3.668 1.027.072 2.02.084 4.042.062 6.063-.009 1.104-.018 2.209-.027 3.348-.012.854-.024 1.709-.035 2.564-18.293 6.098-45.091-2.668-61.719-10.556-7.514-3.81-14.121-8.861-20.659-14.136-1.418-1.143-2.86-2.255-4.305-3.362-13.074-10.979-22.548-29.286-25.129-46.133-.941-19.129 2.318-36.028 13.812-51.812.646-.904 1.292-1.808 1.957-2.738 5.529-7.252 12.025-12.671 19.337-18.012 1.126-.824 2.241-1.664 3.344-2.519 4.757-3.602 9.816-5.979 15.299-8.292.919-.391 1.837-.781 2.784-1.184 15.088-6.241 29.859-8.49 46.154-8.504Z" fill="#2B2626" />
+              <path d="M179 107c23.334.911 45.148 5.133 65 18 1.412.907 1.412.907 2.852 1.832 18.89 12.929 32.204 30.769 36.601 53.414 2.876 19.743-1.942 38.317-13.661 54.413-2.446 3.253-4.937 6.439-7.792 9.342h-2c-.33.99-.66 1.98-1 3-1.945 1.705-3.871 3.268-5.938 4.813-.592.446-1.184.891-1.794 1.351-24.167 17.973-50.728 23.369-80.268 22.837-1.088-.017-2.176-.034-3.297-.051-23.831-1.178-45.446-12.343-63.703-26.949-.744-.521-1.488-1.042-2.254-1.579-.576-.469-1.152-.938-1.746-1.421v-2h-2c-1.68-1.9-3.223-3.793-4.75-5.812-.448-.59-.896-1.18-1.358-1.786-3.87-5.192-7.102-10.55-9.892-16.401-.389-.808-.779-1.617-1.18-2.449-3.673-8.325-5.192-17.464-4.82-26.551 1-1 1-1 3.688-1.133 1.093.003 2.186.005 3.313.008 1.093-.003 2.186-.005 3.313-.008 2.687.133 2.687.133 3.687 1.133.11 1.54.187 3.082.25 4.625 1.58 18.425 11.573 33.548 25.239 45.563 17.072 13.263 38.246 19.425 59.512 20.813.911.061 1.822.121 2.762.184 2.439.07 4.804-.019 7.239-.184 1.213-.08 2.425-.161 3.675-.242 24.462-2.04 48.364-11.384 65.137-29.758 1.083-1.316 2.146-2.649 3.187-3.999.522-.674 1.045-1.349 1.582-2.043 9.823-13.653 11.609-28.648 10.418-44.957-1.531-8.629-5.074-15.822-10-23-.451-.686-.902-1.372-1.367-2.078-11.899-17.075-32.641-27.657-52.633-31.921-7.541-1.188-15.133-1.971-22.732-2.69-2.268-.31-2.268-.31-4.268-1.31.495-6.435.495-6.435 1-13Z" fill="#2C4851" />
+              <path d="M248.75 64.938c15.32 12.006 27.195 28.428 30.25 48.062.186 2.728.158 5.265 0 8.001h-4c-.159-1.016-.317-2.032-.48-3.078-3.317-20.076-12.231-37.045-28.789-49.415-23.693-16.948-53.31-24.056-82.178-19.686-3.545.613-7.049 1.361-10.552 2.178-.7.161-1.4.322-2.121.488-22.241 5.319-41.758 17.448-54.918 36.458-5.438 8.863-9.494 18.567-9.961 29.055-.052.891-.104 1.782-.156 2.699-.347 11.053 1.983 21.519 7.156 31.301.42.799.84 1.598 1.273 2.422 11.106 19.757 31.379 32.969 52.727 39.576 11.791 2.993 23.912 3.947 36 5v4c-28.396.948-54.838-6.918-76.582-25.734-13.746-12.879-24.639-29.454-25.789-48.702-.437-16.279 3.089-30.013 12.371-43.563.522-.775 1.045-1.551 1.582-2.348 15.97-22.032 42.285-33.637 68.422-38.244 30.127-4.102 61.463 3.083 85.745 21.53Z" fill="#F0B5A8" />
+              <path d="M183 112c28.312-.444 55.175 11.082 75.609 30.477 8.225 8.707 14.702 19.106 18.391 30.523.224.655.449 1.31.68 1.984 4.849 17.135.381 35.425-7.691 50.723-3.16 5.234-6.886 9.777-10.988 14.294-.529.621-1.057 1.243-1.602 1.883-16.06 17.707-43.918 27.645-67.248 29.322-2.928.098-5.845.124-8.775.108-1.063-.003-2.126-.007-3.221-.01-9.008-.125-17.46-1.139-26.218-3.177-1.476-.314-1.476-.314-2.951-.628-23.252-5.538-45.355-20.033-58.078-40.379-5.817-9.95-9.928-20.304-9-31.95h3c.196 1.042.392 2.083.594 3.156 3.436 16.971 9.911 29.828 22.406 41.844.656.664 1.312 1.328 1.988 2.012 5.84 5.564 12.935 9.248 20.012 12.988.896.476 1.792.951 2.715 1.441 11.345 5.576 24.624 9.34 37.285 9.559 1.136.029 2.271.057 3.438.086 30.975.714 59.797-7.042 82.769-28.682 12.003-12.394 19.451-28.774 19.563-46.125-.425-18.753-8.416-34.223-21.625-47.25-.686-.696-1.372-1.392-2.078-2.109-18.467-17.646-43.492-22.945-67.922-25.89v-4Z" fill="#A8F0B5" />
+            </svg>
+          </div>
+          <div class="startup-shell__eyebrow">Personal finance, in sync</div>
+          <div class="startup-shell__label">ShekelSync</div>
+          <div class="startup-shell__status">Launching your workspace with the latest accounts, budgets, and insights.</div>
+          <div class="startup-shell__loader"></div>
+          <div class="startup-shell__caption">
+            <span class="startup-shell__caption-dot"></span>
+            <span>Opening your dashboard...</span>
+          </div>
+        </div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

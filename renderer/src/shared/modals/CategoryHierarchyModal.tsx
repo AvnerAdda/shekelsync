@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -108,7 +108,9 @@ import {
   buildCategoryHierarchyTransactionKey,
   formatCategoryHierarchyCurrency,
   formatCategoryHierarchyDate,
+  getInitialRulePattern,
   resolveLocalizedCategoryName,
+  resolveFocusedTransactionSelection,
   type LocalizedCategoryInfo,
 } from './category-hierarchy-helpers';
 
@@ -202,6 +204,11 @@ interface CategoryHierarchyModalProps {
   onClose: () => void;
   onCategoriesUpdated?: () => void;
   initialTab?: number;
+  initialRuleVendor?: string | null;
+  focusedTransaction?: {
+    identifier: string;
+    vendor: string;
+  } | null;
 }
 
 // Icon rendering is now handled by the CategoryIcon component which supports all Material-UI icons dynamically
@@ -211,6 +218,8 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   onClose,
   onCategoriesUpdated = () => {},
   initialTab,
+  initialRuleVendor,
+  focusedTransaction,
 }) => {
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'categoryHierarchy' });
   const theme = useTheme();
@@ -218,10 +227,20 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const [activeTab, setActiveTab] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
   useEffect(() => {
-    if (open && initialTab !== undefined) setActiveTab(initialTab);
-  }, [open, initialTab]);
+    if (!open) {
+      return;
+    }
+
+    setActiveTab(initialTab ?? 0);
+    setNewRule((prev) => ({
+      ...prev,
+      name_pattern: getInitialRulePattern(initialRuleVendor),
+    }));
+    setInfoMessage(null);
+  }, [initialRuleVendor, initialTab, open]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pendingRefresh, setPendingRefresh] = useState(false);
 
@@ -295,6 +314,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   // Transaction Detail Modal State
   const [transactionDetailModalOpen, setTransactionDetailModalOpen] = useState(false);
   const [selectedTransactionForDetail, setSelectedTransactionForDetail] = useState<TransactionForModal | null>(null);
+  const handledFocusedTransactionKeyRef = useRef<string | null>(null);
 
   // Memoized grouped transactions by category ID -> grouped by name
   const groupedTransactionsCache = useMemo(() => {
@@ -380,6 +400,21 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
 
   const getTransactionKey = (txn: UncategorizedTransaction) =>
     buildCategoryHierarchyTransactionKey(txn);
+
+  const toTransactionMatch = useCallback((txn: UncategorizedTransaction): TransactionMatch => ({
+    identifier: txn.identifier,
+    vendor: txn.vendor,
+    date: txn.date,
+    name: txn.name,
+    price: txn.price,
+    accountNumber: txn.accountNumber,
+    memo: null,
+    tags: [],
+    category_name: txn.categoryName ?? null,
+    parent_name: null,
+    category_definition_id: txn.categoryDefinitionId ?? null,
+    category_type: txn.categoryType ?? null,
+  }), []);
 
   // Helper function to auto-detect type from category path
   const getTypeFromCategoryPath = useCallback((path: number[]): CategoryType => {
@@ -634,6 +669,53 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       return next;
     });
   }, [uncategorized, categories, buildCategoryPath]);
+
+  useEffect(() => {
+    if (!open) {
+      handledFocusedTransactionKeyRef.current = null;
+      return;
+    }
+
+    if (!focusedTransaction) {
+      handledFocusedTransactionKeyRef.current = null;
+      return;
+    }
+
+    if (loading || !uncategorized) {
+      return;
+    }
+
+    const resolution = resolveFocusedTransactionSelection(
+      focusedTransaction,
+      uncategorized.recentTransactions,
+    );
+
+    if (!resolution.shouldActivateCategorizeTab || !resolution.targetKey) {
+      return;
+    }
+
+    if (handledFocusedTransactionKeyRef.current === resolution.targetKey) {
+      return;
+    }
+    handledFocusedTransactionKeyRef.current = resolution.targetKey;
+
+    setActiveTab(0);
+
+    if (!resolution.targetTransaction) {
+      setInfoMessage(t('notifications.targetTransactionNotFound', {
+        defaultValue: 'This transaction is no longer in the uncategorized list. You can still review recent uncategorized items below.',
+      }));
+      return;
+    }
+
+    setInfoMessage(null);
+    setRecategorizeTransaction(toTransactionMatch(resolution.targetTransaction));
+    setRecategorizeTargetCategoryId(null);
+    setRecategorizeCategoryType(
+      resolution.targetTransaction.categoryType || (resolution.targetTransaction.price >= 0 ? 'income' : 'expense'),
+    );
+    setRecategorizeDialogOpen(true);
+  }, [focusedTransaction, loading, open, t, toTransactionMatch, uncategorized]);
   
   const handleCategoryPathChange = (key: string, depth: number, categoryId: number | null) => {
     setAssignmentDrafts((prev: Record<string, TransactionAssignment>) => {
@@ -3586,8 +3668,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   const handleClose = () => {
     setEditingCategory(null);
     setError(null);
+    setInfoMessage(null);
     setSuccess(null);
     setActiveTab(0);
+    handledFocusedTransactionKeyRef.current = null;
     onClose();
   };
 
@@ -3616,6 +3700,12 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         {success && (
           <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
             {success}
+          </Alert>
+        )}
+
+        {infoMessage && (
+          <Alert severity="info" sx={{ mb: 2 }} onClose={() => setInfoMessage(null)}>
+            {infoMessage}
           </Alert>
         )}
 

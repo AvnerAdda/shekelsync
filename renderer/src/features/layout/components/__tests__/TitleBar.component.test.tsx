@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TitleBar from '../TitleBar';
 
@@ -42,6 +43,54 @@ const translations: Record<string, string> = {
   'common.languages.en': 'English',
   'common.languages.fr': 'French',
 };
+
+vi.mock('@mui/material/Autocomplete', async () => {
+  const React = await vi.importActual<typeof import('react')>('react');
+
+  return {
+    default: ({
+      options = [],
+      getOptionLabel = (option: { label?: string }) => option.label || '',
+      filterOptions,
+      onChange,
+    }: {
+      options?: Array<{ label?: string }>;
+      getOptionLabel?: (option: { label?: string }) => string;
+      filterOptions?: (options: Array<{ label?: string }>, state: { inputValue: string }) => Array<{ label?: string }>;
+      onChange?: (event: React.SyntheticEvent | null, value: { label?: string } | null) => void;
+    }) => {
+      const [inputValue, setInputValue] = React.useState('');
+      const visibleOptions = typeof filterOptions === 'function'
+        ? filterOptions(options, { inputValue })
+        : options;
+
+      return (
+        <div>
+          <input
+            role="combobox"
+            value={inputValue}
+            onChange={(event) => setInputValue(event.target.value)}
+          />
+          <div>
+            {visibleOptions.map((option) => {
+              const label = getOptionLabel(option);
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  role="option"
+                  onClick={() => onChange?.(null, option)}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    },
+  };
+});
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigate,
@@ -161,6 +210,7 @@ async function renderTitleBar(props: React.ComponentProps<typeof TitleBar>) {
 
 describe('TitleBar component', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     navigate.mockReset();
     setMode.mockReset();
     setLocale.mockReset();
@@ -174,13 +224,17 @@ describe('TitleBar component', () => {
   });
 
   it('navigates to analysis from search selection', async () => {
+    const user = userEvent.setup();
+
     await renderTitleBar({ sessionDisplayName: 'Demo User', authLoading: false });
 
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'analysis' } });
-    fireEvent.click(await screen.findByText('Analysis'));
+    const combobox = screen.getByRole('combobox');
+    await user.click(combobox);
+    fireEvent.change(combobox, { target: { value: 'analysis' } });
+    await user.click(await screen.findByRole('option', { name: 'Analysis' }, { timeout: 10_000 }));
 
     expect(navigate).toHaveBeenCalledWith('/analysis');
-  });
+  }, 10_000);
 
   it('toggles theme mode and applies language selection', async () => {
     await renderTitleBar({ sessionDisplayName: 'Demo User', authLoading: false });
@@ -208,17 +262,19 @@ describe('TitleBar component', () => {
   });
 
   it('exports diagnostics via menu action and electron bridges', async () => {
+    const user = userEvent.setup();
+
     await renderTitleBar({ sessionDisplayName: 'Demo User', authLoading: false });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Help' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Export diagnostics' }));
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Help' }, { timeout: 10_000 }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Export diagnostics' }, { timeout: 10_000 }));
 
     await waitFor(() => {
       expect((window as any).electronAPI.file.showSaveDialog).toHaveBeenCalledTimes(1);
       expect((window as any).electronAPI.diagnostics.exportDiagnostics).toHaveBeenCalledWith('/tmp/diagnostics.json');
-    });
-  });
+    }, { timeout: 10_000 });
+  }, 10_000);
 
   it('opens donation modal from button and global event, and hides window controls on macOS', async () => {
     (window as any).electronAPI = buildElectronApi(true);

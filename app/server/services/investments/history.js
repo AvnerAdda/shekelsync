@@ -5,6 +5,15 @@ const {
   buildInstitutionFromRow,
   loadInstitutionsCache,
 } = require('../institutions.js');
+const {
+  DEFAULT_INVESTMENT_TIME_ZONE,
+  appendContributionHistory,
+  fetchLinkedInvestmentTransactions,
+  toIsoDateInTimeZone,
+} = require('./linked-transaction-rollforward.js');
+const {
+  toNumber,
+} = require('./account-holdings-rollup.js');
 
 // Helper to normalize date to UTC YYYY-MM-DD string
 const toDateStr = (date) => {
@@ -188,40 +197,292 @@ function normalizeAccountIds(accountId, accountIds) {
   return Array.isArray(accountIds) ? accountIds : [accountIds];
 }
 
-function buildAccountConditions(accountId, idsFilter, paramsList, accountConditions) {
+function buildAccountConditions(accountId, idsFilter, paramsList, accountConditions, tableAlias = 'ih') {
   if (accountId) {
     paramsList.push(accountId);
-    accountConditions.push(`ih.account_id = $${paramsList.length}`);
+    accountConditions.push(`${tableAlias}.account_id = $${paramsList.length}`);
   } else if (idsFilter.length > 0) {
     const startIndex = paramsList.length;
     paramsList.push(...idsFilter);
     const placeholders = idsFilter.map((_, idx) => `$${startIndex + idx + 1}`).join(',');
-    accountConditions.push(`ih.account_id IN (${placeholders})`);
+    accountConditions.push(`${tableAlias}.account_id IN (${placeholders})`);
   }
 }
 
-function buildHistoryPoint(row, institutionByVendorCode) {
-  const currentValue = row.current_value == null ? 0 : Number.parseFloat(row.current_value);
-  const costBasis = row.cost_basis == null ? 0 : Number.parseFloat(row.cost_basis);
-  const gainLoss = currentValue - costBasis;
-  const accountIdNumber = Number(row.account_id);
+function appendDateFilter(paramsList, conditions, field, operator, value) {
+  paramsList.push(value);
+  conditions.push(`${field} ${operator} $${paramsList.length}`);
+}
 
-  let institution = buildInstitutionFromRow(row);
-  if (!institution && row.account_type) {
-    institution = institutionByVendorCode?.get(row.account_type) || null;
+async function fetchHistoryRows({
+  accountId,
+  idsFilter,
+  startDateStr,
+  todayDateStr,
+}) {
+  const sharedSelect = `
+    SELECT
+      ih.id,
+      ih.as_of_date AS snapshot_date,
+      ih.current_value,
+      ih.cost_basis,
+      ih.account_id,
+      ih.holding_type,
+      ih.status,
+      ia.account_name,
+      ia.account_type,
+      rt.date AS return_date,
+      ${INSTITUTION_SELECT_FIELDS}
+    FROM investment_holdings ih
+    JOIN investment_accounts ia ON ih.account_id = ia.id
+    LEFT JOIN transactions rt
+      ON ih.return_transaction_id = rt.identifier
+     AND ih.return_transaction_vendor = rt.vendor
+    LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
+  `;
+
+  const standardParams = [];
+  const standardConditions = [
+    "COALESCE(ih.holding_type, 'standard') <> 'pikadon'",
+  ];
+  buildAccountConditions(accountId, idsFilter, standardParams, standardConditions);
+  appendDateFilter(standardParams, standardConditions, 'ih.as_of_date', '<=', todayDateStr);
+  if (startDateStr) {
+    appendDateFilter(standardParams, standardConditions, 'ih.as_of_date', '>=', startDateStr);
   }
 
+  const standardInRangeResult = await database.query(
+    `
+      ${sharedSelect}
+      WHERE ${standardConditions.join(' AND ')}
+      ORDER BY ih.account_id ASC, ih.as_of_date ASC, ih.id ASC
+    `,
+    standardParams,
+  );
+
+  let standardBaselineRows = [];
+  if (startDateStr) {
+    const baselineParams = [];
+    const baselineConditions = [
+      "COALESCE(ih.holding_type, 'standard') <> 'pikadon'",
+    ];
+    buildAccountConditions(accountId, idsFilter, baselineParams, baselineConditions);
+    appendDateFilter(baselineParams, baselineConditions, 'ih.as_of_date', '<', startDateStr);
+
+    const baselineResult = await database.query(
+      `
+        WITH ranked_baseline AS (
+          SELECT
+            ih.id,
+            ih.as_of_date AS snapshot_date,
+            ih.current_value,
+            ih.cost_basis,
+            ih.account_id,
+            ih.holding_type,
+            ih.status,
+            ia.account_name,
+            ia.account_type,
+            rt.date AS return_date,
+            ${INSTITUTION_SELECT_FIELDS},
+            ROW_NUMBER() OVER (
+              PARTITION BY ih.account_id
+              ORDER BY ih.as_of_date DESC, ih.id DESC
+            ) AS rn
+          FROM investment_holdings ih
+          JOIN investment_accounts ia ON ih.account_id = ia.id
+          LEFT JOIN transactions rt
+            ON ih.return_transaction_id = rt.identifier
+           AND ih.return_transaction_vendor = rt.vendor
+          LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
+          WHERE ${baselineConditions.join(' AND ')}
+        )
+        SELECT
+          id,
+          snapshot_date,
+          current_value,
+          cost_basis,
+          account_id,
+          holding_type,
+          status,
+          account_name,
+          account_type,
+          return_date,
+          institution_id,
+          institution_vendor_code,
+          institution_display_name_he,
+          institution_display_name_en,
+          institution_type,
+          institution_category,
+          institution_subcategory,
+          institution_logo_url,
+          institution_is_scrapable,
+          institution_scraper_company_id,
+          institution_parent_id,
+          institution_hierarchy_path,
+          institution_depth_level
+        FROM ranked_baseline
+        WHERE rn = 1
+        ORDER BY account_id ASC
+      `,
+      baselineParams,
+    );
+
+    standardBaselineRows = Array.isArray(baselineResult?.rows) ? baselineResult.rows : [];
+  }
+
+  const pikadonParams = [];
+  const pikadonConditions = [
+    "ih.holding_type = 'pikadon'",
+  ];
+  buildAccountConditions(accountId, idsFilter, pikadonParams, pikadonConditions);
+  appendDateFilter(pikadonParams, pikadonConditions, 'ih.as_of_date', '<=', todayDateStr);
+  if (startDateStr) {
+    pikadonParams.push(startDateStr, todayDateStr);
+    const startParam = `$${pikadonParams.length - 1}`;
+    const todayParam = `$${pikadonParams.length}`;
+    pikadonConditions.push(`
+      (
+        ih.as_of_date >= ${startParam}
+        OR COALESCE(
+          rt.date,
+          CASE WHEN COALESCE(ih.status, 'active') = 'active' THEN ${todayParam} ELSE NULL END
+        ) >= ${startParam}
+      )
+    `);
+  }
+
+  const pikadonResult = await database.query(
+    `
+      ${sharedSelect}
+      WHERE ${pikadonConditions.join(' AND ')}
+      ORDER BY ih.account_id ASC, ih.as_of_date ASC, ih.id ASC
+    `,
+    pikadonParams,
+  );
+
+  return [
+    ...(standardBaselineRows || []),
+    ...((standardInRangeResult?.rows) || []),
+    ...((pikadonResult?.rows) || []),
+  ];
+}
+
+function buildHistoryPoint(point, accountMeta) {
+  const currentValue = point.currentValue == null ? 0 : Number(point.currentValue);
+  const costBasis = point.costBasis == null ? 0 : Number(point.costBasis);
+  const gainLoss = currentValue - costBasis;
+
   return {
-    date: row.snapshot_date,
+    date: point.date,
     currentValue,
     costBasis,
     gainLoss,
     roi: costBasis > 0 ? (gainLoss / costBasis) * 100 : 0,
-    accountId: accountIdNumber,
-    accountName: row.account_name,
-    accountType: row.account_type,
+    accountId: accountMeta.accountId,
+    accountName: accountMeta.accountName,
+    accountType: accountMeta.accountType,
+    institution: accountMeta.institution,
+  };
+}
+
+function buildAccountHistoryPoints(rows, institutionByVendorCode) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return [];
+  }
+
+  const firstRow = rows[0];
+  let institution = buildInstitutionFromRow(firstRow);
+  if (!institution && firstRow.account_type) {
+    institution = institutionByVendorCode?.get(firstRow.account_type) || null;
+  }
+
+  const accountMeta = {
+    accountId: Number(firstRow.account_id),
+    accountName: firstRow.account_name,
+    accountType: firstRow.account_type,
     institution: institution || null,
   };
+
+  const eventsByDate = new Map();
+  rows
+    .slice()
+    .sort((left, right) => {
+      if (left.snapshot_date === right.snapshot_date) {
+        return Number(left.id || 0) - Number(right.id || 0);
+      }
+      return String(left.snapshot_date || '').localeCompare(String(right.snapshot_date || ''));
+    })
+    .forEach((row) => {
+      const snapshotDate = row.snapshot_date;
+      if (!snapshotDate) {
+        return;
+      }
+
+      if (!eventsByDate.has(snapshotDate)) {
+        eventsByDate.set(snapshotDate, []);
+      }
+
+      const currentValue = toNumber(row.current_value) ?? toNumber(row.cost_basis) ?? 0;
+      const costBasis = toNumber(row.cost_basis) ?? toNumber(row.current_value) ?? 0;
+      const holdingType = String(row.holding_type || 'standard');
+      const holdingStatus = String(row.status || 'active');
+
+      if (holdingType === 'pikadon') {
+        eventsByDate.get(snapshotDate).push({
+          kind: 'delta',
+          currentValue,
+          costBasis,
+        });
+
+        if (holdingStatus !== 'active' && row.return_date) {
+          if (!eventsByDate.has(row.return_date)) {
+            eventsByDate.set(row.return_date, []);
+          }
+          eventsByDate.get(row.return_date).push({
+            kind: 'delta',
+            currentValue: -currentValue,
+            costBasis: -costBasis,
+          });
+        }
+
+        return;
+      }
+
+      eventsByDate.get(snapshotDate).push({
+        kind: 'absolute',
+        currentValue,
+        costBasis,
+      });
+    });
+
+  const points = [];
+  let runningValue = 0;
+  let runningCost = 0;
+
+  Array.from(eventsByDate.entries())
+    .sort((left, right) => left[0].localeCompare(right[0]))
+    .forEach(([date, dateEvents]) => {
+      const absoluteEvents = dateEvents.filter((event) => event.kind === 'absolute');
+      const deltaEvents = dateEvents.filter((event) => event.kind === 'delta');
+      if (absoluteEvents.length > 0) {
+        const latestAbsolute = absoluteEvents[absoluteEvents.length - 1];
+        runningValue = latestAbsolute.currentValue;
+        runningCost = latestAbsolute.costBasis;
+      }
+
+      deltaEvents.forEach((event) => {
+        runningValue += event.currentValue;
+        runningCost += event.costBasis;
+      });
+
+      points.push(buildHistoryPoint({
+        date,
+        currentValue: runningValue,
+        costBasis: runningCost,
+      }, accountMeta));
+    });
+
+  return points;
 }
 
 function aggregateAccountHistories(filledPerAccount) {
@@ -286,80 +547,19 @@ async function getInvestmentHistory(params = {}) {
   const startDate = calculateStartDate(timeRange);
   const startDateStr = startDate ? startDate.toISOString().split('T')[0] : null;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayDateStr = toIsoDateInTimeZone(new Date(), DEFAULT_INVESTMENT_TIME_ZONE)
+    || new Date().toISOString().split('T')[0];
+  const today = new Date(`${todayDateStr}T00:00:00.000Z`);
 
-  const paramsList = [];
-  const accountConditions = [];
   const idsFilter = normalizeAccountIds(accountId, accountIds);
-
-  buildAccountConditions(accountId, idsFilter, paramsList, accountConditions);
-
-  const holdingsSelect = `
-    SELECT 
-      ih.as_of_date as snapshot_date,
-      ih.current_value,
-      ih.cost_basis,
-      ih.account_id,
-      ia.account_name,
-      ia.account_type,
-      ${INSTITUTION_SELECT_FIELDS}
-    FROM investment_holdings ih
-    JOIN investment_accounts ia ON ih.account_id = ia.id
-    LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
-  `;
-
-  const withStartDate = Boolean(startDateStr);
-  const dateParamIndex = paramsList.length + 1;
-
-  const buildWhereClause = (comparison) => {
-    const clauses = [...accountConditions];
-    if (withStartDate && comparison) {
-      clauses.push(`ih.as_of_date ${comparison === 'before' ? '<' : '>='} $${dateParamIndex}`);
-    }
-    return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-  };
-
-  const queryParams = withStartDate ? [...paramsList, startDateStr] : [...paramsList];
-
-  const historyQuery = `
-    ${holdingsSelect}
-    ${buildWhereClause('after')}
-    ORDER BY ih.as_of_date ASC, ih.account_id
-  `;
-
-  const historyResult = await database.query(historyQuery, queryParams);
-
-  let baselineRows = [];
-  if (withStartDate) {
-    const baselineQuery = `
-      WITH ordered AS (
-        ${holdingsSelect}
-        ${buildWhereClause('before')}
-      )
-      SELECT *
-      FROM (
-        SELECT 
-          *,
-          ROW_NUMBER() OVER (PARTITION BY account_id ORDER BY snapshot_date DESC) AS rn
-        FROM ordered
-      ) ranked
-      WHERE rn = 1
-    `;
-    const baselineResult = await database.query(baselineQuery, queryParams);
-    baselineRows = baselineResult.rows;
-  }
-
-  // Combine baseline rows (latest before start) with in-range snapshots
-  const uniqueRows = new Map();
-  [...baselineRows, ...historyResult.rows].forEach((row) => {
-    const key = `${row.account_id}-${row.snapshot_date}`;
-    if (!uniqueRows.has(key)) {
-      uniqueRows.set(key, row);
-    }
+  const historyRows = await fetchHistoryRows({
+    accountId,
+    idsFilter,
+    startDateStr,
+    todayDateStr,
   });
 
-  if (uniqueRows.size === 0) {
+  if (historyRows.length === 0) {
     return {
       success: true,
       timeRange,
@@ -376,18 +576,54 @@ async function getInvestmentHistory(params = {}) {
   );
 
   const accountHistories = new Map();
-  for (const row of uniqueRows.values()) {
-    const point = buildHistoryPoint(row, institutionByVendorCode);
-    if (!accountHistories.has(point.accountId)) {
-      accountHistories.set(point.accountId, []);
+  const rowsByAccount = new Map();
+  historyRows.forEach((row) => {
+    const accountKey = Number(row.account_id);
+    if (!Number.isFinite(accountKey)) {
+      return;
     }
-    accountHistories.get(point.accountId).push(point);
-  }
+
+    if (!rowsByAccount.has(accountKey)) {
+      rowsByAccount.set(accountKey, []);
+    }
+    rowsByAccount.get(accountKey).push(row);
+  });
+
+  rowsByAccount.forEach((rows, accountKey) => {
+    accountHistories.set(accountKey, buildAccountHistoryPoints(rows, institutionByVendorCode));
+  });
+
+  const linkedTransactions = await fetchLinkedInvestmentTransactions(
+    database,
+    Array.from(accountHistories.keys()),
+    {
+      endDate: todayDateStr,
+    },
+  );
+  const linkedTransactionsByAccount = new Map();
+  linkedTransactions.forEach((transaction) => {
+    const accountKey = Number(transaction.account_id);
+    if (!Number.isFinite(accountKey)) {
+      return;
+    }
+
+    if (!linkedTransactionsByAccount.has(accountKey)) {
+      linkedTransactionsByAccount.set(accountKey, []);
+    }
+    linkedTransactionsByAccount.get(accountKey).push(transaction);
+  });
 
   // Forward-fill each account individually
   const filledPerAccount = new Map();
   for (const [id, points] of accountHistories.entries()) {
-    filledPerAccount.set(id, forwardFillHistory(points, startDate, today));
+    const augmentedPoints = appendContributionHistory(
+      points,
+      linkedTransactionsByAccount.get(id) || [],
+      {
+        excludePikadonTransactions: true,
+      },
+    );
+    filledPerAccount.set(id, forwardFillHistory(augmentedPoints, startDate, today));
   }
 
   // If a single account is requested, return its filled history

@@ -5,6 +5,15 @@ const queryMock = vi.fn();
 let accountsService: any;
 let clearInstitutionsCache: () => void;
 
+function isStandardSnapshotQuery(sql: string) {
+  return sql.includes('WITH ranked_standard AS');
+}
+
+function isActivePikadonSnapshotQuery(sql: string) {
+  return sql.includes("ih.holding_type = 'pikadon'")
+    && sql.includes('GROUP BY ih.account_id');
+}
+
 beforeAll(async () => {
   const module = await import('../accounts.js');
   accountsService = module.default ?? module;
@@ -45,15 +54,26 @@ describe('investment accounts service', () => {
           ],
         })
         .mockResolvedValueOnce({
+          rows: [],
+        })
+        .mockResolvedValueOnce({
+          rows: [],
+        })
+        .mockResolvedValueOnce({
           rows: [{ id: 7, vendor_code: 'brokerage', display_name_en: 'Broker' }],
+        })
+        .mockResolvedValueOnce({
+          rows: [],
         });
 
       const result = await accountsService.listAccounts();
 
-      expect(queryMock).toHaveBeenCalledTimes(2);
+      expect(queryMock).toHaveBeenCalledTimes(5);
       const [sql, params] = queryMock.mock.calls[0];
       expect(sql).toContain('ia.is_active = true');
       expect(params).toEqual([]);
+      expect(isStandardSnapshotQuery(String(queryMock.mock.calls[1][0]))).toBe(true);
+      expect(isActivePikadonSnapshotQuery(String(queryMock.mock.calls[2][0]))).toBe(true);
       expect(result.accounts[0]).toMatchObject({
         holdings_count: 3,
         current_value: 1234.56,
@@ -64,22 +84,38 @@ describe('investment accounts service', () => {
     });
 
     it('supports includeInactive and category filters and preserves explicit value', async () => {
-      queryMock.mockResolvedValueOnce({
-        rows: [
-          {
-            id: 21,
-            account_name: 'Pension',
-            account_type: 'pension',
-            investment_category: 'restricted',
-            is_liquid: false,
-            holdings_count: '1',
-            current_value: '5000',
-            total_invested: '4800',
-            institution_id: 11,
-            institution_vendor_code: 'pension',
-          },
-        ],
-      });
+      queryMock
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: 21,
+              account_name: 'Pension',
+              account_type: 'pension',
+              investment_category: 'restricted',
+              is_liquid: false,
+              holdings_count: '1',
+              current_value: '5000',
+              total_invested: '4800',
+              institution_id: 11,
+              institution_vendor_code: 'pension',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: 90,
+              account_id: 21,
+              holding_type: 'standard',
+              status: 'active',
+              current_value: '5000',
+              cost_basis: '5000',
+              as_of_date: '2026-02-20',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
 
       const result = await accountsService.listAccounts({
         includeInactive: true,
@@ -90,9 +126,78 @@ describe('investment accounts service', () => {
       expect(sql).not.toContain('ia.is_active = true');
       expect(sql).toContain('ia.investment_category = $1');
       expect(params).toEqual(['restricted']);
+      expect(isStandardSnapshotQuery(String(queryMock.mock.calls[1][0]))).toBe(true);
+      expect(isActivePikadonSnapshotQuery(String(queryMock.mock.calls[2][0]))).toBe(true);
       expect(result.accounts[0].current_value).toBe(5000);
       expect(result.accounts[0].current_value_explicit).toBe(5000);
       expect(result.accounts[0].institution).toMatchObject({ vendor_code: 'pension' });
+    });
+
+    it('rolls explicit account values forward from linked investment contributions', async () => {
+      queryMock
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: 2,
+              account_name: 'פיקדונות',
+              account_type: 'savings',
+              investment_category: 'liquid',
+              is_liquid: true,
+              holdings_count: '1',
+              current_value: '300',
+              total_invested: '680300',
+              last_update_date: '2026-02-23',
+              institution_id: 9,
+              institution_vendor_code: 'savings',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: 11,
+              account_id: 2,
+              holding_type: 'standard',
+              status: 'active',
+              current_value: '300',
+              cost_basis: '300',
+              as_of_date: '2026-02-23',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              account_id: 2,
+              identifier: 'pik-1',
+              vendor: 'discount',
+              date: '2026-03-09T22:00:00.000Z',
+              transaction_datetime: '2026-03-09T22:00:00.000Z',
+              name: 'Monthly investment contribution',
+              memo: '',
+              price: '-680000',
+              category_type: 'investment',
+              category_name: 'Contribution',
+              category_name_en: 'Contribution',
+              category_name_fr: null,
+            },
+          ],
+        });
+
+      const result = await accountsService.listAccounts();
+
+      expect(isStandardSnapshotQuery(String(queryMock.mock.calls[1][0]))).toBe(true);
+      expect(isActivePikadonSnapshotQuery(String(queryMock.mock.calls[2][0]))).toBe(true);
+      expect(result.accounts[0]).toMatchObject({
+        current_value: 680300,
+        current_value_explicit: 300,
+        cost_basis: 680300,
+        last_update_date: '2026-03-10',
+        linked_contribution_adjustment: 680000,
+      });
     });
   });
 

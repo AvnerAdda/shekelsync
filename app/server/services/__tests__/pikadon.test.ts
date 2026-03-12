@@ -69,6 +69,69 @@ describe('pikadon service', () => {
     });
   });
 
+  it('backfills linked pikadon deposits that are missing holding rows', async () => {
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            account_id: 7,
+            transaction_identifier: 'dep-7',
+            transaction_vendor: 'discount',
+            date: '2025-01-15T22:30:00.000Z',
+            transaction_datetime: '2025-01-15T22:30:00.000Z',
+            name: 'הפקדה לפיקדון שבועי',
+            memo: '',
+            price: -1000,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 91,
+            account_id: 7,
+            current_value: '1000',
+            cost_basis: '1000',
+            as_of_date: '2025-01-16',
+            holding_type: 'pikadon',
+            deposit_transaction_id: 'dep-7',
+            deposit_transaction_vendor: 'discount',
+            status: 'active',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await pikadonModule.ensureLinkedPikadonHoldings();
+
+    expect(queryMock).toHaveBeenCalledTimes(3);
+    expect(queryMock.mock.calls[1][1]).toEqual([
+      7,
+      1000,
+      1000,
+      '2025-01-16',
+      'dep-7',
+      'discount',
+      null,
+      null,
+      'Auto-created from linked pikadon transaction',
+      null,
+    ]);
+    expect(queryMock.mock.calls[2][1]).toEqual(['dep-7', 'discount']);
+    expect(result).toMatchObject({
+      created_count: 1,
+      created: [
+        {
+          id: 91,
+          account_id: 7,
+          current_value: 1000,
+          cost_basis: 1000,
+          deposit_transaction_id: 'dep-7',
+        },
+      ],
+    });
+  });
+
   it('lists pikadon holdings with linked transactions when requested', async () => {
     queryMock
       .mockResolvedValueOnce({
@@ -97,11 +160,12 @@ describe('pikadon service', () => {
       })
       .mockResolvedValueOnce({
         rows: [{ identifier: 'ret-1', vendor: 'leumi', name: 'Return', price: 1100 }],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });
 
     const result = await pikadonModule.listPikadon({ includeTransactions: true });
 
-    expect(queryMock).toHaveBeenCalledTimes(3);
+    expect(queryMock).toHaveBeenCalledTimes(4);
     expect(result.pikadon).toHaveLength(1);
     const holding = result.pikadon[0];
     expect(holding.current_value).toBe(1100);
@@ -729,7 +793,7 @@ describe('pikadon service', () => {
       includeTransactions: true,
     });
 
-    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(queryMock).toHaveBeenCalledTimes(2);
     expect(queryMock.mock.calls[0][1]).toEqual([42, 'active']);
     expect(result.pikadon[0]).toMatchObject({
       current_value: null,
@@ -751,6 +815,7 @@ describe('pikadon service', () => {
         account_id: 7,
         cost_basis: 1000,
         as_of_date: '2025-01-01',
+        maturity_date: '2025-12-31',
       }),
     ).rejects.toMatchObject({ status: 404, message: 'Account not found' });
 
@@ -763,6 +828,7 @@ describe('pikadon service', () => {
         account_id: 7,
         cost_basis: 1000,
         as_of_date: '2025-01-01',
+        maturity_date: '2025-12-31',
         parent_pikadon_id: 123,
       }),
     ).rejects.toMatchObject({ status: 404, message: 'Parent pikadon not found' });
@@ -789,6 +855,7 @@ describe('pikadon service', () => {
       account_id: 7,
       cost_basis: 1250,
       as_of_date: '2025-05-01',
+      maturity_date: '2026-05-01',
       parent_pikadon_id: 12,
     });
 

@@ -26,6 +26,16 @@ import { useNotification } from '@renderer/features/notifications/NotificationCo
 import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from '@renderer/shared/components/InstitutionBadge';
 import { apiClient } from '@/lib/api-client';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
+import type {
+  PendingPikadonSetup,
+  PikadonDetailsInput,
+} from '@renderer/types/investments';
+import PikadonSetupDialog from './PikadonSetupDialog';
+import {
+  buildPikadonCandidateFromSuggestionTransaction,
+  getPikadonCandidateKey,
+} from './pikadon-linking';
+import { getCreatedInvestmentAccountId } from '../utils/account-response';
 
 interface Transaction {
   transactionIdentifier: string;
@@ -87,6 +97,7 @@ export default function SmartInvestmentAccountForm({
   const [institutionsLoading, setInstitutionsLoading] = useState(false);
   const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
   const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
+  const [pendingPikadonItems, setPendingPikadonItems] = useState<PendingPikadonSetup[]>([]);
 
   // Step 1: Account Details
   const [accountName, setAccountName] = useState('');
@@ -203,11 +214,19 @@ useEffect(() => {
     setActiveStep(prev => prev - 1);
   };
 
-  const handleSubmit = async () => {
+  const buildLinkableTransactions = () => suggestion?.transactions.map((transaction) => ({
+    transactionIdentifier: transaction.transactionIdentifier,
+    transactionVendor: transaction.transactionVendor,
+    transactionDate: transaction.transactionDate,
+    transactionAmount: transaction.transactionAmount,
+    transactionName: transaction.transactionName,
+    confidence: transaction.confidence || 0.95,
+  })) || [];
+
+  const submitAccountAndLinks = async (detailsByKey: Record<string, PikadonDetailsInput> = {}) => {
     setLoading(true);
 
     try {
-      // Prepare account details
       const accountDetails = {
         account_name: accountName,
         account_type: accountType,
@@ -218,7 +237,6 @@ useEffect(() => {
         notes: notes || null
       };
 
-      // Prepare holding details
       const holdingDetails = {
         current_value: parseFloat(currentValue),
         cost_basis: parseFloat(costBasis),
@@ -226,23 +244,9 @@ useEffect(() => {
         notes: `Created from smart suggestion with ${suggestion?.transactionCount || 0} transactions`
       };
 
-      // Prepare transactions for linking
-      const transactions = suggestion?.transactions.map(t => ({
-        transactionIdentifier: t.transactionIdentifier,
-        transactionVendor: t.transactionVendor,
-        transactionDate: t.transactionDate,
-        confidence: t.confidence || 0.95
-      })) || [];
-
-      // Call API to create account + holding + link transactions
-      const response = await apiClient.post('/api/investments/suggestions/create-from-suggestion', {
-        accountDetails,
-        holdingDetails,
-        transactions
-      });
+      const response = await apiClient.post('/api/investments/accounts', accountDetails);
 
       if (!response.ok) {
-        // Check for license read-only error
         const licenseCheck = isLicenseReadOnlyError(response.data);
         if (licenseCheck.isReadOnly) {
           setLicenseAlertReason(licenseCheck.reason);
@@ -250,34 +254,60 @@ useEffect(() => {
           setLoading(false);
           return;
         }
-        console.error('Error response:', response.data);
         throw new Error(`HTTP ${response.status}: ${response.statusText || 'Failed to create account'}`);
       }
 
-      const data = response.data as any;
-
-      if (data.success) {
-        showNotification(
-          `Account "${accountName}" created successfully with ${data.linkResult?.successCount || 0} linked transactions`,
-          'success'
-        );
-
-        // Trigger data refresh event
-        window.dispatchEvent(new Event('dataRefresh'));
-
-        // Reset form
-        resetForm();
-
-        // Call success callback
-        if (onSuccess) {
-          onSuccess();
-        }
-
-        // Close dialog
-        onClose();
-      } else {
-        throw new Error(data.error || 'Failed to create account');
+      const accountId = getCreatedInvestmentAccountId(response.data);
+      if (!accountId) {
+        throw new Error('Failed to create account');
       }
+
+      const holdingResponse = await apiClient.post('/api/investments/holdings', {
+        account_id: accountId,
+        ...holdingDetails,
+      });
+      if (!holdingResponse.ok) {
+        throw new Error(holdingResponse.statusText || 'Failed to create initial holding');
+      }
+
+      let successCount = 0;
+      for (const transaction of buildLinkableTransactions()) {
+        const key = getPikadonCandidateKey({
+          transaction_identifier: transaction.transactionIdentifier,
+          transaction_vendor: transaction.transactionVendor,
+        });
+        const linkResponse = await apiClient.post('/api/investments/transaction-links', {
+          transaction_identifier: transaction.transactionIdentifier,
+          transaction_vendor: transaction.transactionVendor,
+          account_id: accountId,
+          link_method: 'auto',
+          confidence: transaction.confidence,
+          pikadon_details: detailsByKey[key],
+        });
+        if (!linkResponse.ok) {
+          const licenseCheck = isLicenseReadOnlyError(linkResponse.data);
+          if (licenseCheck.isReadOnly) {
+            setLicenseAlertReason(licenseCheck.reason);
+            setLicenseAlertOpen(true);
+            return;
+          }
+          throw new Error(linkResponse.statusText || 'Failed to link suggested transactions');
+        }
+        successCount += 1;
+      }
+
+      showNotification(
+        `Account "${accountName}" created successfully with ${successCount} linked transactions`,
+        'success'
+      );
+
+      window.dispatchEvent(new Event('dataRefresh'));
+      resetForm();
+      setPendingPikadonItems([]);
+      if (onSuccess) {
+        onSuccess();
+      }
+      onClose();
     } catch (error: any) {
       console.error('Error creating investment account:', error);
       showNotification(error.message || 'Error creating investment account', 'error');
@@ -286,8 +316,26 @@ useEffect(() => {
     }
   };
 
+  const handleSubmit = async () => {
+    const pikadonItems = buildLinkableTransactions()
+      .map((transaction) => buildPikadonCandidateFromSuggestionTransaction(transaction, 0, accountName))
+      .filter((candidate): candidate is PendingPikadonSetup => Boolean(candidate))
+      .map((candidate) => ({
+        ...candidate,
+        account_name: accountName,
+      }));
+
+    if (pikadonItems.length > 0) {
+      setPendingPikadonItems(pikadonItems);
+      return;
+    }
+
+    await submitAccountAndLinks();
+  };
+
   const resetForm = () => {
     setActiveStep(0);
+    setPendingPikadonItems([]);
     setAccountName('');
     setAccountType('');
     setInstitution('');
@@ -571,6 +619,18 @@ useEffect(() => {
           {activeStep === steps.length - 1 ? 'Create Account & Link Transactions' : 'Next'}
         </Button>
       </DialogActions>
+
+      <PikadonSetupDialog
+        open={pendingPikadonItems.length > 0}
+        title="Complete pikadon setup"
+        items={pendingPikadonItems}
+        loading={loading}
+        saveLabel="Create account and link"
+        onClose={() => setPendingPikadonItems([])}
+        onSubmit={async (detailsByKey) => {
+          await submitAccountAndLinks(detailsByKey);
+        }}
+      />
 
       <LicenseReadOnlyAlert
         open={licenseAlertOpen}

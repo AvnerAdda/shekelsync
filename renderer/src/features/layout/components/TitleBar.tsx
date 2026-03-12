@@ -108,6 +108,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
 
   // Platform detection
   const isMacOS = window.electronAPI?.platform?.isMacOS;
+  const reduceVisualEffects = window.electronAPI?.platform?.reduceVisualEffects === true;
 
   const getKeywords = useCallback(
     (key: string, fallback: string[]) => {
@@ -505,12 +506,16 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         right: 0,
         height: 64,
         zIndex: (muiTheme) => muiTheme.zIndex.drawer + 1,
-        backgroundColor: theme.palette.mode === 'dark'
-          ? 'rgba(10, 10, 10, 0.8)'
-          : 'rgba(255, 255, 255, 0.8)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        boxShadow: `0 4px 30px ${alpha(theme.palette.common.black, 0.1)}`,
+        backgroundColor: reduceVisualEffects
+          ? theme.palette.background.paper
+          : theme.palette.mode === 'dark'
+            ? 'rgba(10, 10, 10, 0.8)'
+            : 'rgba(255, 255, 255, 0.8)',
+        backdropFilter: reduceVisualEffects ? 'none' : 'blur(20px)',
+        WebkitBackdropFilter: reduceVisualEffects ? 'none' : 'blur(20px)',
+        boxShadow: reduceVisualEffects
+          ? `0 1px 0 ${alpha(theme.palette.divider, 0.18)}`
+          : `0 4px 30px ${alpha(theme.palette.common.black, 0.1)}`,
         borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
         borderTopLeftRadius: 'var(--app-window-radius, 12px)',
         borderTopRightRadius: 'var(--app-window-radius, 12px)',
@@ -648,14 +653,32 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
               option.keywords.some((kw) => kw.toLowerCase().includes(query))
             );
           }}
-          renderOption={(props, option) => (
-            <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.5, px: 2, borderRadius: 2, mx: 1, my: 0.5, '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.1) } }}>
-              <Box sx={{ color: theme.palette.primary.main, display: 'flex', alignItems: 'center', p: 0.5, borderRadius: 1, backgroundColor: alpha(theme.palette.primary.main, 0.1) }}>
-                {option.icon}
+          renderOption={(props, option) => {
+            const { key, ...optionProps } = props;
+            return (
+              <Box
+                component="li"
+                key={key}
+                {...optionProps}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  py: 1.5,
+                  px: 2,
+                  borderRadius: 2,
+                  mx: 1,
+                  my: 0.5,
+                  '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
+                }}
+              >
+                <Box sx={{ color: theme.palette.primary.main, display: 'flex', alignItems: 'center', p: 0.5, borderRadius: 1, backgroundColor: alpha(theme.palette.primary.main, 0.1) }}>
+                  {option.icon}
+                </Box>
+                <Typography variant="body2" fontWeight={500}>{option.label}</Typography>
               </Box>
-              <Typography variant="body2" fontWeight={500}>{option.label}</Typography>
-            </Box>
-          )}
+            );
+          }}
           PaperComponent={(props) => (
             <Paper {...props} sx={{ mt: 1, borderRadius: 3, boxShadow: theme.shadows[10], border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, backdropFilter: 'blur(12px)', backgroundColor: alpha(theme.palette.background.paper, 0.9) }} />
           )}

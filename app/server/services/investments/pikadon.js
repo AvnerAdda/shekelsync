@@ -1,4 +1,8 @@
 const actualDatabase = require('../database.js');
+const {
+  PIKADON_KEYWORDS,
+  buildPikadonCandidate,
+} = require('./pikadon-candidates.js');
 
 let database = actualDatabase;
 
@@ -8,17 +12,221 @@ function serviceError(status, message) {
   return error;
 }
 
-// Keywords to identify pikadon transactions (Hebrew and English)
-const PIKADON_KEYWORDS = [
-  'פיקדון',
-  'פקדון',
-  'pikadon',
-  'term deposit',
-  'fixed deposit',
-  'תוכנית חסכון',
-  'פק"מ',
-  'פקמ',
-];
+function parsePikadonRow(row) {
+  if (!row) {
+    return row;
+  }
+
+  const currentValue = row.current_value !== null ? Number.parseFloat(row.current_value) : null;
+  const costBasis = row.cost_basis !== null ? Number.parseFloat(row.cost_basis) : null;
+
+  return {
+    ...row,
+    current_value: currentValue,
+    cost_basis: costBasis,
+    interest_rate: row.interest_rate !== null ? Number.parseFloat(row.interest_rate) : null,
+    interest_earned: currentValue !== null && costBasis !== null ? currentValue - costBasis : 0,
+  };
+}
+
+async function ensureLinkedPikadonHoldings(params = {}, dbAdapter = database) {
+  const {
+    accountId,
+    transactionIdentifier,
+    transactionVendor,
+  } = params;
+
+  const queryParams = [];
+  let query = `
+    SELECT
+      tal.account_id,
+      tal.transaction_identifier,
+      tal.transaction_vendor,
+      t.date,
+      t.transaction_datetime,
+      t.name,
+      t.memo,
+      t.price
+    FROM transaction_account_links tal
+    JOIN transactions t
+      ON tal.transaction_identifier = t.identifier
+     AND tal.transaction_vendor = t.vendor
+    LEFT JOIN investment_holdings ih
+      ON ih.deposit_transaction_id = tal.transaction_identifier
+     AND ih.deposit_transaction_vendor = tal.transaction_vendor
+     AND ih.holding_type = 'pikadon'
+    WHERE ih.id IS NULL
+      AND t.price < 0
+  `;
+
+  if (accountId) {
+    queryParams.push(accountId);
+    query += ` AND tal.account_id = $${queryParams.length}`;
+  }
+
+  if (transactionIdentifier && transactionVendor) {
+    queryParams.push(transactionIdentifier);
+    query += ` AND tal.transaction_identifier = $${queryParams.length}`;
+    queryParams.push(transactionVendor);
+    query += ` AND tal.transaction_vendor = $${queryParams.length}`;
+  }
+
+  query += ' ORDER BY t.date ASC, tal.transaction_identifier ASC';
+
+  const result = await dbAdapter.query(query, queryParams);
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  const created = [];
+
+  for (const row of rows) {
+    const candidate = buildPikadonCandidate({
+      accountId: row.account_id,
+      transactionIdentifier: row.transaction_identifier,
+      transactionVendor: row.transaction_vendor,
+      transaction: row,
+    });
+
+    if (!candidate) {
+      continue;
+    }
+
+    try {
+      const insertResult = await dbAdapter.query(
+        `
+          INSERT INTO investment_holdings (
+            account_id,
+            current_value,
+            cost_basis,
+            as_of_date,
+            holding_type,
+            deposit_transaction_id,
+            deposit_transaction_vendor,
+            maturity_date,
+            interest_rate,
+            status,
+            notes,
+            parent_pikadon_id
+          ) VALUES ($1, $2, $3, $4, 'pikadon', $5, $6, $7, $8, 'active', $9, $10)
+          RETURNING *
+        `,
+        [
+          Number(candidate.account_id),
+          candidate.principal,
+          candidate.principal,
+          candidate.deposit_date,
+          candidate.transaction_identifier,
+          candidate.transaction_vendor,
+          null,
+          null,
+          'Auto-created from linked pikadon transaction',
+          null,
+        ],
+      );
+
+      if (insertResult?.rows?.[0]) {
+        created.push(parsePikadonRow(insertResult.rows[0]));
+      }
+    } catch (error) {
+      const message = String(error?.message || '');
+      if (
+        !message.includes('idx_investment_holdings_pikadon_deposit_unique')
+        && !message.includes('UNIQUE constraint failed')
+      ) {
+        throw error;
+      }
+    }
+
+    await dbAdapter.query(
+      'UPDATE transactions SET is_pikadon_related = 1 WHERE identifier = $1 AND vendor = $2',
+      [candidate.transaction_identifier, candidate.transaction_vendor],
+    );
+  }
+
+  return {
+    created,
+    created_count: created.length,
+  };
+}
+
+async function findLinkedPikadonByDepositTransaction(
+  transactionIdentifier,
+  transactionVendor,
+  dbAdapter = database,
+) {
+  if (!transactionIdentifier || !transactionVendor) {
+    return null;
+  }
+
+  const result = await dbAdapter.query(
+    `
+      SELECT *
+      FROM investment_holdings
+      WHERE holding_type = 'pikadon'
+        AND deposit_transaction_id = $1
+        AND deposit_transaction_vendor = $2
+      LIMIT 1
+    `,
+    [transactionIdentifier, transactionVendor],
+  );
+
+  return parsePikadonRow(result.rows[0] || null);
+}
+
+async function listPendingPikadonSetup(params = {}) {
+  const { accountId } = params;
+  const queryParams = [];
+  let query = `
+    SELECT
+      tal.account_id,
+      tal.transaction_identifier,
+      tal.transaction_vendor,
+      t.date,
+      t.transaction_datetime,
+      t.name,
+      t.memo,
+      t.price,
+      ia.account_name
+    FROM transaction_account_links tal
+    JOIN transactions t
+      ON tal.transaction_identifier = t.identifier
+     AND tal.transaction_vendor = t.vendor
+    JOIN investment_accounts ia ON tal.account_id = ia.id
+    LEFT JOIN investment_holdings ih
+      ON ih.deposit_transaction_id = tal.transaction_identifier
+     AND ih.deposit_transaction_vendor = tal.transaction_vendor
+     AND ih.holding_type = 'pikadon'
+    WHERE ih.id IS NULL
+      AND t.price < 0
+  `;
+
+  if (accountId) {
+    queryParams.push(accountId);
+    query += ` AND tal.account_id = $${queryParams.length}`;
+  }
+
+  query += ' ORDER BY t.date DESC, tal.transaction_identifier DESC';
+
+  const result = await database.query(query, queryParams);
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  return rows
+    .map((row) => {
+      const candidate = buildPikadonCandidate({
+        accountId: row.account_id,
+        transactionIdentifier: row.transaction_identifier,
+        transactionVendor: row.transaction_vendor,
+        transaction: row,
+      });
+
+      if (!candidate) {
+        return null;
+      }
+
+      return {
+        ...candidate,
+        account_name: row.account_name || null,
+      };
+    })
+    .filter(Boolean);
+}
 
 /**
  * List all pikadon holdings
@@ -55,15 +263,7 @@ async function listPikadon(params = {}) {
 
   const result = await database.query(query, queryParams);
 
-  const pikadonList = result.rows.map((row) => ({
-    ...row,
-    current_value: row.current_value !== null ? Number.parseFloat(row.current_value) : null,
-    cost_basis: row.cost_basis !== null ? Number.parseFloat(row.cost_basis) : null,
-    interest_rate: row.interest_rate !== null ? Number.parseFloat(row.interest_rate) : null,
-    interest_earned: row.cost_basis && row.current_value
-      ? Number.parseFloat(row.current_value) - Number.parseFloat(row.cost_basis)
-      : 0,
-  }));
+  const pikadonList = result.rows.map(parsePikadonRow);
 
   // Optionally fetch linked transactions
   if (includeTransactions && pikadonList.length > 0) {
@@ -93,7 +293,9 @@ async function listPikadon(params = {}) {
     }
   }
 
-  return { pikadon: pikadonList };
+  const pending_setup = await listPendingPikadonSetup({ accountId });
+
+  return { pikadon: pikadonList, pending_setup };
 }
 
 /**
@@ -152,7 +354,7 @@ async function getPikadonSummary() {
 /**
  * Create a new pikadon holding
  */
-async function createPikadon(payload = {}) {
+async function createPikadon(payload = {}, dbAdapter = database) {
   const {
     account_id,
     cost_basis, // principal amount
@@ -165,12 +367,12 @@ async function createPikadon(payload = {}) {
     parent_pikadon_id, // for rollover tracking
   } = payload;
 
-  if (!account_id || !cost_basis || !as_of_date) {
-    throw serviceError(400, 'account_id, cost_basis (principal), and as_of_date (deposit date) are required');
+  if (!account_id || !cost_basis || !as_of_date || !maturity_date) {
+    throw serviceError(400, 'account_id, cost_basis (principal), as_of_date (deposit date), and maturity_date are required');
   }
 
   // Verify account exists
-  const accountCheck = await database.query(
+  const accountCheck = await dbAdapter.query(
     'SELECT id FROM investment_accounts WHERE id = $1',
     [account_id]
   );
@@ -180,7 +382,7 @@ async function createPikadon(payload = {}) {
 
   // If parent_pikadon_id provided, verify it exists and mark as rolled_over
   if (parent_pikadon_id) {
-    const parentCheck = await database.query(
+    const parentCheck = await dbAdapter.query(
       'SELECT id, status FROM investment_holdings WHERE id = $1 AND holding_type = $2',
       [parent_pikadon_id, 'pikadon']
     );
@@ -188,7 +390,7 @@ async function createPikadon(payload = {}) {
       throw serviceError(404, 'Parent pikadon not found');
     }
     // Mark parent as rolled over
-    await database.query(
+    await dbAdapter.query(
       'UPDATE investment_holdings SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
       ['rolled_over', parent_pikadon_id]
     );
@@ -197,7 +399,7 @@ async function createPikadon(payload = {}) {
   // For a new pikadon, current_value starts equal to cost_basis (no interest yet)
   const current_value = cost_basis;
 
-  const result = await database.query(
+  const result = await dbAdapter.query(
     `
     INSERT INTO investment_holdings (
       account_id, current_value, cost_basis, as_of_date,
@@ -220,14 +422,48 @@ async function createPikadon(payload = {}) {
     ]
   );
 
-  const row = result.rows[0];
   return {
-    pikadon: {
-      ...row,
-      current_value: Number.parseFloat(row.current_value),
-      cost_basis: Number.parseFloat(row.cost_basis),
-      interest_earned: 0,
-    },
+    pikadon: parsePikadonRow(result.rows[0]),
+  };
+}
+
+async function updatePikadon(pikadonId, payload = {}, dbAdapter = database) {
+  const {
+    maturity_date,
+    interest_rate,
+    notes,
+  } = payload;
+
+  if (!maturity_date) {
+    throw serviceError(400, 'maturity_date is required');
+  }
+
+  const result = await dbAdapter.query(
+    `
+      UPDATE investment_holdings
+      SET
+        maturity_date = $1,
+        interest_rate = $2,
+        notes = $3,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4
+        AND holding_type = 'pikadon'
+      RETURNING *
+    `,
+    [
+      maturity_date,
+      interest_rate ?? null,
+      notes ?? null,
+      pikadonId,
+    ],
+  );
+
+  if (result.rows.length === 0) {
+    throw serviceError(404, 'Pikadon not found');
+  }
+
+  return {
+    pikadon: parsePikadonRow(result.rows[0]),
   };
 }
 
@@ -582,14 +818,8 @@ async function updatePikadonStatus(pikadonId, status) {
     throw serviceError(404, 'Pikadon not found');
   }
 
-  const row = result.rows[0];
   return {
-    pikadon: {
-      ...row,
-      current_value: Number.parseFloat(row.current_value),
-      cost_basis: Number.parseFloat(row.cost_basis),
-      interest_earned: Number.parseFloat(row.current_value) - Number.parseFloat(row.cost_basis),
-    },
+    pikadon: parsePikadonRow(result.rows[0]),
   };
 }
 
@@ -1432,9 +1662,11 @@ async function autoSetupPikadon(accountId, params = {}) {
 }
 
 module.exports = {
+  ensureLinkedPikadonHoldings,
   listPikadon,
   getPikadonSummary,
   createPikadon,
+  updatePikadon,
   linkReturnTransaction,
   detectPikadonPairs,
   updatePikadonStatus,
@@ -1446,6 +1678,9 @@ module.exports = {
   autoDetectPikadonEvents,
   autoSetupPikadon,
   PIKADON_KEYWORDS,
+  buildPikadonCandidate,
+  findLinkedPikadonByDepositTransaction,
+  listPendingPikadonSetup,
   __setDatabase(mock) {
     database = mock || actualDatabase;
   },

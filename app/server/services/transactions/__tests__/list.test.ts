@@ -65,10 +65,10 @@ describe('transactions list service', () => {
       expect(String(sql)).toContain('LOWER(t.memo) LIKE LOWER($2)');
       expect(params[0]).toContain('chips');
       expect(params[1]).toBe('%chips%');
-      expect(params.slice(2)).toEqual(['Food', 'shop', '2025-02-01', '2025-02-28', 10]);
+      expect(params.slice(2)).toEqual(['Food', '%shop%', '2025-02-01', '2025-02-28', 10]);
     } else {
       expect(String(sql)).toContain('LOWER(t.memo) LIKE LOWER($1)');
-      expect(params).toEqual(['%chips%', 'Food', 'shop', '2025-02-01', '2025-02-28', 10]);
+      expect(params).toEqual(['%chips%', 'Food', '%shop%', '2025-02-01', '2025-02-28', 10]);
     }
     expect(result.transactions[0].price).toBe(-5);
   });
@@ -179,7 +179,7 @@ describe('transactions list service', () => {
     const [sql, params] = queryMock.mock.calls[0];
     expect(String(sql)).toContain('t.category_definition_id =');
     expect(params).toContain(123);
-    expect(params).toContain('max');
+    expect(params).toContain('%max%');
     expect(params[params.length - 1]).toBe(20);
   });
 
@@ -206,9 +206,67 @@ describe('transactions list service', () => {
 
     const [sql, params] = queryMock.mock.calls[0];
     expect(String(sql)).toContain('WHERE');
-    expect(String(sql)).toContain('t.vendor =');
+    expect(String(sql)).toContain('LOWER(t.vendor) LIKE LOWER(');
     expect(result.transactions[0].tags).toEqual(['a', 'b']);
     expect(params[params.length - 1]).toBe(5);
+  });
+
+  it('searchTransactions supports tag filtering', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{ identifier: 'txn-tag-filter', vendor: 'shop', tags: '["a"]', price: '-9', date: '2025-02-05' }],
+    });
+
+    await transactionsList.searchTransactions({
+      tag: 'a',
+      limit: 5,
+    });
+
+    const [sql, params] = queryMock.mock.calls[0];
+    expect(String(sql)).toContain('LOWER(t.tags) LIKE LOWER(');
+    expect(params).toContain('%"a"%');
+  });
+
+  it('returns a single transaction by composite id', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [
+        {
+          identifier: 'txn-single',
+          vendor: 'bank',
+          name: 'Coffee',
+          category_name: 'Dining',
+          parent_name: 'Food',
+          memo: 'note',
+          tags: '["coffee"]',
+          price: '-14.2',
+          date: '2025-02-10',
+          processed_date: '2025-02-10',
+          account_number: '1234',
+          type: 'expense',
+          status: 'completed',
+        },
+      ],
+    });
+
+    const result = await transactionsList.getTransactionById('txn-single|bank');
+
+    expect(result.identifier).toBe('txn-single');
+    expect(result.vendor).toBe('bank');
+    expect(result.tags).toEqual(['coffee']);
+    expect(result.price).toBe(-14.2);
+  });
+
+  it('throws when a single transaction id is invalid', async () => {
+    await expect(transactionsList.getTransactionById('invalid-id')).rejects.toThrow(
+      'Invalid transaction identifier',
+    );
+  });
+
+  it('throws when a single transaction is missing', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] });
+
+    await expect(transactionsList.getTransactionById('txn-missing|bank')).rejects.toThrow(
+      'Transaction not found',
+    );
   });
 
   it('getAllTags returns unique sorted tags from all rows', async () => {

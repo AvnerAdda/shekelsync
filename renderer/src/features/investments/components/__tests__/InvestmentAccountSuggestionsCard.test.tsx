@@ -1,10 +1,64 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   findMatchingInvestmentAccounts,
   getInvestmentSuggestionKey,
 } from '../investment-account-suggestions-helpers';
+import { linkSuggestionTransactionsBatch } from '../investment-account-link-batch';
+
+const mockPost = vi.fn();
+
+const suggestionFixture = {
+  suggestedAccountType: 'brokerage',
+  suggestedInstitution: 'Brokerage House',
+  suggestedAccountName: 'Brokerage',
+  avgConfidence: 0.9,
+  transactions: [
+    {
+      transactionIdentifier: 'tx-1',
+      transactionVendor: 'discount',
+      transactionDate: '2026-03-10',
+      transactionAmount: -500,
+      transactionName: 'Monthly investment contribution',
+    },
+    {
+      transactionIdentifier: 'tx-2',
+      transactionVendor: 'discount',
+      transactionDate: '2026-03-11',
+      transactionAmount: -450,
+      transactionName: 'Monthly investment contribution',
+    },
+  ],
+  totalAmount: 950,
+  transactionCount: 2,
+  dateRange: { earliest: '2026-03-10', latest: '2026-03-11' },
+};
+
+const accountFixture = {
+  id: 7,
+  account_name: 'Brokerage Main',
+  account_type: 'brokerage',
+  currency: 'ILS',
+  current_value: 5000,
+  current_value_explicit: 5000,
+  institution: {
+    id: 77,
+    vendor_code: 'brokerage',
+    display_name_he: '',
+    display_name_en: 'Brokerage House',
+    institution_type: 'investment',
+    category: 'investment',
+    subcategory: null,
+    logo_url: null,
+    is_scrapable: true,
+    scraper_company_id: null,
+  },
+};
 
 describe('InvestmentAccountSuggestionsCard helpers', () => {
+  beforeEach(() => {
+    mockPost.mockReset();
+  });
+
   it('builds deterministic keys from transaction identifiers and fallback fields', () => {
     expect(
       getInvestmentSuggestionKey({
@@ -105,5 +159,53 @@ describe('InvestmentAccountSuggestionsCard helpers', () => {
       accounts as any,
     );
     expect(institutionMatch.map((item) => item.id)).toEqual([2]);
+  });
+
+  it('stops batch linking on the first failed response', async () => {
+    mockPost.mockResolvedValue({
+      ok: false,
+      data: { error: 'pikadon sync failed' },
+    });
+
+    const result = await linkSuggestionTransactionsBatch({
+      transactions: suggestionFixture.transactions,
+      accountId: accountFixture.id,
+      postLink: async (payload) => {
+        mockPost(payload);
+        return {
+          ok: false,
+          data: { error: 'pikadon sync failed' },
+        };
+      },
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      response: {
+        ok: false,
+        data: { error: 'pikadon sync failed' },
+      },
+    });
+    expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('links every transaction when the batch succeeds', async () => {
+    const result = await linkSuggestionTransactionsBatch({
+      transactions: suggestionFixture.transactions,
+      accountId: accountFixture.id,
+      postLink: async (payload) => {
+        mockPost(payload);
+        return {
+          ok: true,
+          data: { success: true },
+        };
+      },
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      linkedCount: 2,
+    });
+    expect(mockPost).toHaveBeenCalledTimes(2);
   });
 });

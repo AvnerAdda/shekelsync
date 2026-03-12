@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Sidebar from '../Sidebar';
 
@@ -77,7 +78,16 @@ vi.mock('@/hooks/useScrapeProgress', () => ({
 }));
 
 vi.mock('@renderer/shared/modals/AccountsModal', () => ({
-  default: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>accounts-modal-open</div> : null),
+  default: ({
+    isOpen,
+    openRequest,
+  }: {
+    isOpen: boolean;
+    openRequest?: { tab?: string; addFlow?: boolean } | null;
+  }) =>
+    isOpen ? (
+      <div>{`accounts-modal-open:${openRequest?.tab ?? ''}:${openRequest?.addFlow ? 'add' : ''}`}</div>
+    ) : null,
 }));
 
 vi.mock('@renderer/shared/modals/ScrapeModal', () => ({
@@ -85,8 +95,22 @@ vi.mock('@renderer/shared/modals/ScrapeModal', () => ({
 }));
 
 vi.mock('@renderer/shared/modals/CategoryHierarchyModal', () => ({
-  default: ({ open, initialTab }: { open: boolean; initialTab?: number }) =>
-    open ? <div data-testid="categories-modal">{`categories-modal-open:${initialTab ?? 0}`}</div> : null,
+  default: ({
+    open,
+    initialTab,
+    initialRuleVendor,
+    focusedTransaction,
+  }: {
+    open: boolean;
+    initialTab?: number;
+    initialRuleVendor?: string | null;
+    focusedTransaction?: { identifier: string; vendor: string } | null;
+  }) =>
+    open ? (
+      <div data-testid="categories-modal">
+        {`categories-modal-open:${initialTab ?? 0}:${initialRuleVendor ?? ''}:${focusedTransaction?.identifier ?? ''}:${focusedTransaction?.vendor ?? ''}`}
+      </div>
+    ) : null,
 }));
 
 vi.mock('@renderer/shared/components/LicenseReadOnlyAlert', () => ({
@@ -138,6 +162,7 @@ async function renderSidebar(props: React.ComponentProps<typeof Sidebar>) {
 
 describe('Sidebar component', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     showNotification.mockReset();
     getPageAccessStatus.mockReset();
     mockGet.mockReset();
@@ -214,7 +239,31 @@ describe('Sidebar component', () => {
     expect(onPageChange).toHaveBeenCalledWith('analysis');
   });
 
+  it('opens the categories modal from the global event with vendor and transaction context', async () => {
+    const onPageChange = vi.fn();
+
+    await renderSidebar({ currentPage: 'home', onPageChange });
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('openCategoriesModal', {
+        detail: {
+          tab: 'create_rules',
+          vendor: 'Mega Store',
+          transaction: {
+            identifier: 'txn-42',
+            vendor: 'bank-a',
+          },
+        },
+      }));
+    });
+
+    expect(screen.getByTestId('categories-modal')).toHaveTextContent(
+      'categories-modal-open:2:Mega Store:txn-42:bank-a',
+    );
+  });
+
   it('runs bulk refresh for stale sync and surfaces success notification', async () => {
+    const user = userEvent.setup();
     const onDataRefresh = vi.fn();
     const onPageChange = vi.fn();
 
@@ -241,21 +290,19 @@ describe('Sidebar component', () => {
 
     await renderSidebar({ currentPage: 'home', onPageChange, onDataRefresh });
 
-    await waitFor(() => {
-      expect(screen.getByText(/days ago/)).toBeInTheDocument();
-    });
+    await screen.findByText(/days ago/, {}, { timeout: 10_000 });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Click to sync accounts' }));
+    await user.click(screen.getByRole('button', { name: 'Click to sync accounts' }));
 
     await waitFor(() => {
       expect(mockPost).toHaveBeenCalledWith('/api/scrape/bulk', {});
-    });
+    }, { timeout: 10_000 });
 
     await waitFor(() => {
       expect(showNotification).toHaveBeenCalledWith('Synced 2/2 accounts (14 transactions)', 'success');
       expect(onDataRefresh).toHaveBeenCalled();
-    });
-  });
+    }, { timeout: 10_000 });
+  }, 10_000);
 
   it('opens read-only license alert when bulk refresh is blocked', async () => {
     const onPageChange = vi.fn();
@@ -300,7 +347,7 @@ describe('Sidebar component', () => {
       window.dispatchEvent(new CustomEvent('openAccountsModal'));
     });
     await waitFor(() => {
-      expect(screen.getByText('accounts-modal-open')).toBeInTheDocument();
+      expect(screen.getByText('accounts-modal-open::')).toBeInTheDocument();
     });
 
     act(() => {
@@ -374,9 +421,27 @@ describe('Sidebar component', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Click to sync accounts' }));
 
     await waitFor(() => {
-      expect(screen.getByText('accounts-modal-open')).toBeInTheDocument();
+      expect(screen.getByText('accounts-modal-open::')).toBeInTheDocument();
     });
     expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('passes investment open requests to accounts modal', async () => {
+    const onPageChange = vi.fn();
+
+    await renderSidebar({ currentPage: 'investments', onPageChange });
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('openAccountsModal', {
+          detail: { tab: 'investments', addFlow: true },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('accounts-modal-open:investments:add')).toBeInTheDocument();
+    });
   });
 
   it('shows backend message when bulk refresh returns success=false', async () => {

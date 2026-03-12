@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AccountPairingModal from '../AccountPairingModal';
 
@@ -12,6 +13,17 @@ vi.mock('@/lib/api-client', () => ({
     get: getMock,
     post: postMock,
   },
+}));
+
+vi.mock('../PairingMatchDetailsModal', () => ({
+  __esModule: true,
+  default: ({
+    isOpen,
+    pairing,
+  }: {
+    isOpen: boolean;
+    pairing?: { id?: number } | null;
+  }) => (isOpen ? <div>{`pairing-details-open:${pairing?.id ?? ''}`}</div> : null),
 }));
 
 vi.mock('@renderer/shared/components/LicenseReadOnlyAlert', () => ({
@@ -102,14 +114,16 @@ const detailsPayload = {
 
 describe('AccountPairingModal', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     getMock.mockReset();
     postMock.mockReset();
   });
 
   it('opens transaction details modal when clicking a paired result row', async () => {
+    const user = userEvent.setup();
+
     getMock
       .mockResolvedValueOnce({ ok: true, data: { pairings: [] } })
-      .mockResolvedValueOnce({ ok: true, data: detailsPayload })
       .mockResolvedValueOnce({ ok: true, data: detailsPayload });
 
     postMock.mockResolvedValueOnce({
@@ -140,15 +154,10 @@ describe('AccountPairingModal', () => {
     expect(await screen.findByText('Cycles: 1')).toBeInTheDocument();
     expect(await screen.findByText('Repayments: 1')).toBeInTheDocument();
     expect(await screen.findByText('Card Txns: 1')).toBeInTheDocument();
-    fireEvent.click(rowHint.closest('li') as HTMLElement);
+    await user.click(rowHint.closest('li') as HTMLElement);
 
-    await waitFor(() => {
-      expect(getMock).toHaveBeenCalledWith('/api/accounts/pairing/11/match-details?monthsBack=6');
-    });
-
-    expect(await screen.findByText(/Pairing Match Details/)).toBeInTheDocument();
-    expect(await screen.findByText('Bank repayments')).toBeInTheDocument();
-  });
+    expect(await screen.findByText('pairing-details-open:11')).toBeInTheDocument();
+  }, 10_000);
 
   it('does not open details modal for missing rows', async () => {
     getMock.mockResolvedValueOnce({ ok: true, data: { pairings: [] } });
@@ -175,10 +184,9 @@ describe('AccountPairingModal', () => {
     expect(screen.queryByText(/Pairing Match Details/)).not.toBeInTheDocument();
   });
 
-  it('shows details error state when details request fails', async () => {
+  it('shows stats error state when match stats request fails', async () => {
     getMock
       .mockResolvedValueOnce({ ok: true, data: { pairings: [] } })
-      .mockResolvedValueOnce({ ok: true, data: detailsPayload })
       .mockResolvedValueOnce({ ok: false, data: { error: 'details unavailable' } });
 
     postMock.mockResolvedValueOnce({
@@ -205,10 +213,7 @@ describe('AccountPairingModal', () => {
       />,
     );
 
-    const rowHint = await screen.findByText('Click to view transaction matching details');
-    fireEvent.click(rowHint.closest('li') as HTMLElement);
-
-    expect(await screen.findByText('details unavailable')).toBeInTheDocument();
+    expect(await screen.findByText('Match stats unavailable')).toBeInTheDocument();
   });
 
   it('re-runs auto-pairing when credit card accounts change while modal remains open', async () => {

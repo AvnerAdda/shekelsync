@@ -51,3 +51,47 @@ export const buildCategoryHierarchyTransactionKey = (txn: {
   identifier: string;
   vendor: string;
 }): string => `${txn.identifier}|${txn.vendor}`;
+
+export type CategoryHierarchyTransactionRef = {
+  identifier: string;
+  vendor: string;
+};
+
+export type FocusedTransactionResolution<T extends CategoryHierarchyTransactionRef> = {
+  targetKey: string | null;
+  shouldActivateCategorizeTab: boolean;
+  targetTransaction: T | null;
+  shouldShowMissingFallback: boolean;
+};
+
+export const getInitialRulePattern = (
+  initialRuleVendor?: string | null,
+): string => initialRuleVendor?.trim() || '';
+
+export const resolveFocusedTransactionSelection = <
+  T extends CategoryHierarchyTransactionRef,
+>(
+  focusedTransaction: CategoryHierarchyTransactionRef | null | undefined,
+  recentTransactions: T[] | null | undefined,
+): FocusedTransactionResolution<T> => {
+  if (!focusedTransaction) {
+    return {
+      targetKey: null,
+      shouldActivateCategorizeTab: false,
+      targetTransaction: null,
+      shouldShowMissingFallback: false,
+    };
+  }
+
+  const targetKey = buildCategoryHierarchyTransactionKey(focusedTransaction);
+  const targetTransaction = recentTransactions?.find((txn) => (
+    txn.identifier === focusedTransaction.identifier && txn.vendor === focusedTransaction.vendor
+  )) || null;
+
+  return {
+    targetKey,
+    shouldActivateCategorizeTab: true,
+    targetTransaction,
+    shouldShowMissingFallback: targetTransaction === null,
+  };
+};

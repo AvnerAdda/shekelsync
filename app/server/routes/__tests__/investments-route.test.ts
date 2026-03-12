@@ -7,6 +7,9 @@ const esModuleMocks = vi.hoisted(() => ({
   linkMultipleTransactions: vi.fn(),
 }));
 
+const transactionClientQuery = vi.fn();
+const transactionClientRelease = vi.fn();
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const {
   createInvestmentsRouter,
@@ -39,6 +42,9 @@ const routeServices = {
   historyService: {
     getInvestmentHistory: vi.fn(),
   },
+  performanceService: {
+    getInvestmentPerformance: vi.fn(),
+  },
   assetsService: {
     listAssets: vi.fn(),
     createAsset: vi.fn(),
@@ -53,6 +59,13 @@ const routeServices = {
   summaryService: {
     getInvestmentSummary: vi.fn(),
   },
+  balanceSheetService: {
+    getInvestmentBalanceSheet: vi.fn(),
+  },
+  positionsService: {
+    listPositions: vi.fn(),
+    createPositionEvent: vi.fn(),
+  },
   bankSummaryService: {
     getBankBalanceSummary: vi.fn(),
   },
@@ -61,6 +74,7 @@ const routeServices = {
   },
   databaseService: {
     query: vi.fn(),
+    getClient: vi.fn(),
   },
   pikadonService: {
     listPikadon: vi.fn(),
@@ -71,11 +85,13 @@ const routeServices = {
     autoDetectPikadonEvents: vi.fn(),
     autoSetupPikadon: vi.fn(),
     createPikadon: vi.fn(),
+    updatePikadon: vi.fn(),
     linkReturnTransaction: vi.fn(),
     updatePikadonStatus: vi.fn(),
     deletePikadon: vi.fn(),
     rolloverPikadon: vi.fn(),
     getRolloverChain: vi.fn(),
+    findLinkedPikadonByDepositTransaction: vi.fn(),
   },
 };
 
@@ -85,9 +101,12 @@ const costBasisService = routeServices.costBasisService;
 const accountsService = routeServices.accountsService;
 const checkExistingService = routeServices.checkExistingService;
 const historyService = routeServices.historyService;
+const performanceService = routeServices.performanceService;
 const assetsService = routeServices.assetsService;
 const holdingsService = routeServices.holdingsService;
 const summaryService = routeServices.summaryService;
+const balanceSheetService = routeServices.balanceSheetService;
+const positionsService = routeServices.positionsService;
 const bankSummaryService = routeServices.bankSummaryService;
 const suggestionAnalyzerCJS = routeServices.suggestionAnalyzerCJS;
 const database = routeServices.databaseService;
@@ -121,6 +140,12 @@ describe('Shared /api/investments routes', () => {
       autoLinker: {
         linkMultipleTransactions: esModuleMocks.linkMultipleTransactions,
       },
+    });
+    transactionClientQuery.mockReset();
+    transactionClientRelease.mockReset();
+    database.getClient.mockResolvedValue({
+      query: (...args: any[]) => transactionClientQuery(...args),
+      release: (...args: any[]) => transactionClientRelease(...args),
     });
     app = buildApp();
   });
@@ -191,7 +216,7 @@ describe('Shared /api/investments routes', () => {
   });
 
   it('lists investment accounts', async () => {
-    const accounts = [{ id: 'acct-1' }];
+    const accounts = { accounts: [{ id: 'acct-1' }] };
     vi.spyOn(accountsService, 'listAccounts').mockResolvedValue(accounts);
 
     const res = await request(app).get('/api/investments/accounts').expect(200);
@@ -200,22 +225,26 @@ describe('Shared /api/investments routes', () => {
   });
 
   it('creates, updates, and deactivates investment accounts', async () => {
-    const createSpy = vi.spyOn(accountsService, 'createAccount').mockResolvedValue({ id: 'acct-2' });
-    const updateSpy = vi.spyOn(accountsService, 'updateAccount').mockResolvedValue({ id: 'acct-2', nickname: 'Main' });
+    const createSpy = vi.spyOn(accountsService, 'createAccount').mockResolvedValue({
+      account: { id: 'acct-2' },
+    });
+    const updateSpy = vi.spyOn(accountsService, 'updateAccount').mockResolvedValue({
+      account: { id: 'acct-2', nickname: 'Main' },
+    });
     const deactivateSpy = vi.spyOn(accountsService, 'deactivateAccount').mockResolvedValue({ success: true });
 
     const created = await request(app)
       .post('/api/investments/accounts')
       .send({ account_name: 'Brokerage A' })
       .expect(201);
-    expect(created.body).toEqual({ id: 'acct-2' });
+    expect(created.body).toEqual({ account: { id: 'acct-2' } });
     expect(createSpy).toHaveBeenCalledWith({ account_name: 'Brokerage A' });
 
     const updated = await request(app)
       .put('/api/investments/accounts')
       .send({ id: 'acct-2', nickname: 'Main' })
       .expect(200);
-    expect(updated.body.nickname).toBe('Main');
+    expect(updated.body.account.nickname).toBe('Main');
     expect(updateSpy).toHaveBeenCalledWith({ id: 'acct-2', nickname: 'Main' });
 
     const deleted = await request(app)
@@ -258,6 +287,51 @@ describe('Shared /api/investments routes', () => {
     const res = await request(app).get('/api/investments/summary').expect(200);
 
     expect(res.body).toEqual(summary);
+  });
+
+  it('returns investment balance sheet and performance', async () => {
+    vi.spyOn(balanceSheetService, 'getInvestmentBalanceSheet').mockResolvedValue({
+      netWorth: 1200,
+    });
+    vi.spyOn(performanceService, 'getInvestmentPerformance').mockResolvedValue({
+      valueChange: 200,
+      marketMove: 150,
+    });
+
+    const balanceSheet = await request(app).get('/api/investments/balance-sheet').expect(200);
+    expect(balanceSheet.body).toEqual({ netWorth: 1200 });
+
+    const performance = await request(app)
+      .get('/api/investments/performance?range=1m')
+      .expect(200);
+    expect(performance.body).toEqual({ valueChange: 200, marketMove: 150 });
+  });
+
+  it('lists positions and records lifecycle events', async () => {
+    vi.spyOn(positionsService, 'listPositions').mockResolvedValue({
+      positions: [{ id: 1 }],
+    });
+    vi.spyOn(positionsService, 'createPositionEvent').mockResolvedValue({
+      position: { id: 1 },
+      event: { id: 10 },
+    });
+
+    const listed = await request(app).get('/api/investments/positions').expect(200);
+    expect(listed.body.positions).toHaveLength(1);
+
+    const event = await request(app)
+      .post('/api/investments/position-events')
+      .send({
+        account_id: 1,
+        position_name: 'Brokerage Position',
+        event_type: 'capital_return',
+        amount: 250,
+        principal_amount: 200,
+        income_amount: 50,
+        close_action: 'partial_close',
+      })
+      .expect(201);
+    expect(event.body.event.id).toBe(10);
   });
 
   it('checks existing investments and lists patterns', async () => {
@@ -375,15 +449,18 @@ describe('Shared /api/investments routes', () => {
 
   it('creates, lists, and deletes transaction links', async () => {
     const querySpy = vi.spyOn(database, 'query')
-      // create: find transaction date
-      .mockResolvedValueOnce({ rows: [{ date: '2025-01-15' }] })
-      // create: upsert link
-      .mockResolvedValueOnce({ rows: [] })
       // list links
       .mockResolvedValueOnce({
         rows: [{ transaction_identifier: 'tx-1', transaction_vendor: 'v-1', account_id: 7 }],
       })
       // delete link
+      .mockResolvedValueOnce({ rows: [] });
+    transactionClientQuery
+      .mockResolvedValueOnce({ rows: [] })
+      // create: find transaction date
+      .mockResolvedValueOnce({ rows: [{ date: '2025-01-15' }] })
+      // create: upsert link
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
     const created = await request(app)
@@ -409,11 +486,120 @@ describe('Shared /api/investments routes', () => {
       .expect(200);
     expect(deleted.body.success).toBe(true);
 
-    expect(querySpy).toHaveBeenCalledTimes(4);
+    expect(transactionClientQuery).toHaveBeenCalledTimes(4);
+    expect(transactionClientQuery.mock.calls[0][0]).toBe('BEGIN');
+    expect(transactionClientQuery.mock.calls[3][0]).toBe('COMMIT');
+    expect(querySpy).toHaveBeenCalledTimes(2);
+    expect(transactionClientRelease).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires pikadon details before linking a pikadon deposit transaction', async () => {
+    transactionClientQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+      rows: [
+        {
+          date: '2025-01-15T22:30:00.000Z',
+          name: 'הפקדה לפיקדון שבועי',
+          memo: '',
+          price: -1000,
+        },
+      ],
+    });
+    vi.spyOn(pikadonService, 'findLinkedPikadonByDepositTransaction').mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .post('/api/investments/transaction-links')
+      .send({
+        transaction_identifier: 'pik-1',
+        transaction_vendor: 'discount',
+        account_id: 7,
+      })
+      .expect(422);
+
+    expect(response.body).toEqual({
+      error: 'pikadon_details_required',
+      pikadonCandidate: {
+        account_id: 7,
+        transaction_identifier: 'pik-1',
+        transaction_vendor: 'discount',
+        principal: 1000,
+        deposit_date: '2025-01-16',
+        transaction_name: 'הפקדה לפיקדון שבועי',
+      },
+    });
+    expect(transactionClientQuery.mock.calls.map(([sql]) => sql)).toEqual([
+      'BEGIN',
+      expect.stringContaining('SELECT date, name, memo, price'),
+      'ROLLBACK',
+    ]);
+    expect(transactionClientRelease).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates a pikadon holding when linking a pikadon deposit transaction with details', async () => {
+    transactionClientQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            date: '2025-01-15T22:30:00.000Z',
+            name: 'הפקדה לפיקדון שבועי',
+            memo: '',
+            price: -1000,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    vi.spyOn(pikadonService, 'findLinkedPikadonByDepositTransaction').mockResolvedValueOnce(null);
+    const createPikadonSpy = vi
+      .spyOn(pikadonService, 'createPikadon')
+      .mockResolvedValue({ pikadon: { id: 91, account_id: 7, status: 'active' } });
+
+    const created = await request(app)
+      .post('/api/investments/transaction-links')
+      .send({
+        transaction_identifier: 'pik-1',
+        transaction_vendor: 'discount',
+        account_id: 7,
+        pikadon_details: {
+          maturity_date: '2025-04-15',
+          interest_rate: 3.5,
+          notes: 'Manual setup',
+        },
+      })
+      .expect(201);
+
+    expect(createPikadonSpy).toHaveBeenCalledWith(
+      {
+        account_id: 7,
+        cost_basis: 1000,
+        as_of_date: '2025-01-16',
+        maturity_date: '2025-04-15',
+        deposit_transaction_id: 'pik-1',
+        deposit_transaction_vendor: 'discount',
+        interest_rate: 3.5,
+        notes: 'Manual setup',
+      },
+      expect.objectContaining({
+        query: expect.any(Function),
+        release: expect.any(Function),
+      }),
+    );
+    expect(created.body.pikadonSynced).toBe(true);
+    expect(created.body.pikadon).toMatchObject({ id: 91, account_id: 7, status: 'active' });
+    expect(transactionClientQuery).toHaveBeenCalledTimes(5);
+    expect(transactionClientQuery.mock.calls[0][0]).toBe('BEGIN');
+    expect(transactionClientQuery.mock.calls[4][0]).toBe('COMMIT');
+    expect(transactionClientRelease).toHaveBeenCalledTimes(1);
   });
 
   it('returns 404 when creating transaction link for a missing transaction', async () => {
-    vi.spyOn(database, 'query').mockResolvedValueOnce({ rows: [] });
+    transactionClientQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
 
     const res = await request(app)
       .post('/api/investments/transaction-links')
@@ -425,6 +611,53 @@ describe('Shared /api/investments routes', () => {
       .expect(404);
 
     expect(res.body.error).toMatch(/Transaction not found/);
+    expect(transactionClientQuery.mock.calls.map(([sql]) => sql)).toEqual([
+      'BEGIN',
+      expect.stringContaining('SELECT date, name, memo, price'),
+      'ROLLBACK',
+    ]);
+    expect(transactionClientRelease).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls back the link when pikadon sync fails', async () => {
+    transactionClientQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            date: '2025-01-15T22:30:00.000Z',
+            name: 'הפקדה לפיקדון שבועי',
+            memo: '',
+            price: -1000,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    vi.spyOn(pikadonService, 'findLinkedPikadonByDepositTransaction').mockResolvedValueOnce(null);
+    vi.spyOn(pikadonService, 'createPikadon').mockRejectedValueOnce(new Error('pikadon sync failed'));
+
+    const response = await request(app)
+      .post('/api/investments/transaction-links')
+      .send({
+        transaction_identifier: 'pik-1',
+        transaction_vendor: 'discount',
+        account_id: 7,
+        pikadon_details: {
+          maturity_date: '2025-04-15',
+        },
+      })
+      .expect(500);
+
+    expect(response.body.error).toBe('pikadon sync failed');
+    expect(transactionClientQuery.mock.calls.map(([sql]) => sql)).toEqual([
+      'BEGIN',
+      expect.stringContaining('SELECT date, name, memo, price'),
+      expect.stringContaining('INSERT INTO transaction_account_links'),
+      'ROLLBACK',
+    ]);
+    expect(transactionClientQuery.mock.calls.some(([sql]) => sql === 'COMMIT')).toBe(false);
+    expect(transactionClientRelease).toHaveBeenCalledTimes(1);
   });
 
   it('returns pikadon payloads', async () => {
@@ -662,7 +895,7 @@ describe('Shared /api/investments routes', () => {
       .expect(500);
     expect(dismissError.body.error).toBe('dismiss write failed');
 
-    querySpy.mockRejectedValueOnce({
+    database.getClient.mockRejectedValueOnce({
       status: 503,
       message: 'link create failed',
     });
@@ -701,6 +934,7 @@ describe('Shared /api/investments routes', () => {
     vi.spyOn(pikadonService, 'autoDetectPikadonEvents').mockResolvedValue({ events: [{ id: 'evt-1' }] });
     const autoSetupSpy = vi.spyOn(pikadonService, 'autoSetupPikadon').mockResolvedValue({ created: 2 });
     vi.spyOn(pikadonService, 'createPikadon').mockResolvedValue({ id: 91, status: 'active' });
+    const updateSpy = vi.spyOn(pikadonService, 'updatePikadon').mockResolvedValue({ pikadon: { id: 91, maturity_date: '2026-01-01' } });
     const linkReturnSpy = vi.spyOn(pikadonService, 'linkReturnTransaction').mockResolvedValue({ success: true });
     const updateStatusSpy = vi.spyOn(pikadonService, 'updatePikadonStatus').mockResolvedValue({ id: 91, status: 'matured' });
     const deleteSpy = vi.spyOn(pikadonService, 'deletePikadon').mockResolvedValue({ success: true });
@@ -728,6 +962,13 @@ describe('Shared /api/investments routes', () => {
       .send({ account_id: 7, cost_basis: 1000, as_of_date: '2025-01-01' })
       .expect(201);
     expect(created.body.id).toBe(91);
+
+    const updated = await request(app)
+      .put('/api/investments/pikadon/91')
+      .send({ maturity_date: '2026-01-01' })
+      .expect(200);
+    expect(updated.body).toEqual({ pikadon: { id: 91, maturity_date: '2026-01-01' } });
+    expect(updateSpy).toHaveBeenCalledWith('91', { maturity_date: '2026-01-01' });
 
     const linked = await request(app)
       .put('/api/investments/pikadon/91/link-return')
@@ -784,6 +1025,7 @@ describe('Shared /api/investments routes', () => {
     vi.spyOn(pikadonService, 'getPikadonMaturityBreakdown').mockRejectedValueOnce({ status: 500, message: 'maturity failed' });
     vi.spyOn(pikadonService, 'autoDetectPikadonEvents').mockRejectedValueOnce({ status: 500, message: 'auto-detect failed' });
     vi.spyOn(pikadonService, 'createPikadon').mockRejectedValueOnce({ status: 500, message: 'create failed' });
+    vi.spyOn(pikadonService, 'updatePikadon').mockRejectedValueOnce({ status: 500, message: 'update failed' });
     vi.spyOn(pikadonService, 'linkReturnTransaction').mockRejectedValueOnce({ status: 500, message: 'link return failed' });
     vi.spyOn(pikadonService, 'updatePikadonStatus').mockRejectedValueOnce({ status: 500, message: 'status failed' });
     vi.spyOn(pikadonService, 'deletePikadon').mockRejectedValueOnce({ status: 500, message: 'delete failed' });
@@ -796,6 +1038,7 @@ describe('Shared /api/investments routes', () => {
     expect((await request(app).get('/api/investments/pikadon/maturity-breakdown').expect(500)).body.error).toBe('maturity failed');
     expect((await request(app).get('/api/investments/pikadon/auto-detect').expect(500)).body.error).toBe('auto-detect failed');
     expect((await request(app).post('/api/investments/pikadon').send({}).expect(500)).body.error).toBe('create failed');
+    expect((await request(app).put('/api/investments/pikadon/1').send({}).expect(500)).body.error).toBe('update failed');
     expect((await request(app).put('/api/investments/pikadon/1/link-return').send({}).expect(500)).body.error).toBe('link return failed');
     expect((await request(app).put('/api/investments/pikadon/1/status').send({ status: 'active' }).expect(500)).body.error).toBe('status failed');
     expect((await request(app).delete('/api/investments/pikadon/1').expect(500)).body.error).toBe('delete failed');

@@ -12,6 +12,8 @@ import {
   TableCell,
   TableBody,
   Chip,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import {
   AreaChart,
@@ -74,7 +76,7 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
 }) => {
   const theme = useTheme();
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
-  const { viewMode } = useInvestmentsFilters();
+  const { viewMode, setViewMode } = useInvestmentsFilters();
   const [displayMode, setDisplayMode] = useState<'chart' | 'table'>(
     viewMode === 'detailed' ? 'table' : 'chart'
   );
@@ -270,6 +272,41 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
 
   return (
     <Paper sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Box
+        sx={{
+          p: 2,
+          pb: 1,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 2,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Box>
+          <Typography variant="subtitle1" fontWeight={600}>
+            {t('title')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {displayMode === 'chart'
+              ? 'Portfolio value stacked by account over time.'
+              : 'Recent investment transactions for the selected period.'}
+          </Typography>
+        </Box>
+        <ToggleButtonGroup
+          value={displayMode}
+          exclusive
+          size="small"
+          onChange={(_, value) => {
+            if (!value) return;
+            setDisplayMode(value);
+            setViewMode(value === 'table' ? 'detailed' : 'summary');
+          }}
+        >
+          <ToggleButton value="chart">{t('tabs.chart')}</ToggleButton>
+          <ToggleButton value="table">{t('tabs.table')}</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
       {displayMode === 'chart' ? (
         <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           {loadingHistory ? (

@@ -27,14 +27,31 @@
   "smartNotifications": {
     "dismiss": "Masquer",
     "dismissAll": "Tout masquer",
-    "allGood": "Tout va bien ! Aucune alerte pour le moment."
+    "allGood": "Tout va bien ! Aucune alerte pour le moment.",
+    "errors": {
+      "missingTransactionContext": "Les détails de la transaction sont manquants pour cette action.",
+      "transactionLoadFailed": "Impossible d'ouvrir cette transaction pour le moment."
+    }
   },
   "globalSearch": {
     "placeholder": "Rechercher des transactions...",
     "hint": "Appuyez sur Entrée pour sélectionner, Échap pour fermer",
     "noResults": "Aucune transaction trouvée",
     "startTyping": "Commencez à taper pour rechercher des transactions",
-    "shortcut": "Cmd+K"
+    "shortcut": "Cmd+K",
+    "emptyFilters": "Essayez d'ajuster vos filtres ou vos termes de recherche.",
+    "filtersHint": "Vous pouvez aussi filtrer par marchand, catégorie, tag ou période.",
+    "filters": {
+      "vendor": "Marchand",
+      "vendorPlaceholder": "Filtrer par marchand",
+      "category": "Catégorie",
+      "tag": "Tag",
+      "startDate": "Du",
+      "endDate": "Au",
+      "allCategories": "Toutes les catégories",
+      "allTags": "Tous les tags",
+      "loading": "Chargement des filtres..."
+    }
   },
   "transactionDetail": {
     "title": "Détails de la transaction",
@@ -216,53 +233,6 @@
       "comparison": {
         "title": "Mode comparaison (bientôt)",
         "description": "La vue de comparaison mois par mois est en cours de développement. Elle affichera des métriques côte à côte comparant {{current}} à {{previous}}."
-      }
-    }
-  },
-  "investmentAccountsModal": {
-    "title": "Gestion des comptes d'investissement",
-    "aria": { "tabs": "onglets de gestion des comptes d'investissement" },
-    "tabs": {
-      "links": "Liens de transactions",
-      "patterns": "Modèles de correspondance"
-    },
-    "links": {
-      "title": "Suggestions de lien",
-      "description": "Suggestions automatiques pour lier les transactions d'investissement aux comptes.",
-      "empty": "Aucune suggestion en attente. Toutes les transactions sont déjà liées !",
-      "notifications": {
-        "approved": "Suggestion approuvée",
-        "rejected": "Suggestion rejetée",
-        "error": "Échec du traitement de la suggestion"
-      },
-      "table": {
-        "date": "Date",
-        "transaction": "Transaction",
-        "amount": "Montant",
-        "account": "Compte suggéré",
-        "confidence": "Confiance",
-        "actions": "Actions",
-        "approve": "Approuver",
-        "reject": "Rejeter"
-      },
-      "aria": { "refresh": "Rafraîchir les suggestions" }
-    },
-    "patterns": {
-      "title": "Règles de correspondance de motifs",
-      "description": "Les motifs définissent quelles transactions appartiennent à quels comptes. Utilisez <code>%</code> comme caractère générique.<br />Exemple : <code>%dépôt%</code> correspond à toute transaction contenant \"dépôt\".",
-      "empty": "Aucun compte d'investissement trouvé. Créez un compte pour ajouter des motifs.",
-      "chipCount_one": "{{count}} motif",
-      "chipCount_other": "{{count}} motifs",
-      "notifications": {
-        "missingPattern": "Veuillez saisir un motif",
-        "added": "Motif ajouté avec succès",
-        "addError": "Échec de l'ajout du motif",
-        "deleted": "Motif supprimé",
-        "deleteError": "Échec de la suppression du motif"
-      },
-      "confirmDelete": "Supprimer ce motif ?",
-      "actions": {
-        "add": "Ajouter"
       }
     }
   },
@@ -881,6 +851,35 @@
         "under": "En dessous de {{amount}}",
         "breakEven": "Dans le budget",
         "noBudget": "Aucun budget défini"
+      },
+      "variability": {
+        "title": "Variabilité des catégories",
+        "subtitle": "Identifiez les catégories qui se comportent comme des coûts fixes, des dépenses flexibles ou des pics saisonniers sur les {{count}} derniers mois.",
+        "timelineBridge": "Utilisez cela comme contexte pour lire la courbe d'historique ci-dessous sur les {{count}} derniers mois.",
+        "timelineBridgeHint": "La courbe mensuelle reste dans la section chronologie ci-dessous afin que l'historique n'apparaisse qu'une seule fois.",
+        "loadFailed": "Impossible de charger la variabilité des catégories.",
+        "saveFailed": "Impossible d'enregistrer la modification de variabilité.",
+        "empty": "Historique récurrent insuffisant pour analyser la variabilité des catégories.",
+        "avgMonthly": "Moyenne mensuelle : {{amount}}",
+        "latestVsAverage": "Dernier mois vs moyenne : {{delta}}",
+        "confidence": "Confiance {{value}} %",
+        "filters": {
+          "all": "Toutes"
+        },
+        "summary": {
+          "fixed": "Fixes {{count}}",
+          "variable": "Variables {{count}}",
+          "seasonal": "Saisonnières {{count}}"
+        },
+        "types": {
+          "fixed": "Fixe",
+          "variable": "Variable",
+          "seasonal": "Saisonnière"
+        },
+        "flags": {
+          "seasonal": "Modèle saisonnier",
+          "momShift": "Variation mensuelle {{delta}}"
+        }
       }
     },
     "header": {

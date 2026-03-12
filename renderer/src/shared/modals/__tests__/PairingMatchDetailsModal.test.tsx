@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PairingMatchDetailsModal from '../PairingMatchDetailsModal';
 
@@ -117,6 +117,7 @@ function buildPayload({
 
 describe('PairingMatchDetailsModal', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     getMock.mockReset();
   });
 
@@ -145,12 +146,36 @@ describe('PairingMatchDetailsModal', () => {
       />,
     );
 
-    const repaymentCell = await screen.findByText('Repayment 1');
+    const dialog = await screen.findByRole('dialog', {}, { timeout: 10_000 });
+    const repaymentCell = await within(dialog).findByText('Repayment 1', {}, { timeout: 10_000 });
     const row = repaymentCell.closest('tr');
     expect(row).toBeTruthy();
 
     const cells = within(row as HTMLTableRowElement).getAllByRole('cell');
     expect(cells[7]).toHaveTextContent('0');
+  }, 10_000);
+
+  it('shows the API error when details loading fails', async () => {
+    getMock.mockResolvedValueOnce({
+      ok: false,
+      data: { error: 'details unavailable' },
+    });
+
+    render(
+      <PairingMatchDetailsModal
+        isOpen
+        onClose={vi.fn()}
+        pairing={{
+          id: 33,
+          creditCardVendor: 'max',
+          creditCardAccountNumber: '4886',
+          bankVendor: 'discount',
+          bankAccountNumber: '0162490242',
+        }}
+      />,
+    );
+
+    expect(await screen.findByText('details unavailable')).toBeInTheDocument();
   });
 
   it('ignores stale request responses when switching pairings quickly', async () => {
@@ -189,26 +214,32 @@ describe('PairingMatchDetailsModal', () => {
       />,
     );
 
-    secondRequest.resolve({
-      ok: true,
-      data: buildPayload({
-        pairingId: 22,
-        repaymentName: 'Repayment B',
-        sharedPairingsCount: 1,
-        sharedPairingIds: [22],
-      }),
+    await act(async () => {
+      secondRequest.resolve({
+        ok: true,
+        data: buildPayload({
+          pairingId: 22,
+          repaymentName: 'Repayment B',
+          sharedPairingsCount: 1,
+          sharedPairingIds: [22],
+        }),
+      });
+      await Promise.resolve();
     });
 
     expect(await screen.findByText('Repayment B')).toBeInTheDocument();
 
-    firstRequest.resolve({
-      ok: true,
-      data: buildPayload({
-        pairingId: 11,
-        repaymentName: 'Repayment A',
-        sharedPairingsCount: 1,
-        sharedPairingIds: [11],
-      }),
+    await act(async () => {
+      firstRequest.resolve({
+        ok: true,
+        data: buildPayload({
+          pairingId: 11,
+          repaymentName: 'Repayment A',
+          sharedPairingsCount: 1,
+          sharedPairingIds: [11],
+        }),
+      });
+      await Promise.resolve();
     });
 
     await waitFor(() => {

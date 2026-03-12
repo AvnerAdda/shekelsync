@@ -106,6 +106,7 @@ function setupHook(overrides: Partial<DonationHookReturn> = {}) {
 
 describe('DonationModal', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     mockOpenDonationUrl.mockReset();
   });

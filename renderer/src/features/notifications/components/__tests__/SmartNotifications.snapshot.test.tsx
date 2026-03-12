@@ -530,7 +530,7 @@ describe('SmartNotifications snapshot flow', () => {
     });
   });
 
-  it('dispatches navigateToUncategorized event for view_uncategorized action', async () => {
+  it('opens the categories modal for view_uncategorized action', async () => {
     const uncategorizedNotification = {
       id: 'notif-uncat-1',
       type: 'uncategorized_transactions',
@@ -556,8 +556,8 @@ describe('SmartNotifications snapshot flow', () => {
       return Promise.resolve({ ok: true, data: { success: true } });
     });
 
-    const navigationListener = vi.fn();
-    window.addEventListener('navigateToUncategorized', navigationListener as EventListener);
+    const categoriesListener = vi.fn();
+    window.addEventListener('openCategoriesModal', categoriesListener as EventListener);
 
     render(<SmartNotifications />);
 
@@ -568,7 +568,85 @@ describe('SmartNotifications snapshot flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open uncategorized' }));
 
-    expect(navigationListener).toHaveBeenCalledTimes(1);
-    window.removeEventListener('navigateToUncategorized', navigationListener as EventListener);
+    expect(categoriesListener).toHaveBeenCalledTimes(1);
+    expect((categoriesListener.mock.calls[0][0] as CustomEvent).detail).toEqual({
+      tab: 'categorize',
+    });
+    window.removeEventListener('openCategoriesModal', categoriesListener as EventListener);
+  });
+
+  it('dispatches global search and detail events for actionable alerts', async () => {
+    const actionableNotifications = [
+      {
+        id: 'notif-vendor-1',
+        type: 'new_vendor',
+        severity: 'info',
+        title: 'New vendor',
+        message: 'Review this new merchant',
+        data: {},
+        timestamp: '2025-08-20T10:00:00.000Z',
+        actionable: true,
+        actions: [
+          {
+            label: 'Open vendor',
+            action: 'view_vendor',
+            params: { vendor: 'Mega Store' },
+          },
+        ],
+      },
+      {
+        id: 'notif-txn-1',
+        type: 'high_transaction',
+        severity: 'warning',
+        title: 'Large transaction',
+        message: 'Inspect this purchase',
+        data: {},
+        timestamp: '2025-08-20T10:05:00.000Z',
+        actionable: true,
+        actions: [
+          {
+            label: 'Open transaction',
+            action: 'view_transaction',
+            params: { id: 'txn-77', vendor: 'bank-a' },
+          },
+        ],
+      },
+    ];
+
+    mockGet.mockImplementation((endpoint: string) => {
+      if (endpoint === '/api/notifications?limit=20') {
+        return Promise.resolve(createNotificationsResponse(actionableNotifications));
+      }
+      return Promise.resolve({ ok: true, data: { success: true } });
+    });
+
+    const searchListener = vi.fn();
+    const detailListener = vi.fn();
+    window.addEventListener('openTransactionSearch', searchListener as EventListener);
+    window.addEventListener('openTransactionDetail', detailListener as EventListener);
+
+    render(<SmartNotifications />);
+
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith('/api/notifications?limit=20');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open vendor' }));
+
+    expect((searchListener.mock.calls[0][0] as CustomEvent).detail).toEqual({
+      vendor: 'Mega Store',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open transaction' }));
+
+    expect((detailListener.mock.calls[0][0] as CustomEvent).detail).toEqual({
+      identifier: 'txn-77',
+      vendor: 'bank-a',
+    });
+
+    window.removeEventListener('openTransactionSearch', searchListener as EventListener);
+    window.removeEventListener('openTransactionDetail', detailListener as EventListener);
   });
 });
