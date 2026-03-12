@@ -44,8 +44,12 @@ vi.mock('@/lib/api-client', () => ({
 }));
 
 vi.mock('@mui/material', () => {
-  const component = (tag: any) =>
-    ({ children, ...props }: { children?: React.ReactNode }) => React.createElement(tag, props, children);
+  const component = (tag: any) => {
+    const MockComponent = ({ children, ...props }: { children?: React.ReactNode }) =>
+      React.createElement(tag, props, children);
+    MockComponent.displayName = `MockMui${String(tag)}`;
+    return MockComponent;
+  };
 
   return {
     Dialog: ({ open, children }: { open: boolean; children?: React.ReactNode }) => (open ? <div>{children}</div> : null),
@@ -152,7 +156,11 @@ vi.mock('@mui/material/styles', () => ({
 }));
 
 vi.mock('@mui/icons-material', () => {
-  const icon = (name: string) => () => <span>{name}</span>;
+  const icon = (name: string) => {
+    const MockIcon = () => <span>{name}</span>;
+    MockIcon.displayName = `MockIcon${name}`;
+    return MockIcon;
+  };
 
   return {
     Search: icon('Search'),
