@@ -110,6 +110,7 @@ async function setupAPIServer(mainWindow, options = {}) {
   app.get('/api/transactions/recent', transactionHandlers.getRecentTransactions);
   app.get('/api/transactions/search', transactionHandlers.searchTransactions);
   app.get('/api/transactions/tags', transactionHandlers.getAllTags);
+  app.get('/api/transactions/:id', transactionHandlers.getTransaction);
 
   // Account management routes (shared router)
   app.use('/api/accounts', createAccountsRouter());

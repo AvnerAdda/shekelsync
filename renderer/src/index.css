@@ -61,6 +61,13 @@ body.window-maximized #root {
   width: 100vw !important;
 }
 
+html.reduce-visual-effects #root,
+html.reduce-visual-effects body.window-restored #root,
+html.reduce-visual-effects body.window-maximized #root {
+  clip-path: none !important;
+  box-shadow: none !important;
+}
+
 /* Draggable region for window title bar */
 .draggable {
   -webkit-app-region: drag;

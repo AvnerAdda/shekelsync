@@ -172,7 +172,7 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
             }}
           >
             <ToggleButton value="value">{t('modes.value', 'Value')}</ToggleButton>
-            <ToggleButton value="performance">{t('modes.performance', 'Performance')}</ToggleButton>
+            <ToggleButton value="performance">{t('modes.performance', 'Value Change')}</ToggleButton>
           </ToggleButtonGroup>
         </Box>
       </Box>
@@ -283,7 +283,7 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
                     }
                   } else {
                     items.push({
-                      label: t('tooltipPerformance', 'Performance'),
+                      label: t('tooltipPerformance', 'Value Change'),
                       value: value,
                       type: 'percentage',
                       color: chartColor,

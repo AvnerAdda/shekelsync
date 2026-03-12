@@ -7,9 +7,17 @@ import {
 import Sidebar from '@renderer/features/layout/components/Sidebar';
 import FinancialChatbot from '@renderer/features/chatbot/components/FinancialChatbot';
 import TitleBar from '@renderer/features/layout/components/TitleBar';
-import GlobalTransactionSearch from '@renderer/features/search/components/GlobalTransactionSearch';
+import GlobalTransactionSearch, {
+  type TransactionSearchFilters,
+} from '@renderer/features/search/components/GlobalTransactionSearch';
 import { DonationReminderDialog, useDonationStatus } from '@renderer/features/support';
 import { useAuth } from '@app/contexts/AuthContext';
+import TransactionDetailModal, {
+  type TransactionForModal,
+} from '@renderer/shared/modals/TransactionDetailModal';
+import { apiClient } from '@renderer/lib/api-client';
+import { useNotification } from '@renderer/features/notifications/NotificationContext';
+import { useTranslation } from 'react-i18next';
 
 const DRAWER_WIDTH_COLLAPSED = 65;
 
@@ -30,13 +38,28 @@ export interface AppLayoutContext {
   triggerDataRefresh: () => void;
 }
 
+interface NavigateToDetail {
+  path?: string;
+  search?: string;
+}
+
+interface TransactionDetailRequest {
+  identifier?: string;
+  vendor?: string;
+}
+
 const AppLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const theme = useTheme();
   const { session, loading: authLoading } = useAuth();
+  const { showNotification } = useNotification();
+  const { t } = useTranslation('translation');
   const [currentPage, setCurrentPage] = useState<string>(() => pathToPage(location.pathname));
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchInitialFilters, setSearchInitialFilters] = useState<TransactionSearchFilters | null>(null);
+  const [transactionDetailOpen, setTransactionDetailOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<TransactionForModal | null>(null);
   const [donationReminderOpen, setDonationReminderOpen] = useState(false);
   const [donationReminderBusy, setDonationReminderBusy] = useState(false);
   const pendingDataRefreshRef = useRef(false);
@@ -182,6 +205,96 @@ const AppLayout: React.FC = () => {
     [location.pathname, navigate],
   );
 
+  const handleSearchClose = useCallback(() => {
+    setSearchOpen(false);
+    setSearchInitialFilters(null);
+  }, []);
+
+  const handleTransactionDetailClose = useCallback(() => {
+    setTransactionDetailOpen(false);
+    setSelectedTransaction(null);
+  }, []);
+
+  const handleTransactionSave = useCallback((updatedTransaction: TransactionForModal) => {
+    setSelectedTransaction(updatedTransaction);
+  }, []);
+
+  const openTransactionDetail = useCallback(async (detail: TransactionDetailRequest) => {
+    const identifier = detail.identifier?.trim();
+    const vendor = detail.vendor?.trim();
+
+    if (!identifier || !vendor) {
+      showNotification(
+        t('smartNotifications.errors.missingTransactionContext', {
+          defaultValue: 'Missing transaction details for this action.',
+        }),
+        'error',
+      );
+      return;
+    }
+
+    try {
+      const response = await apiClient.get<TransactionForModal>(
+        `/api/transactions/${encodeURIComponent(`${identifier}|${vendor}`)}`,
+      );
+
+      if (!response.ok || !response.data) {
+        throw new Error('Transaction not found');
+      }
+
+      setSelectedTransaction(response.data);
+      setTransactionDetailOpen(true);
+    } catch (error) {
+      console.error('Failed to load transaction detail:', error);
+      showNotification(
+        t('smartNotifications.errors.transactionLoadFailed', {
+          defaultValue: 'Unable to open that transaction right now.',
+        }),
+        'error',
+      );
+    }
+  }, [showNotification, t]);
+
+  const navigateToDetail = useCallback(({ path, search }: NavigateToDetail) => {
+    const targetPath = path?.trim();
+    if (!targetPath) {
+      return;
+    }
+
+    if (targetPath === '/budgets') {
+      navigate('/analysis?tab=budget');
+      return;
+    }
+
+    const query = search ? (search.startsWith('?') ? search : `?${search}`) : '';
+    navigate(`${targetPath}${query}`);
+  }, [navigate]);
+
+  useEffect(() => {
+    const handleNavigateTo = (event: Event) => {
+      navigateToDetail((event as CustomEvent<NavigateToDetail>).detail || {});
+    };
+
+    const handleOpenTransactionDetail = (event: Event) => {
+      void openTransactionDetail((event as CustomEvent<TransactionDetailRequest>).detail || {});
+    };
+
+    const handleOpenTransactionSearch = (event: Event) => {
+      setSearchInitialFilters((event as CustomEvent<TransactionSearchFilters>).detail || {});
+      setSearchOpen(true);
+    };
+
+    globalThis.addEventListener('navigateTo', handleNavigateTo);
+    globalThis.addEventListener('openTransactionDetail', handleOpenTransactionDetail);
+    globalThis.addEventListener('openTransactionSearch', handleOpenTransactionSearch);
+
+    return () => {
+      globalThis.removeEventListener('navigateTo', handleNavigateTo);
+      globalThis.removeEventListener('openTransactionDetail', handleOpenTransactionDetail);
+      globalThis.removeEventListener('openTransactionSearch', handleOpenTransactionSearch);
+    };
+  }, [navigateToDetail, openTransactionDetail]);
+
   const handleDismissDonationReminder = useCallback(async () => {
     if (!donationStatus) {
       setDonationReminderOpen(false);
@@ -261,7 +374,19 @@ const AppLayout: React.FC = () => {
       
       <GlobalTransactionSearch
         open={searchOpen}
-        onClose={() => setSearchOpen(false)}
+        onClose={handleSearchClose}
+        initialFilters={searchInitialFilters}
+        onOpenTransaction={(identifier, vendor) => {
+          handleSearchClose();
+          void openTransactionDetail({ identifier, vendor });
+        }}
+      />
+
+      <TransactionDetailModal
+        open={transactionDetailOpen}
+        onClose={handleTransactionDetailClose}
+        transaction={selectedTransaction}
+        onSave={handleTransactionSave}
       />
 
       <DonationReminderDialog

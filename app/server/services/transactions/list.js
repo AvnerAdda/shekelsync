@@ -9,6 +9,46 @@ function __resetDatabase() {
   database = actualDatabase;
 }
 
+function serviceError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+function parseTransactionId(id) {
+  if (typeof id !== 'string' || !id.includes('|')) {
+    throw serviceError(400, 'Invalid transaction identifier');
+  }
+
+  const [identifier, vendor] = id.split('|');
+  if (!identifier || !vendor) {
+    throw serviceError(400, 'Invalid transaction identifier');
+  }
+
+  return { identifier, vendor };
+}
+
+function parseTags(rawTags) {
+  if (!rawTags) {
+    return [];
+  }
+
+  try {
+    const maybeTags = JSON.parse(rawTags);
+    return Array.isArray(maybeTags) ? maybeTags : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeTransactionRow(row) {
+  return {
+    ...row,
+    price: parseFloat(row.price) || 0,
+    tags: parseTags(row.tags),
+  };
+}
+
 /**
  * Build search condition using FTS5 when available, fallback to LIKE for PostgreSQL
  * @param {string} searchTerm - The search term
@@ -97,25 +137,7 @@ async function listRecentTransactions(params = {}) {
     [limit, offset],
   );
 
-  const transactions = result.rows.map((row) => {
-    let parsedTags = [];
-    if (row.tags) {
-      try {
-        const maybeTags = JSON.parse(row.tags);
-        if (Array.isArray(maybeTags)) {
-          parsedTags = maybeTags;
-        }
-      } catch {
-        parsedTags = [];
-      }
-    }
-
-    return {
-      ...row,
-      price: parseFloat(row.price) || 0,
-      tags: parsedTags,
-    };
-  });
+  const transactions = result.rows.map(normalizeTransactionRow);
 
   return {
     transactions,
@@ -128,6 +150,7 @@ async function searchTransactions(params = {}) {
   const {
     query: searchQuery,
     category,
+    tag,
     vendor,
     startDate,
     endDate,
@@ -184,8 +207,13 @@ async function searchTransactions(params = {}) {
   }
 
   if (vendor) {
-    values.push(vendor);
-    conditions.push(`t.vendor = $${values.length}`);
+    values.push(`%${vendor}%`);
+    conditions.push(dialect.likeInsensitive('t.vendor', `$${values.length}`));
+  }
+
+  if (tag) {
+    values.push(`%"${tag}"%`);
+    conditions.push(dialect.likeInsensitive('t.tags', `$${values.length}`));
   }
 
   if (startDate) {
@@ -234,18 +262,52 @@ async function searchTransactions(params = {}) {
     values,
   );
 
-  const transactions = result.rows.map((row) => ({
-    ...row,
-    price: parseFloat(row.price) || 0,
-    tags: row.tags ? JSON.parse(row.tags) : [],
-  }));
+  const transactions = result.rows.map(normalizeTransactionRow);
 
   return {
     transactions,
     count: transactions.length,
     searchQuery,
-    filters: { category, vendor, startDate, endDate },
+    filters: { category, tag, vendor, startDate, endDate },
   };
+}
+
+async function getTransactionById(id) {
+  const { identifier, vendor } = parseTransactionId(id);
+
+  const result = await database.query(
+    `
+      SELECT
+        t.identifier,
+        t.vendor,
+        t.name,
+        cd.name AS category_name,
+        parent.name AS parent_name,
+        t.category_definition_id,
+        t.category_type,
+        t.memo,
+        t.tags,
+        t.price,
+        t.date,
+        t.processed_date,
+        t.account_number,
+        t.type,
+        t.status
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
+      WHERE t.identifier = $1
+        AND t.vendor = $2
+      LIMIT 1
+    `,
+    [identifier, vendor],
+  );
+
+  if (result.rows.length === 0) {
+    throw serviceError(404, 'Transaction not found');
+  }
+
+  return normalizeTransactionRow(result.rows[0]);
 }
 
 async function getAllTags() {
@@ -286,6 +348,7 @@ async function getAllTags() {
 module.exports = {
   listRecentTransactions,
   searchTransactions,
+  getTransactionById,
   getAllTags,
   __setDatabase,
   __resetDatabase,

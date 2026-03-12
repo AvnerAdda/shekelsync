@@ -24,6 +24,17 @@ const sendLog = (level, message, data) => {
 };
 
 const allowUnsafeIpc = process.env.ALLOW_UNSAFE_IPC === 'true';
+const reduceVisualEffectsEnv = (process.env.SHEKELSYNC_REDUCE_VISUAL_EFFECTS || '').trim().toLowerCase();
+
+function shouldReduceVisualEffects() {
+  if (reduceVisualEffectsEnv === 'true') {
+    return true;
+  }
+  if (reduceVisualEffectsEnv === 'false') {
+    return false;
+  }
+  return process.platform === 'darwin';
+}
 
 const logBridge = Object.freeze({
   info: (message, data) => sendLog('info', message, data),
@@ -272,7 +283,8 @@ const electronAPI = {
   platform: {
     isWindows: process.platform === 'win32',
     isMacOS: process.platform === 'darwin',
-    isLinux: process.platform === 'linux'
+    isLinux: process.platform === 'linux',
+    reduceVisualEffects: shouldReduceVisualEffects(),
   },
 
   // Update operations

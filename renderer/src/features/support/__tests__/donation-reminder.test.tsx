@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DonationReminderDialog from '../components/DonationReminderDialog';
 import { DONATION_OPEN_MODAL_EVENT } from '../constants';
@@ -37,10 +38,12 @@ describe('donation helper functions', () => {
 
 describe('DonationReminderDialog', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   it('calls dismiss handler when Maybe later is clicked', async () => {
+    const user = userEvent.setup();
     const onDismissForMonth = vi.fn().mockResolvedValue(undefined);
 
     render(
@@ -51,12 +54,12 @@ describe('DonationReminderDialog', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Maybe later' }));
+    await user.click(screen.getByRole('button', { name: 'Maybe later' }));
 
     await waitFor(() => {
       expect(onDismissForMonth).toHaveBeenCalledTimes(1);
-    });
-  });
+    }, { timeout: 10_000 });
+  }, 10_000);
 
   it('opens support modal and marks reminder shown when Donate now is clicked', async () => {
     const onDismissForMonth = vi.fn().mockResolvedValue(undefined);

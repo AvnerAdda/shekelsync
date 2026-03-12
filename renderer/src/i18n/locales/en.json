@@ -31,14 +31,31 @@
   "smartNotifications": {
     "dismiss": "Dismiss",
     "dismissAll": "Dismiss all",
-    "allGood": "All good! No alerts at the moment."
+    "allGood": "All good! No alerts at the moment.",
+    "errors": {
+      "missingTransactionContext": "Missing transaction details for this action.",
+      "transactionLoadFailed": "Unable to open that transaction right now."
+    }
   },
   "globalSearch": {
     "placeholder": "Search transactions...",
     "hint": "Press Enter to select, Escape to close",
     "noResults": "No transactions found",
     "startTyping": "Start typing to search transactions",
-    "shortcut": "Cmd+K"
+    "shortcut": "Cmd+K",
+    "emptyFilters": "Try adjusting your filters or search terms.",
+    "filtersHint": "You can also search by vendor, category, tag, or date range.",
+    "filters": {
+      "vendor": "Vendor",
+      "vendorPlaceholder": "Filter by vendor",
+      "category": "Category",
+      "tag": "Tag",
+      "startDate": "From",
+      "endDate": "To",
+      "allCategories": "All categories",
+      "allTags": "All tags",
+      "loading": "Loading filters..."
+    }
   },
   "transactionDetail": {
     "title": "Transaction Details",
@@ -899,6 +916,35 @@
         "under": "Under by {{amount}}",
         "breakEven": "On budget",
         "noBudget": "No budget set"
+      },
+      "variability": {
+        "title": "Category variability",
+        "subtitle": "See which categories behave like fixed costs, flexible spend, or seasonal spikes over the last {{count}} months.",
+        "timelineBridge": "Use this as context for reading the spending timeline below over the last {{count}} months.",
+        "timelineBridgeHint": "The monthly curve stays in the timeline section below so the history appears only once.",
+        "loadFailed": "Failed to load category variability.",
+        "saveFailed": "Failed to save variability override.",
+        "empty": "Not enough recurring category history yet to analyze variability.",
+        "avgMonthly": "Avg monthly: {{amount}}",
+        "latestVsAverage": "Latest vs avg: {{delta}}",
+        "confidence": "Confidence {{value}}%",
+        "filters": {
+          "all": "All"
+        },
+        "summary": {
+          "fixed": "Fixed {{count}}",
+          "variable": "Variable {{count}}",
+          "seasonal": "Seasonal {{count}}"
+        },
+        "types": {
+          "fixed": "Fixed",
+          "variable": "Variable",
+          "seasonal": "Seasonal"
+        },
+        "flags": {
+          "seasonal": "Seasonal pattern",
+          "momShift": "MoM shift {{delta}}"
+        }
       }
     },
     "header": {
@@ -1995,53 +2041,6 @@
     },
     "security": {
       "localStorageWarning": "Your credentials are stored locally on your device and encrypted at rest. During sync, they are used to sign in directly to your bank/card provider."
-    }
-  },
-  "investmentAccountsModal": {
-    "title": "Investment Accounts Management",
-    "aria": { "tabs": "investment accounts management tabs" },
-    "tabs": {
-      "links": "Transaction Links",
-      "patterns": "Matching Patterns"
-    },
-    "links": {
-      "title": "Pending Transaction Links",
-      "description": "Automatic suggestions to link investment transactions to accounts.",
-      "empty": "No pending suggestions. All investment transactions are linked!",
-      "notifications": {
-        "approved": "Suggestion approved",
-        "rejected": "Suggestion rejected",
-        "error": "Failed to process suggestion"
-      },
-      "table": {
-        "date": "Date",
-        "transaction": "Transaction",
-        "amount": "Amount",
-        "account": "Suggested Account",
-        "confidence": "Confidence",
-        "actions": "Actions",
-        "approve": "Approve",
-        "reject": "Reject"
-      },
-      "aria": { "refresh": "Refresh suggestions" }
-    },
-    "patterns": {
-      "title": "Pattern Matching Rules",
-      "description": "Patterns define which transactions belong to which accounts. Use <code>%</code> as a wildcard.<br />Example: <code>%deposit%</code> matches any transaction containing \"deposit\".",
-      "empty": "No investment accounts found. Create an account to add patterns.",
-      "chipCount_one": "{{count}} pattern",
-      "chipCount_other": "{{count}} patterns",
-      "notifications": {
-        "missingPattern": "Please enter a pattern",
-        "added": "Pattern added successfully",
-        "addError": "Failed to add pattern",
-        "deleted": "Pattern deleted",
-        "deleteError": "Failed to delete pattern"
-      },
-      "confirmDelete": "Delete this pattern?",
-      "actions": {
-        "add": "Add"
-      }
     }
   },
   "categoryHierarchy": {

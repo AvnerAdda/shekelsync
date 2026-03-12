@@ -50,6 +50,124 @@ function getTableColumns(db, tableName) {
   }
 }
 
+function getTableSql(db, tableName) {
+  try {
+    const row = db.prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+    ).get(tableName);
+    return row?.sql || '';
+  } catch {
+    return '';
+  }
+}
+
+function rebuildInvestmentHoldingsForPikadonEntries(db) {
+  const columns = getTableColumns(db, 'investment_holdings');
+  if (!Array.isArray(columns) || columns.length === 0) {
+    return;
+  }
+
+  db.exec(`
+    UPDATE investment_holdings
+    SET holding_type = 'standard'
+    WHERE holding_type IS NULL OR TRIM(holding_type) = ''
+  `);
+
+  const tableSql = getTableSql(db, 'investment_holdings');
+  const needsRebuild = tableSql.includes('UNIQUE(account_id, as_of_date)');
+  if (!needsRebuild) {
+    return;
+  }
+
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec('BEGIN');
+
+  try {
+    db.exec(`
+      CREATE TABLE investment_holdings__new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id INTEGER NOT NULL,
+        asset_name TEXT,
+        asset_type TEXT,
+        units REAL,
+        current_value REAL NOT NULL,
+        cost_basis REAL,
+        as_of_date TEXT NOT NULL,
+        notes TEXT,
+        holding_type TEXT NOT NULL DEFAULT 'standard',
+        deposit_transaction_id TEXT,
+        deposit_transaction_vendor TEXT,
+        return_transaction_id TEXT,
+        return_transaction_vendor TEXT,
+        maturity_date TEXT,
+        interest_rate REAL,
+        status TEXT DEFAULT 'active',
+        parent_pikadon_id INTEGER,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE,
+        FOREIGN KEY (parent_pikadon_id) REFERENCES investment_holdings(id) ON DELETE SET NULL
+      );
+    `);
+    db.exec(`
+      INSERT INTO investment_holdings__new (
+        id,
+        account_id,
+        asset_name,
+        asset_type,
+        units,
+        current_value,
+        cost_basis,
+        as_of_date,
+        notes,
+        holding_type,
+        deposit_transaction_id,
+        deposit_transaction_vendor,
+        return_transaction_id,
+        return_transaction_vendor,
+        maturity_date,
+        interest_rate,
+        status,
+        parent_pikadon_id,
+        created_at,
+        updated_at
+      )
+      SELECT
+        id,
+        account_id,
+        asset_name,
+        asset_type,
+        units,
+        current_value,
+        cost_basis,
+        as_of_date,
+        notes,
+        COALESCE(NULLIF(TRIM(holding_type), ''), 'standard'),
+        deposit_transaction_id,
+        deposit_transaction_vendor,
+        return_transaction_id,
+        return_transaction_vendor,
+        maturity_date,
+        interest_rate,
+        status,
+        parent_pikadon_id,
+        created_at,
+        updated_at
+      FROM investment_holdings;
+    `);
+    db.exec('DROP TABLE investment_holdings');
+    db.exec('ALTER TABLE investment_holdings__new RENAME TO investment_holdings');
+    db.exec('COMMIT');
+  } catch (error) {
+    if (db.inTransaction) {
+      db.exec('ROLLBACK');
+    }
+    throw error;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+}
+
 function applySchemaUpgrades(db) {
   ensureColumnExists(
     db,
@@ -109,6 +227,8 @@ function applySchemaUpgrades(db) {
       VALUES (1, NULL, datetime('now'), datetime('now'))
     `);
   }
+
+  rebuildInvestmentHoldingsForPikadonEntries(db);
 }
 
 function parseArgs() {
@@ -406,7 +526,7 @@ const TABLE_DEFINITIONS = [
       cost_basis REAL,
       as_of_date TEXT NOT NULL,
       notes TEXT,
-      holding_type TEXT DEFAULT 'standard',
+      holding_type TEXT NOT NULL DEFAULT 'standard',
       deposit_transaction_id TEXT,
       deposit_transaction_vendor TEXT,
       return_transaction_id TEXT,
@@ -417,7 +537,6 @@ const TABLE_DEFINITIONS = [
       parent_pikadon_id INTEGER,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(account_id, as_of_date),
       FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE,
       FOREIGN KEY (parent_pikadon_id) REFERENCES investment_holdings(id) ON DELETE SET NULL
     );`,
@@ -471,6 +590,46 @@ const TABLE_DEFINITIONS = [
         REFERENCES transactions(identifier, vendor)
         ON DELETE CASCADE,
       FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE
+    );`,
+  `CREATE TABLE IF NOT EXISTS investment_positions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL,
+      position_name TEXT NOT NULL,
+      asset_type TEXT,
+      currency TEXT NOT NULL DEFAULT 'ILS',
+      status TEXT NOT NULL DEFAULT 'open',
+      opened_at TEXT NOT NULL,
+      closed_at TEXT,
+      original_cost_basis REAL NOT NULL DEFAULT 0,
+      open_cost_basis REAL NOT NULL DEFAULT 0,
+      current_value REAL,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE
+    );`,
+  `CREATE TABLE IF NOT EXISTS investment_position_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      position_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      effective_date TEXT NOT NULL,
+      amount REAL,
+      principal_amount REAL,
+      income_amount REAL,
+      fee_amount REAL,
+      units REAL,
+      current_value REAL,
+      close_action TEXT,
+      linked_transaction_identifier TEXT,
+      linked_transaction_vendor TEXT,
+      notes TEXT,
+      metadata TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (position_id) REFERENCES investment_positions(id) ON DELETE CASCADE,
+      FOREIGN KEY (linked_transaction_identifier, linked_transaction_vendor)
+        REFERENCES transactions(identifier, vendor)
+        ON DELETE SET NULL
     );`,
   `CREATE TABLE IF NOT EXISTS account_pairings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -839,6 +998,14 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_investment_holdings_maturity ON investment_holdings (maturity_date);',
   'CREATE INDEX IF NOT EXISTS idx_investment_holdings_deposit_txn ON investment_holdings (deposit_transaction_id, deposit_transaction_vendor);',
   'CREATE INDEX IF NOT EXISTS idx_investment_holdings_parent_pikadon ON investment_holdings (parent_pikadon_id);',
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_investment_holdings_standard_snapshot_unique
+    ON investment_holdings (account_id, as_of_date)
+    WHERE holding_type = 'standard';`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_investment_holdings_pikadon_deposit_unique
+    ON investment_holdings (deposit_transaction_id, deposit_transaction_vendor)
+    WHERE holding_type = 'pikadon'
+      AND deposit_transaction_id IS NOT NULL
+      AND deposit_transaction_vendor IS NOT NULL;`,
   // Investment holdings composite indexes for common query patterns
   'CREATE INDEX IF NOT EXISTS idx_holdings_account_date_type ON investment_holdings (account_id, as_of_date DESC, holding_type);',
   `CREATE INDEX IF NOT EXISTS idx_holdings_active_account_date ON investment_holdings (account_id, as_of_date DESC) WHERE status = 'active';`,
@@ -847,6 +1014,9 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_transaction_suggestions (status);',
   'CREATE INDEX IF NOT EXISTS idx_pending_account_type ON pending_transaction_suggestions (suggested_account_type);',
   'CREATE INDEX IF NOT EXISTS idx_pending_dismissed ON pending_transaction_suggestions (dismiss_count, last_dismissed_at);',
+  'CREATE INDEX IF NOT EXISTS idx_investment_positions_account ON investment_positions (account_id, status);',
+  'CREATE INDEX IF NOT EXISTS idx_investment_positions_status ON investment_positions (status, opened_at DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_investment_position_events_position ON investment_position_events (position_id, effective_date DESC);',
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_created_at ON scrape_events (created_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_vendor ON scrape_events (vendor);',
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_credential_id ON scrape_events (credential_id);',

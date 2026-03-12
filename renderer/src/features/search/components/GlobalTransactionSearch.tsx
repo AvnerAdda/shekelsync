@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,8 @@ import {
   Divider,
   IconButton,
   Tooltip,
+  MenuItem,
+  Stack,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -28,11 +30,12 @@ import {
   TrendingUp as InvestmentIcon,
   Notes as NotesIcon,
   LocalOffer as TagIcon,
+  Store as VendorIcon,
+  Category as CategoryFilterIcon,
+  CalendarMonth as CalendarIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
-import TransactionDetailModal, { TransactionForModal } from '@renderer/shared/modals/TransactionDetailModal';
 
 interface Transaction {
   identifier: string;
@@ -59,65 +62,205 @@ interface SearchResult {
   filters: Record<string, unknown>;
 }
 
+interface CategoryOption {
+  id: number;
+  name: string;
+  name_en?: string | null;
+  name_fr?: string | null;
+  parent_id: number | null;
+}
+
+interface CategoryHierarchyResponse {
+  categories?: CategoryOption[];
+}
+
+export interface TransactionSearchFilters {
+  query?: string;
+  vendor?: string;
+  category?: string;
+  tag?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
 interface GlobalTransactionSearchProps {
   open: boolean;
   onClose: () => void;
+  initialFilters?: TransactionSearchFilters | null;
+  onOpenTransaction?: (identifier: string, vendor: string) => void;
 }
 
-const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open, onClose }) => {
+const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
+  open,
+  onClose,
+  initialFilters,
+  onOpenTransaction,
+}) => {
   const theme = useTheme();
-  const navigate = useNavigate();
-  const { t } = useTranslation('translation');
+  const { t, i18n } = useTranslation('translation');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [vendorFilter, setVendorFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [tagFilter, setTagFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [results, setResults] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState<TransactionForModal | null>(null);
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
+  const [tagOptions, setTagOptions] = useState<string[]>([]);
+  const [filtersLoading, setFiltersLoading] = useState(false);
 
-  // Focus input when dialog opens
-  useEffect(() => {
-    if (open) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
-    } else {
-      // Reset state when closing
-      setSearchQuery('');
-      setResults([]);
-      setSelectedIndex(0);
-    }
-  }, [open]);
+  const resetState = useCallback(() => {
+    setSearchQuery('');
+    setVendorFilter('');
+    setCategoryFilter('');
+    setTagFilter('');
+    setStartDate('');
+    setEndDate('');
+    setResults([]);
+    setSelectedIndex(0);
+    setLoading(false);
+  }, []);
 
-  // Search transactions with debounce
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setResults([]);
+    if (!open) {
+      resetState();
       return;
     }
 
-    const debounceTimer = setTimeout(async () => {
+    setSearchQuery(initialFilters?.query || '');
+    setVendorFilter(initialFilters?.vendor || '');
+    setCategoryFilter(initialFilters?.category || '');
+    setTagFilter(initialFilters?.tag || '');
+    setStartDate(initialFilters?.startDate || '');
+    setEndDate(initialFilters?.endDate || '');
+    setSelectedIndex(0);
+
+    const timer = window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+
+    return () => window.clearTimeout(timer);
+  }, [initialFilters, open, resetState]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchFilterOptions = async () => {
+      setFiltersLoading(true);
+      try {
+        const [categoriesResponse, tagsResponse] = await Promise.all([
+          apiClient.get<CategoryHierarchyResponse>('/api/categories/hierarchy'),
+          apiClient.get<string[]>('/api/transactions/tags'),
+        ]);
+
+        if (!cancelled) {
+          setCategoryOptions(Array.isArray(categoriesResponse.data?.categories)
+            ? categoriesResponse.data.categories
+            : []);
+          setTagOptions(Array.isArray(tagsResponse.data) ? tagsResponse.data : []);
+        }
+      } catch (error) {
+        console.error('Failed to load transaction search filters:', error);
+        if (!cancelled) {
+          setCategoryOptions([]);
+          setTagOptions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setFiltersLoading(false);
+        }
+      }
+    };
+
+    void fetchFilterOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const hasSearchCriteria = useMemo(() => (
+    Boolean(
+      searchQuery.trim()
+      || vendorFilter.trim()
+      || categoryFilter
+      || tagFilter
+      || startDate
+      || endDate
+    )
+  ), [categoryFilter, endDate, searchQuery, startDate, tagFilter, vendorFilter]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (!hasSearchCriteria) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const debounceTimer = window.setTimeout(async () => {
       setLoading(true);
       try {
         const response = await apiClient.get<SearchResult>('/api/transactions/search', {
-          params: { query: searchQuery, limit: 20 },
+          params: {
+            query: searchQuery.trim() || undefined,
+            vendor: vendorFilter.trim() || undefined,
+            category: categoryFilter || undefined,
+            tag: tagFilter || undefined,
+            startDate: startDate || undefined,
+            endDate: endDate || undefined,
+            limit: 20,
+          },
         });
-        setResults(response.data.transactions || []);
-        setSelectedIndex(0);
+
+        if (!cancelled) {
+          setResults(response.data?.transactions || []);
+          setSelectedIndex(0);
+        }
       } catch (error) {
         console.error('Search error:', error);
-        setResults([]);
+        if (!cancelled) {
+          setResults([]);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }, 300);
 
-    return () => clearTimeout(debounceTimer);
-  }, [searchQuery]);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(debounceTimer);
+    };
+  }, [
+    categoryFilter,
+    endDate,
+    hasSearchCriteria,
+    open,
+    searchQuery,
+    startDate,
+    tagFilter,
+    vendorFilter,
+  ]);
 
-  // Handle keyboard navigation
+  const handleSelectTransaction = useCallback((transaction: Transaction) => {
+    onOpenTransaction?.(transaction.identifier, transaction.vendor);
+  }, [onOpenTransaction]);
+
   const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
     switch (event.key) {
       case 'ArrowDown':
@@ -139,29 +282,7 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
         onClose();
         break;
     }
-  }, [results, selectedIndex, onClose]);
-
-  const handleSelectTransaction = useCallback((transaction: Transaction) => {
-    // Open detail modal instead of navigating
-    setSelectedTransaction(transaction as TransactionForModal);
-    setDetailModalOpen(true);
-  }, []);
-
-  const handleDetailModalClose = useCallback(() => {
-    setDetailModalOpen(false);
-    setSelectedTransaction(null);
-  }, []);
-
-  const handleTransactionSave = useCallback((updatedTransaction: TransactionForModal) => {
-    // Update the transaction in results list
-    setResults((prev) =>
-      prev.map((t) =>
-        t.identifier === updatedTransaction.identifier && t.vendor === updatedTransaction.vendor
-          ? { ...t, ...updatedTransaction }
-          : t
-      )
-    );
-  }, []);
+  }, [handleSelectTransaction, onClose, results, selectedIndex]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('he-IL', {
@@ -171,7 +292,7 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('he-IL', {
+    return new Date(dateStr).toLocaleDateString(i18n.language || 'he', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -197,12 +318,25 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
     }
   };
 
+  const categoryLabelMap = useMemo(() => {
+    const language = i18n.language?.split('-')[0] || 'he';
+    return new Map(
+      categoryOptions.map((category) => {
+        const localizedName = language === 'fr'
+          ? category.name_fr || category.name_en || category.name
+          : language === 'en'
+            ? category.name_en || category.name
+            : category.name;
+        return [String(category.id), localizedName];
+      }),
+    );
+  }, [categoryOptions, i18n.language]);
+
   return (
-    <>
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="sm"
+      maxWidth="md"
       fullWidth
       aria-labelledby="global-search-title"
       aria-describedby="global-search-description"
@@ -215,7 +349,7 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
           backdropFilter: 'blur(20px)',
           boxShadow: `0 8px 32px ${alpha(theme.palette.common.black, 0.2)}`,
           border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-          maxHeight: '70vh',
+          maxHeight: '80vh',
           overflow: 'hidden',
         },
         role: 'dialog',
@@ -230,18 +364,25 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
       }}
     >
       <Box sx={{ p: 2, borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
-        <Typography id="global-search-title" sx={{ position: 'absolute', left: -9999, width: 1, height: 1, overflow: 'hidden' }}>
+        <Typography
+          id="global-search-title"
+          sx={{ position: 'absolute', left: -9999, width: 1, height: 1, overflow: 'hidden' }}
+        >
           {t('globalSearch.placeholder', 'Search transactions')}
         </Typography>
-        <Typography id="global-search-description" sx={{ position: 'absolute', left: -9999, width: 1, height: 1, overflow: 'hidden' }}>
+        <Typography
+          id="global-search-description"
+          sx={{ position: 'absolute', left: -9999, width: 1, height: 1, overflow: 'hidden' }}
+        >
           {t('globalSearch.hint', 'Press Enter to select, Escape to close')}
         </Typography>
+
         <TextField
           inputRef={inputRef}
           fullWidth
           placeholder={t('globalSearch.placeholder', 'Search transactions...')}
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(event) => setSearchQuery(event.target.value)}
           onKeyDown={handleKeyDown}
           variant="outlined"
           autoComplete="off"
@@ -259,9 +400,9 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
                 )}
               </InputAdornment>
             ),
-            endAdornment: searchQuery && (
+            endAdornment: (searchQuery || hasSearchCriteria) && (
               <InputAdornment position="end">
-                <IconButton size="small" onClick={() => setSearchQuery('')}>
+                <IconButton size="small" onClick={resetState}>
                   <CloseIcon fontSize="small" />
                 </IconButton>
               </InputAdornment>
@@ -280,9 +421,123 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
             },
           }}
         />
-        <Typography variant="caption" sx={{ display: 'block', mt: 1, color: theme.palette.text.secondary }}>
-          {t('globalSearch.hint', 'Press Enter to select, Escape to close')}
-        </Typography>
+
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mt: 2 }}>
+          <TextField
+            size="small"
+            value={vendorFilter}
+            onChange={(event) => setVendorFilter(event.target.value)}
+            onKeyDown={handleKeyDown}
+            label={t('globalSearch.filters.vendor', 'Vendor')}
+            placeholder={t('globalSearch.filters.vendorPlaceholder', 'Filter by vendor')}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <VendorIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ flex: 1 }}
+          />
+          <TextField
+            select
+            size="small"
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+            label={t('globalSearch.filters.category', 'Category')}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <CategoryFilterIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ flex: 1 }}
+          >
+            <MenuItem value="">
+              <em>{t('globalSearch.filters.allCategories', 'All categories')}</em>
+            </MenuItem>
+            {categoryOptions.map((category) => (
+              <MenuItem key={category.id} value={String(category.id)}>
+                {categoryLabelMap.get(String(category.id)) || category.name}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            value={tagFilter}
+            onChange={(event) => setTagFilter(event.target.value)}
+            label={t('globalSearch.filters.tag', 'Tag')}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <TagIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ flex: 1 }}
+          >
+            <MenuItem value="">
+              <em>{t('globalSearch.filters.allTags', 'All tags')}</em>
+            </MenuItem>
+            {tagOptions.map((tag) => (
+              <MenuItem key={tag} value={tag}>
+                {tag}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Stack>
+
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mt: 1.5 }}>
+          <TextField
+            size="small"
+            type="date"
+            label={t('globalSearch.filters.startDate', 'From')}
+            value={startDate}
+            onChange={(event) => setStartDate(event.target.value)}
+            InputLabelProps={{ shrink: true }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <CalendarIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ flex: 1 }}
+          />
+          <TextField
+            size="small"
+            type="date"
+            label={t('globalSearch.filters.endDate', 'To')}
+            value={endDate}
+            onChange={(event) => setEndDate(event.target.value)}
+            InputLabelProps={{ shrink: true }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <CalendarIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ flex: 1 }}
+          />
+          <Box
+            sx={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: { xs: 'flex-start', md: 'flex-end' },
+              minHeight: 40,
+            }}
+          >
+            <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+              {filtersLoading
+                ? t('globalSearch.filters.loading', 'Loading filters...')
+                : t('globalSearch.hint', 'Press Enter to select, Escape to close')}
+            </Typography>
+          </Box>
+        </Stack>
       </Box>
 
       <DialogContent sx={{ p: 0, overflow: 'auto' }}>
@@ -309,7 +564,7 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
                       {getTransactionIcon(transaction)}
                     </ListItemIcon>
                     <ListItemText
-                      primary={
+                      primary={(
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography variant="body2" fontWeight={500} noWrap sx={{ flex: 1 }}>
                             {transaction.name}
@@ -323,11 +578,12 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
                                 : theme.palette.error.main,
                             }}
                           >
-                            {transaction.price > 0 ? '+' : '-'}{formatPrice(transaction.price)}
+                            {transaction.price > 0 ? '+' : '-'}
+                            {formatPrice(transaction.price)}
                           </Typography>
                         </Box>
-                      }
-                      secondary={
+                      )}
+                      secondary={(
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
                           <Typography variant="caption" color="text.secondary">
                             {formatDate(transaction.date)}
@@ -379,7 +635,7 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
                             {transaction.vendor}
                           </Typography>
                         </Box>
-                      }
+                      )}
                       primaryTypographyProps={{ component: 'div' }}
                       secondaryTypographyProps={{ component: 'div' }}
                     />
@@ -391,31 +647,29 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({ open,
               </React.Fragment>
             ))}
           </List>
-        ) : searchQuery && !loading ? (
+        ) : hasSearchCriteria && !loading ? (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <TransactionIcon sx={{ fontSize: 48, color: theme.palette.text.disabled, mb: 2 }} />
             <Typography variant="body2" color="text.secondary">
               {t('globalSearch.noResults', 'No transactions found')}
             </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t('globalSearch.emptyFilters', 'Try adjusting your filters or search terms.')}
+            </Typography>
           </Box>
-        ) : !searchQuery ? (
+        ) : !hasSearchCriteria ? (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <SearchIcon sx={{ fontSize: 48, color: theme.palette.text.disabled, mb: 2 }} />
             <Typography variant="body2" color="text.secondary">
               {t('globalSearch.startTyping', 'Start typing to search transactions')}
             </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t('globalSearch.filtersHint', 'You can also search by vendor, category, tag, or date range.')}
+            </Typography>
           </Box>
         ) : null}
       </DialogContent>
     </Dialog>
-
-    <TransactionDetailModal
-      open={detailModalOpen}
-      onClose={handleDetailModalClose}
-      transaction={selectedTransaction}
-      onSave={handleTransactionSave}
-    />
-  </>
   );
 };
 

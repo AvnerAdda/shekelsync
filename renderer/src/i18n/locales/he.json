@@ -27,14 +27,31 @@
   "smartNotifications": {
     "dismiss": "הסתר",
     "dismissAll": "הסתר הכל",
-    "allGood": "הכל בסדר! אין התראות כרגע."
+    "allGood": "הכל בסדר! אין התראות כרגע.",
+    "errors": {
+      "missingTransactionContext": "חסרים פרטי עסקה לפעולה הזו.",
+      "transactionLoadFailed": "לא ניתן לפתוח את העסקה כרגע."
+    }
   },
   "globalSearch": {
     "placeholder": "חיפוש עסקאות...",
     "hint": "Enter לבחירה, Escape לסגירה",
     "noResults": "לא נמצאו עסקאות",
     "startTyping": "התחילו להקליד לחיפוש עסקאות",
-    "shortcut": "Cmd+K"
+    "shortcut": "Cmd+K",
+    "emptyFilters": "נסו לשנות את המסננים או את מונחי החיפוש.",
+    "filtersHint": "אפשר גם לחפש לפי ספק, קטגוריה, תגית או טווח תאריכים.",
+    "filters": {
+      "vendor": "ספק",
+      "vendorPlaceholder": "סינון לפי ספק",
+      "category": "קטגוריה",
+      "tag": "תגית",
+      "startDate": "מתאריך",
+      "endDate": "עד תאריך",
+      "allCategories": "כל הקטגוריות",
+      "allTags": "כל התגיות",
+      "loading": "טוען מסננים..."
+    }
   },
   "transactionDetail": {
     "title": "פרטי עסקה",
@@ -234,52 +251,6 @@
       "comparison": {
         "title": "מצב השוואה (בקרוב)",
         "description": "תצוגת השוואה חודשית בפיתוח. כאן יוצגו מדדים זה לצד זה להשוואה בין {{current}} ל-{{previous}}."
-      }
-    }
-  },
-  "investmentAccountsModal": {
-    "title": "ניהול חשבונות השקעה",
-    "aria": { "tabs": "לשוניות ניהול חשבונות השקעה" },
-    "tabs": {
-      "links": "קישורי עסקאות",
-      "patterns": "תבניות התאמה"
-    },
-    "links": {
-      "title": "הצעות לקישור עסקאות",
-      "description": "הצעות אוטומטיות לקישור עסקאות השקעה לחשבונות.",
-      "empty": "אין הצעות ממתינות. כל עסקאות ההשקעה מקושרות!",
-      "notifications": {
-        "approved": "ההצעה אושרה",
-        "rejected": "ההצעה נדחתה",
-        "error": "שגיאה בעיבוד ההצעה"
-      },
-      "table": {
-        "date": "תאריך",
-        "transaction": "עסקה",
-        "amount": "סכום",
-        "account": "חשבון מוצע",
-        "confidence": "רמת ביטחון",
-        "actions": "פעולות",
-        "approve": "אשר",
-        "reject": "דחה"
-      },
-      "aria": { "refresh": "רענון הצעות" }
-    },
-    "patterns": {
-      "title": "כללי התאמת תבניות",
-      "description": "תבניות מגדירות אילו עסקאות שייכות לאילו חשבונות. השתמשו ב-<code>%</code> כתו כללי.<br />דוגמה: <code>%פיקדון%</code> תתאים לכל עסקה שמכילה \"פיקדון\".",
-      "empty": "לא נמצאו חשבונות השקעה. צרו חשבון כדי להוסיף תבניות.",
-      "chipCount": "{{count}} תבניות",
-      "notifications": {
-        "missingPattern": "נא להזין תבנית",
-        "added": "תבנית נוספה בהצלחה",
-        "addError": "שגיאה בהוספת תבנית",
-        "deleted": "תבנית נמחקה",
-        "deleteError": "שגיאה במחיקת תבנית"
-      },
-      "confirmDelete": "האם למחוק תבנית זו?",
-      "actions": {
-        "add": "הוסף"
       }
     }
   },
@@ -900,6 +871,35 @@
         "under": "חיסכון של {{amount}}",
         "breakEven": "במסגרת התקציב",
         "noBudget": "אין תקציב מוגדר"
+      },
+      "variability": {
+        "title": "שונות בקטגוריות",
+        "subtitle": "ראו אילו קטגוריות מתנהגות כמו עלות קבועה, הוצאה גמישה או קפיצה עונתית לאורך {{count}} החודשים האחרונים.",
+        "timelineBridge": "השתמשו בזה כהקשר לקריאת גרף ציר הזמן שלמטה לאורך {{count}} החודשים האחרונים.",
+        "timelineBridgeHint": "העקומה החודשית נשארת בגרף ציר הזמן למטה כדי שההיסטוריה תופיע פעם אחת בלבד.",
+        "loadFailed": "טעינת שונות הקטגוריות נכשלה.",
+        "saveFailed": "שמירת עדכון השונות נכשלה.",
+        "empty": "עדיין אין מספיק היסטוריה חוזרת כדי לנתח שונות קטגוריות.",
+        "avgMonthly": "ממוצע חודשי: {{amount}}",
+        "latestVsAverage": "החודש האחרון מול הממוצע: {{delta}}",
+        "confidence": "ביטחון {{value}}%",
+        "filters": {
+          "all": "הכל"
+        },
+        "summary": {
+          "fixed": "קבוע {{count}}",
+          "variable": "משתנה {{count}}",
+          "seasonal": "עונתי {{count}}"
+        },
+        "types": {
+          "fixed": "קבוע",
+          "variable": "משתנה",
+          "seasonal": "עונתי"
+        },
+        "flags": {
+          "seasonal": "דפוס עונתי",
+          "momShift": "שינוי חודשי {{delta}}"
+        }
       }
     },
     "header": {

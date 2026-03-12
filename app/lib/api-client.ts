@@ -24,6 +24,7 @@ const FORECAST_DAILY_PATH = '/api/forecast/daily';
 const FORECAST_CLIENT_CACHE_TTL_MS = 15_000;
 const forecastResponseCache = new Map<string, { response: ApiResponse<unknown>; expiresAt: number }>();
 const forecastInFlightRequests = new Map<string, Promise<ApiResponse<unknown>>>();
+const sharedGetInFlightRequests = new Map<string, Promise<ApiResponse<unknown>>>();
 
 function splitPathAndQuery(url: string): { path: string; searchParams: URLSearchParams } {
   const [pathAndQuery = ''] = url.split('#');
@@ -47,6 +48,22 @@ function shouldReadForecastClientCache(method: HttpMethod, url: string): boolean
   if (path !== FORECAST_DAILY_PATH) return false;
   const noCache = (searchParams.get('noCache') || '').toLowerCase();
   return noCache !== '1' && noCache !== 'true';
+}
+
+function getSharedGetRequestKey(
+  method: HttpMethod,
+  url: string,
+  headers: Record<string, string>,
+): string | null {
+  if (method !== 'GET') {
+    return null;
+  }
+
+  const sortedHeaders = Object.entries(headers)
+    .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+    .map(([key, value]) => `${key}:${value}`);
+
+  return JSON.stringify([url, sortedHeaders]);
 }
 
 function normalizeLocale(value?: string | null): string | null {
@@ -249,6 +266,40 @@ async function request<TResponse = unknown, TBody = unknown>(
 
     forecastInFlightRequests.set(
       forecastCacheKey,
+      requestPromise as Promise<ApiResponse<unknown>>,
+    );
+
+    return requestPromise;
+  }
+
+  const sharedGetRequestKey = getSharedGetRequestKey(method, url, finalHeaders);
+  if (sharedGetRequestKey) {
+    const inFlight = sharedGetInFlightRequests.get(sharedGetRequestKey);
+    if (inFlight) {
+      return inFlight as Promise<ApiResponse<TResponse>>;
+    }
+
+    const requestPromise = executeRequest()
+      .then((response) => {
+        if (forecastCacheKey) {
+          if (response.ok) {
+            forecastResponseCache.set(forecastCacheKey, {
+              response: response as ApiResponse<unknown>,
+              expiresAt: Date.now() + FORECAST_CLIENT_CACHE_TTL_MS,
+            });
+          } else {
+            forecastResponseCache.delete(forecastCacheKey);
+          }
+        }
+
+        return response;
+      })
+      .finally(() => {
+        sharedGetInFlightRequests.delete(sharedGetRequestKey);
+      });
+
+    sharedGetInFlightRequests.set(
+      sharedGetRequestKey,
       requestPromise as Promise<ApiResponse<unknown>>,
     );
 

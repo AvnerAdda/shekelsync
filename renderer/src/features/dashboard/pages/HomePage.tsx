@@ -132,6 +132,7 @@ const DashboardHomeContent: React.FC = () => {
   } = useBreakdownData({
     startDate,
     endDate,
+    initialTypes: [],
   });
 
   // Fallback breakdown data
@@ -144,6 +145,7 @@ const DashboardHomeContent: React.FC = () => {
   } = useBreakdownData({
     startDate: fallbackStartDate,
     endDate: fallbackEndDate,
+    initialTypes: [],
     enabled: fallbackEnabled,
   });
 

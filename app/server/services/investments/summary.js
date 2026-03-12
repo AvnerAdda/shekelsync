@@ -6,6 +6,16 @@ const {
   getInstitutionByVendorCode,
 } = require('../institutions.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
+const {
+  applyContributionRollforward,
+  fetchLinkedInvestmentTransactions,
+} = require('./linked-transaction-rollforward.js');
+const {
+  toNumber,
+} = require('./account-holdings-rollup.js');
+const {
+  fetchAccountHoldingSnapshots,
+} = require('./account-snapshots.js');
 
 let dateFnsPromise = null;
 
@@ -14,10 +24,6 @@ async function loadDateFns() {
     dateFnsPromise = import('date-fns');
   }
   return dateFnsPromise;
-}
-
-function toNumber(value) {
-  return value !== null && value !== undefined ? Number.parseFloat(value) : null;
 }
 
 async function fetchAccounts(client) {
@@ -35,22 +41,8 @@ async function fetchAccounts(client) {
         ia.notes,
         ia.is_liquid,
         ia.investment_category,
-        ih.current_value,
-        ih.cost_basis,
-        ih.as_of_date,
-        ih.units,
-        ih.asset_name,
-        ih.asset_type,
         ${INSTITUTION_SELECT_FIELDS}
       FROM investment_accounts ia
-      LEFT JOIN investment_holdings ih
-        ON ih.id = (
-          SELECT ih2.id
-          FROM investment_holdings ih2
-          WHERE ih2.account_id = ia.id
-          ORDER BY ih2.as_of_date DESC
-          LIMIT 1
-        )
       LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
       WHERE ia.is_active = ${booleanTrue}
       ORDER BY ia.investment_category, ia.account_type, ia.account_name
@@ -284,13 +276,33 @@ async function getInvestmentSummary(params = {}) {
       fetchAssets(client),
     ]);
 
+    const snapshotByAccount = await fetchAccountHoldingSnapshots(
+      client,
+      accountsResult.rows.map((row) => row.id),
+    );
     const accountsRows = await Promise.all(
       accountsResult.rows.map(async (row) => {
         let institution = buildInstitutionFromRow(row);
         if (!institution && row.account_type) {
           institution = await getInstitutionByVendorCode(database, row.account_type);
         }
-        return { ...row, institution: institution || null };
+        const snapshot = snapshotByAccount.get(Number(row.id)) || {
+          current_value: null,
+          cost_basis: null,
+          as_of_date: null,
+          uses_pikadon_rollup: false,
+        };
+        return {
+          ...row,
+          current_value: snapshot.current_value,
+          cost_basis: snapshot.cost_basis,
+          as_of_date: snapshot.as_of_date,
+          units: null,
+          asset_name: null,
+          asset_type: null,
+          uses_pikadon_rollup: snapshot.uses_pikadon_rollup,
+          institution: institution || null,
+        };
       }),
     );
 
@@ -301,7 +313,17 @@ async function getInvestmentSummary(params = {}) {
       }),
     );
 
-    const summary = buildAccountSummaries(accountsRows, bankAccountsRows);
+    const linkedTransactions = accountsRows.length > 0
+      ? await fetchLinkedInvestmentTransactions(
+        client,
+        accountsRows.map((row) => row.id),
+      )
+      : [];
+    const rolledForwardAccounts = applyContributionRollforward(accountsRows, linkedTransactions, {
+      excludePikadonTransactions: true,
+    });
+
+    const summary = buildAccountSummaries(rolledForwardAccounts, bankAccountsRows);
 
     const assetsByAccount = {};
     const normalizedAssets = assetsResult.rows.map((row) => {
@@ -347,8 +369,8 @@ async function getInvestmentSummary(params = {}) {
       study_fund: { name: 'Study Fund', name_he: 'קופת גמל לחינוך', category: 'restricted' },
       brokerage: { name: 'Brokerage Account', name_he: 'חשבון ברוקר', category: 'liquid' },
       crypto: { name: 'Cryptocurrency', name_he: 'מטבעות דיגיטליים', category: 'liquid' },
-      savings: { name: 'Bank Savings & Cash', name_he: 'חשבונות בנק ומזומן', category: 'liquid' },
-      bank_balance: { name: 'Bank Savings & Cash', name_he: 'חשבונות בנק ומזומן', category: 'liquid' },
+      savings: { name: 'Savings & Term Deposits', name_he: 'חסכונות ופיקדונות', category: 'liquid' },
+      bank_balance: { name: 'Available Cash', name_he: 'מזומן זמין', category: 'liquid' },
       mutual_fund: { name: 'Mutual Funds', name_he: 'קרנות נאמנות', category: 'liquid' },
       bonds: { name: 'Bonds & Fixed Income', name_he: 'אג"ח והלוואות', category: 'liquid' },
       real_estate: { name: 'Real Estate', name_he: 'נדל"ן והשקעות רע"ן', category: 'liquid' },
@@ -387,7 +409,7 @@ async function getInvestmentSummary(params = {}) {
       };
     });
 
-    const investmentAccounts = accountsRows.map((account) => ({
+    const investmentAccounts = rolledForwardAccounts.map((account) => ({
       ...account,
       current_value: toNumber(account.current_value),
       cost_basis: toNumber(account.cost_basis),

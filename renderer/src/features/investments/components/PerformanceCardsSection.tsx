@@ -12,7 +12,7 @@ import {
   Paper,
 } from '@mui/material';
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
-import { PortfolioSummary, PortfolioHistoryPoint } from '@renderer/types/investments';
+import { PortfolioSummary, PortfolioHistoryPoint, InvestmentAccountSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
 import InvestmentPerformanceCard from './InvestmentPerformanceCard';
 
@@ -21,6 +21,7 @@ interface PerformanceCardsSectionProps {
   accountHistories: Record<number, PortfolioHistoryPoint[]>;
   categoryFilter: string;
   onCategoryFilterChange: (category: string) => void;
+  onAccountClick?: (account: InvestmentAccountSummary) => void;
 }
 
 const CHART_COLORS = [
@@ -41,6 +42,7 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
   accountHistories,
   categoryFilter,
   onCategoryFilterChange,
+  onAccountClick,
 }) => {
   const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.performance' });
@@ -91,7 +93,7 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
         }}
       >
         <Typography variant="subtitle1" fontWeight={600}>
-          {t('title', 'My Performance')}
+          Account Overview
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -177,6 +179,7 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
             account={account}
             history={accountHistories[account.id] || []}
             color={CHART_COLORS[index % CHART_COLORS.length]}
+            onClick={account.account_type === 'savings' ? onAccountClick : undefined}
           />
         ))}
 

@@ -176,6 +176,7 @@ declare global {
     isWindows?: boolean;
     isMacOS?: boolean;
     isLinux?: boolean;
+    reduceVisualEffects?: boolean;
   }
 
   interface ElectronDevTools {

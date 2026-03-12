@@ -13,6 +13,7 @@ const {
   Tray,
   Menu,
   nativeImage,
+  nativeTheme,
   crashReporter,
   clipboard,
 } = require('electron');
@@ -43,6 +44,7 @@ const isMac = process.platform === 'darwin';
 const isLinux = process.platform === 'linux';
 const allowUnsafeIpc = process.env.ALLOW_UNSAFE_IPC === 'true';
 const allowInsecureEnvKey = process.env.ALLOW_INSECURE_ENV_KEY === 'true';
+const reduceVisualEffectsEnv = (process.env.SHEKELSYNC_REDUCE_VISUAL_EFFECTS || '').trim().toLowerCase();
 const keytarDisabledByEnv =
   process.env.KEYTAR_DISABLE === 'true' ||
   process.env.DBUS_SESSION_BUS_ADDRESS === 'disabled:';
@@ -57,6 +59,16 @@ if (isPackaged && (sandboxDisabledByEnv || sandboxDisabledByFlag)) {
   logger.error('Sandbox disabled in packaged build. Refusing to start.', { reason });
   console.error('Sandbox disabled in packaged build. Refusing to start.', reason);
   app.exit(1);
+}
+
+function shouldReduceVisualEffects() {
+  if (reduceVisualEffectsEnv === 'true') {
+    return true;
+  }
+  if (reduceVisualEffectsEnv === 'false') {
+    return false;
+  }
+  return isMac;
 }
 
 function abortForSecurity(message) {
@@ -867,6 +879,38 @@ function getSyncScheduler() {
   return syncScheduler;
 }
 
+async function authenticateMacBiometricsIfAvailable() {
+  if (!isMac) {
+    return;
+  }
+
+  try {
+    const biometricAuthManager = require('./auth/biometric-auth');
+    const isAvailable = await biometricAuthManager.isAvailable();
+
+    if (!isAvailable) {
+      logger.info('[Main] Touch ID not available on this system');
+      return;
+    }
+
+    logger.info('[Main] Touch ID is available, prompting for authentication...');
+    try {
+      const result = await biometricAuthManager.authenticate('Authenticate to open ShekelSync');
+      if (result.success) {
+        logger.info('[Main] Touch ID authentication successful');
+      } else {
+        logger.warn('[Main] Touch ID authentication failed, proceeding anyway');
+      }
+    } catch (error) {
+      logger.warn('[Main] Touch ID authentication error:', error.message);
+      console.warn('Touch ID authentication failed:', error.message);
+    }
+  } catch (error) {
+    logger.error('[Main] Error initializing Touch ID:', error.message);
+    console.error('Error initializing Touch ID:', error);
+  }
+}
+
 function emitSessionChanged(session) {
   if (mainWindow?.webContents) {
     mainWindow.webContents.send('auth:session-changed', sanitizeSession(session));
@@ -994,6 +1038,10 @@ function setupTray() {
 async function createWindow() {
   const skipEmbeddedApi = process.env.SKIP_EMBEDDED_API === 'true';
   const devRendererUrl = process.env.RENDERER_DEV_URL || 'http://localhost:5173';
+  const reduceVisualEffects = shouldReduceVisualEffects();
+  const windowBackgroundColor = reduceVisualEffects
+    ? (nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#f8fef9')
+    : '#00000000';
 
   if (isDev) {
     process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
@@ -1046,11 +1094,11 @@ async function createWindow() {
     minWidth: 1200,
     minHeight: 700,
     title: 'ShekelSync - Personal Finance Tracker',
-    backgroundColor: '#00000000', // Transparent for rounded corners
+    backgroundColor: windowBackgroundColor,
     frame: false, // Frameless on all platforms
     titleBarStyle: 'hidden', // Custom title bar handling
     titleBarOverlay: isMac, // Only needed for macOS traffic lights
-    transparent: true, // Enable transparency for rounded corners on all platforms
+    transparent: !reduceVisualEffects,
     roundedCorners: true, // Enable rounded corners
     hasShadow: true,
     webPreferences: {
@@ -1070,11 +1118,17 @@ async function createWindow() {
   });
 
   let windowShown = false;
+  const showFallbackDelayMs = isDev ? 8000 : 5000;
+  let showFallbackTimer = null;
   const ensureWindowVisible = () => {
     if (!mainWindow || windowShown || mainWindow.isDestroyed()) {
       return;
     }
     windowShown = true;
+    if (showFallbackTimer) {
+      clearTimeout(showFallbackTimer);
+      showFallbackTimer = null;
+    }
     console.log('Electron main window ready, displaying now...');
     mainWindow.center(); // Ensure window appears on primary display
     if (!mainWindow.isVisible()) {
@@ -1094,12 +1148,13 @@ async function createWindow() {
   });
   mainWindow.webContents.once('did-finish-load', () => {
     console.log('WebContents finished load');
-    ensureWindowVisible();
   });
-  setTimeout(() => {
-    console.log('Fallback timer triggering ensureWindowVisible');
+  showFallbackTimer = setTimeout(() => {
+    console.log(
+      `Fallback timer (${showFallbackDelayMs}ms) triggering ensureWindowVisible`,
+    );
     ensureWindowVisible();
-  }, 1500);
+  }, showFallbackDelayMs);
 
   // Send window state changes to renderer
   const emitWindowState = () => {
@@ -1145,7 +1200,6 @@ async function createWindow() {
     }
   }
 
-  ensureWindowVisible();
   emitWindowState();
 
   // Handle window closed
@@ -1178,35 +1232,6 @@ async function createWindow() {
 app.whenReady().then(async () => {
   await loadInitialSettings();
 
-  // Touch ID authentication on macOS
-  if (isMac) {
-    try {
-      const biometricAuthManager = require('./auth/biometric-auth');
-      const isAvailable = await biometricAuthManager.isAvailable();
-
-      if (isAvailable) {
-        logger.info('[Main] Touch ID is available, prompting for authentication...');
-        try {
-          const result = await biometricAuthManager.authenticate('Authenticate to open ShekelSync');
-          if (result.success) {
-            logger.info('[Main] Touch ID authentication successful');
-          } else {
-            logger.warn('[Main] Touch ID authentication failed, proceeding anyway');
-          }
-        } catch (error) {
-          // If authentication fails or is cancelled, log it but don't block app launch
-          logger.warn('[Main] Touch ID authentication error:', error.message);
-          console.warn('Touch ID authentication failed:', error.message);
-        }
-      } else {
-        logger.info('[Main] Touch ID not available on this system');
-      }
-    } catch (error) {
-      logger.error('[Main] Error initializing Touch ID:', error.message);
-      console.error('Error initializing Touch ID:', error);
-    }
-  }
-
   const isIpcSmokeTest = process.env.LICENSE_IPC_SMOKE_TEST === 'true';
   if (isIpcSmokeTest) {
     try {
@@ -1220,6 +1245,11 @@ app.whenReady().then(async () => {
 
   await createWindow();
   setupTray();
+  if (isMac) {
+    setTimeout(() => {
+      void authenticateMacBiometricsIfAvailable();
+    }, 250);
+  }
 
   if (process.env.LICENSE_SMOKE_TEST_EMAIL) {
     setTimeout(() => {

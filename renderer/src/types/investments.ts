@@ -190,6 +190,85 @@ export interface InvestmentBalanceSheetResponse {
   missingValuationsCount: number;
 }
 
+export interface InvestmentPerformanceTimelinePoint {
+  date: string;
+  currentValue: number;
+  costBasis: number;
+  contributions: number;
+  withdrawals: number;
+  capitalReturns: number;
+  income: number;
+  fees: number;
+  valueChange: number;
+  marketMove: number;
+  netFlow: number;
+}
+
+export interface InvestmentPerformanceResponse {
+  range: string;
+  startDate: string | null;
+  endDate: string | null;
+  startValue: number;
+  endValue: number;
+  valueChange: number;
+  netFlows: {
+    contributions: number;
+    withdrawals: number;
+    netContributions: number;
+  };
+  capitalReturns: number;
+  income: number;
+  fees: number;
+  marketMove: number;
+  twr: number;
+  mwr: number | null;
+  timeline: InvestmentPerformanceTimelinePoint[];
+}
+
+export interface InvestmentPosition {
+  id: number;
+  account_id: number;
+  account_name?: string;
+  position_name: string;
+  asset_type?: string | null;
+  currency: string;
+  status: 'open' | 'closed';
+  opened_at: string;
+  closed_at?: string | null;
+  original_cost_basis: number;
+  open_cost_basis: number;
+  current_value?: number | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface InvestmentPositionEvent {
+  id: number;
+  position_id: number;
+  event_type:
+    | 'deposit'
+    | 'buy'
+    | 'sell'
+    | 'capital_return'
+    | 'dividend'
+    | 'interest'
+    | 'fee'
+    | 'valuation'
+    | 'rollover';
+  effective_date: string;
+  amount?: number | null;
+  principal_amount?: number | null;
+  income_amount?: number | null;
+  fee_amount?: number | null;
+  units?: number | null;
+  current_value?: number | null;
+  close_action?: 'keep_open' | 'partial_close' | 'full_close' | null;
+  linked_transaction_identifier?: string | null;
+  linked_transaction_vendor?: string | null;
+  notes?: string | null;
+}
+
 // Pikadon (Term Deposit) Types
 
 export interface PikadonHolding {
@@ -212,6 +291,32 @@ export interface PikadonHolding {
   return_transaction_vendor: string | null;
   parent_pikadon_id: number | null;
   notes?: string;
+}
+
+export interface PikadonDetailsInput {
+  maturity_date: string;
+  interest_rate?: number | null;
+  notes?: string | null;
+}
+
+export interface PendingPikadonSetup {
+  account_id: number;
+  account_name?: string | null;
+  transaction_identifier: string;
+  transaction_vendor: string;
+  principal: number;
+  deposit_date: string;
+  transaction_name: string | null;
+}
+
+export interface PikadonListResponse {
+  pikadon: PikadonHolding[];
+  pending_setup: PendingPikadonSetup[];
+}
+
+export interface PikadonDetailsRequiredResponse {
+  error: 'pikadon_details_required';
+  pikadonCandidate: PendingPikadonSetup;
 }
 
 export interface PikadonSummary {

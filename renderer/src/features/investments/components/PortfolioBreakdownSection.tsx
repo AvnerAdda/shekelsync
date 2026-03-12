@@ -27,10 +27,12 @@ interface PortfolioBreakdownSectionProps {
   portfolioData: PortfolioSummary;
   accountHistories: Record<number, PortfolioHistoryPoint[]>;
   historyLoading: boolean;
+  onAccountClick?: (account: InvestmentAccountSummary) => void;
 }
 
 const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
   portfolioData,
+  onAccountClick,
 }) => {
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
@@ -60,9 +62,19 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
         {accounts.map((account) => {
           const roi = calculatePortfolioRoi(account.current_value, account.cost_basis);
           const isPositive = roi >= 0;
+          const isClickable = Boolean(onAccountClick) && account.account_type === 'savings';
 
           return (
-            <ListItem key={account.id} disablePadding sx={{ py: 0.5, px: 2 }}>
+            <ListItem
+              key={account.id}
+              disablePadding
+              onClick={() => isClickable ? onAccountClick?.(account) : undefined}
+              sx={{
+                py: 0.5,
+                px: 2,
+                cursor: isClickable ? 'pointer' : 'default',
+              }}
+            >
               <ListItemIcon sx={{ minWidth: 24 }}>
                 <CircleIcon
                   sx={{
@@ -113,6 +125,14 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
 
   return (
     <Paper sx={{ height: '100%', overflow: 'auto', bgcolor: 'background.paper' }}>
+      <Box sx={{ p: 2, pb: 1.5 }}>
+        <Typography variant="subtitle1" fontWeight={600}>
+          Account Breakdown
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Compare account balances and unrealized gain across liquid and long-term buckets.
+        </Typography>
+      </Box>
       <List dense>
         {/* Render Liquid Accounts first (Top of the stack visually) */}
         {renderAccountList(liquidAccounts, t('group.liquid', 'Liquid Assets'))}

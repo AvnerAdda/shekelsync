@@ -186,7 +186,7 @@ async function upsertHolding(payload = {}) {
           account_id, current_value, cost_basis, as_of_date,
           asset_name, asset_type, units, notes
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (account_id, as_of_date)
+        ON CONFLICT (account_id, as_of_date) WHERE holding_type = 'standard'
         DO UPDATE SET
           current_value = EXCLUDED.current_value,
           cost_basis = EXCLUDED.cost_basis,

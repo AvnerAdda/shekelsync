@@ -299,6 +299,8 @@ describe('notifications service', () => {
     expect(result.data.notifications[0].type).toBe('unusual_spending');
     expect(result.data.notifications[0].data.transaction_id).toBe('n8');
     expect(result.data.notifications[0].actions[0].action).toBe('view_transaction');
+    expect(result.data.notifications[0].actions[0].params).toEqual({ id: 'n8', vendor: 'coffee' });
+    expect(result.data.notifications[0].actions[1].params).toEqual({ id: 'n8', vendor: 'coffee' });
   });
 
   it('creates high-transaction alerts using percentile threshold and recency window', async () => {
@@ -335,6 +337,10 @@ describe('notifications service', () => {
     expect(result.data.notifications).toHaveLength(1);
     expect(result.data.notifications[0].type).toBe('high_transaction');
     expect(result.data.notifications[0].data.transaction_id).toBe('t10');
+    expect(result.data.notifications[0].actions[0].params).toEqual({
+      id: 't10',
+      vendor: 'electronics',
+    });
   });
 
   it('creates new vendor and cash flow alerts from aggregate queries', async () => {
@@ -364,6 +370,7 @@ describe('notifications service', () => {
     const vendorResult = await notificationsService.getNotifications({ type: 'new_vendor' });
     expect(vendorResult.data.notifications).toHaveLength(1);
     expect(vendorResult.data.notifications[0].type).toBe('new_vendor');
+    expect(vendorResult.data.notifications[0].actions[0].params).toEqual({ vendor: 'New Grocery' });
     expect(vendorResult.data.notifications[0].actions[1].action).toBe('create_rule');
 
     const cashFlowClient = createMockClient(async (sql) => {

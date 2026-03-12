@@ -703,8 +703,16 @@ async function getNotifications(query = {}) {
             timestamp: txn.date.toISOString(),
             actionable: true,
             actions: [
-              { label: 'View Transaction', action: 'view_transaction', params: { id: txn.identifier } },
-              { label: 'Categorize', action: 'categorize_transaction', params: { id: txn.identifier } },
+              {
+                label: 'View Transaction',
+                action: 'view_transaction',
+                params: { id: txn.identifier, vendor: txn.vendor },
+              },
+              {
+                label: 'Categorize',
+                action: 'categorize_transaction',
+                params: { id: txn.identifier, vendor: txn.vendor },
+              },
             ],
           });
         });
@@ -778,7 +786,13 @@ async function getNotifications(query = {}) {
               },
               timestamp: txn.date.toISOString(),
               actionable: true,
-              actions: [{ label: 'View Details', action: 'view_transaction', params: { id: txn.identifier } }],
+              actions: [
+                {
+                  label: 'View Details',
+                  action: 'view_transaction',
+                  params: { id: txn.identifier, vendor: txn.vendor },
+                },
+              ],
             });
           });
       }

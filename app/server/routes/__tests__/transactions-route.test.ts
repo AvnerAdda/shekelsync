@@ -22,6 +22,8 @@ function buildApp() {
   app.get('/api/category_by_month', transactionsHandlers.getCategoryByMonth);
   app.get('/api/transactions/recent', transactionsHandlers.getRecentTransactions);
   app.get('/api/transactions/search', transactionsHandlers.searchTransactions);
+  app.get('/api/transactions/tags', transactionsHandlers.getAllTags);
+  app.get('/api/transactions/:id', transactionsHandlers.getTransaction);
   app.get('/api/category_expenses', transactionsHandlers.getCategoryExpenses);
   app.get('/api/expenses_by_month', transactionsHandlers.getExpensesByMonth);
   app.get('/api/month_by_categories', transactionsHandlers.getMonthByCategories);
@@ -30,7 +32,6 @@ function buildApp() {
   app.put('/api/transactions', transactionsHandlers.updateTransaction);
   app.delete('/api/transactions/:id', transactionsHandlers.deleteTransaction);
   app.delete('/api/transactions', transactionsHandlers.deleteTransaction);
-  app.get('/api/transactions/tags', transactionsHandlers.getAllTags);
   return app;
 }
 
@@ -83,6 +84,18 @@ describe('Electron transaction endpoints', () => {
 
     expect(res.body).toEqual(payload);
     expect(spy).toHaveBeenCalledWith({ vendor: 'acme' });
+  });
+
+  it('returns a single transaction', async () => {
+    const payload = { identifier: 'txn-1', vendor: 'bank', tags: [] };
+    const spy = vi.spyOn(listService, 'getTransactionById').mockResolvedValue(payload);
+
+    const res = await request(app)
+      .get('/api/transactions/txn-1%7Cbank')
+      .expect(200);
+
+    expect(res.body).toEqual(payload);
+    expect(spy).toHaveBeenCalledWith('txn-1|bank');
   });
 
   it('returns category spending timeline', async () => {
@@ -227,6 +240,13 @@ describe('Electron transaction endpoints', () => {
       message: 'search failed',
     });
     await request(app).get('/api/transactions/search').expect(500);
+
+    vi.spyOn(listService, 'getTransactionById').mockRejectedValue({
+      status: 404,
+      message: 'missing',
+    });
+    const getRes = await request(app).get('/api/transactions/txn%7Cmissing').expect(404);
+    expect(getRes.body.error).toMatch(/missing/i);
 
     vi.spyOn(adminService, 'createManualTransaction').mockRejectedValue({
       status: 500,

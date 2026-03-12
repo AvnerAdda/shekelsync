@@ -8,6 +8,13 @@ const {
   getInstitutionById,
   getInstitutionByVendorCode,
 } = require('../institutions.js');
+const {
+  applyContributionRollforward,
+  fetchLinkedInvestmentTransactions,
+} = require('./linked-transaction-rollforward.js');
+const {
+  fetchAccountHoldingSnapshots,
+} = require('./account-snapshots.js');
 
 const VALID_TYPES = new Set([
   'pension',
@@ -71,14 +78,6 @@ async function listAccounts(params = {}) {
       ia.*,
       ${INSTITUTION_SELECT_FIELDS},
       COUNT(DISTINCT ih.id) AS holdings_count,
-      MAX(ih.as_of_date) AS last_update_date,
-      (
-        SELECT current_value
-        FROM investment_holdings
-        WHERE account_id = ia.id
-        ORDER BY as_of_date DESC
-        LIMIT 1
-      ) AS current_value,
       (
         SELECT SUM(ABS(t.price))
         FROM transaction_account_links tal
@@ -97,10 +96,20 @@ async function listAccounts(params = {}) {
   `;
 
   const result = await database.query(query, values);
+  const snapshotByAccount = await fetchAccountHoldingSnapshots(
+    database,
+    result.rows.map((row) => row.id),
+  );
 
   const accounts = await Promise.all(
     result.rows.map(async (row) => {
-      const explicitValue = row.current_value ? Number.parseFloat(row.current_value) : null;
+      const snapshot = snapshotByAccount.get(Number(row.id)) || {
+        current_value: null,
+        cost_basis: null,
+        as_of_date: null,
+        uses_pikadon_rollup: false,
+      };
+      const explicitValue = snapshot.current_value;
       const totalInvested = row.total_invested ? Number.parseFloat(row.total_invested) : null;
       let institution = buildInstitutionFromRow(row);
 
@@ -110,8 +119,11 @@ async function listAccounts(params = {}) {
 
       return {
         ...row,
-        current_value: explicitValue || totalInvested, // Use explicit value if set, otherwise use sum of transactions
+        current_value: explicitValue ?? totalInvested,
         current_value_explicit: explicitValue, // Keep track of whether it was explicitly set
+        cost_basis: snapshot.cost_basis,
+        last_update_date: snapshot.as_of_date,
+        uses_pikadon_rollup: snapshot.uses_pikadon_rollup,
         total_invested: totalInvested,
         holdings_count: Number.parseInt(row.holdings_count, 10),
         is_liquid: row.is_liquid,
@@ -120,6 +132,17 @@ async function listAccounts(params = {}) {
       };
     }),
   );
+
+  if (accounts.length > 0) {
+    const linkedTransactions = await fetchLinkedInvestmentTransactions(
+      database,
+      accounts.map((account) => account.id),
+    );
+    applyContributionRollforward(accounts, linkedTransactions, {
+      dateField: 'last_update_date',
+      excludePikadonTransactions: true,
+    });
+  }
 
   return { accounts };
 }
