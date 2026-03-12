@@ -27,6 +27,7 @@ interface UpdaterApi {
     autoUpdateEnabled: boolean;
     currentVersion: string;
     platform: string;
+    reason?: string | null;
   }>;
 }
 

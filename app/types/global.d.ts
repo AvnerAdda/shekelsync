@@ -283,6 +283,7 @@ declare global {
       autoUpdateEnabled: boolean;
       currentVersion: string;
       platform: string;
+      reason?: string | null;
     }>;
   }
 

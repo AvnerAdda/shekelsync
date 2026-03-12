@@ -26,6 +26,7 @@ interface UpdateRuntimeInfo {
   autoUpdateEnabled: boolean;
   currentVersion: string;
   platform: string;
+  reason?: string | null;
 }
 
 interface UpdateManagerReturn {
