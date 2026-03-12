@@ -3,6 +3,156 @@ const express = require('express');
 // Dynamic imports for ES modules
 let suggestionAnalyzer;
 let autoLinker;
+const {
+  buildPikadonCandidate,
+} = require('../services/investments/pikadon-candidates.js');
+
+function normalizePikadonDetails(details) {
+  if (!details || typeof details !== 'object') {
+    return null;
+  }
+
+  const maturityDate = typeof details.maturity_date === 'string'
+    ? details.maturity_date.trim()
+    : '';
+  const interestRate =
+    details.interest_rate === undefined || details.interest_rate === null || details.interest_rate === ''
+      ? null
+      : Number(details.interest_rate);
+
+  return {
+    maturity_date: maturityDate || null,
+    interest_rate: Number.isFinite(interestRate) ? interestRate : null,
+    notes: typeof details.notes === 'string' ? details.notes.trim() : null,
+  };
+}
+
+async function syncLinkedPikadonHolding({
+  pool,
+  pikadonService,
+  accountId,
+  transactionIdentifier,
+  transactionVendor,
+  transaction,
+  pikadonCandidate,
+  existingHolding,
+  pikadonDetails,
+  dbAdapter,
+}) {
+  const candidate = pikadonCandidate || buildPikadonCandidate({
+    accountId,
+    transactionIdentifier,
+    transactionVendor,
+    transaction,
+  });
+  if (!candidate) {
+    return null;
+  }
+
+  const linkedPikadon = existingHolding
+    || await pikadonService.findLinkedPikadonByDepositTransaction?.(
+      transactionIdentifier,
+      transactionVendor,
+      dbAdapter,
+    )
+    || null;
+  if (linkedPikadon) {
+    if (Number(linkedPikadon.account_id) !== Number(accountId)) {
+      await pool.query(
+        `
+          UPDATE investment_holdings
+          SET account_id = $1, updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2
+        `,
+        [accountId, linkedPikadon.id],
+      );
+    }
+
+    let updatedPikadon = linkedPikadon;
+    if (pikadonDetails) {
+      updatedPikadon = (
+        await pikadonService.updatePikadon(linkedPikadon.id, pikadonDetails, dbAdapter)
+      ).pikadon;
+    }
+
+    await pool.query(
+      'UPDATE transactions SET is_pikadon_related = 1 WHERE identifier = $1 AND vendor = $2',
+      [transactionIdentifier, transactionVendor],
+    );
+
+    return {
+      pikadon: {
+        ...updatedPikadon,
+        account_id: Number(accountId),
+      },
+      synced: true,
+    };
+  }
+
+  const created = await pikadonService.createPikadon(
+    {
+      account_id: Number(accountId),
+      cost_basis: candidate.principal,
+      as_of_date: candidate.deposit_date,
+      maturity_date: pikadonDetails?.maturity_date,
+      deposit_transaction_id: transactionIdentifier,
+      deposit_transaction_vendor: transactionVendor,
+      interest_rate: pikadonDetails?.interest_rate ?? null,
+      notes: pikadonDetails?.notes || 'Linked from pikadon transaction',
+    },
+    dbAdapter,
+  );
+
+  await pool.query(
+    'UPDATE transactions SET is_pikadon_related = 1 WHERE identifier = $1 AND vendor = $2',
+    [transactionIdentifier, transactionVendor],
+  );
+
+  return created;
+}
+
+async function findExistingLinkedPikadon(
+  pikadonService,
+  transactionIdentifier,
+  transactionVendor,
+  dbAdapter,
+) {
+  if (typeof pikadonService?.findLinkedPikadonByDepositTransaction !== 'function') {
+    return null;
+  }
+
+  return pikadonService.findLinkedPikadonByDepositTransaction(
+    transactionIdentifier,
+    transactionVendor,
+    dbAdapter,
+  );
+}
+
+function pikadonNeedsSetup(existingHolding, pikadonDetails) {
+  if (pikadonDetails?.maturity_date) {
+    return false;
+  }
+
+  return !existingHolding?.maturity_date;
+}
+
+function buildPikadonRequirementResponse(candidate) {
+  return {
+    error: 'pikadon_details_required',
+    pikadonCandidate: candidate,
+  };
+}
+
+async function getQueryClient(databaseService) {
+  if (typeof databaseService?.getClient === 'function') {
+    return databaseService.getClient();
+  }
+
+  return {
+    query: (...args) => databaseService.query(...args),
+    release: () => {},
+  };
+}
 
 async function loadESModules() {
   if (!suggestionAnalyzer) {
@@ -30,6 +180,7 @@ function __resetESModulesForTests() {
 function createInvestmentsRouter({ services = {} } = {}) {
   const checkExistingService = services.checkExistingService || require('../services/investments/check-existing.js');
   const historyService = services.historyService || require('../services/investments/history.js');
+  const performanceService = services.performanceService || require('../services/investments/performance.js');
   const patternsService = services.patternsService || require('../services/investments/patterns.js');
   const pendingSuggestionsService = services.pendingSuggestionsService || require('../services/investments/pending-suggestions.js');
   const costBasisService = services.costBasisService || require('../services/investments/suggest-cost-basis.js');
@@ -37,6 +188,8 @@ function createInvestmentsRouter({ services = {} } = {}) {
   const assetsService = services.assetsService || require('../services/investments/assets.js');
   const holdingsService = services.holdingsService || require('../services/investments/holdings.js');
   const summaryService = services.summaryService || require('../services/investments/summary.js');
+  const balanceSheetService = services.balanceSheetService || require('../services/investments/balance-sheet.js');
+  const positionsService = services.positionsService || require('../services/investments/positions.js');
   const bankSummaryService = services.bankSummaryService || require('../services/investments/bank-summary.js');
   const suggestionAnalyzerCJS = services.suggestionAnalyzerCJS || require('../services/investments/suggestion-analyzer-cjs.js');
   const pikadonService = services.pikadonService || require('../services/investments/pikadon.js');
@@ -66,6 +219,19 @@ function createInvestmentsRouter({ services = {} } = {}) {
       res.status(error?.statusCode || 500).json({
         error: error?.message || 'Failed to fetch investment history',
         details: error?.payload || error?.stack,
+      });
+    }
+  });
+
+  router.get('/performance', async (req, res) => {
+    try {
+      const result = await performanceService.getInvestmentPerformance(req.query || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Investments performance error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch investment performance',
+        details: error?.stack,
       });
     }
   });
@@ -341,6 +507,45 @@ function createInvestmentsRouter({ services = {} } = {}) {
     }
   });
 
+  router.get('/balance-sheet', async (req, res) => {
+    try {
+      const result = await balanceSheetService.getInvestmentBalanceSheet(req.query || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Investments balance sheet error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch investment balance sheet',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/positions', async (req, res) => {
+    try {
+      const result = await positionsService.listPositions(req.query || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Investments positions list error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch investment positions',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.post('/position-events', async (req, res) => {
+    try {
+      const result = await positionsService.createPositionEvent(req.body || {});
+      res.status(201).json(result);
+    } catch (error) {
+      console.error('Investments position-event create error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to create investment position event',
+        details: error?.stack,
+      });
+    }
+  });
+
   /**
    * GET /api/investments/bank-summary
    * Get comprehensive bank balance summary with historical data
@@ -455,10 +660,10 @@ function createInvestmentsRouter({ services = {} } = {}) {
             dismiss_count,
             last_dismissed_at
           )
-          VALUES (?, ?, 'dismissed', 1, datetime('now'))
+          VALUES ($1, $2, 'dismissed', 1, CURRENT_TIMESTAMP)
           ON CONFLICT(transaction_identifier, transaction_vendor) DO UPDATE SET
             dismiss_count = dismiss_count + 1,
-            last_dismissed_at = datetime('now'),
+            last_dismissed_at = CURRENT_TIMESTAMP,
             status = 'dismissed'
         `;
 
@@ -498,7 +703,8 @@ function createInvestmentsRouter({ services = {} } = {}) {
         transaction_vendor,
         account_id,
         link_method = 'manual',
-        confidence = 1.0
+        confidence = 1.0,
+        pikadon_details,
       } = req.body;
 
       if (!transaction_identifier || !transaction_vendor || !account_id) {
@@ -507,65 +713,123 @@ function createInvestmentsRouter({ services = {} } = {}) {
         });
       }
 
-      const pool = databaseService;
+      const client = await getQueryClient(databaseService);
+      let transactionComplete = false;
 
-      // First, get the transaction date
-      const txnQuery = `
-        SELECT date FROM transactions
-        WHERE identifier = ? AND vendor = ?
-        LIMIT 1
-      `;
-      const txnResult = await pool.query(txnQuery, [transaction_identifier, transaction_vendor]);
+      try {
+        await client.query('BEGIN');
 
-      if (!txnResult.rows || txnResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Transaction not found',
-          transaction_identifier,
-          transaction_vendor
+        // First, get the transaction details so we can sync pikadon holdings when relevant.
+        const txnQuery = `
+          SELECT date, name, memo, price
+          FROM transactions
+          WHERE identifier = $1 AND vendor = $2
+          LIMIT 1
+        `;
+        const txnResult = await client.query(txnQuery, [transaction_identifier, transaction_vendor]);
+
+        if (!txnResult.rows || txnResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          transactionComplete = true;
+          return res.status(404).json({
+            error: 'Transaction not found',
+            transaction_identifier,
+            transaction_vendor
+          });
+        }
+
+        const transaction = txnResult.rows[0];
+        const transactionDate = transaction.date;
+        const normalizedPikadonDetails = normalizePikadonDetails(pikadon_details);
+        const pikadonCandidate = buildPikadonCandidate({
+          accountId: account_id,
+          transactionIdentifier: transaction_identifier,
+          transactionVendor: transaction_vendor,
+          transaction,
         });
-      }
+        const existingPikadon = pikadonCandidate
+          ? await findExistingLinkedPikadon(
+            pikadonService,
+            transaction_identifier,
+            transaction_vendor,
+            client,
+          )
+          : null;
 
-      const transactionDate = txnResult.rows[0].date;
+        if (pikadonCandidate && pikadonNeedsSetup(existingPikadon, normalizedPikadonDetails)) {
+          await client.query('ROLLBACK');
+          transactionComplete = true;
+          return res.status(422).json(buildPikadonRequirementResponse(pikadonCandidate));
+        }
 
-      // Insert or update the link
-      const insertQuery = `
-        INSERT INTO transaction_account_links (
+        const insertQuery = `
+          INSERT INTO transaction_account_links (
+            transaction_identifier,
+            transaction_vendor,
+            transaction_date,
+            account_id,
+            link_method,
+            confidence,
+            created_by
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, 'user')
+          ON CONFLICT(transaction_identifier, transaction_vendor) DO UPDATE SET
+            account_id = excluded.account_id,
+            link_method = excluded.link_method,
+            confidence = excluded.confidence,
+            created_at = CURRENT_TIMESTAMP
+        `;
+
+        await client.query(insertQuery, [
           transaction_identifier,
           transaction_vendor,
-          transaction_date,
-          account_id,
-          link_method,
-          confidence,
-          created_by
-        )
-        VALUES (?, ?, ?, ?, ?, ?, 'user')
-        ON CONFLICT(transaction_identifier, transaction_vendor) DO UPDATE SET
-          account_id = excluded.account_id,
-          link_method = excluded.link_method,
-          confidence = excluded.confidence,
-          created_at = datetime('now')
-      `;
-
-      await pool.query(insertQuery, [
-        transaction_identifier,
-        transaction_vendor,
-        transactionDate,
-        account_id,
-        link_method,
-        confidence
-      ]);
-
-      res.status(201).json({
-        success: true,
-        message: 'Transaction linked successfully',
-        link: {
-          transaction_identifier,
-          transaction_vendor,
+          transactionDate,
           account_id,
           link_method,
           confidence
+        ]);
+
+        const pikadonSync = await syncLinkedPikadonHolding({
+          pool: client,
+          pikadonService,
+          accountId: account_id,
+          transactionIdentifier: transaction_identifier,
+          transactionVendor: transaction_vendor,
+          transaction,
+          pikadonCandidate,
+          existingHolding: existingPikadon,
+          pikadonDetails: normalizedPikadonDetails,
+          dbAdapter: client,
+        });
+
+        await client.query('COMMIT');
+        transactionComplete = true;
+
+        res.status(201).json({
+          success: true,
+          message: 'Transaction linked successfully',
+          link: {
+            transaction_identifier,
+            transaction_vendor,
+            account_id,
+            link_method,
+            confidence
+          },
+          pikadon: pikadonSync?.pikadon || null,
+          pikadonSynced: Boolean(pikadonSync),
+        });
+      } catch (error) {
+        if (!transactionComplete) {
+          try {
+            await client.query('ROLLBACK');
+          } catch (_rollbackError) {
+            // Ignore rollback failures and surface the original error.
+          }
         }
-      });
+        throw error;
+      } finally {
+        client.release?.();
+      }
     } catch (error) {
       console.error('Investments transaction-link create error:', error);
       res.status(error?.status || 500).json({
@@ -601,7 +865,7 @@ function createInvestmentsRouter({ services = {} } = {}) {
         FROM transaction_account_links tal
         LEFT JOIN transactions t ON tal.transaction_identifier = t.identifier
           AND tal.transaction_vendor = t.vendor
-        WHERE tal.account_id = ?
+        WHERE tal.account_id = $1
         ORDER BY tal.created_at DESC
       `;
 
@@ -640,7 +904,7 @@ function createInvestmentsRouter({ services = {} } = {}) {
 
       const deleteQuery = `
         DELETE FROM transaction_account_links
-        WHERE transaction_identifier = ? AND transaction_vendor = ?
+        WHERE transaction_identifier = $1 AND transaction_vendor = $2
       `;
 
       await pool.query(deleteQuery, [transaction_identifier, transaction_vendor]);
@@ -866,6 +1130,23 @@ function createInvestmentsRouter({ services = {} } = {}) {
       console.error('Pikadon create error:', error);
       res.status(error?.status || 500).json({
         error: error?.message || 'Failed to create pikadon',
+        details: error?.stack,
+      });
+    }
+  });
+
+  /**
+   * PUT /api/investments/pikadon/:id
+   * Update editable pikadon metadata
+   */
+  router.put('/pikadon/:id', async (req, res) => {
+    try {
+      const result = await pikadonService.updatePikadon(req.params.id, req.body || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Investments pikadon update error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to update pikadon',
         details: error?.stack,
       });
     }

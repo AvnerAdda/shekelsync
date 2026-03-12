@@ -269,6 +269,27 @@ describe('late targeted coverage for institutions, summary, and subscriptions', 
           ],
         };
       }
+      if (text.includes('WITH ranked_standard AS')) {
+        return {
+          rows: [
+            {
+              account_id: 1,
+              current_value: '200',
+              cost_basis: '150',
+              as_of_date: '2026-02-10',
+            },
+            {
+              account_id: 2,
+              current_value: '100',
+              cost_basis: '120',
+              as_of_date: '2026-01-10',
+            },
+          ],
+        };
+      }
+      if (text.includes("ih.holding_type = 'pikadon'")) {
+        return { rows: [] };
+      }
       if (text.includes('FROM investment_assets iasset')) {
         return {
           rows: [
