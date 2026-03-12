@@ -152,18 +152,17 @@ function resolveSqliteDatabaseCtor(databaseCtor) {
   return SqliteDatabase;
 }
 
-function hasMinimumSchema(dbPath, databaseCtor) {
+function inspectMinimumSchema(dbPath, databaseCtor) {
   let db = null;
+  const requiredTables = [
+    'transactions',
+    'vendor_credentials',
+    'category_definitions',
+    'institution_nodes',
+  ];
   try {
     const DatabaseCtor = resolveSqliteDatabaseCtor(databaseCtor);
     db = new DatabaseCtor(dbPath, { fileMustExist: true, readonly: true });
-
-    const requiredTables = [
-      'transactions',
-      'vendor_credentials',
-      'category_definitions',
-      'institution_nodes',
-    ];
 
     const placeholders = requiredTables.map(() => '?').join(', ');
     const presentRows = db
@@ -175,9 +174,21 @@ function hasMinimumSchema(dbPath, databaseCtor) {
       .all(requiredTables);
 
     const present = new Set(presentRows.map((row) => row.name));
-    return requiredTables.every((name) => present.has(name));
-  } catch {
-    return false;
+    const missingTables = requiredTables.filter((name) => !present.has(name));
+    if (missingTables.length === 0) {
+      return { ok: true, missingTables: [], reason: null };
+    }
+    return {
+      ok: false,
+      missingTables,
+      reason: `missing required tables: ${missingTables.join(', ')}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      missingTables: requiredTables,
+      reason: `schema probe failed: ${error?.message || String(error)}`,
+    };
   } finally {
     try {
       db?.close();
@@ -211,6 +222,17 @@ function createPreReinitializeBackup(dbPath) {
   return backupPath;
 }
 
+function shouldAutoReinitializeSchema(dbPath) {
+  if (isAnonymizedDbPath(dbPath)) {
+    return true;
+  }
+
+  const value = String(process.env.SQLITE_AUTO_REINIT_ON_SCHEMA_MISMATCH || '')
+    .trim()
+    .toLowerCase();
+  return value === '1' || value === 'true' || value === 'yes';
+}
+
 function initializeSqliteIfMissing(dbPath, databaseCtor) {
   const initPath = resolveSqliteInitPath();
   if (!initPath) {
@@ -235,8 +257,17 @@ function initializeSqliteIfMissing(dbPath, databaseCtor) {
     return;
   }
 
-  if (hasMinimumSchema(dbPath, databaseCtor)) {
+  const schemaStatus = inspectMinimumSchema(dbPath, databaseCtor);
+  if (schemaStatus.ok) {
     return;
+  }
+
+  if (!shouldAutoReinitializeSchema(dbPath)) {
+    throw new Error(
+      `SQLite database at ${dbPath} failed schema validation (${schemaStatus.reason}). ` +
+      'Refusing to auto-reinitialize to avoid data loss. ' +
+      'Fix the DB path/schema or set SQLITE_AUTO_REINIT_ON_SCHEMA_MISMATCH=true to force reinitialization.',
+    );
   }
 
   let backupPath = null;
@@ -249,8 +280,8 @@ function initializeSqliteIfMissing(dbPath, databaseCtor) {
   }
 
   console.warn(
-    '[SQLite Init] Existing database is missing required schema tables. Reinitializing schema after backup.',
-    { dbPath, backupPath },
+    '[SQLite Init] Existing database failed schema validation. Reinitializing schema after backup.',
+    { dbPath, backupPath, reason: schemaStatus.reason },
   );
   initialize(true);
 }
