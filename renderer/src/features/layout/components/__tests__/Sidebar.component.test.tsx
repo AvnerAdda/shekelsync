@@ -11,6 +11,7 @@ const mockPost = vi.fn();
 
 let mockCredentials: any[] = [];
 let mockInvestmentAccounts: any[] = [];
+let mockInvestmentSuggestions: any[] = [];
 let mockUncategorizedCount = 0;
 let mockPingOk = true;
 let mockPairingGap: any = null;
@@ -26,6 +27,7 @@ const translations: Record<string, string> = {
   'tooltips.expandSidebar': 'Expand sidebar',
   'tooltips.addAccount': 'Add account',
   'tooltips.addAccountPairingGap': 'Current month may be missing card transactions. Open Account Pairing for unmatched cards and run Recovery Sync (100 days).',
+  'tooltips.addAccountInvestmentSuggestions': 'You have investment transactions ready to link in Investments & Savings.',
   'tooltips.categories': 'Categories',
   'actions.addAccount': 'Add Account',
   'actions.categories': 'Categories',
@@ -131,6 +133,9 @@ function setupDefaultApiMocks() {
     if (endpoint === '/api/investments/accounts') {
       return Promise.resolve({ ok: true, data: { accounts: mockInvestmentAccounts } });
     }
+    if (endpoint === '/api/investments/smart-suggestions?thresholdDays=90') {
+      return Promise.resolve({ ok: true, data: { success: true, suggestions: mockInvestmentSuggestions } });
+    }
     if (endpoint === '/api/categories/hierarchy') {
       return Promise.resolve({ ok: true, data: { uncategorized: { totalCount: mockUncategorizedCount } } });
     }
@@ -172,6 +177,7 @@ describe('Sidebar component', () => {
     mockLicenseCheck = { isReadOnly: false, reason: undefined };
     mockPingOk = true;
     mockUncategorizedCount = 0;
+    mockInvestmentSuggestions = [];
     mockPairingGap = {
       windowDays: 30,
       windowStartDate: '2026-02-08',
@@ -562,6 +568,28 @@ describe('Sidebar component', () => {
         screen.getByText(
           'Current month may be missing card transactions. Open Account Pairing for unmatched cards and run Recovery Sync (100 days).',
         ),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('WarningAmberIcon')).toBeInTheDocument();
+  });
+
+  it('shows add-account warning when investment suggestions are available', async () => {
+    const onPageChange = vi.fn();
+    mockInvestmentSuggestions = [
+      {
+        categoryName: 'פיקדון',
+        transactionCount: 1,
+      },
+    ];
+
+    await renderSidebar({ currentPage: 'home', onPageChange });
+
+    const addAccountButton = screen.getByRole('button', { name: 'Add Account' });
+    fireEvent.mouseOver(addAccountButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('You have investment transactions ready to link in Investments & Savings.'),
       ).toBeInTheDocument();
     });
     expect(screen.getByTestId('WarningAmberIcon')).toBeInTheDocument();

@@ -278,8 +278,12 @@ async function getUnlinkedInvestmentTransactions(thresholdDays = 90) {
     LEFT JOIN transaction_account_links tal ON t.identifier = tal.transaction_identifier
       AND t.vendor = tal.transaction_vendor
     WHERE
-      cd.category_type = 'investment'
+      (
+        t.category_type = 'investment'
+        OR cd.category_type = 'investment'
+      )
       AND tal.id IS NULL
+      AND (t.status IS NULL OR t.status != 'canceled')
       AND date(t.date) >= date('now', '-' || $1 || ' days')
     ORDER BY t.date DESC
   `;
