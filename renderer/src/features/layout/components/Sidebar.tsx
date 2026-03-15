@@ -101,7 +101,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const [accountAlerts, setAccountAlerts] = useState({
     noBank: false,
     noCredit: false,
-    noPension: false
+    noPension: false,
+    hasInvestmentSuggestions: false,
   });
   const [uncategorizedCount, setUncategorizedCount] = useState<number>(0);
   const [isBulkSyncing, setIsBulkSyncing] = useState(false);
@@ -190,7 +191,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
 
   const fetchAccountStatus = useCallback(async () => {
     try {
-      const credsResponse = await apiClient.get('/api/credentials');
+      const [credsResponse, investResponse, suggestionsResponse] = await Promise.all([
+        apiClient.get('/api/credentials'),
+        apiClient.get('/api/investments/accounts'),
+        apiClient.get('/api/investments/smart-suggestions?thresholdDays=90'),
+      ]);
+
       const credentialsData = credsResponse.ok ? (credsResponse.data as any) : [];
       const credentials = Array.isArray(credentialsData) ? credentialsData : credentialsData?.items ?? [];
 
@@ -205,10 +211,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         );
       }
 
-      // Fetch investment accounts for pension check
-      const investResponse = await apiClient.get('/api/investments/accounts');
       const investData = investResponse.ok ? (investResponse.data as any) : { accounts: [] };
       const investAccounts = Array.isArray(investData?.accounts) ? investData.accounts : [];
+      const suggestionsData = suggestionsResponse.ok ? (suggestionsResponse.data as any) : { suggestions: [] };
+      const investmentSuggestions = Array.isArray(suggestionsData?.suggestions)
+        ? suggestionsData.suggestions
+        : [];
 
       const PENSION_TYPES = new Set(['pension', 'provident', 'study_fund']);
       const hasPension = investAccounts.some((acc: any) => PENSION_TYPES.has(acc.account_type));
@@ -216,7 +224,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       setAccountAlerts({
         noBank: !hasBank,
         noCredit: !hasCredit,
-        noPension: !hasPension
+        noPension: !hasPension,
+        hasInvestmentSuggestions: investmentSuggestions.length > 0,
       });
 
     } catch (error) {
@@ -490,12 +499,21 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   );
   const hasPairingGapWarning = !pairingGapLoading && Number(pairingGapData?.totals?.missingAmount || 0) > 2;
   const hasAddAccountWarning =
-    accountAlerts.noBank || accountAlerts.noCredit || accountAlerts.noPension || hasPairingGapWarning;
+    accountAlerts.noBank
+    || accountAlerts.noCredit
+    || accountAlerts.noPension
+    || accountAlerts.hasInvestmentSuggestions
+    || hasPairingGapWarning;
   const addAccountTooltip = hasPairingGapWarning
     ? t(
       'tooltips.addAccountPairingGap',
       'Current month may be missing card transactions. Open Account Pairing for unmatched cards and run Recovery Sync (100 days).',
     )
+    : accountAlerts.hasInvestmentSuggestions
+      ? t(
+        'tooltips.addAccountInvestmentSuggestions',
+        'You have investment transactions ready to link in Investments & Savings.',
+      )
     : t('tooltips.addAccount');
 
   const drawerWidth = open ? DRAWER_WIDTH : DRAWER_WIDTH_COLLAPSED;

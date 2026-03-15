@@ -199,6 +199,116 @@ describe('investment accounts service', () => {
         linked_contribution_adjustment: 680000,
       });
     });
+
+    it('does not double count linked transactions when the value comes from links', async () => {
+      queryMock
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: 8,
+              account_name: 'Savings Link',
+              account_type: 'savings',
+              investment_category: 'liquid',
+              is_liquid: true,
+              holdings_count: '0',
+              current_value: null,
+              total_invested: '1250',
+              institution_id: 9,
+              institution_vendor_code: 'savings',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              account_id: 8,
+              identifier: 'tx-8',
+              vendor: 'discount',
+              date: '2026-03-10T08:00:00.000Z',
+              transaction_datetime: '2026-03-10T08:00:00.000Z',
+              name: 'Investment transfer',
+              memo: '',
+              price: '-1250',
+              is_pikadon_related: 0,
+              category_type: 'investment',
+              category_name: 'Investment',
+              category_name_en: 'Investment',
+              category_name_fr: null,
+            },
+          ],
+        });
+
+      const result = await accountsService.listAccounts();
+
+      expect(result.accounts[0]).toMatchObject({
+        current_value: 1250,
+        current_value_explicit: null,
+        cost_basis: 1250,
+        total_invested: 1250,
+        linked_contribution_adjustment: 1250,
+      });
+    });
+
+    it('excludes flagged pikadon transactions from link rollforward even without keyword match', async () => {
+      queryMock
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: 5,
+              account_name: 'פיקדון',
+              account_type: 'savings',
+              investment_category: 'liquid',
+              is_liquid: true,
+              holdings_count: '1',
+              current_value: '1000',
+              total_invested: '1000',
+              institution_id: 9,
+              institution_vendor_code: 'savings',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              account_id: 5,
+              current_value: '1000',
+              cost_basis: '1000',
+              as_of_date: '2026-03-10',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              account_id: 5,
+              identifier: 'pik-5',
+              vendor: 'discount',
+              date: '2026-03-10T08:00:00.000Z',
+              transaction_datetime: '2026-03-10T08:00:00.000Z',
+              name: 'Internal transfer',
+              memo: '',
+              price: '-1000',
+              is_pikadon_related: 1,
+              category_type: 'investment',
+              category_name: 'Pikadon',
+              category_name_en: 'Pikadon',
+              category_name_fr: null,
+            },
+          ],
+        });
+
+      const result = await accountsService.listAccounts();
+
+      expect(result.accounts[0]).toMatchObject({
+        current_value: 1000,
+        current_value_explicit: 1000,
+        cost_basis: 1000,
+      });
+      expect(result.accounts[0]).not.toHaveProperty('linked_contribution_adjustment');
+    });
   });
 
   describe('createAccount', () => {
