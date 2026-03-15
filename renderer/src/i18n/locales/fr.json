@@ -1299,9 +1299,7 @@
         "edit": "Modifier",
         "delete": "Supprimer",
         "pause": "Mettre en pause",
-        "resume": "Reprendre",
-        "approve": "Approuver",
-        "ignore": "Ignorer"
+        "resume": "Reprendre"
       },
       "list": {
         "title": "Vos abonnements",
@@ -1311,7 +1309,6 @@
           "active": "Actifs",
           "paused": "En pause",
           "cancelled": "Annulés",
-          "review": "À revoir",
           "keep": "Conserver"
         },
         "sort": {
@@ -1354,6 +1351,18 @@
         "tooltipTotal": "Total mensuel",
         "legendMonthly": "Total mensuel",
         "legendAverage": "Moyenne"
+      },
+      "calendar": {
+        "listView": "Liste",
+        "calendarView": "Calendrier",
+        "today": "Aujourd'hui",
+        "monthTotal": "Total : {{amount}}",
+        "noCharges": "Aucun frais",
+        "moreCharges": "+{{count}} de plus",
+        "dayDetail": {
+          "title": "Frais du {{date}}",
+          "total": "Total"
+        }
       },
       "modal": {
         "titleAdd": "Ajouter un abonnement",

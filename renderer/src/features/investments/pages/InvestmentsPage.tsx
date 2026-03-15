@@ -5,7 +5,7 @@ import {
   Alert,
   Box,
   Button,
-  CircularProgress,
+  CircularProgress, Skeleton,
   Grid,
   IconButton,
   Paper,
@@ -443,8 +443,14 @@ const InvestmentsPageContent: React.FC = () => {
       </Box>
 
       {portfolioLoading && !hasPortfolio ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}>
-          <CircularProgress />
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, p: 2 }}>
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12, md: 4 }}><Skeleton variant="rounded" height={140} animation="wave" /></Grid>
+            <Grid size={{ xs: 12, md: 4 }}><Skeleton variant="rounded" height={140} animation="wave" /></Grid>
+            <Grid size={{ xs: 12, md: 4 }}><Skeleton variant="rounded" height={140} animation="wave" /></Grid>
+          </Grid>
+          <Skeleton variant="rounded" height={300} animation="wave" />
+          <Skeleton variant="rounded" height={400} animation="wave" />
         </Box>
       ) : hasPortfolio ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, flexGrow: 1 }}>

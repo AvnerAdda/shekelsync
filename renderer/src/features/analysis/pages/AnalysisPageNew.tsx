@@ -2749,8 +2749,8 @@ const AnalysisPageNew: React.FC = () => {
                   {t('budgetForecast.timelineTitle', { defaultValue: 'Spending timeline (last 12 months)' })}
                 </Typography>
                 {selectedTimelineLoading ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                    <CircularProgress size={20} />
+                  <Box sx={{ py: 2 }}>
+                    <Skeleton variant="rectangular" height={140} animation="wave" sx={{ borderRadius: 1 }} />
                   </Box>
                 ) : selectedTimelineError ? (
                   <Alert

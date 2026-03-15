@@ -13,7 +13,6 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
-  Button,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -22,8 +21,6 @@ import {
   PlayArrow as ResumeIcon,
   MoreVert as MoreIcon,
   NotificationsActive as AlertIcon,
-  CheckCircle as ApproveIcon,
-  VisibilityOff as IgnoreIcon,
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useTranslation } from 'react-i18next';
@@ -53,7 +50,6 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
   const frequency = subscription.user_frequency || subscription.detected_frequency || 'monthly';
   const statusColor = STATUS_COLORS[subscription.status] || theme.palette.grey[500];
   const isActive = subscription.status === 'active';
-  const isReview = subscription.status === 'review';
   const categoryColor = subscription.category_color || theme.palette.primary.main;
 
   // Calculate days until next charge and progress
@@ -450,52 +446,6 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
           </Stack>
         </Stack>
 
-        {/* Review Status Quick Actions */}
-        {isReview && subscription.id && (
-          <Box
-            sx={{
-              mt: 2,
-              p: 1.5,
-              borderRadius: 2,
-              bgcolor: alpha(theme.palette.info.main, 0.05),
-              border: '1px solid',
-              borderColor: alpha(theme.palette.info.main, 0.15),
-            }}
-          >
-            <Stack direction="row" spacing={1.5}>
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<ApproveIcon />}
-                onClick={() => onStatusChange(subscription.id!, 'active')}
-                sx={{
-                  flex: 1,
-                  bgcolor: theme.palette.success.main,
-                  '&:hover': { bgcolor: theme.palette.success.dark },
-                }}
-              >
-                {t('actions.approve')}
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<IgnoreIcon />}
-                onClick={() => onStatusChange(subscription.id!, 'keep')}
-                sx={{
-                  flex: 1,
-                  borderColor: alpha(theme.palette.info.main, 0.3),
-                  color: theme.palette.info.main,
-                  '&:hover': {
-                    borderColor: theme.palette.info.main,
-                    bgcolor: alpha(theme.palette.info.main, 0.08),
-                  },
-                }}
-              >
-                {t('actions.ignore')}
-              </Button>
-            </Stack>
-          </Box>
-        )}
       </Box>
     </Box>
   );

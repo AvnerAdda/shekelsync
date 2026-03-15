@@ -25,6 +25,19 @@ const FREQUENCY_THRESHOLDS = {
   yearly: { min: 0.08, max: 0.15 }
 };
 
+// Minimum occurrences required to classify as a given frequency.
+// High-frequency patterns need more evidence to avoid false positives.
+const FREQUENCY_MIN_OCCURRENCES = {
+  daily: 10,
+  weekly: 4,
+  biweekly: 3,
+  monthly: 2,
+  bimonthly: 2,
+  quarterly: 2,
+  yearly: 2,
+  variable: 2,
+};
+
 const REPAYMENT_CATEGORY_NAMES = new Set([
   ...CREDIT_CARD_REPAYMENT_CATEGORY_MATCH.name,
   ...CREDIT_CARD_REPAYMENT_CATEGORY_MATCH.name_en,
@@ -403,10 +416,17 @@ async function analyzeRecurringPatterns(options = {}) {
     const intervalFrequency = detectFrequencyFromIntervals(clusterDates);
     const intervalConsistency = calculateConsistencyScore(clusterDates, intervalFrequency);
     const occurrenceFrequency = detectFrequency(occurrencesPerMonth);
-    const detectedFrequency =
+    let detectedFrequency =
       intervalFrequency !== 'variable' && intervalConsistency >= minConsistency
         ? intervalFrequency
         : occurrenceFrequency;
+
+    // Require minimum occurrences per frequency to avoid false positives
+    // (e.g. 2 charges close together being classified as "daily")
+    const freqMinOcc = FREQUENCY_MIN_OCCURRENCES[detectedFrequency] || 2;
+    if (clusterCharges.length < freqMinOcc) {
+      detectedFrequency = 'variable';
+    }
 
     const consistencyScore = calculateConsistencyScore(clusterDates, detectedFrequency);
     if (consistencyScore < minConsistency) {

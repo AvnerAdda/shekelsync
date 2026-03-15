@@ -5,6 +5,7 @@ let suggestionAnalyzer;
 let autoLinker;
 const {
   buildPikadonCandidate,
+  transactionLooksLikePikadonDeposit,
 } = require('../services/investments/pikadon-candidates.js');
 
 function normalizePikadonDetails(details) {
@@ -967,6 +968,19 @@ function createInvestmentsRouter({ services = {} } = {}) {
           'auto',
           0.95 // High confidence for user-confirmed suggestions
         );
+
+        // Mark pikadon-related transactions so rollforward excludes them
+        for (const txn of transactions) {
+          const identifier = txn.transactionIdentifier || txn.identifier;
+          const vendor = txn.transactionVendor || txn.vendor;
+          const name = txn.transactionName || txn.name || '';
+          if (identifier && vendor && transactionLooksLikePikadonDeposit({ name })) {
+            await databaseService.query(
+              'UPDATE transactions SET is_pikadon_related = 1 WHERE identifier = $1 AND vendor = $2',
+              [identifier, vendor]
+            );
+          }
+        }
       }
 
       res.status(201).json({

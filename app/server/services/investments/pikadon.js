@@ -1642,6 +1642,20 @@ async function autoSetupPikadon(accountId, params = {}) {
     });
   }
 
+  // Mark standard holdings as superseded now that pikadon holdings exist.
+  // The standard holding was a summary-level placeholder created by the suggestion
+  // flow; individual pikadon holdings now provide the granular breakdown.
+  if (created.length > 0) {
+    await database.query(
+      `UPDATE investment_holdings
+       SET status = 'superseded'
+       WHERE account_id = $1
+         AND COALESCE(holding_type, 'standard') <> 'pikadon'
+         AND COALESCE(status, 'active') <> 'superseded'`,
+      [accountId]
+    );
+  }
+
   // Mark all related transactions as pikadon-related
   for (const txn of transactionsToMark) {
     if (txn.identifier && txn.vendor) {

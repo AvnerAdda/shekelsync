@@ -1319,9 +1319,7 @@
         "edit": "ערוך",
         "delete": "מחק",
         "pause": "השהה",
-        "resume": "המשך",
-        "approve": "אשר",
-        "ignore": "התעלם"
+        "resume": "המשך"
       },
       "list": {
         "title": "המנויים שלך",
@@ -1331,7 +1329,6 @@
           "active": "פעילים",
           "paused": "מושהים",
           "cancelled": "מבוטלים",
-          "review": "לבדיקה",
           "keep": "שמור"
         },
         "sort": {
@@ -1374,6 +1371,18 @@
         "tooltipTotal": "סה\"כ חודשי",
         "legendMonthly": "סה\"כ חודשי",
         "legendAverage": "ממוצע"
+      },
+      "calendar": {
+        "listView": "רשימה",
+        "calendarView": "לוח שנה",
+        "today": "היום",
+        "monthTotal": "סה\"כ: {{amount}}",
+        "noCharges": "אין חיובים",
+        "moreCharges": "+{{count}} נוספים",
+        "dayDetail": {
+          "title": "חיובים בתאריך {{date}}",
+          "total": "סה\"כ"
+        }
       },
       "modal": {
         "titleAdd": "הוסף מנוי",
