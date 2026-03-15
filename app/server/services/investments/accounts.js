@@ -119,7 +119,7 @@ async function listAccounts(params = {}) {
 
       return {
         ...row,
-        current_value: explicitValue ?? totalInvested,
+        current_value: explicitValue,
         current_value_explicit: explicitValue, // Keep track of whether it was explicitly set
         cost_basis: snapshot.cost_basis,
         last_update_date: snapshot.as_of_date,
@@ -141,6 +141,21 @@ async function listAccounts(params = {}) {
     applyContributionRollforward(accounts, linkedTransactions, {
       dateField: 'last_update_date',
       excludePikadonTransactions: true,
+    });
+
+    accounts.forEach((account) => {
+      if (account.current_value !== null && account.current_value !== undefined) {
+        return;
+      }
+
+      if (account.total_invested === null || account.total_invested === undefined) {
+        return;
+      }
+
+      account.current_value = account.total_invested;
+      if (account.cost_basis === null || account.cost_basis === undefined) {
+        account.cost_basis = account.total_invested;
+      }
     });
   }
 

@@ -80,7 +80,13 @@ function isInvestmentContribution(transaction, { excludePikadonTransactions = fa
     transaction?.category_name_fr,
   ].join(' ');
 
-  if (excludePikadonTransactions && transactionLooksLikePikadonDeposit(transaction)) {
+  if (
+    excludePikadonTransactions
+    && (
+      Number(transaction?.is_pikadon_related) === 1
+      || transactionLooksLikePikadonDeposit(transaction)
+    )
+  ) {
     return false;
   }
 
@@ -125,6 +131,7 @@ async function fetchLinkedInvestmentTransactions(client, accountIds = [], option
         t.name,
         t.memo,
         t.price,
+        t.is_pikadon_related,
         COALESCE(cd.category_type, t.category_type) AS category_type,
         cd.name AS category_name,
         cd.name_en AS category_name_en,

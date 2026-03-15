@@ -174,7 +174,9 @@ describe('suggestion-analyzer-cjs', () => {
       const rows = await analyzer.getUnlinkedInvestmentTransactions();
       expect(rows).toEqual([{ identifier: 'txn-a' }]);
       expect(databaseQuerySpy).toHaveBeenCalledTimes(1);
+      expect(databaseQuerySpy.mock.calls[0][0]).toContain("t.category_type = 'investment'");
       expect(databaseQuerySpy.mock.calls[0][0]).toContain("cd.category_type = 'investment'");
+      expect(databaseQuerySpy.mock.calls[0][0]).toContain("(t.status IS NULL OR t.status != 'canceled')");
       expect(databaseQuerySpy.mock.calls[0][1]).toEqual([90]);
     });
 
