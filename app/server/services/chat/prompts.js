@@ -51,6 +51,52 @@ const TOOLS = [
   },
 ];
 
+const MEMORY_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'save_memory',
+      description: 'Save a user preference, financial goal, or important insight for future conversations. Use when the user mentions preferences, goals, or important financial facts they want you to remember.',
+      parameters: {
+        type: 'object',
+        properties: {
+          key: {
+            type: 'string',
+            description: 'Short descriptive key (e.g., "savings_goal", "currency_preference", "risk_tolerance")',
+          },
+          value: {
+            type: 'string',
+            description: 'The value to remember',
+          },
+          category: {
+            type: 'string',
+            enum: ['preference', 'goal', 'insight'],
+            description: 'Type of memory: preference (user preferences), goal (financial goals), insight (important observations)',
+          },
+        },
+        required: ['key', 'value', 'category'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'recall_memory',
+      description: 'Search stored memories about user preferences, goals, and insights from previous conversations.',
+      parameters: {
+        type: 'object',
+        properties: {
+          search_term: {
+            type: 'string',
+            description: 'Term to search for in stored memories',
+          },
+        },
+        required: ['search_term'],
+      },
+    },
+  },
+];
+
 /**
  * Base system prompt template
  */
@@ -66,6 +112,7 @@ CAPABILITIES:
 - Generate reports and summaries
 - Execute SQL queries to find specific data
 - Run calculations for projections and analysis
+- Remember user preferences and goals across conversations
 
 GUIDELINES:
 - Be encouraging and non-judgmental about spending habits
@@ -75,6 +122,7 @@ GUIDELINES:
 - Use a warm, conversational tone; when natural, address the user by their name
 - If you need data not in the context, use the execute_sql_query tool
 - For complex calculations, use the execute_calculation tool
+- When the user mentions a preference, goal, or important financial fact, use save_memory to remember it for future conversations
 - Keep responses concise but comprehensive
 - Use ₪ (ILS) as the currency symbol
 - Format numbers with thousands separators for readability
@@ -112,6 +160,7 @@ When using tools:
 - הפקת דוחות וסיכומים
 - הרצת שאילתות SQL למציאת נתונים ספציפיים
 - חישובים לתחזיות וניתוחים
+- זכירת העדפות ומטרות המשתמש בין שיחות
 
 הנחיות:
 - היה מעודד ולא שיפוטי לגבי הרגלי הוצאות
@@ -121,6 +170,7 @@ When using tools:
 - שמור על טון חם ושיחתי, וכשזה טבעי פנה למשתמש בשמו
 - אם צריך נתונים שאינם בהקשר, השתמש בכלי execute_sql_query
 - לחישובים מורכבים, השתמש בכלי execute_calculation
+- כאשר המשתמש מציין העדפה, מטרה, או עובדה פיננסית חשובה, השתמש ב-save_memory כדי לזכור לשיחות עתידיות
 - שמור על תגובות תמציתיות אך מקיפות
 - השתמש ב-₪ כסמל המטבע
 - עצב מספרים עם מפרידי אלפים לקריאות
@@ -158,6 +208,7 @@ CAPACITÉS:
 - Générer des rapports et des résumés
 - Exécuter des requêtes SQL pour trouver des données spécifiques
 - Effectuer des calculs pour les projections et analyses
+- Mémoriser les préférences et objectifs de l'utilisateur entre les conversations
 
 DIRECTIVES:
 - Soyez encourageant et non-jugeant concernant les habitudes de dépenses
@@ -167,6 +218,7 @@ DIRECTIVES:
 - Gardez un ton chaleureux et conversationnel; quand c'est naturel, adressez-vous à l'utilisateur par son prénom
 - Si vous avez besoin de données non présentes dans le contexte, utilisez l'outil execute_sql_query
 - Pour les calculs complexes, utilisez l'outil execute_calculation
+- Quand l'utilisateur mentionne une préférence, un objectif, ou un fait financier important, utilisez save_memory pour s'en souvenir dans les conversations futures
 - Gardez les réponses concises mais complètes
 - Utilisez ₪ (ILS) comme symbole monétaire
 - Formatez les nombres avec des séparateurs de milliers pour la lisibilité
@@ -202,7 +254,7 @@ Lors de l'utilisation des outils:
  * @param {Object} permissions - User's permission flags
  * @returns {string} Complete system prompt
  */
-function getSystemPrompt(locale, financialContext, schemaDescription, permissions) {
+function getSystemPrompt(locale, financialContext, schemaDescription, permissions, memoriesSection = '') {
   const basePrompt = SYSTEM_PROMPT_BASE[locale] || SYSTEM_PROMPT_BASE.en;
 
   // Build permission context
@@ -220,7 +272,7 @@ function getSystemPrompt(locale, financialContext, schemaDescription, permission
 ---
 CURRENT FINANCIAL DATA:
 ${financialContext}
-
+${memoriesSection}
 ---
 ${schemaDescription}`;
 }
@@ -294,6 +346,7 @@ function getErrorMessage(errorType, locale) {
 
 module.exports = {
   TOOLS,
+  MEMORY_TOOLS,
   getSystemPrompt,
   getGreetingMessage,
   getErrorMessage,

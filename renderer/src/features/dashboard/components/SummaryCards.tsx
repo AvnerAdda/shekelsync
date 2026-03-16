@@ -9,8 +9,10 @@ import {
   CircularProgress,
   Tooltip,
   Grid,
+  Alert,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
+import { CurrencyTypography } from '@renderer/components/CurrencyTypography';
 import {
   AccountBalance as AccountBalanceIcon,
   TrendingUp as TrendingUpIcon,
@@ -27,7 +29,7 @@ import {
   Pie,
   Cell,
   ResponsiveContainer,
-  Tooltip as RechartsTooltip,
+  Tooltip as RechartsTooltip, LineChart, Line,
 } from 'recharts';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpendingCategories';
@@ -284,7 +286,15 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   const formatCurrencyValue = (amount: number) =>
     formatCurrency(amount, { absolute: true, maximumFractionDigits: 0 });
 
-  const PIE_COLORS = ['#3ea54d', '#00897B', '#e88b78', '#F97316', '#F4A261', '#26A69A'];
+  const PIE_COLORS = [
+    theme.palette.primary.main,
+    theme.palette.secondary.main,
+    theme.palette.info.main,
+    theme.palette.warning.main,
+    theme.palette.success.main,
+    theme.palette.primary.light,
+    theme.palette.secondary.light,
+  ];
 
   const cards = [
     {
@@ -302,20 +312,20 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             <Typography variant="body2" color="text.secondary">
               {t('summary.cards.finance.income')}
             </Typography>
-            <Typography variant="body2" color="success.main">+{formatCurrencyValue(totalIncome)}</Typography>
+            <CurrencyTypography variant="body2" color="success.main">+{formatCurrencyValue(totalIncome)}</CurrencyTypography>
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
             <Typography variant="body2" color="text.secondary">
               {t('summary.cards.finance.expenses')}
             </Typography>
-            <Typography variant="body2" color="error.main">-{formatCurrencyValue(totalExpenses)}</Typography>
+            <CurrencyTypography variant="body2" color="error.main">-{formatCurrencyValue(totalExpenses)}</CurrencyTypography>
           </Box>
           {netInvestments > 0 && (
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Typography variant="body2" color="text.secondary">
                 {t('summary.cards.finance.investments')}
               </Typography>
-              <Typography variant="body2" color="info.main">-{formatCurrencyValue(netInvestments)}</Typography>
+              <CurrencyTypography variant="body2" color="info.main">-{formatCurrencyValue(netInvestments)}</CurrencyTypography>
             </Box>
           )}
           {totalCapitalReturns > 0 && (
@@ -332,7 +342,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                   <InfoIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
                 </Tooltip>
               </Box>
-              <Typography variant="body2" sx={{ color: '#B2DFDB' }}>+{formatCurrencyValue(totalCapitalReturns)}</Typography>
+              <CurrencyTypography variant="body2" sx={{ color: '#B2DFDB' }}>+{formatCurrencyValue(totalCapitalReturns)}</CurrencyTypography>
             </Box>
           )}
           {hasPendingExpenses && (
@@ -622,20 +632,31 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   ];
 
   return (
-    <Grid container spacing={3}>
-      {cards.map((card) => (
+    <>
+      {forecastSummary && (forecastSummary.atRisk > 0 || forecastSummary.exceeded > 0) && (
+        <Alert severity={forecastSummary.exceeded > 0 ? "error" : "warning"} sx={{ mb: 3, borderRadius: 2 }}>
+          <strong>Proactive Insight:</strong> You have {forecastSummary.exceeded > 0 ? `${forecastSummary.exceeded} budget(s) currently exceeded` : `${forecastSummary.atRisk} budget(s) trending to exceed`} by end of month based on your current burn rate.
+        </Alert>
+      )}
+      <Grid container spacing={3}>
+        {cards.map((card) => (
         <Grid size={{ xs: 12, md: 4 }} key={card.id}>
           <Card sx={{
             height: '100%',
             borderRadius: 2.5,
             backgroundColor: theme.palette.mode === 'dark' ? 'rgba(30, 30, 30, 0.6)' : 'rgba(255, 255, 255, 0.6)',
             backdropFilter: 'blur(20px)',
-            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            boxShadow: `0 8px 32px ${alpha(theme.palette.common.black, 0.05)}`,
-            transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+            border: card.id === 'finance'
+              ? `2px solid ${alpha(theme.palette.primary.main, 0.5)}`
+              : `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            boxShadow: card.id === 'finance'
+              ? `0 12px 40px ${alpha(theme.palette.primary.main, 0.15)}`
+              : `0 8px 32px ${alpha(theme.palette.common.black, 0.05)}`,
+            transform: card.id === 'finance' ? 'scale(1.02)' : 'none',
+            transition: 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': {
-              transform: 'translateY(-4px)',
-              boxShadow: `0 12px 40px ${alpha(theme.palette.common.black, 0.1)}`,
+              transform: card.id === 'finance' ? 'translateY(-6px) scale(1.04)' : 'translateY(-6px) scale(1.02)',
+              boxShadow: `0 16px 40px ${alpha(card.color || theme.palette.common.black, 0.2)}`,
             }
           }}>
             <CardContent sx={{ p: 3 }}>
@@ -655,14 +676,14 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                 </Typography>
               </Box>
 
-              <Typography variant="h4" sx={{ 
+              <CurrencyTypography variant="h4" sx={{ 
                 fontWeight: 700, 
                 color: card.color, 
                 mb: 0.5,
                 textShadow: `0 0 20px ${alpha(card.color, 0.3)}`
               }}>
                 {card.mainValue}
-              </Typography>
+              </CurrencyTypography>
 
               {card.subtitle && (
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
@@ -676,6 +697,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
         </Grid>
       ))}
     </Grid>
+    </>
   );
 };
 

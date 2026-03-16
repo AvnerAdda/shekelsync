@@ -6,12 +6,16 @@ import {
   Stack,
   CircularProgress,
   Alert,
+  ToggleButtonGroup,
+  ToggleButton,
   alpha,
   useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Refresh as RefreshIcon,
+  ViewList as ViewListIcon,
+  CalendarMonth as CalendarMonthIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useSubscriptions } from '@renderer/features/analysis/hooks/useSubscriptions';
@@ -20,6 +24,7 @@ import SubscriptionList from './SubscriptionList';
 import SubscriptionAlerts from './SubscriptionAlerts';
 import SubscriptionModal from './SubscriptionModal';
 import SubscriptionCreepChart from './SubscriptionCreepChart';
+import SubscriptionCalendar from './SubscriptionCalendar';
 import type {
   Subscription,
   SubscriptionStatus,
@@ -50,6 +55,7 @@ const SubscriptionsTab: React.FC = () => {
     fetchAll,
   } = useSubscriptions();
 
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
 
@@ -160,7 +166,7 @@ const SubscriptionsTab: React.FC = () => {
         <SubscriptionCreepChart creep={creep} loading={creepLoading} />
       </Box>
 
-      {/* Subscription list */}
+      {/* Subscription list / calendar */}
       <Box
         sx={{
           p: 3,
@@ -173,16 +179,58 @@ const SubscriptionsTab: React.FC = () => {
           overflow: 'hidden',
         }}
       >
-        <Typography variant="subtitle1" fontWeight="bold" mb={2}>
-          {t('list.title')}
-        </Typography>
-        <SubscriptionList
-          subscriptions={subscriptions}
-          loading={loading}
-          onEdit={handleOpenEditModal}
-          onStatusChange={handleStatusChange}
-          onDelete={handleDelete}
-        />
+        <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
+          <Typography variant="subtitle1" fontWeight="bold">
+            {t('list.title')}
+          </Typography>
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={(_, value) => value && setViewMode(value)}
+            size="small"
+            sx={{
+              '& .MuiToggleButton-root': {
+                borderRadius: 2,
+                px: 1.5,
+                py: 0.5,
+                borderColor: alpha(theme.palette.divider, 0.15),
+                '&.Mui-selected': {
+                  bgcolor: alpha(theme.palette.primary.main, 0.1),
+                  color: theme.palette.primary.main,
+                },
+              },
+            }}
+          >
+            <ToggleButton value="list">
+              <ViewListIcon sx={{ fontSize: 18, mr: 0.5 }} />
+              <Typography variant="caption" sx={{ textTransform: 'none' }}>
+                {t('calendar.listView')}
+              </Typography>
+            </ToggleButton>
+            <ToggleButton value="calendar">
+              <CalendarMonthIcon sx={{ fontSize: 18, mr: 0.5 }} />
+              <Typography variant="caption" sx={{ textTransform: 'none' }}>
+                {t('calendar.calendarView')}
+              </Typography>
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Stack>
+
+        {viewMode === 'list' ? (
+          <SubscriptionList
+            subscriptions={subscriptions}
+            loading={loading}
+            onEdit={handleOpenEditModal}
+            onStatusChange={handleStatusChange}
+            onDelete={handleDelete}
+          />
+        ) : (
+          <SubscriptionCalendar
+            subscriptions={subscriptions}
+            loading={loading}
+            onEdit={handleOpenEditModal}
+          />
+        )}
       </Box>
 
       {/* Add/Edit Modal */}

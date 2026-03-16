@@ -16,15 +16,19 @@ const {
   updateTitle,
 } = require('./chat/conversation-store.js');
 const { buildContext, formatContextForPrompt, getSchemaDescription } = require('./chat/financial-context.js');
-const { TOOLS, getSystemPrompt, getErrorMessage } = require('./chat/prompts.js');
+const { TOOLS, MEMORY_TOOLS, getSystemPrompt, getErrorMessage } = require('./chat/prompts.js');
+const { ensureMemoryTable, saveMemory, recallMemory, getAllMemories, formatMemoriesForPrompt } = require('./chat/memory-store.js');
 
 const IS_TEST_ENV = process.env.NODE_ENV === 'test';
 const CHAT_MODEL = 'gpt-4o-mini';
+const ALLOWED_MODELS = new Set(['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1']);
 const DEFAULT_MAX_REQUESTS_PER_MINUTE = IS_TEST_ENV ? 1000 : 6;
 const DEFAULT_HISTORY_MESSAGE_LIMIT = 10;
 const DEFAULT_MAX_TOOL_ATTEMPTS = 3;
 const DEFAULT_MAX_TOKENS_PER_COMPLETION = 1200;
-const DEFAULT_MAX_TOTAL_TOKENS_PER_REQUEST = IS_TEST_ENV ? 100000 : 3000;
+const LONG_ANSWER_MAX_TOKENS_PER_COMPLETION = 4096;
+const DEFAULT_MAX_TOTAL_TOKENS_PER_REQUEST = IS_TEST_ENV ? 100000 : 8000;
+const LONG_REQUEST_MAX_TOTAL_TOKENS = IS_TEST_ENV ? 100000 : 16000;
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
@@ -121,6 +125,26 @@ async function processToolCall(toolCall, sandbox, context) {
     };
   }
 
+  if (name === 'save_memory') {
+    const { key, value, category } = args;
+    try {
+      await saveMemory(context.db, { key, value, category });
+      return { success: true, result: `Remembered: ${key}`, explanation: `Saving "${key}" to memory` };
+    } catch (err) {
+      return { success: false, error: err.message, explanation: `Failed to save memory: ${key}` };
+    }
+  }
+
+  if (name === 'recall_memory') {
+    const { search_term } = args;
+    try {
+      const results = await recallMemory(context.db, search_term);
+      return { success: true, data: results, explanation: `Searching memory for "${search_term}"` };
+    } catch (err) {
+      return { success: false, error: err.message, explanation: `Failed to search memory` };
+    }
+  }
+
   return { success: false, error: `Unknown tool: ${name}` };
 }
 
@@ -133,15 +157,20 @@ async function processMessage(payload = {}) {
   const {
     message,
     conversationId,
+    model,
     permissions = {},
     locale = 'en',
     openaiApiKey,
+    allowLongAnswers = false,
+    allowLongRequests = false,
   } = payload;
 
   // Validate message
   if (!message || typeof message !== 'string' || !message.trim()) {
     throw serviceError(400, 'Message is required');
   }
+
+  const resolvedModel = (model && ALLOWED_MODELS.has(model)) ? model : CHAT_MODEL;
 
   const resolvedOpenAiKey = typeof openaiApiKey === 'string' ? openaiApiKey.trim() : '';
   const historyLimit = parsePositiveInt(
@@ -152,13 +181,15 @@ async function processMessage(payload = {}) {
     process.env.OPENAI_MAX_TOOL_ATTEMPTS,
     DEFAULT_MAX_TOOL_ATTEMPTS,
   );
+  const baseMaxTokens = allowLongAnswers ? LONG_ANSWER_MAX_TOKENS_PER_COMPLETION : DEFAULT_MAX_TOKENS_PER_COMPLETION;
   const maxTokensPerCompletion = parsePositiveInt(
     process.env.OPENAI_MAX_TOKENS_PER_COMPLETION,
-    DEFAULT_MAX_TOKENS_PER_COMPLETION,
+    baseMaxTokens,
   );
+  const baseTotalTokens = allowLongRequests ? LONG_REQUEST_MAX_TOTAL_TOKENS : DEFAULT_MAX_TOTAL_TOKENS_PER_REQUEST;
   const maxTotalTokensPerRequest = parsePositiveInt(
     process.env.OPENAI_MAX_TOTAL_TOKENS_PER_REQUEST,
-    DEFAULT_MAX_TOTAL_TOKENS_PER_REQUEST,
+    baseTotalTokens,
   );
 
   // Check if OpenAI is configured
@@ -224,8 +255,11 @@ async function processMessage(payload = {}) {
     const contextString = formatContextForPrompt(anonymizedContext);
     const schemaDesc = perms.allowTransactionAccess ? getSchemaDescription() : '';
 
-    // Build system prompt
-    const systemPrompt = getSystemPrompt(locale, contextString, schemaDesc, perms);
+    // Load memories and build system prompt
+    await ensureMemoryTable(client);
+    const memories = await getAllMemories(client);
+    const memoriesSection = formatMemoriesForPrompt(memories);
+    const systemPrompt = getSystemPrompt(locale, contextString, schemaDesc, perms, memoriesSection);
 
     console.log('[chat] Context string preview:', contextString.substring(0, 500));
     console.log('[chat] System prompt length:', systemPrompt.length);
@@ -249,7 +283,7 @@ async function processMessage(payload = {}) {
     });
 
     // Determine which tools to provide based on permissions
-    const availableTools = [];
+    const availableTools = [...MEMORY_TOOLS]; // Memory tools always available
     if (perms.allowTransactionAccess || perms.allowCategoryAccess) {
       availableTools.push(TOOLS[0]); // execute_sql_query
     }
@@ -277,7 +311,7 @@ async function processMessage(payload = {}) {
         messages,
         availableTools.length > 0 ? availableTools : null,
         {
-          model: CHAT_MODEL,
+          model: resolvedModel,
           apiKey: resolvedOpenAiKey || undefined,
           maxTokens: maxTokensPerCompletion,
         },
@@ -305,7 +339,7 @@ async function processMessage(payload = {}) {
 
         // Process each tool call
         for (const toolCall of result.message.tool_calls) {
-          const toolResult = await processToolCall(toolCall, sandbox, { calculationData });
+          const toolResult = await processToolCall(toolCall, sandbox, { calculationData, db: client });
 
           // Store query results for subsequent calculations
           if (toolResult.success && toolResult.data) {
@@ -375,7 +409,7 @@ async function processMessage(payload = {}) {
       isNewConversation,
       timestamp: new Date().toISOString(),
       metadata: {
-        model: CHAT_MODEL,
+        model: resolvedModel,
         tokensUsed: totalTokensUsed,
         toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined,
         contextIncluded: {
@@ -466,6 +500,243 @@ async function deleteConversation(conversationId) {
   }
 }
 
+/**
+ * Process a chat message with streaming response
+ * @param {Object} payload - Request payload
+ * @param {Function} onEvent - Callback for SSE events: { type, content?, conversationId?, metadata? }
+ * @returns {Promise<void>}
+ */
+async function processMessageStream(payload = {}, onEvent) {
+  const {
+    message,
+    conversationId,
+    model,
+    permissions = {},
+    locale = 'en',
+    openaiApiKey,
+    allowLongAnswers = false,
+    allowLongRequests = false,
+  } = payload;
+
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    throw serviceError(400, 'Message is required');
+  }
+
+  const resolvedModel = (model && ALLOWED_MODELS.has(model)) ? model : CHAT_MODEL;
+  const resolvedOpenAiKey = typeof openaiApiKey === 'string' ? openaiApiKey.trim() : '';
+
+  const openai = getOpenAIClient();
+  if (!openai.isConfigured({ apiKey: resolvedOpenAiKey || undefined })) {
+    throw serviceError(503, 'AI service not configured');
+  }
+
+  const rateCheck = rateLimiter.checkLimit();
+  if (!rateCheck.allowed) {
+    throw serviceError(429, getErrorMessage('rate_limited', locale), { retryAfter: rateCheck.retryAfter });
+  }
+
+  const perms = {
+    allowTransactionAccess: permissions.allowTransactionAccess || false,
+    allowCategoryAccess: permissions.allowCategoryAccess || false,
+    allowAnalyticsAccess: permissions.allowAnalyticsAccess || false,
+  };
+
+  const baseMaxTokens = allowLongAnswers ? LONG_ANSWER_MAX_TOKENS_PER_COMPLETION : DEFAULT_MAX_TOKENS_PER_COMPLETION;
+  const maxTokensPerCompletion = parsePositiveInt(process.env.OPENAI_MAX_TOKENS_PER_COMPLETION, baseMaxTokens);
+  const maxToolAttempts = parsePositiveInt(process.env.OPENAI_MAX_TOOL_ATTEMPTS, DEFAULT_MAX_TOOL_ATTEMPTS);
+  const baseTotalTokens = allowLongRequests ? LONG_REQUEST_MAX_TOTAL_TOKENS : DEFAULT_MAX_TOTAL_TOKENS_PER_REQUEST;
+  const maxTotalTokensPerRequest = parsePositiveInt(process.env.OPENAI_MAX_TOTAL_TOKENS_PER_REQUEST, baseTotalTokens);
+
+  const client = await getDatabase().getClient();
+  const { createStreamingCompletion } = require('./chat/openai-stream.js');
+
+  try {
+    let conversation;
+    let isNewConversation = false;
+
+    if (conversationId) {
+      conversation = await getConversation(client, conversationId, false);
+      if (!conversation) throw serviceError(404, 'Conversation not found');
+    } else {
+      conversation = await createConversation(client);
+      isNewConversation = true;
+    }
+
+    const historyLimit = parsePositiveInt(process.env.OPENAI_HISTORY_MESSAGE_LIMIT, DEFAULT_HISTORY_MESSAGE_LIMIT);
+
+    let financialContext;
+    try {
+      financialContext = await buildContext(client, perms);
+    } catch {
+      financialContext = { hasData: false, permissions: perms, summary: { transactionCount: 0 } };
+    }
+
+    const anonymizer = createAnonymizer();
+    const anonymizedContext = anonymizeContext(financialContext, anonymizer);
+    const contextString = formatContextForPrompt(anonymizedContext);
+    const schemaDesc = perms.allowTransactionAccess ? getSchemaDescription() : '';
+
+    await ensureMemoryTable(client);
+    const memories = await getAllMemories(client);
+    const memoriesSection = formatMemoriesForPrompt(memories);
+    const systemPrompt = getSystemPrompt(locale, contextString, schemaDesc, perms, memoriesSection);
+
+    const historyMessages = conversationId
+      ? await getMessagesForAPI(client, conversationId, historyLimit)
+      : [];
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...historyMessages,
+      { role: 'user', content: message },
+    ];
+
+    const sandbox = createSandbox(async (sql) => {
+      const result = await client.query(sql);
+      return result.rows;
+    });
+
+    const availableTools = [...MEMORY_TOOLS];
+    if (perms.allowTransactionAccess || perms.allowCategoryAccess) {
+      availableTools.push(TOOLS[0]);
+    }
+    if (perms.allowAnalyticsAccess) {
+      availableTools.push(TOOLS[1]);
+    }
+
+    const calculationData = { queryResults: {} };
+    let totalTokensUsed = 0;
+    const toolExecutions = [];
+    let fullContent = '';
+    let attempts = 0;
+
+    while (attempts < maxToolAttempts) {
+      attempts++;
+
+      const streamResult = await createStreamingCompletion(
+        messages,
+        availableTools.length > 0 ? availableTools : null,
+        {
+          model: resolvedModel,
+          apiKey: resolvedOpenAiKey || undefined,
+          maxTokens: maxTokensPerCompletion,
+        },
+        onEvent,
+      );
+
+      totalTokensUsed += streamResult.usage?.total_tokens || 0;
+      if (totalTokensUsed > maxTotalTokensPerRequest) {
+        onEvent({ type: 'error', message: getErrorMessage('rate_limited', locale) });
+        break;
+      }
+
+      if (streamResult.toolCalls && streamResult.toolCalls.length > 0) {
+        // Add assistant message with tool calls
+        messages.push({
+          role: 'assistant',
+          content: streamResult.content || '',
+          tool_calls: streamResult.toolCalls,
+        });
+
+        for (const toolCall of streamResult.toolCalls) {
+          onEvent({ type: 'tool_start', tool: toolCall.function.name });
+          const toolResult = await processToolCall(toolCall, sandbox, { calculationData, db: client });
+
+          if (toolResult.success && toolResult.data) {
+            calculationData.queryResults[toolCall.id] = toolResult.data;
+            calculationData.lastQueryResult = toolResult.data;
+          }
+
+          toolExecutions.push({
+            tool: toolCall.function.name,
+            explanation: toolResult.explanation,
+            success: toolResult.success,
+            rowCount: toolResult.rowCount,
+            error: toolResult.error,
+          });
+
+          const toolContent = toolResult.success
+            ? (toolResult.data || toolResult.result || { success: true })
+            : { error: toolResult.error || 'Unknown error' };
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(toolContent),
+          });
+
+          onEvent({ type: 'tool_result', tool: toolCall.function.name, success: toolResult.success });
+        }
+
+        continue;
+      }
+
+      fullContent = streamResult.content;
+      break;
+    }
+
+    sandbox.dispose();
+
+    // Store messages
+    await addMessage(client, conversation.id, {
+      role: 'user',
+      content: message,
+      tokensUsed: estimateTokens(message),
+    });
+
+    await addMessage(client, conversation.id, {
+      role: 'assistant',
+      content: fullContent,
+      tokensUsed: totalTokensUsed,
+      metadata: toolExecutions.length > 0 ? { toolExecutions } : null,
+    });
+
+    if (isNewConversation) {
+      const title = generateTitle(message);
+      await updateTitle(client, conversation.externalId, title);
+    }
+
+    onEvent({
+      type: 'done',
+      conversationId: conversation.externalId,
+      isNewConversation,
+      metadata: {
+        model: resolvedModel,
+        tokensUsed: totalTokensUsed,
+        toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined,
+      },
+    });
+  } catch (error) {
+    if (error.status) throw error;
+    console.error('Stream processing error:', error);
+    throw serviceError(500, 'Failed to process chat message', error.message);
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Get smart suggestions based on financial data
+ * @param {Object} payload - Request payload with permissions and locale
+ * @returns {Promise<Array>} Suggestions array
+ */
+async function getSuggestions(payload = {}) {
+  const { permissions = {}, locale = 'en' } = payload;
+  const { generateSuggestions } = require('./chat/suggestions.js');
+
+  const perms = {
+    allowTransactionAccess: permissions.allowTransactionAccess || false,
+    allowCategoryAccess: permissions.allowCategoryAccess || false,
+    allowAnalyticsAccess: permissions.allowAnalyticsAccess || false,
+  };
+
+  const client = await getDatabase().getClient();
+  try {
+    return await generateSuggestions(client, perms, locale);
+  } finally {
+    client.release();
+  }
+}
+
 // Test helpers for dependency injection
 let testDatabase = null;
 let testOpenAI = null;
@@ -502,6 +773,8 @@ module.exports = {
   getConversationHistory,
   listConversations,
   deleteConversation,
+  getSuggestions,
+  processMessageStream,
   __setDatabase,
   __resetDatabase,
   __setOpenAI,

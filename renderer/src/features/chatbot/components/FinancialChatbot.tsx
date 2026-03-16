@@ -40,12 +40,14 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';
-import { useChatbotPermissions } from '@app/contexts/ChatbotPermissionsContext';
+import { useChatbotPermissions, MODEL_TIERS } from '@app/contexts/ChatbotPermissionsContext';
 import { useAuth } from '@app/contexts/AuthContext';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 
 // Styled markdown container for assistant messages
 const MarkdownContent = styled(Box)(({ theme }) => ({
+  fontSize: '0.875rem',
+  lineHeight: 1.6,
   '& p': {
     margin: '0 0 0.5em 0',
     '&:last-child': {
@@ -71,9 +73,7 @@ const MarkdownContent = styled(Box)(({ theme }) => ({
     fontFamily: 'monospace',
   },
   '& pre': {
-    backgroundColor: theme.palette.mode === 'light'
-      ? alpha(theme.palette.grey[900], 0.05)
-      : alpha(theme.palette.common.black, 0.3),
+    backgroundColor: theme.palette.mode === 'light' ? alpha(theme.palette.grey[900], 0.05) : alpha(theme.palette.common.black, 0.3),
     padding: '0.75em',
     borderRadius: 8,
     overflow: 'auto',
@@ -141,14 +141,10 @@ const MAX_DRAWER_WIDTH_VW = 0.8; // 80vw
 
 const FinancialChatbot: React.FC = () => {
   const theme = useTheme();
-  const { t, i18n } = useTranslation('translation', { keyPrefix: 'chatbotWidget' });
-  const {
-    chatbotEnabled,
-    allowTransactionAccess,
-    allowCategoryAccess,
-    allowAnalyticsAccess,
-    openAiApiKey,
-  } = useChatbotPermissions();
+  const { t, i18n } = useTranslation('translation', {
+    keyPrefix: 'chatbotWidget',
+  });
+  const { chatbotEnabled, allowTransactionAccess, allowCategoryAccess, allowAnalyticsAccess, openAiApiKey, allowLongAnswers, allowLongRequests, chatModelTier } = useChatbotPermissions();
   const { session } = useAuth();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -163,6 +159,7 @@ const FinancialChatbot: React.FC = () => {
   const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
   const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
   const [drawerWidth, setDrawerWidth] = useState(420);
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
@@ -221,8 +218,8 @@ const FinancialChatbot: React.FC = () => {
   const getGreetingMessage = useCallback((): Message => {
     const greetings = {
       en: "Hi {{name}}! I'm your personal financial assistant. I'm here to help you understand your spending, spot useful patterns, and give advice tailored to you. What would you like to look at today?",
-      he: "שלום! אני העוזר הפיננסי החכם שלך. אני יכול לנתח את ההוצאות שלך, למצוא דפוסים ולספק תובנות מותאמות אישית. איך אוכל לעזור לך היום?",
-      fr: "Bonjour! Je suis votre assistant financier intelligent. Je peux analyser vos dépenses, trouver des tendances et fournir des insights personnalisés. Comment puis-je vous aider?",
+      he: 'שלום! אני העוזר הפיננסי החכם שלך. אני יכול לנתח את ההוצאות שלך, למצוא דפוסים ולספק תובנות מותאמות אישית. איך אוכל לעזור לך היום?',
+      fr: 'Bonjour! Je suis votre assistant financier intelligent. Je peux analyser vos dépenses, trouver des tendances et fournir des insights personnalisés. Comment puis-je vous aider?',
     };
 
     const locale = i18n.language.substring(0, 2) as 'en' | 'he' | 'fr';
@@ -274,6 +271,35 @@ const FinancialChatbot: React.FC = () => {
     }
   }, [isOpen, showHistory, loadConversations]);
 
+  // Fetch smart suggestions when drawer opens on a fresh chat
+  useEffect(() => {
+    if (!isOpen || messages.length > 1 || !canUseChatbot) return;
+
+    const locale = i18n.language.substring(0, 2);
+    const params = new URLSearchParams({
+      transactions: String(allowTransactionAccess),
+      categories: String(allowCategoryAccess),
+      analytics: String(allowAnalyticsAccess),
+      locale,
+    });
+
+    apiClient
+      .get(`/api/chat/suggestions?${params.toString()}`)
+      .then((response) => {
+        if (response.ok && response.data) {
+          const data = response.data as {
+            suggestions: Array<{ text: string; category: string }>;
+          };
+          if (data.suggestions?.length > 0) {
+            setDynamicSuggestions(data.suggestions.map((s) => s.text));
+          }
+        }
+      })
+      .catch(() => {
+        // Silently fall back to static suggestions
+      });
+  }, [isOpen, messages.length, canUseChatbot, allowTransactionAccess, allowCategoryAccess, allowAnalyticsAccess, i18n.language]);
+
   // Load a specific conversation
   const loadConversation = async (convId: string) => {
     setIsLoading(true);
@@ -293,13 +319,15 @@ const FinancialChatbot: React.FC = () => {
         };
 
         setConversationId(data.externalId);
-        setMessages(data.messages.map(m => ({
-          id: m.id.toString(),
-          role: m.role,
-          content: m.content,
-          timestamp: new Date(m.createdAt),
-          metadata: m.metadata as Message['metadata'],
-        })));
+        setMessages(
+          data.messages.map((m) => ({
+            id: m.id.toString(),
+            role: m.role,
+            content: m.content,
+            timestamp: new Date(m.createdAt),
+            metadata: m.metadata as Message['metadata'],
+          })),
+        );
         setShowHistory(false);
       }
     } catch (err) {
@@ -324,7 +352,7 @@ const FinancialChatbot: React.FC = () => {
           return;
         }
       }
-      setConversations(prev => prev.filter(c => c.externalId !== convId));
+      setConversations((prev) => prev.filter((c) => c.externalId !== convId));
       if (conversationId === convId) {
         startNewChat();
       }
@@ -339,7 +367,10 @@ const FinancialChatbot: React.FC = () => {
     setMessages([getGreetingMessage()]);
     setError(null);
     setShowHistory(false);
+    setDynamicSuggestions([]);
   };
+
+  const supportsDirectStreamingTransport = typeof window !== 'undefined' && !window.electronAPI?.api?.request;
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading || !canUseChatbot) return;
@@ -351,26 +382,103 @@ const FinancialChatbot: React.FC = () => {
       timestamp: new Date(),
     };
 
+    const streamingMsgId = (Date.now() + 1).toString();
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setIsLoading(true);
     setError(null);
 
+    const requestBody = {
+      message: inputValue,
+      conversationId,
+      model: MODEL_TIERS[chatModelTier].model,
+      permissions: {
+        allowTransactionAccess,
+        allowCategoryAccess,
+        allowAnalyticsAccess,
+      },
+      allowLongAnswers,
+      allowLongRequests,
+      openaiApiKey: openAiApiKey.trim(),
+      locale: i18n.language.substring(0, 2),
+    };
+
     try {
-      const response = await apiClient.post('/api/chat', {
-        message: inputValue,
-        conversationId,
-        permissions: {
-          allowTransactionAccess,
-          allowCategoryAccess,
-          allowAnalyticsAccess,
-        },
-        openaiApiKey: openAiApiKey.trim(),
-        locale: i18n.language.substring(0, 2),
-      });
+      if (supportsDirectStreamingTransport) {
+        try {
+          const response = await fetch('/api/chat/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          });
+
+          if (!response.ok || !response.body) {
+            throw new Error('Stream unavailable');
+          }
+
+          const streamingMessage: Message = {
+            id: streamingMsgId,
+            role: 'assistant',
+            content: '',
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, streamingMessage]);
+          setIsLoading(false);
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let finalMetadata: Message['metadata'] | undefined;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              try {
+                const event = JSON.parse(line.slice(6));
+
+                if (event.type === 'token') {
+                  setMessages((prev) => prev.map((m) => (m.id === streamingMsgId ? { ...m, content: m.content + event.content } : m)));
+                } else if (event.type === 'done') {
+                  if (event.conversationId && event.conversationId !== conversationId) {
+                    setConversationId(event.conversationId);
+                  }
+                  if (event.metadata?.toolExecutions) {
+                    finalMetadata = {
+                      toolExecutions: event.metadata.toolExecutions,
+                    };
+                  }
+                } else if (event.type === 'error') {
+                  throw new Error(event.message);
+                }
+              } catch (parseErr) {
+                if (parseErr instanceof SyntaxError) continue;
+                throw parseErr;
+              }
+            }
+          }
+
+          if (finalMetadata) {
+            setMessages((prev) => prev.map((m) => (m.id === streamingMsgId ? { ...m, metadata: finalMetadata } : m)));
+          }
+
+          return;
+        } catch (streamErr) {
+          console.warn('Streaming failed, falling back to regular endpoint:', streamErr);
+          setMessages((prev) => prev.filter((m) => m.id !== streamingMsgId));
+          setIsLoading(true);
+        }
+      }
+
+      const response = await apiClient.post('/api/chat', requestBody);
 
       if (!response.ok) {
-        // Check for license read-only error
         const licenseCheck = isLicenseReadOnlyError(response.data);
         if (licenseCheck.isReadOnly) {
           setLicenseAlertReason(licenseCheck.reason);
@@ -378,7 +486,7 @@ const FinancialChatbot: React.FC = () => {
           setIsLoading(false);
           return;
         }
-        const errorData = response.data as { error?: string; retryAfter?: number };
+        const errorData = response.data as { error?: string };
         throw new Error(errorData?.error || 'Failed to get response');
       }
 
@@ -394,34 +502,33 @@ const FinancialChatbot: React.FC = () => {
         };
       };
 
-      // Update conversation ID if this is a new conversation
       if (data.conversationId && data.conversationId !== conversationId) {
         setConversationId(data.conversationId);
       }
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.response,
-        timestamp: new Date(),
-        metadata: data.metadata,
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (err) {
-      console.error('Chat error:', err);
-      const errorMsg = err instanceof Error ? err.message : 'An error occurred';
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: data.response,
+          timestamp: new Date(),
+          metadata: data.metadata,
+        },
+      ]);
+    } catch (fallbackErr) {
+      console.error('Chat error:', fallbackErr);
+      const errorMsg = fallbackErr instanceof Error ? fallbackErr.message : 'An error occurred';
       setError(errorMsg);
-
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: errorMsg.includes('rate')
-          ? t('errors.rateLimited')
-          : t('errors.generic'),
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: errorMsg.includes('rate') ? t('errors.rateLimited') : t('errors.generic'),
+          timestamp: new Date(),
+        },
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -436,18 +543,19 @@ const FinancialChatbot: React.FC = () => {
 
   const handleRetry = () => {
     if (messages.length >= 2) {
-      const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
+      const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
       if (lastUserMessage) {
         // Remove the last error message and retry
-        setMessages(prev => prev.slice(0, -1));
+        setMessages((prev) => prev.slice(0, -1));
         setInputValue(lastUserMessage.content);
       }
     }
   };
 
-  const suggestedQuestions = [
-    ...(t('suggestions.items', { returnObjects: true }) as string[]),
-  ];
+  const staticSuggestions = t('suggestions.items', {
+    returnObjects: true,
+  }) as string[];
+  const suggestedQuestions = dynamicSuggestions.length > 0 ? dynamicSuggestions : staticSuggestions;
 
   // Don't render if chatbot is disabled
   if (!chatbotEnabled) {
@@ -471,7 +579,7 @@ const FinancialChatbot: React.FC = () => {
           '&:hover': {
             transform: 'scale(1.1) rotate(5deg)',
             boxShadow: `0 12px 40px 0 ${alpha(theme.palette.primary.main, 0.6)}`,
-          }
+          },
         }}
         onClick={() => setIsOpen(true)}
       >
@@ -489,14 +597,10 @@ const FinancialChatbot: React.FC = () => {
             display: 'flex',
             flexDirection: 'column',
             zIndex: (muiTheme) => muiTheme.zIndex.drawer + 2,
-            bgcolor: (theme) => theme.palette.mode === 'light'
-              ? theme.palette.background.paper
-              : alpha(theme.palette.background.paper, 0.95),
+            bgcolor: (theme) => (theme.palette.mode === 'light' ? theme.palette.background.paper : alpha(theme.palette.background.paper, 0.95)),
             backdropFilter: 'blur(20px)',
             borderLeft: '1px solid',
-            borderColor: (theme) => theme.palette.mode === 'light'
-              ? alpha(theme.palette.grey[400], 0.3)
-              : alpha(theme.palette.divider, 0.1),
+            borderColor: (theme) => (theme.palette.mode === 'light' ? alpha(theme.palette.grey[400], 0.3) : alpha(theme.palette.divider, 0.1)),
           },
         }}
         sx={{
@@ -537,12 +641,14 @@ const FinancialChatbot: React.FC = () => {
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Avatar sx={{
-              bgcolor: 'transparent',
-              background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-              width: 40,
-              height: 40
-            }}>
+            <Avatar
+              sx={{
+                bgcolor: 'transparent',
+                background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+                width: 40,
+                height: 40,
+              }}
+            >
               <BotIcon />
             </Avatar>
             <Box>
@@ -550,18 +656,21 @@ const FinancialChatbot: React.FC = () => {
                 {t('header.title')}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'success.main' }} />
+                <Box
+                  sx={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    bgcolor: 'success.main',
+                  }}
+                />
                 {t('header.subtitle')}
               </Typography>
             </Box>
           </Box>
           <Box sx={{ display: 'flex', gap: 0.5 }}>
             <Tooltip title={t('actions.newChat')}>
-              <IconButton
-                onClick={startNewChat}
-                size="small"
-                sx={{ color: 'text.secondary' }}
-              >
+              <IconButton onClick={startNewChat} size="small" sx={{ color: 'text.secondary' }}>
                 <AddIcon fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -585,7 +694,7 @@ const FinancialChatbot: React.FC = () => {
                 '&:hover': {
                   color: 'error.main',
                   bgcolor: (theme) => alpha(theme.palette.error.main, 0.1),
-                }
+                },
               }}
             >
               <CloseIcon fontSize="small" />
@@ -619,16 +728,17 @@ const FinancialChatbot: React.FC = () => {
                     key={conv.externalId}
                     disablePadding
                     sx={{
-                      bgcolor: conv.externalId === conversationId
-                        ? (theme) => alpha(theme.palette.primary.main, 0.1)
-                        : 'transparent',
+                      bgcolor: conv.externalId === conversationId ? (theme) => alpha(theme.palette.primary.main, 0.1) : 'transparent',
                     }}
                   >
                     <ListItemButton onClick={() => loadConversation(conv.externalId)}>
                       <ListItemText
                         primary={conv.title || t('history.untitled')}
                         secondary={new Date(conv.updatedAt).toLocaleDateString()}
-                        primaryTypographyProps={{ noWrap: true, fontSize: '0.875rem' }}
+                        primaryTypographyProps={{
+                          noWrap: true,
+                          fontSize: '0.875rem',
+                        }}
                         secondaryTypographyProps={{ fontSize: '0.7rem' }}
                       />
                       <ListItemSecondaryAction>
@@ -636,7 +746,10 @@ const FinancialChatbot: React.FC = () => {
                           edge="end"
                           size="small"
                           onClick={(e) => deleteConversation(conv.externalId, e)}
-                          sx={{ opacity: 0.5, '&:hover': { opacity: 1, color: 'error.main' } }}
+                          sx={{
+                            opacity: 0.5,
+                            '&:hover': { opacity: 1, color: 'error.main' },
+                          }}
                         >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
@@ -672,13 +785,15 @@ const FinancialChatbot: React.FC = () => {
               }}
             >
               {message.role === 'assistant' && (
-                <Avatar sx={{
-                  bgcolor: 'transparent',
-                  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-                  width: 28,
-                  height: 28,
-                  mb: 0.5
-                }}>
+                <Avatar
+                  sx={{
+                    bgcolor: 'transparent',
+                    background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+                    width: 28,
+                    height: 28,
+                    mb: 0.5,
+                  }}
+                >
                   <BotIcon sx={{ fontSize: 16 }} />
                 </Avatar>
               )}
@@ -687,28 +802,14 @@ const FinancialChatbot: React.FC = () => {
                 sx={{
                   p: 2,
                   maxWidth: '75%',
-                  bgcolor: message.role === 'user'
-                    ? 'transparent'
-                    : (theme) => theme.palette.mode === 'light'
-                      ? alpha(theme.palette.grey[100], 0.95)
-                      : alpha(theme.palette.background.paper, 0.6),
-                  background: message.role === 'user'
-                    ? `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`
-                    : undefined,
+                  bgcolor: message.role === 'user' ? 'transparent' : (theme) => (theme.palette.mode === 'light' ? alpha(theme.palette.grey[100], 0.95) : alpha(theme.palette.background.paper, 0.6)),
+                  background: message.role === 'user' ? `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)` : undefined,
                   backdropFilter: 'blur(10px)',
-                  color: message.role === 'user'
-                    ? theme.palette.common.white
-                    : theme.palette.text.primary,
+                  color: message.role === 'user' ? theme.palette.common.white : theme.palette.text.primary,
                   borderRadius: message.role === 'user' ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
-                  boxShadow: (theme) => theme.palette.mode === 'light'
-                    ? `0 2px 8px 0 ${alpha(theme.palette.common.black, 0.08)}`
-                    : `0 4px 12px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+                  boxShadow: (theme) => (theme.palette.mode === 'light' ? `0 2px 8px 0 ${alpha(theme.palette.common.black, 0.08)}` : `0 4px 12px 0 ${alpha(theme.palette.common.black, 0.05)}`),
                   border: '1px solid',
-                  borderColor: (theme) => message.role === 'user'
-                    ? 'transparent'
-                    : theme.palette.mode === 'light'
-                      ? alpha(theme.palette.grey[400], 0.3)
-                      : alpha(theme.palette.divider, 0.1),
+                  borderColor: (theme) => (message.role === 'user' ? 'transparent' : theme.palette.mode === 'light' ? alpha(theme.palette.grey[400], 0.3) : alpha(theme.palette.divider, 0.1)),
                 }}
               >
                 {message.role === 'assistant' ? (
@@ -722,16 +823,16 @@ const FinancialChatbot: React.FC = () => {
                 )}
                 {/* Show tool executions if any */}
                 {message.metadata?.toolExecutions && message.metadata.toolExecutions.length > 0 && (
-                  <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                  <Box
+                    sx={{
+                      mt: 1,
+                      pt: 1,
+                      borderTop: '1px solid',
+                      borderColor: 'divider',
+                    }}
+                  >
                     {message.metadata.toolExecutions.map((tool, idx) => (
-                      <Chip
-                        key={idx}
-                        size="small"
-                        label={tool.explanation}
-                        color={tool.success ? 'success' : 'error'}
-                        variant="outlined"
-                        sx={{ mr: 0.5, mb: 0.5, fontSize: '0.65rem' }}
-                      />
+                      <Chip key={idx} size="small" label={tool.explanation} color={tool.success ? 'success' : 'error'} variant="outlined" sx={{ mr: 0.5, mb: 0.5, fontSize: '0.65rem' }} />
                     ))}
                   </Box>
                 )}
@@ -743,7 +844,7 @@ const FinancialChatbot: React.FC = () => {
                     opacity: 0.7,
                     fontSize: '0.65rem',
                     textAlign: message.role === 'user' ? 'right' : 'left',
-                    color: 'inherit'
+                    color: 'inherit',
                   }}
                 >
                   {message.timestamp.toLocaleTimeString(i18n.language, {
@@ -753,13 +854,15 @@ const FinancialChatbot: React.FC = () => {
                 </Typography>
               </Paper>
               {message.role === 'user' && (
-                <Avatar sx={{
-                  bgcolor: (theme) => alpha(theme.palette.secondary.main, 0.1),
-                  color: 'secondary.main',
-                  width: 28,
-                  height: 28,
-                  mb: 0.5
-                }}>
+                <Avatar
+                  sx={{
+                    bgcolor: (theme) => alpha(theme.palette.secondary.main, 0.1),
+                    color: 'secondary.main',
+                    width: 28,
+                    height: 28,
+                    mb: 0.5,
+                  }}
+                >
                   <PersonIcon sx={{ fontSize: 16 }} />
                 </Avatar>
               )}
@@ -768,12 +871,14 @@ const FinancialChatbot: React.FC = () => {
 
           {isLoading && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Avatar sx={{
-                bgcolor: 'transparent',
-                background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-                width: 28,
-                height: 28
-              }}>
+              <Avatar
+                sx={{
+                  bgcolor: 'transparent',
+                  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+                  width: 28,
+                  height: 28,
+                }}
+              >
                 <BotIcon sx={{ fontSize: 16 }} />
               </Avatar>
               <Paper
@@ -801,14 +906,7 @@ const FinancialChatbot: React.FC = () => {
           {/* Error with retry button */}
           {error && !isLoading && (
             <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-              <Chip
-                icon={<RefreshIcon />}
-                label={t('actions.retry')}
-                onClick={handleRetry}
-                color="warning"
-                variant="outlined"
-                size="small"
-              />
+              <Chip icon={<RefreshIcon />} label={t('actions.retry')} onClick={handleRetry} color="warning" variant="outlined" size="small" />
             </Box>
           )}
 
@@ -821,9 +919,7 @@ const FinancialChatbot: React.FC = () => {
             <Typography variant="body2" fontWeight="bold">
               {t('warnings.title')}
             </Typography>
-            <Typography variant="caption">
-              {t('warnings.description')}
-            </Typography>
+            <Typography variant="caption">{t('warnings.description')}</Typography>
           </Alert>
         )}
 
@@ -833,9 +929,7 @@ const FinancialChatbot: React.FC = () => {
             <Typography variant="body2" fontWeight="bold">
               {t('warnings.missingApiKeyTitle')}
             </Typography>
-            <Typography variant="caption">
-              {t('warnings.missingApiKeyDescription')}
-            </Typography>
+            <Typography variant="caption">{t('warnings.missingApiKeyDescription')}</Typography>
           </Alert>
         )}
 
@@ -848,7 +942,7 @@ const FinancialChatbot: React.FC = () => {
             }}
           >
             <Typography variant="caption" color="text.secondary" gutterBottom sx={{ fontWeight: 600, ml: 1 }}>
-              {t('suggestions.title')}
+              {dynamicSuggestions.length > 0 ? t('suggestions.dynamicTitle') : t('suggestions.title')}
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
               {suggestedQuestions.map((question, idx) => (
@@ -868,8 +962,8 @@ const FinancialChatbot: React.FC = () => {
                     '&:hover': {
                       bgcolor: (theme) => alpha(theme.palette.primary.main, 0.2),
                       borderColor: 'primary.main',
-                      transform: 'translateY(-1px)'
-                    }
+                      transform: 'translateY(-1px)',
+                    },
                   }}
                 />
               ))}
@@ -883,14 +977,10 @@ const FinancialChatbot: React.FC = () => {
         <Box
           sx={{
             p: 2,
-            bgcolor: (theme) => theme.palette.mode === 'light'
-              ? alpha(theme.palette.grey[100], 0.8)
-              : alpha(theme.palette.background.paper, 0.4),
+            bgcolor: (theme) => (theme.palette.mode === 'light' ? alpha(theme.palette.grey[100], 0.8) : alpha(theme.palette.background.paper, 0.4)),
             backdropFilter: 'blur(10px)',
             borderTop: '1px solid',
-            borderColor: (theme) => theme.palette.mode === 'light'
-              ? alpha(theme.palette.grey[300], 0.5)
-              : 'transparent',
+            borderColor: (theme) => (theme.palette.mode === 'light' ? alpha(theme.palette.grey[300], 0.5) : 'transparent'),
           }}
         >
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
@@ -898,13 +988,7 @@ const FinancialChatbot: React.FC = () => {
               fullWidth
               multiline
               maxRows={3}
-              placeholder={
-                canUseChatbot
-                  ? t('input.placeholderEnabled')
-                  : hasAnyPermission
-                    ? t('input.placeholderMissingApiKey')
-                    : t('input.placeholderDisabled')
-              }
+              placeholder={canUseChatbot ? t('input.placeholderEnabled') : hasAnyPermission ? t('input.placeholderMissingApiKey') : t('input.placeholderDisabled')}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
@@ -942,11 +1026,11 @@ const FinancialChatbot: React.FC = () => {
                 transition: 'all 0.2s',
                 '&:hover': {
                   transform: 'scale(1.05)',
-                  boxShadow: `0 4px 12px 0 ${alpha(theme.palette.primary.main, 0.4)}`
+                  boxShadow: `0 4px 12px 0 ${alpha(theme.palette.primary.main, 0.4)}`,
                 },
                 '&.Mui-disabled': {
                   background: (theme) => alpha(theme.palette.action.disabledBackground, 0.5),
-                  color: (theme) => theme.palette.action.disabled
+                  color: (theme) => theme.palette.action.disabled,
                 },
               }}
             >
@@ -959,11 +1043,7 @@ const FinancialChatbot: React.FC = () => {
         </Box>
       </Drawer>
 
-      <LicenseReadOnlyAlert
-        open={licenseAlertOpen}
-        onClose={() => setLicenseAlertOpen(false)}
-        reason={licenseAlertReason}
-      />
+      <LicenseReadOnlyAlert open={licenseAlertOpen} onClose={() => setLicenseAlertOpen(false)} reason={licenseAlertReason} />
     </>
   );
 };

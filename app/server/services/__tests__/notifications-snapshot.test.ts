@@ -102,8 +102,9 @@ describe('notifications snapshot progress service', () => {
     expect(weekPeriod.current.end).toBe('2025-08-16');
     expect(weekPeriod.previous.start).toBe('2025-08-03');
     expect(weekPeriod.previous.end).toBe('2025-08-09');
-    expect(weekPeriod.deltaNet).toBe(140);
-    expect(weekPeriod.deltaNetPct).toBeCloseTo(127.27, 2);
+    // spendDelta = prev expenses - curr expenses = 700 - 600 = 100
+    expect(weekPeriod.spendDelta).toBe(100);
+    expect(weekPeriod.spendDeltaPct).toBeCloseTo(14.29, 2);
 
     const monthPeriod = result.data.periods.find((period: any) => period.key === 'month');
     expect(monthPeriod.current.start).toBe('2025-07-01');
@@ -193,6 +194,6 @@ describe('notifications snapshot progress service', () => {
     expect(weekPeriod.current.net).toBe(300);
     // Previous: 1000 - 600 - max(0, (100 - 0) - 0) = 300
     expect(weekPeriod.previous.net).toBe(300);
-    expect(weekPeriod.deltaNet).toBe(0);
+    expect(weekPeriod.spendDelta).toBe(0);
   });
 });

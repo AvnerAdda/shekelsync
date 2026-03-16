@@ -5,6 +5,7 @@ let suggestionAnalyzer;
 let autoLinker;
 const {
   buildPikadonCandidate,
+  transactionLooksLikePikadonDeposit,
 } = require('../services/investments/pikadon-candidates.js');
 
 function normalizePikadonDetails(details) {
@@ -193,6 +194,8 @@ function createInvestmentsRouter({ services = {} } = {}) {
   const bankSummaryService = services.bankSummaryService || require('../services/investments/bank-summary.js');
   const suggestionAnalyzerCJS = services.suggestionAnalyzerCJS || require('../services/investments/suggestion-analyzer-cjs.js');
   const pikadonService = services.pikadonService || require('../services/investments/pikadon.js');
+  const ibkrSyncService = services.ibkrSyncService || require('../services/investments/ibkr-sync.js');
+  const credentialsService = services.credentialsService || require('../services/credentials.js');
   const databaseService = services.databaseService || require('../services/database.js');
 
   const router = express.Router();
@@ -967,6 +970,19 @@ function createInvestmentsRouter({ services = {} } = {}) {
           'auto',
           0.95 // High confidence for user-confirmed suggestions
         );
+
+        // Mark pikadon-related transactions so rollforward excludes them
+        for (const txn of transactions) {
+          const identifier = txn.transactionIdentifier || txn.identifier;
+          const vendor = txn.transactionVendor || txn.vendor;
+          const name = txn.transactionName || txn.name || '';
+          if (identifier && vendor && transactionLooksLikePikadonDeposit({ name })) {
+            await databaseService.query(
+              'UPDATE transactions SET is_pikadon_related = 1 WHERE identifier = $1 AND vendor = $2',
+              [identifier, vendor]
+            );
+          }
+        }
       }
 
       res.status(201).json({
@@ -1237,6 +1253,88 @@ function createInvestmentsRouter({ services = {} } = {}) {
       res.status(error?.status || 500).json({
         error: error?.message || 'Failed to fetch pikadon chain',
         details: error?.stack,
+      });
+    }
+  });
+
+  // ─── Interactive Brokers (IBKR) Flex Query routes ───────────
+
+  /**
+   * GET /api/investments/ibkr/status
+   * Check if IBKR credentials are configured and last sync status
+   */
+  router.get('/ibkr/status', async (req, res) => {
+    try {
+      const result = await ibkrSyncService.getIBKRStatus();
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('IBKR status error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to get IBKR status',
+      });
+    }
+  });
+
+  /**
+   * POST /api/investments/ibkr/sync
+   * Trigger a sync from IBKR Flex Query.
+   * Uses stored credentials (token + queryId) from vendor_credentials.
+   */
+  router.post('/ibkr/sync', async (req, res) => {
+    try {
+      // Load IBKR credentials
+      const status = await ibkrSyncService.getIBKRStatus();
+      if (!status.isConfigured) {
+        return res.status(400).json({
+          error: 'IBKR not configured. Please add your Flex Query token and query ID first.',
+        });
+      }
+
+      const credentials = await credentialsService.listCredentials({ vendor: 'interactive_brokers' });
+      if (!credentials.length) {
+        return res.status(400).json({
+          error: 'IBKR credentials not found.',
+        });
+      }
+
+      const cred = credentials[0];
+      const token = cred.password;
+      const queryId = cred.identification_code;
+
+      if (!token || !queryId) {
+        return res.status(400).json({
+          error: 'IBKR Flex Query token or query ID missing. Please update your credentials.',
+        });
+      }
+
+      const result = await ibkrSyncService.syncFromIBKR({
+        token,
+        queryId,
+        credentialId: cred.id,
+        logger: console,
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error('IBKR sync error:', error);
+
+      // Update credential with failure status
+      try {
+        const status = await ibkrSyncService.getIBKRStatus();
+        if (status.credentialId) {
+          await databaseService.query(
+            `UPDATE vendor_credentials
+               SET last_scrape_attempt = CURRENT_TIMESTAMP,
+                   last_scrape_status = 'failed',
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1`,
+            [status.credentialId],
+          );
+        }
+      } catch { /* ignore secondary error */ }
+
+      res.status(error?.status || 500).json({
+        error: error?.message || 'IBKR sync failed',
       });
     }
   });

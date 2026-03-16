@@ -904,6 +904,15 @@ const TABLE_DEFINITIONS = [
       metadata TEXT,
       FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE
     );`,
+  // Chat Memory Table
+  `CREATE TABLE IF NOT EXISTS chat_memory (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT NOT NULL UNIQUE,
+      value TEXT NOT NULL,
+      category TEXT NOT NULL CHECK (category IN ('preference', 'goal', 'insight')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`,
   // Subscription Management Tables
   `CREATE TABLE IF NOT EXISTS subscriptions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1079,6 +1088,8 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_chat_conversations_archived ON chat_conversations(is_archived, updated_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id, created_at);',
   'CREATE INDEX IF NOT EXISTS idx_chat_messages_role ON chat_messages(role);',
+  'CREATE INDEX IF NOT EXISTS idx_chat_memory_category ON chat_memory(category);',
+  'CREATE INDEX IF NOT EXISTS idx_chat_memory_key ON chat_memory(key);',
   // Subscription Management Indexes
   'CREATE INDEX IF NOT EXISTS idx_subscriptions_pattern_key ON subscriptions(pattern_key);',
   'CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);',

@@ -165,7 +165,7 @@ function formatProfileSection(profile) {
  * @returns {Promise<Object>} Financial context object
  */
 async function buildContext(db, permissions, options = {}) {
-  const months = options.months || 3;
+  const months = options.months || 6;
   const { start, end } = resolveDateRange({
     startDate: options.startDate,
     endDate: options.endDate,
@@ -236,7 +236,7 @@ async function buildContext(db, permissions, options = {}) {
         AND ${EXCLUDE_PIKADON}
       GROUP BY COALESCE(parent.name, cd.name), COALESCE(parent.category_type, cd.category_type, t.category_type)
       ORDER BY total_expenses DESC
-      LIMIT 15
+      LIMIT 25
     `, [startDateStr, endDateStr]);
 
     context.categories = categoriesResult.rows.map(c => ({
@@ -291,7 +291,7 @@ async function buildContext(db, permissions, options = {}) {
       WHERE tpe.transaction_identifier IS NULL
         AND ${EXCLUDE_PIKADON}
       ORDER BY t.date DESC
-      LIMIT 30
+      LIMIT 50
     `);
 
     context.recentTransactions = recentResult.rows.map(t => ({
@@ -319,7 +319,7 @@ async function buildContext(db, permissions, options = {}) {
         AND ${EXCLUDE_PIKADON}
       GROUP BY merchant_name
       ORDER BY total_spent DESC
-      LIMIT 10
+      LIMIT 20
     `, [startDateStr, endDateStr]);
 
     context.topMerchants = merchantsResult.rows.map(m => ({
@@ -327,6 +327,35 @@ async function buildContext(db, permissions, options = {}) {
       visits: parseInt(m.visit_count, 10),
       total: parseFloat(m.total_spent || 0),
       avgTransaction: parseFloat(m.avg_transaction || 0),
+    }));
+
+    // Recurring transactions (merchants appearing 3+ times)
+    const recurringResult = await db.query(`
+      SELECT
+        merchant_name,
+        COUNT(*) as occurrence_count,
+        AVG(ABS(price)) as avg_amount,
+        MIN(date) as first_seen,
+        MAX(date) as last_seen
+      FROM transactions t
+      ${PAIRING_EXCLUSION_JOIN}
+      WHERE date >= $1 AND date <= $2
+        AND price < 0
+        AND merchant_name IS NOT NULL
+        AND tpe.transaction_identifier IS NULL
+        AND ${EXCLUDE_PIKADON}
+      GROUP BY merchant_name
+      HAVING COUNT(*) >= 3
+      ORDER BY occurrence_count DESC
+      LIMIT 15
+    `, [startDateStr, endDateStr]);
+
+    context.recurringTransactions = recurringResult.rows.map(r => ({
+      name: r.merchant_name,
+      count: parseInt(r.occurrence_count, 10),
+      avgAmount: parseFloat(r.avg_amount || 0),
+      firstSeen: r.first_seen,
+      lastSeen: r.last_seen,
     }));
   }
 
@@ -367,6 +396,42 @@ async function buildContext(db, permissions, options = {}) {
         avgMonthlySavings: Math.round(avgIncome - avgExpenses),
         savingsRate: avgIncome > 0 ? Math.round(((avgIncome - avgExpenses) / avgIncome) * 100) : 0,
       };
+    }
+
+    // Year-over-year comparison
+    try {
+      const prevYearStart = new Date(start);
+      prevYearStart.setFullYear(prevYearStart.getFullYear() - 1);
+      const prevYearEnd = new Date(end);
+      prevYearEnd.setFullYear(prevYearEnd.getFullYear() - 1);
+      const prevStartStr = prevYearStart.toISOString().split('T')[0];
+      const prevEndStr = prevYearEnd.toISOString().split('T')[0];
+
+      const yoyResult = await db.query(`
+        SELECT
+          SUM(CASE WHEN ${INCOME_CASE} THEN t.price ELSE 0 END) as income,
+          SUM(CASE WHEN ${EXPENSE_CASE} THEN ABS(t.price) ELSE 0 END) as expenses
+        FROM transactions t
+        LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+        ${PAIRING_EXCLUSION_JOIN}
+        WHERE t.date >= $1 AND t.date <= $2
+          AND tpe.transaction_identifier IS NULL
+          AND ${EXCLUDE_PIKADON}
+      `, [prevStartStr, prevEndStr, BANK_CATEGORY_NAME]);
+
+      const prevYear = yoyResult.rows[0];
+      if (prevYear && (parseFloat(prevYear.income || 0) > 0 || parseFloat(prevYear.expenses || 0) > 0)) {
+        const prevIncome = parseFloat(prevYear.income || 0);
+        const prevExpenses = parseFloat(prevYear.expenses || 0);
+        context.yearOverYear = {
+          prevPeriodIncome: Math.round(prevIncome),
+          prevPeriodExpenses: Math.round(prevExpenses),
+          incomeChange: prevIncome > 0 ? Math.round(((context.summary.totalIncome - prevIncome) / prevIncome) * 100) : null,
+          expenseChange: prevExpenses > 0 ? Math.round(((context.summary.totalExpenses - prevExpenses) / prevExpenses) * 100) : null,
+        };
+      }
+    } catch {
+      // Previous year data might not exist
     }
 
     // Investment summary (if available)
@@ -425,7 +490,7 @@ function formatContextForPrompt(context) {
   // Categories
   if (context.categories && context.categories.length > 0) {
     parts.push('\nTOP SPENDING CATEGORIES:');
-    context.categories.slice(0, 5).forEach((c, i) => {
+    context.categories.forEach((c, i) => {
       parts.push(`${i + 1}. ${c.name}: ₪${Math.round(c.totalExpenses).toLocaleString()} (${c.count} transactions)`);
     });
   }
@@ -454,6 +519,27 @@ function formatContextForPrompt(context) {
     parts.push(`- Total portfolio value: ₪${Math.round(context.investments.totalValue).toLocaleString()}`);
     parts.push(`- Liquid investments: ₪${Math.round(context.investments.liquidValue).toLocaleString()}`);
     parts.push(`- Number of accounts: ${context.investments.accountCount}`);
+  }
+
+  // Recurring transactions
+  if (context.recurringTransactions && context.recurringTransactions.length > 0) {
+    parts.push('\nRECURRING TRANSACTIONS:');
+    context.recurringTransactions.forEach(r => {
+      parts.push(`- ${r.name}: ${r.count} times, avg ₪${Math.round(r.avgAmount).toLocaleString()} (${r.firstSeen} to ${r.lastSeen})`);
+    });
+  }
+
+  // Year-over-year comparison
+  if (context.yearOverYear) {
+    parts.push('\nYEAR-OVER-YEAR COMPARISON:');
+    if (context.yearOverYear.incomeChange !== null) {
+      const direction = context.yearOverYear.incomeChange >= 0 ? '+' : '';
+      parts.push(`- Income: ${direction}${context.yearOverYear.incomeChange}% vs same period last year (was ₪${context.yearOverYear.prevPeriodIncome.toLocaleString()})`);
+    }
+    if (context.yearOverYear.expenseChange !== null) {
+      const direction = context.yearOverYear.expenseChange >= 0 ? '+' : '';
+      parts.push(`- Expenses: ${direction}${context.yearOverYear.expenseChange}% vs same period last year (was ₪${context.yearOverYear.prevPeriodExpenses.toLocaleString()})`);
+    }
   }
 
   // Permission notices
@@ -495,8 +581,25 @@ transactions:
 category_definitions:
   - id (INTEGER PRIMARY KEY)
   - name (TEXT) - category name
-  - parent_id (INTEGER) - FK to parent category
+  - parent_id (INTEGER) - self-referential FK to parent category_definitions.id (forms a tree)
   - category_type (TEXT) - 'expense', 'income', etc.
+  - depth_level (INTEGER) - 0=virtual root, 1=top-level categories, 2+=subcategories
+  - hierarchy_path (TEXT) - slash-separated path of ancestor IDs
+
+  IMPORTANT: Categories form a TREE hierarchy. Transactions point to LEAF categories (depth_level >= 2).
+  To get top-level category totals, join through the parent:
+    SELECT parent.name, SUM(ABS(t.price)) as total
+    FROM transactions t
+    JOIN category_definitions cd ON t.category_definition_id = cd.id
+    JOIN category_definitions parent ON cd.parent_id = parent.id
+    WHERE parent.depth_level = 1
+    GROUP BY parent.id ORDER BY total DESC
+  To get subcategory totals within a parent:
+    SELECT cd.name, SUM(ABS(t.price)) as total
+    FROM transactions t
+    JOIN category_definitions cd ON t.category_definition_id = cd.id
+    WHERE cd.parent_id = <parent_category_id>
+    GROUP BY cd.id ORDER BY total DESC
 
 category_budgets:
   - id (INTEGER PRIMARY KEY)

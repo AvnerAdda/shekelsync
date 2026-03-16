@@ -99,9 +99,12 @@ async function fetchAccountHoldingSnapshots(client, accountIds = []) {
 
     const existing = snapshots.get(accountId);
 
+    // Pikadon holdings replace (not add to) standard holdings for the same account.
+    // The standard holding is a summary-level placeholder that becomes redundant
+    // once granular pikadon holdings exist for the account.
     snapshots.set(accountId, {
-      current_value: addNullableNumbers(existing?.current_value, row.current_value),
-      cost_basis: addNullableNumbers(existing?.cost_basis, row.cost_basis),
+      current_value: toNumber(row.current_value),
+      cost_basis: toNumber(row.cost_basis),
       as_of_date: maxDate(existing?.as_of_date, row.as_of_date || null),
       uses_pikadon_rollup: true,
     });

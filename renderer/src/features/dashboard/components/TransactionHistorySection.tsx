@@ -6,6 +6,7 @@ import {
   Chip,
   Button,
   CircularProgress,
+  Skeleton,
   ToggleButtonGroup,
   ToggleButton,
   Alert,
@@ -1070,9 +1071,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       {activeTab === 1 && (
         <Box>
           {forecastLoading && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 350 }}>
-              <CircularProgress />
-              <Typography sx={{ ml: 2 }}>{t('forecast.loading')}</Typography>
+            <Box sx={{ height: 350, p: 2 }}>
+              <Skeleton variant="rectangular" height="100%" animation="wave" sx={{ borderRadius: 2 }} />
             </Box>
           )}
           {forecastError && (
@@ -1324,7 +1324,17 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             ) : (
               // Show actual transactions (existing logic)
               loadingTransactions ? (
-                <CircularProgress size={20} />
+                <Box sx={{ width: '100%', px: 2 }}>
+                  {[...Array(5)].map((_, i) => (
+                    <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1.5 }}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1 }}>
+                        <Skeleton variant="text" width="60%" height={24} />
+                        <Skeleton variant="text" width="40%" height={16} />
+                      </Box>
+                      <Skeleton variant="text" width="80px" height={24} />
+                    </Box>
+                  ))}
+                </Box>
               ) : dateTransactions.length > 0 ? (
                 <Box sx={{ maxHeight: 400, overflowY: 'auto' }}>
                   {dateTransactions.map((txn, idx) => (

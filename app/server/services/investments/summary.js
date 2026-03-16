@@ -16,6 +16,10 @@ const {
 const {
   fetchAccountHoldingSnapshots,
 } = require('./account-snapshots.js');
+const {
+  applyBankBalanceOverlapAdjustments,
+  fetchActivePikadonOverlapSources,
+} = require('./bank-balance-overlap.js');
 
 let dateFnsPromise = null;
 
@@ -322,8 +326,21 @@ async function getInvestmentSummary(params = {}) {
     const rolledForwardAccounts = applyContributionRollforward(accountsRows, linkedTransactions, {
       excludePikadonTransactions: true,
     });
+    const pikadonRollupAccountIds = rolledForwardAccounts
+      .filter((account) => account.account_type === 'savings' && account.uses_pikadon_rollup)
+      .map((account) => account.id);
+    const hasBankBalanceAccounts = rolledForwardAccounts.some(
+      (account) => account.account_type === 'bank_balance',
+    );
+    const overlapSources = hasBankBalanceAccounts && pikadonRollupAccountIds.length > 0
+      ? await fetchActivePikadonOverlapSources(client, pikadonRollupAccountIds)
+      : [];
+    const adjustedAccounts = applyBankBalanceOverlapAdjustments(
+      rolledForwardAccounts,
+      overlapSources,
+    );
 
-    const summary = buildAccountSummaries(rolledForwardAccounts, bankAccountsRows);
+    const summary = buildAccountSummaries(adjustedAccounts, bankAccountsRows);
 
     const assetsByAccount = {};
     const normalizedAssets = assetsResult.rows.map((row) => {
@@ -409,7 +426,7 @@ async function getInvestmentSummary(params = {}) {
       };
     });
 
-    const investmentAccounts = rolledForwardAccounts.map((account) => ({
+    const investmentAccounts = adjustedAccounts.map((account) => ({
       ...account,
       current_value: toNumber(account.current_value),
       cost_basis: toNumber(account.cost_basis),

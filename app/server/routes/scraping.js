@@ -415,7 +415,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         transactions: transactionCount,
       });
 
-      maybeRunAutoDetection({ locale: req.locale, defaultStatus: 'review' })
+      maybeRunAutoDetection({ locale: req.locale })
         .catch((detectError) => {
           logger.warn?.('Auto-detection failed:', detectError?.message || detectError);
         });
@@ -496,7 +496,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         },
       });
 
-      maybeRunAutoDetection({ locale: req.locale, defaultStatus: 'review' })
+      maybeRunAutoDetection({ locale: req.locale })
         .catch((detectError) => {
           routeLogger.warn('Auto-detection failed:', detectError?.message || detectError);
         });

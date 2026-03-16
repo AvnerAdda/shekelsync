@@ -683,6 +683,20 @@ async function dismissAlert(alertId) {
 }
 
 /**
+ * Compute status for a newly detected subscription based on confidence signals.
+ * High-confidence patterns become 'active'; low-confidence ones become 'keep'.
+ */
+function computeAutoStatus(sub) {
+  const score = sub.consistency_score || 0;
+  const occurrences = sub.occurrence_count || 0;
+  const isFixed = sub.amount_is_fixed === 1;
+
+  if (score >= 0.6 && occurrences >= 3) return 'active';
+  if (score >= 0.4 && occurrences >= 3 && isFixed) return 'active';
+  return 'keep';
+}
+
+/**
  * Refresh subscription detection
  * Syncs detected patterns with subscriptions table
  */
@@ -690,16 +704,10 @@ let lastAutoDetectionAt = 0;
 
 async function refreshDetection(input = {}) {
   let locale = 'he';
-  let defaultStatus = 'active';
   if (typeof input === 'string') {
     locale = input;
   } else if (input && typeof input === 'object') {
     locale = input.locale || locale;
-    defaultStatus = input.defaultStatus || defaultStatus;
-  }
-  const allowedStatuses = new Set(['active', 'paused', 'cancelled', 'keep', 'review']);
-  if (!allowedStatuses.has(defaultStatus)) {
-    defaultStatus = 'active';
   }
 
   const { subscriptions } = await getSubscriptions({ locale });
@@ -710,24 +718,48 @@ async function refreshDetection(input = {}) {
   for (const sub of subscriptions) {
     if (sub.id) {
       // Update existing subscription with fresh detection data
-      await database.query(
-        `UPDATE subscriptions SET
-          detected_frequency = $1,
-          detected_amount = $2,
-          consistency_score = $3,
-          last_charge_date = $4,
-          next_expected_date = $5,
-          updated_at = datetime('now')
-        WHERE id = $6`,
-        [
-          sub.detected_frequency,
-          sub.detected_amount,
-          sub.consistency_score,
-          sub.last_charge_date,
-          sub.next_expected_date,
-          sub.id
-        ]
-      );
+      if (sub.status === 'review') {
+        // Reclassify leftover 'review' subscriptions using auto-classification
+        await database.query(
+          `UPDATE subscriptions SET
+            detected_frequency = $1,
+            detected_amount = $2,
+            consistency_score = $3,
+            last_charge_date = $4,
+            next_expected_date = $5,
+            status = $6,
+            updated_at = datetime('now')
+          WHERE id = $7`,
+          [
+            sub.detected_frequency,
+            sub.detected_amount,
+            sub.consistency_score,
+            sub.last_charge_date,
+            sub.next_expected_date,
+            computeAutoStatus(sub),
+            sub.id
+          ]
+        );
+      } else {
+        await database.query(
+          `UPDATE subscriptions SET
+            detected_frequency = $1,
+            detected_amount = $2,
+            consistency_score = $3,
+            last_charge_date = $4,
+            next_expected_date = $5,
+            updated_at = datetime('now')
+          WHERE id = $6`,
+          [
+            sub.detected_frequency,
+            sub.detected_amount,
+            sub.consistency_score,
+            sub.last_charge_date,
+            sub.next_expected_date,
+            sub.id
+          ]
+        );
+      }
       updated++;
     } else {
       // Create new subscription record
@@ -752,7 +784,7 @@ async function refreshDetection(input = {}) {
           sub.detected_amount,
           sub.amount_is_fixed,
           sub.consistency_score,
-          defaultStatus,
+          computeAutoStatus(sub),
           sub.category_definition_id,
           sub.first_detected_date,
           sub.last_charge_date,
@@ -766,13 +798,13 @@ async function refreshDetection(input = {}) {
   return { success: true, created, updated };
 }
 
-async function maybeRunAutoDetection({ locale = 'he', defaultStatus = 'review', debounceMs = 30 * 60 * 1000 } = {}) {
+async function maybeRunAutoDetection({ locale = 'he', debounceMs = 30 * 60 * 1000 } = {}) {
   const now = Date.now();
   if (now - lastAutoDetectionAt < debounceMs) {
     return { success: false, skipped: true, reason: 'debounced' };
   }
   lastAutoDetectionAt = now;
-  return refreshDetection({ locale, defaultStatus });
+  return refreshDetection({ locale });
 }
 
 module.exports = {

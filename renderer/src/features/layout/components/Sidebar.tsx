@@ -52,6 +52,7 @@ import {
   getAccountSyncStatus,
   type AccountSyncStatusColor,
 } from './sidebar-helpers';
+import { resolveOnboardingGate } from './onboarding-gate';
 
 const DRAWER_WIDTH = 260;
 const DRAWER_WIDTH_COLLAPSED = 65;
@@ -110,7 +111,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
   const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
   const { showNotification } = useNotification();
-  const { getPageAccessStatus } = useOnboarding();
+  const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
   const { t } = useTranslation('translation', { keyPrefix: 'sidebar' });
   const {
     data: pairingGapData,
@@ -589,8 +590,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         {/* Menu Items */}
         <List sx={{ flexGrow: 1, px: 1.5 }}>
           {menuItems.map((item) => {
-            const accessStatus = getPageAccessStatus(item.id);
-            const isLocked = accessStatus.isLocked;
+            const { accessStatus, isLocked } = resolveOnboardingGate(
+              onboardingStatus,
+              getPageAccessStatus,
+              item.id,
+            );
             const isActive = currentPage === item.id;
 
             return (

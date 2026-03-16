@@ -32,6 +32,7 @@ const {
   logger,
   recordRendererLog,
 } = require('./logger');
+const { proxyApiRequest } = require('./api-request-proxy');
 const {
   getDiagnosticsInfo,
   openDiagnosticsLogDirectory,
@@ -775,6 +776,7 @@ function reportException(error) {
 let healthService = null;
 let scrapingService = null;
 let setupAPIServer = null;
+let backendInitializationPromise = null;
 
 async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit } = {}) {
   const shouldSkipDbInit = typeof skipDbInit === 'boolean' ? skipDbInit : skipEmbeddedApi;
@@ -872,6 +874,27 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
       `Failed to initialize application: ${error.message}`
     );
   }
+}
+
+function ensureBackendInitialization(options = {}) {
+  if (!backendInitializationPromise) {
+    backendInitializationPromise = new Promise((resolve) => {
+      setImmediate(() => {
+        initializeBackendServices(options)
+          .then(resolve)
+          .catch((error) => {
+            logger.error('Backend initialization promise rejected', { error: error.message });
+            resolve();
+          });
+      });
+    });
+  }
+
+  return backendInitializationPromise;
+}
+
+function waitForBackendInitialization() {
+  return backendInitializationPromise || Promise.resolve();
 }
 
 // Helper to lazy-load services only when needed (and not in SQLite dev mode)
@@ -1234,11 +1257,7 @@ async function createWindow() {
   });
 
   // Kick off heavy initialization in the background so the window can appear sooner
-  setImmediate(() => {
-    initializeBackendServices({ skipEmbeddedApi }).catch((error) => {
-      console.error('Background initialization failed:', error);
-    });
-  });
+  ensureBackendInitialization({ skipEmbeddedApi });
 
   // Start renderer server in development
   // Load the app
@@ -1884,53 +1903,19 @@ ipcMain.handle('api:getToken', () => {
 
 // API proxy handler
 ipcMain.handle('api:request', async (event, { method, endpoint, data, headers = {} }) => {
-  try {
-    // Use internal API server if available, otherwise hit the embedded Next renderer (dev only)
-    const baseUrl = apiPort ? `http://localhost:${apiPort}` : 'http://localhost:3000';
-    const url = `${baseUrl}${endpoint}`;
-
-    const fetchOptions = {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers
-      }
-    };
-
-    // Add authentication token if API server is running
-    if (apiToken) {
-      fetchOptions.headers['Authorization'] = `Bearer ${apiToken}`;
-    }
-
-    if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-      fetchOptions.body = JSON.stringify(data);
-    }
-
-    const response = await fetch(url, fetchOptions);
-    const responseData = await response.text();
-
-    let parsedData;
-    try {
-      parsedData = JSON.parse(responseData);
-    } catch {
-      parsedData = responseData;
-    }
-
-    return {
-      status: response.status,
-      statusText: response.statusText,
-      data: parsedData,
-      ok: response.ok
-    };
-  } catch (error) {
-    console.error('API request failed:', error);
-    return {
-      status: 500,
-      statusText: 'Internal Server Error',
-      data: { error: error.message },
-      ok: false
-    };
-  }
+  return proxyApiRequest({
+    method,
+    endpoint,
+    data,
+    headers,
+    fetchImpl: fetch,
+    getState: () => ({
+      apiPort,
+      apiToken,
+      skipEmbeddedApi: process.env.SKIP_EMBEDDED_API === 'true',
+    }),
+    waitForEmbeddedApi: waitForBackendInitialization,
+  });
 });
 
 ipcMain.handle('settings:get', async () => {

@@ -1,25 +1,8 @@
 import React from 'react';
-import {
-  Alert,
-  Box,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  IconButton,
-  Stack,
-  Typography,
-} from '@mui/material';
-import {
-  ArrowDownward as DownIcon,
-  ArrowUpward as UpIcon,
-  Close as CloseIcon,
-} from '@mui/icons-material';
+import { Alert, Box, Card, CardContent, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, Divider, Grid, IconButton, Stack, Typography } from '@mui/material';
+import { ArrowDownward as DownIcon, ArrowUpward as UpIcon, Close as CloseIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import SpendComparisonBar from './SpendComparisonBar';
 
 export interface SnapshotWindow {
   start: string;
@@ -39,8 +22,8 @@ export interface SnapshotPeriod {
   label: string;
   current: SnapshotWindow;
   previous: SnapshotWindow;
-  deltaNet: number;
-  deltaNetPct: number | null;
+  spendDelta: number;
+  spendDeltaPct: number | null;
   hasData: boolean;
 }
 
@@ -91,13 +74,7 @@ function parseSnapshotDate(value: string | null | undefined): Date | null {
   return parsed;
 }
 
-const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({
-  open,
-  onClose,
-  data,
-  loading,
-  error,
-}) => {
+const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({ open, onClose, data, loading, error }) => {
   const { t, i18n } = useTranslation();
   const locale = resolveLocale(i18n.language);
 
@@ -126,12 +103,15 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({
     return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
   };
 
-  const formatDelta = (value: number) =>
-    `${value >= 0 ? '+' : ''}${formatCurrency(value)}`;
-
-  const formatDeltaPct = (value: number | null) => {
+  const formatDeltaPctStr = (value: number | null, isPositiveDelta: boolean) => {
     if (value === null) return t('insights.snapshot.modal.notAvailable');
-    return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+    const positiveStr = t('insights.snapshot.modal.reductionBy', {
+      pct: Math.abs(value).toFixed(1),
+    });
+    const negativeStr = t('insights.snapshot.modal.increasedBy', {
+      pct: Math.abs(value).toFixed(1),
+    });
+    return isPositiveDelta ? positiveStr : negativeStr;
   };
 
   return (
@@ -139,14 +119,23 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({
       open={open}
       onClose={onClose}
       fullWidth
-      maxWidth="md"
+      maxWidth={false}
       disableAutoFocus
       disableEnforceFocus
       disableRestoreFocus
       transitionDuration={0}
+      PaperProps={{ sx: { height: '55vh', width: '85vw', maxWidth: '85vw' } }}
     >
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="h6" component="span" role="heading" aria-level={2}>
+      <DialogTitle
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          py: 1,
+          px: 2,
+        }}
+      >
+        <Typography variant="subtitle1" fontWeight={600} component="span" role="heading" aria-level={2}>
           {t('insights.snapshot.modal.title')}
         </Typography>
         <IconButton size="small" onClick={onClose} aria-label={t('common.close')}>
@@ -154,9 +143,25 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({
         </IconButton>
       </DialogTitle>
 
-      <DialogContent dividers>
+      <DialogContent
+        dividers
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          p: 1.5,
+          overflow: 'auto',
+        }}
+      >
         {loading && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 6, gap: 2 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              py: 6,
+              gap: 2,
+            }}
+          >
             <CircularProgress />
             <Typography variant="body2" color="text.secondary">
               {t('insights.snapshot.modal.loading')}
@@ -164,114 +169,141 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({
           </Box>
         )}
 
-        {!loading && error && (
-          <Alert severity="error">
-            {error}
-          </Alert>
-        )}
+        {!loading && error && <Alert severity="error">{error}</Alert>}
 
-        {!loading && !error && !data && (
-          <Alert severity="info">
-            {t('insights.snapshot.modal.empty')}
-          </Alert>
-        )}
+        {!loading && !error && !data && <Alert severity="info">{t('insights.snapshot.modal.empty')}</Alert>}
 
-        {!loading && !error && data && (
-          <Stack spacing={2}>
-            {data.periods.map((period) => {
-              const periodLabel = t(`insights.snapshot.periodLabels.${period.key}`, period.label);
-              const positiveDelta = period.deltaNet >= 0;
-              const previousMissing = period.previous.txCount === 0;
-              const currentRange = period.current.range || formatDateRange(period.current.start, period.current.end);
-              const previousRange = period.previous.range || formatDateRange(period.previous.start, period.previous.end);
+        {!loading &&
+          !error &&
+          data &&
+          (() => {
+            const visiblePeriods = data.periods.filter((p) => p.hasData);
 
-              return (
-                <Card key={period.key} variant="outlined">
-                  <CardContent>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                        {periodLabel}
+            return (
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  flex: 1,
+                  gap: 1,
+                }}
+              >
+                <Grid container spacing={1} sx={{ flex: 1 }}>
+                  {visiblePeriods.map((period) => {
+                    const periodLabel = t(`insights.snapshot.periodLabels.${period.key}`, period.label);
+                    const positiveDelta = period.spendDelta >= 0;
+                    const currentRange = period.current.range || formatDateRange(period.current.start, period.current.end);
+                    const previousRange = period.previous.range || formatDateRange(period.previous.start, period.previous.end);
+                    const previousMissing = period.previous.txCount === 0;
+
+                    return (
+                      <Grid size="grow" key={period.key} sx={{ display: 'flex' }}>
+                        <Card variant="outlined" sx={{ flex: 1, display: 'flex' }}>
+                          <CardContent
+                            sx={{
+                              flex: 1,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              p: 1,
+                              '&:last-child': { pb: 1 },
+                            }}
+                          >
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={0.5}>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {periodLabel}
+                              </Typography>
+                              <Chip
+                                size="small"
+                                color={positiveDelta ? 'success' : 'error'}
+                                icon={positiveDelta ? <DownIcon sx={{ fontSize: 14 }} /> : <UpIcon sx={{ fontSize: 14 }} />}
+                                label={formatDeltaPctStr(period.spendDeltaPct, positiveDelta)}
+                                sx={{ height: 22, fontSize: '0.7rem' }}
+                              />
+                            </Stack>
+
+                            <Box
+                              sx={{
+                                flex: 1,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <SpendComparisonBar
+                                previous={period.previous.expenses}
+                                current={period.current.expenses}
+                                formatCurrency={formatCurrency}
+                                previousRange={previousRange}
+                                currentRange={currentRange}
+                              />
+                            </Box>
+
+                            {previousMissing && (
+                              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                                {t('insights.snapshot.modal.insufficientHistory')}
+                              </Typography>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    );
+                  })}
+                </Grid>
+
+                {visiblePeriods.length > 0 && <Divider />}
+
+                <Card variant="outlined" sx={{ flexShrink: 0 }}>
+                  <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {t('insights.snapshot.periodLabels.sinceStart')}
                       </Typography>
-                      <Chip
-                        size="small"
-                        color={positiveDelta ? 'success' : 'error'}
-                        icon={positiveDelta ? <UpIcon /> : <DownIcon />}
-                        label={`${formatDelta(period.deltaNet)} (${formatDeltaPct(period.deltaNetPct)})`}
-                      />
+                      <Typography variant="caption" color="text.secondary">
+                        {formatDateRange(data.sinceStart.startDate, data.sinceStart.endDate)}
+                        {' \u00b7 '}
+                        {t('insights.snapshot.modal.daysTracked', {
+                          count: data.sinceStart.daysTracked,
+                        })}
+                      </Typography>
                     </Stack>
 
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                      {t('insights.snapshot.modal.currentPeriod')}: {currentRange}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                      {t('insights.snapshot.modal.previousPeriod')}: {previousRange}
-                    </Typography>
-
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-                      <Typography variant="body2">
-                        {t('insights.snapshot.metrics.net')}: <strong>{formatCurrency(period.current.net)}</strong>
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('insights.snapshot.modal.previousNet')}: {formatCurrency(period.previous.net)}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('insights.snapshot.metrics.txCount')}: {formatCount(period.current.txCount)}
-                      </Typography>
-                    </Stack>
-
-                    {previousMissing && (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: 'block', mt: 1.5 }}
-                      >
-                        {t('insights.snapshot.modal.insufficientHistory')}
-                      </Typography>
-                    )}
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 6, sm: 3 }}>
+                        <Typography variant="caption" color="text.secondary" component="div">
+                          {t('insights.snapshot.metrics.totalSpend')}
+                        </Typography>
+                        <Typography variant="h6" fontWeight="bold">
+                          {formatCurrency(data.sinceStart.expenses)}
+                        </Typography>
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 3 }}>
+                        <Typography variant="caption" color="text.secondary" component="div">
+                          {t('insights.snapshot.metrics.investmentOutflow')}
+                        </Typography>
+                        <Typography variant="h6" fontWeight="bold">
+                          {formatCurrency(data.sinceStart.investmentOutflow)}
+                        </Typography>
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 3 }}>
+                        <Typography variant="caption" color="text.secondary" component="div">
+                          {t('insights.snapshot.metrics.investmentInflow')}
+                        </Typography>
+                        <Typography variant="h6" fontWeight="bold">
+                          {formatCurrency(data.sinceStart.investmentInflow)}
+                        </Typography>
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 3 }}>
+                        <Typography variant="caption" color="text.secondary" component="div">
+                          {t('insights.snapshot.metrics.txCount')}
+                        </Typography>
+                        <Typography variant="h6">{formatCount(data.sinceStart.txCount)}</Typography>
+                      </Grid>
+                    </Grid>
                   </CardContent>
                 </Card>
-              );
-            })}
-
-            <Divider />
-
-            <Card variant="outlined">
-              <CardContent>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                  {t('insights.snapshot.periodLabels.sinceStart')}
-                </Typography>
-
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                  {formatDateRange(data.sinceStart.startDate, data.sinceStart.endDate)}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                  {t('insights.snapshot.modal.daysTracked', { count: data.sinceStart.daysTracked })}
-                </Typography>
-
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} useFlexGap flexWrap="wrap">
-                  <Typography variant="body2">
-                    {t('insights.snapshot.metrics.income')}: <strong>{formatCurrency(data.sinceStart.income)}</strong>
-                  </Typography>
-                  <Typography variant="body2">
-                    {t('insights.snapshot.metrics.expenses')}: <strong>{formatCurrency(data.sinceStart.expenses)}</strong>
-                  </Typography>
-                  <Typography variant="body2">
-                    {t('insights.snapshot.metrics.investmentOutflow')}: <strong>{formatCurrency(data.sinceStart.investmentOutflow)}</strong>
-                  </Typography>
-                  <Typography variant="body2">
-                    {t('insights.snapshot.metrics.investmentInflow')}: <strong>{formatCurrency(data.sinceStart.investmentInflow)}</strong>
-                  </Typography>
-                  <Typography variant="body2">
-                    {t('insights.snapshot.metrics.net')}: <strong>{formatCurrency(data.sinceStart.net)}</strong>
-                  </Typography>
-                  <Typography variant="body2">
-                    {t('insights.snapshot.metrics.txCount')}: <strong>{formatCount(data.sinceStart.txCount)}</strong>
-                  </Typography>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Stack>
-        )}
+              </Box>
+            );
+          })()}
       </DialogContent>
     </Dialog>
   );

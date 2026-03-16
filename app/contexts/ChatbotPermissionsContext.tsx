@@ -1,5 +1,25 @@
 import React, { createContext, useContext, useState } from 'react';
 
+export type ModelTier = 'light' | 'normal' | 'heavy';
+
+export const MODEL_TIERS: Record<ModelTier, { model: string; label: string }> = {
+  light: { model: 'gpt-4o-mini', label: 'Light' },
+  normal: { model: 'gpt-4o', label: 'Normal' },
+  heavy: { model: 'gpt-4.1', label: 'Heavy' },
+};
+
+const VALID_TIERS = new Set<string>(Object.keys(MODEL_TIERS));
+
+function readStoredTier(key: string, fallback: ModelTier): ModelTier {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const stored = window.localStorage.getItem(key);
+    return stored && VALID_TIERS.has(stored) ? (stored as ModelTier) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 interface ChatbotPermissionsContextType {
   chatbotEnabled: boolean;
   setChatbotEnabled: (enabled: boolean) => void;
@@ -11,6 +31,12 @@ interface ChatbotPermissionsContextType {
   setAllowAnalyticsAccess: (allow: boolean) => void;
   openAiApiKey: string;
   setOpenAiApiKey: (apiKey: string) => void;
+  allowLongAnswers: boolean;
+  setAllowLongAnswers: (allow: boolean) => void;
+  allowLongRequests: boolean;
+  setAllowLongRequests: (allow: boolean) => void;
+  chatModelTier: ModelTier;
+  setChatModelTier: (tier: ModelTier) => void;
 }
 
 const ChatbotPermissionsContext = createContext<ChatbotPermissionsContextType | undefined>(
@@ -95,6 +121,15 @@ export const ChatbotPermissionsProvider: React.FC<{ children: React.ReactNode }>
   const [openAiApiKey, setOpenAiApiKeyState] = useState<string>(() =>
     readStoredString('chatbot-openai-api-key', '')
   );
+  const [allowLongAnswers, setAllowLongAnswersState] = useState<boolean>(() =>
+    readStoredBoolean('chatbot-long-answers', false)
+  );
+  const [allowLongRequests, setAllowLongRequestsState] = useState<boolean>(() =>
+    readStoredBoolean('chatbot-long-requests', false)
+  );
+  const [chatModelTier, setChatModelTierState] = useState<ModelTier>(() =>
+    readStoredTier('chatbot-model-tier', 'light')
+  );
 
   const setChatbotEnabled = (enabled: boolean) => {
     setChatbotEnabledState(enabled);
@@ -121,6 +156,21 @@ export const ChatbotPermissionsProvider: React.FC<{ children: React.ReactNode }>
     persistString('chatbot-openai-api-key', apiKey);
   };
 
+  const setAllowLongAnswers = (allow: boolean) => {
+    setAllowLongAnswersState(allow);
+    persistBoolean('chatbot-long-answers', allow);
+  };
+
+  const setAllowLongRequests = (allow: boolean) => {
+    setAllowLongRequestsState(allow);
+    persistBoolean('chatbot-long-requests', allow);
+  };
+
+  const setChatModelTier = (tier: ModelTier) => {
+    setChatModelTierState(tier);
+    persistString('chatbot-model-tier', tier);
+  };
+
   return (
     <ChatbotPermissionsContext.Provider
       value={{
@@ -134,6 +184,12 @@ export const ChatbotPermissionsProvider: React.FC<{ children: React.ReactNode }>
         setAllowAnalyticsAccess,
         openAiApiKey,
         setOpenAiApiKey,
+        allowLongAnswers,
+        setAllowLongAnswers,
+        allowLongRequests,
+        setAllowLongRequests,
+        chatModelTier,
+        setChatModelTier,
       }}
     >
       {children}

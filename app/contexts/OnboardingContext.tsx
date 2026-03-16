@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '@/lib/api-client';
 
 interface OnboardingStatus {
@@ -38,6 +38,7 @@ interface OnboardingContextType {
 }
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
+const INITIAL_RETRY_DELAYS_MS = [500, 1000, 2000];
 
 const createDefaultStatus = (): OnboardingStatus => ({
   isComplete: false,
@@ -93,26 +94,66 @@ export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isMountedRef = useRef(true);
+  const activeRequestRef = useRef(0);
+  const retryTimeoutsRef = useRef<Set<number>>(new Set());
 
-  const fetchStatus = useCallback(async () => {
-    try {
+  const clearRetryTimeouts = useCallback(() => {
+    retryTimeoutsRef.current.forEach((timeoutId) => {
+      window.clearTimeout(timeoutId);
+    });
+    retryTimeoutsRef.current.clear();
+  }, []);
+
+  const fetchStatus = useCallback(async (retryDelays: number[] = [], attempt = 0, requestId?: number) => {
+    const nextRequestId = requestId ?? activeRequestRef.current + 1;
+
+    if (attempt === 0) {
+      activeRequestRef.current = nextRequestId;
+      clearRetryTimeouts();
       setLoading(true);
       setError(null);
+    }
 
+    try {
       const response = await apiClient.get('/api/onboarding/status');
+      if (!isMountedRef.current || activeRequestRef.current !== nextRequestId) {
+        return;
+      }
       if (!response.ok) {
         throw new Error('Failed to fetch onboarding status');
       }
 
       const data = response.data as any;
       setStatus(normalizeStatus(data));
+      setError(null);
     } catch (err) {
+      if (!isMountedRef.current || activeRequestRef.current !== nextRequestId) {
+        return;
+      }
+
       console.error('Error fetching onboarding status:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMessage);
+
+      const nextDelay = retryDelays[attempt];
+      if (typeof nextDelay === 'number') {
+        const timeoutId = window.setTimeout(() => {
+          retryTimeoutsRef.current.delete(timeoutId);
+          void fetchStatus(retryDelays, attempt + 1, nextRequestId);
+        }, nextDelay);
+        retryTimeoutsRef.current.add(timeoutId);
+        return;
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current && activeRequestRef.current === nextRequestId) {
+        const hasPendingRetry = retryTimeoutsRef.current.size > 0;
+        if (!hasPendingRetry) {
+          setLoading(false);
+        }
+      }
     }
-  }, []);
+  }, [clearRetryTimeouts]);
 
   const dismissOnboarding = useCallback(async () => {
     try {
@@ -163,12 +204,43 @@ export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
 
     // Refetch from server to get accurate data
-    fetchStatus();
+    void fetchStatus();
   }, [fetchStatus]);
 
   // Fetch status on mount
   useEffect(() => {
-    fetchStatus();
+    isMountedRef.current = true;
+    void fetchStatus(INITIAL_RETRY_DELAYS_MS);
+
+    return () => {
+      isMountedRef.current = false;
+      activeRequestRef.current += 1;
+      clearRetryTimeouts();
+    };
+  }, [clearRetryTimeouts, fetchStatus]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchStatus();
+      }
+    };
+
+    const handleDataRefresh = () => {
+      void fetchStatus();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('dataRefresh', handleDataRefresh);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('dataRefresh', handleDataRefresh);
+    };
   }, [fetchStatus]);
 
   const getPageAccessStatus = useCallback((page: string): PageAccessStatus => {
@@ -190,12 +262,12 @@ export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       };
     }
 
-    // If no status yet, lock everything except settings/home
+    // Unknown onboarding status is treated as unresolved, not locked.
     if (!status) {
       return {
-        isLocked: true,
-        requiredStep: 'firstScrape',
-        reason: 'Complete your first transaction scrape to unlock this page'
+        isLocked: false,
+        requiredStep: '',
+        reason: ''
       };
     }
 

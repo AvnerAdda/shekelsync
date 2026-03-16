@@ -641,6 +641,12 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
     asOfDate: new Date().toISOString().split('T')[0],
   });
 
+  // IBKR Flex Query credentials (shown when Interactive Brokers is selected)
+  const [ibkrToken, setIbkrToken] = useState('');
+  const [ibkrQueryId, setIbkrQueryId] = useState('');
+  const [ibkrShowToken, setIbkrShowToken] = useState(false);
+  const [ibkrSyncing, setIbkrSyncing] = useState(false);
+
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'accountsModal' });
   const locale = normalizeLocale(i18n.language) || 'he';
 
@@ -1377,6 +1383,43 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
           showNotification('Investment account added successfully', 'success');
         }
 
+        // Save IBKR Flex Query credentials if provided
+        if (
+          addWizardSelectedInstitution?.vendor_code === 'interactive_brokers' &&
+          ibkrToken.trim() &&
+          ibkrQueryId.trim()
+        ) {
+          try {
+            await apiClient.post('/api/credentials', {
+              vendor: 'interactive_brokers',
+              password: ibkrToken.trim(),
+              identification_code: ibkrQueryId.trim(),
+            });
+
+            // Trigger initial sync in background
+            if (newAccountId) {
+              setIbkrSyncing(true);
+              apiClient.post('/api/investments/ibkr/sync').then((syncRes) => {
+                if (syncRes.ok && (syncRes.data as any)?.success) {
+                  const summary = (syncRes.data as any).summary;
+                  showNotification(
+                    `IBKR synced: ${summary?.positionCount ?? 0} positions ($${summary?.totalValue?.toFixed(0) ?? '0'})`,
+                    'success',
+                  );
+                  window.dispatchEvent(new CustomEvent('dataRefresh'));
+                }
+              }).catch(() => {
+                // Sync failure is non-critical — credentials are saved
+              }).finally(() => {
+                setIbkrSyncing(false);
+              });
+            }
+          } catch (credError) {
+            console.error('Failed to save IBKR credentials:', credError);
+            showNotification('Account created, but IBKR credentials could not be saved.', 'warning');
+          }
+        }
+
         await fetchInvestmentAccounts();
         setNewInvestmentAccount({
           account_name: '',
@@ -1392,6 +1435,8 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
           costBasis: '',
           asOfDate: new Date().toISOString().split('T')[0],
         });
+        setIbkrToken('');
+        setIbkrQueryId('');
         setActiveTab(1);
         setIsAdding(false);
         window.dispatchEvent(new CustomEvent('dataRefresh'));
@@ -2092,6 +2137,54 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                         </IconButton>
                       </Tooltip>
                     )}
+                    {institutionMeta?.vendor_code === 'interactive_brokers' && (
+                      <Tooltip title={t('tooltips.syncIBKR', { defaultValue: 'Sync from IBKR' })}>
+                        <IconButton
+                          onClick={async () => {
+                            setIbkrSyncing(true);
+                            try {
+                              const res = await apiClient.post('/api/investments/ibkr/sync');
+                              if (res.ok && (res.data as any)?.success) {
+                                const summary = (res.data as any).summary;
+                                showNotification(
+                                  `IBKR synced: ${summary?.positionCount ?? 0} positions ($${summary?.totalValue?.toFixed(0) ?? '0'})`,
+                                  'success',
+                                );
+                                await fetchInvestmentAccounts();
+                                window.dispatchEvent(new CustomEvent('dataRefresh'));
+                              } else {
+                                showNotification((res.data as any)?.error || 'IBKR sync failed', 'error');
+                              }
+                            } catch (syncErr) {
+                              showNotification(
+                                syncErr instanceof Error ? syncErr.message : 'IBKR sync failed',
+                                'error',
+                              );
+                            } finally {
+                              setIbkrSyncing(false);
+                            }
+                          }}
+                          color="primary"
+                          size="small"
+                          disabled={ibkrSyncing}
+                          sx={{
+                            transition: 'all 0.2s ease-in-out',
+                            '&:hover': {
+                              transform: 'scale(1.1)',
+                            },
+                            ...(ibkrSyncing && {
+                              animation: 'spin 1s linear infinite',
+                              '@keyframes spin': {
+                                '0%': { transform: 'rotate(0deg)' },
+                                '100%': { transform: 'rotate(360deg)' },
+                              },
+                            }),
+                          }}
+                        >
+                          <SyncIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                     <Tooltip title={t('tooltips.deleteAccount')}>
                       <IconButton
                         onClick={() => confirmDelete(account, 'investment')}
@@ -2722,6 +2815,59 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                                 placeholder={t('placeholders.notes')}
                               />
                             </Grid>
+
+                            {/* IBKR Flex Query Credentials (shown for Interactive Brokers) */}
+                            {addWizardSelectedInstitution?.vendor_code === 'interactive_brokers' && (
+                              <Grid size={{ xs: 12 }}>
+                                <Box
+                                  sx={{
+                                    p: 2,
+                                    borderRadius: 2,
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    bgcolor: 'action.hover',
+                                  }}
+                                >
+                                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                                    {t('ibkr.title', { defaultValue: 'Flex Query Auto-Sync' })}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                                    {t('ibkr.description', { defaultValue: 'Enter your IBKR Flex Query credentials to automatically sync portfolio data. Create a Flex Query in IBKR Account Management under Reports > Flex Queries.' })}
+                                  </Typography>
+                                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                                    <TextField
+                                      size="small"
+                                      label={t('ibkr.tokenLabel', { defaultValue: 'Flex Query Token' })}
+                                      value={ibkrToken}
+                                      onChange={(e) => setIbkrToken(e.target.value)}
+                                      type={ibkrShowToken ? 'text' : 'password'}
+                                      autoComplete="off"
+                                      sx={{ flex: 1, minWidth: 200 }}
+                                      InputProps={{
+                                        endAdornment: (
+                                          <InputAdornment position="end">
+                                            <IconButton size="small" onClick={() => setIbkrShowToken(!ibkrShowToken)} edge="end">
+                                              {ibkrShowToken ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                                            </IconButton>
+                                          </InputAdornment>
+                                        ),
+                                      }}
+                                    />
+                                    <TextField
+                                      size="small"
+                                      label={t('ibkr.queryIdLabel', { defaultValue: 'Flex Query ID' })}
+                                      value={ibkrQueryId}
+                                      onChange={(e) => setIbkrQueryId(e.target.value)}
+                                      autoComplete="off"
+                                      sx={{ flex: 1, minWidth: 200 }}
+                                    />
+                                  </Box>
+                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                                    {t('ibkr.optional', { defaultValue: 'Optional — you can add these later and sync from the account details.' })}
+                                  </Typography>
+                                </Box>
+                              </Grid>
+                            )}
 
                             <Grid size={{ xs: 12 }}>
                               <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>

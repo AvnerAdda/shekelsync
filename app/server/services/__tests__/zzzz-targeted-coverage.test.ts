@@ -611,22 +611,19 @@ describe('late targeted coverage for institutions, summary, and subscriptions', 
     const refreshFromString = await subscriptionsService.refreshDetection('en');
     expect(refreshFromString.success).toBe(true);
 
-    const refreshWithInvalidStatus = await subscriptionsService.refreshDetection({
+    const refreshWithObject = await subscriptionsService.refreshDetection({
       locale: 'en',
-      defaultStatus: 'invalid-status',
     });
-    expect(refreshWithInvalidStatus.success).toBe(true);
+    expect(refreshWithObject.success).toBe(true);
 
     const autoRun = await subscriptionsService.maybeRunAutoDetection({
       locale: 'en',
-      defaultStatus: 'review',
       debounceMs: 1000,
     });
     expect(autoRun.success).toBe(true);
 
     const debounced = await subscriptionsService.maybeRunAutoDetection({
       locale: 'en',
-      defaultStatus: 'review',
       debounceMs: 1000,
     });
     expect(debounced).toEqual({

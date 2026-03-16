@@ -295,7 +295,6 @@ async function aggregateNetMetrics(client, startDate, endDate) {
   const incomeCase = `(
     (${categoryTypeExpr} = 'income' AND t.price > 0 AND COALESCE(cd.is_counted_as_income, 1) = 1)
     OR (${categoryTypeExpr} IS NULL AND t.price > 0)
-    OR (COALESCE(cd.name, '') = $3 AND t.price > 0)
   )`;
   const expenseCase = `(
     (${categoryTypeExpr} = 'expense' OR (${categoryTypeExpr} IS NULL AND t.price < 0))
@@ -348,6 +347,7 @@ async function aggregateNetMetrics(client, startDate, endDate) {
      WHERE t.date >= $1
        AND t.date <= $2
        AND tpe.transaction_identifier IS NULL
+       AND COALESCE(cd.name, '') != $3
        AND ${dialect.excludePikadon('t')}`,
     [startDate, endDate, BANK_CATEGORY_NAME],
   );
@@ -463,9 +463,9 @@ function toSnapshotWindowPayload(metrics, start, end) {
   };
 }
 
-function calculateDeltaNetPct(deltaNet, previousNet) {
-  if (!previousNet) return null;
-  return (deltaNet / Math.abs(previousNet)) * 100;
+function calculateSpendDeltaPct(spendDelta, previousExpenses) {
+  if (!previousExpenses) return null;
+  return (spendDelta / previousExpenses) * 100;
 }
 
 async function getSnapshotProgress(options = {}) {
@@ -484,14 +484,14 @@ async function getSnapshotProgress(options = {}) {
         aggregateNetMetrics(client, toISODateLocal(period.previousStart), toISODateLocal(period.previousEnd)),
       ]);
 
-      const deltaNet = currentMetrics.net - previousMetrics.net;
+      const spendDelta = previousMetrics.expenses - currentMetrics.expenses;
       periods.push({
         key: period.key,
         label: period.label,
         current: toSnapshotWindowPayload(currentMetrics, period.currentStart, period.currentEnd),
         previous: toSnapshotWindowPayload(previousMetrics, period.previousStart, period.previousEnd),
-        deltaNet,
-        deltaNetPct: calculateDeltaNetPct(deltaNet, previousMetrics.net),
+        spendDelta,
+        spendDeltaPct: calculateSpendDeltaPct(spendDelta, previousMetrics.expenses),
         hasData: currentMetrics.txCount > 0 || previousMetrics.txCount > 0,
       });
     }
@@ -641,11 +641,17 @@ async function getNotifications(query = {}) {
         FROM transactions t
         LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
         LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
+        LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+          ON t.identifier = tpe.transaction_identifier
+          AND t.vendor = tpe.transaction_vendor
         WHERE t.date >= $1
           AND t.price < 0
+          AND tpe.transaction_identifier IS NULL
+          AND COALESCE(cd.name, '') != $2
+          AND ${dialect.excludePikadon('t')}
         ORDER BY t.date DESC
         LIMIT 1000`,
-        [ninetyDaysStr],
+        [ninetyDaysStr, BANK_CATEGORY_NAME],
       );
 
       const transactions = transactionsResult.rows.map((row) => {
