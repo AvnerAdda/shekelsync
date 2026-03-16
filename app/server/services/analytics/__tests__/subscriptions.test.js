@@ -632,7 +632,7 @@ describe('subscriptions service', () => {
 
     await expect(subscriptionsService.dismissAlert(99)).resolves.toEqual({ success: true });
 
-    const refresh = await subscriptionsService.refreshDetection({ locale: 'en', defaultStatus: 'invalid' });
+    const refresh = await subscriptionsService.refreshDetection({ locale: 'en' });
     expect(refresh).toEqual({ success: true, created: 1, updated: 1 });
 
     const insertCall = query.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO subscriptions'));
@@ -939,18 +939,19 @@ describe('subscriptions service', () => {
 
     const auto = await subscriptionsService.maybeRunAutoDetection({
       locale: 'fr',
-      defaultStatus: 'review',
       debounceMs: 0,
     });
     expect(auto.success).toBe(true);
 
+    // new-review-sub has consistency_score=0.5, occurrence_count=3, amount_is_fixed=false
+    // computeAutoStatus: score < 0.6 (rule 1 fails), not fixed (rule 2 fails) → 'keep'
     const refreshInsertCall = query.mock.calls.find(([sql, params]) =>
       String(sql).includes('ON CONFLICT(pattern_key) DO UPDATE') &&
       Array.isArray(params) &&
       params[0] === 'new-review-sub' &&
-      params[6] === 'review',
+      params[6] === 'keep',
     );
-    expect(refreshInsertCall?.[1]?.[6]).toBe('review');
+    expect(refreshInsertCall?.[1]?.[6]).toBe('keep');
   });
 
   it('executes default recurring analyzer wrappers when dependencies are reset', async () => {

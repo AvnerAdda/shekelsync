@@ -1,7 +1,11 @@
 {
   "common": {
     "language": "Langue",
-    "languages": { "he": "Hébreu", "en": "Anglais", "fr": "Français" },
+    "languages": {
+      "he": "Hébreu",
+      "en": "Anglais",
+      "fr": "Français"
+    },
     "systemLanguageDetected": "Langue détectée ({{language}}) depuis la configuration système. Vous pouvez changer à tout moment.",
     "or": "ou",
     "close": "Fermer"
@@ -199,10 +203,32 @@
   },
   "dashboard": {
     "summary": {
-      "categories": { "essential": "Essentiel", "growth": "Croissance", "stability": "Stabilité", "reward": "Loisirs" },
-      "budgets": { "heading": "Budgets ({{count}} au total)", "utilization": "Utilisation du budget ({{count}} catégories)", "onTrack": "Dans l'objectif", "warning": "Alerte", "exceeded": "Dépassé", "none": "Pas encore de budgets" },
-      "allocation": { "actual": "Répartition actuelle", "target": "Cible : {{targets}}%", "tooltip": "{{label}} : {{actual}}% (cible {{target}}%)" },
-      "health": { "subtitle": "Score de santé financière", "savings": "Épargne", "diversity": "Diversification", "impulse": "Impulsivité", "runway": "Autonomie de trésorerie" },
+      "categories": {
+        "essential": "Essentiel",
+        "growth": "Croissance",
+        "stability": "Stabilité",
+        "reward": "Loisirs"
+      },
+      "budgets": {
+        "heading": "Budgets ({{count}} au total)",
+        "utilization": "Utilisation du budget ({{count}} catégories)",
+        "onTrack": "Dans l'objectif",
+        "warning": "Alerte",
+        "exceeded": "Dépassé",
+        "none": "Pas encore de budgets"
+      },
+      "allocation": {
+        "actual": "Répartition actuelle",
+        "target": "Cible : {{targets}}%",
+        "tooltip": "{{label}} : {{actual}}% (cible {{target}}%)"
+      },
+      "health": {
+        "subtitle": "Score de santé financière",
+        "savings": "Épargne",
+        "diversity": "Diversification",
+        "impulse": "Impulsivité",
+        "runway": "Autonomie de trésorerie"
+      },
       "cards": {
         "finance": {
           "title": "Mois en cours",
@@ -216,8 +242,12 @@
           "pendingDeficit": "Les dépenses en attente provoqueront un déficit de {{amount}}",
           "pendingDeficitCovered": "Les dépenses en attente dépassent cette période de {{amount}} — couvert par votre solde bancaire"
         },
-        "portfolio": { "title": "Portefeuille d'investissement" },
-        "analysis": { "title": "Santé financière" }
+        "portfolio": {
+          "title": "Portefeuille d'investissement"
+        },
+        "analysis": {
+          "title": "Santé financière"
+        }
       }
     },
     "summarySection": {
@@ -247,8 +277,13 @@
       "scrapeRecent": "Récupérer les transactions récentes",
       "viewHistory": "Voir les données historiques"
     },
-    "anomaly": { "expenseSpike": "Pic de dépense inhabituel : {{amount}}" },
-    "trends": { "highSpending": "Période de dépenses élevées", "lowSpending": "Période de dépenses faibles" },
+    "anomaly": {
+      "expenseSpike": "Pic de dépense inhabituel : {{amount}}"
+    },
+    "trends": {
+      "highSpending": "Période de dépenses élevées",
+      "lowSpending": "Période de dépenses faibles"
+    },
     "tooltip": {
       "income": "Revenus",
       "expenses": "Dépenses",
@@ -332,6 +367,44 @@
         "readOnly": "La synchronisation est désactivée en mode lecture seule."
       }
     },
+    "ibkr": {
+      "title": "Interactive Brokers",
+      "description": "Synchronisez votre portefeuille IBKR via Flex Query. Importation automatique des positions, soldes de trésorerie et valeur du portefeuille.",
+      "form": {
+        "setupCredentials": "Configurer les identifiants Flex Query",
+        "updateCredentials": "Mettre à jour les identifiants Flex Query",
+        "tokenLabel": "Jeton Flex Query",
+        "tokenPlaceholder": "Entrez votre jeton Flex Web Service",
+        "queryIdLabel": "ID Flex Query",
+        "queryIdPlaceholder": "Entrez votre ID Flex Query",
+        "save": "Enregistrer",
+        "update": "Mettre à jour",
+        "saving": "Enregistrement..."
+      },
+      "actions": {
+        "syncNow": "Synchroniser le portefeuille IBKR"
+      },
+      "status": {
+        "configured": "Identifiants Flex Query configurés",
+        "notConfigured": "Pas encore configuré",
+        "active": "Connecté",
+        "setup": "Configuration requise",
+        "syncing": "Synchronisation...",
+        "syncSuccess": "{{positions}} positions synchronisées (total : ${{value}})",
+        "lastSync": "Dernière synchronisation {{timeAgo}}",
+        "balance": "Valeur du portefeuille : ${{value}}",
+        "credentialsSaved": "Identifiants IBKR enregistrés avec succès"
+      },
+      "help": {
+        "howTo": "Créez une Flex Query dans la gestion de compte IBKR sous Reports > Flex Queries. Incluez Open Positions, Cash Report et NAV.",
+        "learnMore": "Docs IBKR"
+      },
+      "errors": {
+        "credentialsRequired": "Le jeton et l'ID de requête sont requis",
+        "saveFailed": "Échec de l'enregistrement des identifiants IBKR",
+        "syncFailed": "Échec de la synchronisation IBKR. Vérifiez vos identifiants et réessayez."
+      }
+    },
     "diagnostics": {
       "title": "Diagnostics et rapports de crash",
       "description": "Partagez des rapports de crash anonymisés pour nous aider à résoudre les problèmes plus rapidement. Aucun identifiant ou donnée sensible n'est inclus.",
@@ -349,6 +422,13 @@
       "openAiApiKeyLabel": "Clé API OpenAI",
       "openAiApiKeyHint": "Ajoutez votre clé OpenAI (stockée localement) pour connecter le chatbot.",
       "openAiApiKeyRequired": "Ajoutez une clé API OpenAI pour commencer à discuter.",
+      "modelTierLabel": "Modèle IA",
+      "modelTierHint": "Choisissez le niveau de qualité. Les niveaux supérieurs produisent de meilleures analyses mais coûtent plus par message.",
+      "modelTiers": {
+        "light": "Rapide et économique",
+        "normal": "Équilibré",
+        "heavy": "Le plus performant"
+      },
       "permissionsTitle": "Autorisations d'accès aux données",
       "permissionsDescription": "Accordez l'accès aux données pour des insights personnalisés.",
       "permissionsEnableFirst": "(Activez le chatbot pour définir les autorisations)",
@@ -359,6 +439,13 @@
         "categoryHint": "Accès aux catégories de dépenses et règles de catégorisation",
         "analytics": "Analyses et insights",
         "analyticsHint": "Accès à l'analyse comportementale, tendances et schémas de dépenses"
+      },
+      "responseSettingsTitle": "Paramètres de réponse",
+      "responseSettings": {
+        "longAnswers": "Autoriser les réponses détaillées",
+        "longAnswersHint": "Active des réponses IA plus longues et complètes (utilise plus de tokens)",
+        "longRequests": "Autoriser l'analyse approfondie",
+        "longRequestsHint": "Active l'analyse multi-étapes avec plus de contexte par requête (utilise plus de tokens)"
       },
       "privacyTitle": "Votre vie privée est protégée",
       "privacyBullet1": "• Le chatbot n'a JAMAIS accès à vos identifiants bancaires",
@@ -575,11 +662,11 @@
         }
       },
       "summary": {
-    "title": "Résumé du foyer :",
-    "members": "{{count}} membres",
-    "combinedIncome": "Revenu combiné : ₪{{amount}}/mois",
-    "children_one": "{{count}} enfant",
-    "children_other": "{{count}} enfants"
+        "title": "Résumé du foyer :",
+        "members": "{{count}} membres",
+        "combinedIncome": "Revenu combiné : ₪{{amount}}/mois",
+        "children_one": "{{count}} enfant",
+        "children_other": "{{count}} enfants"
       },
       "privacyNote": {
         "title": "Votre vie privée compte :",
@@ -675,7 +762,12 @@
     }
   },
   "breakdownTabs": {
-    "tabs": { "overall": "Global", "income": "Revenus", "expense": "Dépenses", "investment": "Investissements" },
+    "tabs": {
+      "overall": "Global",
+      "income": "Revenus",
+      "expense": "Dépenses",
+      "investment": "Investissements"
+    },
     "periodDays": {
       "last30": "30j",
       "last60": "60j",
@@ -688,7 +780,9 @@
       "noData": "Aucune donnée de flux financier pour cette période",
       "noDataHint": "Ajoutez des transactions de revenus et dépenses pour voir le schéma de flux"
     },
-    "shared": { "noDataPeriod": "Aucune donnée de répartition pour cette période." },
+    "shared": {
+      "noDataPeriod": "Aucune donnée de répartition pour cette période."
+    },
     "income": {
       "noIncomeTitle": "Pas de données de revenus",
       "noAccounts": "Ajoutez vos identifiants bancaires pour suivre automatiquement les revenus et obtenir une vue complète des flux.",
@@ -720,12 +814,16 @@
   },
   "transactionHistory": {
     "title": "Historique des transactions",
-    "scales": { 
-      "linear": "Échelle linéaire", 
+    "scales": {
+      "linear": "Échelle linéaire",
       "log": "Échelle logarithmique",
       "logRecommendedHint": "Des différences de valeurs importantes ont été détectées. Envisagez d'utiliser l'échelle logarithmique pour une meilleure visualisation."
     },
-    "periods": { "daily": "Quotidien", "weekly": "Hebdomadaire", "monthly": "Mensuel" },
+    "periods": {
+      "daily": "Quotidien",
+      "weekly": "Hebdomadaire",
+      "monthly": "Mensuel"
+    },
     "periodDays": {
       "last30": "30j",
       "last60": "60j",
@@ -791,8 +889,7 @@
     },
     "transactionsOn": "Transactions du {{date}} ({{count}} transactions) :",
     "noTransactionsForDate": "Aucune transaction pour cette date."
-  }
-  ,
+  },
   "analysisPage": {
     "actions": {
       "refresh": "Actualiser",
@@ -1299,9 +1396,7 @@
         "edit": "Modifier",
         "delete": "Supprimer",
         "pause": "Mettre en pause",
-        "resume": "Reprendre",
-        "approve": "Approuver",
-        "ignore": "Ignorer"
+        "resume": "Reprendre"
       },
       "list": {
         "title": "Vos abonnements",
@@ -1311,7 +1406,6 @@
           "active": "Actifs",
           "paused": "En pause",
           "cancelled": "Annulés",
-          "review": "À revoir",
           "keep": "Conserver"
         },
         "sort": {
@@ -1354,6 +1448,18 @@
         "tooltipTotal": "Total mensuel",
         "legendMonthly": "Total mensuel",
         "legendAverage": "Moyenne"
+      },
+      "calendar": {
+        "listView": "Liste",
+        "calendarView": "Calendrier",
+        "today": "Aujourd'hui",
+        "monthTotal": "Total : {{amount}}",
+        "noCharges": "Aucun frais",
+        "moreCharges": "+{{count}} de plus",
+        "dayDetail": {
+          "title": "Frais du {{date}}",
+          "total": "Total"
+        }
       },
       "modal": {
         "titleAdd": "Ajouter un abonnement",
@@ -1795,7 +1901,9 @@
     }
   },
   "budgetsPage": {
-    "progress": { "percentUsed": "{{value}} % utilisé" },
+    "progress": {
+      "percentUsed": "{{value}} % utilisé"
+    },
     "alerts": {
       "exceeded": "Budget dépassé de {{amount}}",
       "remaining": "Il reste {{amount}}"
@@ -1857,6 +1965,7 @@
     },
     "suggestions": {
       "title": "Questions suggérées :",
+      "dynamicTitle": "Basé sur vos données :",
       "items": [
         "Combien ai-je dépensé ce mois-ci ?",
         "Sur quelle catégorie ai-je le plus dépensé ?",
@@ -1977,7 +2086,9 @@
     }
   },
   "categoryHierarchy": {
-    "header": { "title": "Gestion des catégories" },
+    "header": {
+      "title": "Gestion des catégories"
+    },
     "tabs": {
       "categorize": "Catégoriser",
       "hierarchy": "Catégories",
@@ -2130,10 +2241,10 @@
         "more": "...et {{count}} de plus"
       }
     },
-      "rulesList": {
-        "title": "Règles actives ({{count}})",
-        "titleFiltered": "Règles actives ({{visible}} / {{total}})",
-        "searchPlaceholder": "Recherchez des règles par motif ou catégorie...",
+    "rulesList": {
+      "title": "Règles actives ({{count}})",
+      "titleFiltered": "Règles actives ({{visible}} / {{total}})",
+      "searchPlaceholder": "Recherchez des règles par motif ou catégorie...",
       "empty": "Aucune règle pour l'instant. Ajoutez votre première règle ci-dessus pour catégoriser automatiquement les transactions.",
       "ifContains": "SI la transaction contient « {{pattern}} »",
       "then": "ALORS catégoriser comme :",
@@ -2242,8 +2353,7 @@
     "accountSync": {
       "neverSynced": "Jamais synchronisé"
     }
-  }
-  ,
+  },
   "titleBar": {
     "menu": {
       "back": "← Retour",
@@ -2328,19 +2438,87 @@
         "holdings": "Positions"
       },
       "keywords": {
-        "dashboard": ["accueil", "aperçu", "principal", "résumé"],
-        "analysis": ["analyses", "dépenses", "budget", "rapports", "graphiques"],
-        "investments": ["portefeuille", "actions", "placements", "patrimoine", "actifs"],
-        "settings": ["préférences", "configuration", "thème", "langue", "profil"],
-        "transactions": ["historique", "paiements", "achats", "dépenses", "revenus"],
-        "breakdown": ["catégories", "camembert", "graphe", "répartition dépenses"],
-        "vendors": ["commerçants", "magasins", "boutiques", "où"],
-        "appearance": ["thème", "sombre", "clair", "mode", "couleurs"],
-        "language": ["hébreu", "anglais", "français", "locale"],
-        "profile": ["compte", "utilisateur", "nom", "email"],
-        "privacy": ["masquer", "cacher", "montants", "sécurité"],
-        "portfolio": ["total", "valeur", "performance"],
-        "holdings": ["positions", "titres", "fonds"]
+        "dashboard": [
+          "accueil",
+          "aperçu",
+          "principal",
+          "résumé"
+        ],
+        "analysis": [
+          "analyses",
+          "dépenses",
+          "budget",
+          "rapports",
+          "graphiques"
+        ],
+        "investments": [
+          "portefeuille",
+          "actions",
+          "placements",
+          "patrimoine",
+          "actifs"
+        ],
+        "settings": [
+          "préférences",
+          "configuration",
+          "thème",
+          "langue",
+          "profil"
+        ],
+        "transactions": [
+          "historique",
+          "paiements",
+          "achats",
+          "dépenses",
+          "revenus"
+        ],
+        "breakdown": [
+          "catégories",
+          "camembert",
+          "graphe",
+          "répartition dépenses"
+        ],
+        "vendors": [
+          "commerçants",
+          "magasins",
+          "boutiques",
+          "où"
+        ],
+        "appearance": [
+          "thème",
+          "sombre",
+          "clair",
+          "mode",
+          "couleurs"
+        ],
+        "language": [
+          "hébreu",
+          "anglais",
+          "français",
+          "locale"
+        ],
+        "profile": [
+          "compte",
+          "utilisateur",
+          "nom",
+          "email"
+        ],
+        "privacy": [
+          "masquer",
+          "cacher",
+          "montants",
+          "sécurité"
+        ],
+        "portfolio": [
+          "total",
+          "valeur",
+          "performance"
+        ],
+        "holdings": [
+          "positions",
+          "titres",
+          "fonds"
+        ]
       }
     }
   },
@@ -2686,7 +2864,8 @@
         "investmentOutflow": "Sorties d'investissement",
         "investmentInflow": "Entrées d'investissement",
         "net": "Net",
-        "txCount": "Transactions"
+        "txCount": "Transactions",
+        "totalSpend": "Dépenses totales"
       },
       "modal": {
         "title": "Instantané de progression",
@@ -2698,7 +2877,10 @@
         "previousNet": "Net précédent",
         "insufficientHistory": "Historique insuffisant pour comparer une période précédente complète.",
         "notAvailable": "N/D",
-        "daysTracked": "{{count}} jours suivis"
+        "daysTracked": "{{count}} jours suivis",
+        "reductionBy": "⬇ Réduction de {{pct}}%",
+        "increasedBy": "⬆ Augmentation de {{pct}}%",
+        "previousSpend": "Dépense précédente"
       }
     }
   },

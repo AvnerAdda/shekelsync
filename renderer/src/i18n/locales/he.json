@@ -1,7 +1,11 @@
 {
   "common": {
     "language": "שפה",
-    "languages": { "he": "עברית", "en": "אנגלית", "fr": "צרפתית" },
+    "languages": {
+      "he": "עברית",
+      "en": "אנגלית",
+      "fr": "צרפתית"
+    },
     "systemLanguageDetected": "זיהינו {{language}} לפי שפת המערכת. אפשר לשנות בכל רגע.",
     "or": "או",
     "close": "סגור"
@@ -212,10 +216,32 @@
   },
   "dashboard": {
     "summary": {
-      "categories": { "essential": "חיוני", "growth": "צמיחה", "stability": "יציבות", "reward": "פנאי" },
-      "budgets": { "heading": "תקציבים ({{count}} סה\"כ)", "utilization": "ניצול תקציב ({{count}} קטגוריות)", "onTrack": "במסלול", "warning": "אזהרה", "exceeded": "חריגה", "none": "אין תקציבים עדיין" },
-      "allocation": { "actual": "חלוקה בפועל", "target": "יעד: {{targets}}%", "tooltip": "{{label}}: {{actual}}% (יעד {{target}}%)" },
-      "health": { "subtitle": "ציון בריאות פיננסית", "savings": "חיסכון", "diversity": "גיוון", "impulse": "שליטה באימפולס", "runway": "מסלול מזומן" },
+      "categories": {
+        "essential": "חיוני",
+        "growth": "צמיחה",
+        "stability": "יציבות",
+        "reward": "פנאי"
+      },
+      "budgets": {
+        "heading": "תקציבים ({{count}} סה\"כ)",
+        "utilization": "ניצול תקציב ({{count}} קטגוריות)",
+        "onTrack": "במסלול",
+        "warning": "אזהרה",
+        "exceeded": "חריגה",
+        "none": "אין תקציבים עדיין"
+      },
+      "allocation": {
+        "actual": "חלוקה בפועל",
+        "target": "יעד: {{targets}}%",
+        "tooltip": "{{label}}: {{actual}}% (יעד {{target}}%)"
+      },
+      "health": {
+        "subtitle": "ציון בריאות פיננסית",
+        "savings": "חיסכון",
+        "diversity": "גיוון",
+        "impulse": "שליטה באימפולס",
+        "runway": "מסלול מזומן"
+      },
       "cards": {
         "finance": {
           "title": "חודש נוכחי",
@@ -229,8 +255,12 @@
           "pendingDeficit": "הוצאות בהמתנה יגרמו לגרעון של {{amount}}",
           "pendingDeficitCovered": "הוצאות בהמתנה גבוהות מהתקופה ב־{{amount}} — יכוסה מיתרת הבנק"
         },
-        "portfolio": { "title": "תיק השקעות" },
-        "analysis": { "title": "בריאות פיננסית" }
+        "portfolio": {
+          "title": "תיק השקעות"
+        },
+        "analysis": {
+          "title": "בריאות פיננסית"
+        }
       }
     },
     "summarySection": {
@@ -265,8 +295,13 @@
       "scrapeRecent": "סרקו עסקאות עדכניות",
       "viewHistory": "צפו בנתונים היסטוריים"
     },
-    "anomaly": { "expenseSpike": "קפיצת הוצאה חריגה: {{amount}}" },
-    "trends": { "highSpending": "תקופת הוצאה גבוהה", "lowSpending": "תקופת הוצאה נמוכה" },
+    "anomaly": {
+      "expenseSpike": "קפיצת הוצאה חריגה: {{amount}}"
+    },
+    "trends": {
+      "highSpending": "תקופת הוצאה גבוהה",
+      "lowSpending": "תקופת הוצאה נמוכה"
+    },
     "tooltip": {
       "income": "הכנסות",
       "expenses": "הוצאות",
@@ -350,6 +385,44 @@
         "readOnly": "הסנכרון מושבת במצב קריאה בלבד."
       }
     },
+    "ibkr": {
+      "title": "אינטראקטיב ברוקרס",
+      "description": "סנכרנו את תיק ההשקעות שלכם מ-IBKR באמצעות Flex Query. ייבוא אוטומטי של פוזיציות, יתרות מזומן וערך התיק.",
+      "form": {
+        "setupCredentials": "הגדרת פרטי Flex Query",
+        "updateCredentials": "עדכון פרטי Flex Query",
+        "tokenLabel": "טוקן Flex Query",
+        "tokenPlaceholder": "הכניסו את טוקן ה-Flex Web Service",
+        "queryIdLabel": "מזהה Flex Query",
+        "queryIdPlaceholder": "הכניסו את מזהה ה-Flex Query",
+        "save": "שמור פרטים",
+        "update": "עדכן פרטים",
+        "saving": "שומר..."
+      },
+      "actions": {
+        "syncNow": "סנכרן תיק IBKR"
+      },
+      "status": {
+        "configured": "פרטי Flex Query הוגדרו",
+        "notConfigured": "עדיין לא הוגדר",
+        "active": "מחובר",
+        "setup": "נדרשת הגדרה",
+        "syncing": "מסנכרן...",
+        "syncSuccess": "סונכרנו {{positions}} פוזיציות (סה\"כ: ${{value}})",
+        "lastSync": "סנכרון אחרון {{timeAgo}}",
+        "balance": "ערך תיק: ${{value}}",
+        "credentialsSaved": "פרטי IBKR נשמרו בהצלחה"
+      },
+      "help": {
+        "howTo": "צרו Flex Query בניהול חשבון IBKR תחת Reports > Flex Queries. כללו Open Positions, Cash Report ו-NAV.",
+        "learnMore": "מדריך IBKR"
+      },
+      "errors": {
+        "credentialsRequired": "נדרשים גם טוקן וגם מזהה Query",
+        "saveFailed": "שמירת פרטי IBKR נכשלה",
+        "syncFailed": "סנכרון IBKR נכשל. בדקו את הפרטים ונסו שוב."
+      }
+    },
     "diagnostics": {
       "title": "דיאגנוסטיקה ודיווח קריסות",
       "description": "שתפו דוחות קריסה אנונימיים כדי לעזור לנו לפתור בעיות יציבות מהר יותר. פרטי חשבון ומזהים אישיים אינם נכללים.",
@@ -367,6 +440,13 @@
       "openAiApiKeyLabel": "מפתח API של OpenAI",
       "openAiApiKeyHint": "הוסיפו את מפתח OpenAI שלכם (נשמר מקומית) כדי לחבר את הצ'אטבוט.",
       "openAiApiKeyRequired": "הוסיפו מפתח API של OpenAI כדי להתחיל בצ'אט.",
+      "modelTierLabel": "מודל AI",
+      "modelTierHint": "בחרו רמת איכות. רמות גבוהות יותר מספקות ניתוח טוב יותר אך עולות יותר לכל הודעה.",
+      "modelTiers": {
+        "light": "מהיר וחסכוני",
+        "normal": "מאוזן",
+        "heavy": "הכי מסוגל"
+      },
       "permissionsTitle": "הרשאות גישה לנתונים",
       "permissionsDescription": "העניקו גישה לנתונים לצורך תובנות מותאמות אישית.",
       "permissionsEnableFirst": "(הפעילו צ'אטבוט כדי להגדיר הרשאות)",
@@ -377,6 +457,13 @@
         "categoryHint": "גישה לקטגוריות הוצאה וחוקי קטלוג",
         "analytics": "אנליטיקות ותובנות",
         "analyticsHint": "גישה לניתוח התנהגותי, מגמות ודפוסי הוצאות"
+      },
+      "responseSettingsTitle": "הגדרות תגובה",
+      "responseSettings": {
+        "longAnswers": "אפשר תשובות מפורטות",
+        "longAnswersHint": "מאפשר תגובות AI ארוכות ומקיפות יותר (משתמש ביותר טוקנים)",
+        "longRequests": "אפשר ניתוח מעמיק",
+        "longRequestsHint": "מאפשר ניתוח רב-שלבי עם הקשר רחב יותר לכל בקשה (משתמש ביותר טוקנים)"
       },
       "privacyTitle": "הפרטיות שלכם מוגנת",
       "privacyBullet1": "• לצ'אטבוט אין לעולם גישה לפרטי התחברות לבנק",
@@ -594,11 +681,11 @@
         }
       },
       "summary": {
-    "title": "סיכום משק בית:",
-    "members": "{{count}} חברים",
-    "combinedIncome": "הכנסה משולבת: ₪{{amount}}/חודש",
-    "children_one": "{{count}} ילד",
-    "children_other": "{{count}} ילדים"
+        "title": "סיכום משק בית:",
+        "members": "{{count}} חברים",
+        "combinedIncome": "הכנסה משולבת: ₪{{amount}}/חודש",
+        "children_one": "{{count}} ילד",
+        "children_other": "{{count}} ילדים"
       },
       "privacyNote": {
         "title": "הפרטיות שלכם חשובה:",
@@ -694,7 +781,12 @@
     }
   },
   "breakdownTabs": {
-    "tabs": { "overall": "סה\"כ", "income": "הכנסות", "expense": "הוצאות", "investment": "השקעות" },
+    "tabs": {
+      "overall": "סה\"כ",
+      "income": "הכנסות",
+      "expense": "הוצאות",
+      "investment": "השקעות"
+    },
     "periodDays": {
       "last30": "30י",
       "last60": "60י",
@@ -707,7 +799,9 @@
       "noData": "אין נתוני זרימת כספים לתקופה זו",
       "noDataHint": "הוסיפו עסקאות הכנסה והוצאה כדי לראות דיאגרמת זרימה"
     },
-    "shared": { "noDataPeriod": "אין נתוני פירוק לתקופה זו." },
+    "shared": {
+      "noDataPeriod": "אין נתוני פירוק לתקופה זו."
+    },
     "income": {
       "noIncomeTitle": "אין נתוני הכנסה",
       "noAccounts": "הוסיפו פרטי בנק כדי לעקוב אוטומטית אחר הכנסות ולקבל תמונה מלאה של הזרימות.",
@@ -739,12 +833,16 @@
   },
   "transactionHistory": {
     "title": "היסטוריית עסקאות",
-    "scales": { 
-      "linear": "סולם לינארי", 
+    "scales": {
+      "linear": "סולם לינארי",
       "log": "סולם לוגריתמי",
       "logRecommendedHint": "זוהו הבדלי ערכים גדולים. שקול להשתמש בסולם לוגריתמי להצגה טובה יותר."
     },
-    "periods": { "daily": "יומי", "weekly": "שבועי", "monthly": "חודשי" },
+    "periods": {
+      "daily": "יומי",
+      "weekly": "שבועי",
+      "monthly": "חודשי"
+    },
     "periodDays": {
       "last30": "30י",
       "last60": "60י",
@@ -811,8 +909,7 @@
     },
     "transactionsOn": "עסקאות ב-{{date}} ({{count}} עסקאות):",
     "noTransactionsForDate": "לא נמצאו עסקאות לתאריך זה."
-  }
-  ,
+  },
   "analysisPage": {
     "actions": {
       "refresh": "רענן",
@@ -1319,9 +1416,7 @@
         "edit": "ערוך",
         "delete": "מחק",
         "pause": "השהה",
-        "resume": "המשך",
-        "approve": "אשר",
-        "ignore": "התעלם"
+        "resume": "המשך"
       },
       "list": {
         "title": "המנויים שלך",
@@ -1331,7 +1426,6 @@
           "active": "פעילים",
           "paused": "מושהים",
           "cancelled": "מבוטלים",
-          "review": "לבדיקה",
           "keep": "שמור"
         },
         "sort": {
@@ -1374,6 +1468,18 @@
         "tooltipTotal": "סה\"כ חודשי",
         "legendMonthly": "סה\"כ חודשי",
         "legendAverage": "ממוצע"
+      },
+      "calendar": {
+        "listView": "רשימה",
+        "calendarView": "לוח שנה",
+        "today": "היום",
+        "monthTotal": "סה\"כ: {{amount}}",
+        "noCharges": "אין חיובים",
+        "moreCharges": "+{{count}} נוספים",
+        "dayDetail": {
+          "title": "חיובים בתאריך {{date}}",
+          "total": "סה\"כ"
+        }
       },
       "modal": {
         "titleAdd": "הוסף מנוי",
@@ -1815,7 +1921,9 @@
     }
   },
   "budgetsPage": {
-    "progress": { "percentUsed": "{{value}}% נוצל" },
+    "progress": {
+      "percentUsed": "{{value}}% נוצל"
+    },
     "alerts": {
       "exceeded": "חריגה של {{amount}}",
       "remaining": "{{amount}} נותר"
@@ -1877,6 +1985,7 @@
     },
     "suggestions": {
       "title": "שאלות מוצעות:",
+      "dynamicTitle": "בהתבסס על הנתונים שלך:",
       "items": [
         "כמה הוצאתי החודש?",
         "על איזו קטגוריה הוצאתי הכי הרבה?",
@@ -1997,7 +2106,9 @@
     }
   },
   "categoryHierarchy": {
-    "header": { "title": "ניהול קטגוריות" },
+    "header": {
+      "title": "ניהול קטגוריות"
+    },
     "tabs": {
       "categorize": "קטגוריזציה",
       "hierarchy": "קטגוריות",
@@ -2271,8 +2382,7 @@
     "accountSync": {
       "neverSynced": "טרם סונכרן"
     }
-  }
-  ,
+  },
   "titleBar": {
     "menu": {
       "back": "← חזרה",
@@ -2357,19 +2467,87 @@
         "holdings": "אחזקות"
       },
       "keywords": {
-        "dashboard": ["בית", "סקירה", "ראשי", "סיכום"],
-        "analysis": ["ניתוחים", "הוצאות", "תקציב", "דוחות", "גרפים"],
-        "investments": ["תיק", "מניות", "השקעות", "עושר", "נכסים"],
-        "settings": ["העדפות", "הגדרות", "תצורה", "שפה", "פרופיל"],
-        "transactions": ["היסטוריה", "תשלומים", "רכישות", "הוצאות", "הכנסות"],
-        "breakdown": ["קטגוריות", "פאי", "גרף", "פילוח הוצאות"],
-        "vendors": ["ספקים", "חנויות", "עסקים", "איפה"],
-        "appearance": ["עיצוב", "כהה", "בהיר", "מצב", "צבעים"],
-        "language": ["עברית", "אנגלית", "צרפתית", "שפה"],
-        "profile": ["חשבון", "משתמש", "שם", "אימייל"],
-        "privacy": ["הסתרה", "הצפנה", "סכומים", "אבטחה"],
-        "portfolio": ["סה\"כ", "שווי", "ביצועים"],
-        "holdings": ["פוזיציות", "מניות", "קרנות"]
+        "dashboard": [
+          "בית",
+          "סקירה",
+          "ראשי",
+          "סיכום"
+        ],
+        "analysis": [
+          "ניתוחים",
+          "הוצאות",
+          "תקציב",
+          "דוחות",
+          "גרפים"
+        ],
+        "investments": [
+          "תיק",
+          "מניות",
+          "השקעות",
+          "עושר",
+          "נכסים"
+        ],
+        "settings": [
+          "העדפות",
+          "הגדרות",
+          "תצורה",
+          "שפה",
+          "פרופיל"
+        ],
+        "transactions": [
+          "היסטוריה",
+          "תשלומים",
+          "רכישות",
+          "הוצאות",
+          "הכנסות"
+        ],
+        "breakdown": [
+          "קטגוריות",
+          "פאי",
+          "גרף",
+          "פילוח הוצאות"
+        ],
+        "vendors": [
+          "ספקים",
+          "חנויות",
+          "עסקים",
+          "איפה"
+        ],
+        "appearance": [
+          "עיצוב",
+          "כהה",
+          "בהיר",
+          "מצב",
+          "צבעים"
+        ],
+        "language": [
+          "עברית",
+          "אנגלית",
+          "צרפתית",
+          "שפה"
+        ],
+        "profile": [
+          "חשבון",
+          "משתמש",
+          "שם",
+          "אימייל"
+        ],
+        "privacy": [
+          "הסתרה",
+          "הצפנה",
+          "סכומים",
+          "אבטחה"
+        ],
+        "portfolio": [
+          "סה\"כ",
+          "שווי",
+          "ביצועים"
+        ],
+        "holdings": [
+          "פוזיציות",
+          "מניות",
+          "קרנות"
+        ]
       }
     }
   },
@@ -2716,7 +2894,8 @@
         "investmentOutflow": "יציאה להשקעות",
         "investmentInflow": "כניסה מהשקעות",
         "net": "נטו",
-        "txCount": "עסקאות"
+        "txCount": "עסקאות",
+        "totalSpend": "סך הוצאות"
       },
       "modal": {
         "title": "תמונת התקדמות",
@@ -2728,7 +2907,10 @@
         "previousNet": "נטו קודם",
         "insufficientHistory": "אין היסטוריה מספקת להשוואה מלאה לתקופה קודמת.",
         "notAvailable": "לא זמין",
-        "daysTracked": "{{count}} ימים במעקב"
+        "daysTracked": "{{count}} ימים במעקב",
+        "reductionBy": "⬇ ירידה של {{pct}}%",
+        "increasedBy": "⬆ עליה של {{pct}}%",
+        "previousSpend": "הוצאה קודמת"
       }
     }
   },

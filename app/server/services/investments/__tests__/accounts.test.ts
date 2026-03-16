@@ -14,6 +14,11 @@ function isActivePikadonSnapshotQuery(sql: string) {
     && sql.includes('GROUP BY ih.account_id');
 }
 
+function isActivePikadonOverlapQuery(sql: string) {
+  return sql.includes('AS active_value')
+    && sql.includes('deposit_transaction_vendor');
+}
+
 beforeAll(async () => {
   const module = await import('../accounts.js');
   accountsService = module.default ?? module;
@@ -308,6 +313,103 @@ describe('investment accounts service', () => {
         cost_basis: 1000,
       });
       expect(result.accounts[0]).not.toHaveProperty('linked_contribution_adjustment');
+    });
+
+    it('subtracts Pikadon-backed savings from matching bank balance accounts', async () => {
+      queryMock.mockImplementation(async (sql: string) => {
+        if (sql.includes('FROM investment_accounts ia')) {
+          return {
+            rows: [
+              {
+                id: 1,
+                account_name: 'Main Bank',
+                account_type: 'bank_balance',
+                investment_category: 'cash',
+                account_number: '1234',
+                is_liquid: true,
+                holdings_count: '1',
+                total_invested: '705476.03',
+                institution_id: 18,
+                institution_vendor_code: 'discount',
+              },
+              {
+                id: 2,
+                account_name: 'Pikadon',
+                account_type: 'savings',
+                investment_category: 'liquid',
+                account_number: '1234',
+                is_liquid: true,
+                holdings_count: '1',
+                total_invested: '680000',
+                institution_id: 18,
+                institution_vendor_code: 'discount',
+              },
+            ],
+          };
+        }
+
+        if (isStandardSnapshotQuery(sql)) {
+          return {
+            rows: [
+              {
+                account_id: 1,
+                current_value: '705476.03',
+                cost_basis: '705476.03',
+                as_of_date: '2026-03-10',
+              },
+            ],
+          };
+        }
+
+        if (isActivePikadonSnapshotQuery(sql)) {
+          return {
+            rows: [
+              {
+                account_id: 2,
+                current_value: '680000',
+                cost_basis: '680000',
+                as_of_date: '2026-03-10',
+              },
+            ],
+          };
+        }
+
+        if (sql.includes('FROM transaction_account_links tal')) {
+          return { rows: [] };
+        }
+
+        if (isActivePikadonOverlapQuery(sql)) {
+          return {
+            rows: [
+              {
+                pikadon_account_id: 2,
+                institution_id: 18,
+                source_vendor_code: 'discount',
+                source_account_number: '1234',
+                active_value: '680000',
+              },
+            ],
+          };
+        }
+
+        throw new Error(`Unexpected query in bank balance overlap list test: ${sql.slice(0, 120)}`);
+      });
+
+      const result = await accountsService.listAccounts();
+
+      expect(result.accounts.find((account: any) => account.id === 1)).toMatchObject({
+        account_type: 'bank_balance',
+        current_value: 25476.03,
+        current_value_explicit: 25476.03,
+        cost_basis: 25476.03,
+      });
+      expect(result.accounts.find((account: any) => account.id === 2)).toMatchObject({
+        account_type: 'savings',
+        current_value: 680000,
+        current_value_explicit: 680000,
+        cost_basis: 680000,
+        uses_pikadon_rollup: true,
+      });
     });
   });
 

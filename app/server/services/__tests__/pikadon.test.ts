@@ -731,6 +731,10 @@ describe('pikadon service', () => {
         return { rows: [], rowCount: 1 };
       }
 
+      if (sql.includes("SET status = 'superseded'")) {
+        return { rows: [], rowCount: 1 };
+      }
+
       throw new Error(`Unexpected auto-setup query: ${sql}`);
     });
 
@@ -1229,6 +1233,9 @@ describe('pikadon service', () => {
         return { rows: [], rowCount: 1 };
       }
       if (sql.includes('UPDATE transactions SET is_pikadon_related = 1')) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes("SET status = 'superseded'")) {
         return { rows: [], rowCount: 1 };
       }
       throw new Error(`Unexpected auto-setup query: ${sql}`);

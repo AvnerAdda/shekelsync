@@ -8,6 +8,7 @@ const showNotification = vi.fn();
 const getPageAccessStatus = vi.fn();
 const mockGet = vi.fn();
 const mockPost = vi.fn();
+let mockOnboardingStatus: any = {};
 
 let mockCredentials: any[] = [];
 let mockInvestmentAccounts: any[] = [];
@@ -64,6 +65,7 @@ vi.mock('@renderer/features/notifications/NotificationContext', () => ({
 
 vi.mock('@app/contexts/OnboardingContext', () => ({
   useOnboarding: () => ({
+    status: mockOnboardingStatus,
     getPageAccessStatus,
   }),
 }));
@@ -174,6 +176,7 @@ describe('Sidebar component', () => {
     mockPost.mockReset();
 
     mockScrapeEvent = null;
+    mockOnboardingStatus = {};
     mockLicenseCheck = { isReadOnly: false, reason: undefined };
     mockPingOk = true;
     mockUncategorizedCount = 0;
@@ -243,6 +246,21 @@ describe('Sidebar component', () => {
     fireEvent.click(screen.getByText('Analysis'));
 
     expect(onPageChange).toHaveBeenCalledWith('analysis');
+  });
+
+  it('suppresses lock indicators while onboarding status is unresolved', async () => {
+    mockOnboardingStatus = null;
+    getPageAccessStatus.mockImplementation(() => ({
+      isLocked: true,
+      requiredStep: 'firstScrape',
+      reason: 'Complete your first transaction scrape to unlock this page',
+    }));
+
+    const onPageChange = vi.fn();
+    const { container } = await renderSidebar({ currentPage: 'home', onPageChange });
+
+    expect(getPageAccessStatus).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="LockIcon"]')).toBeNull();
   });
 
   it('opens the categories modal from the global event with vendor and transaction context', async () => {

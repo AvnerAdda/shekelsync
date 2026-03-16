@@ -262,8 +262,7 @@
           "title": "Financial Health"
         }
       }
-    }
-    ,
+    },
     "summarySection": {
       "fallbackCategory": "Total Expenses",
       "noIncomeTitle": "No Income Detected",
@@ -386,6 +385,44 @@
         "readOnly": "Sync is disabled in read-only mode."
       }
     },
+    "ibkr": {
+      "title": "Interactive Brokers",
+      "description": "Sync your IBKR portfolio via Flex Query. Automatically imports positions, cash balances, and portfolio value.",
+      "form": {
+        "setupCredentials": "Set up Flex Query credentials",
+        "updateCredentials": "Update Flex Query credentials",
+        "tokenLabel": "Flex Query Token",
+        "tokenPlaceholder": "Enter your Flex Web Service token",
+        "queryIdLabel": "Flex Query ID",
+        "queryIdPlaceholder": "Enter your Flex Query ID",
+        "save": "Save Credentials",
+        "update": "Update Credentials",
+        "saving": "Saving..."
+      },
+      "actions": {
+        "syncNow": "Sync IBKR Portfolio"
+      },
+      "status": {
+        "configured": "Flex Query credentials configured",
+        "notConfigured": "Not configured yet",
+        "active": "Connected",
+        "setup": "Setup Required",
+        "syncing": "Syncing...",
+        "syncSuccess": "Synced {{positions}} positions (total: ${{value}})",
+        "lastSync": "Last synced {{timeAgo}}",
+        "balance": "Portfolio value: ${{value}}",
+        "credentialsSaved": "IBKR credentials saved successfully"
+      },
+      "help": {
+        "howTo": "Create a Flex Query in IBKR Account Management under Reports > Flex Queries. Include Open Positions, Cash Report, and NAV sections.",
+        "learnMore": "IBKR Docs"
+      },
+      "errors": {
+        "credentialsRequired": "Both token and query ID are required",
+        "saveFailed": "Failed to save IBKR credentials",
+        "syncFailed": "IBKR sync failed. Check your credentials and try again."
+      }
+    },
     "diagnostics": {
       "title": "Diagnostics & Crash Reports",
       "description": "Share anonymized crash reports to help us resolve stability issues faster. Sensitive data such as account credentials and personal identifiers are never included in crash payloads.",
@@ -403,6 +440,13 @@
       "openAiApiKeyLabel": "OpenAI API Key",
       "openAiApiKeyHint": "Add your OpenAI key (stored locally) to connect the chatbot.",
       "openAiApiKeyRequired": "Add an OpenAI API key to start chatting.",
+      "modelTierLabel": "AI Model",
+      "modelTierHint": "Choose the AI quality level. Higher tiers produce better analysis but cost more per message.",
+      "modelTiers": {
+        "light": "Fast & affordable",
+        "normal": "Balanced",
+        "heavy": "Most capable"
+      },
       "permissionsTitle": "Data Access Permissions",
       "permissionsDescription": "Grant the chatbot access to specific data to enable personalized insights.",
       "permissionsEnableFirst": "(Enable chatbot first to configure permissions)",
@@ -413,6 +457,13 @@
         "categoryHint": "Allow access to spending categories and categorization rules",
         "analytics": "Analytics & Insights",
         "analyticsHint": "Allow access to behavioral analytics, trends, and spending patterns"
+      },
+      "responseSettingsTitle": "Response Settings",
+      "responseSettings": {
+        "longAnswers": "Allow detailed answers",
+        "longAnswersHint": "Enable longer, more comprehensive AI responses (uses more tokens)",
+        "longRequests": "Allow deep analysis",
+        "longRequestsHint": "Enable multi-step analysis with more context per request (uses more tokens)"
       },
       "privacyTitle": "Your Privacy is Protected",
       "privacyBullet1": "• The chatbot NEVER has access to your bank credentials or passwords",
@@ -564,11 +615,11 @@
         }
       },
       "summary": {
-    "title": "Household Summary:",
-    "members": "{{count}} members",
-    "combinedIncome": "Combined income: ₪{{amount}}/month",
-    "children_one": "{{count}} child",
-    "children_other": "{{count}} children"
+        "title": "Household Summary:",
+        "members": "{{count}} members",
+        "combinedIncome": "Combined income: ₪{{amount}}/month",
+        "children_one": "{{count}} child",
+        "children_other": "{{count}} children"
       },
       "privacyNote": {
         "title": "Your privacy matters:",
@@ -856,8 +907,7 @@
     },
     "transactionsOn": "Transactions on {{date}} ({{count}} transactions):",
     "noTransactionsForDate": "No transactions found for this date."
-  }
-  ,
+  },
   "analysisPage": {
     "actions": {
       "refresh": "Refresh",
@@ -1364,9 +1414,7 @@
         "edit": "Edit",
         "delete": "Delete",
         "pause": "Pause",
-        "resume": "Resume",
-        "approve": "Approve",
-        "ignore": "Ignore"
+        "resume": "Resume"
       },
       "list": {
         "title": "Your Subscriptions",
@@ -1376,7 +1424,6 @@
           "active": "Active",
           "paused": "Paused",
           "cancelled": "Cancelled",
-          "review": "Review",
           "keep": "Keep"
         },
         "sort": {
@@ -1419,6 +1466,18 @@
         "tooltipTotal": "Monthly Total",
         "legendMonthly": "Monthly total",
         "legendAverage": "Average"
+      },
+      "calendar": {
+        "listView": "List",
+        "calendarView": "Calendar",
+        "today": "Today",
+        "monthTotal": "Total: {{amount}}",
+        "noCharges": "No charges",
+        "moreCharges": "+{{count}} more",
+        "dayDetail": {
+          "title": "Charges on {{date}}",
+          "total": "Total"
+        }
       },
       "modal": {
         "titleAdd": "Add Subscription",
@@ -1924,6 +1983,7 @@
     },
     "suggestions": {
       "title": "Suggested questions:",
+      "dynamicTitle": "Based on your data:",
       "items": [
         "How much did I spend this month?",
         "What category did I spend the most on?",
@@ -2044,7 +2104,9 @@
     }
   },
   "categoryHierarchy": {
-    "header": { "title": "Category Management" },
+    "header": {
+      "title": "Category Management"
+    },
     "tabs": {
       "categorize": "Categorize",
       "hierarchy": "Categories",
@@ -2309,8 +2371,7 @@
     "accountSync": {
       "neverSynced": "Never synced"
     }
-  }
-  ,
+  },
   "titleBar": {
     "menu": {
       "back": "← Back",
@@ -2395,19 +2456,87 @@
         "holdings": "Holdings"
       },
       "keywords": {
-        "dashboard": ["home", "overview", "main", "summary"],
-        "analysis": ["analytics", "spending", "budget", "reports", "charts"],
-        "investments": ["portfolio", "stocks", "holdings", "wealth", "assets"],
-        "settings": ["preferences", "config", "theme", "language", "profile"],
-        "transactions": ["history", "payments", "purchases", "expenses", "income"],
-        "breakdown": ["categories", "pie", "chart", "spending breakdown"],
-        "vendors": ["merchants", "stores", "shops", "where"],
-        "appearance": ["theme", "dark", "light", "mode", "colors"],
-        "language": ["hebrew", "english", "french", "locale"],
-        "profile": ["account", "user", "name", "email"],
-        "privacy": ["mask", "hide", "amounts", "security"],
-        "portfolio": ["total", "value", "performance"],
-        "holdings": ["positions", "shares", "funds"]
+        "dashboard": [
+          "home",
+          "overview",
+          "main",
+          "summary"
+        ],
+        "analysis": [
+          "analytics",
+          "spending",
+          "budget",
+          "reports",
+          "charts"
+        ],
+        "investments": [
+          "portfolio",
+          "stocks",
+          "holdings",
+          "wealth",
+          "assets"
+        ],
+        "settings": [
+          "preferences",
+          "config",
+          "theme",
+          "language",
+          "profile"
+        ],
+        "transactions": [
+          "history",
+          "payments",
+          "purchases",
+          "expenses",
+          "income"
+        ],
+        "breakdown": [
+          "categories",
+          "pie",
+          "chart",
+          "spending breakdown"
+        ],
+        "vendors": [
+          "merchants",
+          "stores",
+          "shops",
+          "where"
+        ],
+        "appearance": [
+          "theme",
+          "dark",
+          "light",
+          "mode",
+          "colors"
+        ],
+        "language": [
+          "hebrew",
+          "english",
+          "french",
+          "locale"
+        ],
+        "profile": [
+          "account",
+          "user",
+          "name",
+          "email"
+        ],
+        "privacy": [
+          "mask",
+          "hide",
+          "amounts",
+          "security"
+        ],
+        "portfolio": [
+          "total",
+          "value",
+          "performance"
+        ],
+        "holdings": [
+          "positions",
+          "shares",
+          "funds"
+        ]
       }
     }
   },
@@ -2752,7 +2881,8 @@
         "investmentOutflow": "Investment Outflow",
         "investmentInflow": "Investment Inflow",
         "net": "Net",
-        "txCount": "Transactions"
+        "txCount": "Transactions",
+        "totalSpend": "Total Spend"
       },
       "modal": {
         "title": "Progress Snapshot",
@@ -2764,7 +2894,10 @@
         "previousNet": "Previous net",
         "insufficientHistory": "Insufficient history for a full previous period comparison.",
         "notAvailable": "N/A",
-        "daysTracked": "{{count}} days tracked"
+        "daysTracked": "{{count}} days tracked",
+        "reductionBy": "⬇ Reduction by {{pct}}%",
+        "increasedBy": "⬆ Increased by {{pct}}%",
+        "previousSpend": "Previous Spend"
       }
     }
   },

@@ -32,6 +32,53 @@ function createChatRouter() {
   });
 
   /**
+   * POST /api/chat/stream
+   * Process a chat message with streaming response (SSE)
+   */
+  router.post('/stream', async (req, res) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+
+    try {
+      await chatService.processMessageStream(req.body || {}, (event) => {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      });
+    } catch (error) {
+      console.error('[chat-route] Stream error:', error);
+      res.write(`data: ${JSON.stringify({ type: 'error', message: error?.message || 'Stream failed' })}\n\n`);
+    } finally {
+      res.end();
+    }
+  });
+
+  /**
+   * GET /api/chat/suggestions
+   * Get smart suggested questions based on financial data
+   * Query: { transactions, categories, analytics, locale }
+   */
+  router.get('/suggestions', async (req, res) => {
+    try {
+      const suggestions = await chatService.getSuggestions({
+        permissions: {
+          allowTransactionAccess: req.query.transactions === 'true',
+          allowCategoryAccess: req.query.categories === 'true',
+          allowAnalyticsAccess: req.query.analytics === 'true',
+        },
+        locale: req.query.locale || 'en',
+      });
+      res.json({ suggestions });
+    } catch (error) {
+      console.error('[chat-route] Suggestions error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to get suggestions',
+      });
+    }
+  });
+
+  /**
    * GET /api/chat/conversations
    * List all conversations
    * Query: { limit?, offset?, includeArchived? }

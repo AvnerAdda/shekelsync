@@ -6,6 +6,11 @@ let balanceSheetService: any;
 let getInvestmentBalanceSheet: (query?: Record<string, unknown>) => Promise<any>;
 let dialect: any;
 
+function isActivePikadonOverlapQuery(sql: string) {
+  return sql.includes('AS active_value')
+    && sql.includes('deposit_transaction_vendor');
+}
+
 beforeAll(async () => {
   const module = await import('../balance-sheet.js');
   balanceSheetService = module.default ?? module;
@@ -183,5 +188,82 @@ describe('investment balance sheet service', () => {
     });
     expect(result.netWorth).toBeNull();
     expect(result.netWorthStatus).toBe('partial');
+  });
+
+  it('reduces cash totals when an active Pikadon overlaps a bank balance account', async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM investment_accounts ia')) {
+        return {
+          rows: [
+            {
+              id: 1,
+              account_name: 'Main Bank',
+              account_type: 'bank_balance',
+              investment_category: 'cash',
+              account_number: '1234',
+              institution_id: 18,
+              institution_vendor_code: 'discount',
+              currency: 'ILS',
+              current_value: '705476.03',
+              as_of_date: '2026-03-10',
+            },
+            {
+              id: 2,
+              account_name: 'Pikadon',
+              account_type: 'savings',
+              investment_category: 'liquid',
+              account_number: '1234',
+              institution_id: 18,
+              institution_vendor_code: 'discount',
+              currency: 'ILS',
+              current_value: '680000',
+              as_of_date: '2026-03-10',
+            },
+          ],
+        };
+      }
+
+      if (isActivePikadonOverlapQuery(sql)) {
+        return {
+          rows: [
+            {
+              pikadon_account_id: 2,
+              institution_id: 18,
+              source_vendor_code: 'discount',
+              source_account_number: '1234',
+              active_value: '680000',
+            },
+          ],
+        };
+      }
+
+      if (sql.includes('SELECT DISTINCT credit_card_vendor as vendor')) {
+        return { rows: [] };
+      }
+
+      throw new Error(`Unexpected query in balance sheet overlap test: ${sql.slice(0, 120)}`);
+    });
+
+    const result = await getInvestmentBalanceSheet({ includeAccounts: 'true' });
+
+    expect(result.assets.total).toBeCloseTo(705476.03, 6);
+    expect(result.assets.buckets.cash).toMatchObject({
+      totalValue: 25476.03,
+      accountsCount: 1,
+      accountsWithValue: 1,
+    });
+    expect(result.assets.buckets.liquid).toMatchObject({
+      totalValue: 680000,
+      accountsCount: 1,
+      accountsWithValue: 1,
+    });
+    expect(result.assets.buckets.cash.accounts[0]).toMatchObject({
+      id: 1,
+      currentValue: 25476.03,
+    });
+    expect(result.assets.buckets.liquid.accounts[0]).toMatchObject({
+      id: 2,
+      currentValue: 680000,
+    });
   });
 });

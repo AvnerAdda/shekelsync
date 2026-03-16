@@ -1,5 +1,9 @@
 const actualDatabase = require('../database.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
+const {
+  applyBankBalanceOverlapAdjustments,
+  fetchActivePikadonOverlapSources,
+} = require('./bank-balance-overlap.js');
 
 let database = actualDatabase;
 
@@ -140,10 +144,15 @@ async function getInvestmentBalanceSheet(query = {}) {
         ia.account_name,
         ia.account_type,
         ia.investment_category,
+        ia.account_number,
+        ia.notes,
+        ia.institution_id,
+        fi.vendor_code AS institution_vendor_code,
         ia.currency,
         ih.current_value,
         ih.as_of_date
       FROM investment_accounts ia
+      LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
       LEFT JOIN investment_holdings ih
         ON ih.id = (
           SELECT ih2.id
@@ -156,6 +165,19 @@ async function getInvestmentBalanceSheet(query = {}) {
       ORDER BY ia.investment_category, ia.account_type, ia.account_name
     `,
     [booleanTrue],
+  );
+  const savingsAccountIds = (accountsResult.rows || [])
+    .filter((row) => row.account_type === 'savings')
+    .map((row) => row.id);
+  const hasBankBalanceAccounts = (accountsResult.rows || []).some(
+    (row) => row.account_type === 'bank_balance',
+  );
+  const overlapSources = hasBankBalanceAccounts && savingsAccountIds.length > 0
+    ? await fetchActivePikadonOverlapSources(database, savingsAccountIds)
+    : [];
+  const adjustedAccounts = applyBankBalanceOverlapAdjustments(
+    accountsResult.rows || [],
+    overlapSources,
   );
 
   const buckets = {
@@ -171,7 +193,7 @@ async function getInvestmentBalanceSheet(query = {}) {
   let totalAssets = 0;
   let missingValuationsCount = 0;
 
-  (accountsResult.rows || []).forEach((row) => {
+  adjustedAccounts.forEach((row) => {
     const bucketKey = getBucketKey(row);
     const bucket = buckets[bucketKey] || buckets.other;
 
@@ -257,4 +279,3 @@ module.exports = {
   },
 };
 module.exports.default = module.exports;
-
