@@ -15,6 +15,10 @@ const {
 const {
   fetchAccountHoldingSnapshots,
 } = require('./account-snapshots.js');
+const {
+  applyBankBalanceOverlapAdjustments,
+  fetchActivePikadonOverlapSources,
+} = require('./bank-balance-overlap.js');
 
 const VALID_TYPES = new Set([
   'pension',
@@ -101,7 +105,7 @@ async function listAccounts(params = {}) {
     result.rows.map((row) => row.id),
   );
 
-  const accounts = await Promise.all(
+  let accounts = await Promise.all(
     result.rows.map(async (row) => {
       const snapshot = snapshotByAccount.get(Number(row.id)) || {
         current_value: null,
@@ -156,6 +160,18 @@ async function listAccounts(params = {}) {
       if (account.cost_basis === null || account.cost_basis === undefined) {
         account.cost_basis = account.total_invested;
       }
+    });
+  }
+
+  const hasBankBalanceAccounts = accounts.some((account) => account.account_type === 'bank_balance');
+  const pikadonRollupAccountIds = accounts
+    .filter((account) => account.account_type === 'savings' && account.uses_pikadon_rollup)
+    .map((account) => account.id);
+
+  if (hasBankBalanceAccounts && pikadonRollupAccountIds.length > 0) {
+    const overlapSources = await fetchActivePikadonOverlapSources(database, pikadonRollupAccountIds);
+    accounts = applyBankBalanceOverlapAdjustments(accounts, overlapSources, {
+      adjustExplicitValue: true,
     });
   }
 

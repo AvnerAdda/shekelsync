@@ -113,18 +113,20 @@ function detectFrequencyFromIntervals(dates) {
 function calculateConsistencyScore(dates, expectedFrequency) {
   if (!dates || dates.length < 2) return 0;
 
-  const expectedInterval = FREQUENCY_INTERVALS[expectedFrequency];
-  if (!expectedInterval) return 0.5;
-
   const sortedDates = dates.map((d) => new Date(d)).sort((a, b) => a - b);
   const intervals = [];
 
   for (let i = 1; i < sortedDates.length; i += 1) {
     const daysDiff = Math.round((sortedDates[i] - sortedDates[i - 1]) / (1000 * 60 * 60 * 24));
-    intervals.push(daysDiff);
+    if (daysDiff > 0) {
+      intervals.push(daysDiff);
+    }
   }
 
   if (intervals.length === 0) return 0;
+
+  const expectedInterval = FREQUENCY_INTERVALS[expectedFrequency];
+  if (!expectedInterval) return 0.5;
 
   const deviations = intervals.map((interval) =>
     Math.abs(interval - expectedInterval) / expectedInterval

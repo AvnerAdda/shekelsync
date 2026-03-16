@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
 import LockedPagePlaceholder from '@renderer/shared/empty-state/LockedPagePlaceholder';
+import LoadingState from '@renderer/components/LoadingState';
+import { resolveOnboardingGate } from '@renderer/features/layout/components/onboarding-gate';
 import {
   Alert,
   Box,
@@ -119,8 +121,8 @@ const InvestmentsPageContent: React.FC = () => {
   const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage' });
   const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
-  const accessStatus = getPageAccessStatus('investments');
-  const isLocked = accessStatus.isLocked;
+  const { isLocked, isResolved: isOnboardingResolved, shouldBlockPageData, showLoading } =
+    resolveOnboardingGate(onboardingStatus, getPageAccessStatus, 'investments');
 
   const {
     historyTimeRange,
@@ -150,10 +152,10 @@ const InvestmentsPageContent: React.FC = () => {
     loading: balanceSheetLoading,
     error: balanceSheetError,
     refresh: refreshBalanceSheet,
-  } = useInvestmentBalanceSheet({ enabled: !isLocked });
+  } = useInvestmentBalanceSheet({ enabled: isOnboardingResolved && !isLocked });
 
   const fetchPortfolioData = useCallback(async (): Promise<PortfolioSummary | null> => {
-    if (isLocked) return null;
+    if (shouldBlockPageData) return null;
     setPortfolioLoading(true);
     try {
       const response = await apiClient.get<PortfolioSummary>('/api/investments/summary');
@@ -170,11 +172,11 @@ const InvestmentsPageContent: React.FC = () => {
     } finally {
       setPortfolioLoading(false);
     }
-  }, [isLocked]);
+  }, [shouldBlockPageData]);
 
   const fetchHistoryData = useCallback(async (portfolioOverride?: PortfolioSummary | null) => {
     const sourcePortfolio = portfolioOverride ?? portfolioData;
-    if (isLocked || !sourcePortfolio || sourcePortfolio.summary.totalAccounts === 0) {
+    if (shouldBlockPageData || !sourcePortfolio || sourcePortfolio.summary.totalAccounts === 0) {
       setOverallHistory([]);
       setAccountHistories({});
       return;
@@ -217,10 +219,10 @@ const InvestmentsPageContent: React.FC = () => {
     } finally {
       setHistoryLoading(false);
     }
-  }, [historyTimeRange, isLocked, portfolioData]);
+  }, [historyTimeRange, portfolioData, shouldBlockPageData]);
 
   const fetchPerformanceData = useCallback(async () => {
-    if (isLocked) return;
+    if (shouldBlockPageData) return;
     setPerformanceLoading(true);
     try {
       const response = await apiClient.get<InvestmentPerformanceResponse>('/api/investments/performance', {
@@ -236,10 +238,10 @@ const InvestmentsPageContent: React.FC = () => {
     } finally {
       setPerformanceLoading(false);
     }
-  }, [historyTimeRange, isLocked]);
+  }, [historyTimeRange, shouldBlockPageData]);
 
   const fetchInvestmentActivity = useCallback(async () => {
-    if (isLocked) return;
+    if (shouldBlockPageData) return;
     setActivityLoading(true);
     try {
       const rangeDates = getRangeDates(historyTimeRange);
@@ -256,18 +258,18 @@ const InvestmentsPageContent: React.FC = () => {
     } finally {
       setActivityLoading(false);
     }
-  }, [historyTimeRange, isLocked]);
+  }, [historyTimeRange, shouldBlockPageData]);
 
   useEffect(() => {
     void fetchPortfolioData();
   }, [fetchPortfolioData, refreshTrigger]);
 
   useEffect(() => {
-    if (!isLocked) {
+    if (!shouldBlockPageData) {
       void fetchPerformanceData();
       void fetchInvestmentActivity();
     }
-  }, [fetchInvestmentActivity, fetchPerformanceData, isLocked, refreshTrigger]);
+  }, [fetchInvestmentActivity, fetchPerformanceData, refreshTrigger, shouldBlockPageData]);
 
   useEffect(() => {
     void fetchHistoryData();
@@ -315,6 +317,10 @@ const InvestmentsPageContent: React.FC = () => {
     }
     setSelectedPikadonAccount(account);
   }, []);
+
+  if (showLoading) {
+    return <LoadingState fullHeight message="Loading setup status..." />;
+  }
 
   if (isLocked) {
     return <LockedPagePlaceholder page="investments" onboardingStatus={onboardingStatus} />;

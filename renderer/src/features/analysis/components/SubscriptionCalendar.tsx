@@ -15,16 +15,18 @@ import {
   ChevronRight as NextIcon,
   Today as TodayIcon,
 } from '@mui/icons-material';
-import { format, addMonths, subMonths, isSameMonth } from 'date-fns';
+import { addMonths, subMonths, isSameMonth } from 'date-fns';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useTranslation } from 'react-i18next';
 import type { Subscription } from '@renderer/types/subscriptions';
 import { buildCalendarData, getMonthTotal } from '../utils/subscription-calendar-helpers';
 import type { CalendarSubscriptionEntry } from '../utils/subscription-calendar-helpers';
+import {
+  formatSubscriptionCalendarMonthLabel,
+  getSubscriptionCalendarWeekdayLabels,
+} from '../utils/subscription-calendar-locale';
 import CalendarDayCell from './CalendarDayCell';
 import CalendarDayDetail from './CalendarDayDetail';
-
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 interface SubscriptionCalendarProps {
   subscriptions: Subscription[];
@@ -58,6 +60,14 @@ const SubscriptionCalendar: React.FC<SubscriptionCalendarProps> = ({
   const monthTotal = useMemo(
     () => getMonthTotal(calendarData, year, month),
     [calendarData, year, month],
+  );
+  const weekdayLabels = useMemo(
+    () => getSubscriptionCalendarWeekdayLabels(i18n.language),
+    [i18n.language],
+  );
+  const monthLabel = useMemo(
+    () => formatSubscriptionCalendarMonthLabel(currentMonth, i18n.language),
+    [currentMonth, i18n.language],
   );
 
   const maxDayTotal = useMemo(
@@ -116,7 +126,7 @@ const SubscriptionCalendar: React.FC<SubscriptionCalendarProps> = ({
             fontWeight={700}
             sx={{ minWidth: isCompact ? 120 : 180, textAlign: 'center' }}
           >
-            {format(currentMonth, 'MMMM yyyy')}
+            {monthLabel}
           </Typography>
           <IconButton size="small" onClick={handleNext}>
             <NextIcon />
@@ -154,7 +164,7 @@ const SubscriptionCalendar: React.FC<SubscriptionCalendarProps> = ({
         }}
       >
         {/* Weekday headers */}
-        {WEEKDAYS.map((day) => (
+        {weekdayLabels.map((day) => (
           <Box
             key={day}
             sx={{

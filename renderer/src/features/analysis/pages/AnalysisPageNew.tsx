@@ -56,6 +56,8 @@ import {
 import { useOnboarding } from '@app/contexts/OnboardingContext';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import LockedPagePlaceholder from '@renderer/shared/empty-state/LockedPagePlaceholder';
+import LoadingState from '@renderer/components/LoadingState';
+import { resolveOnboardingGate } from '@renderer/features/layout/components/onboarding-gate';
 import QuestsPanel from '../components/QuestsPanel';
 import SpendingCategoriesChart from '../components/SpendingCategoriesChart';
 import SpendingCategoryTargetsMinimal from '../components/SpendingCategoryTargetsMinimal';
@@ -470,8 +472,8 @@ const AnalysisPageNew: React.FC = () => {
   
   const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
   const { formatCurrency } = useFinancePrivacy();
-  const accessStatus = getPageAccessStatus('analysis');
-  const isLocked = accessStatus.isLocked;
+  const { isLocked, isResolved: isOnboardingResolved, shouldBlockPageData, showLoading } =
+    resolveOnboardingGate(onboardingStatus, getPageAccessStatus, 'analysis');
   const fetchOnceRef = useRef({
     intelligence: false,
     temporal: false,
@@ -494,7 +496,7 @@ const AnalysisPageNew: React.FC = () => {
   };
 
   const fetchTemporalData = useCallback(async () => {
-    if (isLocked) return;
+    if (shouldBlockPageData) return;
     setTemporalLoading(true);
     setTemporalError(null);
     try {
@@ -509,10 +511,10 @@ const AnalysisPageNew: React.FC = () => {
     } finally {
       setTemporalLoading(false);
     }
-  }, [isLocked, t]);
+  }, [shouldBlockPageData, t]);
 
   const fetchBehavioralData = useCallback(async () => {
-    if (isLocked) return;
+    if (shouldBlockPageData) return;
     setBehavioralLoading(true);
     setBehavioralError(null);
     try {
@@ -527,10 +529,10 @@ const AnalysisPageNew: React.FC = () => {
     } finally {
       setBehavioralLoading(false);
     }
-  }, [isLocked, t]);
+  }, [shouldBlockPageData, t]);
 
   const fetchFutureData = useCallback(async () => {
-    if (isLocked) return;
+    if (shouldBlockPageData) return;
     setFutureLoading(true);
     setFutureError(null);
     try {
@@ -545,10 +547,10 @@ const AnalysisPageNew: React.FC = () => {
     } finally {
       setFutureLoading(false);
     }
-  }, [isLocked, t]);
+  }, [shouldBlockPageData, t]);
 
   const fetchTimeValueData = useCallback(async () => {
-    if (isLocked) return;
+    if (shouldBlockPageData) return;
     setTimeValueLoading(true);
     setTimeValueError(null);
     try {
@@ -563,10 +565,10 @@ const AnalysisPageNew: React.FC = () => {
     } finally {
       setTimeValueLoading(false);
     }
-  }, [isLocked, t]);
+  }, [shouldBlockPageData, t]);
 
   const fetchIntelligence = useCallback(async () => {
-    if (isLocked) {
+    if (shouldBlockPageData) {
       return;
     }
     setLoading(true);
@@ -586,10 +588,10 @@ const AnalysisPageNew: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [isLocked, t]);
+  }, [shouldBlockPageData, t]);
 
   const fetchBudgetForecast = useCallback(async (options: { force?: boolean } = {}) => {
-    if (isLocked) {
+    if (shouldBlockPageData) {
       return;
     }
     setBudgetForecastLoading(true);
@@ -632,10 +634,10 @@ const AnalysisPageNew: React.FC = () => {
     } finally {
       setBudgetForecastLoading(false);
     }
-  }, [isLocked, t]);
+  }, [shouldBlockPageData, t]);
 
   const fetchCategoryVariability = useCallback(async () => {
-    if (isLocked) {
+    if (shouldBlockPageData) {
       return;
     }
 
@@ -659,7 +661,7 @@ const AnalysisPageNew: React.FC = () => {
     } finally {
       setCategoryVariabilityLoading(false);
     }
-  }, [isLocked, t]);
+  }, [shouldBlockPageData, t]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue);
@@ -717,7 +719,7 @@ const AnalysisPageNew: React.FC = () => {
   }, [runRefreshAll]);
 
   useEffect(() => {
-    if (isLocked) {
+    if (shouldBlockPageData) {
       return;
     }
     if (fetchOnceRef.current.intelligence) {
@@ -725,10 +727,10 @@ const AnalysisPageNew: React.FC = () => {
     }
     fetchOnceRef.current.intelligence = true;
     fetchIntelligence();
-  }, [fetchIntelligence, isLocked]);
+  }, [fetchIntelligence, shouldBlockPageData]);
 
   useEffect(() => {
-    if (isLocked) {
+    if (shouldBlockPageData) {
       return;
     }
 
@@ -778,7 +780,7 @@ const AnalysisPageNew: React.FC = () => {
     fetchFutureData,
     fetchTemporalData,
     fetchTimeValueData,
-    isLocked,
+    shouldBlockPageData,
   ]);
 
   const formatCurrencyValue = (
@@ -1446,6 +1448,15 @@ const AnalysisPageNew: React.FC = () => {
 
   const selectedSuggestedLimit = selectedBudgetItem ? getSuggestedLimit(selectedBudgetItem) : null;
   const canCreateAdditionalBudget = addBudgetCategoryId !== '' && parseLimitInput(addBudgetLimitInput) !== null;
+
+  if (showLoading) {
+    return (
+      <LoadingState
+        fullHeight
+        message="Loading setup status..."
+      />
+    );
+  }
 
   if (isLocked) {
     return (

@@ -16,13 +16,12 @@ import {
   Edit as EditIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';
-import { format } from 'date-fns';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useTranslation } from 'react-i18next';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
-import { FREQUENCY_LABELS } from '@renderer/types/subscriptions';
 import type { Subscription } from '@renderer/types/subscriptions';
 import type { CalendarSubscriptionEntry } from '../utils/subscription-calendar-helpers';
+import { formatSubscriptionCalendarDayLabel } from '../utils/subscription-calendar-locale';
 
 interface CalendarDayDetailProps {
   open: boolean;
@@ -49,14 +48,14 @@ const CalendarDayDetail: React.FC<CalendarDayDetailProps> = ({
   if (!date) return null;
 
   const dayTotal = subscriptions.reduce((sum, e) => sum + e.amount, 0);
-  const formattedDate = format(date, 'EEEE, MMMM d, yyyy');
+  const formattedDate = formatSubscriptionCalendarDayLabel(date, i18n.language);
 
   const content = (
     <Box sx={{ p: 2, minWidth: isMobile ? 'auto' : 280, maxWidth: 360 }}>
       {/* Header */}
       <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.5}>
         <Typography variant="subtitle2" fontWeight={700}>
-          {formattedDate}
+          {t('dayDetail.title', { date: formattedDate })}
         </Typography>
         <IconButton size="small" onClick={onClose}>
           <CloseIcon fontSize="small" />
@@ -110,7 +109,7 @@ const CalendarDayDetail: React.FC<CalendarDayDetailProps> = ({
                   {sub.display_name}
                 </Typography>
                 <Chip
-                  label={FREQUENCY_LABELS[freq]}
+                  label={i18n.t(`analysisPage.subscriptions.frequency.${freq}`)}
                   size="small"
                   sx={{
                     height: 18,

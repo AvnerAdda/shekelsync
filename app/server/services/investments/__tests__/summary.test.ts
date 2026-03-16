@@ -16,6 +16,11 @@ function isActivePikadonSnapshotQuery(sql: string) {
     && sql.includes('GROUP BY ih.account_id');
 }
 
+function isActivePikadonOverlapQuery(sql: string) {
+  return sql.includes('AS active_value')
+    && sql.includes('deposit_transaction_vendor');
+}
+
 beforeAll(async () => {
   const module = await import('../summary.js');
   summaryService = module.default ?? module;
@@ -232,7 +237,7 @@ describe('investment summary service', () => {
     expect(releaseMock).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps bank balances in the portfolio total but labels cash separately from savings', async () => {
+  it('subtracts Pikadon-backed savings from matching bank balances to avoid double counting', async () => {
     queryMock.mockImplementation(async (sql: string) => {
       if (sql.includes('FROM investment_accounts ia')) {
         return {
@@ -242,20 +247,24 @@ describe('investment summary service', () => {
               account_name: 'Main Bank',
               account_type: 'bank_balance',
               investment_category: 'cash',
-              current_value: '25476.03',
-              cost_basis: '25476.03',
+              account_number: '1234',
+              current_value: '705476.03',
+              cost_basis: '705476.03',
               as_of_date: '2026-03-10',
-              institution_id: null,
+              institution_id: 18,
+              institution_vendor_code: 'discount',
             },
             {
               id: 2,
               account_name: 'Pikadon',
               account_type: 'savings',
               investment_category: 'liquid',
-              current_value: '680000',
-              cost_basis: '680000',
+              account_number: '1234',
+              current_value: null,
+              cost_basis: null,
               as_of_date: '2026-03-10',
-              institution_id: null,
+              institution_id: 18,
+              institution_vendor_code: 'discount',
             },
           ],
         };
@@ -269,15 +278,19 @@ describe('investment summary service', () => {
               account_id: 1,
               holding_type: 'standard',
               status: 'active',
-              current_value: '25476.03',
-              cost_basis: '25476.03',
+              current_value: '705476.03',
+              cost_basis: '705476.03',
               as_of_date: '2026-03-10',
             },
+          ],
+        };
+      }
+
+      if (isActivePikadonSnapshotQuery(sql)) {
+        return {
+          rows: [
             {
-              id: 22,
               account_id: 2,
-              holding_type: 'standard',
-              status: 'active',
               current_value: '680000',
               cost_basis: '680000',
               as_of_date: '2026-03-10',
@@ -286,8 +299,18 @@ describe('investment summary service', () => {
         };
       }
 
-      if (isActivePikadonSnapshotQuery(sql)) {
-        return { rows: [] };
+      if (isActivePikadonOverlapQuery(sql)) {
+        return {
+          rows: [
+            {
+              pikadon_account_id: 2,
+              institution_id: 18,
+              source_vendor_code: 'discount',
+              source_account_number: '1234',
+              active_value: '680000',
+            },
+          ],
+        };
       }
 
       if (sql.includes('FROM investment_assets iasset')) {
@@ -316,6 +339,11 @@ describe('investment summary service', () => {
     const result = await getInvestmentSummary({ historyMonths: 1 });
 
     expect(result.summary.totalPortfolioValue).toBeCloseTo(705476.03, 6);
+    expect(result.accounts.find((account: any) => account.id === 1)).toMatchObject({
+      account_type: 'bank_balance',
+      current_value: 25476.03,
+      cost_basis: 25476.03,
+    });
     expect(result.breakdown.find((entry: any) => entry.type === 'bank_balance')).toMatchObject({
       name: 'Available Cash',
       category: 'liquid',
