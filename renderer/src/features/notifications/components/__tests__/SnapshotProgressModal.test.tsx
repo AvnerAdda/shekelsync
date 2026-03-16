@@ -28,8 +28,10 @@ const translations: Record<string, string> = {
 };
 
 vi.mock('@mui/material', () => {
-  const component = (tag: any) =>
-    ({ children }: { children?: React.ReactNode }) => React.createElement(tag, null, children);
+  const component =
+    (tag: any) =>
+    ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(tag, null, children);
 
   return {
     Alert: component('div'),
@@ -43,21 +45,21 @@ vi.mock('@mui/material', () => {
     DialogTitle: component('h2'),
     Divider: component('hr'),
     Grid: component('div'),
-    IconButton: ({
-      children,
-      onClick,
-      'aria-label': ariaLabel,
-    }: {
-      children?: React.ReactNode;
-      onClick?: () => void;
-      'aria-label'?: string;
-    }) => (
+    IconButton: ({ children, onClick, 'aria-label': ariaLabel }: { children?: React.ReactNode; onClick?: () => void; 'aria-label'?: string }) => (
       <button onClick={onClick} aria-label={ariaLabel}>
         {children}
       </button>
     ),
     Stack: component('div'),
     Typography: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    alpha: (color: string) => color,
+    useTheme: () => ({
+      palette: {
+        grey: { 400: '#bdbdbd', 500: '#9e9e9e' },
+        error: { main: '#d32f2f' },
+        success: { main: '#2e7d32' },
+      },
+    }),
   };
 });
 
@@ -141,58 +143,26 @@ describe('SnapshotProgressModal', () => {
   });
 
   it('renders nothing when dialog is closed', () => {
-    render(
-      <SnapshotProgressModal
-        open={false}
-        onClose={() => {}}
-        data={sampleData}
-        loading={false}
-        error={null}
-      />,
-    );
+    render(<SnapshotProgressModal open={false} onClose={() => {}} data={sampleData} loading={false} error={null} />);
 
     expect(screen.queryByText('Progress Snapshot')).not.toBeInTheDocument();
   });
 
   it('renders loading state', () => {
-    render(
-      <SnapshotProgressModal
-        open
-        onClose={() => {}}
-        data={null}
-        loading
-        error={null}
-      />,
-    );
+    render(<SnapshotProgressModal open onClose={() => {}} data={null} loading error={null} />);
 
     expect(screen.getByText('Loading snapshot...')).toBeInTheDocument();
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
   });
 
   it('renders empty state when no data is available', () => {
-    render(
-      <SnapshotProgressModal
-        open
-        onClose={() => {}}
-        data={null}
-        loading={false}
-        error={null}
-      />,
-    );
+    render(<SnapshotProgressModal open onClose={() => {}} data={null} loading={false} error={null} />);
 
     expect(screen.getByText('No snapshot data available yet.')).toBeInTheDocument();
   });
 
   it('renders snapshot cards and insufficient history state', () => {
-    render(
-      <SnapshotProgressModal
-        open
-        onClose={() => {}}
-        data={sampleData}
-        loading={false}
-        error={null}
-      />,
-    );
+    render(<SnapshotProgressModal open onClose={() => {}} data={sampleData} loading={false} error={null} />);
 
     expect(screen.getByText('Progress Snapshot')).toBeInTheDocument();
     expect(screen.getByText('Week')).toBeInTheDocument();
@@ -224,15 +194,7 @@ describe('SnapshotProgressModal', () => {
       ],
     };
 
-    render(
-      <SnapshotProgressModal
-        open
-        onClose={() => {}}
-        data={customData}
-        loading={false}
-        error={null}
-      />,
-    );
+    render(<SnapshotProgressModal open onClose={() => {}} data={customData} loading={false} error={null} />);
 
     expect(screen.getByText(/Custom Current/)).toBeInTheDocument();
     expect(screen.getByText(/Custom Previous/)).toBeInTheDocument();
@@ -270,15 +232,7 @@ describe('SnapshotProgressModal', () => {
     };
 
     expect(() => {
-      render(
-        <SnapshotProgressModal
-          open
-          onClose={() => {}}
-          data={dataWithInvalidDates}
-          loading={false}
-          error={null}
-        />,
-      );
+      render(<SnapshotProgressModal open onClose={() => {}} data={dataWithInvalidDates} loading={false} error={null} />);
     }).not.toThrow();
 
     expect(screen.getAllByText(/N\/A/).length).toBeGreaterThanOrEqual(2);
@@ -287,15 +241,7 @@ describe('SnapshotProgressModal', () => {
   it('invokes onClose when close button is clicked', () => {
     const onClose = vi.fn();
 
-    render(
-      <SnapshotProgressModal
-        open
-        onClose={onClose}
-        data={sampleData}
-        loading={false}
-        error={null}
-      />,
-    );
+    render(<SnapshotProgressModal open onClose={onClose} data={sampleData} loading={false} error={null} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -319,29 +265,13 @@ describe('SnapshotProgressModal', () => {
       ],
     };
 
-    render(
-      <SnapshotProgressModal
-        open
-        onClose={() => {}}
-        data={data}
-        loading={false}
-        error={null}
-      />,
-    );
+    render(<SnapshotProgressModal open onClose={() => {}} data={data} loading={false} error={null} />);
 
     expect(screen.getAllByText(/₪/).length).toBeGreaterThan(0);
   });
 
   it('renders fetch error state', () => {
-    render(
-      <SnapshotProgressModal
-        open
-        onClose={() => {}}
-        data={null}
-        loading={false}
-        error="Request failed"
-      />,
-    );
+    render(<SnapshotProgressModal open onClose={() => {}} data={null} loading={false} error="Request failed" />);
 
     expect(screen.getByText('Request failed')).toBeInTheDocument();
   });

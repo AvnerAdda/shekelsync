@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, alpha, useTheme } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 
 interface SpendDetailRowProps {
   label: string;
@@ -11,17 +11,16 @@ interface SpendDetailRowProps {
   formatCurrency: (value: number) => string;
 }
 
-const SpendDetailRow: React.FC<SpendDetailRowProps> = ({
-  label,
-  range,
-  value,
-  percentage,
-  color,
-  bgColor,
-  formatCurrency,
-}) => (
+const SpendDetailRow: React.FC<SpendDetailRowProps> = ({ label, range, value, percentage, color, bgColor, formatCurrency }) => (
   <Box>
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.25 }}>
+    <Box
+      sx={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        mb: 0.25,
+      }}
+    >
       <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
         {label}
       </Typography>
@@ -29,8 +28,22 @@ const SpendDetailRow: React.FC<SpendDetailRowProps> = ({
         {formatCurrency(value)}
       </Typography>
     </Box>
-    <Box sx={{ height: 8, bgcolor: bgColor, borderRadius: 0.5, overflow: 'hidden' }}>
-      <Box sx={{ height: '100%', width: `${percentage}%`, bgcolor: color, borderRadius: '2px 0 0 2px' }} />
+    <Box
+      sx={{
+        height: 8,
+        bgcolor: bgColor,
+        borderRadius: 0.5,
+        overflow: 'hidden',
+      }}
+    >
+      <Box
+        sx={{
+          height: '100%',
+          width: `${percentage}%`,
+          bgcolor: color,
+          borderRadius: '2px 0 0 2px',
+        }}
+      />
     </Box>
     {range && (
       <Typography variant="caption" color="text.secondary" sx={{ mt: 0.25, display: 'block', fontSize: '0.65rem' }}>
