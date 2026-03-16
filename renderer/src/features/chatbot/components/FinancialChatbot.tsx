@@ -40,12 +40,14 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';
-import { useChatbotPermissions } from '@app/contexts/ChatbotPermissionsContext';
+import { useChatbotPermissions, MODEL_TIERS } from '@app/contexts/ChatbotPermissionsContext';
 import { useAuth } from '@app/contexts/AuthContext';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 
 // Styled markdown container for assistant messages
 const MarkdownContent = styled(Box)(({ theme }) => ({
+  fontSize: '0.875rem',
+  lineHeight: 1.6,
   '& p': {
     margin: '0 0 0.5em 0',
     '&:last-child': {
@@ -148,6 +150,9 @@ const FinancialChatbot: React.FC = () => {
     allowCategoryAccess,
     allowAnalyticsAccess,
     openAiApiKey,
+    allowLongAnswers,
+    allowLongRequests,
+    chatModelTier,
   } = useChatbotPermissions();
   const { session } = useAuth();
 
@@ -163,6 +168,7 @@ const FinancialChatbot: React.FC = () => {
   const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
   const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
   const [drawerWidth, setDrawerWidth] = useState(420);
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
@@ -274,6 +280,32 @@ const FinancialChatbot: React.FC = () => {
     }
   }, [isOpen, showHistory, loadConversations]);
 
+  // Fetch smart suggestions when drawer opens on a fresh chat
+  useEffect(() => {
+    if (!isOpen || messages.length > 1 || !canUseChatbot) return;
+
+    const locale = i18n.language.substring(0, 2);
+    const params = new URLSearchParams({
+      transactions: String(allowTransactionAccess),
+      categories: String(allowCategoryAccess),
+      analytics: String(allowAnalyticsAccess),
+      locale,
+    });
+
+    apiClient.get(`/api/chat/suggestions?${params.toString()}`)
+      .then((response) => {
+        if (response.ok && response.data) {
+          const data = response.data as { suggestions: Array<{ text: string; category: string }> };
+          if (data.suggestions?.length > 0) {
+            setDynamicSuggestions(data.suggestions.map(s => s.text));
+          }
+        }
+      })
+      .catch(() => {
+        // Silently fall back to static suggestions
+      });
+  }, [isOpen, messages.length, canUseChatbot, allowTransactionAccess, allowCategoryAccess, allowAnalyticsAccess, i18n.language]);
+
   // Load a specific conversation
   const loadConversation = async (convId: string) => {
     setIsLoading(true);
@@ -339,6 +371,7 @@ const FinancialChatbot: React.FC = () => {
     setMessages([getGreetingMessage()]);
     setError(null);
     setShowHistory(false);
+    setDynamicSuggestions([]);
   };
 
   const handleSendMessage = async () => {
@@ -351,77 +384,159 @@ const FinancialChatbot: React.FC = () => {
       timestamp: new Date(),
     };
 
+    const streamingMsgId = (Date.now() + 1).toString();
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setIsLoading(true);
     setError(null);
 
+    const requestBody = {
+      message: inputValue,
+      conversationId,
+      model: MODEL_TIERS[chatModelTier].model,
+      permissions: {
+        allowTransactionAccess,
+        allowCategoryAccess,
+        allowAnalyticsAccess,
+      },
+      allowLongAnswers,
+      allowLongRequests,
+      openaiApiKey: openAiApiKey.trim(),
+      locale: i18n.language.substring(0, 2),
+    };
+
     try {
-      const response = await apiClient.post('/api/chat', {
-        message: inputValue,
-        conversationId,
-        permissions: {
-          allowTransactionAccess,
-          allowCategoryAccess,
-          allowAnalyticsAccess,
-        },
-        openaiApiKey: openAiApiKey.trim(),
-        locale: i18n.language.substring(0, 2),
+      // Try streaming first
+      const response = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
       });
 
-      if (!response.ok) {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          setIsLoading(false);
-          return;
+      if (!response.ok || !response.body) {
+        throw new Error('Stream unavailable');
+      }
+
+      // Add empty assistant message that will be filled by streaming
+      const streamingMessage: Message = {
+        id: streamingMsgId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, streamingMessage]);
+      setIsLoading(false); // Hide spinner once we start getting tokens
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalMetadata: Message['metadata'] | undefined;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+
+            if (event.type === 'token') {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === streamingMsgId
+                    ? { ...m, content: m.content + event.content }
+                    : m
+                )
+              );
+            } else if (event.type === 'done') {
+              if (event.conversationId && event.conversationId !== conversationId) {
+                setConversationId(event.conversationId);
+              }
+              if (event.metadata?.toolExecutions) {
+                finalMetadata = { toolExecutions: event.metadata.toolExecutions };
+              }
+            } else if (event.type === 'error') {
+              throw new Error(event.message);
+            }
+          } catch (parseErr) {
+            if (parseErr instanceof SyntaxError) continue;
+            throw parseErr;
+          }
         }
-        const errorData = response.data as { error?: string; retryAfter?: number };
-        throw new Error(errorData?.error || 'Failed to get response');
       }
 
-      const data = response.data as {
-        response: string;
-        conversationId: string;
-        metadata?: {
-          toolExecutions?: Array<{
-            tool: string;
-            explanation: string;
-            success: boolean;
-          }>;
+      // Update metadata on the streaming message
+      if (finalMetadata) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === streamingMsgId ? { ...m, metadata: finalMetadata } : m
+          )
+        );
+      }
+    } catch (streamErr) {
+      // Fallback to non-streaming endpoint
+      console.warn('Streaming failed, falling back to regular endpoint:', streamErr);
+
+      // Remove the empty streaming message if it was added
+      setMessages((prev) => prev.filter((m) => m.id !== streamingMsgId));
+      setIsLoading(true);
+
+      try {
+        const response = await apiClient.post('/api/chat', requestBody);
+
+        if (!response.ok) {
+          const licenseCheck = isLicenseReadOnlyError(response.data);
+          if (licenseCheck.isReadOnly) {
+            setLicenseAlertReason(licenseCheck.reason);
+            setLicenseAlertOpen(true);
+            setIsLoading(false);
+            return;
+          }
+          const errorData = response.data as { error?: string };
+          throw new Error(errorData?.error || 'Failed to get response');
+        }
+
+        const data = response.data as {
+          response: string;
+          conversationId: string;
+          metadata?: {
+            toolExecutions?: Array<{ tool: string; explanation: string; success: boolean }>;
+          };
         };
-      };
 
-      // Update conversation ID if this is a new conversation
-      if (data.conversationId && data.conversationId !== conversationId) {
-        setConversationId(data.conversationId);
+        if (data.conversationId && data.conversationId !== conversationId) {
+          setConversationId(data.conversationId);
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: data.response,
+            timestamp: new Date(),
+            metadata: data.metadata,
+          },
+        ]);
+      } catch (fallbackErr) {
+        console.error('Chat error:', fallbackErr);
+        const errorMsg = fallbackErr instanceof Error ? fallbackErr.message : 'An error occurred';
+        setError(errorMsg);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: errorMsg.includes('rate') ? t('errors.rateLimited') : t('errors.generic'),
+            timestamp: new Date(),
+          },
+        ]);
       }
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.response,
-        timestamp: new Date(),
-        metadata: data.metadata,
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (err) {
-      console.error('Chat error:', err);
-      const errorMsg = err instanceof Error ? err.message : 'An error occurred';
-      setError(errorMsg);
-
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: errorMsg.includes('rate')
-          ? t('errors.rateLimited')
-          : t('errors.generic'),
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -445,9 +560,10 @@ const FinancialChatbot: React.FC = () => {
     }
   };
 
-  const suggestedQuestions = [
-    ...(t('suggestions.items', { returnObjects: true }) as string[]),
-  ];
+  const staticSuggestions = t('suggestions.items', { returnObjects: true }) as string[];
+  const suggestedQuestions = dynamicSuggestions.length > 0
+    ? dynamicSuggestions
+    : staticSuggestions;
 
   // Don't render if chatbot is disabled
   if (!chatbotEnabled) {
@@ -848,7 +964,7 @@ const FinancialChatbot: React.FC = () => {
             }}
           >
             <Typography variant="caption" color="text.secondary" gutterBottom sx={{ fontWeight: 600, ml: 1 }}>
-              {t('suggestions.title')}
+              {dynamicSuggestions.length > 0 ? t('suggestions.dynamicTitle') : t('suggestions.title')}
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
               {suggestedQuestions.map((question, idx) => (

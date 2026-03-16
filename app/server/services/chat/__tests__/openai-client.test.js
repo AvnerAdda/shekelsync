@@ -147,7 +147,7 @@ describe('openai-client', () => {
         model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: 'cap test' }],
         temperature: 0.7,
-        max_tokens: 1500,
+        max_tokens: 8192,
       });
     });
   });

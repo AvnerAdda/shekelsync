@@ -2,8 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useLocation } from 'react-router-dom';
 import {
   Box,
-  Tabs,
-  Tab,
   Paper,
   Typography,
   useTheme,
@@ -1502,85 +1500,89 @@ const AnalysisPageNew: React.FC = () => {
       </Box>
 
       {/* Tabs */}
-      <Paper sx={{ 
+      <Box sx={{
         mb: 3,
-        borderRadius: 3,
-        bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
-        backdropFilter: 'blur(20px)',
+        p: 0.75,
+        borderRadius: '16px',
+        bgcolor: (theme) => alpha(theme.palette.background.paper, 0.5),
+        backdropFilter: 'blur(24px)',
         border: '1px solid',
-        borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
-        boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
-        overflow: 'hidden'
+        borderColor: (theme) => alpha(theme.palette.divider, 0.08),
+        boxShadow: (theme) => `0 4px 24px 0 ${alpha(theme.palette.common.black, 0.04)}, 0 1px 2px 0 ${alpha(theme.palette.common.black, 0.03)}`,
+        display: 'flex',
+        gap: 0.5,
+        flexWrap: 'wrap',
       }}>
-        <Tabs
-          value={currentTab}
-          onChange={handleTabChange}
-          aria-label={t('tabs.ariaLabel')}
-          sx={{
-            '& .MuiTabs-indicator': {
-              height: 3,
-              borderRadius: '3px 3px 0 0',
-              background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-            },
-            '& .MuiTab-root': {
-              minHeight: 64,
-              textTransform: 'none',
-              fontSize: '1rem',
-              fontWeight: 600,
-              transition: 'all 0.2s',
-              '&.Mui-selected': {
-                color: theme.palette.primary.main,
-              },
-              '&:hover': {
-                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
-              }
-            },
-          }}
-        >
-          <Tab
-            icon={<DashboardIcon />}
-            iconPosition="start"
-            label={t('tabs.dashboard')}
-            id="analysis-tab-0"
-            aria-controls="analysis-tabpanel-0"
-          />
-          <Tab
-            icon={<ActionsIcon />}
-            iconPosition="start"
-            label={t('tabs.actions')}
-            id="analysis-tab-1"
-            aria-controls="analysis-tabpanel-1"
-          />
-          <Tab
-            icon={<SpendingIcon />}
-            iconPosition="start"
-            label={t('tabs.spending')}
-            id="analysis-tab-2"
-            aria-controls="analysis-tabpanel-2"
-          />
-          <Tab
-            icon={<BudgetIcon />}
-            iconPosition="start"
-            label={t('tabs.budget')}
-            id="analysis-tab-3"
-            aria-controls="analysis-tabpanel-3"
-          />
-          <Tab
-            icon={<ScoringIcon />}
-            iconPosition="start"
-            label={t('tabs.scoring')}
-            id="analysis-tab-4"
-            aria-controls="analysis-tabpanel-4"
-          />
-          <Tab
-            icon={<SubscriptionsIcon />}
-            iconPosition="start"
-            label={t('tabs.subscriptions')}
-            id="analysis-tab-5"
-            aria-controls="analysis-tabpanel-5"
-          />
-        </Tabs>
-      </Paper>
+        {[
+          { icon: <DashboardIcon sx={{ fontSize: 20 }} />, label: t('tabs.dashboard'), index: 0 },
+          { icon: <ActionsIcon sx={{ fontSize: 20 }} />, label: t('tabs.actions'), index: 1 },
+          { icon: <SpendingIcon sx={{ fontSize: 20 }} />, label: t('tabs.spending'), index: 2 },
+          { icon: <BudgetIcon sx={{ fontSize: 20 }} />, label: t('tabs.budget'), index: 3 },
+          { icon: <ScoringIcon sx={{ fontSize: 20 }} />, label: t('tabs.scoring'), index: 4 },
+          { icon: <SubscriptionsIcon sx={{ fontSize: 20 }} />, label: t('tabs.subscriptions'), index: 5 },
+        ].map((tab) => {
+          const isSelected = currentTab === tab.index;
+          return (
+            <Box
+              key={tab.index}
+              role="tab"
+              id={`analysis-tab-${tab.index}`}
+              aria-controls={`analysis-tabpanel-${tab.index}`}
+              aria-selected={isSelected}
+              tabIndex={isSelected ? 0 : -1}
+              onClick={(e) => handleTabChange(e, tab.index)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleTabChange(e, tab.index);
+                }
+              }}
+              sx={{
+                flex: 1,
+                minWidth: 'fit-content',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 1,
+                px: 2,
+                py: 1.25,
+                borderRadius: '12px',
+                cursor: 'pointer',
+                userSelect: 'none',
+                fontSize: '0.875rem',
+                fontWeight: isSelected ? 700 : 500,
+                letterSpacing: '-0.01em',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                color: isSelected
+                  ? theme.palette.primary.contrastText
+                  : theme.palette.text.secondary,
+                background: isSelected
+                  ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`
+                  : 'transparent',
+                boxShadow: isSelected
+                  ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}, 0 1px 3px ${alpha(theme.palette.primary.main, 0.2)}`
+                  : 'none',
+                '&:hover': isSelected
+                  ? {}
+                  : {
+                      bgcolor: alpha(theme.palette.primary.main, 0.08),
+                      color: theme.palette.text.primary,
+                    },
+                '&:active': {
+                  transform: 'scale(0.97)',
+                },
+                '& .MuiSvgIcon-root': {
+                  opacity: isSelected ? 1 : 0.6,
+                  transition: 'opacity 0.2s',
+                },
+              }}
+            >
+              {tab.icon}
+              {tab.label}
+            </Box>
+          );
+        })}
+      </Box>
 
       {/* Tab Content */}
       <TabPanel value={currentTab} index={0}>

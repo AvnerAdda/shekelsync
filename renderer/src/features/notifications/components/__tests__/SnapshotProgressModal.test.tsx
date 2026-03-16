@@ -12,8 +12,10 @@ const translations: Record<string, string> = {
   'insights.snapshot.modal.currentPeriod': 'Current',
   'insights.snapshot.modal.previousPeriod': 'Previous',
   'insights.snapshot.modal.previousNet': 'Previous net',
+  'insights.snapshot.modal.previousSpend': 'Previous Spend',
   'insights.snapshot.modal.insufficientHistory': 'Insufficient history for a full previous period comparison.',
   'insights.snapshot.modal.notAvailable': 'N/A',
+  'insights.snapshot.metrics.totalSpend': 'Total Spend',
   'insights.snapshot.periodLabels.week': 'Week',
   'insights.snapshot.periodLabels.month': 'Month',
   'insights.snapshot.periodLabels.sinceStart': 'Since ShekelSync Started',
@@ -40,6 +42,7 @@ vi.mock('@mui/material', () => {
     DialogContent: component('div'),
     DialogTitle: component('h2'),
     Divider: component('hr'),
+    Grid: component('div'),
     IconButton: ({
       children,
       onClick,
@@ -69,6 +72,12 @@ vi.mock('react-i18next', () => ({
     t: (key: string, options?: Record<string, unknown> | string) => {
       if (key === 'insights.snapshot.modal.daysTracked' && typeof options === 'object' && typeof options?.count === 'number') {
         return `${options.count} days tracked`;
+      }
+      if (key === 'insights.snapshot.modal.reductionBy' && typeof options === 'object') {
+        return `Reduction by ${options.pct}%`;
+      }
+      if (key === 'insights.snapshot.modal.increasedBy' && typeof options === 'object') {
+        return `Increased by ${options.pct}%`;
       }
       if (typeof options === 'string') {
         return translations[key] || options;
@@ -108,8 +117,8 @@ const sampleData: SnapshotProgressData = {
         net: 0,
         txCount: 0,
       },
-      deltaNet: 240,
-      deltaNetPct: null,
+      spendDelta: 240,
+      spendDeltaPct: null,
       hasData: true,
     },
   ],
@@ -209,8 +218,8 @@ describe('SnapshotProgressModal', () => {
             txCount: 7,
             net: 300,
           },
-          deltaNet: -420,
-          deltaNetPct: -58.3,
+          spendDelta: -420,
+          spendDeltaPct: -58.3,
         },
       ],
     };
@@ -227,7 +236,7 @@ describe('SnapshotProgressModal', () => {
 
     expect(screen.getByText(/Custom Current/)).toBeInTheDocument();
     expect(screen.getByText(/Custom Previous/)).toBeInTheDocument();
-    expect(screen.getByText(/-58\.3%/)).toBeInTheDocument();
+    expect(screen.getByText(/Increased by 58\.3%/)).toBeInTheDocument();
     expect(screen.queryByText('Insufficient history for a full previous period comparison.')).not.toBeInTheDocument();
   });
 
@@ -250,7 +259,7 @@ describe('SnapshotProgressModal', () => {
             start: '2025-08-03T12:00:00.000Z',
             end: '2025-08-09T12:00:00.000Z',
           },
-          deltaNetPct: 42.1,
+          spendDeltaPct: 42.1,
         },
       ],
       sinceStart: {
@@ -300,8 +309,8 @@ describe('SnapshotProgressModal', () => {
       periods: [
         {
           ...sampleData.periods[0],
-          deltaNet: 1000,
-          deltaNetPct: 10,
+          spendDelta: 1000,
+          spendDeltaPct: 10,
           previous: {
             ...sampleData.periods[0].previous,
             txCount: 1,

@@ -7,7 +7,8 @@ const OpenAI = require('openai');
 
 const openaiClients = new Map();
 const DEFAULT_MAX_TOKENS = 1200;
-const HARD_MAX_TOKENS = 1500;
+const LONG_ANSWER_MAX_TOKENS = 4096;
+const HARD_MAX_TOKENS = 8192;
 
 function resolveApiKey(options = {}) {
   const keyFromOptions = typeof options.apiKey === 'string' ? options.apiKey.trim() : '';

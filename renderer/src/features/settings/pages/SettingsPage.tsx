@@ -26,7 +26,8 @@ import {
 } from '@mui/icons-material';
 import { useThemeMode } from '@renderer/contexts/ThemeContext';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
-import { useChatbotPermissions } from '@app/contexts/ChatbotPermissionsContext';
+import { useChatbotPermissions, MODEL_TIERS } from '@app/contexts/ChatbotPermissionsContext';
+import type { ModelTier } from '@app/contexts/ChatbotPermissionsContext';
 import DataExportPanel from '../components/DataExportPanel';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
 import EnhancedProfileSection from '../components/EnhancedProfileSection';
@@ -55,6 +56,12 @@ const SettingsPage: React.FC = () => {
     setAllowAnalyticsAccess,
     openAiApiKey,
     setOpenAiApiKey,
+    allowLongAnswers,
+    setAllowLongAnswers,
+    allowLongRequests,
+    setAllowLongRequests,
+    chatModelTier,
+    setChatModelTier,
   } = useChatbotPermissions();
   const {
     telemetryEnabled,
@@ -364,6 +371,37 @@ const SettingsPage: React.FC = () => {
 
         <Divider sx={{ my: 2 }} />
 
+        <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>
+          {tSettings('chatbot.modelTierLabel')}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+          {tSettings('chatbot.modelTierHint')}
+        </Typography>
+
+        <ToggleButtonGroup
+          value={chatModelTier}
+          exclusive
+          onChange={(_e, value: ModelTier | null) => {
+            if (value) setChatModelTier(value);
+          }}
+          size="small"
+          disabled={!chatbotEnabled}
+          sx={{ mb: 3 }}
+        >
+          {(Object.entries(MODEL_TIERS) as [ModelTier, { model: string; label: string }][]).map(([tier, { label }]) => (
+            <ToggleButton key={tier} value={tier} sx={{ px: 3 }}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="body2" fontWeight="bold">{label}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {tSettings(`chatbot.modelTiers.${tier}`)}
+                </Typography>
+              </Box>
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+
+        <Divider sx={{ my: 2 }} />
+
         <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2 }}>
           {tSettings('chatbot.permissionsTitle')}
         </Typography>
@@ -432,6 +470,56 @@ const SettingsPage: React.FC = () => {
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {tSettings('chatbot.permissions.analyticsHint')}
+                </Typography>
+              </Box>
+            }
+          />
+        </Box>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2 }}>
+          {tSettings('chatbot.responseSettingsTitle')}
+        </Typography>
+
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={allowLongAnswers}
+                onChange={(event) => setAllowLongAnswers(event.target.checked)}
+                color="primary"
+                disabled={!chatbotEnabled}
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2" fontWeight="bold">
+                  {tSettings('chatbot.responseSettings.longAnswers')}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {tSettings('chatbot.responseSettings.longAnswersHint')}
+                </Typography>
+              </Box>
+            }
+          />
+
+          <FormControlLabel
+            control={
+              <Switch
+                checked={allowLongRequests}
+                onChange={(event) => setAllowLongRequests(event.target.checked)}
+                color="primary"
+                disabled={!chatbotEnabled}
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2" fontWeight="bold">
+                  {tSettings('chatbot.responseSettings.longRequests')}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {tSettings('chatbot.responseSettings.longRequestsHint')}
                 </Typography>
               </Box>
             }

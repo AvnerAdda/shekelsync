@@ -116,8 +116,18 @@ describe('financial-context service', () => {
         })
         .mockResolvedValueOnce({
           rows: [
+            { merchant_name: 'Merchant_1', occurrences: '4', avg_amount: '182.50' },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
             { month: '2025-01', income: '1000', expenses: '600' },
             { month: '2025-02', income: '500', expenses: '200' },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { prev_income: '900', prev_expenses: '500' },
           ],
         })
         .mockResolvedValueOnce({
@@ -192,7 +202,7 @@ describe('financial-context service', () => {
       liquidValue: 10000,
       accountCount: 2,
     });
-    expect(db.query).toHaveBeenCalledTimes(8);
+    expect(db.query).toHaveBeenCalledTimes(10);
   });
 
   it('swallows investment-query failures while keeping analytics context', async () => {
@@ -215,6 +225,9 @@ describe('financial-context service', () => {
         .mockResolvedValueOnce({
           rows: [{ month: '2025-01', income: '400', expenses: '100' }],
         })
+        .mockResolvedValueOnce({
+          rows: [{ income: '0', expenses: '0' }],
+        })
         .mockRejectedValueOnce(new Error('missing investment tables')),
     };
 
@@ -235,7 +248,7 @@ describe('financial-context service', () => {
       savingsRate: 75,
     });
     expect(context.investments).toBeUndefined();
-    expect(db.query).toHaveBeenCalledTimes(4);
+    expect(db.query).toHaveBeenCalledTimes(5);
   });
 
   it('formats prompt context with sections, status markers, and denied permission note', () => {
@@ -297,7 +310,7 @@ describe('financial-context service', () => {
     expect(formatted).toContain('MONTHLY AVERAGES:');
     expect(formatted).toContain('INVESTMENTS:');
     expect(formatted).toContain('NOTE: User has not granted access to: transaction details, analytics and trends');
-    expect(formatted).not.toContain('IgnoredSixth');
+    expect(formatted).toContain('IgnoredSixth');
   });
 
   it('returns no-data message when context has no data', () => {
