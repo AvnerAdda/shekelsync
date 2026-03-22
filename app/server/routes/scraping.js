@@ -413,6 +413,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         progress: 100,
         message: `Scraping completed (${transactionCount} transactions)`,
         transactions: transactionCount,
+        scrapeAnchor: result.scrapeAnchor || null,
       });
 
       maybeRunAutoDetection({ locale: req.locale })

@@ -375,6 +375,7 @@ if (process.env[MIGRATION_ENV_FLAG] === 'true') {
 const { configManager } = require('./config');
 const { dbManager } = require('./database');
 const sessionStore = require('./session-store');
+const { createScrapeAnchorRepairStateProvider } = require('./scrape-anchor-repair-state');
 const { describeTelemetryState } = require('./telemetry-utils');
 const secureKeyManager = require('./secure-key-manager');
 const licenseService = require('./license-service');
@@ -921,6 +922,7 @@ let appTray;
 let syncScheduler;
 let appSettingsCache = null;
 let isQuitting = false;
+const scrapeAnchorRepairStateProvider = createScrapeAnchorRepairStateProvider();
 
 // Development mode logging
 if (isDev) {
@@ -948,12 +950,39 @@ function sendScrapeProgress(payload) {
   }
 }
 
+function showMainWindow({ createIfMissing = true } = {}) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    if (createIfMissing) {
+      createWindow().catch((error) => {
+        logger.error('Failed to recreate main window', { error: error.message });
+      });
+    }
+    return false;
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  if (!mainWindow.isVisible()) {
+    mainWindow.show();
+  }
+  if (typeof mainWindow.moveTop === 'function') {
+    mainWindow.moveTop();
+  }
+  if (!mainWindow.isFocused()) {
+    mainWindow.focus();
+  }
+
+  return true;
+}
+
 function getSyncScheduler() {
   if (!syncScheduler) {
     syncScheduler = createSyncScheduler({
       getSettings: getAppSettings,
       updateSettings: async (patch) => updateAppSettings(patch),
       emitProgress: sendScrapeProgress,
+      repairStateProvider: scrapeAnchorRepairStateProvider,
       logger,
     });
   }
@@ -1074,14 +1103,7 @@ function setupTray() {
     {
       label: 'Show ShekelSync',
       click: () => {
-        if (mainWindow) {
-          if (!mainWindow.isVisible()) {
-            mainWindow.show();
-          }
-          mainWindow.focus();
-        } else {
-          createWindow();
-        }
+        showMainWindow();
       },
     },
     { type: 'separator' },
@@ -1107,12 +1129,7 @@ function setupTray() {
   ]);
   appTray.setContextMenu(contextMenu);
   appTray.on('click', () => {
-    if (mainWindow) {
-      if (!mainWindow.isVisible()) {
-        mainWindow.show();
-      }
-      mainWindow.focus();
-    }
+    showMainWindow();
   });
 }
 
@@ -1445,8 +1462,8 @@ app.on('window-all-closed', async () => {
 });
 
 app.on('activate', () => {
-  // On macOS, re-create window when dock icon is clicked
-  if (BrowserWindow.getAllWindows().length === 0) {
+  // Restore an existing hidden/minimized window before creating a new one.
+  if (!showMainWindow({ createIfMissing: false }) && BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
@@ -1757,6 +1774,7 @@ ipcMain.handle('scrape:start', async (event, options, credentials) => {
       options,
       credentials,
       logger,
+      repairStateProvider: scrapeAnchorRepairStateProvider,
     });
 
     const transactionCount = Array.isArray(result.accounts)
@@ -1772,6 +1790,7 @@ ipcMain.handle('scrape:start', async (event, options, credentials) => {
       progress: 100,
       message: `Scraping completed (${transactionCount} transactions)`,
       transactions: transactionCount,
+      scrapeAnchor: result.scrapeAnchor || null,
     });
 
     return { success: true, data: { ...result, transactionCount } };

@@ -19,11 +19,13 @@ const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const { getInstitutionById, mapInstitutionToVendorCode } = require('../institutions.js');
 const { syncBankBalanceToInvestments, forwardFillForCredential } = require('../investments/balance-sync.js');
 const { getCreditCardRepaymentCategoryId } = require('../accounts/repayment-category.js');
+const lastTransactionDateService = require('../accounts/last-transaction-date.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
 
 const DEFAULT_TIMEOUT = 120000; // 2 minutes
 const MAX_TIMEOUT = 180000; // 3 minutes for problematic scrapers
 const DEFAULT_LOOKBACK_MONTHS = 3;
+const SCRAPE_ANCHOR_REPAIR_LOOKBACK_DAYS = 90;
 const DEMO_SYNC_MERCHANTS = {
   discount: ['רמי לוי', 'סופר פארם', 'WOLT', 'העברה לכרטיס אשראי'],
   max: ['WOLT', 'פז', 'סופר פארם', 'Amazon Marketplace'],
@@ -32,12 +34,21 @@ const DEMO_SYNC_MERCHANTS = {
 };
 let cachedBankCategory = null;
 let databaseRef = baseDatabase;
+let lastTransactionDateServiceRef = lastTransactionDateService;
 
 const PENDING_COMPLETED_MATCH_WINDOW_HOURS = 36; // 1.5 days (handles timezone/date rounding)
 
 // Mutex to serialize scrape operations and prevent SQLite transaction conflicts
 // SQLite uses a single connection and doesn't support nested transactions
 const scrapeMutex = new Mutex();
+const defaultRepairStateProvider = {
+  async getCompletedCredentialIds() {
+    return [];
+  },
+  async markCredentialRepairComplete() {
+    return false;
+  },
+};
 
 function createHttpError(statusCode, message, extra = {}) {
   const error = new Error(message || 'Scraping failed');
@@ -69,6 +80,84 @@ function resolvePrimaryAccountNumber(credentials = {}) {
     .split(';')
     .map((segment) => segment.trim())
     .find(Boolean) || null;
+}
+
+function normalizeCredentialId(value) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeCompletedCredentialIds(values = []) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return Array.from(new Set(
+    values
+      .map((value) => normalizeCredentialId(value))
+      .filter((value) => value !== null),
+  )).sort((left, right) => left - right);
+}
+
+function buildRepairBackfillDate() {
+  const repairDate = new Date();
+  repairDate.setDate(repairDate.getDate() - SCRAPE_ANCHOR_REPAIR_LOOKBACK_DAYS);
+  repairDate.setHours(0, 0, 0, 0);
+  return repairDate;
+}
+
+async function resolveRepairBackfillState(credentials, repairStateProvider, logger = console) {
+  const credentialId = normalizeCredentialId(credentials?.dbId);
+  if (!credentialId) {
+    return {
+      credentialId: null,
+      eligible: false,
+      completedCredentialIds: [],
+    };
+  }
+
+  const provider = repairStateProvider || defaultRepairStateProvider;
+
+  try {
+    const completedCredentialIds = normalizeCompletedCredentialIds(
+      await provider.getCompletedCredentialIds?.(),
+    );
+    return {
+      credentialId,
+      eligible: !completedCredentialIds.includes(credentialId),
+      completedCredentialIds,
+    };
+  } catch (error) {
+    logger?.warn?.(
+      `[Scrape:${credentials?.vendor || 'unknown'}] Failed to load scrape repair state: ${error?.message || error}`,
+    );
+    return {
+      credentialId,
+      eligible: false,
+      completedCredentialIds: [],
+    };
+  }
+}
+
+async function markRepairBackfillComplete(repairContext, repairStateProvider, logger = console) {
+  if (!repairContext?.eligible || !repairContext?.credentialId) {
+    return false;
+  }
+
+  const provider = repairStateProvider || defaultRepairStateProvider;
+
+  try {
+    await provider.markCredentialRepairComplete?.(repairContext.credentialId);
+    logger?.info?.(
+      `[Scrape:${repairContext.vendor}] Recorded scrape repair completion for credential ${repairContext.credentialId}`,
+    );
+    return true;
+  } catch (error) {
+    logger?.warn?.(
+      `[Scrape:${repairContext.vendor}] Failed to persist scrape repair completion: ${error?.message || error}`,
+    );
+    return false;
+  }
 }
 
 function isAnonymizedSqliteDatabase() {
@@ -211,32 +300,63 @@ async function getPuppeteerExecutable(logger = console) {
   return undefined;
 }
 
-async function resolveStartDate(input, credentials) {
+async function resolveStartDate(input, credentials, options = {}) {
   // 1. If user provides explicit startDate, use it (highest priority)
   if (input?.startDate) {
     const date = new Date(input.startDate);
     if (!Number.isNaN(date.getTime())) {
       const now = new Date();
       if (date > now) {
-        return { date: now, reason: 'User-provided date (clamped to today)' };
+        return {
+          date: now,
+          reason: 'User-provided date (clamped to today)',
+          hasTransactions: false,
+          anchorSource: 'manual_start_date',
+          overlapDaysApplied: 0,
+          repairBackfillApplied: false,
+          usedExplicitStartDate: true,
+        };
       }
-      return { date, reason: 'User-provided date' };
+      return {
+        date,
+        reason: 'User-provided date',
+        hasTransactions: false,
+        anchorSource: 'manual_start_date',
+        overlapDaysApplied: 0,
+        repairBackfillApplied: false,
+        usedExplicitStartDate: true,
+      };
     }
   }
 
-  // 2. Smart detection: Check last transaction for this credential
-  const { getLastTransactionDate } = require('../accounts/last-transaction-date.js');
-
   try {
-    const lastTxnInfo = await getLastTransactionDate({
+    const lastTxnInfo = await lastTransactionDateServiceRef.getLastTransactionDate({
       vendor: input.companyId,
       credentialNickname: credentials?.nickname,
+      credentialId: options.credentialId ?? credentials?.dbId ?? null,
     });
 
+    let resolvedDate = new Date(lastTxnInfo.lastTransactionDate);
+    let repairBackfillApplied = false;
+    let reason = lastTxnInfo.message;
+
+    if (options.applyRepairBackfill) {
+      const repairBackfillDate = buildRepairBackfillDate();
+      if (repairBackfillDate.getTime() < resolvedDate.getTime()) {
+        resolvedDate = repairBackfillDate;
+        repairBackfillApplied = true;
+        reason = `${reason}; applying one-time ${SCRAPE_ANCHOR_REPAIR_LOOKBACK_DAYS}-day repair backfill`;
+      }
+    }
+
     return {
-      date: new Date(lastTxnInfo.lastTransactionDate),
-      reason: lastTxnInfo.message,
+      date: resolvedDate,
+      reason,
       hasTransactions: lastTxnInfo.hasTransactions,
+      anchorSource: lastTxnInfo.anchorSource || 'vendor_fallback',
+      overlapDaysApplied: lastTxnInfo.overlapDaysApplied,
+      repairBackfillApplied,
+      usedExplicitStartDate: false,
     };
   } catch (error) {
     // Fallback if service fails: use default 3-month lookback
@@ -246,6 +366,10 @@ async function resolveStartDate(input, credentials) {
       date: fallback,
       reason: `Fallback to ${DEFAULT_LOOKBACK_MONTHS} months ago (service error)`,
       hasTransactions: false,
+      anchorSource: 'vendor_fallback',
+      overlapDaysApplied: 0,
+      repairBackfillApplied: false,
+      usedExplicitStartDate: false,
     };
   }
 }
@@ -1113,7 +1237,13 @@ async function processScrapeResult(client, { options, credentials, result, isBan
  * Internal implementation of runScrape
  * This function contains the actual scraping logic and is wrapped by the mutex
  */
-async function _runScrapeInternal({ options, credentials, execute, logger = console }) {
+async function _runScrapeInternal({
+  options,
+  credentials,
+  execute,
+  logger = console,
+  repairStateProvider = defaultRepairStateProvider,
+}) {
   if (!options?.companyId) {
     throw createHttpError(400, 'Missing companyId');
   }
@@ -1124,8 +1254,31 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
   }
 
   const isBank = isBankVendor(options.companyId);
-  const startDateInfo = await resolveStartDate(options, credentials);
+  const repairContext = await resolveRepairBackfillState(
+    { ...credentials, vendor: options.companyId },
+    repairStateProvider,
+    logger,
+  );
+  const startDateInfo = await resolveStartDate(options, credentials, {
+    credentialId: repairContext.credentialId,
+    applyRepairBackfill: repairContext.eligible,
+  });
+  const repairCompletionContext = {
+    ...repairContext,
+    vendor: options.companyId,
+    eligible: repairContext.eligible && !startDateInfo.usedExplicitStartDate,
+  };
   const resolvedStartDate = startDateInfo.date;
+  const scrapeAnchor = {
+    source: startDateInfo.anchorSource || 'vendor_fallback',
+    overlapDays: Number.isFinite(startDateInfo.overlapDaysApplied)
+      ? startDateInfo.overlapDaysApplied
+      : null,
+    repairBackfillApplied: Boolean(startDateInfo.repairBackfillApplied),
+    usedExplicitStartDate: Boolean(startDateInfo.usedExplicitStartDate),
+    credentialId: repairContext.credentialId,
+    startDate: resolvedStartDate.toISOString(),
+  };
   const client = await databaseRef.getClient();
   let auditId = null;
   let failureMessage = null;
@@ -1136,6 +1289,9 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
   logger?.info?.(`[Scrape:${options.companyId}] Credential: ${auditLabel}`);
   logger?.info?.(`[Scrape:${options.companyId}] Date range: ${resolvedStartDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
   logger?.info?.(`[Scrape:${options.companyId}] Reason: ${startDateInfo.reason}`);
+  logger?.info?.(
+    `[Scrape:${options.companyId}] Anchor source: ${scrapeAnchor.source}; overlap=${scrapeAnchor.overlapDays ?? 0}; repair=${scrapeAnchor.repairBackfillApplied ? 'applied' : 'none'}`,
+  );
 
   try {
     const triggeredBy = resolveTriggeredBy(credentials);
@@ -1187,6 +1343,7 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
 
       await client.query('COMMIT');
       await safeUpdateScrapeEventStatus(auditId, 'success', message, logger);
+      await markRepairBackfillComplete(repairCompletionContext, repairStateProvider, logger);
 
       return {
         success: true,
@@ -1194,6 +1351,7 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
         accounts: simulatedResult.accounts,
         bankTransactions: summary.bankTransactions,
         simulated: true,
+        scrapeAnchor,
       };
     }
 
@@ -1254,6 +1412,7 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
 
           await client.query('COMMIT');
           await safeUpdateScrapeEventStatus(auditId, 'success', successMessage, logger);
+          await markRepairBackfillComplete(repairCompletionContext, repairStateProvider, logger);
           
           return {
             success: true,
@@ -1261,6 +1420,7 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
             accounts: result.accounts,
             bankTransactions: summary.bankTransactions,
             noNewTransactions: true,
+            scrapeAnchor,
           };
         }
         
@@ -1283,6 +1443,7 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
 
         await client.query('COMMIT');
         await safeUpdateScrapeEventStatus(auditId, 'success', successMessage, logger);
+        await markRepairBackfillComplete(repairCompletionContext, repairStateProvider, logger);
         
         return {
           success: true,
@@ -1290,6 +1451,7 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
           accounts: [],
           bankTransactions: 0,
           noNewTransactions: true,
+          scrapeAnchor,
         };
       }
 
@@ -1338,12 +1500,14 @@ async function _runScrapeInternal({ options, credentials, execute, logger = cons
 
     await client.query('COMMIT');
     await safeUpdateScrapeEventStatus(auditId, 'success', message, logger);
+    await markRepairBackfillComplete(repairCompletionContext, repairStateProvider, logger);
 
     return {
       success: true,
       message: 'Scraping and database update completed successfully',
       accounts: result.accounts,
       bankTransactions: summary.bankTransactions,
+      scrapeAnchor,
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1392,6 +1556,11 @@ module.exports = {
     hasNonEmptyString,
     pickRandom,
     resolvePrimaryAccountNumber,
+    normalizeCredentialId,
+    normalizeCompletedCredentialIds,
+    buildRepairBackfillDate,
+    resolveRepairBackfillState,
+    markRepairBackfillComplete,
     isAnonymizedSqliteDatabase,
     shouldSimulateDemoSync,
     buildSimulatedDemoResult,
@@ -1428,6 +1597,12 @@ module.exports = {
   },
   __resetDatabaseForTests() {
     databaseRef = baseDatabase;
+  },
+  __setLastTransactionDateServiceForTests(serviceOverride = null) {
+    lastTransactionDateServiceRef = serviceOverride || lastTransactionDateService;
+  },
+  __resetLastTransactionDateServiceForTests() {
+    lastTransactionDateServiceRef = lastTransactionDateService;
   },
 };
 
