@@ -52,6 +52,7 @@ async function bulkScrape(options = {}) {
     rateLimitMs = SCRAPE_RATE_LIMIT_MS,
     logger = console,
     showBrowser = false,
+    repairStateProvider,
     onAccountStart,
     onAccountComplete,
     createLogger,
@@ -179,6 +180,7 @@ async function bulkScrape(options = {}) {
           options: scrapeOptions,
           credentials: decryptedCredentials,
           logger: accountLogger,
+          repairStateProvider,
         });
 
         const transactionCount = Array.isArray(scrapeResult.accounts)

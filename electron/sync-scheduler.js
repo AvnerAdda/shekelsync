@@ -61,6 +61,7 @@ function createSyncScheduler({
   getSettings,
   updateSettings,
   emitProgress,
+  repairStateProvider,
   logger = console,
 } = {}) {
   let timer = null;
@@ -150,6 +151,7 @@ function createSyncScheduler({
         rateLimitMs: SCRAPE_RATE_LIMIT_MS,
         logger: createScrapeLogger('bulk', logger),
         showBrowser: !headless,
+        repairStateProvider,
         onAccountStart: ({ account, index, total }) => {
           emit({
             vendor: account.vendor,
