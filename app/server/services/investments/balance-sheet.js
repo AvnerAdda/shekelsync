@@ -161,7 +161,16 @@ async function getInvestmentBalanceSheet(query = {}) {
         END AS as_of_date
       FROM investment_accounts ia
       LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
-      LEFT JOIN vendor_credentials vc ON ia.account_type = 'bank_balance' AND fi.vendor_code = vc.vendor
+      LEFT JOIN vendor_credentials vc
+        ON ia.account_type = 'bank_balance'
+       AND (
+         COALESCE(ia.notes, '') LIKE '%' || 'credential_id:' || CAST(vc.id AS TEXT) || '%'
+         OR (
+           ia.account_number IS NOT NULL
+           AND fi.vendor_code = vc.vendor
+           AND ia.account_number = vc.bank_account_number
+         )
+       )
       LEFT JOIN investment_holdings ih
         ON ih.id = (
           SELECT ih2.id

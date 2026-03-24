@@ -193,6 +193,8 @@ describe('investment balance sheet service', () => {
   it('reduces cash totals when an active Pikadon overlaps a bank balance account', async () => {
     queryMock.mockImplementation(async (sql: string) => {
       if (sql.includes('FROM investment_accounts ia')) {
+        expect(sql).toContain("credential_id:");
+        expect(sql).toContain('ia.account_number = vc.bank_account_number');
         return {
           rows: [
             {

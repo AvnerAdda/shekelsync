@@ -220,7 +220,7 @@ function getConfigHealthSummary() {
   };
 }
 
-function getDiagnosticsInfo({ appVersion, telemetry } = {}) {
+function getDiagnosticsInfo({ appVersion, telemetry, telegram } = {}) {
   return {
     success: true,
     logDirectory: logger.getLogDirectory(),
@@ -228,6 +228,7 @@ function getDiagnosticsInfo({ appVersion, telemetry } = {}) {
     appVersion,
     platform: process.platform,
     telemetry,
+    telegram: telegram || null,
     telemetrySummary: summarizeTelemetry(telemetry),
     analyticsMetrics: getSanitizedMetricsSnapshot(),
     configHealth: getConfigHealthSummary(),
@@ -248,7 +249,7 @@ async function openDiagnosticsLogDirectory() {
   }
 }
 
-async function buildDiagnosticsPayload({ appVersion, telemetry } = {}) {
+async function buildDiagnosticsPayload({ appVersion, telemetry, telegram } = {}) {
   const rawLogTail = await logger.readRecentLogs();
   return {
     generatedAt: new Date().toISOString(),
@@ -260,6 +261,7 @@ async function buildDiagnosticsPayload({ appVersion, telemetry } = {}) {
     logDirectory: logger.getLogDirectory(),
     logTail: redactLogPayload(rawLogTail),
     telemetry,
+    telegram: telegram || null,
     telemetrySummary: summarizeTelemetry(telemetry),
     analyticsMetrics: getSanitizedMetricsSnapshot(),
     configHealth: getConfigHealthSummary(),

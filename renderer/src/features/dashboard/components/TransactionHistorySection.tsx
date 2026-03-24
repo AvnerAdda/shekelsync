@@ -145,7 +145,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   // Compute average daily metrics for the summary badge and tooltip.
   // Single pass over fullHistory to bucket into 7/30/90 day windows + accumulate all-time totals.
   const avgDailyMetrics = React.useMemo(() => {
-    const fullHistory: any[] = data.history || [];
+    const fullHistory: any[] = chartHistory;
     if (fullHistory.length === 0) {
       const zero = { expenses: 0, income: 0 };
       return {
@@ -230,7 +230,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       peakIncomeDay,
       allTime: { expenses: avg(allExp, fullHistory.length), income: avg(allInc, fullHistory.length) },
     };
-  }, [data.history, chartHistory, chartTotalExpenses, chartTotalIncome]);
+  }, [chartHistory, chartTotalExpenses, chartTotalIncome]);
 
   const handleOpenTransactionDetail = (txn: any) => {
     setSelectedTransaction({

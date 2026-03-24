@@ -324,16 +324,42 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     }
   }, []);
 
+  const activeSeriesIds = React.useMemo(
+    () => new Set(drillSeriesDefinitions.map((series) => series.id)),
+    [drillSeriesDefinitions],
+  );
+  const currentParentId = toNumberOrNull(currentLevel?.parentId);
+  const currentSubcategoryId = toNumberOrNull(currentLevel?.subcategoryId);
+
   const selectedTransactions = React.useMemo(() => {
     if (!selectedDateLabel) return [];
     const isMonthly = /^\d{4}-\d{2}$/.test(selectedDateLabel);
+
     return transactions.filter((txn) => {
       const key = toDateKey(txn.date as Date | string | null | undefined);
-      if (!key) return false;
-      if (isMonthly) return key.startsWith(selectedDateLabel);
-      return key === selectedDateLabel;
+      if (!key) {
+        return false;
+      }
+
+      const matchesDate = isMonthly ? key.startsWith(selectedDateLabel) : key === selectedDateLabel;
+      if (!matchesDate) {
+        return false;
+      }
+
+      const txParentId = toNumberOrNull(txn.parent_id ?? txn.parentId);
+      const txSubcategoryId = toNumberOrNull(txn.subcategory_id ?? txn.subcategoryId);
+
+      if (!currentLevel) {
+        return activeSeriesIds.size === 0 || (txParentId !== null && activeSeriesIds.has(txParentId));
+      }
+
+      if (currentLevel.type === 'parent') {
+        return currentParentId !== null && txParentId === currentParentId;
+      }
+
+      return currentSubcategoryId !== null && txSubcategoryId === currentSubcategoryId;
     });
-  }, [selectedDateLabel, transactions]);
+  }, [selectedDateLabel, transactions, currentLevel, currentParentId, currentSubcategoryId, activeSeriesIds]);
 
   return (
     <Box>

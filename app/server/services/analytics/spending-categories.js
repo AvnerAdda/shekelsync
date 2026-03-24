@@ -774,6 +774,21 @@ async function getSpendingCategoryTransactions(params = {}) {
 
     await ensureSpendingCategorySchema(client);
 
+    const allocationFilter = spendingCategory === 'growth'
+      ? `
+        (
+          (
+            cd.category_type = 'expense'
+            AND COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') = $3
+          )
+          OR cd.category_type = 'investment'
+        )
+      `
+      : `
+        cd.category_type = 'expense'
+        AND COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') = $3
+      `;
+
     const transactionsResult = await client.query(`
       SELECT
         t.identifier,
@@ -796,10 +811,9 @@ async function getSpendingCategoryTransactions(params = {}) {
        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
-        AND cd.category_type = 'expense'
         AND cd.id NOT IN (${capitalReturnSubquery})
         AND tpe.transaction_identifier IS NULL
-        AND COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') = $3
+        AND ${allocationFilter}
       ORDER BY t.date DESC, ABS(t.price) DESC
       LIMIT $4 OFFSET $5
     `, [start, end, spendingCategory, limit, offset]);
@@ -816,10 +830,9 @@ async function getSpendingCategoryTransactions(params = {}) {
        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
-        AND cd.category_type = 'expense'
         AND cd.id NOT IN (${capitalReturnSubquery})
         AND tpe.transaction_identifier IS NULL
-        AND COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') = $3
+        AND ${allocationFilter}
     `, [start, end, spendingCategory]);
 
     const summary = summaryResult.rows[0] || {};
