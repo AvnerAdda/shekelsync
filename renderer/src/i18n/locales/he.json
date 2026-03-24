@@ -907,6 +907,21 @@
       "spikes_one": "{{count}} קפיצה",
       "spikes_other": "{{count}} קפיצות"
     },
+    "avgTooltip": {
+      "heading": "ממוצעים",
+      "daily": "יומי",
+      "weekly": "שבועי",
+      "insights": "תובנות",
+      "last7": "7 ימים אחרונים",
+      "last30": "30 ימים אחרונים",
+      "last90": "90 ימים אחרונים",
+      "thisWeek": "השבוע",
+      "lastMonth": "החודש האחרון",
+      "median30": "חציון יומי (30י׳)",
+      "allTimeAvg": "ממוצע יומי כולל",
+      "peakExpense": "יום הוצאה שיא",
+      "peakIncome": "יום הכנסה שיא"
+    },
     "transactionsOn": "עסקאות ב-{{date}} ({{count}} עסקאות):",
     "noTransactionsForDate": "לא נמצאו עסקאות לתאריך זה."
   },

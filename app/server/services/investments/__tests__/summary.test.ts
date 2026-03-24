@@ -338,17 +338,15 @@ describe('investment summary service', () => {
 
     const result = await getInvestmentSummary({ historyMonths: 1 });
 
-    expect(result.summary.totalPortfolioValue).toBeCloseTo(125000.75, 6);
+    // bank_balance accounts are excluded from portfolio totals (they are everyday cash, not investments)
+    expect(result.summary.totalPortfolioValue).toBeCloseTo(100000, 6);
     expect(result.accounts.find((account: any) => account.id === 1)).toMatchObject({
       account_type: 'bank_balance',
       current_value: 25000.75,
       cost_basis: 25000.75,
     });
-    expect(result.breakdown.find((entry: any) => entry.type === 'bank_balance')).toMatchObject({
-      name: 'Available Cash',
-      category: 'liquid',
-      totalValue: 25000.75,
-    });
+    // bank_balance should not appear in breakdown
+    expect(result.breakdown.find((entry: any) => entry.type === 'bank_balance')).toBeUndefined();
     expect(result.breakdown.find((entry: any) => entry.type === 'savings')).toMatchObject({
       name: 'Savings & Term Deposits',
       category: 'liquid',

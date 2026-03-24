@@ -887,6 +887,21 @@
       "spikes_one": "{{count}} pic",
       "spikes_other": "{{count}} pics"
     },
+    "avgTooltip": {
+      "heading": "Moyennes",
+      "daily": "Quotidien",
+      "weekly": "Hebdomadaire",
+      "insights": "Aperçus",
+      "last7": "7 derniers jours",
+      "last30": "30 derniers jours",
+      "last90": "90 derniers jours",
+      "thisWeek": "Cette semaine",
+      "lastMonth": "Le mois dernier",
+      "median30": "Médiane quotidienne (30j)",
+      "allTimeAvg": "Moyenne quotidienne globale",
+      "peakExpense": "Jour de dépense record",
+      "peakIncome": "Jour de revenu record"
+    },
     "transactionsOn": "Transactions du {{date}} ({{count}} transactions) :",
     "noTransactionsForDate": "Aucune transaction pour cette date."
   },
