@@ -223,7 +223,7 @@
       "provider": "github",
       "owner": "AvnerAdda",
       "repo": "shekelsync",
-      "releaseType": "release"
+      "releaseType": "draft"
     }
   }
 }
