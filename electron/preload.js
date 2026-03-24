@@ -76,6 +76,14 @@ const settingsBridge = Object.freeze({
   },
 });
 
+const telegramBridge = Object.freeze({
+  getStatus: () => ipcRenderer.invoke('telegram:getStatus'),
+  saveBotToken: (token) => ipcRenderer.invoke('telegram:saveBotToken', token),
+  beginPairing: () => ipcRenderer.invoke('telegram:beginPairing'),
+  disconnect: () => ipcRenderer.invoke('telegram:disconnect'),
+  sendTestMessage: () => ipcRenderer.invoke('telegram:sendTestMessage'),
+});
+
 const authBridge = Object.freeze({
   getSession: () => ipcRenderer.invoke('auth:getSession'),
   setSession: (session) => {
@@ -250,6 +258,7 @@ const electronAPI = {
   diagnostics: diagnosticsBridge,
   telemetry: telemetryBridge,
   settings: settingsBridge,
+  telegram: telegramBridge,
 
   // License management
   license: {
