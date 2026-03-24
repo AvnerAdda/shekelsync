@@ -218,6 +218,7 @@ async function getCategoryDetails(params = {}) {
     const transactionsPromise = client.query(
       `
         SELECT
+          t.identifier,
           t.date,
           t.name,
           t.price,
@@ -311,6 +312,7 @@ async function getCategoryDetails(params = {}) {
         total: Number.parseFloat(row.total),
       })),
       transactions: transactionsResult.rows.map((row) => ({
+        identifier: row.identifier,
         date: row.date,
         name: row.name,
         price: Number.parseFloat(row.price),

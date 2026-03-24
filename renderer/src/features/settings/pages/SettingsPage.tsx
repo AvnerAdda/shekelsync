@@ -33,6 +33,7 @@ import DiagnosticsPanel from '../components/DiagnosticsPanel';
 import EnhancedProfileSection from '../components/EnhancedProfileSection';
 import SecuritySettingsPanel from '../components/SecuritySettingsPanel';
 import AutoSyncPanel from '../components/AutoSyncPanel';
+import TelegramPanel from '../components/TelegramPanel';
 import { useTelemetry } from '@app/contexts/TelemetryContext';
 import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
 import type { SupportedLocale } from '@renderer/i18n';
@@ -97,6 +98,17 @@ const SettingsPage: React.FC = () => {
       active = false;
     };
   }, []);
+
+  React.useEffect(() => {
+    const settingsBridge = window.electronAPI?.settings;
+    if (!settingsBridge?.update) {
+      return;
+    }
+
+    settingsBridge.update({ appLocale: locale }).catch(() => {
+      // Locale persistence already lives in renderer localStorage; this sync is best-effort for background features.
+    });
+  }, [locale]);
 
   const languageOptions = [
     { code: 'he', label: tCommon('languages.he') },
@@ -251,6 +263,12 @@ const SettingsPage: React.FC = () => {
       {/* Auto Sync */}
       <Box sx={{ mb: 4 }}>
         <AutoSyncPanel />
+      </Box>
+
+      <Divider sx={{ my: 4 }} />
+
+      <Box sx={{ mb: 4 }}>
+        <TelegramPanel />
       </Box>
 
       <Divider sx={{ my: 4 }} />

@@ -9,6 +9,8 @@ interface TimelineStrings {
   simpleMode: string;
   cumulativeMode: string;
   cumulativeCategoryMode: string;
+  transactionsForDate: (date: string) => string;
+  noTransactions: string;
 }
 
 interface GeneralBreakdownStrings {
@@ -83,6 +85,8 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
       simpleMode: 'Simple',
       cumulativeMode: 'Cumulatif',
       cumulativeCategoryMode: 'Cumulatif par catégorie',
+      transactionsForDate: (date) => `Transactions du ${date}`,
+      noTransactions: 'Aucune transaction pour cette date',
     },
     general: {
       transactions: 'transactions',
@@ -151,6 +155,8 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
       simpleMode: 'Simple',
       cumulativeMode: 'Cumulative',
       cumulativeCategoryMode: 'Cumulative Category',
+      transactionsForDate: (date) => `Transactions for ${date}`,
+      noTransactions: 'No transactions for this date',
     },
     general: {
       transactions: 'transactions',
@@ -219,6 +225,8 @@ const STRINGS: Record<SupportedLocale, BreakdownStrings> = {
       simpleMode: 'פשוט',
       cumulativeMode: 'מצטבר',
       cumulativeCategoryMode: 'מצטבר לפי קטגוריה',
+      transactionsForDate: (date) => `עסקאות ב-${date}`,
+      noTransactions: 'אין עסקאות לתאריך זה',
     },
     general: {
       transactions: 'עסקאות',

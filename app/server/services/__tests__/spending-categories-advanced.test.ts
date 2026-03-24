@@ -1059,6 +1059,63 @@ describe('spending categories service advanced coverage', () => {
     expect(client.release).toHaveBeenCalledTimes(1);
   });
 
+  it('includes investment outflows in growth transaction details and totals', async () => {
+    let transactionQueryCount = 0;
+    let summaryQueryCount = 0;
+
+    client = createSchemaAwareClient(async (sql, params) => {
+      if (sql.includes('AS category_name') && sql.includes('LIMIT $4 OFFSET $5')) {
+        transactionQueryCount += 1;
+        expect(sql).toContain("OR cd.category_type = 'investment'");
+        expect(params?.[2]).toBe('growth');
+        return {
+          rows: [
+            {
+              identifier: 'txn-investment',
+              vendor: 'discount',
+              name: 'Pikadon transfer',
+              date: '2026-02-08',
+              price: '-680000',
+              account_number: '1234',
+              category_definition_id: 77,
+              category_type: 'investment',
+              status: 'completed',
+              category_name: 'פיקדון',
+              category_name_en: 'Term Deposit',
+              category_name_fr: 'Dépôt à terme',
+            },
+          ],
+        };
+      }
+      if (sql.includes('COUNT(*) AS total_count') && sql.includes('COALESCE(SUM(ABS(t.price)), 0)')) {
+        summaryQueryCount += 1;
+        expect(sql).toContain("OR cd.category_type = 'investment'");
+        expect(params?.[2]).toBe('growth');
+        return { rows: [{ total_count: '1', total_amount: '680000' }] };
+      }
+      return { rows: [] };
+    });
+
+    serviceModule.__setDatabase({ getClient: async () => client });
+
+    const result = await serviceModule.getSpendingCategoryTransactions({
+      spendingCategory: 'growth',
+      startDate: '2026-02-01',
+      endDate: '2026-02-10',
+    });
+
+    expect(transactionQueryCount).toBe(1);
+    expect(summaryQueryCount).toBe(1);
+    expect(result.total_count).toBe(1);
+    expect(result.total_amount).toBe(680000);
+    expect(result.transactions[0]).toMatchObject({
+      identifier: 'txn-investment',
+      category_type: 'investment',
+      price: -680000,
+    });
+    expect(client.release).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects transactions query when spending category is missing', async () => {
     await expect(
       serviceModule.getSpendingCategoryTransactions({

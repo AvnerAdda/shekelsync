@@ -73,9 +73,25 @@ declare global {
     };
   }
 
+  interface TelegramDigestResult {
+    status: 'sent' | 'skipped' | 'failed';
+    message?: string;
+  }
+
+  interface TelegramSettings {
+    enabled?: boolean;
+    deliveryMode?: 'both';
+    pushOnScheduledSync?: boolean;
+    localeMode?: 'app';
+    lastDigestAt?: string;
+    lastDigestResult?: TelegramDigestResult;
+  }
+
   interface ElectronAppSettings {
+    appLocale?: 'he' | 'en' | 'fr';
     telemetry?: ElectronTelemetryPreferences;
     backgroundSync?: BackgroundSyncSettings;
+    telegram?: TelegramSettings;
     [key: string]: unknown;
   }
 
@@ -333,6 +349,45 @@ declare global {
     onChange?: (callback: (settings: ElectronAppSettings) => void) => ElectronEventUnsubscribe | void;
   }
 
+  interface ElectronTelegramStatus {
+    enabled: boolean;
+    deliveryMode: 'both';
+    pushOnScheduledSync: boolean;
+    configured: boolean;
+    paired: boolean;
+    botUsername?: string | null;
+    chatTitle?: string | null;
+    chatUsername?: string | null;
+    pairingCode?: string | null;
+    pairingExpiresAt?: string | null;
+    runtimeActive: boolean;
+    lastPollAt?: string | null;
+    lastMessageAt?: string | null;
+    lastError?: string | null;
+    localOnly: boolean;
+    syncStatus?: {
+      keepRunningInTray?: boolean;
+      backgroundSync?: BackgroundSyncSettings | null;
+    };
+  }
+
+  interface ElectronTelegramApi {
+    getStatus?: () => Promise<{ success: boolean; status?: ElectronTelegramStatus; error?: string }>;
+    saveBotToken?: (
+      token: string,
+    ) => Promise<{ success: boolean; status?: ElectronTelegramStatus; error?: string }>;
+    beginPairing?: () => Promise<{
+      success: boolean;
+      pairingCode?: string;
+      expiresAt?: string;
+      botUsername?: string;
+      status?: ElectronTelegramStatus;
+      error?: string;
+    }>;
+    disconnect?: () => Promise<{ success: boolean; status?: ElectronTelegramStatus; error?: string }>;
+    sendTestMessage?: () => Promise<{ success: boolean; status?: ElectronTelegramStatus; error?: string }>;
+  }
+
   interface ElectronTelemetryApi {
     getConfig?: () => Promise<{
       dsn?: string | null;
@@ -359,6 +414,7 @@ declare global {
     log?: ElectronLogBridge;
     diagnostics?: ElectronDiagnosticsApi;
     settings?: ElectronSettingsApi;
+    telegram?: ElectronTelegramApi;
     telemetry?: ElectronTelemetryApi;
     updater?: ElectronUpdaterApi;
     license?: ElectronLicenseApi;

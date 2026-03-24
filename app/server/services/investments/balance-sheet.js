@@ -149,10 +149,28 @@ async function getInvestmentBalanceSheet(query = {}) {
         ia.institution_id,
         fi.vendor_code AS institution_vendor_code,
         ia.currency,
-        ih.current_value,
-        ih.as_of_date
+        CASE
+          WHEN ia.account_type = 'bank_balance' AND vc.current_balance IS NOT NULL
+          THEN vc.current_balance
+          ELSE ih.current_value
+        END AS current_value,
+        CASE
+          WHEN ia.account_type = 'bank_balance' AND vc.balance_updated_at IS NOT NULL
+          THEN vc.balance_updated_at
+          ELSE ih.as_of_date
+        END AS as_of_date
       FROM investment_accounts ia
       LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
+      LEFT JOIN vendor_credentials vc
+        ON ia.account_type = 'bank_balance'
+       AND (
+         COALESCE(ia.notes, '') LIKE '%' || 'credential_id:' || CAST(vc.id AS TEXT) || '%'
+         OR (
+           ia.account_number IS NOT NULL
+           AND fi.vendor_code = vc.vendor
+           AND ia.account_number = vc.bank_account_number
+         )
+       )
       LEFT JOIN investment_holdings ih
         ON ih.id = (
           SELECT ih2.id

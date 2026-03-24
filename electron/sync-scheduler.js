@@ -1,13 +1,28 @@
 const { resolveAppPath } = require('./paths');
 
 const { SCRAPE_RATE_LIMIT_MS } = require(resolveAppPath('utils', 'constants.js'));
-const { bulkScrape } = require(resolveAppPath('server', 'services', 'scraping', 'bulk.js'));
-const { maybeRunAutoDetection } = require(resolveAppPath(
-  'server',
-  'services',
-  'analytics',
-  'subscriptions.js',
-));
+
+let bulkScrapeImpl;
+let autoDetectionImpl;
+
+function getBulkScrape() {
+  if (!bulkScrapeImpl) {
+    ({ bulkScrape: bulkScrapeImpl } = require(resolveAppPath('server', 'services', 'scraping', 'bulk.js')));
+  }
+  return bulkScrapeImpl;
+}
+
+function getAutoDetection() {
+  if (!autoDetectionImpl) {
+    ({ maybeRunAutoDetection: autoDetectionImpl } = require(resolveAppPath(
+      'server',
+      'services',
+      'analytics',
+      'subscriptions.js',
+    )));
+  }
+  return autoDetectionImpl;
+}
 
 const INTERVAL_CHOICES = new Set([48, 168, 720]);
 const IMMEDIATE_DELAY_MS = 60 * 1000;
@@ -61,6 +76,10 @@ function createSyncScheduler({
   getSettings,
   updateSettings,
   emitProgress,
+  repairStateProvider,
+  onScheduledResult,
+  bulkScrapeImpl: bulkScrapeOverride,
+  autoDetectionImpl: autoDetectionOverride,
   logger = console,
 } = {}) {
   let timer = null;
@@ -137,6 +156,9 @@ function createSyncScheduler({
     const headless = currentBackground.headless;
     const intervalMs = currentBackground.intervalHours * 60 * 60 * 1000;
 
+    const runBulkScrape = bulkScrapeOverride || getBulkScrape();
+    const runAutoDetection = autoDetectionOverride || getAutoDetection();
+
     try {
       emit({
         vendor: 'bulk',
@@ -145,11 +167,12 @@ function createSyncScheduler({
         message: 'Scheduled bulk sync initiated',
       });
 
-      const bulkResult = await bulkScrape({
+      const bulkResult = await runBulkScrape({
         thresholdMs: intervalMs,
         rateLimitMs: SCRAPE_RATE_LIMIT_MS,
         logger: createScrapeLogger('bulk', logger),
         showBrowser: !headless,
+        repairStateProvider,
         onAccountStart: ({ account, index, total }) => {
           emit({
             vendor: account.vendor,
@@ -191,7 +214,20 @@ function createSyncScheduler({
         totals,
       });
 
-      await maybeRunAutoDetection({ defaultStatus: 'review' });
+      await runAutoDetection({ defaultStatus: 'review' });
+
+      if (reason === 'scheduled' && typeof onScheduledResult === 'function') {
+        try {
+          await onScheduledResult({
+            reason,
+            success: true,
+            message: bulkResult.message || 'Bulk sync completed',
+            totals,
+          });
+        } catch (error) {
+          logger.warn('[SyncScheduler] Scheduled result handler failed', { error: error.message });
+        }
+      }
 
       return { success: true, ...bulkResult };
     } catch (error) {
@@ -207,6 +243,18 @@ function createSyncScheduler({
         status: 'failed',
         message: error?.message || 'Bulk sync failed',
       });
+
+      if (reason === 'scheduled' && typeof onScheduledResult === 'function') {
+        try {
+          await onScheduledResult({
+            reason,
+            success: false,
+            message: error?.message || 'Bulk sync failed',
+          });
+        } catch (scheduledError) {
+          logger.warn('[SyncScheduler] Scheduled result handler failed', { error: scheduledError.message });
+        }
+      }
 
       return { success: false, status: 'failed', message: error?.message || 'Bulk sync failed' };
     } finally {
