@@ -1,6 +1,10 @@
 import React from 'react';
 import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line, Area } from 'recharts';
-import { useTheme, alpha, Box, ToggleButtonGroup, ToggleButton } from '@mui/material';
+import { useTheme, alpha, Box, ToggleButtonGroup, ToggleButton, Dialog, DialogTitle, DialogContent, IconButton, List, ListItem, ListItemText, Divider, Typography, Chip } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
+import { isPendingTransaction } from '../utils';
 import { CHART_COLORS } from '@renderer/shared/chart-colors';
 import {
   BreakdownTransaction,
@@ -86,7 +90,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const theme = useTheme();
   const strings = getBreakdownStrings();
   const timelineStrings = strings.timeline;
+  const generalStrings = strings.general;
   const [timelineMode, setTimelineMode] = React.useState<TimelineMode>('cumulative');
+  const [selectedDateLabel, setSelectedDateLabel] = React.useState<string | null>(null);
 
   const fallbackChartData = React.useMemo(() => {
     const hasDailySeries = dailyData.length > 0;
@@ -312,6 +318,49 @@ const TimelineView: React.FC<TimelineViewProps> = ({
     return label;
   }, []);
 
+  const handleChartClick = React.useCallback((data: any) => {
+    if (data?.activeLabel) {
+      setSelectedDateLabel(data.activeLabel);
+    }
+  }, []);
+
+  const activeSeriesIds = React.useMemo(
+    () => new Set(drillSeriesDefinitions.map((series) => series.id)),
+    [drillSeriesDefinitions],
+  );
+  const currentParentId = toNumberOrNull(currentLevel?.parentId);
+  const currentSubcategoryId = toNumberOrNull(currentLevel?.subcategoryId);
+
+  const selectedTransactions = React.useMemo(() => {
+    if (!selectedDateLabel) return [];
+    const isMonthly = /^\d{4}-\d{2}$/.test(selectedDateLabel);
+
+    return transactions.filter((txn) => {
+      const key = toDateKey(txn.date as Date | string | null | undefined);
+      if (!key) {
+        return false;
+      }
+
+      const matchesDate = isMonthly ? key.startsWith(selectedDateLabel) : key === selectedDateLabel;
+      if (!matchesDate) {
+        return false;
+      }
+
+      const txParentId = toNumberOrNull(txn.parent_id ?? txn.parentId);
+      const txSubcategoryId = toNumberOrNull(txn.subcategory_id ?? txn.subcategoryId);
+
+      if (!currentLevel) {
+        return activeSeriesIds.size === 0 || (txParentId !== null && activeSeriesIds.has(txParentId));
+      }
+
+      if (currentLevel.type === 'parent') {
+        return currentParentId !== null && txParentId === currentParentId;
+      }
+
+      return currentSubcategoryId !== null && txSubcategoryId === currentSubcategoryId;
+    });
+  }, [selectedDateLabel, transactions, currentLevel, currentParentId, currentSubcategoryId, activeSeriesIds]);
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
@@ -331,7 +380,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
         </ToggleButtonGroup>
       </Box>
       <ResponsiveContainer width="100%" height={400} minHeight={400}>
-        <ComposedChart data={chartData}>
+        <ComposedChart data={chartData} onClick={handleChartClick} style={{ cursor: 'pointer' }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="label" tickFormatter={formatXAxisLabel} minTickGap={20} />
           <YAxis tickFormatter={(value) => formatCurrencyValue(typeof value === 'number' ? value : Number(value ?? 0))} />
@@ -418,6 +467,131 @@ const TimelineView: React.FC<TimelineViewProps> = ({
           )}
         </ComposedChart>
       </ResponsiveContainer>
+      <Dialog
+        open={selectedDateLabel !== null}
+        onClose={() => setSelectedDateLabel(null)}
+        maxWidth="md"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              background: alpha(theme.palette.background.paper, 0.8),
+              backdropFilter: 'blur(12px)',
+              border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+              borderRadius: 3,
+              boxShadow: theme.shadows[8],
+            },
+          },
+        }}
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">
+              {selectedDateLabel ? timelineStrings.transactionsForDate(selectedDateLabel) : ''}
+            </Typography>
+            <IconButton onClick={() => setSelectedDateLabel(null)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {selectedTransactions.length === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+              {timelineStrings.noTransactions}
+            </Typography>
+          ) : (
+            <List dense>
+              {selectedTransactions.map((txn, index) => {
+                const pending = isPendingTransaction(txn);
+                const transactionKey = txn.identifier ?? txn.id ?? `${txn.vendor}-${index}`;
+                const processedDate = txn.processedDate || txn.processed_date;
+                const accountNumber = txn.account_number || txn.accountNumber;
+                return (
+                  <React.Fragment key={transactionKey}>
+                    <ListItem
+                      sx={{
+                        opacity: pending ? 0.6 : 1,
+                        bgcolor: pending ? 'rgba(237, 108, 2, 0.05)' : 'transparent',
+                      }}
+                    >
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2">{txn.transaction_name || txn.name || txn.vendor}</Typography>
+                            {pending && (
+                              <Chip
+                                icon={<HourglassEmptyIcon sx={{ fontSize: 14 }} />}
+                                label={generalStrings.pendingBadge}
+                                size="small"
+                                color="warning"
+                                sx={{
+                                  fontSize: '0.7rem',
+                                  height: 20,
+                                  borderRadius: 1,
+                                }}
+                              />
+                            )}
+                            {accountNumber && (
+                              <Chip
+                                label={`****${accountNumber}`}
+                                size="small"
+                                variant="outlined"
+                                sx={{
+                                  fontSize: '0.7rem',
+                                  height: 20,
+                                  fontFamily: 'monospace',
+                                  backgroundColor: alpha(theme.palette.grey[500], 0.1),
+                                  borderRadius: 1,
+                                  borderColor: alpha(theme.palette.divider, 0.2),
+                                }}
+                              />
+                            )}
+                          </Box>
+                        }
+                        secondary={
+                          <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                            <Typography variant="caption" color="text.secondary">
+                              {new Date(txn.date).toLocaleDateString()}
+                            </Typography>
+                            {pending && processedDate && (
+                              <>
+                                <Typography variant="caption" color="text.secondary">
+                                  •
+                                </Typography>
+                                <Typography variant="caption" color="warning.main">
+                                  {`${generalStrings.processedDatePrefix}: ${new Date(processedDate).toLocaleDateString()}`}
+                                </Typography>
+                              </>
+                            )}
+                            {(txn.institution || txn.vendor) && (
+                              <>
+                                <Typography variant="caption" color="text.secondary">
+                                  •
+                                </Typography>
+                                <InstitutionBadge institution={txn.institution} fallback={txn.vendor} />
+                              </>
+                            )}
+                          </Box>
+                        }
+                        primaryTypographyProps={{ component: 'div' }}
+                        secondaryTypographyProps={{ component: 'div' }}
+                      />
+                      <Typography
+                        variant="body2"
+                        fontWeight="bold"
+                        color={categoryType === 'income' ? 'success.main' : undefined}
+                      >
+                        {formatCurrencyValue(Math.abs(txn.price))}
+                      </Typography>
+                    </ListItem>
+                    {index < selectedTransactions.length - 1 && <Divider />}
+                  </React.Fragment>
+                );
+              })}
+            </List>
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };

@@ -39,6 +39,10 @@ const {
   exportDiagnosticsToFile,
   buildDiagnosticsPayload,
 } = require('./diagnostics');
+const {
+  createTelegramBotService,
+  normalizeTelegramSettings,
+} = require('./telegram-bot');
 const analyticsMetricsStore = require(resolveAppPath('server', 'services', 'analytics', 'metrics-store.js'));
 const isPackaged = app.isPackaged;
 const isDev = process.env.NODE_ENV === 'development' || !isPackaged;
@@ -375,6 +379,7 @@ if (process.env[MIGRATION_ENV_FLAG] === 'true') {
 const { configManager } = require('./config');
 const { dbManager } = require('./database');
 const sessionStore = require('./session-store');
+const { createScrapeAnchorRepairStateProvider } = require('./scrape-anchor-repair-state');
 const { describeTelemetryState } = require('./telemetry-utils');
 const secureKeyManager = require('./secure-key-manager');
 const licenseService = require('./license-service');
@@ -698,9 +703,11 @@ async function applyTelemetryPreference(settings = {}) {
 
 function applySettingsDefaults(settings = {}) {
   const normalizedBackground = normalizeBackgroundSettings(settings?.backgroundSync || {});
+  const normalizedTelegram = normalizeTelegramSettings(settings?.telegram || {});
   return {
     ...settings,
     backgroundSync: normalizedBackground,
+    telegram: normalizedTelegram,
   };
 }
 
@@ -733,6 +740,10 @@ async function updateAppSettings(patch = {}) {
       ...(current?.backgroundSync || {}),
       ...(patch?.backgroundSync || {}),
     },
+    telegram: {
+      ...(current?.telegram || {}),
+      ...(patch?.telegram || {}),
+    },
   };
   const updated = await sessionStore.updateSettings(merged);
   const normalized = applySettingsDefaults(updated);
@@ -743,6 +754,9 @@ async function updateAppSettings(patch = {}) {
   });
   if (syncScheduler) {
     syncScheduler.updateSettings(normalized);
+  }
+  if (telegramBotService) {
+    await telegramBotService.refreshSettings(normalized);
   }
   return normalized;
 }
@@ -866,6 +880,7 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
     }
 
     getSyncScheduler().start();
+    await getTelegramBotService().start();
   } catch (error) {
     console.error('Initialization error:', error);
     logger.error('Fatal initialization error', { error: error.message });
@@ -919,8 +934,10 @@ let apiPort;
 let apiToken; // API authentication token for internal API
 let appTray;
 let syncScheduler;
+let telegramBotService;
 let appSettingsCache = null;
 let isQuitting = false;
+const scrapeAnchorRepairStateProvider = createScrapeAnchorRepairStateProvider();
 
 // Development mode logging
 if (isDev) {
@@ -948,16 +965,69 @@ function sendScrapeProgress(payload) {
   }
 }
 
+function showMainWindow({ createIfMissing = true } = {}) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    if (createIfMissing) {
+      createWindow().catch((error) => {
+        logger.error('Failed to recreate main window', { error: error.message });
+      });
+    }
+    return false;
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  if (!mainWindow.isVisible()) {
+    mainWindow.show();
+  }
+  if (typeof mainWindow.moveTop === 'function') {
+    mainWindow.moveTop();
+  }
+  if (!mainWindow.isFocused()) {
+    mainWindow.focus();
+  }
+
+  return true;
+}
+
 function getSyncScheduler() {
   if (!syncScheduler) {
     syncScheduler = createSyncScheduler({
       getSettings: getAppSettings,
       updateSettings: async (patch) => updateAppSettings(patch),
       emitProgress: sendScrapeProgress,
+      repairStateProvider: scrapeAnchorRepairStateProvider,
+      onScheduledResult: async (payload) => {
+        try {
+          await getTelegramBotService().notifyScheduledSyncResult(payload);
+        } catch (error) {
+          logger.warn('Telegram scheduled sync notification failed', { error: error.message });
+        }
+      },
       logger,
     });
   }
   return syncScheduler;
+}
+
+function getSyncStatusSnapshot() {
+  return {
+    keepRunningInTray: shouldKeepRunningInTray(),
+    backgroundSync: appSettingsCache?.backgroundSync || null,
+  };
+}
+
+function getTelegramBotService() {
+  if (!telegramBotService) {
+    telegramBotService = createTelegramBotService({
+      getSettings: getAppSettings,
+      updateSettings: async (patch) => updateAppSettings(patch),
+      getSyncStatus: getSyncStatusSnapshot,
+      logger,
+    });
+  }
+  return telegramBotService;
 }
 
 async function authenticateMacBiometricsIfAvailable() {
@@ -1032,6 +1102,7 @@ async function handleDiagnosticsExportRequest() {
 
   const exportResult = await exportDiagnosticsToFile(saveResult.filePath, {
     appVersion: app.getVersion(),
+    telegram: await getTelegramBotService().getDiagnostics(),
   });
 
   if (!exportResult.success) {
@@ -1074,14 +1145,7 @@ function setupTray() {
     {
       label: 'Show ShekelSync',
       click: () => {
-        if (mainWindow) {
-          if (!mainWindow.isVisible()) {
-            mainWindow.show();
-          }
-          mainWindow.focus();
-        } else {
-          createWindow();
-        }
+        showMainWindow();
       },
     },
     { type: 'separator' },
@@ -1107,12 +1171,7 @@ function setupTray() {
   ]);
   appTray.setContextMenu(contextMenu);
   appTray.on('click', () => {
-    if (mainWindow) {
-      if (!mainWindow.isVisible()) {
-        mainWindow.show();
-      }
-      mainWindow.focus();
-    }
+    showMainWindow();
   });
 }
 
@@ -1431,6 +1490,14 @@ app.on('window-all-closed', async () => {
     apiServer.close();
   }
 
+  if (telegramBotService) {
+    try {
+      await telegramBotService.stop();
+    } catch (error) {
+      logger.warn('Failed to stop Telegram bot service', { error: error.message });
+    }
+  }
+
   // Close database connection
   try {
     await dbManager.close();
@@ -1445,8 +1512,8 @@ app.on('window-all-closed', async () => {
 });
 
 app.on('activate', () => {
-  // On macOS, re-create window when dock icon is clicked
-  if (BrowserWindow.getAllWindows().length === 0) {
+  // Restore an existing hidden/minimized window before creating a new one.
+  if (!showMainWindow({ createIfMissing: false }) && BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
@@ -1455,6 +1522,11 @@ app.on('before-quit', () => {
   isQuitting = true;
   if (appTray) {
     appTray.destroy();
+  }
+  if (telegramBotService) {
+    telegramBotService.stop().catch((error) => {
+      logger.warn('Failed to stop Telegram bot service during quit', { error: error.message });
+    });
   }
 });
 
@@ -1484,6 +1556,7 @@ ipcMain.handle('diagnostics:getInfo', async () => {
   return getDiagnosticsInfo({
     appVersion: app.getVersion(),
     telemetry: getTelemetryDiagnostics(),
+    telegram: await getTelegramBotService().getDiagnostics(),
   });
 });
 
@@ -1504,6 +1577,7 @@ ipcMain.handle('diagnostics:export', async (event, outputPath) => {
   return exportDiagnosticsToFile(outputPath, {
     appVersion: app.getVersion(),
     telemetry: getTelemetryDiagnostics(),
+    telegram: await getTelegramBotService().getDiagnostics(),
   });
 });
 
@@ -1515,6 +1589,7 @@ ipcMain.handle('diagnostics:copy', async (event) => {
     const payload = await buildDiagnosticsPayload({
       appVersion: app.getVersion(),
       telemetry: getTelemetryDiagnostics(),
+      telegram: await getTelegramBotService().getDiagnostics(),
     });
     clipboard.writeText(JSON.stringify(payload, null, 2));
     return { success: true };
@@ -1757,6 +1832,7 @@ ipcMain.handle('scrape:start', async (event, options, credentials) => {
       options,
       credentials,
       logger,
+      repairStateProvider: scrapeAnchorRepairStateProvider,
     });
 
     const transactionCount = Array.isArray(result.accounts)
@@ -1772,6 +1848,7 @@ ipcMain.handle('scrape:start', async (event, options, credentials) => {
       progress: 100,
       message: `Scraping completed (${transactionCount} transactions)`,
       transactions: transactionCount,
+      scrapeAnchor: result.scrapeAnchor || null,
     });
 
     return { success: true, data: { ...result, transactionCount } };
@@ -1934,6 +2011,70 @@ ipcMain.handle('settings:update', async (event, patch = {}) => {
     return { success: true, settings: updated };
   } catch (error) {
     logger.error('Failed to update application settings', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('telegram:getStatus', async (event) => {
+  if (!requireTrustedIpcSender(event, 'telegram:getStatus')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  try {
+    const status = await getTelegramBotService().getStatus();
+    return { success: true, status };
+  } catch (error) {
+    logger.error('Failed to get Telegram status', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('telegram:saveBotToken', async (event, token) => {
+  if (!requireTrustedIpcSender(event, 'telegram:saveBotToken')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  try {
+    const status = await getTelegramBotService().saveBotToken(token);
+    return { success: true, status };
+  } catch (error) {
+    logger.error('Failed to save Telegram bot token', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('telegram:beginPairing', async (event) => {
+  if (!requireTrustedIpcSender(event, 'telegram:beginPairing')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  try {
+    return await getTelegramBotService().beginPairing();
+  } catch (error) {
+    logger.error('Failed to begin Telegram pairing', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('telegram:disconnect', async (event) => {
+  if (!requireTrustedIpcSender(event, 'telegram:disconnect')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  try {
+    const status = await getTelegramBotService().disconnect();
+    return { success: true, status };
+  } catch (error) {
+    logger.error('Failed to disconnect Telegram bot', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('telegram:sendTestMessage', async (event) => {
+  if (!requireTrustedIpcSender(event, 'telegram:sendTestMessage')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  try {
+    const status = await getTelegramBotService().sendTestMessage();
+    return { success: true, status };
+  } catch (error) {
+    logger.error('Failed to send Telegram test message', { error: error.message });
     return { success: false, error: error.message };
   }
 });

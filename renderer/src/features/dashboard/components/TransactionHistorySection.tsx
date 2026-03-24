@@ -142,6 +142,96 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const chartTotalExpenses = chartHistory.reduce((sum: number, item: any) => sum + (item.expenses || 0), 0);
   const chartTotalSalaryIncome = chartHistory.reduce((sum: number, item: any) => sum + (item.salaryIncome || 0), 0);
 
+  // Compute average daily metrics for the summary badge and tooltip.
+  // Single pass over fullHistory to bucket into 7/30/90 day windows + accumulate all-time totals.
+  const avgDailyMetrics = React.useMemo(() => {
+    const fullHistory: any[] = chartHistory;
+    if (fullHistory.length === 0) {
+      const zero = { expenses: 0, income: 0 };
+      return {
+        periodAvgExpenses: 0,
+        periodAvgIncome: 0,
+        daily: { last7: zero, last30: zero, last90: zero },
+        weekly: { lastWeek: zero, lastMonth: zero, last90: zero },
+        median30: zero,
+        peakExpenseDay: null as any,
+        peakIncomeDay: null as any,
+        allTime: zero,
+      };
+    }
+
+    const today = new Date();
+    const todayStr = format(today, 'yyyy-MM-dd');
+    const cutoff7 = format(subDays(today, 7), 'yyyy-MM-dd');
+    const cutoff30 = format(subDays(today, 30), 'yyyy-MM-dd');
+    const cutoff90 = format(subDays(today, 90), 'yyyy-MM-dd');
+
+    // Accumulators – single pass over fullHistory
+    let allExp = 0, allInc = 0;
+    let sum7Exp = 0, sum7Inc = 0, cnt7 = 0;
+    let sum30Exp = 0, sum30Inc = 0, cnt30 = 0;
+    let sum90Exp = 0, sum90Inc = 0, cnt90 = 0;
+    let peakExpenseDay: any = null;
+    let peakIncomeDay: any = null;
+    const expenses30: number[] = [];
+    const income30: number[] = [];
+
+    for (const d of fullHistory) {
+      const exp = d.expenses || 0;
+      const inc = d.income || 0;
+      allExp += exp;
+      allInc += inc;
+
+      if (d.date > todayStr) continue;
+
+      if (d.date >= cutoff90) {
+        sum90Exp += exp; sum90Inc += inc; cnt90++;
+        if (d.date >= cutoff30) {
+          sum30Exp += exp; sum30Inc += inc; cnt30++;
+          expenses30.push(exp);
+          income30.push(inc);
+          if (!peakExpenseDay || exp > (peakExpenseDay.expenses || 0)) peakExpenseDay = d;
+          if (!peakIncomeDay || inc > (peakIncomeDay.income || 0)) peakIncomeDay = d;
+          if (d.date >= cutoff7) {
+            sum7Exp += exp; sum7Inc += inc; cnt7++;
+          }
+        }
+      }
+    }
+
+    const avg = (sum: number, cnt: number) => (cnt > 0 ? sum / cnt : 0);
+
+    // Median helper (sort is unavoidable but only over 30-day window)
+    const median = (vals: number[]) => {
+      if (vals.length === 0) return 0;
+      vals.sort((a, b) => a - b);
+      const mid = Math.floor(vals.length / 2);
+      return vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
+    };
+
+    const periodAvgExpenses = chartHistory.length > 0 ? chartTotalExpenses / chartHistory.length : 0;
+    const periodAvgIncome = chartHistory.length > 0 ? chartTotalIncome / chartHistory.length : 0;
+
+    return {
+      periodAvgExpenses,
+      periodAvgIncome,
+      daily: {
+        last7: { expenses: avg(sum7Exp, cnt7), income: avg(sum7Inc, cnt7) },
+        last30: { expenses: avg(sum30Exp, cnt30), income: avg(sum30Inc, cnt30) },
+        last90: { expenses: avg(sum90Exp, cnt90), income: avg(sum90Inc, cnt90) },
+      },
+      weekly: {
+        lastWeek: { expenses: sum7Exp, income: sum7Inc },
+        lastMonth: { expenses: sum30Exp / Math.max(30 / 7, 1), income: sum30Inc / Math.max(30 / 7, 1) },
+        last90: { expenses: sum90Exp / Math.max(90 / 7, 1), income: sum90Inc / Math.max(90 / 7, 1) },
+      },
+      median30: { expenses: median(expenses30), income: median(income30) },
+      peakExpenseDay,
+      peakIncomeDay,
+      allTime: { expenses: avg(allExp, fullHistory.length), income: avg(allInc, fullHistory.length) },
+    };
+  }, [chartHistory, chartTotalExpenses, chartTotalIncome]);
+
   const handleOpenTransactionDetail = (txn: any) => {
     setSelectedTransaction({
       identifier: txn.identifier,
@@ -570,6 +660,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               </IconButton>
             </MuiTooltip>
           </Box>
+
         </Box>
         {activeTab === 0 && (
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -987,29 +1078,147 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         </ComposedChart>
       </ResponsiveContainer>
 
-      {anomalies.length > 0 && (
+      {chartHistory.length > 0 && (
         <Box sx={{ mt: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            {t('patterns.title')}
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                {t('patterns.avgByPeriod', {
-                  period:
-                    aggregationPeriod === 'daily'
-                      ? t('periods.daily')
-                      : aggregationPeriod === 'weekly'
-                        ? t('periods.weekly')
-                        : t('periods.monthly'),
-                })}
-              </Typography>
-              <Typography variant="body2" fontWeight="medium">
-                ↓ {formatCurrencyValue(chartHistory.length > 0 ? chartTotalExpenses / chartHistory.length : 0)}
-                {' / '}
-                ↑ {formatCurrencyValue(chartHistory.length > 0 ? chartTotalIncome / chartHistory.length : 0)}
-              </Typography>
-            </Box>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            {/* Avg Daily with rich hover tooltip */}
+            <MuiTooltip
+              arrow
+              enterDelay={200}
+              leaveDelay={150}
+              slotProps={{
+                tooltip: {
+                  sx: {
+                    maxWidth: 340,
+                    p: 0,
+                    bgcolor: 'background.paper',
+                    color: 'text.primary',
+                    border: (tt) => `1px solid ${tt.palette.divider}`,
+                    borderRadius: '12px',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+                    '& .MuiTooltip-arrow': {
+                      color: 'background.paper',
+                      '&::before': {
+                        border: (tt) => `1px solid ${tt.palette.divider}`,
+                      },
+                    },
+                  },
+                },
+              }}
+              title={
+                <Box sx={{ p: 2 }}>
+                  <Typography variant="caption" fontWeight={700} sx={{ mb: 1.5, display: 'block', opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    {t('avgTooltip.heading')}
+                  </Typography>
+
+                  {/* Daily averages */}
+                  <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block', opacity: 0.5 }}>
+                    {t('avgTooltip.daily')}
+                  </Typography>
+                  {[
+                    { label: t('avgTooltip.last7'), data: avgDailyMetrics.daily.last7 },
+                    { label: t('avgTooltip.last30'), data: avgDailyMetrics.daily.last30 },
+                    { label: t('avgTooltip.last90'), data: avgDailyMetrics.daily.last90 },
+                  ].map(({ label, data: d }) => (
+                    <Box key={label} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.3 }}>
+                      <Typography variant="caption" color="text.secondary">{label}</Typography>
+                      <Typography variant="caption" fontWeight={500} sx={{ ml: 2 }}>
+                        <Box component="span" sx={{ color: 'error.main' }}>↓ {formatCurrencyValue(d.expenses)}</Box>
+                        {' / '}
+                        <Box component="span" sx={{ color: 'success.main' }}>↑ {formatCurrencyValue(d.income)}</Box>
+                      </Typography>
+                    </Box>
+                  ))}
+
+                  <Divider sx={{ my: 1, opacity: 0.3 }} />
+
+                  {/* Weekly averages */}
+                  <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block', opacity: 0.5 }}>
+                    {t('avgTooltip.weekly')}
+                  </Typography>
+                  {[
+                    { label: t('avgTooltip.thisWeek'), data: avgDailyMetrics.weekly.lastWeek },
+                    { label: t('avgTooltip.lastMonth'), data: avgDailyMetrics.weekly.lastMonth },
+                    { label: t('avgTooltip.last90'), data: avgDailyMetrics.weekly.last90 },
+                  ].map(({ label, data: d }) => (
+                    <Box key={label} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.3 }}>
+                      <Typography variant="caption" color="text.secondary">{label}</Typography>
+                      <Typography variant="caption" fontWeight={500} sx={{ ml: 2 }}>
+                        <Box component="span" sx={{ color: 'error.main' }}>↓ {formatCurrencyValue(d.expenses)}</Box>
+                        {' / '}
+                        <Box component="span" sx={{ color: 'success.main' }}>↑ {formatCurrencyValue(d.income)}</Box>
+                      </Typography>
+                    </Box>
+                  ))}
+
+                  <Divider sx={{ my: 1, opacity: 0.3 }} />
+
+                  {/* Median & peaks */}
+                  <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block', opacity: 0.5 }}>
+                    {t('avgTooltip.insights')}
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
+                    <Typography variant="caption" color="text.secondary">{t('avgTooltip.median30')}</Typography>
+                    <Typography variant="caption" fontWeight={500} sx={{ ml: 2 }}>
+                      <Box component="span" sx={{ color: 'error.main' }}>↓ {formatCurrencyValue(avgDailyMetrics.median30.expenses)}</Box>
+                      {' / '}
+                      <Box component="span" sx={{ color: 'success.main' }}>↑ {formatCurrencyValue(avgDailyMetrics.median30.income)}</Box>
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
+                    <Typography variant="caption" color="text.secondary">{t('avgTooltip.allTimeAvg')}</Typography>
+                    <Typography variant="caption" fontWeight={500} sx={{ ml: 2 }}>
+                      <Box component="span" sx={{ color: 'error.main' }}>↓ {formatCurrencyValue(avgDailyMetrics.allTime.expenses)}</Box>
+                      {' / '}
+                      <Box component="span" sx={{ color: 'success.main' }}>↑ {formatCurrencyValue(avgDailyMetrics.allTime.income)}</Box>
+                    </Typography>
+                  </Box>
+                  {avgDailyMetrics.peakExpenseDay && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
+                      <Typography variant="caption" color="text.secondary">{t('avgTooltip.peakExpense')}</Typography>
+                      <Typography variant="caption" fontWeight={500} color="error.main" sx={{ ml: 2 }}>
+                        {formatCurrencyValue(avgDailyMetrics.peakExpenseDay.expenses)} ({format(parseLocalDate(avgDailyMetrics.peakExpenseDay.date), 'MMM dd')})
+                      </Typography>
+                    </Box>
+                  )}
+                  {avgDailyMetrics.peakIncomeDay && avgDailyMetrics.peakIncomeDay.income > 0 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
+                      <Typography variant="caption" color="text.secondary">{t('avgTooltip.peakIncome')}</Typography>
+                      <Typography variant="caption" fontWeight={500} color="success.main" sx={{ ml: 2 }}>
+                        {formatCurrencyValue(avgDailyMetrics.peakIncomeDay.income)} ({format(parseLocalDate(avgDailyMetrics.peakIncomeDay.date), 'MMM dd')})
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              }
+            >
+              <Box sx={{ cursor: 'default' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  {t('patterns.avgByPeriod', {
+                    period:
+                      aggregationPeriod === 'daily'
+                        ? t('periods.daily')
+                        : aggregationPeriod === 'weekly'
+                          ? t('periods.weekly')
+                          : t('periods.monthly'),
+                  })}
+                </Typography>
+                <Typography variant="body2" fontWeight="medium" sx={{
+                  borderBottom: (tt) => `1px dashed ${alpha(tt.palette.text.secondary, 0.3)}`,
+                  display: 'inline-block',
+                  pb: 0.25,
+                }}>
+                  <Box component="span" sx={{ color: 'error.main' }}>
+                    ↓ {formatCurrencyValue(avgDailyMetrics.periodAvgExpenses)}
+                  </Box>
+                  {' / '}
+                  <Box component="span" sx={{ color: 'success.main' }}>
+                    ↑ {formatCurrencyValue(avgDailyMetrics.periodAvgIncome)}
+                  </Box>
+                </Typography>
+              </Box>
+            </MuiTooltip>
+
             {chartTotalIncome > 0 && (
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
@@ -1049,19 +1258,21 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               </Box>
             )}
           </Box>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-            {anomalies.slice(0, 2).map((anomaly, idx) => (
-              <Chip
-                key={idx}
-                label={`⚠ ${format(parseLocalDate(anomaly.date), 'MMM dd')}`}
-                size="small"
-                color="warning"
-                variant="outlined"
-                sx={{ cursor: 'pointer' }}
-                onClick={() => fetchTransactionsByDate(anomaly.date)}
-              />
-            ))}
-          </Box>
+          {anomalies.length > 0 && (
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+              {anomalies.slice(0, 2).map((anomaly, idx) => (
+                <Chip
+                  key={idx}
+                  label={`⚠ ${format(parseLocalDate(anomaly.date), 'MMM dd')}`}
+                  size="small"
+                  color="warning"
+                  variant="outlined"
+                  sx={{ cursor: 'pointer' }}
+                  onClick={() => fetchTransactionsByDate(anomaly.date)}
+                />
+              ))}
+            </Box>
+          )}
         </Box>
       )}
         </>

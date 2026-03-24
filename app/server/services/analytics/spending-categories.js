@@ -570,7 +570,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
           AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
-        AND cd.category_type IN ('expense', 'investment')
+        AND cd.category_type = 'expense'
         AND cd.id NOT IN (${capitalReturnSubquery})
           AND tpe.transaction_identifier IS NULL
       GROUP BY COALESCE(scm.spending_category, 'unallocated')
@@ -578,6 +578,41 @@ async function getSpendingCategoryBreakdown(params = {}) {
     `, [start, end]);
 
     const breakdown = result.rows;
+
+    // Investment outflows (pikadon, study fund, etc.) count as growth spending
+    const investmentResult = await client.query(`
+      SELECT
+        COUNT(t.identifier) as transaction_count,
+        COALESCE(SUM(ABS(t.price)), 0) as total_amount
+      FROM transactions t
+      JOIN category_definitions cd ON t.category_definition_id = cd.id
+      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
+        ON t.identifier = tpe.transaction_identifier
+        AND t.vendor = tpe.transaction_vendor
+      WHERE t.date >= $1 AND t.date <= $2
+        AND t.price < 0
+        AND cd.category_type = 'investment'
+        AND tpe.transaction_identifier IS NULL
+    `, [start, end]);
+    const investmentAmount = parseFloat(getRows(investmentResult)[0]?.total_amount || 0);
+    const investmentCount = parseInt(getRows(investmentResult)[0]?.transaction_count || 0, 10);
+
+    // Merge investment outflows into the growth row
+    const growthRow = breakdown.find(item => item.spending_category === 'growth');
+    if (growthRow && investmentAmount > 0) {
+      growthRow.total_amount = parseFloat(growthRow.total_amount || 0) + investmentAmount;
+      growthRow.transaction_count = parseInt(growthRow.transaction_count || 0, 10) + investmentCount;
+    } else if (investmentAmount > 0) {
+      breakdown.push({
+        spending_category: 'growth',
+        transaction_count: investmentCount,
+        total_amount: investmentAmount,
+        avg_transaction: investmentAmount / (investmentCount || 1),
+        first_transaction_date: null,
+        last_transaction_date: null,
+      });
+    }
+
     const totalSpending = breakdown.reduce((sum, item) => sum + parseFloat(item.total_amount || 0), 0);
 
     // Capital return inflows offset growth; subtract positive capital-return amounts from growth
@@ -633,7 +668,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
       LEFT JOIN transactions t ON t.category_definition_id = cd.id
         AND t.date >= $1 AND t.date <= $2
         AND t.price < 0
-      WHERE cd.category_type IN ('expense', 'investment') AND cd.is_active = 1
+      WHERE cd.category_type = 'expense' AND cd.is_active = 1
         AND cd.id NOT IN (${capitalReturnSubquery})
       GROUP BY cd.id, cd.name, cd.name_en, cd.name_fr, cd.icon, scm.spending_category
       ORDER BY scm.spending_category, total_amount DESC
@@ -739,6 +774,21 @@ async function getSpendingCategoryTransactions(params = {}) {
 
     await ensureSpendingCategorySchema(client);
 
+    const allocationFilter = spendingCategory === 'growth'
+      ? `
+        (
+          (
+            cd.category_type = 'expense'
+            AND COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') = $3
+          )
+          OR cd.category_type = 'investment'
+        )
+      `
+      : `
+        cd.category_type = 'expense'
+        AND COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') = $3
+      `;
+
     const transactionsResult = await client.query(`
       SELECT
         t.identifier,
@@ -761,10 +811,9 @@ async function getSpendingCategoryTransactions(params = {}) {
        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
-        AND cd.category_type IN ('expense', 'investment')
         AND cd.id NOT IN (${capitalReturnSubquery})
         AND tpe.transaction_identifier IS NULL
-        AND COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') = $3
+        AND ${allocationFilter}
       ORDER BY t.date DESC, ABS(t.price) DESC
       LIMIT $4 OFFSET $5
     `, [start, end, spendingCategory, limit, offset]);
@@ -781,10 +830,9 @@ async function getSpendingCategoryTransactions(params = {}) {
        AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND t.price < 0
-        AND cd.category_type IN ('expense', 'investment')
         AND cd.id NOT IN (${capitalReturnSubquery})
         AND tpe.transaction_identifier IS NULL
-        AND COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') = $3
+        AND ${allocationFilter}
     `, [start, end, spendingCategory]);
 
     const summary = summaryResult.rows[0] || {};

@@ -23,6 +23,7 @@ const coreRoutes = require('./api-routes/core');
 const migrationsRoutes = require('./api-routes/migrations');
 const transactionHandlers = require(resolveAppPath('server', 'routes', 'transactions.js'));
 const { createScrapingRouter } = require(resolveAppPath('server', 'routes', 'scraping.js'));
+const { createScrapeAnchorRepairStateProvider } = require('./scrape-anchor-repair-state');
 const { resolveLocaleFromRequest } = require(resolveAppPath('lib', 'server', 'locale-utils.js'));
 const { createAccountsRouter } = require(resolveAppPath('server', 'routes', 'accounts.js'));
 const { createOnboardingRouter } = require(resolveAppPath('server', 'routes', 'onboarding.js'));
@@ -32,6 +33,7 @@ const { createNotificationsRouter } = require(resolveAppPath('server', 'routes',
 const { createDonationsRouter } = require(resolveAppPath('server', 'routes', 'donations.js'));
 const { createInsightsRouter } = require(resolveAppPath('server', 'routes', 'insights.js'));
 const institutionsService = require(resolveAppPath('server', 'services', 'institutions.js'));
+const scrapeAnchorRepairStateProvider = createScrapeAnchorRepairStateProvider();
 
 function lazyRouter(factory) {
   let router = null;
@@ -249,7 +251,19 @@ async function setupAPIServer(mainWindow, options = {}) {
   );
 
   // Scraping API routes (shared router)
-  app.use('/api', createScrapingRouter({ mainWindow }));
+  app.use('/api', createScrapingRouter({
+    mainWindow,
+    services: {
+      runScrape: (payload = {}) => require(resolveAppPath('server', 'services', 'scraping', 'run.js')).runScrape({
+        ...payload,
+        repairStateProvider: scrapeAnchorRepairStateProvider,
+      }),
+      bulkScrape: (options = {}) => require(resolveAppPath('server', 'services', 'scraping', 'bulk.js')).bulkScrape({
+        ...options,
+        repairStateProvider: scrapeAnchorRepairStateProvider,
+      }),
+    },
+  }));
 
   // Fire-and-forget backfill to ensure legacy accounts gain institution IDs (deferred to avoid slowing boot)
   setTimeout(() => {

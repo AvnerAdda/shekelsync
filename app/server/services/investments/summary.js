@@ -97,7 +97,9 @@ function buildAccountSummaries(accountsRows, bankAccountsRows) {
     const cost = toNumber(account.cost_basis) || 0;
     const category = account.investment_category;
 
-    if (value > 0) {
+    const isBankBalance = account.account_type === 'bank_balance';
+
+    if (value > 0 && !isBankBalance) {
       totalPortfolioValue += value;
       accountsWithValues += 1;
 
@@ -110,7 +112,7 @@ function buildAccountSummaries(accountsRows, bankAccountsRows) {
       }
     }
 
-    if (cost > 0) {
+    if (cost > 0 && !isBankBalance) {
       totalCostBasis += cost;
 
       if (category === 'liquid') {
@@ -394,19 +396,21 @@ async function getInvestmentSummary(params = {}) {
       other: { name: 'Other Investments', name_he: 'השקעות אחרות', category: 'liquid' },
     };
 
-    const breakdown = Object.values(summary.accountsByType).map((group) => {
-      const label = accountTypeLabels[group.type] || {
-        name: group.type,
-        name_he: group.type,
-        category: group.accounts[0]?.investment_category || 'liquid',
-      };
+    const breakdown = Object.values(summary.accountsByType)
+      .filter((group) => group.type !== 'bank_balance')
+      .map((group) => {
+        const label = accountTypeLabels[group.type] || {
+          name: group.type,
+          name_he: group.type,
+          category: group.accounts[0]?.investment_category || 'liquid',
+        };
 
-      return {
-        ...group,
-        ...label,
-        percentage: totalPortfolioValue > 0 ? (group.totalValue / totalPortfolioValue) * 100 : 0,
-      };
-    });
+        return {
+          ...group,
+          ...label,
+          percentage: totalPortfolioValue > 0 ? (group.totalValue / totalPortfolioValue) * 100 : 0,
+        };
+      });
 
     const performanceHistory = await fetchInvestmentPerformance(
       client,

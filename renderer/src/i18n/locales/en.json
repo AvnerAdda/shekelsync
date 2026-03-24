@@ -905,6 +905,21 @@
       "spikes_one": "{{count}} spike",
       "spikes_other": "{{count}} spikes"
     },
+    "avgTooltip": {
+      "heading": "Averages",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "insights": "Insights",
+      "last7": "Last 7 days",
+      "last30": "Last 30 days",
+      "last90": "Last 90 days",
+      "thisWeek": "This week",
+      "lastMonth": "Last month",
+      "median30": "Median daily (30d)",
+      "allTimeAvg": "All-time daily avg",
+      "peakExpense": "Peak expense day",
+      "peakIncome": "Peak income day"
+    },
     "transactionsOn": "Transactions on {{date}} ({{count}} transactions):",
     "noTransactionsForDate": "No transactions found for this date."
   },

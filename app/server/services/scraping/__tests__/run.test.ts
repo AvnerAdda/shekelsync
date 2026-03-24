@@ -170,10 +170,14 @@ beforeEach(async () => {
     query: queryMock,
     getClient: getClientMock,
   });
+  runService.__setLastTransactionDateServiceForTests?.({
+    getLastTransactionDate: getLastTransactionDateMock,
+  });
 });
 
 afterEach(() => {
   runService.__resetDatabaseForTests?.();
+  runService.__resetLastTransactionDateServiceForTests?.();
   if (typeof originalSqliteDbPath === 'undefined') {
     delete process.env.SQLITE_DB_PATH;
   } else {
@@ -202,6 +206,8 @@ describe('scraping run service', () => {
       lastTransactionDate: '2026-02-07T00:00:00.000Z',
       message: 'Using latest transaction date',
       hasTransactions: true,
+      overlapDaysApplied: 7,
+      anchorSource: 'credential_account_numbers',
     });
     queryMock.mockImplementation(async (sql: string) => {
       if (String(sql).includes('RETURNING id')) {
@@ -319,6 +325,7 @@ describe('scraping run service', () => {
 
     it('treats no-transactions scraper errors with accounts as successful balance updates', async () => {
       const logger = buildLogger();
+      const markCredentialRepairComplete = vi.fn().mockResolvedValue(true);
 
       mockClient.query.mockImplementation(async (sql: string) => {
         const normalizedSql = String(sql);
@@ -346,13 +353,18 @@ describe('scraping run service', () => {
           accounts: [
             { accountNumber: '123456', balance: '₪1,234.56', txns: [] },
           ],
-        }),
-        logger,
-      } as any);
+          }),
+          logger,
+          repairStateProvider: {
+            getCompletedCredentialIds: vi.fn().mockResolvedValue([]),
+            markCredentialRepairComplete,
+          },
+        } as any);
 
       expect(result.success).toBe(true);
       expect(result.noNewTransactions).toBe(true);
       expect(result.message).toContain('No new transactions found');
+      expect(markCredentialRepairComplete).toHaveBeenCalledWith(7);
     });
 
     it('forward-fills portfolio history when no transactions and no accounts are returned', async () => {
@@ -422,6 +434,8 @@ describe('scraping run service', () => {
 
     it('completes a successful non-simulated scrape and commits transaction updates', async () => {
       const logger = buildLogger();
+      const getCompletedCredentialIds = vi.fn().mockResolvedValue([]);
+      const markCredentialRepairComplete = vi.fn().mockResolvedValue(true);
 
       mockClient.query.mockImplementation(async (sql: string) => {
         const normalizedSql = String(sql);
@@ -445,15 +459,26 @@ describe('scraping run service', () => {
         credentials: { dbId: 7, username: 'bank-user', password: 'bank-pass' },
         execute: async () => ({ success: true, accounts: [] }),
         logger,
+        repairStateProvider: {
+          getCompletedCredentialIds,
+          markCredentialRepairComplete,
+        },
       } as any);
 
       expect(result.success).toBe(true);
       expect(result.bankTransactions).toBe(0);
+      expect(result.scrapeAnchor).toMatchObject({
+        source: 'credential_account_numbers',
+        overlapDays: 7,
+        credentialId: 7,
+      });
       expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
       expect(queryMock).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE scrape_events'),
         expect.arrayContaining(['success']),
       );
+      expect(getCompletedCredentialIds).toHaveBeenCalledTimes(1);
+      expect(markCredentialRepairComplete).toHaveBeenCalledWith(7);
     });
 
     it('continues successfully when scrape_events start insert fails', async () => {
@@ -705,6 +730,7 @@ describe('scraping run service', () => {
       );
       expect(clamped.reason).toContain('clamped to today');
       expect(clamped.date.getTime()).toBeLessThanOrEqual(Date.now());
+      expect(clamped.anchorSource).toBe('manual_start_date');
 
       const explicit = await internal.resolveStartDate(
         { companyId: 'hapoalim', startDate: '2025-01-01T00:00:00.000Z' },
@@ -715,10 +741,32 @@ describe('scraping run service', () => {
 
       const fromService = await internal.resolveStartDate(
         { companyId: 'hapoalim' },
-        { nickname: 'demo' },
+        { nickname: 'demo', dbId: 41 },
+        { credentialId: 41, applyRepairBackfill: false },
       );
       expect(fromService.date).toBeInstanceOf(Date);
       expect(typeof fromService.reason).toBe('string');
+      expect(fromService.anchorSource).toBe('credential_account_numbers');
+      expect(getLastTransactionDateMock).toHaveBeenCalledWith({
+        vendor: 'hapoalim',
+        credentialNickname: 'demo',
+        credentialId: 41,
+      });
+
+      getLastTransactionDateMock.mockResolvedValueOnce({
+        lastTransactionDate: new Date().toISOString(),
+        message: 'Using latest transaction date',
+        hasTransactions: true,
+        overlapDaysApplied: 7,
+        anchorSource: 'credential_account_numbers',
+      });
+      const repaired = await internal.resolveStartDate(
+        { companyId: 'hapoalim' },
+        { nickname: 'demo', dbId: 41 },
+        { credentialId: 41, applyRepairBackfill: true },
+      );
+      expect(repaired.repairBackfillApplied).toBe(true);
+      expect(repaired.reason).toContain('repair backfill');
 
       getLastTransactionDateMock.mockRejectedValueOnce(new Error('lookup failed'));
       const fallback = await internal.resolveStartDate({ companyId: 'hapoalim', startDate: 'invalid-date' }, { nickname: 'demo' });
