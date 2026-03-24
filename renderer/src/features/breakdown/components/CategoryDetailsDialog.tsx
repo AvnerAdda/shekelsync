@@ -330,7 +330,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                     <ListItemText
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2">{txn.name || txn.vendor}</Typography>
+                          <Typography variant="body2">{txn.transaction_name || txn.name || txn.vendor}</Typography>
                           {pending && (
                             <Chip
                               icon={<HourglassEmptyIcon sx={{ fontSize: 14 }} />}

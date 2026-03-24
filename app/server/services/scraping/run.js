@@ -708,7 +708,7 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber, 
       status: 'completed',
     });
 
-    if (txn.status === 'pending' && bestCompleted) {
+    if (txn.status === 'pending' && (bestCompleted || bestPending)) {
       return;
     }
 
