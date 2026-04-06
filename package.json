@@ -28,5 +28,8 @@
     "electron-is-dev": "^3.0.1",
     "electron-reload": "^2.0.0-alpha.1",
     "http-proxy-middleware": "^3.0.5"
+  },
+  "overrides": {
+    "picomatch": "^2.3.2"
   }
 }
