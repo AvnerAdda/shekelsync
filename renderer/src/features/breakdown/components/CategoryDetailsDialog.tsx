@@ -70,6 +70,12 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
   }
 
   const transactions = details.transactions ?? [];
+  const pendingCount = Number.isFinite(details.summary.pendingCount)
+    ? Number(details.summary.pendingCount)
+    : transactions.filter((txn) => isPendingTransaction(txn)).length;
+  const processedCount = Number.isFinite(details.summary.processedCount)
+    ? Number(details.summary.processedCount)
+    : Math.max(0, details.summary.count - pendingCount);
 
   return (
     <Dialog 
@@ -141,18 +147,11 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                   <Typography variant="h6" fontWeight="bold">
                     {details.summary.count}
                   </Typography>
-                  {(() => {
-                    const pendingCount = transactions.filter(txn => isPendingTransaction(txn)).length;
-                    const processedCount = transactions.length - pendingCount;
-                    if (pendingCount > 0) {
-                      return (
-                        <Typography variant="caption" color="text.secondary">
-                          {strings.categoryDetails.processedBreakdown(processedCount, pendingCount)}
-                        </Typography>
-                      );
-                    }
-                    return null;
-                  })()}
+                  {pendingCount > 0 && (
+                    <Typography variant="caption" color="text.secondary">
+                      {strings.categoryDetails.processedBreakdown(processedCount, pendingCount)}
+                    </Typography>
+                  )}
                 </CardContent>
               </Card>
             </Grid>

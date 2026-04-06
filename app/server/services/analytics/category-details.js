@@ -1,8 +1,9 @@
-const database = require('../database.js');
+const actualDatabase = require('../database.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
 const { resolveLocale, getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
 const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
 
+let database = actualDatabase;
 const categoryDetailsCache = createTtlCache({ maxEntries: 50, defaultTtlMs: 30 * 1000 });
 
 function buildCategoryFilter({ category, parentId, subcategoryId }) {
@@ -133,6 +134,16 @@ async function getCategoryDetails(params = {}) {
           COUNT(*) AS count,
           SUM(${amountExpression}) AS total,
           AVG(${amountExpression}) AS average,
+          SUM(CASE
+            WHEN t.processed_date IS NOT NULL
+              AND datetime(t.processed_date) > datetime('now', 'localtime')
+            THEN 1 ELSE 0
+          END) AS pending_count,
+          SUM(CASE
+            WHEN t.processed_date IS NULL
+              OR datetime(t.processed_date) <= datetime('now', 'localtime')
+            THEN 1 ELSE 0
+          END) AS processed_count,
           MIN(${amountExpression}) AS min_amount,
           MAX(${amountExpression}) AS max_amount
         FROM transactions t
@@ -287,6 +298,8 @@ async function getCategoryDetails(params = {}) {
         count: Number.parseInt(summary.count || 0, 10),
         total: Number.parseFloat(summary.total || 0),
         average: Number.parseFloat(summary.average || 0),
+        pendingCount: Number.parseInt(summary.pending_count || 0, 10),
+        processedCount: Number.parseInt(summary.processed_count || 0, 10),
         minAmount: Number.parseFloat(summary.min_amount || 0),
         maxAmount: Number.parseFloat(summary.max_amount || 0),
       },
@@ -349,6 +362,12 @@ async function getCategoryDetails(params = {}) {
 
 module.exports = {
   getCategoryDetails,
+  __setDatabase(mock) {
+    database = mock || actualDatabase;
+  },
+  __resetDatabase() {
+    database = actualDatabase;
+  },
 };
 
 module.exports.default = module.exports;

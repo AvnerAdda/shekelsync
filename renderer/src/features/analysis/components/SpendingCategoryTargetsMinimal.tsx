@@ -7,6 +7,7 @@ import {
   Tooltip,
   CircularProgress,
   Alert,
+  Button,
   Menu,
   MenuItem,
   ListItemIcon,
@@ -16,13 +17,14 @@ import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpend
 import type { SpendingCategory, CategoryWithSpending } from '@renderer/types/spending-categories';
 import { useTranslation } from 'react-i18next';
 import CategoryIcon from '../../breakdown/components/CategoryIcon';
-
-const DEFAULT_TARGETS: Record<SpendingCategory, number> = {
-  essential: 50,
-  growth: 20,
-  stability: 15,
-  reward: 15,
-};
+import {
+  DEFAULT_TARGETS,
+  TARGET_KEYS,
+  calculateTargetTotal,
+  canSaveTargetChanges,
+  haveTargetsChanged,
+  normalizeTargets,
+} from './spendingCategoryTargetsHelpers';
 
 const CATEGORY_COLORS: Record<string, string> = {
   essential: '#2196F3',
@@ -40,8 +42,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   unallocated: 'Unallocated',
 };
 
-const TARGET_KEYS: SpendingCategory[] = ['essential', 'growth', 'stability', 'reward'];
-
 const SpendingCategoryTargetsMinimal: React.FC = () => {
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'analysisPage.targets' });
   const {
@@ -55,21 +55,28 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
   } = useSpendingCategories({ currentMonthOnly: true });
 
   const [localTargets, setLocalTargets] = useState<Record<SpendingCategory, number>>(DEFAULT_TARGETS);
+  const [savingTargets, setSavingTargets] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedCategoryForMenu, setSelectedCategoryForMenu] = useState<CategoryWithSpending | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Fetch breakdown on mount
   useEffect(() => {
     fetchBreakdown();
   }, [fetchBreakdown]);
 
+  const savedTargets = normalizeTargets(breakdown?.targets);
+  const savedTargetsSignature = TARGET_KEYS.map((key) => savedTargets[key]).join('|');
+
   useEffect(() => {
-    if (breakdown?.targets) {
-      setLocalTargets(breakdown.targets);
-    }
-  }, [breakdown]);
+    setLocalTargets(savedTargets);
+  }, [savedTargetsSignature]);
 
   const totalIncome = breakdown?.total_income || 0;
+  const totalPercentage = calculateTargetTotal(localTargets);
+  const isValidTotal = Math.abs(totalPercentage - 100) < 0.01;
+  const hasUnsavedChanges = haveTargetsChanged(localTargets, savedTargets);
+  const canSaveTargets = canSaveTargetChanges(localTargets, savedTargets, savingTargets);
 
   const getCategoryName = (category: CategoryWithSpending) => {
     const language = (i18n.language || 'en').toLowerCase();
@@ -91,44 +98,6 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
       </Typography>
     </Box>
   );
-
-  const rebalanceTargets = (targets: Record<SpendingCategory, number>, changedKey: SpendingCategory) => {
-    const normalized = { ...targets };
-    const total = TARGET_KEYS.reduce((sum, key) => sum + (normalized[key] || 0), 0);
-    const diff = 100 - total;
-
-    if (Math.abs(diff) < 0.01) {
-      return normalized;
-    }
-
-    const otherKeys = TARGET_KEYS.filter((key) => key !== changedKey);
-    const otherSum = otherKeys.reduce((sum, key) => sum + (normalized[key] || 0), 0);
-
-    if (otherSum <= 0) {
-      if (diff > 0) {
-        const per = diff / otherKeys.length;
-        otherKeys.forEach((key) => {
-          normalized[key] = Math.min(100, Math.max(0, per));
-        });
-      } else {
-        normalized[changedKey] = Math.min(100, Math.max(0, (normalized[changedKey] || 0) + diff));
-      }
-      return normalized;
-    }
-
-    otherKeys.forEach((key) => {
-      const share = (normalized[key] || 0) / otherSum;
-      normalized[key] = Math.min(100, Math.max(0, (normalized[key] || 0) + diff * share));
-    });
-
-    const finalTotal = TARGET_KEYS.reduce((sum, key) => sum + (normalized[key] || 0), 0);
-    const roundingDiff = 100 - finalTotal;
-    if (Math.abs(roundingDiff) > 0.01) {
-      normalized[changedKey] = Math.min(100, Math.max(0, (normalized[changedKey] || 0) + roundingDiff));
-    }
-
-    return normalized;
-  };
 
   const handleCategoryClick = (event: React.MouseEvent<HTMLElement>, category: CategoryWithSpending) => {
     setAnchorEl(event.currentTarget);
@@ -157,21 +126,29 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
   };
 
   const handleSliderChange = (key: SpendingCategory, newValue: number | number[]) => {
-    setLocalTargets(prev => ({ ...prev, [key]: newValue as number }));
+    setLocalTargets((prev) => ({ ...prev, [key]: newValue as number }));
+    setSaveError(null);
   };
 
-  const handleSliderCommit = async (key: SpendingCategory, newValue: number | number[]) => {
-    const updatedTargets = { ...localTargets, [key]: newValue as number };
-    const balancedTargets = rebalanceTargets(updatedTargets, key);
-    setLocalTargets(balancedTargets);
+  const handleResetTargets = () => {
+    setLocalTargets(savedTargets);
+    setSaveError(null);
+  };
+
+  const handleSaveTargets = async () => {
+    if (!isValidTotal || !hasUnsavedChanges) {
+      return;
+    }
+
+    setSavingTargets(true);
+    setSaveError(null);
     try {
-      await updateTargets(balancedTargets);
+      await updateTargets(localTargets);
     } catch (err) {
       console.error('Failed to update targets:', err);
-      // Revert on error
-      if (breakdown?.targets) {
-        setLocalTargets(breakdown.targets);
-      }
+      setSaveError(err instanceof Error ? err.message : t('saveError', { defaultValue: 'Failed to save allocation targets.' }));
+    } finally {
+      setSavingTargets(false);
     }
   };
 
@@ -194,16 +171,59 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="subtitle2" fontWeight="bold">
-          {t('title')}
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          {totalIncome > 0
-            ? t('subtitle.withIncome', { amount: totalIncome.toFixed(0) })
-            : t('subtitle.noIncome')}
-        </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+        <Box>
+          <Typography variant="subtitle2" fontWeight="bold">
+            {t('title')}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {totalIncome > 0
+              ? t('subtitle.withIncome', { amount: totalIncome.toFixed(0) })
+              : t('subtitle.noIncome')}
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Button
+            size="small"
+            variant="text"
+            onClick={handleResetTargets}
+            disabled={!hasUnsavedChanges || savingTargets}
+          >
+            {t('actions.reset', { defaultValue: 'Reset' })}
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            onClick={handleSaveTargets}
+            disabled={!canSaveTargets}
+          >
+            {savingTargets ? <CircularProgress size={18} color="inherit" /> : t('actions.save', { defaultValue: 'Save' })}
+          </Button>
+        </Box>
       </Box>
+
+      {saveError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {saveError}
+        </Alert>
+      )}
+
+      <Alert severity={!isValidTotal ? 'warning' : hasUnsavedChanges ? 'info' : 'success'} sx={{ mb: 2 }}>
+        {!isValidTotal
+          ? t('summary.invalid', {
+              total: totalPercentage.toFixed(0),
+              defaultValue: `Total: ${totalPercentage.toFixed(0)}%. Adjust to 100% to enable Save.`,
+            })
+          : hasUnsavedChanges
+            ? t('summary.validDirty', {
+                total: totalPercentage.toFixed(0),
+                defaultValue: `Total: ${totalPercentage.toFixed(0)}%. Save to apply changes.`,
+              })
+            : t('summary.validClean', {
+                total: totalPercentage.toFixed(0),
+                defaultValue: `Total: ${totalPercentage.toFixed(0)}%`,
+              })}
+      </Alert>
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {TARGET_KEYS.map((key) => {
@@ -232,10 +252,11 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
                   <Slider
                     value={target}
                     onChange={(_, val) => handleSliderChange(key, val)}
-                    onChangeCommitted={(_, val) => handleSliderCommit(key, val)}
+                    aria-label={label}
                     min={0}
                     max={100}
-                    step={5}
+                    step={1}
+                    disabled={savingTargets}
                     sx={{
                       color,
                       height: 6,

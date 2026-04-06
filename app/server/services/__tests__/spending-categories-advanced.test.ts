@@ -740,6 +740,69 @@ describe('spending categories service advanced coverage', () => {
     expect(client.release).toHaveBeenCalledTimes(1);
   });
 
+  it('ignores investment transfers above the monthly salary benchmark in breakdown totals', async () => {
+    client = createSchemaAwareClient(async (sql, params) => {
+      if (sql.includes('total_income')) {
+        return { rows: [{ total_income: '24000' }] };
+      }
+      if (sql.includes('total_salary')) {
+        return { rows: [{ total_salary: '20000' }] };
+      }
+      if (sql.includes('avg_transaction') && sql.includes('GROUP BY COALESCE(scm.spending_category')) {
+        return {
+          rows: [
+            {
+              spending_category: 'essential',
+              transaction_count: '1',
+              total_amount: '2000',
+              avg_transaction: '2000',
+            },
+          ],
+        };
+      }
+      if (sql.includes("COUNT(t.identifier) as transaction_count") && sql.includes("cd.category_type = 'investment'")) {
+        expect(sql).toContain('ABS(t.price) <= $3');
+        expect(new Date(params?.[0]).toISOString().slice(0, 10)).toBe('2026-01-01');
+        expect(new Date(params?.[1]).toISOString().slice(0, 10)).toBe('2026-03-01');
+        expect(Number(params?.[2])).toBeCloseTo(10000, 5);
+        return { rows: [{ transaction_count: '1', total_amount: '8000' }] };
+      }
+      if (sql.includes('AND t.price > 0') && sql.includes('category_definition_id IN')) {
+        return { rows: [{ total_amount: '0' }] };
+      }
+      if (sql.includes('FROM spending_category_targets')) {
+        return {
+          rows: [
+            { spending_category: 'essential', target_percentage: '50' },
+            { spending_category: 'growth', target_percentage: '20' },
+          ],
+        };
+      }
+      if (sql.includes('allocation_type') && sql.includes('FROM category_definitions cd')) {
+        return { rows: [] };
+      }
+      return { rows: [] };
+    });
+
+    serviceModule.__setDatabase({ getClient: async () => client });
+
+    const result = await serviceModule.getSpendingCategoryBreakdown({
+      startDate: '2026-01-01',
+      endDate: '2026-03-01',
+    });
+
+    const growth = result.breakdown.find((item: any) => item.spending_category === 'growth');
+
+    expect(result.total_income).toBe(24000);
+    expect(result.total_salary).toBe(20000);
+    expect(result.total_spending).toBe(10000);
+    expect(growth).toMatchObject({
+      total_amount: 8000,
+      transaction_count: 1,
+    });
+    expect(client.release).toHaveBeenCalledTimes(1);
+  });
+
   it('computes zero-total breakdowns with other->unallocated mapping and under status', async () => {
     client = createSchemaAwareClient(async (sql) => {
       if (sql.includes('total_income')) {
@@ -1112,6 +1175,78 @@ describe('spending categories service advanced coverage', () => {
       identifier: 'txn-investment',
       category_type: 'investment',
       price: -680000,
+    });
+    expect(client.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('filters oversized growth investment transactions using income when salary is unavailable', async () => {
+    let transactionQueryCount = 0;
+    let summaryQueryCount = 0;
+
+    client = createSchemaAwareClient(async (sql, params) => {
+      if (sql.includes('total_income')) {
+        return { rows: [{ total_income: '9000' }] };
+      }
+      if (sql.includes('total_salary')) {
+        return { rows: [{ total_salary: '0' }] };
+      }
+      if (sql.includes('AS category_name') && sql.includes('LIMIT $5 OFFSET $6')) {
+        transactionQueryCount += 1;
+        expect(sql).toContain("OR cd.category_type = 'investment'");
+        expect(sql).toContain('ABS(t.price) <= $4');
+        expect(new Date(params?.[0]).toISOString().slice(0, 10)).toBe('2026-01-01');
+        expect(new Date(params?.[1]).toISOString().slice(0, 10)).toBe('2026-03-31');
+        expect(params?.[2]).toBe('growth');
+        expect(Number(params?.[3])).toBeCloseTo(3000, 5);
+        expect(params?.[4]).toBe(500);
+        expect(params?.[5]).toBe(0);
+        return {
+          rows: [
+            {
+              identifier: 'txn-below-income-cap',
+              vendor: 'broker',
+              name: 'Monthly investment',
+              date: '2026-03-15',
+              price: '-2500',
+              account_number: '2222',
+              category_definition_id: 88,
+              category_type: 'investment',
+              status: 'completed',
+              category_name: 'השקעה',
+              category_name_en: 'Investment',
+              category_name_fr: 'Investissement',
+            },
+          ],
+        };
+      }
+      if (sql.includes('COUNT(*) AS total_count') && sql.includes('COALESCE(SUM(ABS(t.price)), 0)')) {
+        summaryQueryCount += 1;
+        expect(sql).toContain('ABS(t.price) <= $4');
+        expect(new Date(params?.[0]).toISOString().slice(0, 10)).toBe('2026-01-01');
+        expect(new Date(params?.[1]).toISOString().slice(0, 10)).toBe('2026-03-31');
+        expect(params?.[2]).toBe('growth');
+        expect(Number(params?.[3])).toBeCloseTo(3000, 5);
+        return { rows: [{ total_count: '1', total_amount: '2500' }] };
+      }
+      return { rows: [] };
+    });
+
+    serviceModule.__setDatabase({ getClient: async () => client });
+
+    const result = await serviceModule.getSpendingCategoryTransactions({
+      spendingCategory: 'growth',
+      startDate: '2026-01-01',
+      endDate: '2026-03-31',
+    });
+
+    expect(transactionQueryCount).toBe(1);
+    expect(summaryQueryCount).toBe(1);
+    expect(result.total_count).toBe(1);
+    expect(result.total_amount).toBe(2500);
+    expect(result.transactions[0]).toMatchObject({
+      identifier: 'txn-below-income-cap',
+      category_type: 'investment',
+      price: -2500,
     });
     expect(client.release).toHaveBeenCalledTimes(1);
   });

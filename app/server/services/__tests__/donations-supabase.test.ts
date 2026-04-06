@@ -767,4 +767,44 @@ describe('donations service supabase flows', () => {
       code: 'SUPABASE_NOT_CONFIGURED',
     });
   });
+
+  it('requires service role credentials for supporter table writes', async () => {
+    vi.resetModules();
+
+    process.env.SUPABASE_URL = 'https://example.supabase.co';
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.SUPABASE_ANON_KEY = 'anon-key';
+    process.env.SUPPORTER_REQUIRE_AUTH = 'false';
+
+    const release = vi.fn();
+    const query = vi.fn(async (sql: string) => {
+      const text = String(sql).replace(/\s+/g, ' ').trim().toLowerCase();
+      if (text.startsWith('create table') || text.startsWith('create index')) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (text.includes('insert into donation_meta')) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (text.includes('select last_reminder_month_key')) {
+        return { rows: [{ last_reminder_month_key: null }], rowCount: 1 };
+      }
+      if (text.includes('select coalesce(sum(amount_ils), 0) as total_amount_ils')) {
+        return { rows: [{ total_amount_ils: '0' }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    const getClient = vi.fn(async () => ({ query, release }));
+    const createClient = vi.fn();
+
+    const module = await import('../donations.js');
+    const service = module.default ?? module;
+    service.__setDatabase({ getClient });
+    service.__setSupabaseClients({ createClient });
+
+    await expect(service.createSupportIntent({}, { userId: 'u-3' })).rejects.toMatchObject({
+      status: 503,
+      code: 'SUPABASE_NOT_CONFIGURED',
+    });
+    expect(createClient).not.toHaveBeenCalled();
+  });
 });

@@ -443,6 +443,39 @@ const DashboardHomeContent: React.FC = () => {
     fetchFallbackBreakdown,
   ]);
 
+  useEffect(() => {
+    if (selectedBreakdownType !== 'income') {
+      return;
+    }
+
+    if (fallbackEnabled) {
+      if (
+        !fallbackBreakdownData.income &&
+        !fallbackBreakdownLoading.income &&
+        !fallbackBreakdownErrors.income
+      ) {
+        void fetchFallbackBreakdown('income');
+      }
+    } else if (
+      !breakdownData.income &&
+      !breakdownLoading.income &&
+      !breakdownErrors.income
+    ) {
+      void fetchBreakdown('income');
+    }
+  }, [
+    breakdownData.income,
+    breakdownErrors.income,
+    breakdownLoading.income,
+    fallbackBreakdownData.income,
+    fallbackBreakdownErrors.income,
+    fallbackBreakdownLoading.income,
+    fallbackEnabled,
+    fetchBreakdown,
+    fetchFallbackBreakdown,
+    selectedBreakdownType,
+  ]);
+
   // Toggle to compare current month with last month
   const toggleCompareLastMonth = () => {
     setCompareToLastMonth(!compareToLastMonth);
