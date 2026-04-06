@@ -10,6 +10,10 @@ const {
   mapVendorCodeToInstitutionId,
 } = require('../institutions.js');
 
+const STANDARD_SNAPSHOT_CONFLICT_TARGET = `
+  ON CONFLICT (account_id, as_of_date) WHERE holding_type = 'standard'
+`;
+
 /**
  * Get or create an investment account for a bank balance
  * @param {object} client - Database client (in transaction)
@@ -310,7 +314,7 @@ async function forwardFillMissingDates(client, accountId, today, logger = consol
       `INSERT INTO investment_holdings (
         account_id, current_value, cost_basis, as_of_date, asset_type, notes
       ) VALUES ($1, $2, $3, $4, $5, $6)
-      ON CONFLICT (account_id, as_of_date) DO NOTHING`,
+      ${STANDARD_SNAPSHOT_CONFLICT_TARGET} DO NOTHING`,
       [
         accountId,
         total_value,
@@ -406,7 +410,7 @@ async function syncBankBalanceToInvestments(client, credential, currentBalance, 
         `INSERT INTO investment_holdings (
           account_id, current_value, cost_basis, as_of_date, asset_type, notes
         ) VALUES ($1, $2, $2, $3, $4, $5)
-        ON CONFLICT (account_id, as_of_date) DO UPDATE
+        ${STANDARD_SNAPSHOT_CONFLICT_TARGET} DO UPDATE
         SET current_value = EXCLUDED.current_value,
             cost_basis = EXCLUDED.cost_basis,
             updated_at = CURRENT_TIMESTAMP`,
@@ -435,7 +439,7 @@ async function syncBankBalanceToInvestments(client, credential, currentBalance, 
       `INSERT INTO investment_holdings (
         account_id, current_value, cost_basis, as_of_date, asset_type, notes
       ) VALUES ($1, $2, $2, $3, $4, $5)
-      ON CONFLICT (account_id, as_of_date)
+      ${STANDARD_SNAPSHOT_CONFLICT_TARGET}
       DO UPDATE SET
         current_value = EXCLUDED.current_value,
         cost_basis = EXCLUDED.cost_basis,
@@ -523,7 +527,7 @@ async function forwardFillForCredential(client, credential, logger = console) {
         `INSERT INTO investment_holdings (
           account_id, current_value, cost_basis, as_of_date, asset_type, notes
         ) VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (account_id, as_of_date) DO NOTHING`,
+        ${STANDARD_SNAPSHOT_CONFLICT_TARGET} DO NOTHING`,
         [
           account.id,
           lastSnapshot.total_value,

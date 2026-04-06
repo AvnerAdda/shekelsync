@@ -56,6 +56,18 @@ create index if not exists supporter_entitlements_status_idx on public.supporter
 create index if not exists supporter_entitlements_updated_at_idx on public.supporter_entitlements (updated_at desc);
 ```
 
+## Row level security
+
+These tables live in `public`, so enable RLS after creating them:
+
+```sql
+alter table if exists public.supporter_intents enable row level security;
+alter table if exists public.supporter_entitlements enable row level security;
+```
+
+This project expects server-side access through `SUPABASE_SERVICE_ROLE_KEY`. No `anon` or `authenticated`
+policies are defined by default for these tables.
+
 ## Validation flow
 
 1. App inserts `supporter_intents` with `status='clicked'` when user opens the donation modal.
@@ -128,6 +140,9 @@ Important deployment note:
   - Run the SQL in this document in the Supabase SQL Editor.
   - Confirm table names match env values (`SUPABASE_SUPPORTER_INTENTS_TABLE`, `SUPABASE_SUPPORTER_ENTITLEMENTS_TABLE`).
   - Wait a few seconds and retry (PostgREST schema cache can lag briefly after table creation).
+- Error: `permission denied for table supporter_intents` (or `supporter_entitlements`)
+  - Confirm `SUPABASE_SERVICE_ROLE_KEY` is set for the server-side app environment.
+  - Confirm RLS is enabled and that you are not using the `anon` key for supporter table writes.
 
 ## Environment variables required
 

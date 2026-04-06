@@ -78,6 +78,8 @@ export interface BreakdownSummary {
   total: number;
   count: number;
   average: number;
+  pendingCount?: number;
+  processedCount?: number;
   min: number;
   max: number;
 }
