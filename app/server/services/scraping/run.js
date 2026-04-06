@@ -37,6 +37,26 @@ let databaseRef = baseDatabase;
 let lastTransactionDateServiceRef = lastTransactionDateService;
 
 const PENDING_COMPLETED_MATCH_WINDOW_HOURS = 36; // 1.5 days (handles timezone/date rounding)
+const MERCHANT_ALIAS_RULES = [
+  {
+    canonical: 'mega_bair',
+    patterns: [
+      /carrefour\s*market/iu,
+      /מגה\s+בעיר/u,
+    ],
+  },
+];
+const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
+const ISRAEL_DATE_PARTS_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: ISRAEL_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+});
 
 // Mutex to serialize scrape operations and prevent SQLite transaction conflicts
 // SQLite uses a single connection and doesn't support nested transactions
@@ -613,9 +633,34 @@ async function wasScrapedRecently(
 
 function normalizeComparableText(value) {
   return String(value ?? '')
+    .replace(/([A-Za-z])([\u0590-\u05FF])/g, '$1 $2')
+    .replace(/([\u0590-\u05FF])([A-Za-z])/g, '$1 $2')
+    .replace(/([0-9])([A-Za-z\u0590-\u05FF])/g, '$1 $2')
+    .replace(/([A-Za-z\u0590-\u05FF])([0-9])/g, '$1 $2')
+    .toLowerCase()
+    .replace(/[^0-9a-z\u0590-\u05ff]+/g, ' ')
     .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase();
+    .replace(/\s+/g, ' ');
+}
+
+function getComparableAliasTags(value) {
+  const normalized = normalizeComparableText(value);
+  if (!normalized) return [];
+
+  return MERCHANT_ALIAS_RULES
+    .filter((rule) => rule.patterns.some((pattern) => pattern.test(normalized)))
+    .map((rule) => rule.canonical);
+}
+
+function getComparableTokens(value) {
+  const normalized = normalizeComparableText(value);
+  if (!normalized) return [];
+  return normalized.split(' ').filter((token) => token.length >= 2);
+}
+
+function getSharedTokenCount(leftTokens, rightTokens) {
+  const rightSet = new Set(rightTokens);
+  return leftTokens.reduce((count, token) => count + (rightSet.has(token) ? 1 : 0), 0);
 }
 
 function getNameMatchScore(left, right) {
@@ -626,6 +671,20 @@ function getNameMatchScore(left, right) {
   if (a.startsWith(b) || b.startsWith(a)) return 2;
   const minLen = Math.min(a.length, b.length);
   if (minLen >= 6 && (a.includes(b) || b.includes(a))) return 1;
+
+  const leftAliasTags = getComparableAliasTags(left);
+  const rightAliasTags = getComparableAliasTags(right);
+  const hasSharedAliasTag = leftAliasTags.some((tag) => rightAliasTags.includes(tag));
+  if (hasSharedAliasTag) {
+    const sharedTokenCount = getSharedTokenCount(
+      getComparableTokens(left),
+      getComparableTokens(right),
+    );
+    if (sharedTokenCount >= 2) {
+      return 1;
+    }
+  }
+
   return 0;
 }
 
@@ -634,6 +693,353 @@ function getAbsHoursDiff(leftIso, rightIso) {
   const right = new Date(rightIso);
   if (Number.isNaN(left.getTime()) || Number.isNaN(right.getTime())) return Number.POSITIVE_INFINITY;
   return Math.abs(left.getTime() - right.getTime()) / (1000 * 60 * 60);
+}
+
+function getTransactionPrice(txn, isBank = false) {
+  const rawAmount = txn?.chargedAmount || txn?.originalAmount || 0;
+  return isBank ? rawAmount : rawAmount > 0 ? rawAmount * -1 : rawAmount;
+}
+
+function getIsraelDateTimeParts(value) {
+  const parsed = normalizeOptionalDatetime(value);
+  if (!parsed) return null;
+
+  const parts = Object.create(null);
+  for (const part of ISRAEL_DATE_PARTS_FORMATTER.formatToParts(parsed)) {
+    if (part.type !== 'literal') {
+      parts[part.type] = part.value;
+    }
+  }
+
+  return {
+    dateKey: `${parts.year}-${parts.month}-${parts.day}`,
+    hour: parts.hour,
+    minute: parts.minute,
+    second: parts.second,
+  };
+}
+
+function isIsraelMidnight(value) {
+  const parts = getIsraelDateTimeParts(value);
+  if (!parts) return false;
+  return parts.hour === '00' && parts.minute === '00' && parts.second === '00';
+}
+
+function hasSameInstant(left, right) {
+  const leftDate = normalizeOptionalDatetime(left);
+  const rightDate = normalizeOptionalDatetime(right);
+  if (!leftDate || !rightDate) return false;
+  return leftDate.getTime() === rightDate.getTime();
+}
+
+function hasSameProcessedMoment(left, right) {
+  return hasSameInstant(left, right);
+}
+
+function shouldPreferIncomingCompletedDuplicateTimestamp(existingIso, incomingIso) {
+  const existingDate = normalizeOptionalDatetime(existingIso);
+  const incomingDate = normalizeOptionalDatetime(incomingIso);
+
+  if (!existingDate) return Boolean(incomingDate);
+  if (!incomingDate) return false;
+
+  const existingIsMidnight = isIsraelMidnight(existingIso);
+  const incomingIsMidnight = isIsraelMidnight(incomingIso);
+
+  if (existingIsMidnight !== incomingIsMidnight) {
+    return existingIsMidnight && !incomingIsMidnight;
+  }
+
+  return false;
+}
+
+function normalizeOptionalDatetime(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function buildCompletionRecordFromTxn(txn) {
+  return {
+    name: txn.description ?? null,
+    processedDate: txn.processedDate || null,
+    processedDatetime: normalizeOptionalDatetime(txn.processedDate),
+    originalAmount: txn.originalAmount ?? null,
+    originalCurrency: txn.originalCurrency ?? null,
+    chargedCurrency: txn.chargedCurrency ?? null,
+    memo: txn.memo ?? null,
+    type: txn.type ?? null,
+  };
+}
+
+function buildCompletionRecordFromStoredTransaction(txn) {
+  return {
+    name: txn.name ?? null,
+    processedDate: txn.processed_date || null,
+    processedDatetime: normalizeOptionalDatetime(txn.processed_datetime || txn.processed_date),
+    originalAmount: txn.original_amount ?? null,
+    originalCurrency: txn.original_currency ?? null,
+    chargedCurrency: txn.charged_currency ?? null,
+    memo: txn.memo ?? null,
+    type: txn.type ?? null,
+  };
+}
+
+function isLikelyCompletedDuplicate(existingCandidate, transaction) {
+  if (!existingCandidate || !transaction) return false;
+
+  const existingParts = getIsraelDateTimeParts(existingCandidate.transaction_datetime);
+  const incomingParts = getIsraelDateTimeParts(transaction.date);
+  if (!existingParts || !incomingParts || existingParts.dateKey !== incomingParts.dateKey) {
+    return false;
+  }
+
+  if (!hasSameProcessedMoment(existingCandidate.processed_date, transaction.processedDate)) {
+    return false;
+  }
+
+  if (hasSameInstant(existingCandidate.transaction_datetime, transaction.date)) {
+    return true;
+  }
+
+  return isIsraelMidnight(existingCandidate.transaction_datetime) || isIsraelMidnight(transaction.date);
+}
+
+async function mergeCompletedDuplicateTransaction(
+  client,
+  existingCandidate,
+  completionRecord,
+  transactionDate = null,
+) {
+  const shouldReplaceTimestamp = shouldPreferIncomingCompletedDuplicateTimestamp(
+    existingCandidate?.transaction_datetime,
+    transactionDate,
+  );
+  const normalizedTransactionDate = shouldReplaceTimestamp
+    ? normalizeOptionalDatetime(transactionDate)
+    : null;
+
+  await client.query(
+    `
+      UPDATE transactions
+      SET name = COALESCE($1, name),
+          merchant_name = COALESCE($1, merchant_name),
+          processed_date = COALESCE($2, processed_date),
+          processed_datetime = COALESCE($3, processed_datetime),
+          original_amount = COALESCE($4, original_amount),
+          original_currency = COALESCE($5, original_currency),
+          charged_currency = COALESCE($6, charged_currency),
+          memo = CASE
+            WHEN (memo IS NULL OR memo = '') AND $7 IS NOT NULL THEN $7
+            ELSE memo
+          END,
+          type = COALESCE($8, type),
+          date = COALESCE($9, date),
+          transaction_datetime = COALESCE($10, transaction_datetime)
+      WHERE identifier = $11 AND vendor = $12
+    `,
+    [
+      completionRecord.name,
+      completionRecord.processedDate,
+      completionRecord.processedDatetime,
+      completionRecord.originalAmount,
+      completionRecord.originalCurrency,
+      completionRecord.chargedCurrency,
+      completionRecord.memo,
+      completionRecord.type,
+      normalizedTransactionDate,
+      normalizedTransactionDate,
+      existingCandidate.identifier,
+      existingCandidate.vendor,
+    ],
+  );
+}
+
+async function promotePendingTransactionToCompleted(client, pendingCandidate, completionRecord) {
+  await client.query(
+    `
+      UPDATE transactions
+      SET status = 'completed',
+          name = COALESCE($1, name),
+          merchant_name = COALESCE($1, merchant_name),
+          processed_date = COALESCE($2, processed_date),
+          processed_datetime = COALESCE($3, processed_datetime),
+          original_amount = COALESCE($4, original_amount),
+          original_currency = COALESCE($5, original_currency),
+          charged_currency = COALESCE($6, charged_currency),
+          memo = CASE
+            WHEN (memo IS NULL OR memo = '') AND $7 IS NOT NULL THEN $7
+            ELSE memo
+          END,
+          type = COALESCE($8, type)
+      WHERE identifier = $9 AND vendor = $10
+    `,
+    [
+      completionRecord.name,
+      completionRecord.processedDate,
+      completionRecord.processedDatetime,
+      completionRecord.originalAmount,
+      completionRecord.originalCurrency,
+      completionRecord.chargedCurrency,
+      completionRecord.memo,
+      completionRecord.type,
+      pendingCandidate.identifier,
+      pendingCandidate.vendor,
+    ],
+  );
+}
+
+async function deleteTransactionRecord(client, transaction) {
+  await client.query(
+    `DELETE FROM transactions WHERE identifier = $1 AND vendor = $2`,
+    [transaction.identifier, transaction.vendor],
+  );
+}
+
+function findMatchingScrapedCompletedTransaction(storedCompletedTxn, transactions = [], isBank = false) {
+  const scored = transactions
+    .filter((txn) => txn?.status === 'completed')
+    .map((txn) => {
+      if (Number(getTransactionPrice(txn, isBank)) !== Number(storedCompletedTxn?.price)) {
+        return null;
+      }
+
+      const matchScore = getNameMatchScore(txn.description, storedCompletedTxn?.name);
+      if (matchScore <= 0 || !isLikelyCompletedDuplicate(storedCompletedTxn, txn)) {
+        return null;
+      }
+
+      return {
+        txn,
+        matchScore,
+        hoursDiff: getAbsHoursDiff(txn.date, storedCompletedTxn.transaction_datetime),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.matchScore - a.matchScore || a.hoursDiff - b.hoursDiff);
+
+  return scored[0]?.txn || null;
+}
+
+function buildReconciliationWindow(transactions = []) {
+  const timestamps = transactions
+    .map((txn) => normalizeOptionalDatetime(txn?.date))
+    .filter(Boolean)
+    .map((value) => value.getTime());
+
+  if (timestamps.length === 0) {
+    return null;
+  }
+
+  const windowMs = PENDING_COMPLETED_MATCH_WINDOW_HOURS * 60 * 60 * 1000;
+  return {
+    startIso: new Date(Math.min(...timestamps) - windowMs).toISOString(),
+    endIso: new Date(Math.max(...timestamps) + windowMs).toISOString(),
+  };
+}
+
+async function findLifecycleTransactionsForReconciliation(
+  client,
+  { vendor, accountNumber, startIso, endIso },
+) {
+  const result = await client.query(
+    `
+      SELECT
+        identifier,
+        vendor,
+        name,
+        status,
+        price,
+        processed_date,
+        processed_datetime,
+        original_amount,
+        original_currency,
+        charged_currency,
+        memo,
+        type,
+        COALESCE(transaction_datetime, date) AS transaction_datetime
+      FROM transactions
+      WHERE vendor = $1
+        AND (account_number IS $2 OR (account_number IS NULL AND $2 IS NULL))
+        AND status IN ('pending', 'completed')
+        AND COALESCE(transaction_datetime, date) BETWEEN $3 AND $4
+      ORDER BY COALESCE(transaction_datetime, date) ASC
+    `,
+    [vendor, accountNumber ?? null, startIso, endIso],
+  );
+
+  return result.rows || [];
+}
+
+async function reconcileRecentlyScrapedAccountDuplicates(
+  client,
+  { vendor, accountNumber, transactions = [], isBank = false },
+) {
+  const completedTransactionsFromScrape = transactions.filter((txn) => txn?.status === 'completed');
+  const window = buildReconciliationWindow(completedTransactionsFromScrape);
+  if (!window) {
+    return { duplicatePairsResolved: 0 };
+  }
+
+  const lifecycleTransactions = await findLifecycleTransactionsForReconciliation(client, {
+    vendor,
+    accountNumber,
+    ...window,
+  });
+
+  if (lifecycleTransactions.length < 2) {
+    return { duplicatePairsResolved: 0 };
+  }
+
+  const pendingTransactions = lifecycleTransactions.filter((txn) => txn.status === 'pending');
+  const completedTransactions = lifecycleTransactions.filter((txn) => txn.status === 'completed');
+  const usedPendingIdentifiers = new Set();
+  let duplicatePairsResolved = 0;
+
+  for (const completedTxn of completedTransactions) {
+    const matchingScrapedCompletedTxn = findMatchingScrapedCompletedTransaction(
+      completedTxn,
+      completedTransactionsFromScrape,
+      isBank,
+    );
+    if (!matchingScrapedCompletedTxn) {
+      continue;
+    }
+
+    const matchingPendingCandidates = pendingTransactions.filter((candidate) => {
+      if (usedPendingIdentifiers.has(candidate.identifier)) {
+        return false;
+      }
+
+      return (
+        Number(candidate.price) === Number(completedTxn.price) &&
+        getAbsHoursDiff(candidate.transaction_datetime, completedTxn.transaction_datetime)
+          <= PENDING_COMPLETED_MATCH_WINDOW_HOURS
+      );
+    });
+
+    const bestPending = pickBestDuplicateCandidate(matchingPendingCandidates, {
+      name: completedTxn.name,
+      transactionDatetimeIso: completedTxn.transaction_datetime,
+      status: 'pending',
+    });
+
+    if (!bestPending) {
+      continue;
+    }
+
+    await promotePendingTransactionToCompleted(
+      client,
+      bestPending,
+      buildCompletionRecordFromStoredTransaction(completedTxn),
+    );
+    await deleteTransactionRecord(client, completedTxn);
+    usedPendingIdentifiers.add(bestPending.identifier);
+    duplicatePairsResolved += 1;
+  }
+
+  return { duplicatePairsResolved };
 }
 
 async function findPotentialDuplicateTransactions(client, { vendor, accountNumber, price, transactionDatetimeIso }) {
@@ -651,6 +1057,7 @@ async function findPotentialDuplicateTransactions(client, { vendor, accountNumbe
         vendor,
         name,
         status,
+        processed_date,
         COALESCE(transaction_datetime, date) AS transaction_datetime
       FROM transactions
       WHERE vendor = $1
@@ -685,8 +1092,7 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber, 
     ? null
     : transactionDate.toISOString();
 
-  const rawAmount = txn.chargedAmount || txn.originalAmount || 0;
-  const transactionPrice = isBank ? rawAmount : rawAmount > 0 ? rawAmount * -1 : rawAmount;
+  const transactionPrice = getTransactionPrice(txn, isBank);
 
   if (transactionDatetimeIso && (txn.status === 'pending' || txn.status === 'completed')) {
     const candidates = await findPotentialDuplicateTransactions(client, {
@@ -713,41 +1119,19 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber, 
     }
 
     if (txn.status === 'completed' && bestPending) {
-      if (bestCompleted) {
-        await client.query(
-          `DELETE FROM transactions WHERE identifier = $1 AND vendor = $2`,
-          [bestPending.identifier, bestPending.vendor],
-        );
-        return;
+      await promotePendingTransactionToCompleted(client, bestPending, buildCompletionRecordFromTxn(txn));
+      if (bestCompleted && isLikelyCompletedDuplicate(bestCompleted, txn)) {
+        await deleteTransactionRecord(client, bestCompleted);
       }
+      return;
+    }
 
-      await client.query(
-        `
-          UPDATE transactions
-          SET status = 'completed',
-              processed_date = COALESCE($1, processed_date),
-              processed_datetime = COALESCE($2, processed_datetime),
-              original_amount = COALESCE($3, original_amount),
-              original_currency = COALESCE($4, original_currency),
-              charged_currency = COALESCE($5, charged_currency),
-              memo = CASE
-                WHEN (memo IS NULL OR memo = '') AND $6 IS NOT NULL THEN $6
-                ELSE memo
-              END,
-              type = COALESCE($7, type)
-          WHERE identifier = $8 AND vendor = $9
-        `,
-        [
-          txn.processedDate || null,
-          txn.processedDate ? new Date(txn.processedDate) : null,
-          txn.originalAmount ?? null,
-          txn.originalCurrency ?? null,
-          txn.chargedCurrency ?? null,
-          txn.memo ?? null,
-          txn.type ?? null,
-          bestPending.identifier,
-          bestPending.vendor,
-        ],
+    if (txn.status === 'completed' && bestCompleted && isLikelyCompletedDuplicate(bestCompleted, txn)) {
+      await mergeCompletedDuplicateTransaction(
+        client,
+        bestCompleted,
+        buildCompletionRecordFromTxn(txn),
+        txn.date,
       );
       return;
     }
@@ -1224,6 +1608,18 @@ async function processScrapeResult(client, { options, credentials, result, isBan
       }
       await insertTransaction(txn, client, options.companyId, isBank, account.accountNumber, credentials.nickname);
     }
+
+    const reconciliation = await reconcileRecentlyScrapedAccountDuplicates(client, {
+      vendor: options.companyId,
+      accountNumber: account.accountNumber,
+      transactions: account.txns || [],
+      isBank,
+    });
+    if (reconciliation.duplicatePairsResolved > 0) {
+      logger?.info?.(
+        `[Scrape:${options.companyId}] Reconciled ${reconciliation.duplicatePairsResolved} duplicate lifecycle pair(s) for account ${account.accountNumber || 'N/A'}`,
+      );
+    }
   }
 
   await updateVendorAccountNumbers(client, options, credentials, discoveredAccountNumbers, isBank);
@@ -1581,6 +1977,23 @@ module.exports = {
     normalizeComparableText,
     getNameMatchScore,
     getAbsHoursDiff,
+    getTransactionPrice,
+    getIsraelDateTimeParts,
+    isIsraelMidnight,
+    hasSameInstant,
+    hasSameProcessedMoment,
+    shouldPreferIncomingCompletedDuplicateTimestamp,
+    normalizeOptionalDatetime,
+    buildCompletionRecordFromTxn,
+    buildCompletionRecordFromStoredTransaction,
+    isLikelyCompletedDuplicate,
+    mergeCompletedDuplicateTransaction,
+    promotePendingTransactionToCompleted,
+    deleteTransactionRecord,
+    findMatchingScrapedCompletedTransaction,
+    buildReconciliationWindow,
+    findLifecycleTransactionsForReconciliation,
+    reconcileRecentlyScrapedAccountDuplicates,
     findPotentialDuplicateTransactions,
     pickBestDuplicateCandidate,
     insertTransaction,

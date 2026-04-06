@@ -954,6 +954,52 @@ describe('scraping run service', () => {
       expect(none).toBeNull();
     });
 
+    it('matches known merchant rename variants during pending/completed transitions', async () => {
+      const internal = (runService as any)._internal;
+
+      const best = internal.pickBestDuplicateCandidate(
+        [
+          {
+            identifier: 'pending-chain-rename',
+            vendor: 'max',
+            name: 'CARREFOUR MARKETמגדל נחום',
+            status: 'pending',
+            transaction_datetime: '2026-03-19T22:00:00.000Z',
+          },
+        ],
+        {
+          name: 'מגה בעיר מגדל נחום',
+          transactionDatetimeIso: '2026-03-20T09:08:48.000Z',
+          status: 'pending',
+        },
+      );
+
+      expect(best?.identifier).toBe('pending-chain-rename');
+      expect(internal.getNameMatchScore('CARREFOUR MARKETמגדל נחום', 'מגה בעיר מגדל נחום')).toBe(1);
+    });
+
+    it('treats MAX midnight-local timestamps as duplicate completed transactions on the same local day', async () => {
+      const internal = (runService as any)._internal;
+
+      expect(
+        internal.isLikelyCompletedDuplicate(
+          {
+            identifier: 'completed-midnight',
+            vendor: 'max',
+            name: 'עיריית בת ים מוקד מילגם',
+            status: 'completed',
+            processed_date: '2026-04-09T21:00:00.000Z',
+            transaction_datetime: '2026-03-19T22:00:00.000Z',
+          },
+          {
+            date: '2026-03-20T10:29:57.000Z',
+            processedDate: '2026-04-09T21:00:00.000Z',
+            description: 'עיריית בת ים מוקד מילגם',
+          },
+        ),
+      ).toBe(true);
+    });
+
     it('updates vendor account numbers only when account ids are discoverable', async () => {
       const internal = (runService as any)._internal;
 
@@ -1317,15 +1363,322 @@ describe('scraping run service', () => {
       mockClient.query.mockResolvedValueOnce({
         rows: [
           { identifier: 'pending-2', vendor: 'max', name: 'Netflix', status: 'pending', transaction_datetime: '2026-02-10T09:50:00.000Z' },
-          { identifier: 'done-2', vendor: 'max', name: 'Netflix', status: 'completed', transaction_datetime: '2026-02-10T10:05:00.000Z' },
+          {
+            identifier: 'done-2',
+            vendor: 'max',
+            name: 'Netflix',
+            status: 'completed',
+            processed_date: '2026-02-10T10:00:00.000Z',
+            transaction_datetime: '2026-02-10T10:00:00.000Z',
+          },
+        ],
+      });
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+      await internal.insertTransaction({ ...baseTxn, status: 'completed' }, mockClient, 'max', false, '1234', 'Nick');
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE transactions'),
+        expect.arrayContaining(['pending-2', 'max']),
+      );
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('DELETE FROM transactions'),
+        ['done-2', 'max'],
+      );
+    });
+
+    it('does not delete unrelated completed rows when promoting a matching pending transaction', async () => {
+      const internal = (runService as any)._internal;
+
+      mockClient.query.mockResolvedValueOnce({
+        rows: [
+          {
+            identifier: 'pending-1',
+            vendor: 'max',
+            name: 'Netflix',
+            status: 'pending',
+            transaction_datetime: '2026-03-21T10:00:00.000Z',
+          },
+          {
+            identifier: 'completed-real',
+            vendor: 'max',
+            name: 'Netflix',
+            status: 'completed',
+            processed_date: '2026-03-20T12:00:00.000Z',
+            transaction_datetime: '2026-03-20T09:00:00.000Z',
+          },
         ],
       });
       mockClient.query.mockResolvedValueOnce({ rows: [], rowCount: 1 });
-      await internal.insertTransaction({ ...baseTxn, status: 'completed' }, mockClient, 'max', false, '1234', 'Nick');
+
+      await internal.insertTransaction(
+        {
+          identifier: 'incoming-2',
+          date: '2026-03-21T10:05:00.000Z',
+          processedDate: '2026-03-22T12:00:00.000Z',
+          description: 'Netflix',
+          chargedAmount: 54.9,
+          originalAmount: 54.9,
+          originalCurrency: 'ILS',
+          chargedCurrency: 'ILS',
+          type: 'card',
+          status: 'completed',
+        },
+        mockClient,
+        'max',
+        false,
+        '1234',
+        'Nick',
+      );
+
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE transactions'),
+        expect.arrayContaining(['pending-1', 'max']),
+      );
+      expect(
+        mockClient.query.mock.calls.some(
+          ([sql, params]: any[]) =>
+            String(sql).includes('DELETE FROM transactions')
+            && params?.[0] === 'completed-real'
+            && params?.[1] === 'max',
+        ),
+      ).toBe(false);
+    });
+
+    it('merges duplicate completed rows when MAX returns midnight-local and precise timestamps for the same charge', async () => {
+      const internal = (runService as any)._internal;
+      const duplicateCompletedTxn = {
+        identifier: 'txn-bat-yam',
+        date: '2026-03-20T10:29:57.000Z',
+        processedDate: '2026-04-09T21:00:00.000Z',
+        description: 'עיריית בת ים מוקד מילגם',
+        chargedAmount: 1180.27,
+        originalAmount: 1180.27,
+        originalCurrency: 'ILS',
+        chargedCurrency: 'ILS',
+        type: 'card',
+        status: 'completed',
+      };
+
+      mockClient.query.mockResolvedValueOnce({
+        rows: [
+          {
+            identifier: 'completed-midnight',
+            vendor: 'max',
+            name: 'עיריית בת ים מוקד מילגם',
+            status: 'completed',
+            processed_date: '2026-04-09T21:00:00.000Z',
+            transaction_datetime: '2026-03-19T22:00:00.000Z',
+          },
+        ],
+      });
+      mockClient.query.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+      await internal.insertTransaction(
+        duplicateCompletedTxn,
+        mockClient,
+        'max',
+        false,
+        '4886',
+        'Nick',
+      );
+
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE transactions'),
+        expect.arrayContaining(['completed-midnight', 'max']),
+      );
+      expect(
+        mockClient.query.mock.calls.some(([sql]: any[]) => String(sql).includes('INSERT INTO transactions')),
+      ).toBe(false);
+    });
+
+    it('updates pending rows when completed transactions use renamed merchant labels', async () => {
+      const internal = (runService as any)._internal;
+      const renamedTxn = {
+        identifier: 'txn-chain-rename',
+        date: '2026-03-20T09:08:48.000Z',
+        processedDate: '2026-03-20T09:08:48.000Z',
+        description: 'מגה בעיר מגדל נחום',
+        chargedAmount: 292.74,
+        originalAmount: 292.74,
+        originalCurrency: 'ILS',
+        chargedCurrency: 'ILS',
+        type: 'card',
+        status: 'completed',
+      };
+
+      mockClient.query.mockResolvedValueOnce({
+        rows: [
+          {
+            identifier: 'pending-chain-rename',
+            vendor: 'max',
+            name: 'CARREFOUR MARKETמגדל נחום',
+            status: 'pending',
+            transaction_datetime: '2026-03-19T22:00:00.000Z',
+          },
+        ],
+      });
+      mockClient.query.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+      await internal.insertTransaction(
+        renamedTxn,
+        mockClient,
+        'max',
+        false,
+        '4886',
+        'Nick',
+      );
+
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE transactions'),
+        expect.arrayContaining(['pending-chain-rename', 'max']),
+      );
+      expect(
+        mockClient.query.mock.calls.some(([sql]: any[]) => String(sql).includes('INSERT INTO transactions')),
+      ).toBe(false);
+    });
+
+    it('reconciles recently scraped pending/completed duplicate pairs before commit', async () => {
+      const internal = (runService as any)._internal;
+
+      mockClient.query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              identifier: 'pending-chain-rename',
+              vendor: 'max',
+              name: 'CARREFOUR MARKETמגדל נחום',
+              status: 'pending',
+              price: -292.74,
+              processed_date: '2026-04-10T00:00:00.000Z',
+              processed_datetime: '2026-04-10T00:00:00.000Z',
+              original_amount: 292.74,
+              original_currency: 'ILS',
+              charged_currency: 'ILS',
+              memo: null,
+              type: 'card',
+              transaction_datetime: '2026-03-19T22:00:00.000Z',
+            },
+            {
+              identifier: 'completed-chain-rename',
+              vendor: 'max',
+              name: 'מגה בעיר מגדל נחום',
+              status: 'completed',
+              price: -292.74,
+              processed_date: '2026-03-20T09:08:48.000Z',
+              processed_datetime: '2026-03-20T09:08:48.000Z',
+              original_amount: 292.74,
+              original_currency: 'ILS',
+              charged_currency: 'ILS',
+              memo: null,
+              type: 'card',
+              transaction_datetime: '2026-03-20T09:08:48.000Z',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+      const result = await internal.reconcileRecentlyScrapedAccountDuplicates(
+        mockClient,
+        {
+          vendor: 'max',
+          accountNumber: '4886',
+          transactions: [
+            {
+              identifier: 'txn-chain-rename',
+              date: '2026-03-20T09:08:48.000Z',
+              processedDate: '2026-03-20T09:08:48.000Z',
+              description: 'מגה בעיר מגדל נחום',
+              chargedAmount: 292.74,
+              originalAmount: 292.74,
+              originalCurrency: 'ILS',
+              chargedCurrency: 'ILS',
+              type: 'card',
+              status: 'completed',
+            },
+          ],
+        },
+      );
+
+      expect(result).toEqual({ duplicatePairsResolved: 1 });
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE transactions'),
+        expect.arrayContaining(['pending-chain-rename', 'max']),
+      );
       expect(mockClient.query).toHaveBeenCalledWith(
         expect.stringContaining('DELETE FROM transactions'),
-        ['pending-2', 'max'],
+        ['completed-chain-rename', 'max'],
       );
+    });
+
+    it('reconciles only completed rows that were returned by the current scrape', async () => {
+      const internal = (runService as any)._internal;
+
+      mockClient.query.mockResolvedValueOnce({
+        rows: [
+          {
+            identifier: 'pending-chain-rename',
+            vendor: 'max',
+            name: 'CARREFOUR MARKETמגדל נחום',
+            status: 'pending',
+            price: -292.74,
+            processed_date: '2026-04-10T00:00:00.000Z',
+            processed_datetime: '2026-04-10T00:00:00.000Z',
+            original_amount: 292.74,
+            original_currency: 'ILS',
+            charged_currency: 'ILS',
+            memo: null,
+            type: 'card',
+            transaction_datetime: '2026-03-19T22:00:00.000Z',
+          },
+          {
+            identifier: 'completed-chain-rename',
+            vendor: 'max',
+            name: 'מגה בעיר מגדל נחום',
+            status: 'completed',
+            price: -292.74,
+            processed_date: '2026-03-20T09:08:48.000Z',
+            processed_datetime: '2026-03-20T09:08:48.000Z',
+            original_amount: 292.74,
+            original_currency: 'ILS',
+            charged_currency: 'ILS',
+            memo: null,
+            type: 'card',
+            transaction_datetime: '2026-03-20T09:08:48.000Z',
+          },
+        ],
+      });
+
+      const result = await internal.reconcileRecentlyScrapedAccountDuplicates(
+        mockClient,
+        {
+          vendor: 'max',
+          accountNumber: '4886',
+          transactions: [
+            {
+              identifier: 'other-txn',
+              date: '2026-03-20T09:08:48.000Z',
+              processedDate: '2026-03-21T09:08:48.000Z',
+              description: 'מגה בעיר מגדל נחום',
+              chargedAmount: 292.74,
+              originalAmount: 292.74,
+              originalCurrency: 'ILS',
+              chargedCurrency: 'ILS',
+              type: 'card',
+              status: 'completed',
+            },
+          ],
+        },
+      );
+
+      expect(result).toEqual({ duplicatePairsResolved: 0 });
+      expect(
+        mockClient.query.mock.calls.some(([sql]: any[]) => String(sql).includes('UPDATE transactions')),
+      ).toBe(false);
+      expect(
+        mockClient.query.mock.calls.some(([sql]: any[]) => String(sql).includes('DELETE FROM transactions')),
+      ).toBe(false);
     });
 
     it('inserts non-bank transactions with fallback expense category when uncategorized', async () => {
