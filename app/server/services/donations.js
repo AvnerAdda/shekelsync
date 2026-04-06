@@ -338,8 +338,7 @@ function getSupabaseAdminClient() {
   }
 
   const serviceKey = normalizeText(process.env.SUPABASE_SERVICE_ROLE_KEY, 4096);
-  const anonKey = normalizeText(process.env.SUPABASE_ANON_KEY, 4096);
-  const client = createSupabaseClientOrNull(serviceKey || anonKey);
+  const client = createSupabaseClientOrNull(serviceKey);
   supabaseAdminClient = client;
   return client;
 }

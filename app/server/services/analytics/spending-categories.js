@@ -506,6 +506,89 @@ const SALARY_MATCH_SQL = `
   )
 `;
 
+function toAmount(value) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeDateValue(value) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
+}
+
+function getInclusiveDayCount(start, end) {
+  const startDate = normalizeDateValue(start);
+  const endDate = normalizeDateValue(end);
+
+  if (!startDate || !endDate || endDate < startDate) {
+    return 30;
+  }
+
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  return Math.max(1, Math.floor((endDate.getTime() - startDate.getTime()) / millisecondsPerDay) + 1);
+}
+
+function getMonthlyIncomeBenchmark({ totalSalary, totalIncome, start, end }) {
+  const benchmarkSource = totalSalary > 0 ? totalSalary : totalIncome;
+  if (!(benchmarkSource > 0)) {
+    return 0;
+  }
+
+  const dayCount = getInclusiveDayCount(start, end);
+  const monthFactor = Math.max(1, dayCount / 30);
+  return benchmarkSource / monthFactor;
+}
+
+function getInvestmentBenchmarkClause(amountCap, paramIndex) {
+  if (!(amountCap > 0)) {
+    return { clause: '', params: [] };
+  }
+
+  return {
+    clause: ` AND ABS(t.price) <= $${paramIndex}`,
+    params: [amountCap],
+  };
+}
+
+async function getIncomeTotalsForPeriod(client, { start, end, capitalReturnSubquery }) {
+  const incomeResult = await client.query(`
+    SELECT COALESCE(SUM(t.price), 0) as total_income
+    FROM transactions t
+    LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+    WHERE t.date >= $1 AND t.date <= $2
+      AND t.price > 0
+      AND (cd.category_type = 'income' OR t.category_type = 'income')
+      AND (cd.is_counted_as_income IS NULL OR cd.is_counted_as_income = 1)
+      AND cd.id NOT IN (${capitalReturnSubquery})
+  `, [start, end]);
+
+  const salaryResult = await client.query(`
+    SELECT COALESCE(SUM(t.price), 0) as total_salary
+    FROM transactions t
+    LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+    LEFT JOIN category_definitions parent_cd ON parent_cd.id = cd.parent_id
+    WHERE t.date >= $1 AND t.date <= $2
+      AND t.price > 0
+      AND (cd.category_type = 'income' OR t.category_type = 'income')
+      AND (cd.is_counted_as_income IS NULL OR cd.is_counted_as_income = 1)
+      AND cd.id NOT IN (${capitalReturnSubquery})
+      AND ${SALARY_MATCH_SQL}
+  `, [start, end]);
+
+  return {
+    totalIncome: toAmount(getRows(incomeResult)[0]?.total_income),
+    totalSalary: toAmount(getRows(salaryResult)[0]?.total_salary),
+  };
+}
+
 /**
  * Get spending category breakdown with actual spending data
  * Uses current month income as 100% base for allocation percentages
@@ -526,32 +609,12 @@ async function getSpendingCategoryBreakdown(params = {}) {
     `;
 
     await ensureSpendingCategorySchema(client);
-    // Get total income for the period (salary = positive transactions with Income category)
-    const incomeResult = await client.query(`
-      SELECT COALESCE(SUM(t.price), 0) as total_income
-      FROM transactions t
-      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      WHERE t.date >= $1 AND t.date <= $2
-        AND t.price > 0
-        AND (cd.category_type = 'income' OR t.category_type = 'income')
-        AND (cd.is_counted_as_income IS NULL OR cd.is_counted_as_income = 1)
-        AND cd.id NOT IN (${capitalReturnSubquery})
-    `, [start, end]);
-
-    const totalIncome = parseFloat(incomeResult.rows[0]?.total_income || 0);
-    const salaryResult = await client.query(`
-      SELECT COALESCE(SUM(t.price), 0) as total_salary
-      FROM transactions t
-      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN category_definitions parent_cd ON parent_cd.id = cd.parent_id
-      WHERE t.date >= $1 AND t.date <= $2
-        AND t.price > 0
-        AND (cd.category_type = 'income' OR t.category_type = 'income')
-        AND (cd.is_counted_as_income IS NULL OR cd.is_counted_as_income = 1)
-        AND cd.id NOT IN (${capitalReturnSubquery})
-        AND ${SALARY_MATCH_SQL}
-    `, [start, end]);
-    const totalSalary = parseFloat(salaryResult.rows[0]?.total_salary || 0);
+    const { totalIncome, totalSalary } = await getIncomeTotalsForPeriod(client, {
+      start,
+      end,
+      capitalReturnSubquery,
+    });
+    const investmentIgnoreThreshold = getMonthlyIncomeBenchmark({ totalSalary, totalIncome, start, end });
 
     // Get spending totals by spending category
     const result = await client.query(`
@@ -580,6 +643,7 @@ async function getSpendingCategoryBreakdown(params = {}) {
     const breakdown = result.rows;
 
     // Investment outflows (pikadon, study fund, etc.) count as growth spending
+    const investmentBenchmark = getInvestmentBenchmarkClause(investmentIgnoreThreshold, 3);
     const investmentResult = await client.query(`
       SELECT
         COUNT(t.identifier) as transaction_count,
@@ -593,7 +657,8 @@ async function getSpendingCategoryBreakdown(params = {}) {
         AND t.price < 0
         AND cd.category_type = 'investment'
         AND tpe.transaction_identifier IS NULL
-    `, [start, end]);
+        ${investmentBenchmark.clause}
+    `, [start, end, ...investmentBenchmark.params]);
     const investmentAmount = parseFloat(getRows(investmentResult)[0]?.total_amount || 0);
     const investmentCount = parseInt(getRows(investmentResult)[0]?.transaction_count || 0, 10);
 
@@ -773,6 +838,22 @@ async function getSpendingCategoryTransactions(params = {}) {
     `;
 
     await ensureSpendingCategorySchema(client);
+    let investmentIgnoreThreshold = 0;
+    if (spendingCategory === 'growth') {
+      const totals = await getIncomeTotalsForPeriod(client, {
+        start,
+        end,
+        capitalReturnSubquery,
+      });
+      investmentIgnoreThreshold = getMonthlyIncomeBenchmark({
+        totalSalary: totals.totalSalary,
+        totalIncome: totals.totalIncome,
+        start,
+        end,
+      });
+    }
+
+    const investmentBenchmark = getInvestmentBenchmarkClause(investmentIgnoreThreshold, 4);
 
     const allocationFilter = spendingCategory === 'growth'
       ? `
@@ -782,6 +863,7 @@ async function getSpendingCategoryTransactions(params = {}) {
             AND COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') = $3
           )
           OR cd.category_type = 'investment'
+          ${investmentBenchmark.clause}
         )
       `
       : `
@@ -815,8 +897,8 @@ async function getSpendingCategoryTransactions(params = {}) {
         AND tpe.transaction_identifier IS NULL
         AND ${allocationFilter}
       ORDER BY t.date DESC, ABS(t.price) DESC
-      LIMIT $4 OFFSET $5
-    `, [start, end, spendingCategory, limit, offset]);
+      LIMIT $${4 + investmentBenchmark.params.length} OFFSET $${5 + investmentBenchmark.params.length}
+    `, [start, end, spendingCategory, ...investmentBenchmark.params, limit, offset]);
 
     const summaryResult = await client.query(`
       SELECT
@@ -833,7 +915,7 @@ async function getSpendingCategoryTransactions(params = {}) {
         AND cd.id NOT IN (${capitalReturnSubquery})
         AND tpe.transaction_identifier IS NULL
         AND ${allocationFilter}
-    `, [start, end, spendingCategory]);
+    `, [start, end, spendingCategory, ...investmentBenchmark.params]);
 
     const summary = summaryResult.rows[0] || {};
 

@@ -1611,7 +1611,17 @@
       },
       "empty": {
         "selectPrompt": "Cliquez sur un type d'allocation pour gérer ses catégories"
-      }
+      },
+      "actions": {
+        "reset": "Réinitialiser",
+        "save": "Enregistrer"
+      },
+      "summary": {
+        "validClean": "Total : {{total}}%",
+        "validDirty": "Total : {{total}}%. Enregistrez pour appliquer les changements.",
+        "invalid": "Total : {{total}}%. Ajustez à 100% pour activer l'enregistrement."
+      },
+      "saveError": "Impossible d'enregistrer les objectifs d'allocation."
     },
     "budgetHealth": {
       "title": "Moniteur de santé budgétaire",
