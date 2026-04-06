@@ -1629,7 +1629,17 @@
       },
       "empty": {
         "selectPrompt": "Click an allocation type to view and manage its categories"
-      }
+      },
+      "actions": {
+        "reset": "Reset",
+        "save": "Save"
+      },
+      "summary": {
+        "validClean": "Total: {{total}}%",
+        "validDirty": "Total: {{total}}%. Save to apply changes.",
+        "invalid": "Total: {{total}}%. Adjust to 100% to enable Save."
+      },
+      "saveError": "Failed to save allocation targets."
     },
     "budgetHealth": {
       "title": "Budget Health Monitor",

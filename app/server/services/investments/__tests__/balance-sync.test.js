@@ -354,6 +354,11 @@ describe('balance sync service', () => {
 
       const holdingsInserts = client.calls.filter((c) => c.sql.includes('INSERT INTO investment_holdings'));
       expect(holdingsInserts.length).toBeGreaterThanOrEqual(2);
+      expect(
+        holdingsInserts.every((c) =>
+          c.sql.includes("ON CONFLICT (account_id, as_of_date) WHERE holding_type = 'standard'"),
+        ),
+      ).toBe(true);
       expect(holdingsInserts.some((c) => c.params[4] === 'Auto-calculated month-start balance')).toBe(true);
       expect(holdingsInserts.some((c) => c.params[4] === 'Current balance from scraper')).toBe(true);
     });
@@ -521,6 +526,7 @@ describe('balance sync service', () => {
           c.params[5] === 'Forward-filled (no new data from bank)',
       );
       expect(todayInsert).toBeDefined();
+      expect(todayInsert.sql).toContain("ON CONFLICT (account_id, as_of_date) WHERE holding_type = 'standard'");
     });
   });
 });
