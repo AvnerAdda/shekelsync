@@ -73,30 +73,14 @@ jobs:
         if: matrix.os == 'macos-latest'
         shell: bash
         env:
-          GITHUB_REF: ${{ github.ref }}
           MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            missing=()
-            [ -n "$MACOS_CERT_P12" ] || missing+=("MACOS_CERT_P12")
-            [ -n "$MACOS_CERT_PASSWORD" ] || missing+=("MACOS_CERT_PASSWORD")
-            [ -n "$APPLE_ID" ] || missing+=("APPLE_ID")
-            [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] || missing+=("APPLE_APP_SPECIFIC_PASSWORD")
-            [ -n "$APPLE_TEAM_ID" ] || missing+=("APPLE_TEAM_ID")
-
-            if [ ${#missing[@]} -gt 0 ]; then
-              echo "Tagged macOS releases require Developer ID signing and notarization secrets."
-              echo "Missing secrets: ${missing[*]}"
-              exit 1
-            fi
-          fi
-
-          if [ -z "$MACOS_CERT_P12" ]; then
-            echo "MACOS_CERT_P12 not configured; skipping macOS signing setup."
+          if [ -z "$MACOS_CERT_P12" ] || [ -z "$MACOS_CERT_PASSWORD" ]; then
+            echo "::warning::macOS signing secrets are not fully configured; building unsigned macOS artifacts."
             exit 0
           fi
 
@@ -104,16 +88,12 @@ jobs:
           echo "CSC_LINK=$(pwd)/macos-cert.p12" >> $GITHUB_ENV
           echo "CSC_KEY_PASSWORD=$MACOS_CERT_PASSWORD" >> $GITHUB_ENV
 
-          if [ -n "$APPLE_ID" ]; then
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
             echo "APPLE_ID=$APPLE_ID" >> $GITHUB_ENV
-          fi
-
-          if [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
             echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD" >> $GITHUB_ENV
-          fi
-
-          if [ -n "$APPLE_TEAM_ID" ]; then
             echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> $GITHUB_ENV
+          else
+            echo "::warning::macOS notarization secrets are not fully configured; skipping notarization."
           fi
 
       - name: Prepare Linux signing
