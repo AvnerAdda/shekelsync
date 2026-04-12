@@ -3,7 +3,7 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { createAnalyticsRouter } = require('../../routes/analytics.js');
+const { createAnalyticsProfilingRouter } = require('../../routes/analytics-profiling.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const profilingService = require('../../services/analytics/profiling.js');
 
@@ -14,7 +14,7 @@ function buildApp(locale = 'en') {
     req.locale = locale;
     next();
   });
-  app.use('/api/analytics', createAnalyticsRouter());
+  app.use('/api/analytics', createAnalyticsProfilingRouter());
   return app;
 }
 
@@ -84,6 +84,33 @@ describe('Shared /api/analytics profiling routes', () => {
       error: 'Complete the required profile fields before generating profiling',
       missingFields: ['location', 'monthly_income'],
     });
+  });
+
+  it('falls back to request locale resolution and includes service error codes', async () => {
+    app = express();
+    app.use(express.json());
+    app.use('/api/analytics', createAnalyticsProfilingRouter());
+
+    vi.spyOn(profilingService, 'generateProfilingAssessment').mockRejectedValue({
+      status: 422,
+      message: 'Profiling prompt failed validation',
+      code: 'PROFILE_PROMPT_INVALID',
+    });
+
+    const res = await request(app)
+      .post('/api/analytics/profiling/generate')
+      .set('x-locale', 'en-US')
+      .send({ openaiApiKey: 'sk-test-key' })
+      .expect(422);
+
+    expect(res.body).toEqual({
+      error: 'Profiling prompt failed validation',
+      code: 'PROFILE_PROMPT_INVALID',
+    });
+    expect(profilingService.generateProfilingAssessment).toHaveBeenCalledWith(
+      { openaiApiKey: 'sk-test-key' },
+      { locale: 'en' },
+    );
   });
 
   it('returns 500 for profiling status failures', async () => {
