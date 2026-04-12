@@ -412,6 +412,17 @@ const TABLE_DEFINITIONS = [
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (user_profile_id) REFERENCES user_profile(id) ON DELETE CASCADE
     );`,
+  `CREATE TABLE IF NOT EXISTS profile_assessments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      assessment_type TEXT NOT NULL UNIQUE,
+      profile_hash TEXT,
+      benchmark_version TEXT,
+      openai_model TEXT,
+      generated_at TEXT,
+      assessment_json TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`,
   `CREATE TABLE IF NOT EXISTS vendor_credentials (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       id_number TEXT,
@@ -993,6 +1004,7 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_children_birth_date ON children_profile (birth_date);',
   'CREATE INDEX IF NOT EXISTS idx_children_education_stage ON children_profile (education_stage);',
   'CREATE INDEX IF NOT EXISTS idx_children_profile_user_id ON children_profile (user_profile_id);',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_assessments_type ON profile_assessments (assessment_type);',
   'CREATE INDEX IF NOT EXISTS idx_investment_accounts_active ON investment_accounts (is_active);',
   'CREATE INDEX IF NOT EXISTS idx_investment_accounts_category ON investment_accounts (investment_category) WHERE investment_category IS NOT NULL;',
   'CREATE INDEX IF NOT EXISTS idx_investment_accounts_is_liquid ON investment_accounts (is_liquid) WHERE is_liquid IS NOT NULL;',

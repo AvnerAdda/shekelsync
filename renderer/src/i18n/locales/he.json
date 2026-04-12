@@ -938,7 +938,102 @@
       "spending": "הוצאות",
       "budget": "תקציב",
       "scoring": "ציון",
-      "subscriptions": "מנויים"
+      "subscriptions": "מנויים",
+      "profiling": "פרופילינג"
+    },
+    "profiling": {
+      "title": "פרופילינג פיננסי",
+      "subtitle": "הסבר חד-פעמי מבוסס AI על מיקום משק הבית שלכם מול מדדים רשמיים בישראל.",
+      "loading": "טוען פרופילינג",
+      "retry": "נסה שוב",
+      "generate": "צור פרופילינג",
+      "refresh": "רענן פרופילינג",
+      "openSettings": "פתח הגדרות",
+      "completeProfile": "השלם פרופיל",
+      "missingKeyTitle": "נדרש מפתח OpenAI",
+      "missingKeyDescription": "הוסיפו מפתח API של OpenAI בהגדרות כדי לייצר הערכת פרופילינג.",
+      "incompleteTitle": "פרטי הפרופיל אינם מלאים",
+      "incompleteDescription": "כדי להשוות אתכם למדדים הרשמיים צריך להשלים כמה פרטי ליבה על משק הבית.",
+      "emptyTitle": "הפרופילינג מוכן ליצירה",
+      "emptyDescription": "צרו סיכום חד-פעמי המבוסס על הפרופיל השמור ועל שלושת החודשים האחרונים של הפעילות שנקלטה.",
+      "staleTitle": "הפרופילינג השמור אינו מעודכן",
+      "staleDescription": "ההערכה השמורה עדיין מוצגת, אך היא כבר לא תואמת לפרופיל הנוכחי או לגרסת המדדים הארוזה.",
+      "scoreLabel": "ציון כולל",
+      "summaryTitle": "סיכום",
+      "generatedAt": "נוצר בתאריך",
+      "benchmarkVersion": "גרסת מדדים",
+      "confidenceLabel": "רמת ביטחון",
+      "statusLabel": "סטטוס",
+      "strengthsTitle": "חוזקות",
+      "risksTitle": "סיכונים",
+      "actionsTitle": "פעולות",
+      "caveatsTitle": "הסתייגויות",
+      "noCaveats": "לא נרשמו הסתייגויות נוספות.",
+      "noItems": "לא נרשמו פריטים.",
+      "comparatorTitle": "פירוק ההשוואות",
+      "metricsTitle": "תמונת פרופיל",
+      "sourcesTitle": "מקורות",
+      "sourceCaption": "מדד רשמי בתוקף מ-{{date}}",
+      "sourceLink": "פתיחת מקור",
+      "actualValue": "בפועל",
+      "benchmarkValue": "מדד",
+      "ratioLabel": "יחס",
+      "weightLabel": "משקל {{value}}%",
+      "supportingOnly": "תומך בלבד",
+      "unknownValue": "לא ידוע",
+      "band": {
+        "well_below_average": "נמוך משמעותית מהממוצע",
+        "below_average": "נמוך מהממוצע",
+        "near_average": "קרוב לממוצע",
+        "above_average": "מעל הממוצע",
+        "well_above_average": "מעל הממוצע משמעותית"
+      },
+      "status": {
+        "current": "עדכני",
+        "stale": "לא מעודכן",
+        "matched": "התאמה מלאה",
+        "fallback": "השוואת גיבוי",
+        "skipped": "דולג"
+      },
+      "fields": {
+        "age_or_birth_date": "גיל או תאריך לידה",
+        "location": "מיקום",
+        "monthly_income": "הכנסה חודשית",
+        "marital_status": "מצב משפחתי",
+        "household_size": "גודל משק הבית",
+        "children_count": "מספר ילדים",
+        "occupation_or_industry": "עיסוק או תחום",
+        "spouse_monthly_income": "הכנסה חודשית של בן או בת הזוג"
+      },
+      "staleReasons": {
+        "profile_changed": "הפרופיל השמור השתנה מאז שנוצרה ההערכה הזו.",
+        "benchmark_updated": "חבילת המדדים המעודכנת שונה מאז שנוצרה ההערכה הזו.",
+        "profile_incomplete": "חלק מהשדות הנדרשים לפרופילינג חסרים כעת."
+      },
+      "comparatorLabels": {
+        "incomeVsHouseholdSize": "הכנסה מול גודל משק הבית",
+        "incomeVsOccupationOrIndustry": "הכנסה מול עיסוק",
+        "incomeVsLocation": "הכנסה מול מיקום",
+        "expensePressureVsHouseholdSize": "לחץ הוצאות",
+        "nationalWageAnchor": "עוגן שכר ארצי"
+      },
+      "metrics": {
+        "householdIncome": "הכנסה מוצהרת של משק הבית",
+        "primaryIncome": "הכנסה חודשית ראשית",
+        "spouseIncome": "הכנסה חודשית של בן או בת הזוג",
+        "monthlyExpenses": "הוצאות חודשיות נצפות",
+        "monthlySavings": "חיסכון חודשי נצפה",
+        "location": "מיקום ממופה",
+        "householdSize": "משק בית",
+        "occupation": "עיסוק או תחום",
+        "householdSizeValue": "{{count}} נפשות • {{children}} ילדים"
+      },
+      "errors": {
+        "statusLoadFailed": "טעינת סטטוס הפרופילינג נכשלה",
+        "generateFailed": "יצירת הפרופילינג נכשלה",
+        "missingApiKey": "הוסיפו מפתח OpenAI בהגדרות כדי ליצור פרופילינג.",
+        "generic": "אירעה שגיאה לא ידועה"
+      }
     },
     "errors": {
       "fetchFailed": "טעינת נתוני הניתוח נכשלה",
