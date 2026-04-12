@@ -918,7 +918,102 @@
       "spending": "Dépenses",
       "budget": "Budget",
       "scoring": "Score",
-      "subscriptions": "Abonnements"
+      "subscriptions": "Abonnements",
+      "profiling": "Profilage"
+    },
+    "profiling": {
+      "title": "Profilage financier",
+      "subtitle": "Une explication IA ponctuelle de la position de votre foyer face aux références officielles israéliennes.",
+      "loading": "Chargement du profilage",
+      "retry": "Réessayer",
+      "generate": "Générer le profilage",
+      "refresh": "Actualiser le profilage",
+      "openSettings": "Ouvrir les paramètres",
+      "completeProfile": "Compléter le profil",
+      "missingKeyTitle": "Clé OpenAI requise",
+      "missingKeyDescription": "Ajoutez votre clé API OpenAI dans les Paramètres pour générer une évaluation de profilage.",
+      "incompleteTitle": "Le profil est incomplet",
+      "incompleteDescription": "Le profilage a besoin de quelques informations essentielles sur le foyer avant toute comparaison avec les références officielles.",
+      "emptyTitle": "Le profilage est prêt",
+      "emptyDescription": "Générez un résumé ponctuel basé sur votre profil enregistré et sur les trois derniers mois d'activité suivie.",
+      "staleTitle": "Le profilage enregistré n'est plus à jour",
+      "staleDescription": "L'évaluation enregistrée reste visible, mais elle ne correspond plus au profil actuel ou à la version de référence embarquée.",
+      "scoreLabel": "Note globale",
+      "summaryTitle": "Résumé",
+      "generatedAt": "Généré le",
+      "benchmarkVersion": "Version des références",
+      "confidenceLabel": "Confiance",
+      "statusLabel": "Statut",
+      "strengthsTitle": "Forces",
+      "risksTitle": "Risques",
+      "actionsTitle": "Actions",
+      "caveatsTitle": "Réserves",
+      "noCaveats": "Aucune réserve supplémentaire n'a été enregistrée.",
+      "noItems": "Aucun élément n'a été enregistré.",
+      "comparatorTitle": "Détail des comparateurs",
+      "metricsTitle": "Instantané du profil",
+      "sourcesTitle": "Sources",
+      "sourceCaption": "Référence officielle en vigueur au {{date}}",
+      "sourceLink": "Ouvrir la source",
+      "actualValue": "Réel",
+      "benchmarkValue": "Référence",
+      "ratioLabel": "Ratio",
+      "weightLabel": "Poids {{value}} %",
+      "supportingOnly": "support uniquement",
+      "unknownValue": "Inconnu",
+      "band": {
+        "well_below_average": "Bien en dessous de la moyenne",
+        "below_average": "En dessous de la moyenne",
+        "near_average": "Proche de la moyenne",
+        "above_average": "Au-dessus de la moyenne",
+        "well_above_average": "Bien au-dessus de la moyenne"
+      },
+      "status": {
+        "current": "À jour",
+        "stale": "Obsolète",
+        "matched": "Correspondance",
+        "fallback": "Secours",
+        "skipped": "Ignoré"
+      },
+      "fields": {
+        "age_or_birth_date": "Âge ou date de naissance",
+        "location": "Lieu",
+        "monthly_income": "Revenu mensuel",
+        "marital_status": "Situation familiale",
+        "household_size": "Taille du foyer",
+        "children_count": "Nombre d'enfants",
+        "occupation_or_industry": "Profession ou secteur",
+        "spouse_monthly_income": "Revenu mensuel du conjoint"
+      },
+      "staleReasons": {
+        "profile_changed": "Votre profil enregistré a changé depuis la génération de cette évaluation.",
+        "benchmark_updated": "L'instantané des références embarquées a changé depuis cette génération.",
+        "profile_incomplete": "Certains champs désormais requis pour le profilage sont absents."
+      },
+      "comparatorLabels": {
+        "incomeVsHouseholdSize": "Revenu vs taille du foyer",
+        "incomeVsOccupationOrIndustry": "Revenu vs profession",
+        "incomeVsLocation": "Revenu vs localisation",
+        "expensePressureVsHouseholdSize": "Pression des dépenses",
+        "nationalWageAnchor": "Ancre salariale nationale"
+      },
+      "metrics": {
+        "householdIncome": "Revenu déclaré du foyer",
+        "primaryIncome": "Revenu mensuel principal",
+        "spouseIncome": "Revenu mensuel du conjoint",
+        "monthlyExpenses": "Dépenses mensuelles observées",
+        "monthlySavings": "Épargne mensuelle observée",
+        "location": "Localisation mappée",
+        "householdSize": "Foyer",
+        "occupation": "Profession ou secteur",
+        "householdSizeValue": "{{count}} membres • {{children}} enfants"
+      },
+      "errors": {
+        "statusLoadFailed": "Impossible de charger le statut du profilage",
+        "generateFailed": "Impossible de générer le profilage",
+        "missingApiKey": "Ajoutez une clé OpenAI dans les Paramètres pour générer le profilage.",
+        "generic": "Une erreur inconnue est survenue"
+      }
     },
     "errors": {
       "fetchFailed": "Impossible de récupérer les données d'analyse",

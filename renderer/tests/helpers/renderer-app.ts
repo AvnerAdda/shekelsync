@@ -757,6 +757,90 @@ const defaultProfile = {
   children: [],
 };
 
+const profilingAssessment = {
+  generatedAt: '2026-04-09T12:00:00.000Z',
+  benchmarkVersion: 'israel-official-2026-01-v1',
+  score: 68,
+  band: 'above_average',
+  confidence: 0.86,
+  comparators: [
+    {
+      key: 'incomeVsHouseholdSize',
+      label: 'Household income vs household-size benchmark',
+      score: 72,
+      weight: 0.4,
+      weighted: true,
+      status: 'matched',
+      actualValue: 24000,
+      benchmarkValue: 20051,
+      delta: 3949,
+      ratio: 1.2,
+      note: 'Compared against the official household-size benchmark.',
+      sourceId: 'cbs_household_size_2022',
+    },
+    {
+      key: 'incomeVsLocation',
+      label: 'Household income vs locality benchmark',
+      score: 63,
+      weight: 0.2,
+      weighted: true,
+      status: 'matched',
+      actualValue: 24000,
+      benchmarkValue: 24819,
+      delta: -819,
+      ratio: 0.97,
+      note: 'Compared against the locality benchmark.',
+      sourceId: 'cbs_locality_2020',
+    },
+  ],
+  metrics: {
+    age: 32,
+    maritalStatus: 'Single',
+    location: 'Tel Aviv',
+    mappedLocation: 'Tel Aviv-Yafo',
+    householdSize: 1,
+    childrenCount: 0,
+    occupation: 'Engineer',
+    industry: 'Tech',
+    primaryMonthlyIncome: 15000,
+    spouseMonthlyIncome: 0,
+    declaredHouseholdIncome: 15000,
+    observedLast3Months: {
+      startDate: '2026-01-09',
+      endDate: '2026-04-09',
+      totalIncome: 45000,
+      totalExpenses: 24000,
+      monthlyIncome: 15000,
+      monthlyExpenses: 8000,
+      monthlySavings: 7000,
+      transactionCount: 18,
+    },
+    officialBenchmarks: {
+      nationalAverageSalary: 13566,
+      householdGrossIncome: 10825,
+      householdMoneyExpenditure: 8166,
+      localityGrossIncome: 24819,
+      occupationGrossIncome: 11684,
+    },
+  },
+  narrative: {
+    headline: 'Your profile sits above the official midpoint',
+    summary: 'Income compares well with the household benchmark, while expense pressure stays manageable.',
+    strengths: ['Declared income is above the benchmark.'],
+    risks: ['Tel Aviv remains a relatively expensive reference point.'],
+    actions: ['Keep an eye on discretionary spending.'],
+    caveats: ['Official benchmarks are city-level averages.'],
+  },
+  sources: [
+    {
+      id: 'btl_average_wage_2026',
+      title: 'National Insurance average wage, effective January 1, 2026',
+      url: 'https://example.com/source',
+      effectiveDate: '2026-01-01',
+    },
+  ],
+};
+
 const analyticsInvestments = {
   summary: {
     totalCount: 3,
@@ -1173,6 +1257,18 @@ const defaultHandlers: Record<string, Handler> = {
     errors: [],
   }),
   'GET /api/analytics/personal-intelligence': respondWith(personalIntelligence),
+  'GET /api/analytics/profiling': respondWith({
+    missingFields: [],
+    isStale: false,
+    staleReasons: [],
+    assessment: null,
+  }),
+  'POST /api/analytics/profiling/generate': respondWith({
+    missingFields: [],
+    isStale: false,
+    staleReasons: [],
+    assessment: profilingAssessment,
+  }),
   'GET /api/forecast/daily': respondWith({
     budgetOutlook,
     budgetSummary: {

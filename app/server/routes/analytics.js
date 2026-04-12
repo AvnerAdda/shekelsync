@@ -16,6 +16,7 @@ const extendedForecastService = require('../services/analytics/extended-forecast
 const timeValueService = require('../services/analytics/time-value.js');
 const questsService = require('../services/analytics/quests.js');
 const subscriptionsService = require('../services/analytics/subscriptions.js');
+const profilingService = require('../services/analytics/profiling.js');
 
 function createAnalyticsRouter() {
   const router = express.Router();
@@ -201,6 +202,33 @@ function createAnalyticsRouter() {
       res.status(500).json({
         error: 'Failed to fetch time value analytics',
         message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  router.get('/profiling', async (_req, res) => {
+    try {
+      const result = await profilingService.getProfilingStatus();
+      res.json(result);
+    } catch (error) {
+      console.error('Profiling status error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch profiling status',
+      });
+    }
+  });
+
+  router.post('/profiling/generate', async (req, res) => {
+    try {
+      const locale = req.locale || resolveLocaleFromRequest(req);
+      const result = await profilingService.generateProfilingAssessment(req.body || {}, { locale });
+      res.json(result);
+    } catch (error) {
+      console.error('Profiling generation error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to generate profiling',
+        ...(Array.isArray(error?.missingFields) ? { missingFields: error.missingFields } : {}),
+        ...(error?.code ? { code: error.code } : {}),
       });
     }
   });

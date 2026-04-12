@@ -335,7 +335,7 @@ const SettingsPage: React.FC = () => {
       </Paper>
 
       {/* AI Chatbot Settings */}
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Paper id="chatbot" sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
           <ChatbotIcon color="primary" />
           <Typography variant="h6">{tSettings('chatbot.title')}</Typography>

@@ -126,6 +126,7 @@ describe('openai-client', () => {
           temperature: 0.1,
           maxTokens: 256,
           toolChoice: 'required',
+          responseFormat: { type: 'json_object' },
         },
       );
 
@@ -136,6 +137,7 @@ describe('openai-client', () => {
         max_tokens: 256,
         tools: [{ type: 'function', function: { name: 'demo_tool' } }],
         tool_choice: 'required',
+        response_format: { type: 'json_object' },
       });
 
       await clientModule.createCompletion(

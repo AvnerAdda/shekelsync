@@ -250,6 +250,17 @@ function createSqlitePool(options = {}) {
         AND deposit_transaction_vendor IS NOT NULL;
     `);
     db.exec(`
+      CREATE TABLE IF NOT EXISTS profile_assessments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        assessment_type TEXT NOT NULL UNIQUE,
+        profile_hash TEXT,
+        benchmark_version TEXT,
+        openai_model TEXT,
+        generated_at TEXT,
+        assessment_json TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
       CREATE TABLE IF NOT EXISTS investment_positions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         account_id INTEGER NOT NULL,
@@ -291,6 +302,7 @@ function createSqlitePool(options = {}) {
           ON DELETE SET NULL
       );
     `);
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_assessments_type ON profile_assessments(assessment_type);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_investment_positions_account ON investment_positions(account_id, status);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_investment_positions_status ON investment_positions(status, opened_at DESC);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_investment_position_events_position ON investment_position_events(position_id, effective_date DESC);');
