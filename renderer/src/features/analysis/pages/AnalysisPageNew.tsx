@@ -39,6 +39,7 @@ import {
   Refresh as RefreshIcon,
   ZoomOutMap as ZoomOutMapIcon,
   Autorenew as SubscriptionsIcon,
+  AssignmentInd as ProfilingTabIcon,
 } from '@mui/icons-material';
 import {
   BarChart as RechartsBarChart,
@@ -65,6 +66,7 @@ import MoneyPersonalityModal from '../components/MoneyPersonalityModal';
 import PersonalizedFutureModal from '../components/PersonalizedFutureModal';
 import MakeItRealModal from '../components/MakeItRealModal';
 import SubscriptionsTab from '../components/SubscriptionsTab';
+import ProfilingTab from '../components/ProfilingTab';
 import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
@@ -234,6 +236,7 @@ const ANALYSIS_TAB_INDEX: Record<string, number> = {
   budget: 3,
   scoring: 4,
   subscriptions: 5,
+  profiling: 6,
 };
 
 const getBudgetItemKey = (item: BudgetOutlookItem): string =>
@@ -1520,6 +1523,7 @@ const AnalysisPageNew: React.FC = () => {
           { icon: <BudgetIcon sx={{ fontSize: 20 }} />, label: t('tabs.budget'), index: 3 },
           { icon: <ScoringIcon sx={{ fontSize: 20 }} />, label: t('tabs.scoring'), index: 4 },
           { icon: <SubscriptionsIcon sx={{ fontSize: 20 }} />, label: t('tabs.subscriptions'), index: 5 },
+          { icon: <ProfilingTabIcon sx={{ fontSize: 20 }} />, label: t('tabs.profiling'), index: 6 },
         ].map((tab) => {
           const isSelected = currentTab === tab.index;
           return (
@@ -2472,6 +2476,20 @@ const AnalysisPageNew: React.FC = () => {
           boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
         }}>
           <SubscriptionsTab />
+        </Paper>
+      </TabPanel>
+
+      <TabPanel value={currentTab} index={6}>
+        <Paper sx={{
+          p: 3,
+          borderRadius: 4,
+          bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+          backdropFilter: 'blur(20px)',
+          border: '1px solid',
+          borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+          boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+        }}>
+          <ProfilingTab />
         </Paper>
       </TabPanel>
 

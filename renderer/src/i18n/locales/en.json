@@ -936,7 +936,102 @@
       "spending": "Spending",
       "budget": "Budget",
       "scoring": "Scoring",
-      "subscriptions": "Subscriptions"
+      "subscriptions": "Subscriptions",
+      "profiling": "Profiling"
+    },
+    "profiling": {
+      "title": "Financial Profiling",
+      "subtitle": "One-time AI explanation of your household position against official Israeli benchmarks.",
+      "loading": "Loading profiling",
+      "retry": "Retry",
+      "generate": "Generate profiling",
+      "refresh": "Refresh profiling",
+      "openSettings": "Open Settings",
+      "completeProfile": "Complete Profile",
+      "missingKeyTitle": "OpenAI key required",
+      "missingKeyDescription": "Add your OpenAI API key in Settings to generate a profiling assessment.",
+      "incompleteTitle": "Profile details are incomplete",
+      "incompleteDescription": "Profiling needs a few core household details before it can compare you against the official benchmarks.",
+      "emptyTitle": "Profiling is ready to generate",
+      "emptyDescription": "Generate a one-time benchmarked summary based on your saved profile and the last three months of tracked activity.",
+      "staleTitle": "Saved profiling is out of date",
+      "staleDescription": "The saved assessment is still visible, but it no longer matches your current profile or the packaged benchmark version.",
+      "scoreLabel": "Overall grade",
+      "summaryTitle": "Summary",
+      "generatedAt": "Generated",
+      "benchmarkVersion": "Benchmark pack",
+      "confidenceLabel": "Confidence",
+      "statusLabel": "Status",
+      "strengthsTitle": "Strengths",
+      "risksTitle": "Risks",
+      "actionsTitle": "Actions",
+      "caveatsTitle": "Caveats",
+      "noCaveats": "No extra caveats were recorded.",
+      "noItems": "No items were recorded.",
+      "comparatorTitle": "Comparator breakdown",
+      "metricsTitle": "Profile snapshot",
+      "sourcesTitle": "Sources",
+      "sourceCaption": "Official benchmark effective {{date}}",
+      "sourceLink": "Open source",
+      "actualValue": "Actual",
+      "benchmarkValue": "Benchmark",
+      "ratioLabel": "Ratio",
+      "weightLabel": "{{value}}% weight",
+      "supportingOnly": "supporting only",
+      "unknownValue": "Unknown",
+      "band": {
+        "well_below_average": "Well below average",
+        "below_average": "Below average",
+        "near_average": "Near average",
+        "above_average": "Above average",
+        "well_above_average": "Well above average"
+      },
+      "status": {
+        "current": "Current",
+        "stale": "Stale",
+        "matched": "Matched",
+        "fallback": "Fallback",
+        "skipped": "Skipped"
+      },
+      "fields": {
+        "age_or_birth_date": "Age or birth date",
+        "location": "Location",
+        "monthly_income": "Monthly income",
+        "marital_status": "Marital status",
+        "household_size": "Household size",
+        "children_count": "Children count",
+        "occupation_or_industry": "Occupation or industry",
+        "spouse_monthly_income": "Spouse monthly income"
+      },
+      "staleReasons": {
+        "profile_changed": "Your saved profile changed after this assessment was generated.",
+        "benchmark_updated": "The packaged benchmark snapshot changed since this assessment was generated.",
+        "profile_incomplete": "Some of the profile fields now required for profiling are missing."
+      },
+      "comparatorLabels": {
+        "incomeVsHouseholdSize": "Income vs household size",
+        "incomeVsOccupationOrIndustry": "Income vs occupation",
+        "incomeVsLocation": "Income vs location",
+        "expensePressureVsHouseholdSize": "Expense pressure",
+        "nationalWageAnchor": "National wage anchor"
+      },
+      "metrics": {
+        "householdIncome": "Declared household income",
+        "primaryIncome": "Primary monthly income",
+        "spouseIncome": "Spouse monthly income",
+        "monthlyExpenses": "Observed monthly expenses",
+        "monthlySavings": "Observed monthly savings",
+        "location": "Mapped location",
+        "householdSize": "Household",
+        "occupation": "Occupation or industry",
+        "householdSizeValue": "{{count}} members • {{children}} children"
+      },
+      "errors": {
+        "statusLoadFailed": "Failed to load profiling status",
+        "generateFailed": "Failed to generate profiling",
+        "missingApiKey": "Add an OpenAI API key in Settings to generate profiling.",
+        "generic": "Unknown error occurred"
+      }
     },
     "errors": {
       "fetchFailed": "Failed to fetch intelligence data",

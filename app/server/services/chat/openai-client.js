@@ -61,6 +61,10 @@ async function createCompletion(messages, tools = null, options = {}) {
     max_tokens: normalizeMaxTokens(options.maxTokens),
   };
 
+  if (options.responseFormat) {
+    requestParams.response_format = options.responseFormat;
+  }
+
   if (tools && tools.length > 0) {
     requestParams.tools = tools;
     requestParams.tool_choice = options.toolChoice || 'auto';
