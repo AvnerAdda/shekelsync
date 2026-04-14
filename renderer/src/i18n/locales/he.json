@@ -1526,7 +1526,14 @@
         "edit": "ערוך",
         "delete": "מחק",
         "pause": "השהה",
-        "resume": "המשך"
+        "resume": "המשך",
+        "filterCategories": "סנן לפי קטגוריה"
+      },
+      "categoryFilter": {
+        "title": "סינון קטגוריות",
+        "subtitle": "הצג או הסתר קטגוריות מנויים",
+        "selectAll": "בחר הכל",
+        "deselectAll": "בטל בחירה"
       },
       "list": {
         "title": "המנויים שלך",

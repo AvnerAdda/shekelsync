@@ -33,7 +33,6 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@sentry/electron": "^7.6.0",
     "@supabase/supabase-js": "^2.93.0",
     "better-sqlite3": "^12.6.2",
     "cors": "^2.8.6",

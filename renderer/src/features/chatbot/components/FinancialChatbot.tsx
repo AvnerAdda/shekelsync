@@ -24,6 +24,7 @@ import {
   styled,
 } from '@mui/material';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Chat as ChatIcon,
   Close as CloseIcon,
@@ -103,6 +104,8 @@ const MarkdownContent = styled(Box)(({ theme }) => ({
     borderCollapse: 'collapse',
     width: '100%',
     margin: '0.5em 0',
+    display: 'block',
+    overflowX: 'auto',
   },
   '& th, & td': {
     border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
@@ -814,7 +817,7 @@ const FinancialChatbot: React.FC = () => {
               >
                 {message.role === 'assistant' ? (
                   <MarkdownContent>
-                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                   </MarkdownContent>
                 ) : (
                   <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>

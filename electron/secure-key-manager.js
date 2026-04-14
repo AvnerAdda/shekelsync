@@ -4,6 +4,7 @@ const path = require('path');
 const { resolveAppPath, requireFromApp } = require('./paths');
 
 let keytar;
+let keytarResolved = false;
 const isLinux = process.platform === 'linux';
 const isMac = process.platform === 'darwin';
 const keytarDisabledByEnv =
@@ -18,35 +19,42 @@ const allowEnvKey =
 const preferRootKeytar = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 const injectedKeytar = globalThis.__SHEKELSYNC_KEYTAR__;
 
-if (injectedKeytar && !keytarDisabled) {
-  keytar = injectedKeytar;
-} else if (!keytarDisabled) {
-  if (preferRootKeytar) {
-    try {
-      keytar = require('keytar');
-    } catch (rootLoadError) {
-      try {
-        keytar = requireFromApp('keytar');
-      } catch (appLoadError) {
-        console.warn('[SecureKeyManager] keytar unavailable, will use environment key only.');
-        keytar = null;
-      }
-    }
-  } else {
-    try {
-      keytar = requireFromApp('keytar');
-    } catch (appLoadError) {
+// Lazy-load keytar on first use to avoid blocking module load with native keychain IPC
+function resolveKeytar() {
+  if (keytarResolved) return keytar;
+  keytarResolved = true;
+
+  if (injectedKeytar && !keytarDisabled) {
+    keytar = injectedKeytar;
+  } else if (!keytarDisabled) {
+    if (preferRootKeytar) {
       try {
         keytar = require('keytar');
       } catch (rootLoadError) {
-        console.warn('[SecureKeyManager] keytar unavailable, will use environment key only.');
-        keytar = null;
+        try {
+          keytar = requireFromApp('keytar');
+        } catch (appLoadError) {
+          console.warn('[SecureKeyManager] keytar unavailable, will use environment key only.');
+          keytar = null;
+        }
+      }
+    } else {
+      try {
+        keytar = requireFromApp('keytar');
+      } catch (appLoadError) {
+        try {
+          keytar = require('keytar');
+        } catch (rootLoadError) {
+          console.warn('[SecureKeyManager] keytar unavailable, will use environment key only.');
+          keytar = null;
+        }
       }
     }
+  } else {
+    console.warn('[SecureKeyManager] keytar disabled via environment.');
+    keytar = null;
   }
-} else {
-  console.warn('[SecureKeyManager] keytar disabled via environment.');
-  keytar = null;
+  return keytar;
 }
 
 const SERVICE_NAME = 'ShekelSync';
@@ -94,7 +102,10 @@ function getSafeStorage() {
 class SecureKeyManager {
   constructor() {
     this.cachedKey = null;
-    this.keytarAvailable = Boolean(keytar);
+  }
+
+  get keytarAvailable() {
+    return Boolean(resolveKeytar());
   }
 
   /**
@@ -200,7 +211,7 @@ class SecureKeyManager {
     let keytarReadFailed = false;
     if (this.keytarAvailable) {
       try {
-        const storedKey = await keytar.getPassword(SERVICE_NAME, ENCRYPTION_KEY_ACCOUNT);
+        const storedKey = await resolveKeytar().getPassword(SERVICE_NAME, ENCRYPTION_KEY_ACCOUNT);
         if (storedKey && this.validateKey(storedKey)) {
           console.log('[SecureKeyManager] Loaded encryption key from OS keychain');
           this.cachedKey = storedKey;
@@ -222,7 +233,7 @@ class SecureKeyManager {
       // Try to re-sync to keytar so future reads may work
       if (keytarReadFailed && this.keytarAvailable) {
         try {
-          await keytar.setPassword(SERVICE_NAME, ENCRYPTION_KEY_ACCOUNT, safeStorageKey);
+          await resolveKeytar().setPassword(SERVICE_NAME, ENCRYPTION_KEY_ACCOUNT, safeStorageKey);
           console.log('[SecureKeyManager] Re-synced key back to keychain');
         } catch {
           // Non-critical, safeStorage is the reliable copy
@@ -237,7 +248,7 @@ class SecureKeyManager {
 
     if (this.keytarAvailable) {
       try {
-        await keytar.setPassword(SERVICE_NAME, ENCRYPTION_KEY_ACCOUNT, newKey);
+        await resolveKeytar().setPassword(SERVICE_NAME, ENCRYPTION_KEY_ACCOUNT, newKey);
         console.log('[SecureKeyManager] Stored new encryption key in OS keychain');
       } catch (error) {
         console.error('[SecureKeyManager] CRITICAL: Failed to store encryption key in keychain:', error.message);
@@ -270,7 +281,7 @@ class SecureKeyManager {
     let stored = false;
     if (this.keytarAvailable) {
       try {
-        await keytar.setPassword(SERVICE_NAME, ENCRYPTION_KEY_ACCOUNT, newKey);
+        await resolveKeytar().setPassword(SERVICE_NAME, ENCRYPTION_KEY_ACCOUNT, newKey);
         console.log('[SecureKeyManager] Encryption key rotated in keychain');
         stored = true;
       } catch (error) {
@@ -297,7 +308,7 @@ class SecureKeyManager {
   async deleteKey() {
     if (this.keytarAvailable) {
       try {
-        await keytar.deletePassword(SERVICE_NAME, ENCRYPTION_KEY_ACCOUNT);
+        await resolveKeytar().deletePassword(SERVICE_NAME, ENCRYPTION_KEY_ACCOUNT);
         console.log('[SecureKeyManager] Encryption key deleted from keychain');
       } catch (error) {
         console.warn('[SecureKeyManager] Failed to delete key from keychain:', error.message);

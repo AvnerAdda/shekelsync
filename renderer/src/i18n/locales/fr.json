@@ -1506,7 +1506,14 @@
         "edit": "Modifier",
         "delete": "Supprimer",
         "pause": "Mettre en pause",
-        "resume": "Reprendre"
+        "resume": "Reprendre",
+        "filterCategories": "Filtrer par catégorie"
+      },
+      "categoryFilter": {
+        "title": "Filtrer les catégories",
+        "subtitle": "Afficher ou masquer les catégories d'abonnements",
+        "selectAll": "Tout sélectionner",
+        "deselectAll": "Tout désélectionner"
       },
       "list": {
         "title": "Vos abonnements",

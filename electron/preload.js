@@ -1,16 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-const createRequire = module?.constructor?.createRequire;
-const requireFromApp = createRequire ? createRequire(`${__dirname}/../app/package.json`) : null;
-
-try {
-  if (requireFromApp) {
-    requireFromApp('@sentry/electron/preload');
-  }
-} catch (error) {
-  console.warn('[Preload] Failed to initialize Sentry preload bridge:', error.message);
-}
-
 const sendLog = (level, message, data) => {
   try {
     ipcRenderer.send('log:report', {

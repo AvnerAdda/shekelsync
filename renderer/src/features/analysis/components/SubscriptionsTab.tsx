@@ -3,6 +3,8 @@ import {
   Box,
   Typography,
   Button,
+  IconButton,
+  Tooltip,
   Stack,
   CircularProgress,
   Alert,
@@ -16,15 +18,18 @@ import {
   Refresh as RefreshIcon,
   ViewList as ViewListIcon,
   CalendarMonth as CalendarMonthIcon,
+  FilterList as FilterListIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useSubscriptions } from '@renderer/features/analysis/hooks/useSubscriptions';
+import { useSubscriptionCategoryFilter } from '@renderer/features/analysis/hooks/useSubscriptionCategoryFilter';
 import SubscriptionSummaryCards from './SubscriptionSummaryCards';
 import SubscriptionList from './SubscriptionList';
 import SubscriptionAlerts from './SubscriptionAlerts';
 import SubscriptionModal from './SubscriptionModal';
 import SubscriptionCreepChart from './SubscriptionCreepChart';
 import SubscriptionCalendar from './SubscriptionCalendar';
+import SubscriptionCategoryFilterPopover from './SubscriptionCategoryFilterPopover';
 import type {
   Subscription,
   SubscriptionStatus,
@@ -55,9 +60,22 @@ const SubscriptionsTab: React.FC = () => {
     fetchAll,
   } = useSubscriptions();
 
+  const {
+    availableCategories,
+    isCategorySelected,
+    toggleCategory,
+    selectAll,
+    deselectAll,
+    isFiltering,
+    filteredSubscriptions,
+    filteredAlerts,
+    filteredSummary,
+  } = useSubscriptionCategoryFilter({ subscriptions, summary, alerts });
+
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
+  const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLElement | null>(null);
 
   const handleOpenAddModal = () => {
     setEditingSubscription(null);
@@ -129,6 +147,27 @@ const SubscriptionsTab: React.FC = () => {
           >
             {detecting ? t('actions.detecting') : t('actions.refresh')}
           </Button>
+          <Tooltip title={t('actions.filterCategories')}>
+            <IconButton
+              size="small"
+              onClick={(e) => setFilterAnchorEl(e.currentTarget)}
+              sx={{
+                borderRadius: 2,
+                border: '1px solid',
+                borderColor: isFiltering
+                  ? alpha(theme.palette.primary.main, 0.5)
+                  : alpha(theme.palette.divider, 0.2),
+                bgcolor: isFiltering
+                  ? alpha(theme.palette.primary.main, 0.08)
+                  : 'transparent',
+                color: isFiltering
+                  ? theme.palette.primary.main
+                  : 'inherit',
+              }}
+            >
+              <FilterListIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -152,11 +191,11 @@ const SubscriptionsTab: React.FC = () => {
       )}
 
       {/* Summary cards */}
-      <SubscriptionSummaryCards summary={summary} loading={summaryLoading} />
+      <SubscriptionSummaryCards summary={filteredSummary} loading={summaryLoading} />
 
       {/* Alerts panel */}
       <SubscriptionAlerts
-        alerts={alerts}
+        alerts={filteredAlerts}
         loading={alertsLoading}
         onDismiss={handleDismissAlert}
       />
@@ -218,7 +257,7 @@ const SubscriptionsTab: React.FC = () => {
 
         {viewMode === 'list' ? (
           <SubscriptionList
-            subscriptions={subscriptions}
+            subscriptions={filteredSubscriptions}
             loading={loading}
             onEdit={handleOpenEditModal}
             onStatusChange={handleStatusChange}
@@ -226,7 +265,7 @@ const SubscriptionsTab: React.FC = () => {
           />
         ) : (
           <SubscriptionCalendar
-            subscriptions={subscriptions}
+            subscriptions={filteredSubscriptions}
             loading={loading}
             onEdit={handleOpenEditModal}
           />
@@ -240,6 +279,19 @@ const SubscriptionsTab: React.FC = () => {
         subscription={editingSubscription}
         onSave={handleSaveSubscription}
         isEditing={!!editingSubscription}
+      />
+
+      {/* Category filter popover */}
+      <SubscriptionCategoryFilterPopover
+        open={Boolean(filterAnchorEl)}
+        anchorEl={filterAnchorEl}
+        onClose={() => setFilterAnchorEl(null)}
+        availableCategories={availableCategories}
+        subscriptions={subscriptions}
+        isCategorySelected={isCategorySelected}
+        toggleCategory={toggleCategory}
+        selectAll={selectAll}
+        deselectAll={deselectAll}
       />
     </Box>
   );
