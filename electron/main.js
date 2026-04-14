@@ -14,9 +14,9 @@ const {
   Menu,
   nativeImage,
   nativeTheme,
-  crashReporter,
   clipboard,
 } = require('electron');
+
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -43,7 +43,6 @@ const {
   createTelegramBotService,
   normalizeTelegramSettings,
 } = require('./telegram-bot');
-const analyticsMetricsStore = require(resolveAppPath('server', 'services', 'analytics', 'metrics-store.js'));
 const isPackaged = app.isPackaged;
 const isDev = process.env.NODE_ENV === 'development' || !isPackaged;
 const isMac = process.platform === 'darwin';
@@ -281,26 +280,34 @@ if (!app.isPackaged) {
   }
 }
 
-// Reduce GPU-related crashes in certain Linux setups
-try {
-  app.disableHardwareAcceleration();
-  app.commandLine.appendSwitch('disable-gpu');
-} catch (error) {
-  console.warn('Failed to disable hardware acceleration:', error.message);
+// Reduce GPU-related crashes in certain Linux setups (keep GPU enabled on macOS/Windows for performance)
+if (isLinux) {
+  try {
+    app.disableHardwareAcceleration();
+    app.commandLine.appendSwitch('disable-gpu');
+  } catch (error) {
+    console.warn('Failed to disable hardware acceleration:', error.message);
+  }
 }
 
-// Handle module resolution for development vs production
+// Lazy-load electron-updater to avoid blocking startup with module init
 let autoUpdater;
+let autoUpdaterResolved = false;
 let lastUpdateBackupVersion = null;
-try {
-  if (isDev) {
-    autoUpdater = requireFromApp('electron-updater').autoUpdater;
-  } else {
-    autoUpdater = require('electron-updater').autoUpdater;
+function resolveAutoUpdater() {
+  if (autoUpdaterResolved) return autoUpdater;
+  autoUpdaterResolved = true;
+  try {
+    if (isDev) {
+      autoUpdater = requireFromApp('electron-updater').autoUpdater;
+    } else {
+      autoUpdater = require('electron-updater').autoUpdater;
+    }
+  } catch (error) {
+    console.log('electron-updater not available:', error.message);
+    autoUpdater = null;
   }
-} catch (error) {
-  console.log('electron-updater not available:', error.message);
-  autoUpdater = null;
+  return autoUpdater;
 }
 
 const AUTO_UPDATE_ENV_FLAG = 'ENABLE_AUTO_UPDATE';
@@ -319,7 +326,7 @@ function getAutoUpdateAvailability() {
     return cachedAutoUpdateAvailability;
   }
 
-  if (!autoUpdater) {
+  if (!resolveAutoUpdater()) {
     cachedAutoUpdateAvailability = {
       enabled: false,
       reason: 'Auto-updater module is not available.',
@@ -380,7 +387,6 @@ const { configManager } = require('./config');
 const { dbManager } = require('./database');
 const sessionStore = require('./session-store');
 const { createScrapeAnchorRepairStateProvider } = require('./scrape-anchor-repair-state');
-const { describeTelemetryState } = require('./telemetry-utils');
 const secureKeyManager = require('./secure-key-manager');
 const licenseService = require('./license-service');
 const { createSyncScheduler, normalizeBackgroundSettings } = require('./sync-scheduler');
@@ -472,47 +478,6 @@ async function runLicenseIpcSmokeTest(email) {
   }
 }
 
-const telemetryState = {
-  enabled: false,
-  initialized: false,
-  sentry: null,
-};
-
-process.env.CRASH_REPORTS_ENABLED = 'false';
-wireTelemetryMetricsReporter();
-
-function emitTelemetryMetric(bucket, payload = {}) {
-  if (!telemetryState.enabled || !telemetryState.initialized) {
-    return;
-  }
-  if (!telemetryState.sentry?.captureMessage) {
-    return;
-  }
-
-  telemetryState.sentry.captureMessage('analytics-metric', {
-    level: 'info',
-    tags: {
-      bucket,
-      component: 'analytics',
-    },
-    extra: {
-      bucket,
-      ...payload,
-    },
-  });
-}
-
-function wireTelemetryMetricsReporter() {
-  if (analyticsMetricsStore?.setMetricReporter) {
-    analyticsMetricsStore.setMetricReporter((bucket, sample) => {
-      try {
-        emitTelemetryMetric(bucket, sample);
-      } catch (error) {
-        logger.warn('Failed to forward analytics metric to telemetry', { error: error.message });
-      }
-    });
-  }
-}
 
 function getEnvKeyRemovalInstructions() {
   if (process.platform === 'win32') {
@@ -642,64 +607,6 @@ Click "Exit" to close the app and manually remove the variable.${instructions}`,
   }
 }
 
-function initializeTelemetry() {
-  const dsn = process.env.SENTRY_DSN;
-  if (!dsn) {
-    // DSN not configured, skip initialization silently
-    return false;
-  }
-
-  try {
-    crashReporter.start({
-      submitURL: '',
-      productName: app.getName(),
-      companyName: 'ShekelSync',
-      uploadToServer: false,
-      ignoreSystemCrashHandler: true,
-    });
-
-    const sentryModule = (isDev
-      ? requireFromApp('@sentry/electron/main')
-      : require('@sentry/electron/main'));
-    sentryModule.init({
-      dsn,
-      release: app.getVersion(),
-      environment: process.env.NODE_ENV || 'production',
-      debug: process.env.SENTRY_DEBUG === 'true',
-      tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE || '0'),
-      beforeSend(event) {
-        return telemetryState.enabled ? event : null;
-      },
-    });
-
-    telemetryState.sentry = sentryModule;
-    logger.info('Crash reporting initialized (events will only be sent if user enables telemetry)');
-    return true;
-  } catch (error) {
-    logger.warn('Failed to initialize crash reporting', { error: error.message });
-    return false;
-  }
-}
-
-// Initialize Sentry early (before app.ready) if DSN is configured
-// The beforeSend hook will prevent events from being sent unless user enables telemetry
-if (process.env.SENTRY_DSN) {
-  telemetryState.initialized = initializeTelemetry();
-}
-
-async function applyTelemetryPreference(settings = {}) {
-  const nextEnabled = Boolean(settings?.telemetry?.crashReportsEnabled);
-  telemetryState.enabled = nextEnabled;
-  process.env.CRASH_REPORTS_ENABLED = nextEnabled ? 'true' : 'false';
-
-  // If telemetry is now enabled and Sentry hasn't been initialized yet, try to initialize it
-  if (nextEnabled && !telemetryState.initialized) {
-    telemetryState.initialized = initializeTelemetry();
-  }
-
-  // Note: We don't close Sentry when disabled anymore since we initialize early
-  // The beforeSend hook will filter out events when telemetryState.enabled is false
-}
 
 function applySettingsDefaults(settings = {}) {
   const normalizedBackground = normalizeBackgroundSettings(settings?.backgroundSync || {});
@@ -715,7 +622,6 @@ async function loadInitialSettings() {
   try {
     const initialSettings = applySettingsDefaults(await sessionStore.getSettings());
     appSettingsCache = initialSettings;
-    await applyTelemetryPreference(initialSettings);
   } catch (error) {
     logger.warn('Failed to load user settings', { error: error.message });
   }
@@ -748,7 +654,6 @@ async function updateAppSettings(patch = {}) {
   const updated = await sessionStore.updateSettings(merged);
   const normalized = applySettingsDefaults(updated);
   appSettingsCache = normalized;
-  await applyTelemetryPreference(normalized);
   BrowserWindow.getAllWindows().forEach((win) => {
     win.webContents.send('settings:changed', normalized);
   });
@@ -770,20 +675,7 @@ function shouldKeepRunningInTray() {
 }
 
 function getTelemetryDiagnostics() {
-  return describeTelemetryState({
-    enabled: telemetryState.enabled,
-    initialized: telemetryState.initialized,
-  });
-}
-
-function reportException(error) {
-  if (telemetryState.initialized && telemetryState.sentry?.captureException) {
-    try {
-      telemetryState.sentry.captureException(error);
-    } catch (captureError) {
-      logger.warn('Failed to forward exception to telemetry client', { error: captureError.message });
-    }
-  }
+  return { enabled: false, initialized: false };
 }
 
 // Lazy-loaded services (to avoid loading better-sqlite3 in dev mode)
@@ -802,7 +694,6 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
     logger.info('Configuration initialised', {
       databaseMode: config?.database?.mode,
     });
-    await ensureEncryptionKey(config);
 
     if (!config.database) {
       config.database = {};
@@ -830,6 +721,17 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
     // Ensure dbManager mode matches the resolved config (constructor runs before env is set)
     dbManager.mode = config.database.mode;
 
+    // Load API server module in parallel with DB initialization
+    const dbInitPromise = (async () => {
+      if (shouldSkipDbInit) {
+        console.log('Skipping main-process database initialization (SKIP_DB_INIT=true).');
+        return { success: true };
+      }
+      console.log('Initializing database connection...');
+      logger.info('Connecting to database', { mode: config.database.mode });
+      return dbManager.initialize(config.database);
+    })();
+
     if (!skipEmbeddedApi && !setupAPIServer) {
       try {
         setupAPIServer = require('./server').setupAPIServer;
@@ -839,25 +741,18 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
       }
     }
 
-    let dbResult = { success: true };
-    if (shouldSkipDbInit) {
-      console.log('Skipping main-process database initialization (SKIP_DB_INIT=true).');
-    } else {
-      console.log('Initializing database connection...');
-      logger.info('Connecting to database', { mode: config.database.mode });
-      dbResult = await dbManager.initialize(config.database);
+    const dbResult = await dbInitPromise;
 
-      if (!dbResult.success) {
-        console.error('Database initialization failed:', dbResult.message);
-        logger.error('Database initialization failed', {
-          error: dbResult.message,
-          mode: config.database.mode,
-        });
-        dialog.showErrorBox(
-          'Database Connection Error',
-          `Failed to connect to database: ${dbResult.message}\n\nThe app will run in limited mode.`
-        );
-      }
+    if (!dbResult.success) {
+      console.error('Database initialization failed:', dbResult.message);
+      logger.error('Database initialization failed', {
+        error: dbResult.message,
+        mode: config.database.mode,
+      });
+      dialog.showErrorBox(
+        'Database Connection Error',
+        `Failed to connect to database: ${dbResult.message}\n\nThe app will run in limited mode.`
+      );
     }
 
     if (!skipEmbeddedApi && setupAPIServer) {
@@ -879,8 +774,15 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
       console.log('Running without internal API server - relying on external dev renderer');
     }
 
-    getSyncScheduler().start();
-    await getTelegramBotService().start();
+    // Defer non-critical services so they don't block the window from becoming responsive
+    setImmediate(() => {
+      try { getSyncScheduler().start(); } catch (error) {
+        logger.warn('Failed to start sync scheduler', { error: error.message });
+      }
+      getTelegramBotService().start().catch((error) => {
+        logger.warn('Failed to start Telegram bot', { error: error.message });
+      });
+    });
   } catch (error) {
     console.error('Initialization error:', error);
     logger.error('Fatal initialization error', { error: error.message });
@@ -2080,24 +1982,15 @@ ipcMain.handle('telegram:sendTestMessage', async (event) => {
 });
 
 ipcMain.handle('telemetry:getConfig', () => ({
-  dsn: process.env.SENTRY_DSN || null,
+  dsn: null,
   environment: process.env.NODE_ENV || 'production',
   release: app.getVersion(),
-  debug: process.env.SENTRY_DEBUG === 'true',
-  enabled: telemetryState.enabled,
+  debug: false,
+  enabled: false,
 }));
 
 ipcMain.handle('telemetry:triggerMainSmoke', async () => {
-  if (!telemetryState.sentry || !telemetryState.initialized) {
-    return { success: false, error: 'Crash reporting is disabled.' };
-  }
-  try {
-    reportException(new Error(`Telemetry smoke test (main process) @ ${new Date().toISOString()}`));
-    return { success: true };
-  } catch (error) {
-    logger.warn('Telemetry smoke test failed', { error: error.message });
-    return { success: false, error: error.message };
-  }
+  return { success: false, error: 'Crash reporting has been removed.' };
 });
 
 ipcMain.handle('auth:getSession', async () => {
@@ -2381,7 +2274,7 @@ if (isDev) {
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
   logger.error('Uncaught exception', { error: error.message, stack: error.stack });
-  reportException(error);
+
   dialog.showErrorBox('Unexpected Error', `An unexpected error occurred: ${error.message}`);
 });
 
@@ -2391,9 +2284,6 @@ process.on('unhandledRejection', (reason, promise) => {
     reason: reason instanceof Error ? reason.message : String(reason),
   });
   if (reason instanceof Error) {
-    reportException(reason);
-  } else {
-    reportException(new Error(String(reason)));
   }
   dialog.showErrorBox('Unexpected Error', `An unexpected error occurred: ${reason}`);
 });

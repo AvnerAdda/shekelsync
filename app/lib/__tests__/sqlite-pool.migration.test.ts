@@ -31,10 +31,12 @@ const LEGACY_INVESTMENT_HOLDINGS_SQL = `
 
 describe('sqlite-pool legacy investment holdings migration', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.spyOn(fs, 'existsSync').mockReturnValue(true);
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -94,6 +96,9 @@ describe('sqlite-pool legacy investment holdings migration', () => {
       databasePath: 'dist/shekelsync.sqlite',
       databaseCtor: LegacyInvestmentHoldingsDb,
     });
+
+    // Flush the setImmediate callback that runs deferred schema migrations
+    vi.runAllTimers();
 
     const startupSql = execCalls.join('\n');
 

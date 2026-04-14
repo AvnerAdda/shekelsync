@@ -181,8 +181,8 @@ describe('electron core routes', () => {
     expect(res.result.body.status).toBe('ok');
     expect(res.result.body.responseTimeMs).toBeGreaterThanOrEqual(0);
     expect(res.result.body.telemetry).toMatchObject({
-      enabled: true,
-      dsnConfigured: true,
+      enabled: false,
+      dsnConfigured: false,
     });
     expect(res.result.body.database).toMatchObject({
       mode: expect.any(String),
@@ -229,7 +229,7 @@ describe('electron core routes', () => {
     expect(res.result.statusCode).toBe(200);
     expect(res.result.body.telemetry).toEqual({
       enabled: false,
-      dsnConfigured: true,
+      dsnConfigured: false,
     });
     expect(res.result.body.metrics).toMatchObject({
       breakdown: {

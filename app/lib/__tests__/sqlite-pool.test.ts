@@ -141,6 +141,9 @@ describe('sqlite-pool', () => {
   it('builds transactions FTS triggers using row deletes for updates/removals', async () => {
     await loadPool();
 
+    // Flush the setImmediate callback that runs deferred schema migrations
+    await new Promise((resolve) => setImmediate(resolve));
+
     const execSql = (latestDb?.execCalls || []).join('\n');
     expect(execSql).toContain('CREATE TRIGGER IF NOT EXISTS transactions_fts_delete');
     expect(execSql).toContain('DELETE FROM transactions_fts');

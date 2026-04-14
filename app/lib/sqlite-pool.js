@@ -164,28 +164,11 @@ function rebuildInvestmentHoldingsForPikadonEntries(db) {
   }
 }
 
-function createSqlitePool(options = {}) {
-  const dbPath =
-    options.databasePath ||
-    process.env.SQLITE_DB_PATH ||
-    resolveDefaultSqlitePath();
-  if (!fs.existsSync(dbPath)) {
-    const resolvedPath = path.resolve(dbPath);
-    throw new Error(
-      `SQLite database not found at: ${resolvedPath}\n\n` +
-      `To initialize the database, run:\n` +
-      `  node scripts/init_sqlite_db.js\n\n` +
-      `Or if you have a backup, copy it to: ${resolvedPath}`
-    );
-  }
-
-  const Database = resolveDatabaseCtor(options.databaseCtor);
-  const db = new Database(dbPath, { fileMustExist: true });
-  db.pragma('foreign_keys = ON');
-  db.pragma('journal_mode = WAL');
-
-  // Lightweight schema fixes for older DBs.
-  // Keep this minimal and idempotent: only additive, safe ALTER TABLE statements.
+/**
+ * Run all idempotent schema migrations/fixes.
+ * Called via setImmediate so it doesn't block pool creation or the main thread.
+ */
+function runDeferredSchemaMigrations(db) {
   try {
     const pairingColumns = db.prepare("PRAGMA table_info('account_pairings')").all();
     if (Array.isArray(pairingColumns) && pairingColumns.length > 0) {
@@ -321,26 +304,16 @@ function createSqlitePool(options = {}) {
       AFTER INSERT ON account_pairings
       BEGIN
         INSERT OR IGNORE INTO transaction_pairing_exclusions (
-          transaction_identifier,
-          transaction_vendor,
-          pairing_id,
-          created_at,
-          updated_at
+          transaction_identifier, transaction_vendor, pairing_id, created_at, updated_at
         )
-        SELECT
-          t.identifier,
-          t.vendor,
-          NEW.id,
-          datetime('now'),
-          datetime('now')
+        SELECT t.identifier, t.vendor, NEW.id, datetime('now'), datetime('now')
         FROM transactions t
         WHERE NEW.is_active = 1
           AND t.vendor = NEW.bank_vendor
           AND (NEW.bank_account_number IS NULL OR t.account_number = NEW.bank_account_number)
           AND NEW.match_patterns IS NOT NULL
           AND EXISTS (
-            SELECT 1
-            FROM json_each(COALESCE(NEW.match_patterns, '[]'))
+            SELECT 1 FROM json_each(COALESCE(NEW.match_patterns, '[]'))
             WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
           );
       END;
@@ -349,29 +322,18 @@ function createSqlitePool(options = {}) {
       CREATE TRIGGER IF NOT EXISTS trg_account_pairings_exclusions_update
       AFTER UPDATE OF is_active, bank_vendor, bank_account_number, match_patterns ON account_pairings
       BEGIN
-        DELETE FROM transaction_pairing_exclusions
-          WHERE pairing_id = OLD.id;
+        DELETE FROM transaction_pairing_exclusions WHERE pairing_id = OLD.id;
         INSERT OR IGNORE INTO transaction_pairing_exclusions (
-          transaction_identifier,
-          transaction_vendor,
-          pairing_id,
-          created_at,
-          updated_at
+          transaction_identifier, transaction_vendor, pairing_id, created_at, updated_at
         )
-        SELECT
-          t.identifier,
-          t.vendor,
-          NEW.id,
-          datetime('now'),
-          datetime('now')
+        SELECT t.identifier, t.vendor, NEW.id, datetime('now'), datetime('now')
         FROM transactions t
         WHERE NEW.is_active = 1
           AND t.vendor = NEW.bank_vendor
           AND (NEW.bank_account_number IS NULL OR t.account_number = NEW.bank_account_number)
           AND NEW.match_patterns IS NOT NULL
           AND EXISTS (
-            SELECT 1
-            FROM json_each(COALESCE(NEW.match_patterns, '[]'))
+            SELECT 1 FROM json_each(COALESCE(NEW.match_patterns, '[]'))
             WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
           );
       END;
@@ -380,8 +342,7 @@ function createSqlitePool(options = {}) {
       CREATE TRIGGER IF NOT EXISTS trg_account_pairings_exclusions_delete
       AFTER DELETE ON account_pairings
       BEGIN
-        DELETE FROM transaction_pairing_exclusions
-          WHERE pairing_id = OLD.id;
+        DELETE FROM transaction_pairing_exclusions WHERE pairing_id = OLD.id;
       END;
     `);
     db.exec(`
@@ -389,29 +350,18 @@ function createSqlitePool(options = {}) {
       AFTER INSERT ON transactions
       BEGIN
         INSERT OR IGNORE INTO transaction_pairing_exclusions (
-          transaction_identifier,
-          transaction_vendor,
-          pairing_id,
-          created_at,
-          updated_at
+          transaction_identifier, transaction_vendor, pairing_id, created_at, updated_at
         )
-        SELECT
-          NEW.identifier,
-          NEW.vendor,
-          ap.id,
-          datetime('now'),
-          datetime('now')
+        SELECT NEW.identifier, NEW.vendor, ap.id, datetime('now'), datetime('now')
         FROM account_pairings ap
         WHERE ap.is_active = 1
           AND ap.bank_vendor = NEW.vendor
           AND (ap.bank_account_number IS NULL OR ap.bank_account_number = NEW.account_number)
           AND ap.match_patterns IS NOT NULL
           AND EXISTS (
-            SELECT 1
-            FROM json_each(COALESCE(ap.match_patterns, '[]'))
+            SELECT 1 FROM json_each(COALESCE(ap.match_patterns, '[]'))
             WHERE LOWER(NEW.name) LIKE '%' || LOWER(json_each.value) || '%'
-          )
-        ;
+          );
       END;
     `);
     db.exec(`
@@ -419,56 +369,39 @@ function createSqlitePool(options = {}) {
       AFTER UPDATE OF vendor, account_number, name ON transactions
       BEGIN
         DELETE FROM transaction_pairing_exclusions
-          WHERE transaction_identifier = OLD.identifier
-            AND transaction_vendor = OLD.vendor;
+          WHERE transaction_identifier = OLD.identifier AND transaction_vendor = OLD.vendor;
         INSERT OR IGNORE INTO transaction_pairing_exclusions (
-          transaction_identifier,
-          transaction_vendor,
-          pairing_id,
-          created_at,
-          updated_at
+          transaction_identifier, transaction_vendor, pairing_id, created_at, updated_at
         )
-        SELECT
-          NEW.identifier,
-          NEW.vendor,
-          ap.id,
-          datetime('now'),
-          datetime('now')
+        SELECT NEW.identifier, NEW.vendor, ap.id, datetime('now'), datetime('now')
         FROM account_pairings ap
         WHERE ap.is_active = 1
           AND ap.bank_vendor = NEW.vendor
           AND (ap.bank_account_number IS NULL OR ap.bank_account_number = NEW.account_number)
           AND ap.match_patterns IS NOT NULL
           AND EXISTS (
-            SELECT 1
-            FROM json_each(COALESCE(ap.match_patterns, '[]'))
+            SELECT 1 FROM json_each(COALESCE(ap.match_patterns, '[]'))
             WHERE LOWER(NEW.name) LIKE '%' || LOWER(json_each.value) || '%'
-          )
-        ;
+          );
       END;
     `);
     db.exec(`
-      CREATE TRIGGER IF NOT EXISTS transactions_fts_insert
-      AFTER INSERT ON transactions
+      CREATE TRIGGER IF NOT EXISTS transactions_fts_insert AFTER INSERT ON transactions
       BEGIN
         INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
         VALUES (NEW.rowid, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
       END;
     `);
     db.exec(`
-      CREATE TRIGGER IF NOT EXISTS transactions_fts_delete
-      AFTER DELETE ON transactions
+      CREATE TRIGGER IF NOT EXISTS transactions_fts_delete AFTER DELETE ON transactions
       BEGIN
-        DELETE FROM transactions_fts
-        WHERE rowid = OLD.rowid;
+        DELETE FROM transactions_fts WHERE rowid = OLD.rowid;
       END;
     `);
     db.exec(`
-      CREATE TRIGGER IF NOT EXISTS transactions_fts_update
-      AFTER UPDATE ON transactions
+      CREATE TRIGGER IF NOT EXISTS transactions_fts_update AFTER UPDATE ON transactions
       BEGIN
-        DELETE FROM transactions_fts
-        WHERE rowid = OLD.rowid;
+        DELETE FROM transactions_fts WHERE rowid = OLD.rowid;
         INSERT INTO transactions_fts(rowid, name, memo, vendor, merchant_name)
         VALUES (NEW.rowid, NEW.name, NEW.memo, NEW.vendor, NEW.merchant_name);
       END;
@@ -480,18 +413,9 @@ function createSqlitePool(options = {}) {
     if (!hasPairingExclusionsData) {
       db.exec(`
         INSERT OR IGNORE INTO transaction_pairing_exclusions (
-          transaction_identifier,
-          transaction_vendor,
-          pairing_id,
-          created_at,
-          updated_at
+          transaction_identifier, transaction_vendor, pairing_id, created_at, updated_at
         )
-        SELECT
-          t.identifier,
-          t.vendor,
-          ap.id,
-          datetime('now'),
-          datetime('now')
+        SELECT t.identifier, t.vendor, ap.id, datetime('now'), datetime('now')
         FROM transactions t
         JOIN account_pairings ap
           ON t.vendor = ap.bank_vendor
@@ -499,8 +423,7 @@ function createSqlitePool(options = {}) {
           AND (ap.bank_account_number IS NULL OR ap.bank_account_number = t.account_number)
           AND ap.match_patterns IS NOT NULL
         WHERE EXISTS (
-          SELECT 1
-          FROM json_each(COALESCE(ap.match_patterns, '[]'))
+          SELECT 1 FROM json_each(COALESCE(ap.match_patterns, '[]'))
           WHERE LOWER(t.name) LIKE '%' || LOWER(json_each.value) || '%'
         );
       `);
@@ -547,9 +470,7 @@ function createSqlitePool(options = {}) {
   }
 
   // Fix orphaned triggers referencing smart_action_items_old
-  // This can happen if a migration renamed the table but didn't properly cleanup triggers
   try {
-    // Check for any triggers referencing the old table name
     const orphanedTriggers = db.prepare(`
       SELECT name FROM sqlite_master
       WHERE type = 'trigger'
@@ -560,13 +481,11 @@ function createSqlitePool(options = {}) {
       db.exec(`DROP TRIGGER IF EXISTS ${trigger.name}`);
     }
 
-    // Ensure proper triggers exist on smart_action_items table
     const tableExists = db.prepare(`
       SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'smart_action_items'
     `).get();
 
     if (tableExists) {
-      // Drop and recreate triggers to ensure they reference the correct table
       db.exec('DROP TRIGGER IF EXISTS update_smart_action_items_timestamp');
       db.exec('DROP TRIGGER IF EXISTS log_smart_action_item_status_change');
 
@@ -574,9 +493,7 @@ function createSqlitePool(options = {}) {
         CREATE TRIGGER IF NOT EXISTS update_smart_action_items_timestamp
         AFTER UPDATE ON smart_action_items
         BEGIN
-          UPDATE smart_action_items
-          SET updated_at = datetime('now')
-          WHERE id = NEW.id;
+          UPDATE smart_action_items SET updated_at = datetime('now') WHERE id = NEW.id;
         END
       `);
 
@@ -606,6 +523,33 @@ function createSqlitePool(options = {}) {
   } catch (_triggerError) {
     // Ignore: smart_action_items table may not exist yet
   }
+}
+
+function createSqlitePool(options = {}) {
+  const dbPath =
+    options.databasePath ||
+    process.env.SQLITE_DB_PATH ||
+    resolveDefaultSqlitePath();
+  if (!fs.existsSync(dbPath)) {
+    const resolvedPath = path.resolve(dbPath);
+    throw new Error(
+      `SQLite database not found at: ${resolvedPath}\n\n` +
+      `To initialize the database, run:\n` +
+      `  node scripts/init_sqlite_db.js\n\n` +
+      `Or if you have a backup, copy it to: ${resolvedPath}`
+    );
+  }
+
+  const Database = resolveDatabaseCtor(options.databaseCtor);
+  const db = new Database(dbPath, { fileMustExist: true });
+  db.pragma('foreign_keys = ON');
+  db.pragma('journal_mode = WAL');
+
+  // Defer heavy schema migrations off the critical path so the pool is available immediately.
+  // All operations are idempotent (IF NOT EXISTS / IF EXISTS), safe to run after queries begin.
+  setImmediate(() => {
+    runDeferredSchemaMigrations(db);
+  });
 
   const prepareStatement = (sql, params) => {
     const indices = [];
