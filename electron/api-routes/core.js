@@ -115,8 +115,8 @@ class CoreAPIRoutes {
           sqlitePath: sqlitePath ? path.basename(sqlitePath) : null,
         },
         telemetry: {
-          enabled: process.env.CRASH_REPORTS_ENABLED === 'true',
-          dsnConfigured: Boolean(process.env.SENTRY_DSN),
+          enabled: false,
+          dsnConfigured: false,
         },
         metrics,
       });

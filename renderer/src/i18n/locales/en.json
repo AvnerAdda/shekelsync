@@ -1524,7 +1524,14 @@
         "edit": "Edit",
         "delete": "Delete",
         "pause": "Pause",
-        "resume": "Resume"
+        "resume": "Resume",
+        "filterCategories": "Filter by category"
+      },
+      "categoryFilter": {
+        "title": "Filter Categories",
+        "subtitle": "Show or hide subscription categories",
+        "selectAll": "Select all",
+        "deselectAll": "Deselect all"
       },
       "list": {
         "title": "Your Subscriptions",
