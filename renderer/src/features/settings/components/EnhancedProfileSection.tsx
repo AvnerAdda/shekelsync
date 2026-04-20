@@ -58,6 +58,23 @@ import {
   calculateProfileAge,
 } from './enhanced-profile-helpers';
 
+interface IncomeSuggestion {
+  amount: number;
+  basis: 'salary' | 'income';
+  confidence: 'high';
+  isNetEstimate: boolean;
+  monthsAnalyzed: number;
+  activeMonths: number;
+  detectedMonthlySalary: number;
+  detectedMonthlyIncome: number;
+  periodStart: string;
+  periodEnd: string;
+}
+
+interface IncomeSuggestionResponse {
+  suggestion: IncomeSuggestion | null;
+}
+
 const EnhancedProfileSection: React.FC = () => {
   const { t } = useTranslation('translation', { keyPrefix: 'settings.profile' });
   const { refetch: refetchOnboarding } = useOnboarding();
@@ -161,6 +178,7 @@ const EnhancedProfileSection: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
   const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>(undefined);
+  const [incomeSuggestion, setIncomeSuggestion] = useState<IncomeSuggestion | null>(null);
   const [childDialogOpen, setChildDialogOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<ChildProfile | null>(null);
   const [tempChild, setTempChild] = useState<ChildProfile>({
@@ -174,6 +192,21 @@ const EnhancedProfileSection: React.FC = () => {
   useEffect(() => {
     fetchProfileData();
   }, []);
+
+  const fetchIncomeSuggestion = async () => {
+    try {
+      const response = await apiClient.get<IncomeSuggestionResponse>('/api/profile/income-suggestion');
+      if (!response.ok) {
+        setIncomeSuggestion(null);
+        return;
+      }
+
+      setIncomeSuggestion(response.data?.suggestion ?? null);
+    } catch (error) {
+      console.error('Error fetching income suggestion:', error);
+      setIncomeSuggestion(null);
+    }
+  };
 
   const fetchProfileData = async () => {
     setIsLoading(true);
@@ -202,8 +235,10 @@ const EnhancedProfileSection: React.FC = () => {
           children: [],
         };
       setProfileData(normalized);
+      void fetchIncomeSuggestion();
     } catch (error) {
       console.error('Error fetching profile:', error);
+      setIncomeSuggestion(null);
       setLoadError(t('messages.loadError'));
     } finally {
       setIsLoading(false);
@@ -238,6 +273,7 @@ const EnhancedProfileSection: React.FC = () => {
 
       // Refresh onboarding status to update checklist automatically
       await refetchOnboarding();
+      void fetchIncomeSuggestion();
     } catch (error) {
       console.error('Error saving profile:', error);
       setSaveError(t('messages.saveError'));
@@ -357,6 +393,23 @@ const EnhancedProfileSection: React.FC = () => {
 
     setProfileData(updatedData);
   };
+
+  const handleUseIncomeSuggestion = () => {
+    if (!incomeSuggestion) {
+      return;
+    }
+
+    handleProfileChange('monthly_income', incomeSuggestion.amount);
+  };
+
+  const monthlyIncomeDifference = incomeSuggestion
+    ? Math.abs((profileData.profile.monthly_income ?? 0) - incomeSuggestion.amount)
+    : 0;
+  const shouldShowIncomeSuggestion = Boolean(
+    incomeSuggestion
+    && profileData.profile.marital_status !== 'Married'
+    && (profileData.profile.monthly_income === null || monthlyIncomeDifference >= 1),
+  );
 
   if (isLoading && !loadError) {
     return (
@@ -572,6 +625,29 @@ const EnhancedProfileSection: React.FC = () => {
                 placeholder={t('placeholders.income')}
                 helperText={t('helpers.grossIncome')}
               />
+              {shouldShowIncomeSuggestion && incomeSuggestion && (
+                <Alert severity="info" sx={{ mt: 1.5 }}>
+                  <Typography variant="body2" sx={{ mb: 0.75 }}>
+                    {incomeSuggestion.basis === 'salary'
+                      ? t('helpers.detectedSalarySuggestion', {
+                          amount: incomeSuggestion.amount.toLocaleString(),
+                          activeMonths: incomeSuggestion.activeMonths,
+                          months: incomeSuggestion.monthsAnalyzed,
+                        })
+                      : t('helpers.detectedIncomeSuggestion', {
+                          amount: incomeSuggestion.amount.toLocaleString(),
+                          activeMonths: incomeSuggestion.activeMonths,
+                          months: incomeSuggestion.monthsAnalyzed,
+                        })}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.25 }}>
+                    {t('helpers.detectedIncomeDisclaimer')}
+                  </Typography>
+                  <Button size="small" variant="outlined" onClick={handleUseIncomeSuggestion}>
+                    {t('actions.useSuggestion')}
+                  </Button>
+                </Alert>
+              )}
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>

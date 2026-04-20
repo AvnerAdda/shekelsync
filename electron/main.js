@@ -20,6 +20,7 @@ const {
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { getMainWindowAppearanceOptions } = require('./window-appearance');
 const {
   appRoot,
   rendererRoot,
@@ -1081,9 +1082,11 @@ async function createWindow() {
   const skipEmbeddedApi = process.env.SKIP_EMBEDDED_API === 'true';
   const devRendererUrl = process.env.RENDERER_DEV_URL || 'http://localhost:5173';
   const reduceVisualEffects = shouldReduceVisualEffects();
-  const windowBackgroundColor = reduceVisualEffects
-    ? (nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#f8fef9')
-    : '#00000000';
+  const windowAppearance = getMainWindowAppearanceOptions({
+    platform: process.platform,
+    reduceVisualEffects,
+    shouldUseDarkColors: nativeTheme.shouldUseDarkColors,
+  });
 
   if (isDev) {
     process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
@@ -1136,12 +1139,12 @@ async function createWindow() {
     minWidth: 1200,
     minHeight: 700,
     title: 'ShekelSync - Personal Finance Tracker',
-    backgroundColor: windowBackgroundColor,
+    backgroundColor: windowAppearance.backgroundColor,
     frame: false, // Frameless on all platforms
     titleBarStyle: 'hidden', // Custom title bar handling
     titleBarOverlay: isMac, // Only needed for macOS traffic lights
-    transparent: !reduceVisualEffects,
-    roundedCorners: true, // Enable rounded corners
+    transparent: windowAppearance.transparent,
+    roundedCorners: windowAppearance.roundedCorners,
     hasShadow: true,
     webPreferences: {
       nodeIntegration: false, // Security: disable node integration

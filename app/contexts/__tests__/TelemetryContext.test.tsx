@@ -21,6 +21,7 @@ function createTestWindowApi() {
     environment: 'test',
     release: '1.0.0-test',
     debug: false,
+    enabled: true,
   });
 
   return {
@@ -118,6 +119,28 @@ describe('TelemetryContext', () => {
     await waitFor(() => expect(screen.getByTestId('error').textContent).toContain('load-fail'));
   });
 
+  it('marks unsupported when crash reporting is disabled in this build', async () => {
+    const api = createTestWindowApi();
+    api.telemetry.getConfig = vi.fn().mockResolvedValue({
+      dsn: null,
+      environment: 'test',
+      release: '1.0.0-test',
+      debug: false,
+      enabled: false,
+    });
+    (window as any).electronAPI = api;
+
+    render(
+      <TelemetryProvider>
+        <TestConsumer />
+      </TelemetryProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('no'));
+    expect(screen.getByTestId('supported').textContent).toBe('no');
+    expect(syncRendererTelemetry).not.toHaveBeenCalled();
+  });
+
   it('throws when useTelemetry is called outside provider', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => renderHook(() => useTelemetry())).toThrow(
@@ -159,6 +182,7 @@ describe('TelemetryContext', () => {
     );
 
     const hook = renderHook(() => useTelemetry(), { wrapper });
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
 
     await act(async () => {
       await expect(hook.result.current.setTelemetryEnabled(false)).rejects.toThrow('Failed to persist');
