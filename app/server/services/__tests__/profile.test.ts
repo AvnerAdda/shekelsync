@@ -58,6 +58,58 @@ describe('profile service helpers', () => {
     expect(toNonNegativeInt(null, 2)).toBe(2);
     expect(toNonNegativeInt(undefined, 3)).toBe(3);
   });
+
+  it('builds a high-confidence salary suggestion from stable recent income', () => {
+    const { buildConfidentIncomeSuggestion } = profileService.utils;
+
+    const suggestion = buildConfidentIncomeSuggestion({
+      profile: {
+        marital_status: 'Single',
+        employment_status: 'employed',
+      },
+      spouse: null,
+      now: new Date('2026-04-17T12:00:00Z'),
+      rows: [
+        { date: '2025-10-05', price: 12000, category_name: 'משכורת' },
+        { date: '2025-11-05', price: 12100, category_name: 'משכורת' },
+        { date: '2025-12-05', price: 12050, category_name: 'משכורת' },
+        { date: '2026-01-05', price: 12000, category_name: 'משכורת' },
+        { date: '2026-02-05', price: 12150, category_name: 'משכורת' },
+      ],
+    });
+
+    expect(suggestion).toMatchObject({
+      amount: 12050,
+      basis: 'salary',
+      confidence: 'high',
+      isNetEstimate: true,
+      monthsAnalyzed: 6,
+      activeMonths: 5,
+      periodStart: '2025-10-01',
+      periodEnd: '2026-03-31',
+    });
+  });
+
+  it('suppresses income suggestions for married profiles', () => {
+    const { buildConfidentIncomeSuggestion } = profileService.utils;
+
+    const suggestion = buildConfidentIncomeSuggestion({
+      profile: {
+        marital_status: 'Married',
+        employment_status: 'employed',
+      },
+      spouse: { name: 'Partner' },
+      now: new Date('2026-04-17T12:00:00Z'),
+      rows: [
+        { date: '2025-10-05', price: 12000, category_name: 'משכורת' },
+        { date: '2025-11-05', price: 12000, category_name: 'משכורת' },
+        { date: '2025-12-05', price: 12000, category_name: 'משכורת' },
+        { date: '2026-01-05', price: 12000, category_name: 'משכורת' },
+      ],
+    });
+
+    expect(suggestion).toBeNull();
+  });
 });
 
 describe('profile service saveProfile', () => {
@@ -709,5 +761,57 @@ describe('profile service getProfile', () => {
     expect(result.profile.username).toBe('Solo');
     expect(result.spouse).toBeNull();
     expect(result.children).toEqual([]);
+  });
+});
+
+describe('profile service getIncomeSuggestion', () => {
+  beforeEach(() => {
+    queryMock.mockReset();
+    releaseMock.mockReset();
+    getClientMock.mockReset();
+    profileService.__setDatabaseForTests({ getClient: getClientMock });
+  });
+
+  it('returns a suggestion payload and releases the client', async () => {
+    queryMock.mockImplementation(async (text, params) => {
+      const sql = String(text).trim();
+
+      if (sql.startsWith('SELECT * FROM user_profile')) {
+        return {
+          rows: [{
+            id: 7,
+            marital_status: 'Single',
+            employment_status: 'employed',
+          }],
+        };
+      }
+
+      if (sql.startsWith('SELECT * FROM spouse_profile')) {
+        expect(params).toEqual([7]);
+        return { rows: [] };
+      }
+
+      if (sql.startsWith('SELECT')) {
+        return {
+          rows: [
+            { date: '2025-10-05', price: 12000, category_name: 'Salary' },
+            { date: '2025-11-05', price: 12000, category_name: 'Salary' },
+            { date: '2025-12-05', price: 12100, category_name: 'Salary' },
+            { date: '2026-01-05', price: 12050, category_name: 'Salary' },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    });
+
+    const result = await profileService.getIncomeSuggestion(new Date('2026-04-17T12:00:00Z'));
+
+    expect(result.suggestion).toMatchObject({
+      basis: 'salary',
+      confidence: 'high',
+      activeMonths: 4,
+    });
+    expect(releaseMock).toHaveBeenCalledTimes(1);
   });
 });

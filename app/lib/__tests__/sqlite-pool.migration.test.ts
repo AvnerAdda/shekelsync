@@ -31,16 +31,14 @@ const LEGACY_INVESTMENT_HOLDINGS_SQL = `
 
 describe('sqlite-pool legacy investment holdings migration', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
     vi.spyOn(fs, 'existsSync').mockReturnValue(true);
   });
 
   afterEach(() => {
-    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
-  it('rebuilds legacy investment_holdings tables and installs pikadon-safe uniqueness on startup', () => {
+  it('rebuilds legacy investment_holdings tables and installs pikadon-safe uniqueness on deferred maintenance', async () => {
     const execCalls: string[] = [];
     const pragmaCalls: string[] = [];
     const getCalls: Array<{ sql: string; params: unknown[] }> = [];
@@ -97,8 +95,7 @@ describe('sqlite-pool legacy investment holdings migration', () => {
       databaseCtor: LegacyInvestmentHoldingsDb,
     });
 
-    // Flush the setImmediate callback that runs deferred schema migrations
-    vi.runAllTimers();
+    await new Promise((resolve) => setImmediate(resolve));
 
     const startupSql = execCalls.join('\n');
 

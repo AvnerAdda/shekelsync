@@ -313,6 +313,13 @@
   },
   "settings": {
     "title": "Settings",
+    "tabs": {
+      "profile": "Profile",
+      "appearance": "Appearance",
+      "sync": "Sync",
+      "privacySecurity": "Privacy & Security",
+      "system": "System"
+    },
     "language": {
       "title": "Language & locale",
       "description": "Default is Hebrew. On first launch we choose the closest match to your system locale; you can switch at any time.",
@@ -425,8 +432,8 @@
     },
     "diagnostics": {
       "title": "Diagnostics & Crash Reports",
-      "description": "Share anonymized crash reports to help us resolve stability issues faster. Sensitive data such as account credentials and personal identifiers are never included in crash payloads.",
-      "notSupported": "Crash reporting is only available in the desktop app.",
+      "description": "Review local diagnostics and export logs for support. Crash reporting availability depends on the current build.",
+      "notSupported": "Crash reporting has been removed from this build.",
       "toggleLabel": "Send crash reports automatically",
       "toggleOn": "Crash details will be securely uploaded to our monitoring service.",
       "toggleOff": "Crash details remain on your device until you opt in.",
@@ -515,6 +522,9 @@
         "ageProfile": "Age: {{age}} years old",
         "ageSpouse": "Age: {{age}} years old",
         "grossIncome": "Gross monthly income",
+        "detectedSalarySuggestion": "Detected recurring salary in {{activeMonths}} of the last {{months}} complete months: ₪{{amount}} net/month.",
+        "detectedIncomeSuggestion": "Detected tracked income in {{activeMonths}} of the last {{months}} complete months: ₪{{amount}} net/month.",
+        "detectedIncomeDisclaimer": "This comes from bank transactions and is usually net, not gross. Review before using it as your profile income.",
         "required": "Required"
       },
       "options": {
@@ -630,6 +640,7 @@
         "cancel": "Cancel",
         "saveChanges": "Save Changes",
         "addChild": "Add Child",
+        "useSuggestion": "Use Suggestion",
         "editChild": "Edit Child",
         "deleteChild": "Delete Child"
       },

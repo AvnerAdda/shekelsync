@@ -119,3 +119,49 @@ test('allows adding and editing a child profile', async ({ page }) => {
   await expect(page.getByText(/updated successfully/i)).toBeVisible();
   expect(savedPayloads.at(-1)?.children?.[0]?.name).toBe('Luna Updated');
 });
+
+test('shows a detected income suggestion and applies it on demand', async ({ page }) => {
+  const bodies: any[] = [];
+
+  const overrides: Record<string, Handler> = {
+    'GET /api/profile': async ({ route }) => {
+      await route.fulfill(jsonResponse(profilePayload));
+    },
+    'GET /api/profile/income-suggestion': async ({ route }) => {
+      await route.fulfill(jsonResponse({
+        suggestion: {
+          amount: 12345,
+          basis: 'salary',
+          confidence: 'high',
+          isNetEstimate: true,
+          monthsAnalyzed: 6,
+          activeMonths: 5,
+          detectedMonthlySalary: 12345,
+          detectedMonthlyIncome: 12345,
+          periodStart: '2025-10-01',
+          periodEnd: '2026-03-31',
+        },
+      }));
+    },
+    'PUT /api/profile': async ({ route, request }) => {
+      const payload = JSON.parse(request.postData() ?? '{}');
+      bodies.push(payload);
+      await route.fulfill(jsonResponse(payload));
+    },
+  };
+
+  await setupRendererTest(page, overrides);
+  await goHome(page);
+
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByRole('heading', { name: /profile information/i })).toBeVisible({ timeout: 20000 });
+  await page.getByRole('button', { name: 'Professional Information' }).click();
+  await expect(page.getByText(/Detected recurring salary/i)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Use Suggestion' }).click();
+  await expect(page.getByLabel('Monthly Income')).toHaveValue('12345');
+
+  await page.getByRole('button', { name: 'Save Profile' }).click();
+  await expect(page.getByText(/updated successfully/i)).toBeVisible();
+  expect(bodies[0]?.profile?.monthly_income).toBe(12345);
+});

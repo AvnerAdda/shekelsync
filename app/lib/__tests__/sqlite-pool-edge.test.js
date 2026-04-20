@@ -49,6 +49,65 @@ describe('sqlite-pool edge cases', () => {
     expect(result.rowCount).toBe(1);
     expect(result.rows[0]).toEqual({ id: 1 });
   });
+
+  it('creates startup-critical tables before the first query runs', async () => {
+    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+    class FakeDb {
+      constructor() {
+        this.hasChatTables = false;
+      }
+
+      prepare(sql) {
+        if (sql === "PRAGMA table_info('account_pairings')") {
+          return { all: () => [] };
+        }
+        if (sql === "PRAGMA table_info('transactions')") {
+          return { all: () => [] };
+        }
+        if (sql === "PRAGMA table_info('investment_holdings')") {
+          return { all: () => [] };
+        }
+        if (sql === "PRAGMA table_info('transaction_pairing_exclusions')") {
+          return { all: () => [] };
+        }
+        if (sql === 'SELECT 1 FROM transaction_pairing_exclusions LIMIT 1') {
+          return { get: () => ({ exists: 1 }) };
+        }
+        if (sql.includes('INSERT INTO chat_conversations')) {
+          if (!this.hasChatTables) {
+            throw new Error('no such table: chat_conversations');
+          }
+          return { run: () => ({ changes: 1 }) };
+        }
+
+        return {
+          all: () => [],
+          get: () => undefined,
+          run: () => ({ changes: 1 }),
+        };
+      }
+
+      exec(sql) {
+        if (sql.includes('CREATE TABLE IF NOT EXISTS chat_conversations')) {
+          this.hasChatTables = true;
+        }
+      }
+
+      pragma() {}
+      close() {}
+    }
+
+    const pool = createSqlitePool({
+      databaseCtor: FakeDb,
+      databasePath: 'dist/shekelsync.sqlite',
+    });
+
+    await expect(
+      pool.query('INSERT INTO chat_conversations (external_id) VALUES ($1)', ['conv-1']),
+    ).resolves.toEqual({ rows: [], rowCount: 1 });
+  });
+
   it('throws when database file does not exist', () => {
     expect(() =>
       createSqlitePool({

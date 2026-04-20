@@ -1318,6 +1318,7 @@ const defaultHandlers: Record<string, Handler> = {
     totalTransactions: 12,
   }),
   'GET /api/profile': respondWith(defaultProfile),
+  'GET /api/profile/income-suggestion': respondWith({ suggestion: null }),
   'PUT /api/profile': async ({ route, request }) => {
     const payload = request.postData() ? JSON.parse(request.postData() as string) : defaultProfile;
     await route.fulfill(jsonResponse(payload, 200));
