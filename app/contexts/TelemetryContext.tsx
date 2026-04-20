@@ -14,6 +14,7 @@ interface TelemetryConfig {
   environment?: string;
   release?: string;
   debug?: boolean;
+  enabled?: boolean;
 }
 
 interface TelemetryContextValue {
@@ -32,13 +33,15 @@ const hasElectronBridge = () =>
 export const TelemetryProvider: React.FC<PropsWithChildren> = ({ children }) => {
   const bridgeAvailable = hasElectronBridge();
   const [telemetryEnabled, setTelemetryEnabled] = useState(false);
-  const [loading, setLoading] = useState(bridgeAvailable);
+  const [settingsLoading, setSettingsLoading] = useState(bridgeAvailable);
+  const [configLoading, setConfigLoading] = useState(bridgeAvailable);
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<TelemetryConfig | null>(null);
 
   useEffect(() => {
     if (!bridgeAvailable) {
-      setLoading(false);
+      setSettingsLoading(false);
+      setConfigLoading(false);
       return;
     }
 
@@ -58,23 +61,30 @@ export const TelemetryProvider: React.FC<PropsWithChildren> = ({ children }) => 
         }
       } finally {
         if (!cancelled) {
-          setLoading(false);
+          setSettingsLoading(false);
         }
       }
     })();
 
-    window.electronAPI?.telemetry?.getConfig?.().then((cfg) => {
-      if (cancelled || !cfg) {
-        return;
-      }
+    window.electronAPI?.telemetry?.getConfig?.()
+      .then((cfg) => {
+        if (cancelled || !cfg) {
+          return;
+        }
 
-      setConfig({
-        dsn: cfg.dsn ?? null,
-        environment: cfg.environment,
-        release: cfg.release,
-        debug: cfg.debug,
+        setConfig({
+          dsn: cfg.dsn ?? null,
+          environment: cfg.environment,
+          release: cfg.release,
+          debug: cfg.debug,
+          enabled: Boolean(cfg.enabled),
+        });
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setConfigLoading(false);
+        }
       });
-    });
 
     const unsubscribe = window.electronAPI?.settings?.onChange?.((nextSettings) => {
       if (cancelled) {
@@ -90,7 +100,7 @@ export const TelemetryProvider: React.FC<PropsWithChildren> = ({ children }) => 
   }, [bridgeAvailable]);
 
   useEffect(() => {
-    if (!config) {
+    if (!config?.enabled) {
       return;
     }
     syncRendererTelemetry(telemetryEnabled && Boolean(config.dsn), config).catch((syncError) => {
@@ -100,12 +110,12 @@ export const TelemetryProvider: React.FC<PropsWithChildren> = ({ children }) => 
 
   const handleTelemetryChange = useCallback(
     async (next: boolean) => {
-      if (!bridgeAvailable) {
+      if (!bridgeAvailable || !config?.enabled) {
         setTelemetryEnabled(next);
         return;
       }
 
-      setLoading(true);
+      setSettingsLoading(true);
       setError(null);
       try {
         const response = await window.electronAPI?.settings?.update?.({
@@ -120,21 +130,24 @@ export const TelemetryProvider: React.FC<PropsWithChildren> = ({ children }) => 
         setError(message);
         throw updateError;
       } finally {
-        setLoading(false);
+        setSettingsLoading(false);
       }
     },
-    [bridgeAvailable],
+    [bridgeAvailable, config],
   );
+
+  const loading = settingsLoading || configLoading;
+  const supported = bridgeAvailable && Boolean(config?.enabled);
 
   const value = useMemo<TelemetryContextValue>(
     () => ({
       telemetryEnabled,
       loading,
-      supported: bridgeAvailable,
+      supported,
       error,
       setTelemetryEnabled: handleTelemetryChange,
     }),
-    [telemetryEnabled, loading, error, handleTelemetryChange, bridgeAvailable],
+    [telemetryEnabled, loading, supported, error, handleTelemetryChange],
   );
 
   return <TelemetryContext.Provider value={value}>{children}</TelemetryContext.Provider>;

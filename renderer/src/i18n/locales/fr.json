@@ -295,6 +295,13 @@
   },
   "settings": {
     "title": "Paramètres",
+    "tabs": {
+      "profile": "Profil",
+      "appearance": "Apparence",
+      "sync": "Synchronisation",
+      "privacySecurity": "Confidentialité et sécurité",
+      "system": "Système"
+    },
     "language": {
       "title": "Langue et région",
       "description": "La langue par défaut est l'hébreu. Au premier lancement nous choisissons la meilleure correspondance avec la langue système ; vous pouvez changer à tout moment.",
@@ -407,8 +414,8 @@
     },
     "diagnostics": {
       "title": "Diagnostics et rapports de crash",
-      "description": "Partagez des rapports de crash anonymisés pour nous aider à résoudre les problèmes plus rapidement. Aucun identifiant ou donnée sensible n'est inclus.",
-      "notSupported": "Le rapport de crash est disponible uniquement sur l'application desktop.",
+      "description": "Consultez les diagnostics locaux et exportez les logs pour le support. La disponibilité du rapport de crash dépend du build actuel.",
+      "notSupported": "Le rapport de crash a été supprimé de ce build.",
       "toggleLabel": "Envoyer les rapports de crash automatiquement",
       "toggleOn": "Les détails de crash seront envoyés de façon sécurisée à notre service de monitoring.",
       "toggleOff": "Les détails restent sur votre appareil tant que vous n'optez pas pour l'envoi.",
@@ -562,6 +569,9 @@
         "ageProfile": "Âge : {{age}} ans",
         "ageSpouse": "Âge : {{age}} ans",
         "grossIncome": "Revenu mensuel brut",
+        "detectedSalarySuggestion": "Salaire récurrent détecté sur {{activeMonths}} des {{months}} derniers mois complets : ₪{{amount}} net/mois.",
+        "detectedIncomeSuggestion": "Revenu suivi détecté sur {{activeMonths}} des {{months}} derniers mois complets : ₪{{amount}} net/mois.",
+        "detectedIncomeDisclaimer": "Ce montant provient des transactions bancaires et correspond généralement au net, pas au brut. Vérifiez-le avant de l'utiliser comme revenu de profil.",
         "required": "Requis"
       },
       "options": {
@@ -677,6 +687,7 @@
         "cancel": "Annuler",
         "saveChanges": "Enregistrer les modifications",
         "addChild": "Ajouter un enfant",
+        "useSuggestion": "Utiliser la suggestion",
         "editChild": "Modifier l'enfant",
         "deleteChild": "Supprimer l'enfant"
       },

@@ -165,10 +165,11 @@ function rebuildInvestmentHoldingsForPikadonEntries(db) {
 }
 
 /**
- * Run all idempotent schema migrations/fixes.
- * Called via setImmediate so it doesn't block pool creation or the main thread.
+ * Run startup-critical, idempotent schema migrations/fixes before the pool is returned.
+ * These tables/columns are queried immediately by request handlers, so they must exist
+ * before the first caller can use the database connection.
  */
-function runDeferredSchemaMigrations(db) {
+function runStartupSchemaMigrations(db) {
   try {
     const pairingColumns = db.prepare("PRAGMA table_info('account_pairings')").all();
     if (Array.isArray(pairingColumns) && pairingColumns.length > 0) {
@@ -185,9 +186,6 @@ function runDeferredSchemaMigrations(db) {
         db.exec('ALTER TABLE transactions ADD COLUMN tags TEXT');
       }
     }
-
-    rebuildInvestmentHoldingsForPikadonEntries(db);
-
     const pairingExclusionInfo = db.prepare("PRAGMA table_info('transaction_pairing_exclusions')").all();
     const hasPairingExclusions = Array.isArray(pairingExclusionInfo) && pairingExclusionInfo.length > 0;
     const pairingIdPk = pairingExclusionInfo.some((col) => col && col.name === 'pairing_id' && col.pk);
@@ -289,7 +287,61 @@ function runDeferredSchemaMigrations(db) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_investment_positions_account ON investment_positions(account_id, status);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_investment_positions_status ON investment_positions(status, opened_at DESC);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_investment_position_events_position ON investment_position_events(position_id, effective_date DESC);');
+  } catch (_error) {
+    // Ignore: table may not exist yet (e.g., before init_sqlite_db runs).
+  }
 
+  // Chat tables migration
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS chat_conversations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        external_id TEXT NOT NULL UNIQUE,
+        title TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        last_message_at TEXT,
+        message_count INTEGER NOT NULL DEFAULT 0,
+        total_tokens_used INTEGER NOT NULL DEFAULT 0,
+        is_archived INTEGER NOT NULL DEFAULT 0 CHECK (is_archived IN (0, 1)),
+        metadata TEXT
+      );
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id INTEGER NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('system', 'user', 'assistant', 'tool')),
+        content TEXT NOT NULL,
+        tool_calls TEXT,
+        tool_call_id TEXT,
+        tokens_used INTEGER,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        metadata TEXT,
+        FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_chat_conversations_external_id ON chat_conversations(external_id);
+      CREATE INDEX IF NOT EXISTS idx_chat_conversations_updated_at ON chat_conversations(updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_chat_conversations_archived ON chat_conversations(is_archived, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_role ON chat_messages(role);
+    `);
+  } catch (_chatError) {
+    // Ignore: chat tables migration may fail on older DBs
+  }
+
+}
+
+/**
+ * Run lower-priority maintenance after the pool is already available.
+ * These repairs are not required for the first query to succeed.
+ */
+function runDeferredSchemaMaintenance(db) {
+  try {
+    rebuildInvestmentHoldingsForPikadonEntries(db);
+  } catch (_error) {
+    // Ignore: investment_holdings may not exist yet.
+  }
+
+  try {
     db.exec('DROP TRIGGER IF EXISTS trg_account_pairings_exclusions_insert');
     db.exec('DROP TRIGGER IF EXISTS trg_account_pairings_exclusions_update');
     db.exec('DROP TRIGGER IF EXISTS trg_account_pairings_exclusions_delete');
@@ -429,44 +481,7 @@ function runDeferredSchemaMigrations(db) {
       `);
     }
   } catch (_error) {
-    // Ignore: table may not exist yet (e.g., before init_sqlite_db runs).
-  }
-
-  // Chat tables migration
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS chat_conversations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        external_id TEXT NOT NULL UNIQUE,
-        title TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-        last_message_at TEXT,
-        message_count INTEGER NOT NULL DEFAULT 0,
-        total_tokens_used INTEGER NOT NULL DEFAULT 0,
-        is_archived INTEGER NOT NULL DEFAULT 0 CHECK (is_archived IN (0, 1)),
-        metadata TEXT
-      );
-      CREATE TABLE IF NOT EXISTS chat_messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        conversation_id INTEGER NOT NULL,
-        role TEXT NOT NULL CHECK (role IN ('system', 'user', 'assistant', 'tool')),
-        content TEXT NOT NULL,
-        tool_calls TEXT,
-        tool_call_id TEXT,
-        tokens_used INTEGER,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        metadata TEXT,
-        FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE
-      );
-      CREATE INDEX IF NOT EXISTS idx_chat_conversations_external_id ON chat_conversations(external_id);
-      CREATE INDEX IF NOT EXISTS idx_chat_conversations_updated_at ON chat_conversations(updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_chat_conversations_archived ON chat_conversations(is_archived, updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id, created_at);
-      CREATE INDEX IF NOT EXISTS idx_chat_messages_role ON chat_messages(role);
-    `);
-  } catch (_chatError) {
-    // Ignore: chat tables migration may fail on older DBs
+    // Ignore: tables may not exist yet (e.g., before init_sqlite_db runs).
   }
 
   // Fix orphaned triggers referencing smart_action_items_old
@@ -545,10 +560,16 @@ function createSqlitePool(options = {}) {
   db.pragma('foreign_keys = ON');
   db.pragma('journal_mode = WAL');
 
-  // Defer heavy schema migrations off the critical path so the pool is available immediately.
-  // All operations are idempotent (IF NOT EXISTS / IF EXISTS), safe to run after queries begin.
+  // Startup-critical schema objects must exist before the pool is exposed.
+  runStartupSchemaMigrations(db);
+
+  let isClosed = false;
+
+  // Keep lower-priority maintenance off the critical path.
   setImmediate(() => {
-    runDeferredSchemaMigrations(db);
+    if (!isClosed) {
+      runDeferredSchemaMaintenance(db);
+    }
   });
 
   const prepareStatement = (sql, params) => {
@@ -800,7 +821,10 @@ function createSqlitePool(options = {}) {
   return {
     query,
     connect,
-    close: () => db.close(),
+    close: () => {
+      isClosed = true;
+      db.close();
+    },
     _db: db,
     // Bulk mode functions for optimized insert operations
     enterBulkMode,

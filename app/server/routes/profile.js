@@ -19,6 +19,20 @@ function createProfileRouter() {
     }
   });
 
+  router.get('/income-suggestion', async (_req, res) => {
+    try {
+      const result = await profileService.getIncomeSuggestion();
+      res.json(result);
+    } catch (error) {
+      console.error('Profile income suggestion error:', error);
+      res.status(error?.status || 500).json({
+        success: false,
+        error: 'Failed to fetch income suggestion',
+        details: error?.stack,
+      });
+    }
+  });
+
   router.put('/', async (req, res) => {
     try {
       const result = await profileService.saveProfile(req.body || {});

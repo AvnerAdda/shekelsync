@@ -35,6 +35,16 @@ describe('Shared /api/profile routes', () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
+  it('returns income suggestion data', async () => {
+    const payload = { suggestion: { amount: 12345, basis: 'salary' } };
+    const spy = vi.spyOn(profileService, 'getIncomeSuggestion').mockResolvedValue(payload);
+
+    const res = await request(app).get('/api/profile/income-suggestion').expect(200);
+
+    expect(res.body).toEqual(payload);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
   it('saves profile data', async () => {
     const payload = { name: 'Updated User' };
     const spy = vi.spyOn(profileService, 'saveProfile').mockResolvedValue(payload);
@@ -49,6 +59,15 @@ describe('Shared /api/profile routes', () => {
     vi.spyOn(profileService, 'getProfile').mockRejectedValue(new Error('boom'));
 
     const res = await request(app).get('/api/profile').expect(500);
+
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toBeDefined();
+  });
+
+  it('returns 500 when income suggestion fetch fails', async () => {
+    vi.spyOn(profileService, 'getIncomeSuggestion').mockRejectedValue(new Error('boom'));
+
+    const res = await request(app).get('/api/profile/income-suggestion').expect(500);
 
     expect(res.body.success).toBe(false);
     expect(res.body.error).toBeDefined();
