@@ -872,8 +872,21 @@
     },
     "tabs": {
       "history": "הכנסות והוצאות יומיות",
+      "calendar": "לוח שנה",
       "netPosition": "מצב נטו",
       "scenarios": "תרחישי סוף חודש"
+    },
+    "calendar": {
+      "subtitle": "לחצו על יום כדי לראות את העסקאות שלו.",
+      "today": "היום",
+      "retry": "נסה שוב",
+      "error": "טעינת לוח השנה נכשלה",
+      "emptyMonth": "אין פעילות של הכנסות או הוצאות בחודש הזה.",
+      "monthIncome": "הכנסות החודש",
+      "monthExpenses": "הוצאות החודש",
+      "monthNet": "נטו חודשי",
+      "previousMonth": "החודש הקודם",
+      "nextMonth": "החודש הבא"
     },
     "forecast": {
       "loading": "טוען תחזית...",
@@ -1860,7 +1873,15 @@
       "refreshTooltip": "רענון כל הנתונים",
       "refresh": "רענן",
       "refreshing": "מרענן...",
-      "portfolioSetup": "הגדרת תיק"
+      "portfolioSetup": "הגדרת תיק",
+      "addAccount": "הוספת חשבון",
+      "updateValuation": "עדכון שווי"
+    },
+    "loading": {
+      "setup": "טוען את מצב ההגדרה..."
+    },
+    "warnings": {
+      "multiCurrency": "קיימים מספר מטבעות. הסכומים והגרפים עדיין מציגים ערכים גולמיים ללא נרמול מט\"ח."
     },
     "filters": {
       "rangeLabel": "טווח עסקאות",
@@ -1884,12 +1905,17 @@
     "allocation": {
       "title": "הקצאה",
       "total": "סה\"כ",
-      "viewMore": "ראה עוד"
+      "viewMore": "ראה עוד",
+      "tooltipCategory": "קטגוריה",
+      "tooltipValue": "שווי",
+      "tooltipPercentage": "אחוז"
     },
     "performance": {
       "title": "הביצועים שלי",
       "allCategories": "כל הקטגוריות",
-      "noAccounts": "לא נמצאו חשבונות השקעה"
+      "noAccounts": "לא נמצאו חשבונות השקעה",
+      "overviewTitle": "סקירת חשבונות",
+      "overviewSubtitle": "השוו ביצועים לפי קטגוריה ותנועה אחרונה בכל חשבון."
     },
     "empty": {
       "title": "התחילו עם תיק ההשקעות",
@@ -1959,6 +1985,11 @@
     },
     "history": {
       "title": "ביצועי התיק",
+      "descriptions": {
+        "chart": "מעקב אחרי היסטוריית התיק המצטברת בכל הקטגוריות שבמעקב.",
+        "table": "סקירת עסקאות השקעה אחרונות לטווח שנבחר."
+      },
+      "tooltipTotal": "סך התיק",
       "aria": {
         "displayMode": "מצב תצוגה",
         "chart": "תצוגת גרף",
@@ -1995,7 +2026,14 @@
     },
     "breakdown": {
       "title": "פירוט תיק",
+      "listTitle": "חשבונות לפי קטגוריה",
+      "listSubtitle": "סקירת החשבונות במעקב לפי קטגוריות התיק.",
       "group": {
+        "cash": "מזומן",
+        "liquid": "השקעות נזילות",
+        "restricted": "חסכונות לטווח ארוך",
+        "stability": "ביטוח ויציבות",
+        "other": "נכסים אחרים",
         "accounts_one": "חשבון {{count}}",
         "accounts_other": "{{count}} חשבונות",
         "percentage": "{{value}}%",
@@ -2055,6 +2093,92 @@
         "setup": {
           "success": "נוצרו {{count}} רשומות פיקדון בהצלחה!"
         }
+      }
+    },
+    "coverage": {
+      "title": "כיסוי התיק",
+      "subtitle": "מודד עד כמה נתוני ההשקעות מלאים וקלים לבדיקה.",
+      "empty": "מדדי הכיסוי יופיעו לאחר שיוגדרו חשבונות השקעה.",
+      "items": {
+        "missingValuations": {
+          "label": "שווים חסרים",
+          "hint": "חשבונות ללא תמונת שווי עדכנית."
+        },
+        "staleValuations": {
+          "label": "שווים מיושנים",
+          "hint": "חשבונות שהשווי האחרון שלהם ישן מ-30 יום."
+        },
+        "missingCurrency": {
+          "label": "מטבע חסר",
+          "hint": "חשבונות בלי מטבע בסיס הופכים את הסכומים לפחות אמינים."
+        },
+        "missingHoldings": {
+          "label": "חשבונות בלי פירוט החזקות",
+          "hint": "חשבונות שעדיין אין להם שווי ואין פירוט החזקות."
+        }
+      }
+    },
+    "performanceBreakdown": {
+      "title": "למה התיק השתנה",
+      "subtitle": "מפריד בין תנועות מזומן לבין תנועת שוק לטווח הנבחר.",
+      "empty": "עדיין אין פירוט ביצועים זמין.",
+      "emptyTimeline": "אין נתוני ציר זמן לטווח הזה.",
+      "mixedCurrencyWarning": "זוהו מספר מטבעות. הפירוט שימושי, אבל הסכומים עדיין לא מנורמלים לפי מט\"ח.",
+      "na": "לא זמין",
+      "metrics": {
+        "twr": "TWR {{value}}",
+        "mwr": "MWR {{value}}"
+      },
+      "cards": {
+        "valueChange": "שינוי בשווי",
+        "contributions": "הפקדות",
+        "withdrawals": "משיכות",
+        "capitalReturns": "החזרי הון",
+        "distributedIncome": "הכנסה מחולקת",
+        "fees": "עמלות",
+        "marketMove": "תנועת שוק"
+      }
+    },
+    "performanceCard": {
+      "high": "גבוה",
+      "low": "נמוך",
+      "value": "שווי",
+      "min": "מינ'",
+      "max": "מקס'"
+    },
+    "holdings": {
+      "title": "החזקות / פוזיציות",
+      "subtitle": "פוזיציות פתוחות לצד החזקות גיבוי מתמונות החשבון האחרונות.",
+      "empty": "לא נמצאו החזקות או פוזיציות שתואמות למסננים.",
+      "filters": {
+        "searchLabel": "חיפוש",
+        "searchPlaceholder": "חיפוש לפי שם, חשבון או מוסד",
+        "categoryLabel": "קטגוריה",
+        "allCategories": "כל הקטגוריות",
+        "rowTypeLabel": "סוג שורה",
+        "rowTypeAll": "כל השורות",
+        "rowTypePositions": "פוזיציות",
+        "rowTypeHoldings": "החזקות"
+      },
+      "rowKind": {
+        "position": "פוזיציה",
+        "holding": "החזקה"
+      },
+      "status": {
+        "needsValuation": "דורש שווי"
+      },
+      "table": {
+        "name": "שם",
+        "rowType": "סוג שורה",
+        "category": "קטגוריה",
+        "account": "חשבון",
+        "itemType": "סוג",
+        "currency": "מטבע",
+        "currentValue": "שווי נוכחי",
+        "costBasis": "עלות בסיס",
+        "unrealizedPnL": "רווח/הפסד לא ממומש",
+        "date": "עודכן / נפתח",
+        "notAvailable": "לא זמין"
       }
     }
   },

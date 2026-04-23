@@ -22,12 +22,14 @@ import { ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend
 import { useTheme, alpha } from '@mui/material/styles';
 import { format, subDays, addDays } from 'date-fns';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import NotesIcon from '@mui/icons-material/Notes';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import TuneIcon from '@mui/icons-material/Tune';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
+import IncomeExpenseCalendar from './IncomeExpenseCalendar';
 import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';
@@ -79,9 +81,12 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const theme = useTheme();
   const { aggregationPeriod, setAggregationPeriod, periodDays, setPeriodDays } = useDashboardFilters();
   const { t } = useTranslation('translation', { keyPrefix: 'transactionHistory' });
+  const TAB_HISTORY = 0;
+  const TAB_CALENDAR = 1;
+  const TAB_NET_POSITION = 2;
 
   // Tab state
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(TAB_HISTORY);
 
   // Display options state
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<HTMLElement | null>(null);
@@ -628,31 +633,48 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             <MuiTooltip title={t('tabs.history')}>
               <IconButton
                 size="small"
-                onClick={() => setActiveTab(0)}
+                onClick={() => setActiveTab(TAB_HISTORY)}
                 sx={{
-                  bgcolor: activeTab === 0 ? 'primary.main' : 'transparent',
-                  color: activeTab === 0 ? 'primary.contrastText' : 'text.secondary',
+                  bgcolor: activeTab === TAB_HISTORY ? 'primary.main' : 'transparent',
+                  color: activeTab === TAB_HISTORY ? 'primary.contrastText' : 'text.secondary',
                   borderRadius: '8px',
                   transition: 'all 0.2s',
                   '&:hover': {
-                    bgcolor: activeTab === 0 ? 'primary.dark' : 'action.hover',
+                    bgcolor: activeTab === TAB_HISTORY ? 'primary.dark' : 'action.hover',
                   },
                 }}
               >
                 <TimelineIcon fontSize="small" />
               </IconButton>
             </MuiTooltip>
-            <MuiTooltip title={t('tabs.netPosition')}>
+            <MuiTooltip title={t('tabs.calendar')}>
               <IconButton
                 size="small"
-                onClick={() => setActiveTab(1)}
+                onClick={() => setActiveTab(TAB_CALENDAR)}
                 sx={{
-                  bgcolor: activeTab === 1 ? 'primary.main' : 'transparent',
-                  color: activeTab === 1 ? 'primary.contrastText' : 'text.secondary',
+                  bgcolor: activeTab === TAB_CALENDAR ? 'primary.main' : 'transparent',
+                  color: activeTab === TAB_CALENDAR ? 'primary.contrastText' : 'text.secondary',
                   borderRadius: '8px',
                   transition: 'all 0.2s',
                   '&:hover': {
-                    bgcolor: activeTab === 1 ? 'primary.dark' : 'action.hover',
+                    bgcolor: activeTab === TAB_CALENDAR ? 'primary.dark' : 'action.hover',
+                  },
+                }}
+              >
+                <CalendarMonthIcon fontSize="small" />
+              </IconButton>
+            </MuiTooltip>
+            <MuiTooltip title={t('tabs.netPosition')}>
+              <IconButton
+                size="small"
+                onClick={() => setActiveTab(TAB_NET_POSITION)}
+                sx={{
+                  bgcolor: activeTab === TAB_NET_POSITION ? 'primary.main' : 'transparent',
+                  color: activeTab === TAB_NET_POSITION ? 'primary.contrastText' : 'text.secondary',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    bgcolor: activeTab === TAB_NET_POSITION ? 'primary.dark' : 'action.hover',
                   },
                 }}
               >
@@ -662,7 +684,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           </Box>
 
         </Box>
-        {activeTab === 0 && (
+        {activeTab === TAB_HISTORY && (
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             <ToggleButtonGroup 
               value={yAxisScale} 
@@ -878,7 +900,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       </Popover>
 
       {/* Tab 0: Daily Income vs Expenses with Forecast */}
-      {activeTab === 0 && (
+      {activeTab === TAB_HISTORY && (
         <>
           {aggregationPeriod === 'daily' && forecastData && (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1, textAlign: 'center' }}>
@@ -1278,8 +1300,22 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         </>
       )}
 
-      {/* Tab 1: Net Position (Cumulative Cash Flow with Forecast) */}
-      {activeTab === 1 && (
+      {/* Tab 1: Income and expense calendar */}
+      {activeTab === TAB_CALENDAR && (
+        <IncomeExpenseCalendar
+          includeCardRepayments={includeCardRepayments}
+          includeCapitalReturns={includeCapitalReturns}
+          formatCurrency={formatCurrency}
+          selectedDate={hoveredDate}
+          onSelectDate={(date) => {
+            fetchTransactionsByDate(date);
+            setHoveredDate(date);
+          }}
+        />
+      )}
+
+      {/* Tab 2: Net Position (Cumulative Cash Flow with Forecast) */}
+      {activeTab === TAB_NET_POSITION && (
         <Box>
           {forecastLoading && (
             <Box sx={{ height: 350, p: 2 }}>

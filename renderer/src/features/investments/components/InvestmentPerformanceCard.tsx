@@ -8,8 +8,9 @@ import {
 } from 'recharts';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { InvestmentAccountSummary, PortfolioHistoryPoint } from '@renderer/types/investments';
+import { useTranslation } from 'react-i18next';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
-import { getInstitutionLabel, type InstitutionMetadata } from '@renderer/shared/components/InstitutionBadge';
+import { resolvePortfolioInstitutionName } from './portfolio-breakdown-helpers';
 import {
   AccountBalance as BankIcon,
   TrendingUp as StockIcon,
@@ -47,6 +48,8 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
 }) => {
   const theme = useTheme();
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'investmentsPage.performanceCard' });
+  const locale = i18n.language;
 
   const formatCurrencyValue = (value: number) =>
     formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
@@ -138,9 +141,7 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
           </Typography>
           {account.institution && (
             <Typography variant="caption" color="text.secondary" noWrap>
-              {typeof account.institution === 'string'
-                ? account.institution
-                : (getInstitutionLabel(account.institution as InstitutionMetadata) || '')}
+              {resolvePortfolioInstitutionName(account.institution, locale)}
             </Typography>
           )}
         </Box>
@@ -195,7 +196,7 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
         >
           <Box>
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-              High
+              {t('high')}
             </Typography>
             <Typography variant="caption" fontWeight={600} display="block" sx={{ fontSize: '0.7rem' }}>
               {maskAmounts ? '***' : `₪${(maxValue / 1000).toFixed(0)}k`}
@@ -203,7 +204,7 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
           </Box>
           <Box sx={{ textAlign: 'right' }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-              Low
+              {t('low')}
             </Typography>
             <Typography variant="caption" fontWeight={600} display="block" sx={{ fontSize: '0.7rem' }}>
               {maskAmounts ? '***' : `₪${(minValue / 1000).toFixed(0)}k`}
@@ -224,18 +225,18 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
                   const dataPoint = payload[0].payload;
                   const items: TooltipDataItem[] = [
                     {
-                      label: 'Value',
+                      label: t('value'),
                       value: dataPoint.value,
                       type: 'currency',
                       color: sparklineColor,
                     },
                     {
-                      label: 'Min',
+                      label: t('min'),
                       value: minValue,
                       type: 'currency',
                     },
                     {
-                      label: 'Max',
+                      label: t('max'),
                       value: maxValue,
                       type: 'currency',
                     },

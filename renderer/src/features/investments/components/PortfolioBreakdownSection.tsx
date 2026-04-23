@@ -15,18 +15,20 @@ import {
   Circle as CircleIcon,
 } from '@mui/icons-material';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
-import { PortfolioSummary, PortfolioHistoryPoint, InvestmentAccountSummary } from '@renderer/types/investments';
+import { InvestmentAccountSummary, PortfolioSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
 import {
   calculatePortfolioRoi,
   getPortfolioAccountColor,
   resolvePortfolioInstitutionName,
 } from './portfolio-breakdown-helpers';
+import {
+  getOrderedPortfolioAccounts,
+  getPortfolioCategoryBuckets,
+} from '../utils/portfolio-categories';
 
 interface PortfolioBreakdownSectionProps {
   portfolioData: PortfolioSummary;
-  accountHistories: Record<number, PortfolioHistoryPoint[]>;
-  historyLoading: boolean;
   onAccountClick?: (account: InvestmentAccountSummary) => void;
 }
 
@@ -46,10 +48,9 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
     return null;
   }
 
-  // Match the sorting logic in PortfolioHistorySection to ensure colors match
-  const restrictedAccounts = portfolioData.restrictedAccounts || [];
-  const liquidAccounts = portfolioData.liquidAccounts || [];
-  const orderedAccounts = [...restrictedAccounts, ...liquidAccounts];
+  const orderedAccounts = getOrderedPortfolioAccounts(portfolioData);
+  const groups = getPortfolioCategoryBuckets(portfolioData)
+    .filter(({ bucket }) => (bucket.accounts?.length || 0) > 0);
 
   const renderAccountList = (accounts: InvestmentAccountSummary[], title: string) => {
     if (!accounts || accounts.length === 0) return null;
@@ -127,20 +128,19 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
     <Paper sx={{ height: '100%', overflow: 'auto', bgcolor: 'background.paper' }}>
       <Box sx={{ p: 2, pb: 1.5 }}>
         <Typography variant="subtitle1" fontWeight={600}>
-          Account Breakdown
+          {t('listTitle')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Compare account balances and unrealized gain across liquid and long-term buckets.
+          {t('listSubtitle')}
         </Typography>
       </Box>
       <List dense>
-        {/* Render Liquid Accounts first (Top of the stack visually) */}
-        {renderAccountList(liquidAccounts, t('group.liquid', 'Liquid Assets'))}
-        
-        {liquidAccounts.length > 0 && restrictedAccounts.length > 0 && <Divider sx={{ my: 1 }} />}
-        
-        {/* Render Restricted Accounts next (Bottom of the stack visually) */}
-        {renderAccountList(restrictedAccounts, t('group.restricted', 'Long Term & Pension'))}
+        {groups.map(({ key, bucket }, index) => (
+          <React.Fragment key={key}>
+            {index > 0 && <Divider sx={{ my: 1 }} />}
+            {renderAccountList(bucket.accounts || [], t(`group.${key}`))}
+          </React.Fragment>
+        ))}
       </List>
     </Paper>
   );

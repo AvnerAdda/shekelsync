@@ -25,6 +25,7 @@ import {
   InvestmentPerformanceResponse,
   InvestmentPerformanceTimelinePoint,
 } from '@renderer/types/investments';
+import { useTranslation } from 'react-i18next';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
 
 interface PerformanceBreakdownPanelProps {
@@ -45,6 +46,7 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
 }) => {
   const theme = useTheme();
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
+  const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.performanceBreakdown' });
 
   const formatCurrencyValue = (value: number) =>
     formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
@@ -83,9 +85,9 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
     return (
       <Paper sx={{ p: 2.5, height: '100%' }}>
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-          Why Portfolio Changed
+          {t('title')}
         </Typography>
-        <Typography color="text.secondary">No performance breakdown available yet.</Typography>
+        <Typography color="text.secondary">{t('empty')}</Typography>
       </Paper>
     );
   }
@@ -95,16 +97,18 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
       <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
         <Box>
           <Typography variant="subtitle1" fontWeight={600}>
-            Why Portfolio Changed
+            {t('title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Separates cash movements from market movement for the selected range.
+            {t('subtitle')}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Chip label={`TWR ${formatPercent(data.twr)}`} size="small" />
+          <Chip label={t('metrics.twr', { value: formatPercent(data.twr) })} size="small" />
           <Chip
-            label={`MWR ${data.mwr === null ? 'N/A' : `${(data.mwr * 100).toFixed(2)}%`}`}
+            label={t('metrics.mwr', {
+              value: data.mwr === null ? t('na') : `${(data.mwr * 100).toFixed(2)}%`,
+            })}
             size="small"
           />
         </Box>
@@ -112,18 +116,18 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
 
       {multiCurrencyWarning && (
         <Alert severity="warning" sx={{ borderRadius: 2 }}>
-          Mixed currencies detected. Breakdown is useful, but totals are not FX-normalized yet.
+          {t('mixedCurrencyWarning')}
         </Alert>
       )}
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 1.5 }}>
         {[
-          { label: 'Value Change', value: data.valueChange, color: 'primary.main' },
-          { label: 'Contributions', value: data.netFlows.contributions, color: 'success.main' },
-          { label: 'Withdrawals', value: data.netFlows.withdrawals * -1, color: 'error.main' },
-          { label: 'Capital Returns', value: data.capitalReturns * -1, color: 'warning.main' },
-          { label: 'Distributed Income', value: data.income * -1, color: 'info.main' },
-          { label: 'Market Move', value: data.marketMove, color: data.marketMove >= 0 ? 'success.main' : 'error.main' },
+          { label: t('cards.valueChange'), value: data.valueChange, color: 'primary.main' },
+          { label: t('cards.contributions'), value: data.netFlows.contributions, color: 'success.main' },
+          { label: t('cards.withdrawals'), value: data.netFlows.withdrawals * -1, color: 'error.main' },
+          { label: t('cards.capitalReturns'), value: data.capitalReturns * -1, color: 'warning.main' },
+          { label: t('cards.distributedIncome'), value: data.income * -1, color: 'info.main' },
+          { label: t('cards.marketMove'), value: data.marketMove, color: data.marketMove >= 0 ? 'success.main' : 'error.main' },
         ].map((item) => (
           <Box
             key={item.label}
@@ -159,11 +163,11 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
                   if (!active || !payload || payload.length === 0) return null;
                   const row = chartData.find((point) => point.displayDate === label);
                   const items: TooltipDataItem[] = [
-                    { label: 'Contributions', value: row?.contributions || 0, type: 'currency', color: '#22c55e' },
-                    { label: 'Withdrawals', value: (row?.withdrawals || 0) * -1, type: 'currency', color: '#ef4444' },
-                    { label: 'Capital Returns', value: (row?.capitalReturns || 0) * -1, type: 'currency', color: '#f59e0b' },
-                    { label: 'Income', value: (row?.income || 0) * -1, type: 'currency', color: '#0ea5e9' },
-                    { label: 'Market Move', value: row?.marketMove || 0, type: 'currency', color: '#8b5cf6' },
+                    { label: t('cards.contributions'), value: row?.contributions || 0, type: 'currency', color: '#22c55e' },
+                    { label: t('cards.withdrawals'), value: (row?.withdrawals || 0) * -1, type: 'currency', color: '#ef4444' },
+                    { label: t('cards.capitalReturns'), value: (row?.capitalReturns || 0) * -1, type: 'currency', color: '#f59e0b' },
+                    { label: t('cards.distributedIncome'), value: (row?.income || 0) * -1, type: 'currency', color: '#0ea5e9' },
+                    { label: t('cards.marketMove'), value: row?.marketMove || 0, type: 'currency', color: '#8b5cf6' },
                   ];
 
                   return (
@@ -176,16 +180,16 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
                 }}
               />
               <Legend />
-              <Bar dataKey="contributions" stackId="flows" fill="#22c55e" name="Contributions" />
-              <Bar dataKey="chartWithdrawals" stackId="flows" fill="#ef4444" name="Withdrawals" />
-              <Bar dataKey="chartCapitalReturns" stackId="flows" fill="#f59e0b" name="Capital Returns" />
-              <Bar dataKey="chartIncome" stackId="flows" fill="#0ea5e9" name="Income" />
-              <Bar dataKey="chartFees" stackId="flows" fill="#64748b" name="Fees" />
-              <Line type="monotone" dataKey="marketMove" stroke="#8b5cf6" strokeWidth={2} dot={false} name="Market Move" />
+              <Bar dataKey="contributions" stackId="flows" fill="#22c55e" name={t('cards.contributions')} />
+              <Bar dataKey="chartWithdrawals" stackId="flows" fill="#ef4444" name={t('cards.withdrawals')} />
+              <Bar dataKey="chartCapitalReturns" stackId="flows" fill="#f59e0b" name={t('cards.capitalReturns')} />
+              <Bar dataKey="chartIncome" stackId="flows" fill="#0ea5e9" name={t('cards.distributedIncome')} />
+              <Bar dataKey="chartFees" stackId="flows" fill="#64748b" name={t('cards.fees')} />
+              <Line type="monotone" dataKey="marketMove" stroke="#8b5cf6" strokeWidth={2} dot={false} name={t('cards.marketMove')} />
             </ComposedChart>
           </ResponsiveContainer>
         ) : (
-          <Typography color="text.secondary">No timeline data available for this range.</Typography>
+          <Typography color="text.secondary">{t('emptyTimeline')}</Typography>
         )}
       </Box>
     </Paper>

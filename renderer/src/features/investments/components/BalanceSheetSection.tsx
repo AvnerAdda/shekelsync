@@ -6,8 +6,10 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import SchoolIcon from '@mui/icons-material/School';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
+import LayersIcon from '@mui/icons-material/Layers';
+import WidgetsIcon from '@mui/icons-material/Widgets';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
-import type { InvestmentBalanceSheetResponse } from '@renderer/types/investments';
+import type { InvestmentBalanceSheetResponse, InvestmentCategoryKey } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
 
 interface BalanceSheetSectionProps {
@@ -93,8 +95,46 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
     chips.push({ label: t('badges.missingValues', { count: data.missingValuationsCount }), color: 'warning' });
   }
 
+  const bucketDefinitions: Array<{
+    key: InvestmentCategoryKey;
+    icon: React.ReactNode;
+    label: string;
+    color: string;
+  }> = [
+    {
+      key: 'cash',
+      icon: <AccountBalanceIcon fontSize="small" />,
+      label: t('buckets.cash'),
+      color: theme.palette.primary.main,
+    },
+    {
+      key: 'liquid',
+      icon: <ShowChartIcon fontSize="small" />,
+      label: t('buckets.liquid'),
+      color: theme.palette.info.main,
+    },
+    {
+      key: 'restricted',
+      icon: <SchoolIcon fontSize="small" />,
+      label: t('buckets.restricted'),
+      color: theme.palette.warning.main,
+    },
+    {
+      key: 'stability',
+      icon: <LayersIcon fontSize="small" />,
+      label: t('buckets.stability'),
+      color: theme.palette.success.main,
+    },
+    {
+      key: 'other',
+      icon: <WidgetsIcon fontSize="small" />,
+      label: t('buckets.other'),
+      color: theme.palette.secondary.main,
+    },
+  ];
+
   const bucketCard = (
-    key: 'cash' | 'liquid' | 'restricted' | 'stability',
+    key: InvestmentCategoryKey,
     {
       icon,
       label,
@@ -213,28 +253,12 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
 
         <Grid size={{ xs: 12, md: 8 }}>
           <Grid container spacing={2}>
-            <Grid size={{ xs: 6, md: 3 }}>
-              {bucketCard('cash', {
-                icon: <AccountBalanceIcon fontSize="small" />,
-                label: t('buckets.cash'),
-                color: theme.palette.primary.main,
-              })}
-            </Grid>
-            <Grid size={{ xs: 6, md: 3 }}>
-              {bucketCard('liquid', {
-                icon: <ShowChartIcon fontSize="small" />,
-                label: t('buckets.liquid'),
-                color: theme.palette.info.main,
-              })}
-            </Grid>
-            <Grid size={{ xs: 6, md: 3 }}>
-              {bucketCard('restricted', {
-                icon: <SchoolIcon fontSize="small" />,
-                label: t('buckets.restricted'),
-                color: theme.palette.warning.main,
-              })}
-            </Grid>
-            <Grid size={{ xs: 6, md: 3 }}>
+            {bucketDefinitions.map((bucket) => (
+              <Grid key={bucket.key} size={{ xs: 6, md: 4, xl: 2 }}>
+                {bucketCard(bucket.key, bucket)}
+              </Grid>
+            ))}
+            <Grid size={{ xs: 6, md: 4, xl: 2 }}>
               {liabilityCard()}
             </Grid>
           </Grid>

@@ -20,7 +20,8 @@ import { Close as CloseIcon } from '@mui/icons-material';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
-import { getInstitutionLabel, type InstitutionMetadata } from '@renderer/shared/components/InstitutionBadge';
+import { getOrderedPortfolioAccounts } from '../utils/portfolio-categories';
+import { resolvePortfolioInstitutionName } from './portfolio-breakdown-helpers';
 
 interface AccountAllocationModalProps {
   open: boolean;
@@ -51,10 +52,7 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
 
   // Combine all accounts
   const allAccounts = useMemo(() => {
-    return [
-      ...(portfolioData.restrictedAccounts || []),
-      ...(portfolioData.liquidAccounts || []),
-    ];
+    return getOrderedPortfolioAccounts(portfolioData);
   }, [portfolioData]);
 
   const totalValue = portfolioData.summary.totalPortfolioValue;
@@ -262,9 +260,7 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
                     </Typography>
                     {account.institution && (
                       <Typography variant="caption" color="text.secondary">
-                        {typeof account.institution === 'string'
-                          ? account.institution
-                          : (getInstitutionLabel(account.institution as InstitutionMetadata, locale) || '')}
+                        {resolvePortfolioInstitutionName(account.institution, locale)}
                       </Typography>
                     )}
                   </Box>

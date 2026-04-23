@@ -6,12 +6,10 @@ import {
 } from '../InvestmentsFiltersContext';
 
 const DisplayConsumer = () => {
-  const { dateRange, historyTimeRange, viewMode, refreshTrigger, isRefreshing } =
-    useInvestmentsFilters();
+  const { historyTimeRange, viewMode, refreshTrigger, isRefreshing } = useInvestmentsFilters();
 
   return (
     <>
-      <span data-testid="dateRange">{dateRange}</span>
       <span data-testid="historyRange">{historyTimeRange}</span>
       <span data-testid="viewMode">{viewMode}</span>
       <span data-testid="refreshTrigger">{refreshTrigger}</span>
@@ -22,7 +20,6 @@ const DisplayConsumer = () => {
 
 const ActionsConsumer = () => {
   const {
-    setDateRange,
     setHistoryTimeRange,
     setViewMode,
     triggerRefresh,
@@ -31,9 +28,6 @@ const ActionsConsumer = () => {
 
   return (
     <>
-      <button type="button" onClick={() => setDateRange('3m')}>
-        set-date
-      </button>
       <button type="button" onClick={() => setHistoryTimeRange('1y')}>
         set-history
       </button>
@@ -76,19 +70,16 @@ describe('InvestmentsFiltersContext', () => {
       </InvestmentsFiltersProvider>
     );
 
-    expectText('dateRange', 'all');
     expectText('historyRange', '3m');
     expectText('viewMode', 'summary');
     expectText('refreshTrigger', '0');
     expectText('isRefreshing', 'no');
 
-    fireEvent.click(screen.getByText('set-date'));
     fireEvent.click(screen.getByText('set-history'));
     fireEvent.click(screen.getByText('set-view'));
     fireEvent.click(screen.getByText('trigger-refresh'));
     fireEvent.click(screen.getByText('set-refreshing'));
 
-    expectText('dateRange', '3m');
     expectText('historyRange', '1y');
     expectText('viewMode', 'detailed');
     expectText('refreshTrigger', '1');

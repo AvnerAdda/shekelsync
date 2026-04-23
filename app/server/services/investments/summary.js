@@ -22,6 +22,25 @@ const {
 } = require('./bank-balance-overlap.js');
 
 let dateFnsPromise = null;
+const CATEGORY_KEYS = ['cash', 'liquid', 'restricted', 'stability', 'other'];
+
+const ACCOUNT_TYPE_LABELS = {
+  pension: { name: 'Pension Fund', name_he: 'קרן פנסיה', category: 'restricted' },
+  provident: { name: 'Provident Fund', name_he: 'קרן השתלמות', category: 'restricted' },
+  study_fund: { name: 'Study Fund', name_he: 'קופת גמל לחינוך', category: 'restricted' },
+  brokerage: { name: 'Brokerage Account', name_he: 'חשבון ברוקר', category: 'liquid' },
+  crypto: { name: 'Cryptocurrency', name_he: 'מטבעות דיגיטליים', category: 'liquid' },
+  savings: { name: 'Savings & Term Deposits', name_he: 'חסכונות ופיקדונות', category: 'liquid' },
+  bank_balance: { name: 'Available Cash', name_he: 'מזומן זמין', category: 'cash' },
+  mutual_fund: { name: 'Mutual Funds', name_he: 'קרנות נאמנות', category: 'liquid' },
+  bonds: { name: 'Bonds & Fixed Income', name_he: 'אג"ח והלוואות', category: 'liquid' },
+  real_estate: { name: 'Real Estate', name_he: 'נדל"ן והשקעות רע"ן', category: 'other' },
+  insurance: { name: 'Insurance & Stability', name_he: 'ביטוח ויציבות', category: 'stability' },
+  cash: { name: 'Cash Holdings', name_he: 'אחזקות מזומן', category: 'cash' },
+  foreign_bank: { name: 'Foreign Cash', name_he: 'מזומן זר', category: 'cash' },
+  foreign_investment: { name: 'Foreign Investments', name_he: 'השקעות זרות', category: 'cash' },
+  other: { name: 'Other Investments', name_he: 'השקעות אחרות', category: 'other' },
+};
 
 async function loadDateFns() {
   if (!dateFnsPromise) {
@@ -62,6 +81,33 @@ async function fetchBankAccounts(client) {
 
 let fetchBankAccountsImpl = fetchBankAccounts;
 
+function createCategoryTotals() {
+  return CATEGORY_KEYS.reduce((accumulator, key) => {
+    accumulator[key] = { value: 0, cost: 0, accounts: 0 };
+    return accumulator;
+  }, {});
+}
+
+function createCategoryAccounts() {
+  return CATEGORY_KEYS.reduce((accumulator, key) => {
+    accumulator[key] = [];
+    return accumulator;
+  }, {});
+}
+
+function normalizeInvestmentCategory(category, accountType) {
+  if (CATEGORY_KEYS.includes(category)) {
+    return category;
+  }
+
+  const fallbackCategory = ACCOUNT_TYPE_LABELS[accountType]?.category;
+  if (CATEGORY_KEYS.includes(fallbackCategory)) {
+    return fallbackCategory;
+  }
+
+  return 'other';
+}
+
 async function fetchAssets(client) {
   const booleanTrue = dialect.useSqlite ? 1 : 'TRUE';
 
@@ -86,40 +132,25 @@ function buildAccountSummaries(accountsRows, bankAccountsRows) {
   let oldestDate = null;
   let newestDate = null;
 
-  const liquidTotal = { value: 0, cost: 0, accounts: 0 };
-  const restrictedTotal = { value: 0, cost: 0, accounts: 0 };
-
   const accountsByType = {};
-  const accountsByCategory = { liquid: [], restricted: [] };
+  const accountsByCategory = createCategoryAccounts();
+  const totalsByCategory = createCategoryTotals();
 
   accountsRows.forEach((account) => {
     const value = toNumber(account.current_value) || 0;
     const cost = toNumber(account.cost_basis) || 0;
-    const category = account.investment_category;
+    const category = normalizeInvestmentCategory(account.investment_category, account.account_type);
 
-    const isBankBalance = account.account_type === 'bank_balance';
-
-    if (value > 0 && !isBankBalance) {
+    if (value > 0) {
       totalPortfolioValue += value;
       accountsWithValues += 1;
-
-      if (category === 'liquid') {
-        liquidTotal.value += value;
-        liquidTotal.accounts += 1;
-      } else if (category === 'restricted') {
-        restrictedTotal.value += value;
-        restrictedTotal.accounts += 1;
-      }
+      totalsByCategory[category].value += value;
+      totalsByCategory[category].accounts += 1;
     }
 
-    if (cost > 0 && !isBankBalance) {
+    if (cost > 0) {
       totalCostBasis += cost;
-
-      if (category === 'liquid') {
-        liquidTotal.cost += cost;
-      } else if (category === 'restricted') {
-        restrictedTotal.cost += cost;
-      }
+      totalsByCategory[category].cost += cost;
     }
 
     if (account.as_of_date) {
@@ -146,6 +177,7 @@ function buildAccountSummaries(accountsRows, bankAccountsRows) {
       current_value: value,
       cost_basis: cost,
       units: toNumber(account.units),
+      investment_category: category,
       institution: account.institution || null,
     };
 
@@ -153,10 +185,7 @@ function buildAccountSummaries(accountsRows, bankAccountsRows) {
     accountsByType[account.account_type].totalValue += value;
     accountsByType[account.account_type].totalCost += cost;
     accountsByType[account.account_type].count += 1;
-
-    if (category === 'liquid' || category === 'restricted') {
-      accountsByCategory[category].push(processedAccount);
-    }
+    accountsByCategory[category].push(processedAccount);
   });
 
   bankAccountsRows.forEach((bankAccount) => {
@@ -164,12 +193,12 @@ function buildAccountSummaries(accountsRows, bankAccountsRows) {
 
     if (balance > 0) {
       totalPortfolioValue += balance;
-      liquidTotal.value += balance;
-      liquidTotal.accounts += 1;
+      totalsByCategory.liquid.value += balance;
+      totalsByCategory.liquid.accounts += 1;
       accountsWithValues += 1;
 
       totalCostBasis += balance;
-      liquidTotal.cost += balance;
+      totalsByCategory.liquid.cost += balance;
 
       if (!accountsByType.savings) {
         accountsByType.savings = {
@@ -205,15 +234,18 @@ function buildAccountSummaries(accountsRows, bankAccountsRows) {
     }
   });
 
-  const averageHoldingAgeMonths = computeAverageHoldingAge(accountsByCategory.liquid, accountsByCategory.restricted);
+  const averageHoldingAgeMonths = computeAverageHoldingAge(
+    CATEGORY_KEYS.flatMap((key) => accountsByCategory[key] || []),
+  );
 
   return {
     totals: {
       portfolioValue: totalPortfolioValue,
       costBasis: totalCostBasis,
       accountsWithValues,
-      liquid: liquidTotal,
-      restricted: restrictedTotal,
+      categories: totalsByCategory,
+      liquid: totalsByCategory.liquid,
+      restricted: totalsByCategory.restricted,
       oldestDate,
       newestDate,
       averageHoldingAgeMonths,
@@ -223,13 +255,12 @@ function buildAccountSummaries(accountsRows, bankAccountsRows) {
   };
 }
 
-function computeAverageHoldingAge(liquidAccounts, restrictedAccounts) {
-  const allAccounts = [...liquidAccounts, ...restrictedAccounts];
-  if (allAccounts.length === 0) {
+function computeAverageHoldingAge(accounts) {
+  if (!Array.isArray(accounts) || accounts.length === 0) {
     return 0;
   }
 
-  const totalMonths = allAccounts.reduce((sum, account) => {
+  const totalMonths = accounts.reduce((sum, account) => {
     if (!account.as_of_date) {
       return sum;
     }
@@ -239,7 +270,7 @@ function computeAverageHoldingAge(liquidAccounts, restrictedAccounts) {
     return sum + Math.max(months, 0);
   }, 0);
 
-  return totalMonths / allAccounts.length;
+  return totalMonths / accounts.length;
 }
 
 async function fetchInvestmentPerformance(client, months) {
@@ -382,27 +413,12 @@ async function getInvestmentSummary(params = {}) {
       accountsCount: totals.accounts,
     });
 
-    const accountTypeLabels = {
-      pension: { name: 'Pension Fund', name_he: 'קרן פנסיה', category: 'restricted' },
-      provident: { name: 'Provident Fund', name_he: 'קרן השתלמות', category: 'restricted' },
-      study_fund: { name: 'Study Fund', name_he: 'קופת גמל לחינוך', category: 'restricted' },
-      brokerage: { name: 'Brokerage Account', name_he: 'חשבון ברוקר', category: 'liquid' },
-      crypto: { name: 'Cryptocurrency', name_he: 'מטבעות דיגיטליים', category: 'liquid' },
-      savings: { name: 'Savings & Term Deposits', name_he: 'חסכונות ופיקדונות', category: 'liquid' },
-      bank_balance: { name: 'Available Cash', name_he: 'מזומן זמין', category: 'liquid' },
-      mutual_fund: { name: 'Mutual Funds', name_he: 'קרנות נאמנות', category: 'liquid' },
-      bonds: { name: 'Bonds & Fixed Income', name_he: 'אג"ח והלוואות', category: 'liquid' },
-      real_estate: { name: 'Real Estate', name_he: 'נדל"ן והשקעות רע"ן', category: 'liquid' },
-      other: { name: 'Other Investments', name_he: 'השקעות אחרות', category: 'liquid' },
-    };
-
     const breakdown = Object.values(summary.accountsByType)
-      .filter((group) => group.type !== 'bank_balance')
       .map((group) => {
-        const label = accountTypeLabels[group.type] || {
+        const label = ACCOUNT_TYPE_LABELS[group.type] || {
           name: group.type,
           name_he: group.type,
-          category: group.accounts[0]?.investment_category || 'liquid',
+          category: normalizeInvestmentCategory(group.accounts[0]?.investment_category, group.type),
         };
 
         return {
@@ -411,6 +427,14 @@ async function getInvestmentSummary(params = {}) {
           percentage: totalPortfolioValue > 0 ? (group.totalValue / totalPortfolioValue) * 100 : 0,
         };
       });
+
+    const categoryBuckets = CATEGORY_KEYS.reduce((accumulator, key) => {
+      accumulator[key] = {
+        ...categorySummary(summary.totals.categories[key]),
+        accounts: summary.accountsByCategory[key] || [],
+      };
+      return accumulator;
+    }, {});
 
     const performanceHistory = await fetchInvestmentPerformance(
       client,
@@ -452,6 +476,7 @@ async function getInvestmentSummary(params = {}) {
         restricted: categorySummary(summary.totals.restricted),
       },
       breakdown,
+      categoryBuckets,
       timeline,
       liquidAccounts: summary.accountsByCategory.liquid,
       restrictedAccounts: summary.accountsByCategory.restricted,

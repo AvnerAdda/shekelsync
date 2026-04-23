@@ -853,8 +853,21 @@
     },
     "tabs": {
       "history": "Revenus et dépenses quotidiens",
+      "calendar": "Calendrier",
       "netPosition": "Position nette",
       "scenarios": "Scénarios de fin de mois"
+    },
+    "calendar": {
+      "subtitle": "Cliquez sur un jour pour afficher ses transactions.",
+      "today": "Aujourd'hui",
+      "retry": "Réessayer",
+      "error": "Échec du chargement du calendrier",
+      "emptyMonth": "Aucune activité de revenus ou de dépenses ce mois-ci.",
+      "monthIncome": "Revenus du mois",
+      "monthExpenses": "Dépenses du mois",
+      "monthNet": "Net du mois",
+      "previousMonth": "Mois précédent",
+      "nextMonth": "Mois suivant"
     },
     "forecast": {
       "loading": "Chargement des prévisions...",
@@ -1840,7 +1853,15 @@
       "refreshTooltip": "Rafraîchir toutes les données",
       "refresh": "Rafraîchir",
       "refreshing": "Rafraîchissement...",
-      "portfolioSetup": "Configurer le portefeuille"
+      "portfolioSetup": "Configurer le portefeuille",
+      "addAccount": "Ajouter un compte",
+      "updateValuation": "Mettre à jour la valorisation"
+    },
+    "loading": {
+      "setup": "Chargement de l'état de configuration..."
+    },
+    "warnings": {
+      "multiCurrency": "Plusieurs devises sont présentes. Les totaux et graphiques utilisent encore les valeurs brutes, sans normalisation FX."
     },
     "filters": {
       "rangeLabel": "Plage des transactions",
@@ -1864,12 +1885,17 @@
     "allocation": {
       "title": "Répartition",
       "total": "Total",
-      "viewMore": "Voir plus"
+      "viewMore": "Voir plus",
+      "tooltipCategory": "Catégorie",
+      "tooltipValue": "Valeur",
+      "tooltipPercentage": "Pourcentage"
     },
     "performance": {
       "title": "Ma performance",
       "allCategories": "Toutes les catégories",
-      "noAccounts": "Aucun compte d'investissement trouvé"
+      "noAccounts": "Aucun compte d'investissement trouvé",
+      "overviewTitle": "Vue des comptes",
+      "overviewSubtitle": "Comparez la performance par catégorie et le mouvement récent de chaque compte."
     },
     "empty": {
       "title": "Commencez votre portefeuille d'investissement",
@@ -1939,6 +1965,11 @@
     },
     "history": {
       "title": "Performance du portefeuille",
+      "descriptions": {
+        "chart": "Suivez l'historique empilé du portefeuille sur toutes les catégories suivies.",
+        "table": "Consultez les transactions d'investissement récentes pour la période sélectionnée."
+      },
+      "tooltipTotal": "Portefeuille total",
       "aria": {
         "displayMode": "mode d'affichage",
         "chart": "vue graphique",
@@ -1975,7 +2006,14 @@
     },
     "breakdown": {
       "title": "Répartition du portefeuille",
+      "listTitle": "Comptes par catégorie",
+      "listSubtitle": "Consultez les comptes suivis groupés par catégorie du portefeuille.",
       "group": {
+        "cash": "Liquidités",
+        "liquid": "Investissements liquides",
+        "restricted": "Épargne long terme",
+        "stability": "Assurance et stabilité",
+        "other": "Autres actifs",
         "accounts_one": "{{count}} compte",
         "accounts_other": "{{count}} comptes",
         "percentage": "{{value}}%",
@@ -2035,6 +2073,92 @@
         "setup": {
           "success": "{{count}} entrées Pikadon créées avec succès !"
         }
+      }
+    },
+    "coverage": {
+      "title": "Couverture du portefeuille",
+      "subtitle": "Mesure à quel point vos données d'investissement sont complètes et vérifiables.",
+      "empty": "Les métriques de couverture apparaîtront une fois les comptes d'investissement disponibles.",
+      "items": {
+        "missingValuations": {
+          "label": "Valorisations manquantes",
+          "hint": "Comptes sans photo de solde récente."
+        },
+        "staleValuations": {
+          "label": "Valorisations obsolètes",
+          "hint": "Comptes dont la dernière valorisation date de plus de 30 jours."
+        },
+        "missingCurrency": {
+          "label": "Devise manquante",
+          "hint": "Les comptes sans devise de base rendent les totaux moins fiables."
+        },
+        "missingHoldings": {
+          "label": "Comptes sans positions détaillées",
+          "hint": "Comptes sans valorisation ni détail de holdings pour l'instant."
+        }
+      }
+    },
+    "performanceBreakdown": {
+      "title": "Pourquoi le portefeuille a changé",
+      "subtitle": "Sépare les flux de trésorerie du mouvement de marché sur la période sélectionnée.",
+      "empty": "Aucun détail de performance disponible pour l'instant.",
+      "emptyTimeline": "Aucune donnée de chronologie disponible pour cette plage.",
+      "mixedCurrencyWarning": "Plusieurs devises détectées. Le détail reste utile, mais les totaux ne sont pas encore normalisés FX.",
+      "na": "N/D",
+      "metrics": {
+        "twr": "TWR {{value}}",
+        "mwr": "MWR {{value}}"
+      },
+      "cards": {
+        "valueChange": "Variation de valeur",
+        "contributions": "Contributions",
+        "withdrawals": "Retraits",
+        "capitalReturns": "Retours de capital",
+        "distributedIncome": "Revenu distribué",
+        "fees": "Frais",
+        "marketMove": "Mouvement de marché"
+      }
+    },
+    "performanceCard": {
+      "high": "Haut",
+      "low": "Bas",
+      "value": "Valeur",
+      "min": "Min",
+      "max": "Max"
+    },
+    "holdings": {
+      "title": "Holdings / Positions",
+      "subtitle": "Positions ouvertes plus holdings de secours issues des derniers instantanés de compte.",
+      "empty": "Aucune holding ni position ne correspond aux filtres actuels.",
+      "filters": {
+        "searchLabel": "Recherche",
+        "searchPlaceholder": "Rechercher par nom, compte ou institution",
+        "categoryLabel": "Catégorie",
+        "allCategories": "Toutes les catégories",
+        "rowTypeLabel": "Type de ligne",
+        "rowTypeAll": "Toutes les lignes",
+        "rowTypePositions": "Positions",
+        "rowTypeHoldings": "Holdings"
+      },
+      "rowKind": {
+        "position": "Position",
+        "holding": "Holding"
+      },
+      "status": {
+        "needsValuation": "Valorisation requise"
+      },
+      "table": {
+        "name": "Nom",
+        "rowType": "Type de ligne",
+        "category": "Catégorie",
+        "account": "Compte",
+        "itemType": "Type",
+        "currency": "Devise",
+        "currentValue": "Valeur actuelle",
+        "costBasis": "Coût de base",
+        "unrealizedPnL": "P&L latent",
+        "date": "Mis à jour / Ouvert",
+        "notAvailable": "N/D"
       }
     }
   },
