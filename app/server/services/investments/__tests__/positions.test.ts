@@ -33,18 +33,25 @@ describe('investment positions service', () => {
   it('lists positions after ensuring schema', async () => {
     queryMock.mockImplementation((sql: string) => {
       const text = String(sql);
-      if (text.includes('SELECT ip.*, ia.account_name') && text.includes('ORDER BY ip.status')) {
+      if (text.includes('SELECT') && text.includes('ia.account_name') && text.includes('ORDER BY ip.status')) {
         return Promise.resolve({
           rows: [
             {
               id: 5,
               account_id: 7,
               account_name: 'Brokerage',
+              account_type: 'brokerage',
+              investment_category: 'liquid',
               position_name: 'Main Position',
               open_cost_basis: '900',
               original_cost_basis: '1000',
               current_value: '950',
               status: 'open',
+              institution_id: 77,
+              institution_vendor_code: 'broker_demo',
+              institution_display_name_en: 'Broker Demo',
+              institution_display_name_he: 'ברוקר דמו',
+              institution_type: 'investment',
             },
           ],
         });
@@ -57,8 +64,14 @@ describe('investment positions service', () => {
     expect(result.positions).toHaveLength(1);
     expect(result.positions[0]).toMatchObject({
       id: 5,
+      account_type: 'brokerage',
+      investment_category: 'liquid',
       open_cost_basis: 900,
       current_value: 950,
+      institution: expect.objectContaining({
+        vendor_code: 'broker_demo',
+        display_name_en: 'Broker Demo',
+      }),
     });
   });
 

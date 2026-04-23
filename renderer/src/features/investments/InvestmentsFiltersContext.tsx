@@ -1,12 +1,9 @@
 import React, { createContext, useContext, useMemo, useState, useCallback } from 'react';
 
-export type DateRangeOption = 'all' | '3m' | '6m' | '1y';
 export type HistoryTimeRangeOption = '1d' | '1w' | '1m' | '2m' | '3m' | '6m' | '1y' | 'ytd' | 'all';
 export type ViewModeOption = 'summary' | 'detailed';
 
 interface InvestmentsFiltersContextValue {
-  dateRange: DateRangeOption;
-  setDateRange: (range: DateRangeOption) => void;
   historyTimeRange: HistoryTimeRangeOption;
   setHistoryTimeRange: (range: HistoryTimeRangeOption) => void;
   viewMode: ViewModeOption;
@@ -20,7 +17,6 @@ interface InvestmentsFiltersContextValue {
 const InvestmentsFiltersContext = createContext<InvestmentsFiltersContextValue | undefined>(undefined);
 
 export const InvestmentsFiltersProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [dateRange, setDateRange] = useState<DateRangeOption>('all');
   const [historyTimeRange, setHistoryTimeRange] = useState<HistoryTimeRangeOption>('3m');
   const [viewMode, setViewMode] = useState<ViewModeOption>('summary');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -32,8 +28,6 @@ export const InvestmentsFiltersProvider: React.FC<{ children: React.ReactNode }>
 
   const value = useMemo(
     () => ({
-      dateRange,
-      setDateRange,
       historyTimeRange,
       setHistoryTimeRange,
       viewMode,
@@ -43,7 +37,7 @@ export const InvestmentsFiltersProvider: React.FC<{ children: React.ReactNode }>
       isRefreshing,
       setIsRefreshing,
     }),
-    [dateRange, historyTimeRange, viewMode, refreshTrigger, isRefreshing, triggerRefresh]
+    [historyTimeRange, viewMode, refreshTrigger, isRefreshing, triggerRefresh]
   );
 
   return <InvestmentsFiltersContext.Provider value={value}>{children}</InvestmentsFiltersContext.Provider>;
@@ -56,4 +50,3 @@ export const useInvestmentsFilters = () => {
   }
   return context;
 };
-

@@ -20,7 +20,6 @@ import {
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioSummary, PortfolioHistoryPoint } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
-import { HistoryTimeRangeOption } from '../InvestmentsFiltersContext';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
 
 // Helper to calculate portfolio change values
@@ -54,8 +53,6 @@ function calculateChartValue(
 interface PortfolioValuePanelProps {
   portfolioData: PortfolioSummary | null;
   overallHistory: PortfolioHistoryPoint[];
-  historyTimeRange: HistoryTimeRangeOption;
-  onTimeRangeChange: (range: HistoryTimeRangeOption) => void;
   viewMode: 'value' | 'performance';
   onViewModeChange: (mode: 'value' | 'performance') => void;
   loading: boolean;
@@ -64,8 +61,6 @@ interface PortfolioValuePanelProps {
 const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
   portfolioData,
   overallHistory,
-  historyTimeRange,
-  onTimeRangeChange,
   viewMode,
   onViewModeChange,
   loading,

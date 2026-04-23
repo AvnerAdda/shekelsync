@@ -211,6 +211,13 @@ describe('investment summary service', () => {
       totalCost: 900,
       accountsCount: 1,
     });
+    expect(result.categoryBuckets).toMatchObject({
+      cash: expect.objectContaining({ totalValue: 0, accountsCount: 0 }),
+      liquid: expect.objectContaining({ totalValue: 1200, totalCost: 1000, accountsCount: 1 }),
+      restricted: expect.objectContaining({ totalValue: 800, totalCost: 900, accountsCount: 1 }),
+      stability: expect.objectContaining({ totalValue: 0, accountsCount: 0 }),
+      other: expect.objectContaining({ totalValue: 0, accountsCount: 0 }),
+    });
 
     expect(result.breakdown).toHaveLength(3);
     expect(result.breakdown.find((entry: any) => entry.type === 'brokerage')?.percentage).toBe(60);
@@ -338,19 +345,26 @@ describe('investment summary service', () => {
 
     const result = await getInvestmentSummary({ historyMonths: 1 });
 
-    // bank_balance accounts are excluded from portfolio totals (they are everyday cash, not investments)
-    expect(result.summary.totalPortfolioValue).toBeCloseTo(680000, 6);
+    // bank_balance accounts are now tracked as cash and included in portfolio/category totals.
+    expect(result.summary.totalPortfolioValue).toBeCloseTo(705476.03, 6);
     expect(result.accounts.find((account: any) => account.id === 1)).toMatchObject({
       account_type: 'bank_balance',
       current_value: 25476.03,
       cost_basis: 25476.03,
+      investment_category: 'cash',
     });
-    // bank_balance should not appear in breakdown
-    expect(result.breakdown.find((entry: any) => entry.type === 'bank_balance')).toBeUndefined();
+    expect(result.breakdown.find((entry: any) => entry.type === 'bank_balance')).toMatchObject({
+      category: 'cash',
+      totalValue: 25476.03,
+    });
     expect(result.breakdown.find((entry: any) => entry.type === 'savings')).toMatchObject({
       name: 'Savings & Term Deposits',
       category: 'liquid',
       totalValue: 680000,
+    });
+    expect(result.categoryBuckets.cash).toMatchObject({
+      totalValue: 25476.03,
+      accountsCount: 1,
     });
     expect(releaseMock).toHaveBeenCalledTimes(1);
   });
@@ -557,7 +571,7 @@ describe('investment summary service', () => {
       expect(result.summary.totalCostBasis).toBe(0);
       expect(result.breakdown[0]).toMatchObject({
         type: 'edge_type',
-        category: 'liquid',
+        category: 'other',
       });
       expect(result.timeline).toEqual([
         { date: '2026-01-01', totalValue: 0, totalCost: 0, gainLoss: 0 },

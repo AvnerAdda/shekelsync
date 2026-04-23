@@ -12,15 +12,25 @@ import {
   Paper,
 } from '@mui/material';
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
-import { PortfolioSummary, PortfolioHistoryPoint, InvestmentAccountSummary } from '@renderer/types/investments';
+import {
+  InvestmentAccountSummary,
+  InvestmentCategoryKey,
+  PortfolioHistoryPoint,
+  PortfolioSummary,
+} from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
 import InvestmentPerformanceCard from './InvestmentPerformanceCard';
+import {
+  getOrderedPortfolioAccounts,
+  getPortfolioCategoryBuckets,
+  normalizeInvestmentCategory,
+} from '../utils/portfolio-categories';
 
 interface PerformanceCardsSectionProps {
   portfolioData: PortfolioSummary;
   accountHistories: Record<number, PortfolioHistoryPoint[]>;
-  categoryFilter: string;
-  onCategoryFilterChange: (category: string) => void;
+  categoryFilter: 'all' | InvestmentCategoryKey;
+  onCategoryFilterChange: (category: 'all' | InvestmentCategoryKey) => void;
   onAccountClick?: (account: InvestmentAccountSummary) => void;
 }
 
@@ -45,24 +55,24 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
   onAccountClick,
 }) => {
   const theme = useTheme();
-  const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.performance' });
+  const { t } = useTranslation('translation');
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
-  // Combine all accounts
-  const allAccounts = [
-    ...(portfolioData.restrictedAccounts || []),
-    ...(portfolioData.liquidAccounts || []),
-  ];
-
-  // Get unique categories for filter
-  const categories = Array.from(
-    new Set(allAccounts.map(a => a.account_type).filter(Boolean))
+  const allAccounts = React.useMemo(
+    () => getOrderedPortfolioAccounts(portfolioData),
+    [portfolioData],
   );
 
-  // Filter accounts by category
+  const categories = React.useMemo(
+    () => getPortfolioCategoryBuckets(portfolioData)
+      .filter(({ bucket }) => (bucket.accounts?.length || 0) > 0)
+      .map(({ key }) => key),
+    [portfolioData],
+  );
+
   const filteredAccounts = categoryFilter === 'all'
     ? allAccounts
-    : allAccounts.filter(a => a.account_type === categoryFilter);
+    : allAccounts.filter((account) => normalizeInvestmentCategory(account.investment_category) === categoryFilter);
 
   const handleScroll = (direction: 'left' | 'right') => {
     if (scrollContainerRef.current) {
@@ -92,16 +102,22 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
           gap: 1,
         }}
       >
-        <Typography variant="subtitle1" fontWeight={600}>
-          Account Overview
-        </Typography>
+        <Box>
+          <Typography variant="subtitle1" fontWeight={600}>
+            {t('investmentsPage.performance.overviewTitle')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t('investmentsPage.performance.overviewSubtitle')}
+          </Typography>
+        </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {/* Category Filter */}
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <Select
               value={categoryFilter}
-              onChange={(e: SelectChangeEvent) => onCategoryFilterChange(e.target.value)}
+              onChange={(e: SelectChangeEvent) =>
+                onCategoryFilterChange(e.target.value as 'all' | InvestmentCategoryKey)}
               sx={{
                 fontSize: '0.75rem',
                 '& .MuiSelect-select': {
@@ -109,10 +125,10 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
                 },
               }}
             >
-              <MenuItem value="all">{t('allCategories', 'All Categories')}</MenuItem>
-              {categories.map(cat => (
-                <MenuItem key={cat} value={cat}>
-                  {cat}
+              <MenuItem value="all">{t('investmentsPage.performance.allCategories')}</MenuItem>
+              {categories.map((category) => (
+                <MenuItem key={category} value={category}>
+                  {t(`investmentsPage.balanceSheet.buckets.${category}`)}
                 </MenuItem>
               ))}
             </Select>
@@ -192,7 +208,7 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
             }}
           >
             <Typography color="text.secondary">
-              {t('noAccounts', 'No investment accounts found')}
+              {t('investmentsPage.performance.noAccounts')}
             </Typography>
           </Box>
         )}

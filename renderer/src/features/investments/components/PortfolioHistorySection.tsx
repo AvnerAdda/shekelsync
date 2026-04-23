@@ -30,6 +30,7 @@ import { PortfolioHistoryPoint, InvestmentData, PortfolioSummary } from '@render
 import { useInvestmentsFilters } from '../InvestmentsFiltersContext';
 import { useTranslation } from 'react-i18next';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
+import { buildStackedPortfolioHistoryData } from '../utils/portfolio-history';
 
 interface PortfolioHistorySectionProps {
   overallHistory: PortfolioHistoryPoint[];
@@ -109,58 +110,10 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
       );
     }
 
-    // 1. Identify accounts and sort them: Restricted (Longterm) first, then Liquid
-    const restrictedAccounts = portfolioData.restrictedAccounts || [];
-    const liquidAccounts = portfolioData.liquidAccounts || [];
-    
-    // We want Restricted at the bottom of the stack.
-    // In Recharts AreaChart, the first <Area> is at the bottom.
-    // So we should render Restricted accounts first.
-    const orderedAccounts = [...restrictedAccounts, ...liquidAccounts];
-    
-    // 2. Collect all unique dates
-    const allDates = new Set<string>();
-    Object.values(accountHistories).forEach(history => {
-      history.forEach(point => allDates.add(point.date.split('T')[0]));
-    });
-    const sortedDates = Array.from(allDates).sort((a, b) => a.localeCompare(b));
-
-    // 3. Build data points
-    const data = sortedDates.map(dateStr => {
-      const point: any = { 
-        date: new Date(dateStr).toLocaleDateString(undefined, {
-          month: 'short',
-          day: 'numeric',
-          year: sortedDates.length > 90 ? '2-digit' : undefined,
-        }),
-        fullDate: dateStr
-      };
-      
-      orderedAccounts.forEach(account => {
-        const history = accountHistories[account.id];
-        if (history) {
-          // Find exact match
-          const match = history.find(h => h.date.startsWith(dateStr));
-          if (match) {
-            point[account.id] = match.currentValue;
-          } else {
-            // Simple fallback: 0. 
-            // Ideally we would forward-fill, but for now let's assume aligned data or 0.
-            // If we want forward fill, we'd need to track last known values outside the map.
-            point[account.id] = 0;
-          }
-        } else {
-          point[account.id] = 0;
-        }
-      });
-      return point;
-    });
-
-    // Forward fill logic (optional but recommended for smoother charts)
-    // Let's do a quick pass to forward fill if needed, or just rely on 0.
-    // Given the user wants "evolution", 0 might be misleading if data is missing for a day.
-    // But implementing robust forward fill inside map is tricky. 
-    // Let's stick to 0 for now, assuming the backend provides consistent daily snapshots or we accept gaps.
+    const { orderedAccounts, sortedDates, data } = buildStackedPortfolioHistoryData(
+      portfolioData,
+      accountHistories,
+    );
 
     return (
       <Box sx={{ p: 2, flexGrow: 1, minHeight: 300, height: '100%' }}>
@@ -289,8 +242,8 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {displayMode === 'chart'
-              ? 'Portfolio value stacked by account over time.'
-              : 'Recent investment transactions for the selected period.'}
+              ? t('descriptions.chart')
+              : t('descriptions.table')}
           </Typography>
         </Box>
         <ToggleButtonGroup

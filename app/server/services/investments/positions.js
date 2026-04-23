@@ -1,4 +1,9 @@
 const actualDatabase = require('../database.js');
+const {
+  INSTITUTION_SELECT_FIELDS,
+  buildInstitutionFromRow,
+  getInstitutionByVendorCode,
+} = require('../institutions.js');
 
 let database = actualDatabase;
 let schemaEnsured = false;
@@ -366,17 +371,37 @@ async function listPositions(params = {}) {
   const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
   const result = await database.query(
     `
-      SELECT ip.*, ia.account_name
+      SELECT
+        ip.*,
+        ia.account_name,
+        ia.account_type,
+        ia.investment_category,
+        ${INSTITUTION_SELECT_FIELDS}
       FROM investment_positions ip
       JOIN investment_accounts ia ON ia.id = ip.account_id
+      LEFT JOIN institution_nodes fi ON ia.institution_id = fi.id AND fi.node_type = 'institution'
       ${whereClause}
       ORDER BY ip.status ASC, ip.opened_at DESC, ip.position_name ASC
     `,
     values,
   );
 
+  const positions = await Promise.all(
+    (result.rows || []).map(async (row) => {
+      let institution = buildInstitutionFromRow(row);
+      if (!institution && row.account_type) {
+        institution = await getInstitutionByVendorCode(database, row.account_type);
+      }
+
+      return normalizePosition({
+        ...row,
+        institution: institution || null,
+      });
+    }),
+  );
+
   return {
-    positions: (result.rows || []).map(normalizePosition),
+    positions,
   };
 }
 

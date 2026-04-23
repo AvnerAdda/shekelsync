@@ -871,8 +871,21 @@
     },
     "tabs": {
       "history": "Daily Income vs Expenses",
+      "calendar": "Calendar",
       "netPosition": "Net Position",
       "scenarios": "End of Month Scenarios"
+    },
+    "calendar": {
+      "subtitle": "Click a day to inspect its transactions.",
+      "today": "Today",
+      "retry": "Retry",
+      "error": "Failed to load calendar",
+      "emptyMonth": "No income or expense activity in this month.",
+      "monthIncome": "Month income",
+      "monthExpenses": "Month expenses",
+      "monthNet": "Month net",
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month"
     },
     "forecast": {
       "loading": "Loading forecast...",
@@ -1858,7 +1871,15 @@
       "refreshTooltip": "Refresh all data",
       "refresh": "Refresh",
       "refreshing": "Refreshing...",
-      "portfolioSetup": "Portfolio Setup"
+      "portfolioSetup": "Portfolio Setup",
+      "addAccount": "Add account",
+      "updateValuation": "Update valuation"
+    },
+    "loading": {
+      "setup": "Loading setup status..."
+    },
+    "warnings": {
+      "multiCurrency": "Multiple currencies are present. Totals and charts still reflect raw account values, not FX-normalized values."
     },
     "filters": {
       "rangeLabel": "Transactions range",
@@ -1882,12 +1903,17 @@
     "allocation": {
       "title": "Allocation",
       "total": "Total",
-      "viewMore": "View more"
+      "viewMore": "View more",
+      "tooltipCategory": "Category",
+      "tooltipValue": "Value",
+      "tooltipPercentage": "Percentage"
     },
     "performance": {
       "title": "My Performance",
       "allCategories": "All Categories",
-      "noAccounts": "No investment accounts found"
+      "noAccounts": "No investment accounts found",
+      "overviewTitle": "Account Overview",
+      "overviewSubtitle": "Compare category performance and recent account movement."
     },
     "empty": {
       "title": "Get Started with Your Investment Portfolio",
@@ -1957,6 +1983,11 @@
     },
     "history": {
       "title": "Portfolio Performance",
+      "descriptions": {
+        "chart": "Track stacked portfolio history across all tracked categories.",
+        "table": "Review recent investment transactions for the selected period."
+      },
+      "tooltipTotal": "Total Portfolio",
       "aria": {
         "displayMode": "display mode",
         "chart": "chart view",
@@ -1993,7 +2024,14 @@
     },
     "breakdown": {
       "title": "Portfolio Breakdown",
+      "listTitle": "Accounts by Category",
+      "listSubtitle": "Review tracked accounts grouped by portfolio category.",
       "group": {
+        "cash": "Cash",
+        "liquid": "Liquid Investments",
+        "restricted": "Long-term Savings",
+        "stability": "Insurance & Stability",
+        "other": "Other Assets",
         "accounts_one": "{{count}} account",
         "accounts_other": "{{count}} accounts",
         "percentage": "{{value}}%",
@@ -2053,6 +2091,92 @@
         "setup": {
           "success": "Successfully created {{count}} pikadon entries!"
         }
+      }
+    },
+    "coverage": {
+      "title": "Portfolio Coverage",
+      "subtitle": "Measures how complete and reviewable your investment data is.",
+      "empty": "Coverage metrics will appear once investment accounts are available.",
+      "items": {
+        "missingValuations": {
+          "label": "Missing valuations",
+          "hint": "Accounts without a recent balance snapshot."
+        },
+        "staleValuations": {
+          "label": "Stale valuations",
+          "hint": "Accounts whose latest valuation is older than 30 days."
+        },
+        "missingCurrency": {
+          "label": "Missing currency metadata",
+          "hint": "Accounts without a base currency make totals less trustworthy."
+        },
+        "missingHoldings": {
+          "label": "Accounts missing holdings",
+          "hint": "Accounts with no valuation and no holdings detail yet."
+        }
+      }
+    },
+    "performanceBreakdown": {
+      "title": "Why Portfolio Changed",
+      "subtitle": "Separates cash movements from market movement for the selected range.",
+      "empty": "No performance breakdown available yet.",
+      "emptyTimeline": "No timeline data available for this range.",
+      "mixedCurrencyWarning": "Mixed currencies detected. Breakdown is useful, but totals are not FX-normalized yet.",
+      "na": "N/A",
+      "metrics": {
+        "twr": "TWR {{value}}",
+        "mwr": "MWR {{value}}"
+      },
+      "cards": {
+        "valueChange": "Value Change",
+        "contributions": "Contributions",
+        "withdrawals": "Withdrawals",
+        "capitalReturns": "Capital Returns",
+        "distributedIncome": "Distributed Income",
+        "fees": "Fees",
+        "marketMove": "Market Move"
+      }
+    },
+    "performanceCard": {
+      "high": "High",
+      "low": "Low",
+      "value": "Value",
+      "min": "Min",
+      "max": "Max"
+    },
+    "holdings": {
+      "title": "Holdings / Positions",
+      "subtitle": "Open positions plus fallback holdings from the latest account snapshots.",
+      "empty": "No holdings or positions matched the current filters.",
+      "filters": {
+        "searchLabel": "Search",
+        "searchPlaceholder": "Search by name, account, or institution",
+        "categoryLabel": "Category",
+        "allCategories": "All categories",
+        "rowTypeLabel": "Row type",
+        "rowTypeAll": "All rows",
+        "rowTypePositions": "Positions",
+        "rowTypeHoldings": "Holdings"
+      },
+      "rowKind": {
+        "position": "Position",
+        "holding": "Holding"
+      },
+      "status": {
+        "needsValuation": "Needs valuation"
+      },
+      "table": {
+        "name": "Name",
+        "rowType": "Row type",
+        "category": "Category",
+        "account": "Account",
+        "itemType": "Type",
+        "currency": "Currency",
+        "currentValue": "Current value",
+        "costBasis": "Cost basis",
+        "unrealizedPnL": "Unrealized P&L",
+        "date": "Updated / Opened",
+        "notAvailable": "N/A"
       }
     }
   },

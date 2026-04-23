@@ -27,7 +27,10 @@ import { useTranslation } from 'react-i18next';
 import {
   InvestmentData,
   InvestmentAccountSummary,
+  InvestmentCategoryKey,
   InvestmentPerformanceResponse,
+  InvestmentPosition,
+  InvestmentPositionsResponse,
   PortfolioHistoryPoint,
   PortfolioHistoryResponse,
   PortfolioSummary,
@@ -45,6 +48,7 @@ import PortfolioHistorySection from '../components/PortfolioHistorySection';
 import PortfolioBreakdownSection from '../components/PortfolioBreakdownSection';
 import PerformanceBreakdownPanel from '../components/PerformanceBreakdownPanel';
 import PortfolioCoveragePanel from '../components/PortfolioCoveragePanel';
+import HoldingsPositionsSection from '../components/HoldingsPositionsSection';
 import PikadonAccountDetailsDialog from '../components/PikadonAccountDetailsDialog';
 import { useInvestmentBalanceSheet } from '../hooks/useBalanceSheet';
 import { type AccountsModalOpenRequest } from '@renderer/shared/modals/AccountsModal';
@@ -62,8 +66,8 @@ const TIME_RANGES: { value: HistoryTimeRangeOption; label: string }[] = [
 
 function getPortfolioAccountIds(portfolio: PortfolioSummary | null | undefined): number[] {
   return Array.from(new Set(
-    portfolio?.breakdown
-      ?.flatMap((group) => group.accounts?.map((account) => account.id).filter(Boolean) || [])
+    portfolio?.accounts
+      ?.map((account) => account.id)
       .filter((id): id is number => typeof id === 'number') || [],
   ));
 }
@@ -140,9 +144,11 @@ const InvestmentsPageContent: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const [chartViewMode, setChartViewMode] = useState<'value' | 'performance'>('value');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | InvestmentCategoryKey>('all');
   const [performanceData, setPerformanceData] = useState<InvestmentPerformanceResponse | null>(null);
   const [performanceLoading, setPerformanceLoading] = useState(false);
+  const [positions, setPositions] = useState<InvestmentPosition[]>([]);
+  const [positionsLoading, setPositionsLoading] = useState(false);
   const [investmentActivity, setInvestmentActivity] = useState<InvestmentData | null>(null);
   const [activityLoading, setActivityLoading] = useState(false);
   const [selectedPikadonAccount, setSelectedPikadonAccount] = useState<InvestmentAccountSummary | null>(null);
@@ -260,6 +266,29 @@ const InvestmentsPageContent: React.FC = () => {
     }
   }, [historyTimeRange, shouldBlockPageData]);
 
+  const fetchPositions = useCallback(async () => {
+    if (shouldBlockPageData) {
+      setPositions([]);
+      return;
+    }
+
+    setPositionsLoading(true);
+    try {
+      const response = await apiClient.get<InvestmentPositionsResponse>('/api/investments/positions', {
+        params: { status: 'open' },
+      });
+      if (!response.ok) {
+        throw new Error(response.statusText || 'Failed to fetch investment positions');
+      }
+      setPositions(Array.isArray(response.data?.positions) ? response.data.positions : []);
+    } catch (error) {
+      console.error('Error fetching investment positions:', error);
+      setPositions([]);
+    } finally {
+      setPositionsLoading(false);
+    }
+  }, [shouldBlockPageData]);
+
   useEffect(() => {
     void fetchPortfolioData();
   }, [fetchPortfolioData, refreshTrigger]);
@@ -268,8 +297,9 @@ const InvestmentsPageContent: React.FC = () => {
     if (!shouldBlockPageData) {
       void fetchPerformanceData();
       void fetchInvestmentActivity();
+      void fetchPositions();
     }
-  }, [fetchInvestmentActivity, fetchPerformanceData, refreshTrigger, shouldBlockPageData]);
+  }, [fetchInvestmentActivity, fetchPerformanceData, fetchPositions, refreshTrigger, shouldBlockPageData]);
 
   useEffect(() => {
     void fetchHistoryData();
@@ -287,6 +317,7 @@ const InvestmentsPageContent: React.FC = () => {
         fetchHistoryData(nextPortfolio),
         fetchPerformanceData(),
         fetchInvestmentActivity(),
+        fetchPositions(),
         refreshBalanceSheet(),
       ]);
     } catch (error) {
@@ -299,6 +330,7 @@ const InvestmentsPageContent: React.FC = () => {
     fetchInvestmentActivity,
     fetchPerformanceData,
     fetchPortfolioData,
+    fetchPositions,
     refreshBalanceSheet,
     setIsRefreshing,
   ]);
@@ -319,7 +351,7 @@ const InvestmentsPageContent: React.FC = () => {
   }, []);
 
   if (showLoading) {
-    return <LoadingState fullHeight message="Loading setup status..." />;
+    return <LoadingState fullHeight message={t('loading.setup')} />;
   }
 
   if (isLocked) {
@@ -334,14 +366,14 @@ const InvestmentsPageContent: React.FC = () => {
 
   const actions = [
     {
-      label: 'Add account',
+      label: t('actions.addAccount'),
       icon: <AddIcon fontSize="small" />,
       onClick: () => openAccountsManagement({ tab: 'investments', addFlow: true }),
       variant: 'contained' as const,
       disabled: false,
     },
     {
-      label: 'Update valuation',
+      label: t('actions.updateValuation'),
       icon: <ValuationIcon fontSize="small" />,
       onClick: () => openAccountsManagement({ tab: 'investments' }),
       variant: 'outlined' as const,
@@ -375,7 +407,7 @@ const InvestmentsPageContent: React.FC = () => {
             {t('header.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Track value change, coverage, and account-level history from one place.
+            {t('header.subtitle')}
           </Typography>
         </Box>
 
@@ -462,7 +494,7 @@ const InvestmentsPageContent: React.FC = () => {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, flexGrow: 1 }}>
           {mixedCurrencies && (
             <Alert severity="warning" sx={{ borderRadius: 2 }}>
-              Multiple currencies are present. Totals and charts still reflect raw account values, not FX-normalized values.
+              {t('warnings.multiCurrency')}
             </Alert>
           )}
 
@@ -472,8 +504,6 @@ const InvestmentsPageContent: React.FC = () => {
                 <PortfolioValuePanel
                   portfolioData={portfolio}
                   overallHistory={overallHistory}
-                  historyTimeRange={historyTimeRange}
-                  onTimeRangeChange={(range: HistoryTimeRangeOption) => setHistoryTimeRange(range)}
                   viewMode={chartViewMode}
                   onViewModeChange={setChartViewMode}
                   loading={portfolioLoading || historyLoading}
@@ -500,6 +530,12 @@ const InvestmentsPageContent: React.FC = () => {
             data={balanceSheetData}
             loading={balanceSheetLoading}
             error={balanceSheetError}
+          />
+
+          <HoldingsPositionsSection
+            portfolioData={portfolio}
+            positions={positions}
+            loading={positionsLoading || portfolioLoading}
           />
 
           <Grid container spacing={3}>
@@ -540,8 +576,6 @@ const InvestmentsPageContent: React.FC = () => {
               <Box sx={{ height: { xs: 420, lg: 500 } }}>
                 <PortfolioBreakdownSection
                   portfolioData={portfolio as PortfolioSummary}
-                  accountHistories={accountHistories}
-                  historyLoading={historyLoading}
                   onAccountClick={handleAccountClick}
                 />
               </Box>
@@ -572,7 +606,7 @@ const InvestmentsPageContent: React.FC = () => {
             color="text.secondary"
             sx={{ mb: 4, maxWidth: 560, mx: 'auto' }}
           >
-            Add your first investment account to start tracking value changes, balance sheet coverage, and account history.
+            {t('empty.description')}
           </Typography>
           <Box sx={{ display: 'flex', justifyContent: 'center' }}>
             <Button
@@ -582,7 +616,7 @@ const InvestmentsPageContent: React.FC = () => {
               onClick={() => openAccountsManagement({ tab: 'investments', addFlow: true })}
               sx={{ borderRadius: 2, textTransform: 'none', px: 4 }}
             >
-              Add investment account
+              {t('empty.cta')}
             </Button>
           </Box>
         </Paper>

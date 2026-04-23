@@ -5,6 +5,9 @@ export interface PortfolioBreakdownItem {
   category: string;
 }
 
+export type InvestmentCategoryKey = 'cash' | 'liquid' | 'restricted' | 'stability' | 'other';
+export type InvestmentInstitution = string | Record<string, unknown> | null;
+
 export interface InvestmentSummaryTotals {
   totalPortfolioValue?: number;
   liquid?: { totalValue?: number };
@@ -82,8 +85,8 @@ export interface InvestmentAccountSummary {
   id: number;
   account_name: string;
   account_type: string;
-  institution?: string | null;
-  investment_category?: string | null;
+  institution?: InvestmentInstitution;
+  investment_category?: InvestmentCategoryKey | null;
   currency: string;
   current_value: number;
   cost_basis: number;
@@ -101,6 +104,15 @@ export interface PortfolioBreakdownGroup {
   totalCost: number;
   count: number;
   percentage: number;
+  accounts: InvestmentAccountSummary[];
+}
+
+export interface PortfolioCategoryBucket {
+  totalValue: number;
+  totalCost: number;
+  unrealizedGainLoss: number;
+  roi: number;
+  accountsCount: number;
   accounts: InvestmentAccountSummary[];
 }
 
@@ -128,6 +140,7 @@ export interface PortfolioSummary {
       accountsCount: number;
     };
   };
+  categoryBuckets: Record<InvestmentCategoryKey, PortfolioCategoryBucket>;
   breakdown: PortfolioBreakdownGroup[];
   timeline: PortfolioHistoryPoint[];
   accounts: InvestmentAccountSummary[];
@@ -229,6 +242,9 @@ export interface InvestmentPosition {
   id: number;
   account_id: number;
   account_name?: string;
+  account_type?: string;
+  investment_category?: InvestmentCategoryKey | null;
+  institution?: InvestmentInstitution;
   position_name: string;
   asset_type?: string | null;
   currency: string;
@@ -241,6 +257,31 @@ export interface InvestmentPosition {
   notes?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface InvestmentPositionsResponse {
+  positions: InvestmentPosition[];
+}
+
+export type InvestmentHoldingsRowKind = 'position' | 'holding';
+export type InvestmentHoldingsRowStatus = 'valued' | 'needs_valuation';
+
+export interface InvestmentHoldingsPositionRow {
+  rowId: string;
+  rowKind: InvestmentHoldingsRowKind;
+  status: InvestmentHoldingsRowStatus;
+  accountId: number;
+  name: string;
+  accountName: string;
+  category: InvestmentCategoryKey;
+  itemType: string;
+  currency: string | null;
+  currentValue: number | null;
+  basisValue: number | null;
+  unrealizedPnL: number | null;
+  displayDate: string | null;
+  rawDate: string | null;
+  institution?: InvestmentInstitution;
 }
 
 export interface InvestmentPositionEvent {

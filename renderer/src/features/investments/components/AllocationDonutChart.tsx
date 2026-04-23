@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
-import { Box, Typography, Paper } from '@mui/material';
+import { Box, Chip, Typography, Paper } from '@mui/material';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
 import AccountAllocationModal from './AccountAllocationModal';
+import {
+  getOrderedPortfolioAccounts,
+  getPortfolioCategoryBuckets,
+  normalizeInvestmentCategory,
+} from '../utils/portfolio-categories';
 
 interface AllocationDonutChartProps {
   portfolioData: PortfolioSummary;
@@ -26,34 +31,26 @@ const CHART_COLORS = [
 
 const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioData }) => {
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
-  const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.allocation' });
+  const { t } = useTranslation('translation');
   const [modalOpen, setModalOpen] = useState(false);
 
   const formatCurrencyValue = (value: number) =>
     formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
 
-  // Combine all accounts for the chart, tracking their type
-  const restrictedAccounts = portfolioData.restrictedAccounts || [];
-  const liquidAccounts = portfolioData.liquidAccounts || [];
+  const allAccounts = getOrderedPortfolioAccounts(portfolioData);
 
-  // Create a map to track which accounts are liquid vs restricted
-  const accountTypeMap = new Map<string, 'liquid' | 'restricted'>();
-  restrictedAccounts.forEach(acc => accountTypeMap.set(acc.account_name, 'restricted'));
-  liquidAccounts.forEach(acc => accountTypeMap.set(acc.account_name, 'liquid'));
-
-  const allAccounts = [...restrictedAccounts, ...liquidAccounts];
-
-  // Create data for the pie chart
   const chartData = allAccounts
-    .filter(account => account.current_value > 0)
+    .filter((account) => account.current_value > 0)
     .map((account, index) => ({
       name: account.account_name,
       value: account.current_value,
       color: CHART_COLORS[index % CHART_COLORS.length],
-      type: accountTypeMap.get(account.account_name) || 'liquid',
+      category: normalizeInvestmentCategory(account.investment_category),
     }));
 
   const totalValue = portfolioData.summary.totalPortfolioValue;
+  const categoryChips = getPortfolioCategoryBuckets(portfolioData)
+    .filter(({ bucket }) => bucket.totalValue > 0);
 
   return (
     <Paper
@@ -68,7 +65,7 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="subtitle1" fontWeight={600}>
-          {t('title', 'Allocation')}
+          {t('investmentsPage.allocation.title')}
         </Typography>
         <Typography
           variant="caption"
@@ -79,7 +76,7 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
             '&:hover': { textDecoration: 'underline' },
           }}
         >
-          {t('viewMore', 'View more')}
+          {t('investmentsPage.allocation.viewMore')}
         </Typography>
       </Box>
 
@@ -100,7 +97,7 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
                 <Cell
                   key={`cell-${index}`}
                   fill={entry.color}
-                  stroke={entry.type === 'liquid' ? '#10B981' : '#EF4444'}
+                  stroke="transparent"
                   strokeWidth={1.5}
                 />
               ))}
@@ -114,19 +111,19 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
 
                 const items: TooltipDataItem[] = [
                   {
-                    label: t('tooltipType', 'Type'),
-                    value: data.type === 'liquid' ? t('tooltipLiquid', 'Liquid') : t('tooltipRestricted', 'Restricted'),
+                    label: t('investmentsPage.allocation.tooltipCategory'),
+                    value: t(`investmentsPage.balanceSheet.buckets.${data.category}`),
                     type: 'text',
-                    color: data.type === 'liquid' ? '#10B981' : '#EF4444',
+                    color: data.color,
                   },
                   {
-                    label: t('tooltipValue', 'Value'),
+                    label: t('investmentsPage.allocation.tooltipValue'),
                     value: data.value,
                     type: 'currency',
                     color: data.color,
                   },
                   {
-                    label: t('tooltipPercentage', 'Percentage'),
+                    label: t('investmentsPage.allocation.tooltipPercentage'),
                     value: percentage.toFixed(1),
                     type: 'percentage',
                   },
@@ -162,7 +159,7 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
             {maskAmounts ? '***' : formatCurrencyValue(totalValue)}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {t('total', 'Total')}
+            {t('investmentsPage.allocation.total')}
           </Typography>
         </Box>
       </Box>
@@ -201,7 +198,6 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
           ))}
         </Box>
 
-        {/* Border color legend */}
         <Box
           sx={{
             display: 'flex',
@@ -211,34 +207,17 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
             pt: 1.5,
             borderTop: 1,
             borderColor: 'divider',
+            flexWrap: 'wrap',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box
-              sx={{
-                width: 12,
-                height: 3,
-                bgcolor: '#10B981',
-                borderRadius: 0.5,
-              }}
+          {categoryChips.map(({ key, bucket }) => (
+            <Chip
+              key={key}
+              size="small"
+              label={`${t(`investmentsPage.balanceSheet.buckets.${key}`)} • ${maskAmounts ? '***' : formatCurrencyValue(bucket.totalValue)}`}
+              variant="outlined"
             />
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-              {t('liquidBorder', 'Liquid')}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box
-              sx={{
-                width: 12,
-                height: 3,
-                bgcolor: '#EF4444',
-                borderRadius: 0.5,
-              }}
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-              {t('restrictedBorder', 'Restricted')}
-            </Typography>
-          </Box>
+          ))}
         </Box>
       </Box>
 

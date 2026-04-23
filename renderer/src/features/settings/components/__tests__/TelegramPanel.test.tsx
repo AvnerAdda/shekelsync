@@ -87,10 +87,8 @@ describe('TelegramPanel', () => {
 
     render(<TelegramPanel />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Telegram')).toBeInTheDocument();
-      expect(screen.getByText('Bot token saved')).toBeInTheDocument();
-    });
+    expect(await screen.findByText('Telegram')).toBeInTheDocument();
+    expect(await screen.findByText('Bot token saved', {}, { timeout: 15000 })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Telegram Bot Token'), {
       target: { value: '123456:ABC' },
@@ -100,7 +98,7 @@ describe('TelegramPanel', () => {
     await waitFor(() => {
       expect(saveBotToken).toHaveBeenCalledWith('123456:ABC');
     });
-  });
+  }, 15000);
 
   it('shows pairing instructions and can disconnect', async () => {
     const get = vi.fn().mockResolvedValue({

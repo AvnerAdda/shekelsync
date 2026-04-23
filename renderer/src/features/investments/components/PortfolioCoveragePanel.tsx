@@ -10,6 +10,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { PortfolioSummary, InvestmentBalanceSheetResponse } from '@renderer/types/investments';
+import { useTranslation } from 'react-i18next';
 
 interface PortfolioCoveragePanelProps {
   portfolioData: PortfolioSummary | null;
@@ -34,6 +35,7 @@ const PortfolioCoveragePanel: React.FC<PortfolioCoveragePanelProps> = ({
   loading,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.coverage' });
 
   if (loading) {
     return (
@@ -54,10 +56,10 @@ const PortfolioCoveragePanel: React.FC<PortfolioCoveragePanelProps> = ({
     return (
       <Paper sx={{ p: 2.5, height: '100%' }}>
         <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-          Portfolio Coverage
+          {t('title')}
         </Typography>
         <Typography color="text.secondary">
-          Coverage metrics will appear once investment accounts are available.
+          {t('empty')}
         </Typography>
       </Paper>
     );
@@ -96,24 +98,24 @@ const PortfolioCoveragePanel: React.FC<PortfolioCoveragePanelProps> = ({
 
   const items = [
     {
-      label: 'Missing valuations',
+      label: t('items.missingValuations.label'),
       value: missingValuations,
-      hint: 'Accounts without a recent balance snapshot.',
+      hint: t('items.missingValuations.hint'),
     },
     {
-      label: 'Stale valuations',
+      label: t('items.staleValuations.label'),
       value: staleValuations,
-      hint: 'Accounts whose latest valuation is older than 30 days.',
+      hint: t('items.staleValuations.hint'),
     },
     {
-      label: 'Missing currency metadata',
+      label: t('items.missingCurrency.label'),
       value: missingCurrencies,
-      hint: 'Accounts without a base currency make totals less trustworthy.',
+      hint: t('items.missingCurrency.hint'),
     },
     {
-      label: 'Accounts missing holdings',
+      label: t('items.missingHoldings.label'),
       value: missingHoldings,
-      hint: 'Accounts with no valuation and no holdings detail yet.',
+      hint: t('items.missingHoldings.hint'),
     },
   ];
 
@@ -122,10 +124,10 @@ const PortfolioCoveragePanel: React.FC<PortfolioCoveragePanelProps> = ({
       <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'flex-start' }}>
         <Box>
           <Typography variant="subtitle1" fontWeight={600}>
-            Portfolio Coverage
+            {t('title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Measures how complete and reviewable your investment data is.
+            {t('subtitle')}
           </Typography>
         </Box>
         <Chip
