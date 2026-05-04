@@ -10,9 +10,9 @@ import {
   CircularProgress, Skeleton,
   Grid,
   IconButton,
+  MenuItem,
   Paper,
-  Tab,
-  Tabs,
+  Select,
   Tooltip,
   Typography,
   alpha,
@@ -423,37 +423,6 @@ const InvestmentsPageContent: React.FC = () => {
             {t('header.subtitle')}
           </Typography>
         </Box>
-
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <Tooltip title={t('actions.refreshTooltip')}>
-            <IconButton
-              onClick={() => void handleRefreshAll()}
-              disabled={isRefreshing}
-              size="small"
-              sx={{
-                bgcolor: alpha(theme.palette.action.selected, 0.1),
-                '&:hover': {
-                  bgcolor: alpha(theme.palette.action.selected, 0.2),
-                },
-              }}
-            >
-              {isRefreshing ? <CircularProgress size={18} /> : <RefreshIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
-
-          {actions.map((action) => (
-            <Button
-              key={action.label}
-              variant={action.variant}
-              startIcon={action.icon}
-              onClick={action.onClick}
-              disabled={action.disabled}
-              sx={{ textTransform: 'none', borderRadius: 2 }}
-            >
-              {action.label}
-            </Button>
-          ))}
-        </Box>
       </Box>
 
       {portfolioLoading && !hasPortfolio ? (
@@ -474,24 +443,29 @@ const InvestmentsPageContent: React.FC = () => {
             </Alert>
           )}
 
-          {/* Custom Modern Tabs Navigation and Time Range selector */}
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, overflowX: 'auto' }}>
+          {/* Tabs bar with actions */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              p: 0.75,
+              borderRadius: '16px',
+              bgcolor: alpha(theme.palette.background.paper, 0.5),
+              backdropFilter: 'blur(24px)',
+              border: '1px solid',
+              borderColor: alpha(theme.palette.divider, 0.08),
+              boxShadow: `0 4px 24px 0 ${alpha(theme.palette.common.black, 0.04)}, 0 1px 2px 0 ${alpha(theme.palette.common.black, 0.03)}`,
+            }}
+          >
+            {/* Tab buttons */}
             <Box
               role="tablist"
+              aria-label={t('tabs.ariaLabel', 'Investment sections')}
               sx={{
-                p: 0.75,
-                borderRadius: '16px',
-                bgcolor: alpha(theme.palette.background.paper, 0.5),
-                backdropFilter: 'blur(24px)',
-                border: '1px solid',
-                borderColor: alpha(theme.palette.divider, 0.08),
-                boxShadow: `0 4px 24px 0 ${alpha(theme.palette.common.black, 0.04)}, 0 1px 2px 0 ${alpha(theme.palette.common.black, 0.03)}`,
                 display: 'flex',
                 gap: 0.5,
                 flexWrap: 'nowrap',
-                overflowX: 'auto',
-                scrollbarWidth: 'none',
-                '&::-webkit-scrollbar': { display: 'none' },
                 flex: '0 0 auto',
               }}
             >
@@ -505,14 +479,15 @@ const InvestmentsPageContent: React.FC = () => {
                       tabIndex={isSelected ? 0 : -1}
                       onClick={() => setActiveTab(tab.id)}
                       sx={{
-                        flex: { xs: '1 0 auto', xl: '0 0 auto' },
-                        minWidth: 44,
-                        height: 40,
+                        flex: '0 0 auto',
+                        minWidth: { xs: 40, md: 'auto' },
+                        height: 36,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        px: 0,
-                        borderRadius: '12px',
+                        gap: 0.75,
+                        px: { xs: 1.25, md: 1.75 },
+                        borderRadius: '10px',
                         cursor: 'pointer',
                         userSelect: 'none',
                         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -535,67 +510,119 @@ const InvestmentsPageContent: React.FC = () => {
                           transform: 'scale(0.97)',
                         },
                         '& .MuiSvgIcon-root': {
+                          fontSize: 18,
                           opacity: isSelected ? 1 : 0.6,
                           transition: 'opacity 0.2s',
                         },
                       }}
                     >
                       {tab.icon}
+                      <Typography
+                        variant="body2"
+                        fontWeight={isSelected ? 600 : 500}
+                        sx={{
+                          display: { xs: 'none', md: 'block' },
+                          whiteSpace: 'nowrap',
+                          fontSize: '0.8125rem',
+                        }}
+                      >
+                        {tab.label}
+                      </Typography>
                     </Box>
                   </Tooltip>
                 );
               })}
             </Box>
 
-            {hasPortfolio && (
-              <Box sx={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-                <Paper
-                  elevation={0}
+            {/* Spacer */}
+            <Box sx={{ flex: 1 }} />
+
+            {/* Time range selector */}
+            {(activeTab === 0 || activeTab === 3) && (
+              <Select
+                value={historyTimeRange}
+                onChange={(e) => setHistoryTimeRange(e.target.value as HistoryTimeRangeOption)}
+                size="small"
+                variant="outlined"
+                sx={{
+                  minWidth: 68,
+                  height: 36,
+                  borderRadius: '10px',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: alpha(theme.palette.divider, 0.12),
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: alpha(theme.palette.divider, 0.3),
+                  },
+                  '& .MuiSelect-select': {
+                    py: 0.75,
+                    pr: '28px !important',
+                  },
+                }}
+              >
+                {TIME_RANGES.map((range) => (
+                  <MenuItem key={range.value} value={range.value} sx={{ fontSize: '0.8125rem', fontWeight: 500 }}>
+                    {range.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            )}
+
+            {/* Divider */}
+            <Box sx={{ width: '1px', height: 24, bgcolor: alpha(theme.palette.divider, 0.15), flexShrink: 0 }} />
+
+            {/* Action buttons */}
+            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0 }}>
+              <Tooltip title={t('actions.refreshTooltip')}>
+                <IconButton
+                  onClick={() => void handleRefreshAll()}
+                  disabled={isRefreshing}
+                  size="small"
                   sx={{
-                    display: 'inline-flex',
-                    p: 0.75,
-                    borderRadius: '16px',
-                    bgcolor: alpha(theme.palette.background.paper, 0.5),
-                    backdropFilter: 'blur(24px)',
-                    border: '1px solid',
-                    borderColor: alpha(theme.palette.divider, 0.08),
-                    boxShadow: `0 4px 24px 0 ${alpha(theme.palette.common.black, 0.04)}, 0 1px 2px 0 ${alpha(theme.palette.common.black, 0.03)}`,
+                    width: 36,
+                    height: 36,
+                    borderRadius: '10px',
+                    color: 'text.secondary',
+                    '&:hover': {
+                      bgcolor: alpha(theme.palette.action.hover, 0.8),
+                      color: 'text.primary',
+                    },
                   }}
                 >
-                  {TIME_RANGES.map((range) => (
-                    <Box
-                      key={range.value}
-                      onClick={() => setHistoryTimeRange(range.value)}
-                      sx={{
-                        px: { xs: 1.5, md: 2 },
-                        py: 1,
-                        borderRadius: '12px',
-                        cursor: 'pointer',
-                        fontSize: '0.8125rem',
-                        fontWeight: historyTimeRange === range.value ? 700 : 500,
-                        color: historyTimeRange === range.value ? 'primary.contrastText' : 'text.secondary',
-                        bgcolor:
-                          historyTimeRange === range.value
-                            ? 'primary.main'
-                            : 'transparent',
-                        boxShadow: historyTimeRange === range.value ? `0 2px 4px ${alpha(theme.palette.primary.main, 0.3)}` : 'none',
-                        '&:hover': {
-                          bgcolor: historyTimeRange === range.value ? 'primary.main' : alpha(theme.palette.action.hover, 0.8),
-                        },
-                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                      }}
-                    >
-                      {range.label}
-                    </Box>
-                  ))}
-                </Paper>
-              </Box>
-            )}
+                  {isRefreshing ? <CircularProgress size={16} /> : <RefreshIcon sx={{ fontSize: 18 }} />}
+                </IconButton>
+              </Tooltip>
+              {actions.map((action) => (
+                <Tooltip title={action.label} key={action.label}>
+                  <IconButton
+                    onClick={action.onClick}
+                    disabled={action.disabled}
+                    size="small"
+                    sx={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: '10px',
+                      color: action.variant === 'contained' ? 'primary.main' : 'text.secondary',
+                      '&:hover': {
+                        bgcolor: action.variant === 'contained'
+                          ? alpha(theme.palette.primary.main, 0.12)
+                          : alpha(theme.palette.action.hover, 0.8),
+                        color: action.variant === 'contained' ? 'primary.dark' : 'text.primary',
+                      },
+                    }}
+                  >
+                    {action.icon}
+                  </IconButton>
+                </Tooltip>
+              ))}
+            </Box>
           </Box>
 
           {/* Overview Tab */}
           {activeTab === 0 && (
-            <>
+            <Box role="tabpanel" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <Grid container spacing={3} sx={{ flexShrink: 0 }}>
                 <Grid size={{ xs: 12, lg: 8 }}>
                   <Box sx={{ height: { xs: 400, lg: 380 } }}>
@@ -623,12 +650,12 @@ const InvestmentsPageContent: React.FC = () => {
                 onCategoryFilterChange={setCategoryFilter}
                 onAccountClick={handleAccountClick}
               />
-            </>
+            </Box>
           )}
 
           {/* Holdings & Balance Tab */}
           {activeTab === 1 && (
-            <>
+            <Box role="tabpanel" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <HoldingsPositionsSection
                 portfolioData={portfolio}
                 positions={positions}
@@ -640,12 +667,12 @@ const InvestmentsPageContent: React.FC = () => {
                 loading={balanceSheetLoading}
                 error={balanceSheetError}
               />
-            </>
+            </Box>
           )}
 
           {/* Performance Analytics Tab */}
           {activeTab === 2 && (
-            <Grid container spacing={3}>
+            <Grid role="tabpanel" container spacing={3}>
               <Grid size={{ xs: 12, lg: 8 }}>
                 <Box sx={{ minHeight: 420 }}>
                   <PerformanceBreakdownPanel
@@ -669,7 +696,7 @@ const InvestmentsPageContent: React.FC = () => {
 
           {/* History Tab */}
           {activeTab === 3 && (
-            <Grid container spacing={3} sx={{ minHeight: 480 }}>
+            <Grid role="tabpanel" container spacing={3} sx={{ minHeight: 480 }}>
               <Grid size={{ xs: 12, lg: 8 }}>
                 <Box sx={{ height: { xs: 520, lg: 500 } }}>
                   <PortfolioHistorySection
