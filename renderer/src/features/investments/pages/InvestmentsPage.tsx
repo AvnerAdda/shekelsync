@@ -10,7 +10,9 @@ import {
   CircularProgress, Skeleton,
   Grid,
   IconButton,
+  MenuItem,
   Paper,
+  Select,
   Tooltip,
   Typography,
   alpha,
@@ -21,6 +23,9 @@ import {
   AccountBalance as AccountIcon,
   Refresh as RefreshIcon,
   TrendingUp as ValuationIcon,
+  Dashboard as DashboardIcon,
+  AccountBalanceWallet as WalletIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import { apiClient } from '@/lib/api-client';
 import { useTranslation } from 'react-i18next';
@@ -145,6 +150,7 @@ const InvestmentsPageContent: React.FC = () => {
 
   const [chartViewMode, setChartViewMode] = useState<'value' | 'performance'>('value');
   const [categoryFilter, setCategoryFilter] = useState<'all' | InvestmentCategoryKey>('all');
+  const [activeTab, setActiveTab] = useState(0);
   const [performanceData, setPerformanceData] = useState<InvestmentPerformanceResponse | null>(null);
   const [performanceLoading, setPerformanceLoading] = useState(false);
   const [positions, setPositions] = useState<InvestmentPosition[]>([]);
@@ -364,6 +370,13 @@ const InvestmentsPageContent: React.FC = () => {
   const transactions = investmentActivity?.transactions || [];
   const coverageLoading = portfolioLoading || balanceSheetLoading;
 
+  const investmentTabs = [
+    { id: 0, icon: <DashboardIcon sx={{ fontSize: 20 }} />, label: t('tabs.overview', 'Overview') },
+    { id: 1, icon: <WalletIcon sx={{ fontSize: 20 }} />, label: t('tabs.holdings', 'Holdings & Balance') },
+    { id: 2, icon: <ValuationIcon sx={{ fontSize: 20 }} />, label: t('tabs.performance', 'Performance Analytics') },
+    { id: 3, icon: <HistoryIcon sx={{ fontSize: 20 }} />, label: t('tabs.history', 'History & Details') },
+  ];
+
   const actions = [
     {
       label: t('actions.addAccount'),
@@ -410,74 +423,6 @@ const InvestmentsPageContent: React.FC = () => {
             {t('header.subtitle')}
           </Typography>
         </Box>
-
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <Box
-            sx={{
-              display: 'flex',
-              gap: 0.5,
-              mr: 1,
-              bgcolor: alpha(theme.palette.background.paper, 0.5),
-              p: 0.5,
-              borderRadius: 1.5,
-            }}
-          >
-            {TIME_RANGES.map((range) => (
-              <Box
-                key={range.value}
-                onClick={() => setHistoryTimeRange(range.value)}
-                sx={{
-                  px: 1.5,
-                  py: 0.5,
-                  borderRadius: 1,
-                  cursor: 'pointer',
-                  fontSize: '0.75rem',
-                  fontWeight: historyTimeRange === range.value ? 600 : 400,
-                  color: historyTimeRange === range.value ? 'primary.main' : 'text.secondary',
-                  bgcolor:
-                    historyTimeRange === range.value
-                      ? alpha(theme.palette.primary.main, 0.1)
-                      : 'transparent',
-                  '&:hover': {
-                    bgcolor: alpha(theme.palette.primary.main, 0.05),
-                  },
-                  transition: 'all 0.2s',
-                }}
-              >
-                {range.label}
-              </Box>
-            ))}
-          </Box>
-
-          <Tooltip title={t('actions.refreshTooltip')}>
-            <IconButton
-              onClick={() => void handleRefreshAll()}
-              disabled={isRefreshing}
-              size="small"
-              sx={{
-                bgcolor: alpha(theme.palette.action.selected, 0.1),
-                '&:hover': {
-                  bgcolor: alpha(theme.palette.action.selected, 0.2),
-                },
-              }}
-            >
-              {isRefreshing ? <CircularProgress size={18} /> : <RefreshIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
-
-          {actions.map((action) => (
-            <Button
-              key={action.label}
-              variant={action.variant}
-              startIcon={action.icon}
-              onClick={action.onClick}
-              disabled={action.disabled}
-              sx={{ textTransform: 'none' }}
-            >
-              {action.label}
-            </Button>
-          ))}
-        </Box>
       </Box>
 
       {portfolioLoading && !hasPortfolio ? (
@@ -498,89 +443,282 @@ const InvestmentsPageContent: React.FC = () => {
             </Alert>
           )}
 
-          <Grid container spacing={3} sx={{ flexShrink: 0 }}>
-            <Grid size={{ xs: 12, lg: 8 }}>
-              <Box sx={{ height: { xs: 400, lg: 380 } }}>
-                <PortfolioValuePanel
-                  portfolioData={portfolio}
-                  overallHistory={overallHistory}
-                  viewMode={chartViewMode}
-                  onViewModeChange={setChartViewMode}
-                  loading={portfolioLoading || historyLoading}
-                />
-              </Box>
-            </Grid>
+          {/* Tabs bar with actions */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              p: 0.75,
+              borderRadius: '16px',
+              bgcolor: alpha(theme.palette.background.paper, 0.5),
+              backdropFilter: 'blur(24px)',
+              border: '1px solid',
+              borderColor: alpha(theme.palette.divider, 0.08),
+              boxShadow: `0 4px 24px 0 ${alpha(theme.palette.common.black, 0.04)}, 0 1px 2px 0 ${alpha(theme.palette.common.black, 0.03)}`,
+            }}
+          >
+            {/* Tab buttons */}
+            <Box
+              role="tablist"
+              aria-label={t('tabs.ariaLabel', 'Investment sections')}
+              sx={{
+                display: 'flex',
+                gap: 0.5,
+                flexWrap: 'nowrap',
+                flex: '0 0 auto',
+              }}
+            >
+              {investmentTabs.map((tab) => {
+                const isSelected = activeTab === tab.id;
+                return (
+                  <Tooltip title={tab.label} placement="top" disableInteractive key={tab.id}>
+                    <Box
+                      role="tab"
+                      aria-selected={isSelected}
+                      tabIndex={isSelected ? 0 : -1}
+                      onClick={() => setActiveTab(tab.id)}
+                      sx={{
+                        flex: '0 0 auto',
+                        minWidth: { xs: 40, md: 'auto' },
+                        height: 36,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 0.75,
+                        px: { xs: 1.25, md: 1.75 },
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                        color: isSelected
+                          ? theme.palette.primary.contrastText
+                          : theme.palette.text.secondary,
+                        background: isSelected
+                          ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`
+                          : 'transparent',
+                        boxShadow: isSelected
+                          ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}, 0 1px 3px ${alpha(theme.palette.primary.main, 0.2)}`
+                          : 'none',
+                        '&:hover': isSelected
+                          ? {}
+                          : {
+                              bgcolor: alpha(theme.palette.primary.main, 0.08),
+                              color: theme.palette.text.primary,
+                            },
+                        '&:active': {
+                          transform: 'scale(0.97)',
+                        },
+                        '& .MuiSvgIcon-root': {
+                          fontSize: 18,
+                          opacity: isSelected ? 1 : 0.6,
+                          transition: 'opacity 0.2s',
+                        },
+                      }}
+                    >
+                      {tab.icon}
+                      <Typography
+                        variant="body2"
+                        fontWeight={isSelected ? 600 : 500}
+                        sx={{
+                          display: { xs: 'none', md: 'block' },
+                          whiteSpace: 'nowrap',
+                          fontSize: '0.8125rem',
+                        }}
+                      >
+                        {tab.label}
+                      </Typography>
+                    </Box>
+                  </Tooltip>
+                );
+              })}
+            </Box>
 
-            <Grid size={{ xs: 12, lg: 4 }}>
-              <Box sx={{ height: { xs: 350, lg: 380 } }}>
-                <AllocationDonutChart portfolioData={portfolio as PortfolioSummary} />
-              </Box>
-            </Grid>
-          </Grid>
+            {/* Spacer */}
+            <Box sx={{ flex: 1 }} />
 
-          <PerformanceCardsSection
-            portfolioData={portfolio as PortfolioSummary}
-            accountHistories={accountHistories}
-            categoryFilter={categoryFilter}
-            onCategoryFilterChange={setCategoryFilter}
-            onAccountClick={handleAccountClick}
-          />
+            {/* Time range selector */}
+            {(activeTab === 0 || activeTab === 3) && (
+              <Select
+                value={historyTimeRange}
+                onChange={(e) => setHistoryTimeRange(e.target.value as HistoryTimeRangeOption)}
+                size="small"
+                variant="outlined"
+                sx={{
+                  minWidth: 68,
+                  height: 36,
+                  borderRadius: '10px',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: alpha(theme.palette.divider, 0.12),
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: alpha(theme.palette.divider, 0.3),
+                  },
+                  '& .MuiSelect-select': {
+                    py: 0.75,
+                    pr: '28px !important',
+                  },
+                }}
+              >
+                {TIME_RANGES.map((range) => (
+                  <MenuItem key={range.value} value={range.value} sx={{ fontSize: '0.8125rem', fontWeight: 500 }}>
+                    {range.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            )}
 
-          <BalanceSheetSection
-            data={balanceSheetData}
-            loading={balanceSheetLoading}
-            error={balanceSheetError}
-          />
+            {/* Divider */}
+            <Box sx={{ width: '1px', height: 24, bgcolor: alpha(theme.palette.divider, 0.15), flexShrink: 0 }} />
 
-          <HoldingsPositionsSection
-            portfolioData={portfolio}
-            positions={positions}
-            loading={positionsLoading || portfolioLoading}
-          />
+            {/* Action buttons */}
+            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0 }}>
+              <Tooltip title={t('actions.refreshTooltip')}>
+                <IconButton
+                  onClick={() => void handleRefreshAll()}
+                  disabled={isRefreshing}
+                  size="small"
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '10px',
+                    color: 'text.secondary',
+                    '&:hover': {
+                      bgcolor: alpha(theme.palette.action.hover, 0.8),
+                      color: 'text.primary',
+                    },
+                  }}
+                >
+                  {isRefreshing ? <CircularProgress size={16} /> : <RefreshIcon sx={{ fontSize: 18 }} />}
+                </IconButton>
+              </Tooltip>
+              {actions.map((action) => (
+                <Tooltip title={action.label} key={action.label}>
+                  <IconButton
+                    onClick={action.onClick}
+                    disabled={action.disabled}
+                    size="small"
+                    sx={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: '10px',
+                      color: action.variant === 'contained' ? 'primary.main' : 'text.secondary',
+                      '&:hover': {
+                        bgcolor: action.variant === 'contained'
+                          ? alpha(theme.palette.primary.main, 0.12)
+                          : alpha(theme.palette.action.hover, 0.8),
+                        color: action.variant === 'contained' ? 'primary.dark' : 'text.primary',
+                      },
+                    }}
+                  >
+                    {action.icon}
+                  </IconButton>
+                </Tooltip>
+              ))}
+            </Box>
+          </Box>
 
-          <Grid container spacing={3}>
-            <Grid size={{ xs: 12, lg: 8 }}>
-              <Box sx={{ minHeight: 420 }}>
-                <PerformanceBreakdownPanel
-                  data={performanceData}
-                  loading={performanceLoading}
-                  multiCurrencyWarning={mixedCurrencies}
-                />
-              </Box>
-            </Grid>
-            <Grid size={{ xs: 12, lg: 4 }}>
-              <Box sx={{ minHeight: 420 }}>
-                <PortfolioCoveragePanel
-                  portfolioData={portfolio}
-                  balanceSheet={balanceSheetData}
-                  loading={coverageLoading}
-                />
-              </Box>
-            </Grid>
-          </Grid>
+          {/* Overview Tab */}
+          {activeTab === 0 && (
+            <Box role="tabpanel" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <Grid container spacing={3} sx={{ flexShrink: 0 }}>
+                <Grid size={{ xs: 12, lg: 8 }}>
+                  <Box sx={{ height: { xs: 400, lg: 380 } }}>
+                    <PortfolioValuePanel
+                      portfolioData={portfolio}
+                      overallHistory={overallHistory}
+                      viewMode={chartViewMode}
+                      onViewModeChange={setChartViewMode}
+                      loading={portfolioLoading || historyLoading}
+                    />
+                  </Box>
+                </Grid>
 
-          <Grid container spacing={3} sx={{ minHeight: 480 }}>
-            <Grid size={{ xs: 12, lg: 8 }}>
-              <Box sx={{ height: { xs: 520, lg: 500 } }}>
-                <PortfolioHistorySection
-                  overallHistory={overallHistory}
-                  accountHistories={accountHistories}
-                  portfolioData={portfolio as PortfolioSummary}
-                  transactions={transactions}
-                  loadingHistory={historyLoading}
-                  loadingTransactions={activityLoading}
-                />
-              </Box>
+                <Grid size={{ xs: 12, lg: 4 }}>
+                  <Box sx={{ height: { xs: 350, lg: 380 } }}>
+                    <AllocationDonutChart portfolioData={portfolio as PortfolioSummary} />
+                  </Box>
+                </Grid>
+              </Grid>
+
+              <PerformanceCardsSection
+                portfolioData={portfolio as PortfolioSummary}
+                accountHistories={accountHistories}
+                categoryFilter={categoryFilter}
+                onCategoryFilterChange={setCategoryFilter}
+                onAccountClick={handleAccountClick}
+              />
+            </Box>
+          )}
+
+          {/* Holdings & Balance Tab */}
+          {activeTab === 1 && (
+            <Box role="tabpanel" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <HoldingsPositionsSection
+                portfolioData={portfolio}
+                positions={positions}
+                loading={positionsLoading || portfolioLoading}
+              />
+
+              <BalanceSheetSection
+                data={balanceSheetData}
+                loading={balanceSheetLoading}
+                error={balanceSheetError}
+              />
+            </Box>
+          )}
+
+          {/* Performance Analytics Tab */}
+          {activeTab === 2 && (
+            <Grid role="tabpanel" container spacing={3}>
+              <Grid size={{ xs: 12, lg: 8 }}>
+                <Box sx={{ minHeight: 420 }}>
+                  <PerformanceBreakdownPanel
+                    data={performanceData}
+                    loading={performanceLoading}
+                    multiCurrencyWarning={mixedCurrencies}
+                  />
+                </Box>
+              </Grid>
+              <Grid size={{ xs: 12, lg: 4 }}>
+                <Box sx={{ minHeight: 420 }}>
+                  <PortfolioCoveragePanel
+                    portfolioData={portfolio}
+                    balanceSheet={balanceSheetData}
+                    loading={coverageLoading}
+                  />
+                </Box>
+              </Grid>
             </Grid>
-            <Grid size={{ xs: 12, lg: 4 }}>
-              <Box sx={{ height: { xs: 420, lg: 500 } }}>
-                <PortfolioBreakdownSection
-                  portfolioData={portfolio as PortfolioSummary}
-                  onAccountClick={handleAccountClick}
-                />
-              </Box>
+          )}
+
+          {/* History Tab */}
+          {activeTab === 3 && (
+            <Grid role="tabpanel" container spacing={3} sx={{ minHeight: 480 }}>
+              <Grid size={{ xs: 12, lg: 8 }}>
+                <Box sx={{ height: { xs: 520, lg: 500 } }}>
+                  <PortfolioHistorySection
+                    overallHistory={overallHistory}
+                    accountHistories={accountHistories}
+                    portfolioData={portfolio as PortfolioSummary}
+                    transactions={transactions}
+                    loadingHistory={historyLoading}
+                    loadingTransactions={activityLoading}
+                  />
+                </Box>
+              </Grid>
+              <Grid size={{ xs: 12, lg: 4 }}>
+                <Box sx={{ height: { xs: 420, lg: 500 } }}>
+                  <PortfolioBreakdownSection
+                    portfolioData={portfolio as PortfolioSummary}
+                    onAccountClick={handleAccountClick}
+                  />
+                </Box>
+              </Grid>
             </Grid>
-          </Grid>
+          )}
 
           <PikadonAccountDetailsDialog
             open={Boolean(selectedPikadonAccount)}
