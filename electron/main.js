@@ -387,6 +387,7 @@ if (process.env[MIGRATION_ENV_FLAG] === 'true') {
 const { configManager } = require('./config');
 const { dbManager } = require('./database');
 const sessionStore = require('./session-store');
+const chatbotSecretStore = require('./chatbot-secret-store');
 const { createScrapeAnchorRepairStateProvider } = require('./scrape-anchor-repair-state');
 const secureKeyManager = require('./secure-key-manager');
 const licenseService = require('./license-service');
@@ -856,10 +857,61 @@ function sanitizeSession(session) {
     return null;
   }
 
-  const { refreshToken, ...rest } = session;
+  const { accessToken, refreshToken, ...rest } = session;
   return {
     ...rest,
   };
+}
+
+function normalizeRendererHeaders(headers = {}) {
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(headers)
+      .filter(([key, value]) => typeof key === 'string' && typeof value === 'string')
+      .filter(([key]) => {
+        const normalizedKey = key.trim().toLowerCase();
+        return ![
+          'authorization',
+          'x-auth-access-token',
+          'x-auth-user-id',
+          'x-auth-user-email',
+          'x-auth-user-name',
+          'x-openai-api-key',
+          'x-forwarded-by-electron',
+        ].includes(normalizedKey);
+      }),
+  );
+}
+
+function shouldAttachChatbotApiKey(endpoint = '') {
+  const normalizedEndpoint = String(endpoint).split('?')[0];
+  return (
+    normalizedEndpoint === '/api/chat'
+    || normalizedEndpoint === '/api/chat/stream'
+    || normalizedEndpoint === '/api/analytics/profiling/generate'
+  );
+}
+
+async function buildTrustedProxyHeaders(endpoint, rendererHeaders = {}) {
+  const trustedHeaders = normalizeRendererHeaders(rendererHeaders);
+  trustedHeaders['X-Forwarded-By-Electron'] = '1';
+  const session = await sessionStore.load();
+  if (session?.accessToken) {
+    trustedHeaders['X-Auth-Access-Token'] = session.accessToken;
+  }
+
+  if (shouldAttachChatbotApiKey(endpoint)) {
+    const secrets = await chatbotSecretStore.load();
+    const openAiApiKey = typeof secrets.openAiApiKey === 'string' ? secrets.openAiApiKey.trim() : '';
+    if (openAiApiKey) {
+      trustedHeaders['X-OpenAI-API-Key'] = openAiApiKey;
+    }
+  }
+
+  return trustedHeaders;
 }
 
 function sendScrapeProgress(payload) {
@@ -1875,21 +1927,18 @@ ipcMain.handle('window:getZoomLevel', () => {
   return mainWindow ? mainWindow.webContents.getZoomLevel() : 0;
 });
 
-// Get API token (for authenticated requests)
-ipcMain.handle('api:getToken', () => {
-  if (!apiToken) {
-    return { success: false, error: 'API token not available' };
-  }
-  return { success: true, token: apiToken };
-});
-
 // API proxy handler
 ipcMain.handle('api:request', async (event, { method, endpoint, data, headers = {} }) => {
+  if (!requireTrustedIpcSender(event, 'api:request')) {
+    return { status: 403, statusText: 'Forbidden', ok: false, data: { error: 'Untrusted IPC sender' } };
+  }
+
+  const trustedHeaders = await buildTrustedProxyHeaders(endpoint, headers);
   return proxyApiRequest({
     method,
     endpoint,
     data,
-    headers,
+    headers: trustedHeaders,
     fetchImpl: fetch,
     getState: () => ({
       apiPort,
@@ -1996,7 +2045,10 @@ ipcMain.handle('telemetry:triggerMainSmoke', async () => {
   return { success: false, error: 'Crash reporting has been removed.' };
 });
 
-ipcMain.handle('auth:getSession', async () => {
+ipcMain.handle('auth:getSession', async (event) => {
+  if (!requireTrustedIpcSender(event, 'auth:getSession')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
   try {
     const session = await sessionStore.load();
     return { success: true, session: sanitizeSession(session) };
@@ -2007,6 +2059,9 @@ ipcMain.handle('auth:getSession', async () => {
 });
 
 ipcMain.handle('auth:setSession', async (event, session) => {
+  if (!requireTrustedIpcSender(event, 'auth:setSession')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
   try {
     if (session && typeof session !== 'object') {
       throw new Error('Session payload must be an object or null');
@@ -2020,13 +2075,65 @@ ipcMain.handle('auth:setSession', async (event, session) => {
   }
 });
 
-ipcMain.handle('auth:clearSession', async () => {
+ipcMain.handle('auth:clearSession', async (event) => {
+  if (!requireTrustedIpcSender(event, 'auth:clearSession')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
   try {
     await sessionStore.clear();
     emitSessionChanged(null);
     return { success: true };
   } catch (error) {
     console.error('Failed to clear auth session:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('chatbot:getStatus', async (event) => {
+  if (!requireTrustedIpcSender(event, 'chatbot:getStatus')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  try {
+    const secrets = await chatbotSecretStore.load();
+    const openAiApiKey = typeof secrets.openAiApiKey === 'string' ? secrets.openAiApiKey.trim() : '';
+    return {
+      success: true,
+      hasOpenAiApiKey: openAiApiKey.length > 0,
+    };
+  } catch (error) {
+    console.error('Failed to load chatbot secret status:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('chatbot:setOpenAiApiKey', async (event, apiKey) => {
+  if (!requireTrustedIpcSender(event, 'chatbot:setOpenAiApiKey')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  try {
+    const normalizedApiKey = typeof apiKey === 'string' ? apiKey.trim() : '';
+    if (!normalizedApiKey) {
+      await chatbotSecretStore.clear();
+      return { success: true, hasOpenAiApiKey: false };
+    }
+
+    await chatbotSecretStore.save({ openAiApiKey: normalizedApiKey });
+    return { success: true, hasOpenAiApiKey: true };
+  } catch (error) {
+    console.error('Failed to persist OpenAI API key:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('chatbot:clearOpenAiApiKey', async (event) => {
+  if (!requireTrustedIpcSender(event, 'chatbot:clearOpenAiApiKey')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  try {
+    await chatbotSecretStore.clear();
+    return { success: true, hasOpenAiApiKey: false };
+  } catch (error) {
+    console.error('Failed to clear OpenAI API key:', error);
     return { success: false, error: error.message };
   }
 });

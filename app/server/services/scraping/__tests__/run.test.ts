@@ -183,6 +183,8 @@ afterEach(() => {
   } else {
     process.env.SQLITE_DB_PATH = originalSqliteDbPath;
   }
+  delete process.env.PUPPETEER_DISABLE_SANDBOX;
+  delete process.env.ELECTRON_DISABLE_SANDBOX;
   vi.clearAllMocks();
 });
 
@@ -785,6 +787,8 @@ describe('scraping run service', () => {
       expect(maxOpts.defaultTimeout).toBe(180000);
       expect(maxOpts.executablePath).toBe('/bin/chrome');
       expect(typeof maxOpts.preparePage).toBe('function');
+      expect(maxOpts.args).not.toContain('--no-sandbox');
+      expect(maxOpts.args).not.toContain('--disable-setuid-sandbox');
 
       const leumiOpts = internal.buildScraperOptions({ companyId: 'leumi', showBrowser: false }, true, undefined, start);
       expect(leumiOpts.showBrowser).toBe(false);
@@ -828,6 +832,11 @@ describe('scraping run service', () => {
       expect(oneZeroCredentials.otpLongTermToken).toBe('token');
       expect(typeof oneZeroCredentials.otpCodeRetriever).toBe('function');
       await expect(oneZeroCredentials.otpCodeRetriever()).resolves.toBe('777777');
+
+      process.env.PUPPETEER_DISABLE_SANDBOX = 'true';
+      const sandboxDisabledOpts = internal.buildScraperOptions({ companyId: 'leumi' }, true, undefined, start);
+      expect(sandboxDisabledOpts.args).toContain('--no-sandbox');
+      expect(sandboxDisabledOpts.args).toContain('--disable-setuid-sandbox');
 
       expect(
         internal.prepareScraperCredentials('amex', { companyId: 'amex' }, { id: 'amex-user', card6Digits: '123456', password: 'p' }),

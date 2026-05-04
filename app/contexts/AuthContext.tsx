@@ -62,8 +62,8 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
   }, []);
 
   const setSession = useCallback(async (nextSession: AuthSession | null) => {
-    await persistSession(nextSession);
-    setSessionState(nextSession ?? null);
+    const persisted = await persistSession(nextSession);
+    setSessionState(persisted ?? null);
   }, []);
 
   const clearSession = useCallback(async () => {
@@ -92,4 +92,3 @@ export function useAuth(): AuthContextValue {
   }
   return context;
 }
-

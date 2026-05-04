@@ -35,7 +35,7 @@ test('Analysis Profiling tab shows the incomplete-profile checklist when require
   };
 
   await page.addInitScript(() => {
-    window.localStorage.setItem('chatbot-openai-api-key', 'sk-test-key');
+    (window as any).__SHEKELSYNC_OPENAI_API_KEY__ = 'sk-test-key';
   });
   await setupRendererTest(page, overrides);
   await goHome(page);
@@ -51,7 +51,7 @@ test('Analysis Profiling tab shows the incomplete-profile checklist when require
 
 test('Analysis Profiling tab can generate and display an assessment', async ({ page }) => {
   await page.addInitScript(() => {
-    window.localStorage.setItem('chatbot-openai-api-key', 'sk-test-key');
+    (window as any).__SHEKELSYNC_OPENAI_API_KEY__ = 'sk-test-key';
   });
   await setupRendererTest(page);
   await goHome(page);

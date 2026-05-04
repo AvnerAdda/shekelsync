@@ -2,6 +2,29 @@ const express = require('express');
 
 const chatService = require('../services/chat.js');
 
+function getHeaderValue(headers, key) {
+  const value = headers?.[key];
+  if (Array.isArray(value)) {
+    return typeof value[0] === 'string' ? value[0] : null;
+  }
+  return typeof value === 'string' ? value : null;
+}
+
+function withResolvedOpenAiApiKey(req) {
+  const payload = req.body && typeof req.body === 'object' ? { ...req.body } : {};
+  const headerApiKey = getHeaderValue(req.headers, 'x-openai-api-key');
+  const bodyApiKey = typeof payload.openaiApiKey === 'string' ? payload.openaiApiKey.trim() : '';
+  const resolvedApiKey = typeof headerApiKey === 'string' && headerApiKey.trim().length > 0
+    ? headerApiKey.trim()
+    : bodyApiKey;
+
+  if (resolvedApiKey) {
+    payload.openaiApiKey = resolvedApiKey;
+  }
+
+  return payload;
+}
+
 function createChatRouter() {
   const router = express.Router();
 
@@ -18,7 +41,7 @@ function createChatRouter() {
       locale: req.body?.locale,
     }));
     try {
-      const result = await chatService.processMessage(req.body || {});
+      const result = await chatService.processMessage(withResolvedOpenAiApiKey(req));
       res.json(result);
     } catch (error) {
       console.error('[chat-route] Error:', error);
@@ -43,7 +66,7 @@ function createChatRouter() {
     });
 
     try {
-      await chatService.processMessageStream(req.body || {}, (event) => {
+      await chatService.processMessageStream(withResolvedOpenAiApiKey(req), (event) => {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
       });
     } catch (error) {

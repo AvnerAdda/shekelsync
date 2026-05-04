@@ -27,6 +27,50 @@ const BANK_VENDORS = ['hapoalim', 'leumi', 'mizrahi', 'otsarHahayal', 'beinleumi
 const SPECIAL_BANK_VENDORS = ['discount', 'mercantile'];
 const CREDIT_CARD_VENDORS = ['visaCal', 'max', 'isracard', 'amex'];
 
+function isTruthyEnvFlag(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true';
+}
+
+function shouldDisableBrowserSandbox() {
+  if (isTruthyEnvFlag(process.env.PUPPETEER_DISABLE_SANDBOX)) {
+    return true;
+  }
+  if (isTruthyEnvFlag(process.env.ELECTRON_DISABLE_SANDBOX)) {
+    return true;
+  }
+  return false;
+}
+
+function shouldDisableScraperWebSecurity() {
+  return isTruthyEnvFlag(process.env.SCRAPER_DISABLE_WEB_SECURITY);
+}
+
+function buildBrowserLaunchArgs() {
+  const args = [
+    '--disable-dev-shm-usage',
+    '--disable-accelerated-2d-canvas',
+    '--no-first-run',
+    '--no-zygote',
+    '--disable-gpu',
+  ];
+
+  if (shouldDisableBrowserSandbox()) {
+    args.unshift('--disable-setuid-sandbox');
+    args.unshift('--no-sandbox');
+  }
+
+  if (shouldDisableScraperWebSecurity()) {
+    args.push('--disable-web-security');
+    args.push('--disable-features=VizDisplayCompositor');
+  }
+
+  return args;
+}
+
 class ElectronScraper {
   constructor(mainWindow) {
     this.mainWindow = mainWindow;
@@ -454,17 +498,7 @@ class ElectronScraper {
           console.warn('No system Chrome found — scraping may fail');
           return undefined;
         })(),
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu',
-          '--disable-web-security',
-          '--disable-features=VizDisplayCompositor'
-        ]
+        args: buildBrowserLaunchArgs()
       });
 
       // Insert audit row: started

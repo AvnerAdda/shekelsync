@@ -1,11 +1,18 @@
 const SESSION_EVENT_NAME = 'authSessionChanged';
 const STORAGE_KEY = 'clarify.auth.session';
+const BOOTSTRAP_SESSION_KEY = '__SHEKELSYNC_SESSION_BOOTSTRAP__';
+const MEMORY_SESSION_KEY = '__SHEKELSYNC_AUTH_SESSION__';
 
 const isRenderer = typeof window !== 'undefined';
 
 export type AuthSession = globalThis.AuthSession;
 
 type SessionListener = (session: AuthSession | null) => void;
+type SessionWindow = Window &
+  typeof globalThis & {
+    [BOOTSTRAP_SESSION_KEY]?: AuthSession | null;
+    [MEMORY_SESSION_KEY]?: AuthSession | null;
+  };
 
 function getElectronAuthBridge() {
   if (!isRenderer) {
@@ -21,7 +28,25 @@ function getElectronEventsBridge() {
   return window.electronAPI?.events;
 }
 
-function readFromLocalStorage(): AuthSession | null {
+function getSessionWindow(): SessionWindow | null {
+  if (!isRenderer) {
+    return null;
+  }
+  return window as SessionWindow;
+}
+
+function removeLegacyLocalStorageSession() {
+  if (!isRenderer || typeof window.localStorage === 'undefined') {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch (error) {
+    console.warn('[session-store] Failed to clear legacy session from localStorage:', error);
+  }
+}
+
+function consumeLegacyLocalStorageSession(): AuthSession | null {
   if (!isRenderer || typeof window.localStorage === 'undefined') {
     return null;
   }
@@ -30,26 +55,53 @@ function readFromLocalStorage(): AuthSession | null {
     if (!raw) {
       return null;
     }
-    return JSON.parse(raw) as AuthSession;
+    const parsed = JSON.parse(raw) as AuthSession;
+    window.localStorage.removeItem(STORAGE_KEY);
+    return parsed;
   } catch (error) {
     console.warn('[session-store] Failed to parse session from localStorage:', error);
+    removeLegacyLocalStorageSession();
     return null;
   }
 }
 
-function writeToLocalStorage(session: AuthSession | null) {
-  if (!isRenderer || typeof window.localStorage === 'undefined') {
+function readFallbackSession(): AuthSession | null {
+  const sessionWindow = getSessionWindow();
+  if (!sessionWindow) {
+    return null;
+  }
+
+  const memorySession = sessionWindow[MEMORY_SESSION_KEY];
+  if (memorySession && typeof memorySession === 'object') {
+    return memorySession;
+  }
+
+  const bootstrapSession = sessionWindow[BOOTSTRAP_SESSION_KEY];
+  if (bootstrapSession && typeof bootstrapSession === 'object') {
+    sessionWindow[MEMORY_SESSION_KEY] = bootstrapSession;
+    return bootstrapSession;
+  }
+
+  const migratedSession = consumeLegacyLocalStorageSession();
+  if (migratedSession) {
+    sessionWindow[MEMORY_SESSION_KEY] = migratedSession;
+  }
+
+  return migratedSession;
+}
+
+function writeFallbackSession(session: AuthSession | null) {
+  const sessionWindow = getSessionWindow();
+  if (!sessionWindow) {
     return;
   }
-  try {
-    if (session) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-    } else {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
-  } catch (error) {
-    console.warn('[session-store] Failed to persist session to localStorage:', error);
+
+  sessionWindow[MEMORY_SESSION_KEY] = session;
+  if (session === null) {
+    delete sessionWindow[BOOTSTRAP_SESSION_KEY];
   }
+
+  removeLegacyLocalStorageSession();
 }
 
 function emitLocalSessionChange(session: AuthSession | null) {
@@ -69,18 +121,16 @@ export async function getSession(): Promise<AuthSession | null> {
       const result = await authBridge.getSession();
       if (result.success) {
         const session = (result.session ?? null) as AuthSession | null;
-        if (session && typeof session === 'object') {
-          writeToLocalStorage(session);
-        }
+        writeFallbackSession(session);
         return session;
       }
       console.warn('[session-store] getSession failed:', result.error);
     } catch (error) {
       console.warn('[session-store] getSession threw:', error);
     }
-    // fall through to local storage fallback
+    // fall through to in-memory fallback
   }
-  return readFromLocalStorage();
+  return readFallbackSession();
 }
 
 export async function setSession(session: AuthSession | null): Promise<AuthSession | null> {
@@ -92,15 +142,15 @@ export async function setSession(session: AuthSession | null): Promise<AuthSessi
         throw new Error(result.error || 'Failed to set session');
       }
       const hydrated = (result.session ?? null) as AuthSession | null;
-      writeToLocalStorage(hydrated);
+      writeFallbackSession(hydrated);
       emitLocalSessionChange(hydrated);
       return hydrated;
     } catch (error) {
-      console.warn('[session-store] setSession failed, falling back to localStorage:', error);
+      console.warn('[session-store] setSession failed, falling back to memory:', error);
     }
   }
 
-  writeToLocalStorage(session);
+  writeFallbackSession(session);
   emitLocalSessionChange(session);
   return session;
 }
@@ -113,15 +163,15 @@ export async function clearSession(): Promise<void> {
       if (!result.success) {
         throw new Error(result.error || 'Failed to clear session');
       }
-      writeToLocalStorage(null);
+      writeFallbackSession(null);
       emitLocalSessionChange(null);
       return;
     } catch (error) {
-      console.warn('[session-store] clearSession failed, falling back to localStorage:', error);
+      console.warn('[session-store] clearSession failed, falling back to memory:', error);
     }
   }
 
-  writeToLocalStorage(null);
+  writeFallbackSession(null);
   emitLocalSessionChange(null);
 }
 

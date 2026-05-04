@@ -70,6 +70,41 @@ const defaultRepairStateProvider = {
   },
 };
 
+function isTruthyEnvFlag(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true';
+}
+
+function shouldDisableBrowserSandbox() {
+  if (isTruthyEnvFlag(process.env.PUPPETEER_DISABLE_SANDBOX)) {
+    return true;
+  }
+  if (isTruthyEnvFlag(process.env.ELECTRON_DISABLE_SANDBOX)) {
+    return true;
+  }
+  return false;
+}
+
+function buildBrowserLaunchArgs() {
+  const args = [
+    '--disable-dev-shm-usage',
+    '--disable-accelerated-2d-canvas',
+    '--no-first-run',
+    '--no-zygote',
+    '--disable-gpu',
+  ];
+
+  if (shouldDisableBrowserSandbox()) {
+    args.unshift('--disable-setuid-sandbox');
+    args.unshift('--no-sandbox');
+  }
+
+  return args;
+}
+
 function createHttpError(statusCode, message, extra = {}) {
   const error = new Error(message || 'Scraping failed');
   error.statusCode = statusCode;
@@ -427,15 +462,7 @@ function buildScraperOptions(options, isBank, executablePath, startDate) {
     defaultTimeout: timeout,
     preparePage,
     executablePath,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--disable-gpu',
-    ],
+    args: buildBrowserLaunchArgs(),
   };
 }
 

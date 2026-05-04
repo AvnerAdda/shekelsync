@@ -146,7 +146,7 @@ const ProfilingTab: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'analysisPage.profiling' });
-  const { openAiApiKey } = useChatbotPermissions();
+  const { hasOpenAiApiKey: hasStoredOpenAiApiKey, openAiApiKey } = useChatbotPermissions();
   const { formatCurrency } = useFinancePrivacy();
 
   const [status, setStatus] = useState<ProfilingStatusResponse | null>(null);
@@ -189,7 +189,8 @@ const ProfilingTab: React.FC = () => {
 
   const generateProfiling = async (force = false) => {
     const apiKey = openAiApiKey.trim();
-    if (!apiKey) {
+    const hasConfiguredApiKey = hasStoredOpenAiApiKey || apiKey.length > 0;
+    if (!hasConfiguredApiKey) {
       setError(i18n.t('analysisPage.profiling.errors.missingApiKey'));
       return;
     }
@@ -198,13 +199,15 @@ const ProfilingTab: React.FC = () => {
     setError(null);
 
     try {
+      const shouldSendApiKeyInBody = !window.electronAPI?.chatbotSecrets;
+      const payload: { openaiApiKey?: string; force?: boolean } = {
+        ...(force ? { force: true } : {}),
+        ...(shouldSendApiKeyInBody ? { openaiApiKey: apiKey } : {}),
+      };
       const response = await apiClient.post<
         ProfilingStatusResponse,
-        { openaiApiKey: string; force?: boolean }
-      >('/api/analytics/profiling/generate', {
-        openaiApiKey: apiKey,
-        ...(force ? { force: true } : {}),
-      });
+        { openaiApiKey?: string; force?: boolean }
+      >('/api/analytics/profiling/generate', payload);
 
       if (!response.ok) {
         throw new Error(
@@ -230,7 +233,7 @@ const ProfilingTab: React.FC = () => {
   const missingFields = status?.missingFields ?? [];
   const staleReasons = status?.staleReasons ?? [];
   const isStale = Boolean(status?.isStale);
-  const hasApiKey = openAiApiKey.trim().length > 0;
+  const hasApiKey = hasStoredOpenAiApiKey || openAiApiKey.trim().length > 0;
   const hasIncompleteProfile = missingFields.length > 0;
   const canRefresh = hasApiKey && !hasIncompleteProfile && !generating;
 

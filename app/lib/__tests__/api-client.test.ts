@@ -1,10 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { getAuthorizationHeader, getSession } from '@/lib/session-store';
+import { getAuthorizationHeader } from '@/lib/session-store';
 import { apiClient } from '../api-client';
 
 vi.mock('@/lib/session-store', () => ({
   getAuthorizationHeader: vi.fn(),
-  getSession: vi.fn(),
 }));
 
 describe('api-client', () => {
@@ -12,7 +11,6 @@ describe('api-client', () => {
   const originalWindow = (global as any).window;
   const originalDocument = (global as any).document;
   const getAuthorizationHeaderMock = vi.mocked(getAuthorizationHeader);
-  const getSessionMock = vi.mocked(getSession);
   const jsonResponse = (body: unknown, status = 200, statusText = 'OK') => ({
     status,
     statusText,
@@ -23,7 +21,6 @@ describe('api-client', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     getAuthorizationHeaderMock.mockResolvedValue({});
-    getSessionMock.mockResolvedValue(null);
     (global as any).document = undefined;
   });
 

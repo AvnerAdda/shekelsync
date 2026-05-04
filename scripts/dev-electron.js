@@ -123,10 +123,22 @@ function ensureEnvKeyForLinuxDev() {
   return generatedKey;
 }
 
+function isRunningAsRoot() {
+  return typeof process.getuid === 'function' && process.getuid() === 0;
+}
+
 function runElectronDev(injectedKey) {
   const env = { ...process.env };
   if (injectedKey) {
     env.SHEKELSYNC_ENCRYPTION_KEY = injectedKey;
+  }
+  if (isRunningAsRoot()) {
+    // Electron/Chromium refuse to launch as root unless sandboxing is explicitly disabled.
+    env.ELECTRON_DISABLE_SANDBOX = env.ELECTRON_DISABLE_SANDBOX || '1';
+    env.PUPPETEER_DISABLE_SANDBOX = env.PUPPETEER_DISABLE_SANDBOX || '1';
+    console.warn(
+      '[dev-electron] Running as root. Enabling Electron/Puppeteer sandbox overrides for this dev session.',
+    );
   }
   // Some tooling shells export ELECTRON_RUN_AS_NODE, which breaks Electron app launch.
   delete env.ELECTRON_RUN_AS_NODE;

@@ -49,6 +49,10 @@ function normalizeInt(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function hasValue(value) {
+  return value !== null && value !== undefined && value !== '';
+}
+
 function hasProfileData(profile = null) {
   if (!profile || typeof profile !== 'object') {
     return false;
@@ -56,18 +60,21 @@ function hasProfileData(profile = null) {
   return Boolean(
     profile.name
     || profile.maritalStatus
-    || profile.age !== null
+    || hasValue(profile.age)
+    || profile.ageBand
     || profile.occupation
     || profile.employmentStatus
-    || profile.monthlyIncome !== null
+    || hasValue(profile.monthlyIncome)
+    || profile.incomeBand
     || profile.location
     || profile.familyStatus
     || profile.industry
     || profile.spouseName
     || profile.spouseOccupation
-    || profile.spouseMonthlyIncome !== null
-    || profile.childrenCount !== null
-    || profile.householdSize !== null
+    || hasValue(profile.spouseMonthlyIncome)
+    || profile.spouseIncomeBand
+    || hasValue(profile.childrenCount)
+    || hasValue(profile.householdSize)
   );
 }
 
@@ -138,20 +145,28 @@ function formatProfileSection(profile) {
   const lines = ['\nUSER PROFILE:'];
   if (profile.name) lines.push(`- Name: ${profile.name}`);
   if (profile.maritalStatus) lines.push(`- Marital status: ${profile.maritalStatus}`);
-  if (profile.age !== null) lines.push(`- Age: ${profile.age}`);
+  if (profile.ageBand) {
+    lines.push(`- Age band: ${profile.ageBand}`);
+  } else if (hasValue(profile.age)) {
+    lines.push(`- Age: ${profile.age}`);
+  }
   if (profile.occupation) lines.push(`- Occupation: ${profile.occupation}`);
   if (profile.employmentStatus) lines.push(`- Employment status: ${profile.employmentStatus}`);
-  if (profile.monthlyIncome !== null) {
+  if (profile.incomeBand) {
+    lines.push(`- Reported monthly income band: ${profile.incomeBand}`);
+  } else if (hasValue(profile.monthlyIncome)) {
     lines.push(`- Reported monthly income: ₪${Math.round(profile.monthlyIncome).toLocaleString()}`);
   }
   if (profile.familyStatus) lines.push(`- Family status: ${profile.familyStatus}`);
   if (profile.location) lines.push(`- Location: ${profile.location}`);
   if (profile.industry) lines.push(`- Industry: ${profile.industry}`);
-  if (profile.householdSize !== null) lines.push(`- Household size: ${profile.householdSize}`);
-  if (profile.childrenCount !== null) lines.push(`- Children: ${profile.childrenCount}`);
+  if (hasValue(profile.householdSize)) lines.push(`- Household size: ${profile.householdSize}`);
+  if (hasValue(profile.childrenCount)) lines.push(`- Children: ${profile.childrenCount}`);
   if (profile.spouseName) lines.push(`- Spouse: ${profile.spouseName}`);
   if (profile.spouseOccupation) lines.push(`- Spouse occupation: ${profile.spouseOccupation}`);
-  if (profile.spouseMonthlyIncome !== null) {
+  if (profile.spouseIncomeBand) {
+    lines.push(`- Spouse monthly income band: ${profile.spouseIncomeBand}`);
+  } else if (hasValue(profile.spouseMonthlyIncome)) {
     lines.push(`- Spouse monthly income: ₪${Math.round(profile.spouseMonthlyIncome).toLocaleString()}`);
   }
   return lines;

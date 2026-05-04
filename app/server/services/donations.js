@@ -381,7 +381,7 @@ function shouldRequireAuthenticatedSupportIdentity() {
   return isTruthy(process.env.SUPPORTER_REQUIRE_AUTH);
 }
 
-function buildAnonymousIdentity(context = {}) {
+function buildAnonymousIdentity() {
   const explicitUserId = normalizeText(process.env.SUPPORTER_ANONYMOUS_ID, 255);
   const fallbackSeed = [
     normalizeText(process.env.SQLITE_DB_PATH, 1024) || '',
@@ -397,8 +397,8 @@ function buildAnonymousIdentity(context = {}) {
 
   return {
     userId: explicitUserId || `anon-${digest}`,
-    email: normalizeEmail(context.email),
-    name: normalizeText(context.name, 255) || 'Anonymous Supporter',
+    email: null,
+    name: 'Anonymous Supporter',
     verifiedByToken: false,
     isAnonymous: true,
   };
@@ -422,24 +422,20 @@ async function resolveRequesterIdentity(context = {}, options = {}) {
           };
         }
       } catch {
-        // Ignore token verification failures and fallback to session headers.
+        // Ignore token verification failures and fall back only to anonymous mode.
       }
-    }
-  }
 
-  if (normalizedContext.userId || normalizedContext.email) {
-    return {
-      userId: normalizedContext.userId || normalizedContext.email,
-      email: normalizedContext.email,
-      name: normalizedContext.name,
-      verifiedByToken: false,
-      isAnonymous: false,
-    };
+      const allowAnonymous = options.allowAnonymous !== false;
+      if (allowAnonymous && !shouldRequireAuthenticatedSupportIdentity()) {
+        return buildAnonymousIdentity();
+      }
+      return null;
+    }
   }
 
   const allowAnonymous = options.allowAnonymous !== false;
   if (allowAnonymous && !shouldRequireAuthenticatedSupportIdentity()) {
-    return buildAnonymousIdentity(normalizedContext);
+    return buildAnonymousIdentity();
   }
 
   return null;

@@ -67,6 +67,41 @@ describe('Electron /api/donations routes', () => {
     });
   });
 
+  it('accepts bearer access tokens for regular supporter routes', async () => {
+    const payload = { hasDonated: false, tier: 'none', supportStatus: 'none' };
+    const spy = donationsService.getDonationStatus.mockResolvedValue(payload);
+
+    await request(app)
+      .get('/api/donations/status')
+      .set('authorization', 'Bearer user-token-123')
+      .expect(200);
+
+    expect(spy).toHaveBeenCalledWith({
+      accessToken: 'user-token-123',
+      userId: null,
+      email: null,
+      name: null,
+    });
+  });
+
+  it('does not treat internal Electron proxy authorization as a user token', async () => {
+    const payload = { hasDonated: false, tier: 'none', supportStatus: 'none' };
+    const spy = donationsService.getDonationStatus.mockResolvedValue(payload);
+
+    await request(app)
+      .get('/api/donations/status')
+      .set('authorization', 'Bearer internal-api-token')
+      .set('x-forwarded-by-electron', '1')
+      .expect(200);
+
+    expect(spy).toHaveBeenCalledWith({
+      accessToken: null,
+      userId: null,
+      email: null,
+      name: null,
+    });
+  });
+
   it('records a support intent from request body', async () => {
     const payload = { hasDonated: false, tier: 'none', supportStatus: 'pending' };
     const spy = donationsService.createSupportIntent.mockResolvedValue(payload);

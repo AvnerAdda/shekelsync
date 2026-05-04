@@ -213,17 +213,21 @@ describe('donations service supabase flows', () => {
   });
 
   it('creates support intent and returns pending status', async () => {
+    let recordedUserId: string | null = null;
     const supabaseMock = createSupabaseClientMock({
-      onInsert: () => null,
+      onInsert: (_table, payload) => {
+        recordedUserId = String(payload.user_id || '');
+        return null;
+      },
       onSelect: (call) => {
         if (call.table === 'supporter_entitlements') {
           return { data: [], error: null };
         }
-        if (call.table === 'supporter_intents' && call.filters.user_id === 'user-1') {
+        if (call.table === 'supporter_intents' && call.filters.user_id === recordedUserId) {
           return {
             data: [
               {
-                user_id: 'user-1',
+                user_id: recordedUserId,
                 plan_key: 'one_time',
                 status: 'clicked',
                 updated_at: '2026-02-09T00:00:00.000Z',
@@ -258,7 +262,8 @@ describe('donations service supabase flows', () => {
     expect(mock.insertCalls).toHaveLength(1);
     expect(mock.insertCalls[0].payload.source).toBe('desktop_menu');
     expect(mock.insertCalls[0].payload.note).toBe('thank you');
-    expect(mock.insertCalls[0].payload.email).toBe('user@example.com');
+    expect(mock.insertCalls[0].payload.user_id).toMatch(/^anon-/);
+    expect(mock.insertCalls[0].payload.email).toBeNull();
     expect(mock.insertCalls[0].payload.plan_key).toBe('one_time');
   });
 
@@ -530,7 +535,7 @@ describe('donations service supabase flows', () => {
     expect(result.pendingPlanKey).toBe('one_time');
   });
 
-  it('falls back to session identity when token lookup fails', async () => {
+  it('falls back to anonymous identity when token lookup fails', async () => {
     const supabaseMock = createSupabaseClientMock({
       onInsert: () => null,
       onGetUser: async () => ({ data: null, error: { message: 'invalid token' } }),
@@ -563,8 +568,8 @@ describe('donations service supabase flows', () => {
     );
 
     expect(mock.auth.getUser).toHaveBeenCalledWith('invalid-token');
-    expect(mock.insertCalls[0].payload.user_id).toBe('ctx-user');
-    expect(mock.insertCalls[0].payload.email).toBe('ctx@example.com');
+    expect(mock.insertCalls[0].payload.user_id).toMatch(/^anon-/);
+    expect(mock.insertCalls[0].payload.email).toBeNull();
     expect(result.supportStatus).toBe('pending');
     expect(result.pendingPlanKey).toBe('one_time');
   });

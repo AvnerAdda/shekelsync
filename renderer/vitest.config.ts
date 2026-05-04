@@ -4,6 +4,16 @@ import path from 'node:path';
 
 export default defineProject({
   plugins: [react()],
+  server: {
+    fs: {
+      allow: [
+        path.resolve(__dirname),
+        path.resolve(__dirname, '..'),
+        path.resolve(__dirname, '../app'),
+        path.resolve(__dirname, '../app/public'),
+      ],
+    },
+  },
   resolve: {
     alias: {
       '@app': path.resolve(__dirname, '../app'),

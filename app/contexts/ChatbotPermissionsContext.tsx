@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 export type ModelTier = 'light' | 'normal' | 'heavy';
 
@@ -9,6 +9,13 @@ export const MODEL_TIERS: Record<ModelTier, { model: string; label: string }> = 
 };
 
 const VALID_TIERS = new Set<string>(Object.keys(MODEL_TIERS));
+const OPENAI_API_KEY_STORAGE_KEY = 'chatbot-openai-api-key';
+const OPENAI_API_KEY_BOOTSTRAP_KEY = '__SHEKELSYNC_OPENAI_API_KEY__';
+
+type OpenAiKeyWindow = Window &
+  typeof globalThis & {
+    [OPENAI_API_KEY_BOOTSTRAP_KEY]?: string;
+  };
 
 function readStoredTier(key: string, fallback: ModelTier): ModelTier {
   if (typeof window === 'undefined') return fallback;
@@ -29,6 +36,7 @@ interface ChatbotPermissionsContextType {
   setAllowCategoryAccess: (allow: boolean) => void;
   allowAnalyticsAccess: boolean;
   setAllowAnalyticsAccess: (allow: boolean) => void;
+  hasOpenAiApiKey: boolean;
   openAiApiKey: string;
   setOpenAiApiKey: (apiKey: string) => void;
   allowLongAnswers: boolean;
@@ -57,19 +65,36 @@ const readStoredBoolean = (key: string, fallback: boolean): boolean => {
   }
 };
 
-const readStoredString = (key: string, fallback = ''): string => {
+const getOpenAiKeyWindow = (): OpenAiKeyWindow | null => {
   if (typeof window === 'undefined') {
-    return fallback;
+    return null;
   }
+  return window as OpenAiKeyWindow;
+};
 
+const readBootstrappedApiKey = (): string => {
+  const keyWindow = getOpenAiKeyWindow();
+  const rawValue = typeof keyWindow?.[OPENAI_API_KEY_BOOTSTRAP_KEY] === 'string'
+    ? keyWindow[OPENAI_API_KEY_BOOTSTRAP_KEY]
+    : '';
+  return rawValue.trim();
+};
+
+const consumeLegacyApiKey = (): string => {
+  if (typeof window === 'undefined') {
+    return '';
+  }
   try {
-    const stored = window.localStorage.getItem(key);
-    return stored === null ? fallback : stored;
+    const stored = window.localStorage.getItem(OPENAI_API_KEY_STORAGE_KEY) || '';
+    window.localStorage.removeItem(OPENAI_API_KEY_STORAGE_KEY);
+    return stored.trim();
   } catch (error) {
-    console.warn(`[ChatbotPermissionsContext] Failed to read "${key}" from localStorage`, error);
-    return fallback;
+    console.warn('[ChatbotPermissionsContext] Failed to migrate OpenAI API key from localStorage', error);
+    return '';
   }
 };
+
+const resolveInitialOpenAiApiKey = (): string => readBootstrappedApiKey() || consumeLegacyApiKey();
 
 const persistBoolean = (key: string, value: boolean): void => {
   if (typeof window === 'undefined') {
@@ -106,6 +131,11 @@ export const useChatbotPermissions = () => {
 export const ChatbotPermissionsProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const initialOpenAiApiKeyRef = useRef<string | null>(null);
+  if (initialOpenAiApiKeyRef.current === null) {
+    initialOpenAiApiKeyRef.current = resolveInitialOpenAiApiKey();
+  }
+  const initialOpenAiApiKey = initialOpenAiApiKeyRef.current || '';
   const [chatbotEnabled, setChatbotEnabledState] = useState<boolean>(() =>
     readStoredBoolean('chatbot-enabled', true)
   );
@@ -118,9 +148,8 @@ export const ChatbotPermissionsProvider: React.FC<{ children: React.ReactNode }>
   const [allowAnalyticsAccess, setAllowAnalyticsAccessState] = useState<boolean>(() =>
     readStoredBoolean('chatbot-analytics-access', false)
   );
-  const [openAiApiKey, setOpenAiApiKeyState] = useState<string>(() =>
-    readStoredString('chatbot-openai-api-key', '')
-  );
+  const [openAiApiKey, setOpenAiApiKeyState] = useState<string>(() => initialOpenAiApiKey);
+  const [hasOpenAiApiKey, setHasOpenAiApiKeyState] = useState<boolean>(() => initialOpenAiApiKey.length > 0);
   const [allowLongAnswers, setAllowLongAnswersState] = useState<boolean>(() =>
     readStoredBoolean('chatbot-long-answers', false)
   );
@@ -130,6 +159,60 @@ export const ChatbotPermissionsProvider: React.FC<{ children: React.ReactNode }>
   const [chatModelTier, setChatModelTierState] = useState<ModelTier>(() =>
     readStoredTier('chatbot-model-tier', 'light')
   );
+
+  useEffect(() => {
+    const keyWindow = getOpenAiKeyWindow();
+    if (keyWindow) {
+      keyWindow[OPENAI_API_KEY_BOOTSTRAP_KEY] = openAiApiKey;
+    }
+  }, [openAiApiKey]);
+
+  useEffect(() => {
+    const bridge = window.electronAPI?.chatbotSecrets;
+    if (!bridge?.getStatus) {
+      return;
+    }
+    const getStatus = bridge.getStatus;
+    const persistSecureApiKey = bridge.setOpenAiApiKey;
+
+    let cancelled = false;
+
+    const syncStoredApiKey = async () => {
+      const pendingOpenAiApiKey = initialOpenAiApiKey.trim();
+      if (pendingOpenAiApiKey) {
+        try {
+          const result = persistSecureApiKey
+            ? await persistSecureApiKey(pendingOpenAiApiKey)
+            : { success: false, error: 'Electron chatbot secret bridge unavailable' };
+          if (!result.success) {
+            throw new Error(result.error || 'Failed to persist OpenAI API key');
+          }
+          if (!cancelled) {
+            setHasOpenAiApiKeyState(Boolean(result.hasOpenAiApiKey));
+            setOpenAiApiKeyState('');
+          }
+        } catch (error) {
+          console.warn('[ChatbotPermissionsContext] Failed to migrate OpenAI API key to secure storage', error);
+        }
+        return;
+      }
+
+      try {
+        const result = await getStatus();
+        if (!cancelled && result.success) {
+          setHasOpenAiApiKeyState(Boolean(result.hasOpenAiApiKey));
+        }
+      } catch (error) {
+        console.warn('[ChatbotPermissionsContext] Failed to load OpenAI API key status', error);
+      }
+    };
+
+    void syncStoredApiKey();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialOpenAiApiKey]);
 
   const setChatbotEnabled = (enabled: boolean) => {
     setChatbotEnabledState(enabled);
@@ -152,8 +235,26 @@ export const ChatbotPermissionsProvider: React.FC<{ children: React.ReactNode }>
   };
 
   const setOpenAiApiKey = (apiKey: string) => {
+    const normalizedApiKey = apiKey.trim();
+    const bridge = window.electronAPI?.chatbotSecrets;
     setOpenAiApiKeyState(apiKey);
-    persistString('chatbot-openai-api-key', apiKey);
+    setHasOpenAiApiKeyState(normalizedApiKey.length > 0);
+
+    if (!bridge?.setOpenAiApiKey) {
+      return;
+    }
+
+    bridge
+      .setOpenAiApiKey(apiKey)
+      .then((result) => {
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to persist OpenAI API key');
+        }
+        setHasOpenAiApiKeyState(Boolean(result.hasOpenAiApiKey));
+      })
+      .catch((error) => {
+        console.warn('[ChatbotPermissionsContext] Failed to persist OpenAI API key securely', error);
+      });
   };
 
   const setAllowLongAnswers = (allow: boolean) => {
@@ -182,6 +283,7 @@ export const ChatbotPermissionsProvider: React.FC<{ children: React.ReactNode }>
         setAllowCategoryAccess,
         allowAnalyticsAccess,
         setAllowAnalyticsAccess,
+        hasOpenAiApiKey,
         openAiApiKey,
         setOpenAiApiKey,
         allowLongAnswers,
