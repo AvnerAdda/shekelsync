@@ -148,20 +148,28 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
             onChange={(_, value) => value && onViewModeChange(value)}
             size="small"
             sx={{
+              bgcolor: alpha(theme.palette.background.default, 0.8),
+              borderRadius: 2,
+              p: 0.5,
               '& .MuiToggleButton-root': {
                 px: 2,
-                py: 0.5,
+                py: 0.75,
                 textTransform: 'none',
-                fontSize: '0.75rem',
-                borderRadius: 2,
+                fontWeight: 500,
+                fontSize: '0.8125rem',
+                borderRadius: 1.5,
                 border: 'none',
-                bgcolor: alpha(theme.palette.action.selected, 0.1),
+                color: 'text.secondary',
                 '&.Mui-selected': {
-                  bgcolor: 'primary.main',
-                  color: 'primary.contrastText',
+                  bgcolor: 'background.paper',
+                  color: 'text.primary',
+                  boxShadow: `0 1px 3px ${alpha(theme.palette.common.black, 0.1)}`,
                   '&:hover': {
-                    bgcolor: 'primary.dark',
+                    bgcolor: 'background.paper',
                   },
+                },
+                '&:hover': {
+                  bgcolor: alpha(theme.palette.action.hover, 0.4),
                 },
               },
             }}
