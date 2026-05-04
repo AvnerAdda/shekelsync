@@ -1489,7 +1489,7 @@ export async function setupRendererTest(
   await page.addInitScript((session) => {
     try {
       window.localStorage.setItem('app-locale', 'en');
-      window.localStorage.setItem('clarify.auth.session', JSON.stringify(session));
+      (window as any).__SHEKELSYNC_SESSION_BOOTSTRAP__ = session;
     } catch (error) {
       console.warn('[setupRendererTest] Failed to seed auth session:', error);
     }

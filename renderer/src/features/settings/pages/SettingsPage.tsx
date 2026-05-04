@@ -93,6 +93,7 @@ const SettingsPage: React.FC = () => {
     setAllowCategoryAccess,
     allowAnalyticsAccess,
     setAllowAnalyticsAccess,
+    hasOpenAiApiKey,
     openAiApiKey,
     setOpenAiApiKey,
     allowLongAnswers,
@@ -493,12 +494,16 @@ const SettingsPage: React.FC = () => {
               placeholder="sk-..."
               value={openAiApiKey}
               onChange={(event) => setOpenAiApiKey(event.target.value)}
-              helperText={tSettings('chatbot.openAiApiKeyHint')}
+              helperText={
+                hasOpenAiApiKey && !openAiApiKey.trim()
+                  ? tSettings('chatbot.openAiApiKeyStoredHint')
+                  : tSettings('chatbot.openAiApiKeyHint')
+              }
               autoComplete="off"
               sx={{ mb: 1 }}
             />
 
-            {chatbotEnabled && !openAiApiKey.trim() && (
+            {chatbotEnabled && !hasOpenAiApiKey && !openAiApiKey.trim() && (
               <Alert severity="warning" sx={{ mt: 2 }}>
                 <Typography variant="body2">
                   {tSettings('chatbot.openAiApiKeyRequired')}

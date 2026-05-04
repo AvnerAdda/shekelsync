@@ -17,7 +17,7 @@ test('updates auth indicator when the session lifecycle changes', async ({ page 
   await expect(page.getByText('Demo User', { exact: true })).toBeVisible();
 
   await page.evaluate(() => {
-    window.localStorage.removeItem('clarify.auth.session');
+    (window as any).__SHEKELSYNC_AUTH_SESSION__ = null;
     window.dispatchEvent(new CustomEvent('authSessionChanged', { detail: null }));
   });
 
@@ -29,7 +29,7 @@ test('updates auth indicator when the session lifecycle changes', async ({ page 
       tokenType: 'Bearer',
       user: { name: 'QA Bot' },
     };
-    window.localStorage.setItem('clarify.auth.session', JSON.stringify(session));
+    (window as any).__SHEKELSYNC_AUTH_SESSION__ = session;
     window.dispatchEvent(new CustomEvent('authSessionChanged', { detail: session }));
   });
 

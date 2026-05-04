@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-const { createAnonymizer, anonymizeContext } = require('../data-anonymizer.js');
+const { createAnonymizer, anonymizeProfile, anonymizeContext } = require('../data-anonymizer.js');
 
 describe('data-anonymizer', () => {
   describe('createAnonymizer', () => {
@@ -175,10 +175,43 @@ describe('data-anonymizer', () => {
 
       expect(result.hasData).toBe(true);
       expect(result.permissions).toEqual({ read: true });
-      expect(result.profile).toEqual({ name: 'Dana', occupation: 'Engineer', monthlyIncome: 22000 });
+      expect(result.profile).toEqual({
+        incomeBand: '₪20,000-₪39,999',
+      });
       expect(result.summary).toEqual({ income: 5000 });
       expect(result.recentTransactions[0].name).toBe('Merchant_1');
       expect(result.topMerchants[0].name).toBe('Merchant_1');
+    });
+  });
+
+  describe('anonymizeProfile', () => {
+    it('drops direct identifiers and coarsens demographic fields', () => {
+      expect(anonymizeProfile({
+        name: 'Dana',
+        maritalStatus: 'Married',
+        age: 37,
+        occupation: 'Engineer',
+        employmentStatus: 'Full-time',
+        monthlyIncome: 22000,
+        familyStatus: 'Two adults',
+        location: 'Tel Aviv',
+        industry: 'Technology',
+        childrenCount: 2,
+        householdSize: 4,
+        spouseName: 'Alex',
+        spouseOccupation: 'Designer',
+        spouseMonthlyIncome: 15000,
+      })).toEqual({
+        maritalStatus: 'Married',
+        ageBand: '30-39',
+        employmentStatus: 'Full-time',
+        incomeBand: '₪20,000-₪39,999',
+        familyStatus: 'Two adults',
+        industry: 'Technology',
+        childrenCount: 2,
+        householdSize: 4,
+        spouseIncomeBand: '₪10,000-₪19,999',
+      });
     });
   });
 });

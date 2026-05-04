@@ -73,6 +73,12 @@ const telegramBridge = Object.freeze({
   sendTestMessage: () => ipcRenderer.invoke('telegram:sendTestMessage'),
 });
 
+const chatbotSecretsBridge = Object.freeze({
+  getStatus: () => ipcRenderer.invoke('chatbot:getStatus'),
+  setOpenAiApiKey: (apiKey) => ipcRenderer.invoke('chatbot:setOpenAiApiKey', apiKey),
+  clearOpenAiApiKey: () => ipcRenderer.invoke('chatbot:clearOpenAiApiKey'),
+});
+
 const authBridge = Object.freeze({
   getSession: () => ipcRenderer.invoke('auth:getSession'),
   setSession: (session) => {
@@ -188,9 +194,6 @@ const electronAPI = {
 
   // Core API operations (native IPC)
   api: {
-    // Get API authentication token
-    getToken: () => ipcRenderer.invoke('api:getToken'),
-
     // Core endpoints using direct IPC (faster)
     ping: () => ipcRenderer.invoke('api:ping'),
     credentials: () => ipcRenderer.invoke('api:credentials'),
@@ -242,6 +245,7 @@ const electronAPI = {
 
   // Auth/session persistence
   auth: authBridge,
+  chatbotSecrets: chatbotSecretsBridge,
   biometricAuth: biometricAuthBridge,
   log: logBridge,
   diagnostics: diagnosticsBridge,

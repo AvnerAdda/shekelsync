@@ -36,6 +36,22 @@ describe('Shared /api/chat routes', () => {
     expect(spy).toHaveBeenCalledWith(payload);
   });
 
+  it('prefers the trusted OpenAI API key header when present', async () => {
+    const response = { reply: 'Hello there!' };
+    const spy = vi.spyOn(chatService, 'processMessage').mockResolvedValue(response);
+
+    await request(app)
+      .post('/api/chat')
+      .set('x-openai-api-key', 'sk-header-key')
+      .send({ message: 'Hi', openaiApiKey: 'sk-body-key' })
+      .expect(200);
+
+    expect(spy).toHaveBeenCalledWith({
+      message: 'Hi',
+      openaiApiKey: 'sk-header-key',
+    });
+  });
+
   it('handles chat errors', async () => {
     vi.spyOn(chatService, 'processMessage').mockRejectedValue({
       status: 422,

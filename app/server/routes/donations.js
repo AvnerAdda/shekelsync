@@ -27,9 +27,22 @@ function getHeaderValue(headers, key) {
   return typeof value === 'string' ? value : null;
 }
 
+function getBearerToken(headers) {
+  const authorization = getHeaderValue(headers, 'authorization');
+  if (authorization && authorization.toLowerCase().startsWith('bearer ')) {
+    return authorization.slice(7).trim();
+  }
+  return null;
+}
+
 function getSupporterContext(req) {
+  const headerAccessToken = getHeaderValue(req.headers, 'x-auth-access-token');
+  const forwardedByElectron = getHeaderValue(req.headers, 'x-forwarded-by-electron') === '1';
+  const bearerAccessToken = forwardedByElectron || req.path === '/entitlement'
+    ? null
+    : getBearerToken(req.headers);
   return {
-    accessToken: getHeaderValue(req.headers, 'x-auth-access-token'),
+    accessToken: headerAccessToken || bearerAccessToken,
     userId: getHeaderValue(req.headers, 'x-auth-user-id'),
     email: getHeaderValue(req.headers, 'x-auth-user-email'),
     name: getHeaderValue(req.headers, 'x-auth-user-name'),
@@ -363,12 +376,7 @@ function getSupportSyncSecretFromRequest(req) {
     return directSecret.trim();
   }
 
-  const authorization = getHeaderValue(req.headers, 'authorization');
-  if (authorization && authorization.toLowerCase().startsWith('bearer ')) {
-    return authorization.slice(7).trim();
-  }
-
-  return null;
+  return getBearerToken(req.headers);
 }
 
 function assertSupporterSyncAuthorized(req) {
