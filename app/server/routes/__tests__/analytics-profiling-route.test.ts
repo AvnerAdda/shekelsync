@@ -68,6 +68,29 @@ describe('Shared /api/analytics profiling routes', () => {
     expect(spy).toHaveBeenCalledWith(payload, { locale: 'fr' });
   });
 
+  it('prefers the trusted OpenAI API key header when present', async () => {
+    const responsePayload = {
+      missingFields: [],
+      isStale: false,
+      staleReasons: [],
+      assessment: { score: 60 },
+    };
+    const spy = vi
+      .spyOn(profilingService, 'generateProfilingAssessment')
+      .mockResolvedValue(responsePayload);
+
+    await request(app)
+      .post('/api/analytics/profiling/generate')
+      .set('x-openai-api-key', 'sk-header-key')
+      .send({ openaiApiKey: 'sk-body-key' })
+      .expect(200);
+
+    expect(spy).toHaveBeenCalledWith(
+      { openaiApiKey: 'sk-header-key' },
+      { locale: 'fr' },
+    );
+  });
+
   it('surfaces validation errors and missing fields from generation', async () => {
     vi.spyOn(profilingService, 'generateProfilingAssessment').mockRejectedValue({
       status: 400,

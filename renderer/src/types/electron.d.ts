@@ -100,6 +100,12 @@ interface AuthApi {
   clearSession: () => Promise<{ success: boolean; error?: string }>;
 }
 
+interface ChatbotSecretsApi {
+  getStatus: () => Promise<{ success: boolean; hasOpenAiApiKey?: boolean; error?: string }>;
+  setOpenAiApiKey: (apiKey: string) => Promise<{ success: boolean; hasOpenAiApiKey?: boolean; error?: string }>;
+  clearOpenAiApiKey: () => Promise<{ success: boolean; hasOpenAiApiKey?: boolean; error?: string }>;
+}
+
 interface LogApi {
   info: (message: string, data?: any) => void;
   warn: (message: string, data?: any) => void;
@@ -218,6 +224,7 @@ interface ElectronAPI {
   scraper: ScraperApi;
   file: FileApi;
   auth: AuthApi;
+  chatbotSecrets?: ChatbotSecretsApi;
   license: LicenseApi;
   log: LogApi;
   diagnostics: DiagnosticsApi;

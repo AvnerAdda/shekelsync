@@ -1,4 +1,4 @@
-import { getAuthorizationHeader, getSession } from '@/lib/session-store';
+import { getAuthorizationHeader } from '@/lib/session-store';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -156,28 +156,18 @@ async function request<TResponse = unknown, TBody = unknown>(
   if (locale && !normalizedHeaders['accept-language'] && !normalizedHeaders['Accept-Language']) {
     normalizedHeaders['Accept-Language'] = locale;
   }
-  const authHeaders = await getAuthorizationHeader();
-  const session = await getSession();
+  const useElectronApi = isElectronApiAvailable();
   const finalHeaders: Record<string, string> = { ...normalizedHeaders };
 
-  if (authHeaders.Authorization && !finalHeaders.Authorization) {
-    finalHeaders.Authorization = authHeaders.Authorization;
-  }
-  if (session?.accessToken && !finalHeaders['X-Auth-Access-Token']) {
-    finalHeaders['X-Auth-Access-Token'] = session.accessToken;
-  }
-  if (session?.user?.id && !finalHeaders['X-Auth-User-Id']) {
-    finalHeaders['X-Auth-User-Id'] = session.user.id;
-  }
-  if (session?.user?.email && !finalHeaders['X-Auth-User-Email']) {
-    finalHeaders['X-Auth-User-Email'] = session.user.email;
-  }
-  if (session?.user?.name && !finalHeaders['X-Auth-User-Name']) {
-    finalHeaders['X-Auth-User-Name'] = session.user.name;
+  if (!useElectronApi) {
+    const authHeaders = await getAuthorizationHeader();
+    if (authHeaders.Authorization && !finalHeaders.Authorization) {
+      finalHeaders.Authorization = authHeaders.Authorization;
+    }
   }
 
   const executeRequest = async (): Promise<ApiResponse<TResponse>> => {
-    if (isElectronApiAvailable()) {
+    if (useElectronApi) {
       const electronApi = window.electronAPI;
       if (!electronApi?.api?.request) {
         throw new Error('Electron API bridge unavailable');

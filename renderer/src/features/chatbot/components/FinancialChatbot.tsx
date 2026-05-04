@@ -147,7 +147,17 @@ const FinancialChatbot: React.FC = () => {
   const { t, i18n } = useTranslation('translation', {
     keyPrefix: 'chatbotWidget',
   });
-  const { chatbotEnabled, allowTransactionAccess, allowCategoryAccess, allowAnalyticsAccess, openAiApiKey, allowLongAnswers, allowLongRequests, chatModelTier } = useChatbotPermissions();
+  const {
+    chatbotEnabled,
+    allowTransactionAccess,
+    allowCategoryAccess,
+    allowAnalyticsAccess,
+    hasOpenAiApiKey: hasStoredOpenAiApiKey,
+    openAiApiKey,
+    allowLongAnswers,
+    allowLongRequests,
+    chatModelTier,
+  } = useChatbotPermissions();
   const { session } = useAuth();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -205,8 +215,9 @@ const FinancialChatbot: React.FC = () => {
   }, []);
 
   const hasAnyPermission = allowTransactionAccess || allowCategoryAccess || allowAnalyticsAccess;
-  const hasOpenAiApiKey = openAiApiKey.trim().length > 0;
+  const hasOpenAiApiKey = hasStoredOpenAiApiKey || openAiApiKey.trim().length > 0;
   const canUseChatbot = hasAnyPermission && hasOpenAiApiKey;
+  const shouldSendApiKeyInBody = !window.electronAPI?.chatbotSecrets;
   const userDisplayName = (() => {
     if (typeof session?.user?.name === 'string' && session.user.name.trim().length > 0) {
       return session.user.name.trim();
@@ -402,8 +413,8 @@ const FinancialChatbot: React.FC = () => {
       },
       allowLongAnswers,
       allowLongRequests,
-      openaiApiKey: openAiApiKey.trim(),
       locale: i18n.language.substring(0, 2),
+      ...(shouldSendApiKeyInBody ? { openaiApiKey: openAiApiKey.trim() } : {}),
     };
 
     try {

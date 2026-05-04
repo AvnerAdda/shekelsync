@@ -134,6 +134,24 @@ declare global {
     clearSession?: () => Promise<{ success: boolean; error?: string }>;
   }
 
+  interface ElectronChatbotSecretsBridge {
+    getStatus?: () => Promise<{
+      success: boolean;
+      hasOpenAiApiKey?: boolean;
+      error?: string;
+    }>;
+    setOpenAiApiKey?: (apiKey: string) => Promise<{
+      success: boolean;
+      hasOpenAiApiKey?: boolean;
+      error?: string;
+    }>;
+    clearOpenAiApiKey?: () => Promise<{
+      success: boolean;
+      hasOpenAiApiKey?: boolean;
+      error?: string;
+    }>;
+  }
+
   interface ElectronScraperApi {
     start?: (options: unknown, credentials: unknown) => Promise<unknown>;
     events?: (limit?: number) => Promise<unknown>;
@@ -407,6 +425,7 @@ declare global {
     scraper?: ElectronScraperApi;
     file?: ElectronFileApi;
     auth?: ElectronAuthBridge;
+    chatbotSecrets?: ElectronChatbotSecretsBridge;
     app?: ElectronAppApi;
     events?: ElectronEventsApi;
     platform?: ElectronPlatformInfo;

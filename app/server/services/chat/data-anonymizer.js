@@ -118,6 +118,64 @@ function createAnonymizer() {
   };
 }
 
+function normalizeNumber(value) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function coarsenAge(age) {
+  const parsedAge = normalizeInt(age);
+  if (parsedAge === null || parsedAge <= 0) {
+    return null;
+  }
+  if (parsedAge >= 80) {
+    return '80+';
+  }
+  const lowerBound = Math.floor(parsedAge / 10) * 10;
+  return `${lowerBound}-${lowerBound + 9}`;
+}
+
+function coarsenIncome(amount) {
+  const parsedAmount = normalizeNumber(amount);
+  if (parsedAmount === null || parsedAmount < 0) {
+    return null;
+  }
+
+  if (parsedAmount < 5000) return 'Below ₪5,000';
+  if (parsedAmount < 10000) return '₪5,000-₪9,999';
+  if (parsedAmount < 20000) return '₪10,000-₪19,999';
+  if (parsedAmount < 40000) return '₪20,000-₪39,999';
+  return '₪40,000+';
+}
+
+function anonymizeProfile(profile) {
+  if (!profile || typeof profile !== 'object') {
+    return null;
+  }
+
+  const anonymized = {
+    maritalStatus: profile.maritalStatus || null,
+    ageBand: coarsenAge(profile.age),
+    employmentStatus: profile.employmentStatus || null,
+    incomeBand: coarsenIncome(profile.monthlyIncome),
+    familyStatus: profile.familyStatus || null,
+    industry: profile.industry || null,
+    childrenCount: normalizeInt(profile.childrenCount),
+    householdSize: normalizeInt(profile.householdSize),
+    spouseIncomeBand: coarsenIncome(profile.spouseMonthlyIncome),
+  };
+
+  const filtered = Object.fromEntries(
+    Object.entries(anonymized).filter(([, value]) => value !== null && value !== ''),
+  );
+  return Object.keys(filtered).length > 0 ? filtered : null;
+}
+
 /**
  * Anonymize a financial context object
  * @param {Object} context - The financial context from getFinancialContext
@@ -131,7 +189,7 @@ function anonymizeContext(context, anonymizer) {
     // Preserve all important context fields
     hasData: context.hasData,
     permissions: context.permissions,
-    profile: context.profile,
+    profile: anonymizeProfile(context.profile),
     summary: context.summary,
     categories: context.categories,
     budgets: context.budgets,
@@ -147,5 +205,6 @@ function anonymizeContext(context, anonymizer) {
 
 module.exports = {
   createAnonymizer,
+  anonymizeProfile,
   anonymizeContext,
 };
