@@ -12,11 +12,13 @@ import {
   Alert,
   Button,
   Chip,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   IconButton,
+  Menu,
   MenuItem,
   Select,
   Skeleton,
@@ -40,6 +42,8 @@ import {
   ZoomOutMap as ZoomOutMapIcon,
   Autorenew as SubscriptionsIcon,
   AssignmentInd as ProfilingTabIcon,
+  MoreHoriz as MoreTabsIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import {
   BarChart as RechartsBarChart,
@@ -65,9 +69,17 @@ import FinancialRhythmModal from '../components/FinancialRhythmModal';
 import MoneyPersonalityModal from '../components/MoneyPersonalityModal';
 import PersonalizedFutureModal from '../components/PersonalizedFutureModal';
 import MakeItRealModal from '../components/MakeItRealModal';
+import DashboardInsightsSectionToggle from '../components/DashboardInsightsSectionToggle';
 import SubscriptionsTab from '../components/SubscriptionsTab';
 import ProfilingTab from '../components/ProfilingTab';
 import { apiClient } from '@renderer/lib/api-client';
+import {
+  ANALYSIS_TAB_DEFINITIONS,
+  ANALYSIS_TAB_INDEX,
+  getActiveOverflowTab,
+  isAnalysisTabKey,
+  partitionAnalysisTabs,
+} from '../analysis-tabs';
 import { useTranslation } from 'react-i18next';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
 import { resolveLocalizedCategoryName } from '@renderer/shared/modals/category-hierarchy-helpers';
@@ -80,6 +92,10 @@ import {
   getVariabilitySummaryCounts,
   resolveBudgetDeepLinkTarget,
 } from '../utils/budget-forecast-helpers';
+import {
+  buildPersonalityHighlightDescriptors,
+  buildRhythmHighlightDescriptors,
+} from '../utils/dashboard-card-highlights';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -229,15 +245,6 @@ interface BudgetPreviewMetrics {
 type StabilityBand = 'very_stable' | 'stable' | 'moving' | 'very_moving' | 'unknown';
 
 const TIMELINE_MONTH_LIMIT = 12;
-const ANALYSIS_TAB_INDEX: Record<string, number> = {
-  dashboard: 0,
-  actions: 1,
-  spending: 2,
-  budget: 3,
-  scoring: 4,
-  subscriptions: 5,
-  profiling: 6,
-};
 
 const getBudgetItemKey = (item: BudgetOutlookItem): string =>
   item.categoryDefinitionId !== null && item.categoryDefinitionId !== undefined
@@ -423,9 +430,12 @@ const AnalysisPageNew: React.FC = () => {
   const location = useLocation();
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'analysisPage' });
+  const refreshShortcutLabel = window.electronAPI?.platform?.isMacOS ? '⌘R' : 'Ctrl+R';
   const isHebrew = i18n.language === 'he';
   const locale = (i18n.language || 'he').toLowerCase();
   const [currentTab, setCurrentTab] = useState(0);
+  const [overflowTabsAnchorEl, setOverflowTabsAnchorEl] = useState<null | HTMLElement>(null);
+  const [showSecondaryDashboardCards, setShowSecondaryDashboardCards] = useState(false);
   const [loading, setLoading] = useState(false);
   const [intelligence, setIntelligence] = useState<PersonalIntelligence | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -668,9 +678,58 @@ const AnalysisPageNew: React.FC = () => {
     setCurrentTab(newValue);
   };
 
+  const analysisTabs = useMemo(
+    () => ANALYSIS_TAB_DEFINITIONS.map((tab) => ({
+      ...tab,
+      label: t(`tabs.${tab.key}`),
+      icon: (
+        {
+          dashboard: <DashboardIcon sx={{ fontSize: 20 }} />,
+          actions: <ActionsIcon sx={{ fontSize: 20 }} />,
+          spending: <SpendingIcon sx={{ fontSize: 20 }} />,
+          budget: <BudgetIcon sx={{ fontSize: 20 }} />,
+          scoring: <ScoringIcon sx={{ fontSize: 20 }} />,
+          subscriptions: <SubscriptionsIcon sx={{ fontSize: 20 }} />,
+          profiling: <ProfilingTabIcon sx={{ fontSize: 20 }} />,
+        }[tab.key]
+      ),
+    })),
+    [t],
+  );
+
+  const { primaryTabs, overflowTabs } = useMemo(
+    () => partitionAnalysisTabs(analysisTabs),
+    [analysisTabs],
+  );
+
+  const activeOverflowTab = useMemo(
+    () => getActiveOverflowTab(currentTab, overflowTabs),
+    [currentTab, overflowTabs],
+  );
+
+  const handleOpenOverflowTabs = (event: React.MouseEvent<HTMLElement>) => {
+    setOverflowTabsAnchorEl(event.currentTarget);
+  };
+
+  const handleCloseOverflowTabs = () => {
+    setOverflowTabsAnchorEl(null);
+  };
+
+  const handleOverflowTabSelect = (tabIndex: number) => {
+    setCurrentTab(tabIndex);
+    handleCloseOverflowTabs();
+  };
+
+  const secondaryDashboardSectionId = 'analysis-dashboard-deeper-insights';
+
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const requestedTab = searchParams.get('tab') || '';
+
+    if (!isAnalysisTabKey(requestedTab)) {
+      return;
+    }
+
     const nextTab = ANALYSIS_TAB_INDEX[requestedTab];
     if (typeof nextTab === 'number' && nextTab !== currentTab) {
       setCurrentTab(nextTab);
@@ -1389,6 +1448,79 @@ const AnalysisPageNew: React.FC = () => {
     };
   }, [behavioralData, intelligence?.behavioralIntelligence?.impulseSpendingScore]);
 
+  const rhythmHighlights = useMemo(() => {
+    if (!rhythmStats) {
+      return [];
+    }
+
+    return buildRhythmHighlightDescriptors(rhythmStats).map((descriptor) => {
+      switch (descriptor.key) {
+        case 'avgDaily':
+          return {
+            ...descriptor,
+            label: `${t('dashboard.rhythm.avgDaily')}: ${formatCurrencyValue(rhythmStats.avgDailySpend || 0)}`,
+          };
+        case 'weekendShare':
+          return {
+            ...descriptor,
+            label: `${t('dashboard.rhythm.weekendShare')}: ${Math.round(rhythmStats.weekendPercentage || 0)}%`,
+          };
+        case 'peakHour':
+          return {
+            ...descriptor,
+            label: `${t('dashboard.rhythm.peakHour')}: ${formatHour(rhythmStats.peakHour)}`,
+          };
+        case 'preciseTime':
+          return {
+            ...descriptor,
+            label: `${t('dashboard.rhythm.preciseTime')}: ${Math.round(rhythmStats.preciseTimePercentage || 0)}%`,
+          };
+        default:
+          return null;
+      }
+    }).filter((descriptor): descriptor is NonNullable<typeof descriptor> => descriptor !== null);
+  }, [formatCurrencyValue, rhythmStats, t]);
+
+  const personalityHighlights = useMemo(
+    () => buildPersonalityHighlightDescriptors(personalityMetrics).map((descriptor) => {
+      switch (descriptor.key) {
+        case 'planned':
+          return {
+            ...descriptor,
+            label: t('dashboard.personality.planned', { value: Math.round(personalityMetrics.programmedPercentage) }),
+          };
+        case 'impulse':
+          return {
+            ...descriptor,
+            label: t('dashboard.personality.impulse', { value: Math.round(personalityMetrics.impulsePercentage) }),
+          };
+        case 'recurringPatterns':
+          return {
+            ...descriptor,
+            label: `${t('dashboard.personality.recurringPatterns')}: ${personalityMetrics.recurringCount ?? 0}`,
+          };
+        case 'topCategoryWeekly':
+          return {
+            ...descriptor,
+            label: `${t('dashboard.personality.topCategoryWeekly', { category: personalityMetrics.topCategoryName || t('dashboard.personality.na') })}: ${formatCurrencyValue(personalityMetrics.topCategoryWeekly || 0)}`,
+          };
+        case 'programmedSpend':
+          return {
+            ...descriptor,
+            label: `${t('dashboard.personality.programmedSpend')}: ${formatCurrencyValue(personalityMetrics.programmedAmount || 0)}`,
+          };
+        case 'impulseSpend':
+          return {
+            ...descriptor,
+            label: `${t('dashboard.personality.impulseSpend')}: ${formatCurrencyValue(personalityMetrics.impulseAmount || 0)}`,
+          };
+        default:
+          return null;
+      }
+    }).filter((descriptor): descriptor is NonNullable<typeof descriptor> => descriptor !== null),
+    [formatCurrencyValue, personalityMetrics, t],
+  );
+
   const scenarioEndBalances = useMemo(() => {
     const combined = futureData?.combinedData;
     if (!combined) {
@@ -1482,24 +1614,44 @@ const AnalysisPageNew: React.FC = () => {
             {t('header.subtitle')}
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          startIcon={isRefreshing ? <CircularProgress size={16} aria-label={t('states.loading')} /> : <RefreshIcon />}
-          onClick={handleRefreshAll}
-          disabled={isRefreshing}
-          size="small"
-          sx={{
-            borderRadius: 2,
-            borderColor: (theme) => alpha(theme.palette.divider, 0.2),
-            backdropFilter: 'blur(10px)',
-            '&:hover': {
-              borderColor: 'primary.main',
-              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05)
-            }
-          }}
-        >
-          {isRefreshing ? t('actions.refreshing') : t('actions.refresh')}
-        </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography
+            aria-hidden="true"
+            variant="caption"
+            sx={{
+              px: 1,
+              py: 0.45,
+              borderRadius: 1.5,
+              bgcolor: alpha(theme.palette.background.paper, 0.8),
+              border: `1px solid ${alpha(theme.palette.divider, 0.16)}`,
+              color: 'text.secondary',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              lineHeight: 1.2,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {refreshShortcutLabel}
+          </Typography>
+          <Button
+            variant="outlined"
+            startIcon={isRefreshing ? <CircularProgress size={16} aria-label={t('states.loading')} /> : <RefreshIcon />}
+            onClick={handleRefreshAll}
+            disabled={isRefreshing}
+            size="small"
+            sx={{
+              borderRadius: 2,
+              borderColor: (theme) => alpha(theme.palette.divider, 0.2),
+              backdropFilter: 'blur(10px)',
+              '&:hover': {
+                borderColor: 'primary.main',
+                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05)
+              }
+            }}
+          >
+            {isRefreshing ? t('actions.refreshing') : t('actions.refresh')}
+          </Button>
+        </Box>
       </Box>
 
       {/* Tabs */}
@@ -1513,18 +1665,22 @@ const AnalysisPageNew: React.FC = () => {
         borderColor: (theme) => alpha(theme.palette.divider, 0.08),
         boxShadow: (theme) => `0 4px 24px 0 ${alpha(theme.palette.common.black, 0.04)}, 0 1px 2px 0 ${alpha(theme.palette.common.black, 0.03)}`,
         display: 'flex',
-        gap: 0.5,
+        gap: 0.75,
+        alignItems: 'stretch',
         flexWrap: 'wrap',
       }}>
-        {[
-          { icon: <DashboardIcon sx={{ fontSize: 20 }} />, label: t('tabs.dashboard'), index: 0 },
-          { icon: <ActionsIcon sx={{ fontSize: 20 }} />, label: t('tabs.actions'), index: 1 },
-          { icon: <SpendingIcon sx={{ fontSize: 20 }} />, label: t('tabs.spending'), index: 2 },
-          { icon: <BudgetIcon sx={{ fontSize: 20 }} />, label: t('tabs.budget'), index: 3 },
-          { icon: <ScoringIcon sx={{ fontSize: 20 }} />, label: t('tabs.scoring'), index: 4 },
-          { icon: <SubscriptionsIcon sx={{ fontSize: 20 }} />, label: t('tabs.subscriptions'), index: 5 },
-          { icon: <ProfilingTabIcon sx={{ fontSize: 20 }} />, label: t('tabs.profiling'), index: 6 },
-        ].map((tab) => {
+        <Box
+          role="tablist"
+          aria-label={t('tabs.ariaLabel')}
+          sx={{
+            display: 'flex',
+            gap: 0.5,
+            flexWrap: 'wrap',
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+        {primaryTabs.map((tab) => {
           const isSelected = currentTab === tab.index;
           return (
             <Box
@@ -1586,6 +1742,68 @@ const AnalysisPageNew: React.FC = () => {
             </Box>
           );
         })}
+        </Box>
+
+        <Button
+          aria-haspopup="menu"
+          aria-expanded={Boolean(overflowTabsAnchorEl)}
+          aria-controls={overflowTabsAnchorEl ? 'analysis-overflow-tabs-menu' : undefined}
+          onClick={handleOpenOverflowTabs}
+          endIcon={<ExpandMoreIcon />}
+          startIcon={activeOverflowTab?.icon || <MoreTabsIcon sx={{ fontSize: 20 }} />}
+          sx={{
+            minWidth: 'fit-content',
+            px: 2,
+            py: 1.25,
+            borderRadius: '12px',
+            textTransform: 'none',
+            fontSize: '0.875rem',
+            fontWeight: activeOverflowTab ? 700 : 500,
+            letterSpacing: '-0.01em',
+            color: activeOverflowTab
+              ? theme.palette.primary.contrastText
+              : theme.palette.text.secondary,
+            background: activeOverflowTab
+              ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`
+              : 'transparent',
+            boxShadow: activeOverflowTab
+              ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}, 0 1px 3px ${alpha(theme.palette.primary.main, 0.2)}`
+              : 'none',
+            '&:hover': activeOverflowTab
+              ? {}
+              : {
+                  bgcolor: alpha(theme.palette.primary.main, 0.08),
+                  color: theme.palette.text.primary,
+                },
+          }}
+        >
+          {activeOverflowTab?.label || t('tabs.more')}
+        </Button>
+
+        <Menu
+          id="analysis-overflow-tabs-menu"
+          anchorEl={overflowTabsAnchorEl}
+          open={Boolean(overflowTabsAnchorEl)}
+          onClose={handleCloseOverflowTabs}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        >
+          {overflowTabs.map((tab) => (
+            <MenuItem
+              key={tab.index}
+              selected={currentTab === tab.index}
+              onClick={() => handleOverflowTabSelect(tab.index)}
+              sx={{ minWidth: 220, gap: 1.25 }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', color: 'primary.main' }}>
+                {tab.icon}
+              </Box>
+              <Typography variant="body2" fontWeight={currentTab === tab.index ? 700 : 500}>
+                {tab.label}
+              </Typography>
+            </MenuItem>
+          ))}
+        </Menu>
       </Box>
 
       {/* Tab Content */}
@@ -1719,161 +1937,30 @@ const AnalysisPageNew: React.FC = () => {
                     </Typography>
                   )}
 
-                  <Grid container spacing={1}>
-                    <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.avgDaily')}</Typography>
-                      <Typography variant="h6">
-                        {rhythmStats?.avgDailySpend !== null && rhythmStats?.avgDailySpend !== undefined
-                          ? formatCurrencyValue(rhythmStats.avgDailySpend || 0)
-                          : t('dashboard.rhythm.na')}
-                      </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.weekendShare')}</Typography>
-                      <Typography variant="h6">
-                        {rhythmStats?.weekendPercentage !== null && rhythmStats?.weekendPercentage !== undefined
-                          ? `${Math.round(rhythmStats.weekendPercentage)}%`
-                          : t('dashboard.rhythm.na')}
-                      </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.peakHour')}</Typography>
-                      <Typography variant="body2">
-                        {rhythmStats?.peakHour !== undefined && rhythmStats?.peakHour !== null
-                          ? formatHour(rhythmStats.peakHour)
-                          : t('dashboard.rhythm.na')}
-                      </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary">{t('dashboard.rhythm.preciseTime')}</Typography>
-                      <Typography variant="body2">
-                        {rhythmStats?.preciseTimePercentage !== null && rhythmStats?.preciseTimePercentage !== undefined
-                          ? `${Math.round(rhythmStats.preciseTimePercentage)}%`
-                          : t('dashboard.rhythm.na')}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Your Money Personality */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Card elevation={0} sx={{
-                height: '100%',
-                borderRadius: 4,
-                bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
-                backdropFilter: 'blur(20px)',
-                border: '1px solid',
-                borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
-                boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
-                transition: 'all 0.3s ease-in-out',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: (theme) => `0 12px 40px 0 ${alpha(theme.palette.primary.main, 0.1)}`,
-                  borderColor: (theme) => alpha(theme.palette.primary.main, 0.3),
-                }
-              }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <PsychologyIcon color="secondary" />
-                      <Typography variant="subtitle1" fontWeight="bold">
-                        {t('dashboard.personality.title')}
-                      </Typography>
-                    </Box>
-                    <Tooltip title={t('dashboard.expandView')}>
-                      <Button
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {rhythmHighlights.map((metric) => (
+                      <Chip
+                        key={metric.key}
+                        label={metric.label}
                         size="small"
-                        onClick={() => setPersonalityModalOpen(true)}
-                        sx={{ minWidth: 'auto', p: 0.5 }}
-                        aria-label={t('dashboard.expandView')}
-                      >
-                        <ZoomOutMapIcon fontSize="small" />
-                      </Button>
-                    </Tooltip>
+                        color={metric.tone}
+                        variant={metric.priority === 'primary' ? 'filled' : 'outlined'}
+                        sx={{
+                          height: 'auto',
+                          borderRadius: 999,
+                          alignItems: 'flex-start',
+                          '& .MuiChip-label': {
+                            display: 'block',
+                            whiteSpace: 'normal',
+                            px: 1.25,
+                            py: 0.85,
+                            fontWeight: metric.priority === 'primary' ? 700 : 500,
+                            lineHeight: 1.25,
+                          },
+                        }}
+                      />
+                    ))}
                   </Box>
-
-                  {behavioralLoading && !behavioralData ? (
-                    <Box>
-                      <Skeleton variant="text" width="50%" height={20} sx={{ mb: 1 }} />
-                      <Skeleton variant="rectangular" width="100%" height={80} sx={{ borderRadius: 2 }} />
-                    </Box>
-                  ) : behavioralError ? (
-                    <Alert severity="warning" sx={{ mb: 1 }}>
-                      {behavioralError}
-                    </Alert>
-                  ) : (
-                    <>
-                      {/* Impulse vs Planned Visual */}
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="caption" color="text.secondary">{t('dashboard.personality.spendingStyle')}</Typography>
-                        <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, mb: 1 }}>
-                          <Box
-                            sx={{
-                              flex: personalityMetrics.impulsePercentage,
-                              height: 8,
-                              bgcolor: 'warning.main',
-                              borderRadius: 1,
-                              transition: 'all 0.3s'
-                            }}
-                          />
-                          <Box
-                            sx={{
-                              flex: Math.max(0, 100 - personalityMetrics.impulsePercentage),
-                              height: 8,
-                              bgcolor: 'success.main',
-                              borderRadius: 1,
-                              transition: 'all 0.3s'
-                            }}
-                          />
-                        </Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <Typography variant="caption" color="warning.main">
-                            {t('dashboard.personality.impulse', { value: Math.round(personalityMetrics.impulsePercentage) })}
-                          </Typography>
-                          <Typography variant="caption" color="success.main">
-                            {t('dashboard.personality.planned', { value: Math.round(Math.max(0, 100 - personalityMetrics.impulsePercentage)) })}
-                          </Typography>
-                        </Box>
-                      </Box>
-
-                      <Grid container spacing={1}>
-                        <Grid size={{ xs: 6 }}>
-                          <Typography variant="caption" color="text.secondary">{t('dashboard.personality.programmedSpend')}</Typography>
-                          <Typography variant="h6" color="success.main">
-                            {personalityMetrics.programmedAmount !== null
-                              ? `+${formatCurrencyValue(personalityMetrics.programmedAmount || 0)}`
-                              : t('dashboard.personality.na')}
-                          </Typography>
-                        </Grid>
-                        <Grid size={{ xs: 6 }}>
-                          <Typography variant="caption" color="text.secondary">{t('dashboard.personality.impulseSpend')}</Typography>
-                          <Typography variant="h6" color="warning.main">
-                            {personalityMetrics.impulseAmount !== null
-                              ? `+${formatCurrencyValue(personalityMetrics.impulseAmount || 0)}`
-                              : t('dashboard.personality.na')}
-                          </Typography>
-                        </Grid>
-                        <Grid size={{ xs: 12 }}>
-                          <Typography variant="caption" color="text.secondary">{t('dashboard.personality.recurringPatterns')}</Typography>
-                          <Typography variant="h6">
-                            {personalityMetrics.recurringCount ?? 0}
-                          </Typography>
-                        </Grid>
-                        <Grid size={{ xs: 12 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            {t('dashboard.personality.topCategoryWeekly', { category: personalityMetrics.topCategoryName || t('dashboard.personality.na') })}
-                          </Typography>
-                          <Typography variant="body2" fontWeight="bold" color="text.primary">
-                            {personalityMetrics.topCategoryWeekly !== null
-                              ? formatCurrencyValue(personalityMetrics.topCategoryWeekly || 0)
-                              : t('dashboard.personality.na')}
-                          </Typography>
-                        </Grid>
-                      </Grid>
-                    </>
-                  )}
                 </CardContent>
               </Card>
             </Grid>
@@ -1987,79 +2074,204 @@ const AnalysisPageNew: React.FC = () => {
               </Card>
             </Grid>
 
-            {/* Make It Real */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Card elevation={0} sx={{
-                height: '100%',
-                borderRadius: 4,
-                bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
-                backdropFilter: 'blur(20px)',
-                border: '1px solid',
-                borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
-                boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
-                transition: 'all 0.3s ease-in-out',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: (theme) => `0 12px 40px 0 ${alpha(theme.palette.primary.main, 0.1)}`,
-                  borderColor: (theme) => alpha(theme.palette.primary.main, 0.3),
-                }
-              }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <MoneyIcon color="warning" />
-                      <Typography variant="subtitle1" fontWeight="bold">
-                        {t('dashboard.reality.title')}
-                      </Typography>
-                    </Box>
-                    <Tooltip title={t('dashboard.expandView')}>
-                      <Button
-                        size="small"
-                        onClick={() => setRealityModalOpen(true)}
-                        sx={{ minWidth: 'auto', p: 0.5 }}
-                        aria-label={t('dashboard.expandView')}
-                      >
-                        <ZoomOutMapIcon fontSize="small" />
-                      </Button>
-                    </Tooltip>
-                  </Box>
+            <Grid size={{ xs: 12 }}>
+              <DashboardInsightsSectionToggle
+                expanded={showSecondaryDashboardCards}
+                insightCount={2}
+                onToggle={() => setShowSecondaryDashboardCards((current) => !current)}
+                sectionId={secondaryDashboardSectionId}
+              />
 
-                  {timeValueLoading && !timeValueData ? (
-                    <Box>
-                      <Skeleton variant="text" width="60%" height={20} sx={{ mb: 1 }} />
-                      <Skeleton variant="rectangular" width="100%" height={60} sx={{ borderRadius: 2 }} />
-                    </Box>
-                  ) : timeValueError ? (
-                    <Alert severity="warning" sx={{ mb: 1 }}>
-                      {timeValueError}
-                    </Alert>
-                  ) : (
-                    <>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="caption" color="text.secondary">{t('dashboard.reality.timeValue')}</Typography>
-                        <Typography variant="h6">
-                          {t('dashboard.reality.hourlyRate', { value: formatCurrencyValue(primaryHourlyWage) })}
-                        </Typography>
-                        <Typography variant="caption">
-                          {expenseRatio !== null
-                            ? t('dashboard.reality.expenseRatio', { ratio: expenseRatio.toFixed(1) })
-                            : t('dashboard.reality.na')}
-                        </Typography>
-                      </Box>
+              <Collapse in={showSecondaryDashboardCards} unmountOnExit>
+                <Grid container spacing={2} id={secondaryDashboardSectionId} sx={{ mt: 0.5 }}>
+                  {/* Your Money Personality */}
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <Card elevation={0} sx={{
+                      height: '100%',
+                      borderRadius: 4,
+                      bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+                      backdropFilter: 'blur(20px)',
+                      border: '1px solid',
+                      borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+                      boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+                      transition: 'all 0.3s ease-in-out',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: (theme) => `0 12px 40px 0 ${alpha(theme.palette.primary.main, 0.1)}`,
+                        borderColor: (theme) => alpha(theme.palette.primary.main, 0.3),
+                      }
+                    }}>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <PsychologyIcon color="secondary" />
+                            <Typography variant="subtitle1" fontWeight="bold">
+                              {t('dashboard.personality.title')}
+                            </Typography>
+                          </Box>
+                          <Tooltip title={t('dashboard.expandView')}>
+                            <Button
+                              size="small"
+                              onClick={() => setPersonalityModalOpen(true)}
+                              sx={{ minWidth: 'auto', p: 0.5 }}
+                              aria-label={t('dashboard.expandView')}
+                            >
+                              <ZoomOutMapIcon fontSize="small" />
+                            </Button>
+                          </Tooltip>
+                        </Box>
 
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">{t('dashboard.reality.biggestPurchase')}</Typography>
-                        <Typography variant="body2">
-                          {t('dashboard.reality.hoursOfWork', { hours: formatBiggestPurchaseHours() })}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                          {t('dashboard.reality.topCategoryHours', { hours: formatAveragePurchaseHours() })}
-                        </Typography>
-                      </Box>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+                        {behavioralLoading && !behavioralData ? (
+                          <Box>
+                            <Skeleton variant="text" width="50%" height={20} sx={{ mb: 1 }} />
+                            <Skeleton variant="rectangular" width="100%" height={80} sx={{ borderRadius: 2 }} />
+                          </Box>
+                        ) : behavioralError ? (
+                          <Alert severity="warning" sx={{ mb: 1 }}>
+                            {behavioralError}
+                          </Alert>
+                        ) : (
+                          <>
+                            {/* Impulse vs Planned Visual */}
+                            <Box sx={{ mb: 2 }}>
+                              <Typography variant="caption" color="text.secondary">{t('dashboard.personality.spendingStyle')}</Typography>
+                              <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, mb: 1 }}>
+                                <Box
+                                  sx={{
+                                    flex: personalityMetrics.impulsePercentage,
+                                    height: 8,
+                                    bgcolor: 'warning.main',
+                                    borderRadius: 1,
+                                    transition: 'all 0.3s'
+                                  }}
+                                />
+                                <Box
+                                  sx={{
+                                    flex: Math.max(0, 100 - personalityMetrics.impulsePercentage),
+                                    height: 8,
+                                    bgcolor: 'success.main',
+                                    borderRadius: 1,
+                                    transition: 'all 0.3s'
+                                  }}
+                                />
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="caption" color="warning.main">
+                                  {t('dashboard.personality.impulse', { value: Math.round(personalityMetrics.impulsePercentage) })}
+                                </Typography>
+                                <Typography variant="caption" color="success.main">
+                                  {t('dashboard.personality.planned', { value: Math.round(Math.max(0, 100 - personalityMetrics.impulsePercentage)) })}
+                                </Typography>
+                              </Box>
+                            </Box>
+
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                              {personalityHighlights.map((metric) => (
+                                <Chip
+                                  key={metric.key}
+                                  label={metric.label}
+                                  size="small"
+                                  color={metric.tone}
+                                  variant={metric.priority === 'primary' ? 'filled' : 'outlined'}
+                                  sx={{
+                                    height: 'auto',
+                                    borderRadius: 999,
+                                    alignItems: 'flex-start',
+                                    '& .MuiChip-label': {
+                                      display: 'block',
+                                      whiteSpace: 'normal',
+                                      px: 1.25,
+                                      py: 0.85,
+                                      fontWeight: metric.priority === 'primary' ? 700 : 500,
+                                      lineHeight: 1.25,
+                                    },
+                                  }}
+                                />
+                              ))}
+                            </Box>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  {/* Make It Real */}
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <Card elevation={0} sx={{
+                      height: '100%',
+                      borderRadius: 4,
+                      bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+                      backdropFilter: 'blur(20px)',
+                      border: '1px solid',
+                      borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
+                      boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+                      transition: 'all 0.3s ease-in-out',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: (theme) => `0 12px 40px 0 ${alpha(theme.palette.primary.main, 0.1)}`,
+                        borderColor: (theme) => alpha(theme.palette.primary.main, 0.3),
+                      }
+                    }}>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <MoneyIcon color="warning" />
+                            <Typography variant="subtitle1" fontWeight="bold">
+                              {t('dashboard.reality.title')}
+                            </Typography>
+                          </Box>
+                          <Tooltip title={t('dashboard.expandView')}>
+                            <Button
+                              size="small"
+                              onClick={() => setRealityModalOpen(true)}
+                              sx={{ minWidth: 'auto', p: 0.5 }}
+                              aria-label={t('dashboard.expandView')}
+                            >
+                              <ZoomOutMapIcon fontSize="small" />
+                            </Button>
+                          </Tooltip>
+                        </Box>
+
+                        {timeValueLoading && !timeValueData ? (
+                          <Box>
+                            <Skeleton variant="text" width="60%" height={20} sx={{ mb: 1 }} />
+                            <Skeleton variant="rectangular" width="100%" height={60} sx={{ borderRadius: 2 }} />
+                          </Box>
+                        ) : timeValueError ? (
+                          <Alert severity="warning" sx={{ mb: 1 }}>
+                            {timeValueError}
+                          </Alert>
+                        ) : (
+                          <>
+                            <Box sx={{ mb: 2 }}>
+                              <Typography variant="caption" color="text.secondary">{t('dashboard.reality.timeValue')}</Typography>
+                              <Typography variant="h6">
+                                {t('dashboard.reality.hourlyRate', { value: formatCurrencyValue(primaryHourlyWage) })}
+                              </Typography>
+                              <Typography variant="caption">
+                                {expenseRatio !== null
+                                  ? t('dashboard.reality.expenseRatio', { ratio: expenseRatio.toFixed(1) })
+                                  : t('dashboard.reality.na')}
+                              </Typography>
+                            </Box>
+
+                            <Box>
+                              <Typography variant="caption" color="text.secondary">{t('dashboard.reality.biggestPurchase')}</Typography>
+                              <Typography variant="body2">
+                                {t('dashboard.reality.hoursOfWork', { hours: formatBiggestPurchaseHours() })}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                {t('dashboard.reality.topCategoryHours', { hours: formatAveragePurchaseHours() })}
+                              </Typography>
+                            </Box>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                </Grid>
+              </Collapse>
             </Grid>
           </Grid>
         )}

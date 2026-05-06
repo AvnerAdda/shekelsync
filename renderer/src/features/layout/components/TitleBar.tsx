@@ -109,6 +109,8 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   // Platform detection
   const isMacOS = window.electronAPI?.platform?.isMacOS;
   const reduceVisualEffects = window.electronAPI?.platform?.reduceVisualEffects === true;
+  const modifierKeyLabel = isMacOS ? '⌘' : 'Ctrl+';
+  const searchShortcutLabel = `${modifierKeyLabel}K`;
 
   const getKeywords = useCallback(
     (key: string, fallback: string[]) => {
@@ -138,24 +140,28 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         label: t('titleBar.search.options.dashboard'),
         path: '/',
         icon: <HomeIcon fontSize="small" />,
+        shortcut: `${modifierKeyLabel}1`,
         keywords: getKeywords('dashboard', ['home', 'overview', 'main', 'summary']),
       },
       {
         label: t('titleBar.search.options.analysis'),
         path: '/analysis',
         icon: <AnalyticsIcon fontSize="small" />,
+        shortcut: `${modifierKeyLabel}2`,
         keywords: getKeywords('analysis', ['analytics', 'spending', 'budget', 'reports', 'charts']),
       },
       {
         label: t('titleBar.search.options.investments'),
         path: '/investments',
         icon: <InvestmentsIcon fontSize="small" />,
+        shortcut: `${modifierKeyLabel}3`,
         keywords: getKeywords('investments', ['portfolio', 'stocks', 'holdings', 'wealth', 'assets']),
       },
       {
         label: t('titleBar.search.options.settings'),
         path: '/settings',
         icon: <SettingsIcon fontSize="small" />,
+        shortcut: `${modifierKeyLabel}4`,
         keywords: getKeywords('settings', ['preferences', 'config', 'theme', 'language', 'profile']),
       },
       // Dashboard sub-sections
@@ -173,7 +179,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
       },
       {
         label: t('titleBar.search.options.vendors'),
-        path: '/#vendors',
+        path: '/analysis',
         icon: <AccountsIcon fontSize="small" />,
         keywords: getKeywords('vendors', ['merchants', 'stores', 'shops', 'where']),
       },
@@ -205,18 +211,18 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
       // Investments sub-sections
       {
         label: t('titleBar.search.options.portfolio'),
-        path: '/investments#portfolio',
+        path: '/investments',
         icon: <InvestmentsIcon fontSize="small" />,
         keywords: getKeywords('portfolio', ['total', 'value', 'performance']),
       },
       {
         label: t('titleBar.search.options.holdings'),
-        path: '/investments#holdings',
+        path: '/investments?tab=holdings',
         icon: <InvestmentsIcon fontSize="small" />,
         keywords: getKeywords('holdings', ['positions', 'shares', 'funds']),
       },
     ],
-    [getKeywords, t],
+    [getKeywords, modifierKeyLabel, t],
   );
 
   const handleSearchSelect = (_event: React.SyntheticEvent, option: typeof searchOptions[0] | null) => {
@@ -641,87 +647,119 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
 
       {/* Center section: Search Bar */}
       <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', maxWidth: 480, mx: 4, WebkitAppRegion: 'no-drag' }}>
-        <Autocomplete
-          size="small"
-          options={searchOptions}
-          getOptionLabel={(option) => option.label}
-          onChange={handleSearchSelect}
-          filterOptions={(options, { inputValue }) => {
-            const query = inputValue.toLowerCase();
-            return options.filter((option) =>
-              option.label.toLowerCase().includes(query) ||
-              option.keywords.some((kw) => kw.toLowerCase().includes(query))
-            );
-          }}
-          renderOption={(props, option) => {
-            const { key, ...optionProps } = props;
-            return (
-              <Box
-                component="li"
-                key={key}
-                {...optionProps}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                  py: 1.5,
-                  px: 2,
-                  borderRadius: 2,
-                  mx: 1,
-                  my: 0.5,
-                  '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
-                }}
-              >
-                <Box sx={{ color: theme.palette.primary.main, display: 'flex', alignItems: 'center', p: 0.5, borderRadius: 1, backgroundColor: alpha(theme.palette.primary.main, 0.1) }}>
-                  {option.icon}
+        <Box sx={{ width: '100%', position: 'relative' }}>
+          <Autocomplete
+            size="small"
+            options={searchOptions}
+            getOptionLabel={(option) => option.label}
+            onChange={handleSearchSelect}
+            filterOptions={(options, { inputValue }) => {
+              const query = inputValue.toLowerCase();
+              return options.filter((option) =>
+                option.label.toLowerCase().includes(query) ||
+                option.keywords.some((kw) => kw.toLowerCase().includes(query))
+              );
+            }}
+            renderOption={(props, option) => {
+              const { key, ...optionProps } = props;
+              return (
+                <Box
+                  component="li"
+                  key={key}
+                  {...optionProps}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    py: 1.5,
+                    px: 2,
+                    borderRadius: 2,
+                    mx: 1,
+                    my: 0.5,
+                    '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.1) },
+                  }}
+                >
+                  <Box sx={{ color: theme.palette.primary.main, display: 'flex', alignItems: 'center', p: 0.5, borderRadius: 1, backgroundColor: alpha(theme.palette.primary.main, 0.1) }}>
+                    {option.icon}
+                  </Box>
+                  <Typography variant="body2" fontWeight={500} sx={{ flexGrow: 1 }}>{option.label}</Typography>
+                  {option.shortcut && (
+                    <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ letterSpacing: '0.04em' }}>
+                      {option.shortcut}
+                    </Typography>
+                  )}
                 </Box>
-                <Typography variant="body2" fontWeight={500}>{option.label}</Typography>
-              </Box>
-            );
-          }}
-          PaperComponent={(props) => (
-            <Paper {...props} sx={{ mt: 1, borderRadius: 3, boxShadow: theme.shadows[10], border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, backdropFilter: 'blur(12px)', backgroundColor: alpha(theme.palette.background.paper, 0.9) }} />
-          )}
-          sx={{ width: '100%' }}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              placeholder={t('titleBar.search.placeholder')}
-              variant="outlined"
-              InputProps={{
-                ...params.InputProps,
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ fontSize: 20, color: theme.palette.text.secondary }} />
-                  </InputAdornment>
-                ),
-                sx: {
-                  height: 40,
-                  fontSize: '0.9rem',
-                  borderRadius: 3,
-                  backgroundColor: alpha(theme.palette.text.primary, 0.05),
-                  transition: 'all 0.2s ease-in-out',
-                  '& fieldset': { border: 'none' },
-                  '&:hover': {
-                    backgroundColor: alpha(theme.palette.text.primary, 0.08),
-                    transform: 'translateY(-1px)',
+              );
+            }}
+            PaperComponent={(props) => (
+              <Paper {...props} sx={{ mt: 1, borderRadius: 3, boxShadow: theme.shadows[10], border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, backdropFilter: 'blur(12px)', backgroundColor: alpha(theme.palette.background.paper, 0.9) }} />
+            )}
+            sx={{ width: '100%' }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                placeholder={t('titleBar.search.placeholder')}
+                variant="outlined"
+                InputProps={{
+                  ...params.InputProps,
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ fontSize: 20, color: theme.palette.text.secondary }} />
+                    </InputAdornment>
+                  ),
+                  sx: {
+                    height: 40,
+                    pr: 8,
+                    fontSize: '0.9rem',
+                    borderRadius: 3,
+                    backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                    transition: 'all 0.2s ease-in-out',
+                    '& fieldset': { border: 'none' },
+                    '&:hover': {
+                      backgroundColor: alpha(theme.palette.text.primary, 0.08),
+                      transform: 'translateY(-1px)',
+                    },
+                    '&.Mui-focused': {
+                      backgroundColor: alpha(theme.palette.background.paper, 0.8),
+                      boxShadow: `0 4px 12px ${alpha(theme.palette.common.black, 0.1)}`,
+                      '& .MuiInputAdornment-root': {
+                        color: theme.palette.primary.main,
+                      }
+                    },
                   },
-                  '&.Mui-focused': {
-                    backgroundColor: alpha(theme.palette.background.paper, 0.8),
-                    boxShadow: `0 4px 12px ${alpha(theme.palette.common.black, 0.1)}`,
-                    '& .MuiInputAdornment-root': {
-                      color: theme.palette.primary.main,
-                    }
-                  },
-                },
-              }}
-            />
-          )}
-          blurOnSelect
-          clearOnBlur
-          selectOnFocus
-          handleHomeEndKeys
-        />
+                }}
+              />
+            )}
+            blurOnSelect
+            clearOnBlur
+            selectOnFocus
+            handleHomeEndKeys
+          />
+
+          <Box
+            aria-hidden="true"
+            sx={{
+              position: 'absolute',
+              right: 12,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              px: 1,
+              py: 0.25,
+              borderRadius: 1.5,
+              border: `1px solid ${alpha(theme.palette.divider, 0.18)}`,
+              bgcolor: alpha(theme.palette.background.paper, 0.82),
+              color: theme.palette.text.secondary,
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              lineHeight: 1.2,
+              letterSpacing: '0.04em',
+              pointerEvents: 'none',
+              boxShadow: `0 1px 2px ${alpha(theme.palette.common.black, 0.08)}`,
+            }}
+          >
+            {searchShortcutLabel}
+          </Box>
+        </Box>
       </Box>
 
       {/* Right section: Status + Notifications + Window Controls */}

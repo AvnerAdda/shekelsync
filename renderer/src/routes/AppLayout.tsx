@@ -275,6 +275,10 @@ const AppLayout: React.FC = () => {
       navigateToDetail((event as CustomEvent<NavigateToDetail>).detail || {});
     };
 
+    const handleNavigateToAnalysis = () => {
+      navigate('/analysis');
+    };
+
     const handleOpenTransactionDetail = (event: Event) => {
       void openTransactionDetail((event as CustomEvent<TransactionDetailRequest>).detail || {});
     };
@@ -285,15 +289,17 @@ const AppLayout: React.FC = () => {
     };
 
     globalThis.addEventListener('navigateTo', handleNavigateTo);
+    globalThis.addEventListener('navigateToAnalysis', handleNavigateToAnalysis);
     globalThis.addEventListener('openTransactionDetail', handleOpenTransactionDetail);
     globalThis.addEventListener('openTransactionSearch', handleOpenTransactionSearch);
 
     return () => {
       globalThis.removeEventListener('navigateTo', handleNavigateTo);
+      globalThis.removeEventListener('navigateToAnalysis', handleNavigateToAnalysis);
       globalThis.removeEventListener('openTransactionDetail', handleOpenTransactionDetail);
       globalThis.removeEventListener('openTransactionSearch', handleOpenTransactionSearch);
     };
-  }, [navigateToDetail, openTransactionDetail]);
+  }, [navigate, navigateToDetail, openTransactionDetail]);
 
   const handleDismissDonationReminder = useCallback(async () => {
     if (!donationStatus) {

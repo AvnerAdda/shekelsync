@@ -129,6 +129,7 @@ function getRangeDates(range: HistoryTimeRangeOption): { startDate?: string; end
 const InvestmentsPageContent: React.FC = () => {
   const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage' });
+  const refreshShortcutLabel = window.electronAPI?.platform?.isMacOS ? '⌘R' : 'Ctrl+R';
   const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
   const { isLocked, isResolved: isOnboardingResolved, shouldBlockPageData, showLoading } =
     resolveOnboardingGate(onboardingStatus, getPageAccessStatus, 'investments');
@@ -158,6 +159,15 @@ const InvestmentsPageContent: React.FC = () => {
   const [investmentActivity, setInvestmentActivity] = useState<InvestmentData | null>(null);
   const [activityLoading, setActivityLoading] = useState(false);
   const [selectedPikadonAccount, setSelectedPikadonAccount] = useState<InvestmentAccountSummary | null>(null);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const requestedTab = searchParams.get('tab');
+
+    if (requestedTab === 'holdings' && activeTab !== 1) {
+      setActiveTab(1);
+    }
+  }, [activeTab, location.search]);
 
   const {
     data: balanceSheetData,
@@ -575,7 +585,25 @@ const InvestmentsPageContent: React.FC = () => {
 
             {/* Action buttons */}
             <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0 }}>
-              <Tooltip title={t('actions.refreshTooltip')}>
+              <Typography
+                aria-hidden="true"
+                variant="caption"
+                sx={{
+                  px: 1,
+                  py: 0.35,
+                  borderRadius: 1.5,
+                  bgcolor: alpha(theme.palette.background.paper, 0.8),
+                  border: `1px solid ${alpha(theme.palette.divider, 0.16)}`,
+                  color: 'text.secondary',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  lineHeight: 1.2,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {refreshShortcutLabel}
+              </Typography>
+              <Tooltip title={`${t('actions.refreshTooltip')} • ${refreshShortcutLabel}`}>
                 <IconButton
                   onClick={() => void handleRefreshAll()}
                   disabled={isRefreshing}
