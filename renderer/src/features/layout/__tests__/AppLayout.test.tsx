@@ -141,6 +141,18 @@ describe('AppLayout', () => {
     });
   });
 
+  it('navigates to analysis from the onboarding shortcut event', async () => {
+    renderAppLayout();
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('navigateToAnalysis'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent('/analysis');
+    });
+  });
+
   it('loads and opens the global transaction detail modal from events', async () => {
     mockGet.mockResolvedValue({
       ok: true,

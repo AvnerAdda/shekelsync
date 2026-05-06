@@ -468,6 +468,53 @@ describe('Sidebar component', () => {
     });
   });
 
+  it('shows navigation shortcut hints when the sidebar is expanded', async () => {
+    const onPageChange = vi.fn();
+
+    await renderSidebar({ currentPage: 'home', onPageChange });
+
+    expect(screen.getByText('Ctrl+1')).toBeInTheDocument();
+    expect(screen.getByText('Ctrl+2')).toBeInTheDocument();
+    expect(screen.getByText('Ctrl+3')).toBeInTheDocument();
+    expect(screen.getByText('Ctrl+4')).toBeInTheDocument();
+  });
+
+  it('does not navigate when a sidebar page is locked', async () => {
+    const onPageChange = vi.fn();
+
+    mockOnboardingStatus = {
+      profileCompleted: true,
+      bankAccountLinked: true,
+      creditCardLinked: true,
+      firstSyncCompleted: true,
+      dismissed: false,
+      stats: {
+        bankCount: 1,
+        creditCardCount: 1,
+        transactionCount: 12,
+      },
+    };
+    getPageAccessStatus.mockImplementation((page: string) => {
+      if (page === 'investments') {
+        return {
+          isLocked: true,
+          reason: 'Finish setup first',
+        };
+      }
+
+      return {
+        isLocked: false,
+        reason: '',
+      };
+    });
+
+    await renderSidebar({ currentPage: 'home', onPageChange });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Finish setup first' }));
+
+    expect(onPageChange).not.toHaveBeenCalled();
+  });
+
   it('shows backend message when bulk refresh returns success=false', async () => {
     const onPageChange = vi.fn();
     mockCredentials = [

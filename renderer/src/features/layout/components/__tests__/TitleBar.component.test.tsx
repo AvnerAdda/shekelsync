@@ -10,6 +10,11 @@ const setLocale = vi.fn();
 const checkForUpdates = vi.fn();
 const downloadUpdate = vi.fn();
 const installUpdate = vi.fn();
+let latestLocation: { pathname: string; search: string; hash: string } = {
+  pathname: '/',
+  search: '',
+  hash: '',
+};
 
 let mockActualTheme: 'light' | 'dark' = 'light';
 let mockLocale: 'en' | 'he' | 'fr' = 'en';
@@ -94,6 +99,7 @@ vi.mock('@mui/material/Autocomplete', async () => {
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigate,
+  useLocation: () => latestLocation,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -220,6 +226,7 @@ describe('TitleBar component', () => {
     mockActualTheme = 'light';
     mockLocale = 'en';
     mockDonationStatus = { hasDonated: false, tier: 'none', supportStatus: 'none' };
+    latestLocation = { pathname: '/', search: '', hash: '' };
     (window as any).electronAPI = buildElectronApi(false);
   });
 
@@ -234,6 +241,25 @@ describe('TitleBar component', () => {
     await user.click(await screen.findByRole('option', { name: 'Analysis' }, { timeout: 10_000 }));
 
     expect(navigate).toHaveBeenCalledWith('/analysis');
+  }, 10_000);
+
+  it('shows the global quick-jump shortcut hint', async () => {
+    await renderTitleBar({ sessionDisplayName: 'Demo User', authLoading: false });
+
+    expect(screen.getByText('Ctrl+K')).toBeInTheDocument();
+  });
+
+  it('navigates to the holdings tab from search selection', async () => {
+    const user = userEvent.setup();
+
+    await renderTitleBar({ sessionDisplayName: 'Demo User', authLoading: false });
+
+    const combobox = screen.getByRole('combobox');
+    await user.click(combobox);
+    fireEvent.change(combobox, { target: { value: 'holdings' } });
+    await user.click(await screen.findByRole('option', { name: 'titleBar.search.options.holdings' }, { timeout: 10_000 }));
+
+    expect(navigate).toHaveBeenCalledWith('/investments?tab=holdings');
   }, 10_000);
 
   it('toggles theme mode and applies language selection', async () => {

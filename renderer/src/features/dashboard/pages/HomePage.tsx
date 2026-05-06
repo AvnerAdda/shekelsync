@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, Paper, Typography, CircularProgress, useTheme, Alert } from '@mui/material';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Box, Paper, Typography, CircularProgress, useTheme, Alert, Button } from '@mui/material';
 import { AccountBalance as AccountBalanceIcon, InfoOutlined as InfoIcon } from '@mui/icons-material';
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
@@ -24,7 +24,7 @@ import { CHART_COLORS } from '@renderer/shared/chart-colors';
 type YAxisScale = 'linear' | 'log';
 
 const DashboardHomeContent: React.FC = () => {
-  const { t } = useTranslation('translation', { keyPrefix: 'dashboardHome' });
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'dashboardHome' });
   // Helper function to parse date strings from SQLite without timezone conversion
   const parseLocalDate = (dateStr: string): Date => {
     if (!dateStr || typeof dateStr !== 'string') {
@@ -70,6 +70,8 @@ const DashboardHomeContent: React.FC = () => {
   } = useCurrentMonthPairingGap({ days: 30, enabled: periodDays === 30 });
   const [yAxisScale, setYAxisScale] = useState<YAxisScale>('linear');
   const [fallbackEnabled, setFallbackEnabled] = useState(false);
+  const [showFallbackData, setShowFallbackData] = useState(false);
+  const fallbackResetInitializedRef = useRef(false);
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
   const { status: onboardingStatus } = useOnboarding();
@@ -92,6 +94,7 @@ const DashboardHomeContent: React.FC = () => {
   const {
     data: fallbackDashboardData,
     loading: fallbackDashboardLoading,
+    refresh: refreshFallbackDashboard,
   } = useDashboardData({
     startDate: fallbackStartDate,
     endDate: fallbackEndDate,
@@ -120,7 +123,7 @@ const DashboardHomeContent: React.FC = () => {
   } = useWaterfallData({
     startDate: fallbackStartDate,
     endDate: fallbackEndDate,
-    enabled: fallbackEnabled && waterfallEnabled,
+    enabled: showFallbackData && waterfallEnabled,
   });
 
   const {
@@ -146,7 +149,7 @@ const DashboardHomeContent: React.FC = () => {
     startDate: fallbackStartDate,
     endDate: fallbackEndDate,
     initialTypes: [],
-    enabled: fallbackEnabled,
+    enabled: showFallbackData,
   });
 
   const handleChartAreaClick = (data: any) => {
@@ -315,6 +318,30 @@ const DashboardHomeContent: React.FC = () => {
   const fallbackHasHistory = (fallbackDashboardData?.history?.length ?? 0) > 0;
   const hasTransactions = (onboardingStatus?.stats?.transactionCount ?? 0) > 0;
 
+  const formatRangeLabel = useCallback((rangeStart: Date, rangeEnd: Date) => {
+    const formatter = new Intl.DateTimeFormat(i18n.language || undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const formattedStart = formatter.format(rangeStart);
+    const formattedEnd = formatter.format(rangeEnd);
+
+    return formattedStart === formattedEnd
+      ? formattedStart
+      : `${formattedStart} - ${formattedEnd}`;
+  }, [i18n.language]);
+
+  const selectedRangeLabel = useMemo(
+    () => formatRangeLabel(startDate, endDate),
+    [endDate, formatRangeLabel, startDate],
+  );
+
+  const fallbackRangeLabel = useMemo(
+    () => formatRangeLabel(fallbackStartDate, fallbackEndDate),
+    [fallbackEndDate, fallbackStartDate, formatRangeLabel],
+  );
+
   useEffect(() => {
     // Prefer primary data; enable fallback fetches only if the current range is empty
     if (!fallbackEnabled && !dashboardLoading && !primaryHasHistory && hasTransactions) {
@@ -326,21 +353,37 @@ const DashboardHomeContent: React.FC = () => {
     // If primary data appears again, stop issuing fallback requests
     if (fallbackEnabled && primaryHasHistory) {
       setFallbackEnabled(false);
+      setShowFallbackData(false);
     }
   }, [fallbackEnabled, primaryHasHistory]);
 
   useEffect(() => {
+    if (showFallbackData && !fallbackDashboardLoading && !fallbackHasHistory) {
+      setShowFallbackData(false);
+    }
+  }, [fallbackDashboardLoading, fallbackHasHistory, showFallbackData]);
+
+  useEffect(() => {
     // Reset fallback when the viewed period changes
+    if (!fallbackResetInitializedRef.current) {
+      fallbackResetInitializedRef.current = true;
+      return;
+    }
+
     setFallbackEnabled(false);
+    setShowFallbackData(false);
   }, [aggregationPeriod, endDate, startDate]);
 
   useEffect(() => {
     const handleDataRefresh = () => {
       refreshDashboard();
+      if (fallbackEnabled) {
+        refreshFallbackDashboard();
+      }
       refreshPortfolio();
       refreshPairingGap();
 
-      if (fallbackEnabled) {
+      if (showFallbackData) {
         refreshFallbackBreakdowns(['expense', 'income']);
         if (selectedBreakdownType === 'investment') {
           void fetchFallbackBreakdown('investment');
@@ -374,18 +417,20 @@ const DashboardHomeContent: React.FC = () => {
     refreshAccountSignals,
     refreshBreakdowns,
     refreshDashboard,
+    refreshFallbackDashboard,
     refreshPairingGap,
     refreshFallbackBreakdowns,
     refreshFallbackWaterfall,
     refreshPortfolio,
     refreshWaterfall,
+    showFallbackData,
     waterfallEnabled,
     selectedBreakdownType,
   ]);
 
   useEffect(() => {
     if (selectedBreakdownType === 'investment') {
-      if (fallbackEnabled) {
+      if (showFallbackData) {
         if (
           !fallbackBreakdownData.investment &&
           !fallbackBreakdownLoading.investment &&
@@ -405,18 +450,18 @@ const DashboardHomeContent: React.FC = () => {
     fallbackBreakdownData.investment,
     fallbackBreakdownErrors.investment,
     fallbackBreakdownLoading.investment,
-    fallbackEnabled,
     fetchBreakdown,
     fetchFallbackBreakdown,
     breakdownData.investment,
     breakdownErrors.investment,
     breakdownLoading.investment,
     selectedBreakdownType,
+    showFallbackData,
   ]);
 
   // Fetch expense breakdown for SummaryCards Financial Health metrics
   useEffect(() => {
-    if (fallbackEnabled) {
+    if (showFallbackData) {
       if (
         !fallbackBreakdownData.expense &&
         !fallbackBreakdownLoading.expense &&
@@ -438,9 +483,9 @@ const DashboardHomeContent: React.FC = () => {
     fallbackBreakdownData.expense,
     fallbackBreakdownErrors.expense,
     fallbackBreakdownLoading.expense,
-    fallbackEnabled,
     fetchBreakdown,
     fetchFallbackBreakdown,
+    showFallbackData,
   ]);
 
   useEffect(() => {
@@ -448,7 +493,7 @@ const DashboardHomeContent: React.FC = () => {
       return;
     }
 
-    if (fallbackEnabled) {
+    if (showFallbackData) {
       if (
         !fallbackBreakdownData.income &&
         !fallbackBreakdownLoading.income &&
@@ -470,10 +515,10 @@ const DashboardHomeContent: React.FC = () => {
     fallbackBreakdownData.income,
     fallbackBreakdownErrors.income,
     fallbackBreakdownLoading.income,
-    fallbackEnabled,
     fetchBreakdown,
     fetchFallbackBreakdown,
     selectedBreakdownType,
+    showFallbackData,
   ]);
 
   // Toggle to compare current month with last month
@@ -481,18 +526,17 @@ const DashboardHomeContent: React.FC = () => {
     setCompareToLastMonth(!compareToLastMonth);
   };
 
-  const shouldUseFallback = fallbackEnabled && !primaryHasHistory && fallbackHasHistory && hasTransactions;
+  const canOfferFallback = fallbackEnabled && !primaryHasHistory && fallbackHasHistory && hasTransactions;
+  const shouldUseFallback = showFallbackData && canOfferFallback;
 
   // Determine effective data to display (use fallback when current period is empty)
   const effectiveData = shouldUseFallback ? fallbackDashboardData : data;
   const effectiveWaterfallData = shouldUseFallback ? fallbackWaterfallData : waterfallData;
   const effectiveBreakdownData = shouldUseFallback ? fallbackBreakdownData : breakdownData;
   const effectiveBreakdownLoading = shouldUseFallback ? fallbackBreakdownLoading : breakdownLoading;
-  const effectiveStartDate = shouldUseFallback ? fallbackStartDate : startDate;
-  const effectiveEndDate = shouldUseFallback ? fallbackEndDate : endDate;
 
-  // Show loading while primary data loads, or while checking fallback
-  const isLoading = dashboardLoading || (fallbackEnabled && fallbackDashboardLoading);
+  // Show loading while primary data loads, or while explicitly switching to fallback data
+  const isLoading = dashboardLoading || (showFallbackData && fallbackDashboardLoading);
 
   if (isLoading || !effectiveData || !effectiveData.summary) {
     return (
@@ -627,16 +671,39 @@ const DashboardHomeContent: React.FC = () => {
 
   return (
     <Box>
-      {shouldUseFallback && (
-        <Alert 
-          severity="info" 
+      {!primaryHasHistory && hasTransactions && (
+        <Alert
+          severity="info"
           icon={<InfoIcon />}
           sx={{ mb: 2 }}
+          action={canOfferFallback ? (
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => setShowFallbackData((current) => !current)}
+            >
+              {shouldUseFallback
+                ? t('empty.returnToSelectedRange', {
+                    selectedRange: selectedRangeLabel,
+                  })
+                : t('empty.showPreviousRange', {
+                    fallbackRange: fallbackRangeLabel,
+                  })}
+            </Button>
+          ) : undefined}
         >
-          {t('empty.showingPreviousMonth', {
-            currentMonth: format(startDate, 'MMMM yyyy'),
-            displayedMonth: format(effectiveStartDate, 'MMMM yyyy'),
-          })}
+          {shouldUseFallback
+            ? t('empty.showingPreviousRange', {
+                selectedRange: selectedRangeLabel,
+                fallbackRange: fallbackRangeLabel,
+              })
+            : fallbackEnabled && fallbackDashboardLoading
+              ? t('empty.checkingPreviousRange', {
+                  selectedRange: selectedRangeLabel,
+                })
+              : t('empty.selectedRangeDescription', {
+                  selectedRange: selectedRangeLabel,
+                })}
         </Alert>
       )}
       <DashboardSummarySection
@@ -681,16 +748,16 @@ const DashboardHomeContent: React.FC = () => {
 
       <Box id="breakdown">
         <BreakdownTabsSection
-        selectedBreakdownType={selectedBreakdownType}
-        onSelectBreakdown={(value) => setSelectedBreakdownType(value)}
-        waterfallData={effectiveWaterfallData}
-        waterfallLoading={shouldUseFallback ? fallbackWaterfallLoading : waterfallLoading}
-        liquidPortfolio={liquidPortfolio}
-        restrictedPortfolio={restrictedPortfolio}
-        formatCurrencyValue={formatCurrencyValue}
-        breakdownData={effectiveBreakdownData}
-        breakdownLoading={effectiveBreakdownLoading}
-        hasBankAccounts={hasBankAccounts}
+          selectedBreakdownType={selectedBreakdownType}
+          onSelectBreakdown={(value) => setSelectedBreakdownType(value)}
+          waterfallData={effectiveWaterfallData}
+          waterfallLoading={shouldUseFallback ? fallbackWaterfallLoading : waterfallLoading}
+          liquidPortfolio={liquidPortfolio}
+          restrictedPortfolio={restrictedPortfolio}
+          formatCurrencyValue={formatCurrencyValue}
+          breakdownData={effectiveBreakdownData}
+          breakdownLoading={effectiveBreakdownLoading}
+          hasBankAccounts={hasBankAccounts}
           data={effectiveData}
           chartColors={CHART_COLORS}
         />
