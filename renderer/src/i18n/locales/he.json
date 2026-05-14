@@ -826,6 +826,11 @@
       "liquidHint": "השקעות נגישות",
       "noLiquid": "אין השקעות נזילות",
       "addLiquidHint": "הוסיפו ברוקר, קריפטו או חשבונות חיסכון",
+      "illiquid": "נדל\"ן לא נזיל",
+      "illiquidTotal": "סה\"כ לא נזיל: {{amount}}",
+      "illiquidHint": "נכסי נדל\"ן שאינם זמינים במהירות",
+      "noIlliquid": "אין נכסים לא נזילים",
+      "addIlliquidHint": "הוסיפו חשבון נדל\"ן",
       "restricted": "השקעות מוגבלות",
       "restrictedTotal": "סה\"כ מוגבל: {{amount}}",
       "restrictedHint": "פנסיה, קופות גמל וקרנות השתלמות",
@@ -1963,6 +1968,7 @@
       "buckets": {
         "cash": "מזומן",
         "liquid": "נזיל",
+        "illiquid": "לא נזיל",
         "restricted": "טווח ארוך",
         "stability": "ביטוח",
         "other": "אחר"
@@ -2032,6 +2038,7 @@
       "group": {
         "cash": "מזומן",
         "liquid": "השקעות נזילות",
+        "illiquid": "נדל\"ן לא נזיל",
         "restricted": "חסכונות לטווח ארוך",
         "stability": "ביטוח ויציבות",
         "other": "נכסים אחרים",

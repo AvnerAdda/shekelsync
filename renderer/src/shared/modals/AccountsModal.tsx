@@ -159,6 +159,7 @@ const mapInstitutionLeafToManualAccountType = (leaf: InstitutionTreeNode): strin
   if (leaf.institution_type === 'investment') {
     if (leaf.subcategory === 'pension') return 'pension';
     if (leaf.subcategory === 'provident') return 'provident';
+    if (leaf.subcategory === 'real_estate') return 'real_estate';
     if (leaf.subcategory === 'cash') return 'savings';
     return 'other';
   }
@@ -3402,6 +3403,7 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                       <AccountSection key={key}>
                         <SectionHeader>
                           {subcategory.id === 'liquid' && <TrendingUpIcon sx={{ color: subcategory.color, fontSize: '24px' }} />}
+                          {subcategory.id === 'illiquid' && <BusinessIcon sx={{ color: subcategory.color, fontSize: '24px' }} />}
                           {subcategory.id === 'restricted' && <LockIcon sx={{ color: subcategory.color, fontSize: '24px' }} />}
                           {subcategory.id === 'stability' && <SecurityIcon sx={{ color: subcategory.color, fontSize: '24px' }} />}
                           {subcategory.id === 'alternative' && <BusinessIcon sx={{ color: subcategory.color, fontSize: '24px' }} />}
