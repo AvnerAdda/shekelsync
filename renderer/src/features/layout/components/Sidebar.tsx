@@ -122,6 +122,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { latestEvent: scrapeEvent } = useScrapeProgress();
   const reduceVisualEffects = window.electronAPI?.platform?.reduceVisualEffects === true;
+  const modifierKeyLabel = window.electronAPI?.platform?.isMacOS ? '⌘' : 'Ctrl+';
 
   const openAccountsModal = useCallback((request: AccountsModalOpenRequest | null = null) => {
     setAccountsModalRequest(request);
@@ -134,12 +135,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
 
   const menuItems = useMemo(
     () => [
-      { id: 'home', label: t('menu.overview'), icon: <HomeIcon /> },
-      { id: 'analysis', label: t('menu.analysis'), icon: <AnalysisIcon /> },
-      { id: 'investments', label: t('menu.investments'), icon: <InvestmentIcon /> },
-      { id: 'settings', label: t('menu.settings'), icon: <SettingsIcon /> },
+      { id: 'home', label: t('menu.overview'), icon: <HomeIcon />, shortcut: `${modifierKeyLabel}1` },
+      { id: 'analysis', label: t('menu.analysis'), icon: <AnalysisIcon />, shortcut: `${modifierKeyLabel}2` },
+      { id: 'investments', label: t('menu.investments'), icon: <InvestmentIcon />, shortcut: `${modifierKeyLabel}3` },
+      { id: 'settings', label: t('menu.settings'), icon: <SettingsIcon />, shortcut: `${modifierKeyLabel}4` },
     ],
-    [t],
+    [modifierKeyLabel, t],
   );
 
   const fetchStats = useCallback(async () => {
@@ -596,17 +597,25 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
               item.id,
             );
             const isActive = currentPage === item.id;
+            const handleItemClick = () => {
+              if (isLocked) {
+                return;
+              }
+
+              onPageChange(item.id);
+            };
 
             return (
               <ListItem key={item.id} disablePadding sx={{ mb: 1 }}>
                 <Tooltip
-                  title={isLocked ? accessStatus.reason : (!open ? item.label : '')}
+                  title={isLocked ? accessStatus.reason : (!open ? `${item.label} • ${item.shortcut}` : '')}
                   placement="right"
                   arrow
                 >
                   <ListItemButton
                     selected={isActive}
-                    onClick={() => onPageChange(item.id)}
+                    onClick={handleItemClick}
+                    aria-disabled={isLocked || undefined}
                     sx={{
                       minHeight: 48,
                       justifyContent: open ? 'initial' : 'center',
@@ -654,13 +663,28 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                       )}
                     </ListItemIcon>
                     {open && (
-                      <ListItemText 
-                        primary={item.label} 
-                        primaryTypographyProps={{
-                          fontWeight: isActive ? 600 : 500,
-                          fontSize: '0.95rem',
-                        }}
-                      />
+                      <>
+                        <ListItemText 
+                          primary={item.label} 
+                          primaryTypographyProps={{
+                            fontWeight: isActive ? 600 : 500,
+                            fontSize: '0.95rem',
+                          }}
+                        />
+                        <Typography
+                          aria-hidden="true"
+                          variant="caption"
+                          sx={{
+                            ml: 1,
+                            color: isActive ? 'primary.main' : 'text.secondary',
+                            fontWeight: 700,
+                            letterSpacing: '0.04em',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {item.shortcut}
+                        </Typography>
+                      </>
                     )}
                   </ListItemButton>
                 </Tooltip>

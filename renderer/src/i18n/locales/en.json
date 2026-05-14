@@ -288,6 +288,11 @@
     "empty": {
       "welcomeTitle": "Welcome to ShekelSync!",
       "welcomeDescription": "Let's get your finances organized. Follow these steps to start tracking your expenses and income.",
+      "selectedRangeDescription": "You have transaction history, but none for {{selectedRange}}.",
+      "checkingPreviousRange": "No transactions found for {{selectedRange}}. Checking your most recent activity.",
+      "showPreviousRange": "Show {{fallbackRange}}",
+      "returnToSelectedRange": "Back to {{selectedRange}}",
+      "showingPreviousRange": "Showing {{fallbackRange}} because {{selectedRange}} has no transactions.",
       "noTransactionsTitle": "No transactions in current month",
       "noTransactionsDescription": "You have {{count}} transactions total, but none in the current month ({{month}}). Try scraping recent data or view historical analysis in the Analysis page.",
       "noTransactionsDisclaimer": "No transactions recorded yet for {{month}}. The data shown below reflects your most recent available period.",
@@ -965,6 +970,7 @@
       "actions": "Actions",
       "spending": "Spending",
       "budget": "Budget",
+      "more": "More",
       "scoring": "Scoring",
       "subscriptions": "Subscriptions",
       "profiling": "Profiling"
@@ -1142,6 +1148,13 @@
       "subtitle": "Smart insights, budget tracking, and financial health metrics"
     },
     "dashboard": {
+      "overview": {
+        "title": "Start with the essentials",
+        "subtitle": "Rhythm and forward-looking cash signals stay visible first. Open personality framing and time-value context only when you need it.",
+        "show": "Show deeper insights",
+        "hide": "Hide deeper insights",
+        "count": "{{count}} extra cards"
+      },
       "rhythm": {
         "title": "Your Financial Rhythm",
         "spendingByHour": "Spending by Hour of Day",
