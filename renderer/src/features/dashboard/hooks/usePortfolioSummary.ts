@@ -8,6 +8,7 @@ import {
 interface UsePortfolioSummaryResult {
   portfolioValue: number | null;
   liquidPortfolio: PortfolioBreakdownItem[];
+  illiquidPortfolio: PortfolioBreakdownItem[];
   restrictedPortfolio: PortfolioBreakdownItem[];
   loading: boolean;
   error: Error | null;
@@ -17,6 +18,7 @@ interface UsePortfolioSummaryResult {
 export function usePortfolioSummary(): UsePortfolioSummaryResult {
   const [portfolioValue, setPortfolioValue] = useState<number | null>(null);
   const [liquidPortfolio, setLiquidPortfolio] = useState<PortfolioBreakdownItem[]>([]);
+  const [illiquidPortfolio, setIlliquidPortfolio] = useState<PortfolioBreakdownItem[]>([]);
   const [restrictedPortfolio, setRestrictedPortfolio] = useState<PortfolioBreakdownItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -39,6 +41,7 @@ export function usePortfolioSummary(): UsePortfolioSummaryResult {
 
       const breakdownEntries = Array.isArray(result?.breakdown) ? result.breakdown : [];
       const liquidTotal = Number(summary?.liquid?.totalValue ?? 0);
+      const illiquidTotal = Number(summary?.illiquid?.totalValue ?? 0);
       const restrictedTotal = Number(summary?.restricted?.totalValue ?? 0);
 
       const liquidItems: PortfolioBreakdownItem[] = breakdownEntries
@@ -59,12 +62,22 @@ export function usePortfolioSummary(): UsePortfolioSummaryResult {
           category: entry.category,
         }));
 
+      const illiquidItems: PortfolioBreakdownItem[] = breakdownEntries
+        .filter((entry) => entry.category === 'illiquid')
+        .map((entry) => ({
+          name: entry.name || entry.type || 'Unknown',
+          value: entry.totalValue,
+          percentage: illiquidTotal > 0 ? (entry.totalValue / illiquidTotal) * 100 : 0,
+          category: entry.category,
+        }));
+
       if (requestId !== requestIdRef.current) {
         return;
       }
 
       setPortfolioValue(totalPortfolioValue);
       setLiquidPortfolio(liquidItems);
+      setIlliquidPortfolio(illiquidItems);
       setRestrictedPortfolio(restrictedItems);
     } catch (err) {
       if (requestId !== requestIdRef.current) {
@@ -73,6 +86,7 @@ export function usePortfolioSummary(): UsePortfolioSummaryResult {
 
       setPortfolioValue(0);
       setLiquidPortfolio([]);
+      setIlliquidPortfolio([]);
       setRestrictedPortfolio([]);
       setError(err as Error);
     } finally {
@@ -93,6 +107,7 @@ export function usePortfolioSummary(): UsePortfolioSummaryResult {
   return {
     portfolioValue,
     liquidPortfolio,
+    illiquidPortfolio,
     restrictedPortfolio,
     loading,
     error,

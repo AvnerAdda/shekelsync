@@ -68,6 +68,7 @@ function getAllTransactions(db, sinceDate = null) {
       t.name,
       t.price,
       t.category_type,
+      t.category_definition_id,
       cd.name as category_name,
       parent_cd.name as parent_category_name,
       strftime('%w', t.date) as day_of_week,
@@ -95,6 +96,7 @@ function getCurrentMonthTransactions(db, currentMonth) {
       t.name,
       t.price,
       t.category_type,
+      t.category_definition_id,
       cd.name as category_name,
       strftime('%w', t.date) as day_of_week,
       CAST(strftime('%d', t.date) AS INTEGER) as day_of_month
@@ -171,6 +173,24 @@ function getDayName(dayOfWeek) {
   return days[dayOfWeek];
 }
 
+function getTransactionCategoryName(txn) {
+  return txn.category_name || 'Uncategorized';
+}
+
+function getCategoryPatternKey(txn) {
+  const categoryDefinitionId = txn.category_definition_id;
+  if (categoryDefinitionId !== null && categoryDefinitionId !== undefined && String(categoryDefinitionId) !== '') {
+    return `category:${categoryDefinitionId}`;
+  }
+  return `${txn.category_type || 'unknown'}:${getTransactionCategoryName(txn)}`;
+}
+
+function getTransactionNamePatternKey(txn, transactionName) {
+  const nameKey = typeof transactionName === 'string' ? transactionName.trim() : '';
+  if (!nameKey) return getCategoryPatternKey(txn);
+  return `${getCategoryPatternKey(txn)}:name:${nameKey}`;
+}
+
 // ==================== PATTERN ANALYSIS ====================
 function analyzeCategoryPatterns(transactions) {
   const patterns = {};
@@ -184,13 +204,20 @@ function analyzeCategoryPatterns(transactions) {
   const tempPatterns = {};
 
   transactions.forEach(txn => {
-    const categoryKey = txn.category_name || 'Uncategorized';
-    if (excludeCategories.includes(categoryKey)) return;
-    if (!tempPatterns[categoryKey]) tempPatterns[categoryKey] = [];
-    tempPatterns[categoryKey].push(txn);
+    const categoryName = getTransactionCategoryName(txn);
+    if (excludeCategories.includes(categoryName)) return;
+    const categoryKey = getCategoryPatternKey(txn);
+    if (!tempPatterns[categoryKey]) {
+      tempPatterns[categoryKey] = {
+        categoryName,
+        txns: [],
+      };
+    }
+    tempPatterns[categoryKey].txns.push(txn);
   });
 
-  Object.entries(tempPatterns).forEach(([categoryKey, txns]) => {
+  Object.entries(tempPatterns).forEach(([categoryKey, group]) => {
+    const { categoryName, txns } = group;
     const categoryType = txns[0]?.category_type;
 
     // Some categories include multiple distinct recurring items (e.g., multiple salary sources).
@@ -218,7 +245,9 @@ function analyzeCategoryPatterns(transactions) {
     const addTxnToPattern = (patternKey, txn, { includeDailyTotals } = {}) => {
       if (!patterns[patternKey]) {
         patterns[patternKey] = {
-          category: categoryKey,
+          patternKey,
+          category: categoryName,
+          categoryDefinitionId: txn.category_definition_id ?? null,
           transactionName: txn.name || null,
           categoryType: txn.category_type,
           parentCategory: txn.parent_category_name,
@@ -263,9 +292,10 @@ function analyzeCategoryPatterns(transactions) {
     if (shouldSplit) {
       const used = new Set();
       recurringNameGroups.forEach(([name, group]) => {
+        const namePatternKey = getTransactionNamePatternKey(group[0], name);
         group.forEach(txn => {
           used.add(txn);
-          addTxnToPattern(name, txn);
+          addTxnToPattern(namePatternKey, txn);
         });
       });
 
@@ -545,7 +575,7 @@ function buildPatternCaches(patterns) {
     cache.avgOccurrencesPerMonth = avgOccurrencesPerMonth;
     cache.isLowFrequency = avgOccurrencesPerMonth > 0 && avgOccurrencesPerMonth < 0.5;
     cache.domDaysRaw = domDaysRaw;
-    cache.monthlyKey = pattern.transactionName || pattern.category;
+    cache.monthlyKey = pattern.patternKey || pattern.transactionName || pattern.category;
 
     const dayOfWeekProb = new Array(7).fill(0);
     let maxDayOfWeekProb = 0;
@@ -636,9 +666,16 @@ function adjustProbabilitiesForCurrentMonth(patterns, currentMonthTransactions, 
   const daysInCurrentMonth = getDaysInMonth(now.getFullYear(), now.getMonth());
 
   currentMonthTransactions.forEach(txn => {
-    const category = txn.category_name || 'Uncategorized';
-    const transactionName = txn.name;
-    const patternKey = patterns[transactionName] ? transactionName : category;
+    const transactionName = typeof txn.name === 'string' ? txn.name.trim() : '';
+    const categoryName = getTransactionCategoryName(txn);
+    const categoryPatternKey = getCategoryPatternKey(txn);
+    const namePatternKey = transactionName ? getTransactionNamePatternKey(txn, transactionName) : null;
+    const legacyPatternKey = (transactionName && patterns[transactionName])
+      ? transactionName
+      : (patterns[categoryName] ? categoryName : null);
+    const patternKey = namePatternKey && patterns[namePatternKey]
+      ? namePatternKey
+      : (patterns[categoryPatternKey] ? categoryPatternKey : (legacyPatternKey || categoryPatternKey));
     if (!occurredCategories[patternKey]) {
       occurredCategories[patternKey] = [];
     }
@@ -904,7 +941,7 @@ function buildChosenMonthlyOccurrenceDateByMonth(dailyForecasts) {
     if (!monthKey) return;
     (day.predictions || []).forEach((pred) => {
       if (!pred?.isChosenOccurrence) return;
-      const key = pred.transactionName || pred.category;
+      const key = pred.monthlyKey || pred.transactionName || pred.category;
       if (!key) return;
       if (!chosenMonthlyOccurrenceDateByMonth[monthKey]) chosenMonthlyOccurrenceDateByMonth[monthKey] = {};
       chosenMonthlyOccurrenceDateByMonth[monthKey][key] = day.date;
@@ -1021,11 +1058,14 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
     if (effectiveProb >= threshold) {
       const expectedAmount = pattern.useDailyTotal ? pattern.avgDailyTotal : pattern.avgAmount;
       const stdDev = pattern.useDailyTotal ? pattern.stdDevDailyTotal : pattern.stdDev;
-      const transactionName = pattern._cache?.monthlyKey || pattern.transactionName || pattern.category;
+      const monthlyKey = pattern._cache?.monthlyKey || pattern.patternKey || pattern.transactionName || pattern.category;
+      const transactionName = pattern.transactionName || pattern.category;
 
       const prediction = {
         category: pattern.category,
+        categoryDefinitionId: pattern.categoryDefinitionId ?? null,
         transactionName,
+        monthlyKey,
         categoryType: pattern.categoryType,
         parentCategory: pattern.parentCategory,
         probability: effectiveProb,
@@ -1043,7 +1083,7 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
       if (simulationEntries) {
         simulationEntries.push({
           patternKey: category,
-          monthlyKey: transactionName,
+          monthlyKey,
           categoryType: pattern.categoryType,
           patternType: pattern.patternType,
           probability: effectiveProb,
@@ -1105,6 +1145,7 @@ function adjustMonthlyPatternForecasts(dailyForecasts, patterns, adjustments) {
     })
     .map(([key, pattern]) => ({
       key,
+      monthlyKey: pattern._cache?.monthlyKey || pattern.patternKey || pattern.transactionName || pattern.category || key,
       transactionName: pattern.transactionName || pattern.category,
       category: pattern.category,
       categoryType: pattern.categoryType,
@@ -1112,13 +1153,13 @@ function adjustMonthlyPatternForecasts(dailyForecasts, patterns, adjustments) {
     }));
 
   if (monthlyPatterns.length > 0) {
-    const monthlyKeys = new Set(monthlyPatterns.map(p => p.transactionName));
+    const monthlyKeys = new Set(monthlyPatterns.map(p => p.monthlyKey));
     const predictionsByKey = new Map();
 
     dailyForecasts.forEach((day, dayIndex) => {
       if (!Array.isArray(day.predictions)) return;
       day.predictions.forEach(pred => {
-        const key = pred.transactionName || pred.category;
+        const key = pred.monthlyKey || pred.transactionName || pred.category;
         if (!monthlyKeys.has(key)) return;
         if (!predictionsByKey.has(key)) predictionsByKey.set(key, []);
         predictionsByKey.get(key).push({ dayIndex, prediction: pred, probability: pred.probability });
@@ -1126,7 +1167,7 @@ function adjustMonthlyPatternForecasts(dailyForecasts, patterns, adjustments) {
     });
 
     monthlyPatterns.forEach(monthlyPattern => {
-      const patternKey = monthlyPattern.transactionName;
+      const patternKey = monthlyPattern.monthlyKey;
       const daysWithPattern = predictionsByKey.get(patternKey);
       if (!daysWithPattern || daysWithPattern.length === 0) return;
       const maxProbDay = daysWithPattern.reduce((max, curr) => (curr.probability > max.probability ? curr : max));
@@ -1344,7 +1385,10 @@ async function generateDailyForecast(options = {}) {
       },
       scenarios: {}, // filled below with cumulative cash flow per scenario
       categoryPatterns: Object.values(patterns).map(p => ({
+        patternKey: p.patternKey,
         category: p.category,
+        categoryDefinitionId: p.categoryDefinitionId ?? null,
+        transactionName: p.transactionName,
         categoryType: p.categoryType,
         patternType: p.patternType,
         avgAmount: p.avgAmount,
@@ -1489,8 +1533,10 @@ function buildBudgetOutlook(result) {
       (day.predictions || [])
         .filter(p => p.categoryType === 'expense')
         .forEach(p => {
-          const catDef = categoryDefinitionsByName[p.category] || categoryDefinitionsByName[p.transactionName];
-          const catId = catDef?.id || null;
+          const catDef = p.categoryDefinitionId
+            ? categoryDefinitionsById[p.categoryDefinitionId]
+            : (categoryDefinitionsByName[p.category] || categoryDefinitionsByName[p.transactionName]);
+          const catId = catDef?.id || p.categoryDefinitionId || null;
           const catName = catDef?.name || p.category;
           const key = makeCategoryKey(catId, catName);
           const current = forecastRemainingByCategory.get(key) || { amount: 0, categoryDefinitionId: catId, categoryName: catName };
@@ -1659,11 +1705,13 @@ function buildBudgetOutlook(result) {
  */
 async function getForecast(options = {}) {
   const result = await generateDailyForecast(options);
-  const { budgetOutlook, budgetSummary, categoryDefinitionsByName } = buildBudgetOutlook(result);
+  const { budgetOutlook, budgetSummary, categoryDefinitionsByName, categoryDefinitionsById } = buildBudgetOutlook(result);
 
   // Enrich patterns with category IDs and names
   const patterns = (result.categoryPatterns || []).map(p => {
-    const catDef = categoryDefinitionsByName[p.category];
+    const catDef = p.categoryDefinitionId
+      ? categoryDefinitionsById[p.categoryDefinitionId]
+      : categoryDefinitionsByName[p.category];
     const confidence = Number.isFinite(p.confidence) ? p.confidence : 0.6;
     const monthsOfHistory = Number.isFinite(p.monthsOfHistory) ? p.monthsOfHistory : 1;
     const isLikelyFixedRecurring =
@@ -1675,7 +1723,7 @@ async function getForecast(options = {}) {
       : null;
     return {
       category: p.category,
-      categoryDefinitionId: catDef?.id || null,
+      categoryDefinitionId: p.categoryDefinitionId || catDef?.id || null,
       categoryName: catDef?.name || p.category,
       categoryNameEn: catDef?.name_en || p.category,
       categoryNameFr: catDef?.name_fr || p.category,
@@ -1730,10 +1778,12 @@ module.exports = {
     generateForecastAcrossMonths,
     forecastDay,
     getAllTransactions,
+    getCategoryPatternKey,
     getCurrentMonthTransactions,
     getDayName,
     getDaysInMonth,
     getProbabilityThreshold,
+    getTransactionNamePatternKey,
     isLastDayOfMonth,
     loadCategoryDefinitions,
     logPatternSummary,

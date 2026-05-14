@@ -35,6 +35,7 @@ const getAccountIcon = (accountType: string, category?: string | null) => {
 
   if (cat.includes('crypto') || cat.includes('bitcoin')) return CryptoIcon;
   if (cat.includes('real') || cat.includes('property')) return RealEstateIcon;
+  if (type.includes('real_estate') || type.includes('property')) return RealEstateIcon;
   if (type.includes('pension') || type.includes('gemel') || type.includes('hishtalmut')) return SavingsIcon;
   if (type.includes('broker') || type.includes('stock')) return StockIcon;
   return BankIcon;

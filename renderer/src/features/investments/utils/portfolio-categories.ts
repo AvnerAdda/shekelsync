@@ -8,6 +8,7 @@ import type {
 export const INVESTMENT_CATEGORY_ORDER: InvestmentCategoryKey[] = [
   'cash',
   'liquid',
+  'illiquid',
   'restricted',
   'stability',
   'other',
@@ -18,7 +19,11 @@ export function isInvestmentCategoryKey(value: unknown): value is InvestmentCate
     && INVESTMENT_CATEGORY_ORDER.includes(value as InvestmentCategoryKey);
 }
 
-export function normalizeInvestmentCategory(value: unknown): InvestmentCategoryKey {
+export function normalizeInvestmentCategory(value: unknown, accountType?: unknown): InvestmentCategoryKey {
+  if (accountType === 'real_estate') {
+    return 'illiquid';
+  }
+
   return isInvestmentCategoryKey(value) ? value : 'other';
 }
 
@@ -53,7 +58,8 @@ function deriveAccountsForCategory(
   category: InvestmentCategoryKey,
 ): InvestmentAccountSummary[] {
   const accounts = Array.isArray(portfolio?.accounts) ? portfolio.accounts : [];
-  return accounts.filter((account) => normalizeInvestmentCategory(account.investment_category) === category);
+  return accounts.filter((account) =>
+    normalizeInvestmentCategory(account.investment_category, account.account_type) === category);
 }
 
 export function getPortfolioCategoryBucket(

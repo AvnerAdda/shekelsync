@@ -5,12 +5,13 @@ export interface PortfolioBreakdownItem {
   category: string;
 }
 
-export type InvestmentCategoryKey = 'cash' | 'liquid' | 'restricted' | 'stability' | 'other';
+export type InvestmentCategoryKey = 'cash' | 'liquid' | 'illiquid' | 'restricted' | 'stability' | 'other';
 export type InvestmentInstitution = string | Record<string, unknown> | null;
 
 export interface InvestmentSummaryTotals {
   totalPortfolioValue?: number;
   liquid?: { totalValue?: number };
+  illiquid?: { totalValue?: number };
   restricted?: { totalValue?: number };
 }
 
@@ -132,6 +133,13 @@ export interface PortfolioSummary {
       roi: number;
       accountsCount: number;
     };
+    illiquid: {
+      totalValue: number;
+      totalCost: number;
+      unrealizedGainLoss: number;
+      roi: number;
+      accountsCount: number;
+    };
     restricted: {
       totalValue: number;
       totalCost: number;
@@ -145,6 +153,7 @@ export interface PortfolioSummary {
   timeline: PortfolioHistoryPoint[];
   accounts: InvestmentAccountSummary[];
   liquidAccounts: InvestmentAccountSummary[];
+  illiquidAccounts: InvestmentAccountSummary[];
   restrictedAccounts: InvestmentAccountSummary[];
 }
 
@@ -183,6 +192,7 @@ export interface InvestmentBalanceSheetResponse {
     buckets: {
       cash: InvestmentBalanceSheetBucket;
       liquid: InvestmentBalanceSheetBucket;
+      illiquid: InvestmentBalanceSheetBucket;
       restricted: InvestmentBalanceSheetBucket;
       stability: InvestmentBalanceSheetBucket;
       other: InvestmentBalanceSheetBucket;

@@ -4,6 +4,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
+import BusinessIcon from '@mui/icons-material/Business';
 import SchoolIcon from '@mui/icons-material/School';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 import LayersIcon from '@mui/icons-material/Layers';
@@ -114,6 +115,12 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
       color: theme.palette.info.main,
     },
     {
+      key: 'illiquid',
+      icon: <BusinessIcon fontSize="small" />,
+      label: t('buckets.illiquid'),
+      color: theme.palette.secondary.main,
+    },
+    {
       key: 'restricted',
       icon: <SchoolIcon fontSize="small" />,
       label: t('buckets.restricted'),
@@ -129,7 +136,7 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
       key: 'other',
       icon: <WidgetsIcon fontSize="small" />,
       label: t('buckets.other'),
-      color: theme.palette.secondary.main,
+      color: theme.palette.grey[600],
     },
   ];
 

@@ -19,6 +19,10 @@ const {
   applyBankBalanceOverlapAdjustments,
   fetchActivePikadonOverlapSources,
 } = require('./bank-balance-overlap.js');
+const {
+  classifyInvestmentAccountType,
+  isInvestmentCategoryKey,
+} = require('./categories.js');
 
 const VALID_TYPES = new Set([
   'pension',
@@ -37,11 +41,6 @@ const VALID_TYPES = new Set([
   'foreign_investment',
   'other',
 ]);
-
-const LIQUID_TYPES = new Set(['brokerage', 'crypto', 'mutual_fund', 'bonds', 'real_estate', 'savings']);
-const RESTRICTED_TYPES = new Set(['pension', 'provident', 'study_fund']);
-const STABILITY_TYPES = new Set(['insurance']);
-const CASH_TYPES = new Set(['bank_balance', 'cash', 'foreign_bank', 'foreign_investment', 'other']);
 
 function serviceError(status, message) {
   const error = new Error(message);
@@ -70,7 +69,7 @@ async function listAccounts(params = {}) {
     filters.push('ia.is_active = true');
   }
 
-  if (category && (category === 'liquid' || category === 'restricted')) {
+  if (category && isInvestmentCategoryKey(category)) {
     filters.push('ia.investment_category = $' + (values.length + 1));
     values.push(category);
   }
@@ -212,22 +211,7 @@ async function createAccount(payload = {}) {
     }
   }
 
-  let isLiquid = null;
-  let investmentCategory = null;
-
-  if (LIQUID_TYPES.has(accountTypeValue)) {
-    isLiquid = true;
-    investmentCategory = 'liquid';
-  } else if (RESTRICTED_TYPES.has(accountTypeValue)) {
-    isLiquid = false;
-    investmentCategory = 'restricted';
-  } else if (STABILITY_TYPES.has(accountTypeValue)) {
-    isLiquid = false;
-    investmentCategory = 'stability';
-  } else if (CASH_TYPES.has(accountTypeValue)) {
-    isLiquid = true;
-    investmentCategory = 'cash';
-  }
+  const { isLiquid, investmentCategory } = classifyInvestmentAccountType(accountTypeValue);
 
   if (!institutionIdValue) {
     throw serviceError(400, 'institution_id is required. Please select a known institution.');
@@ -308,26 +292,12 @@ async function updateAccount(payload = {}) {
     updates.push(`account_type = $${paramIndex++}`);
     values.push(account_type);
 
-    if (LIQUID_TYPES.has(account_type)) {
+    const classification = classifyInvestmentAccountType(account_type);
+    if (classification.investmentCategory !== null) {
       updates.push(`is_liquid = $${paramIndex++}`);
-      values.push(true);
+      values.push(classification.isLiquid);
       updates.push(`investment_category = $${paramIndex++}`);
-      values.push('liquid');
-    } else if (RESTRICTED_TYPES.has(account_type)) {
-      updates.push(`is_liquid = $${paramIndex++}`);
-      values.push(false);
-      updates.push(`investment_category = $${paramIndex++}`);
-      values.push('restricted');
-    } else if (STABILITY_TYPES.has(account_type)) {
-      updates.push(`is_liquid = $${paramIndex++}`);
-      values.push(false);
-      updates.push(`investment_category = $${paramIndex++}`);
-      values.push('stability');
-    } else if (CASH_TYPES.has(account_type)) {
-      updates.push(`is_liquid = $${paramIndex++}`);
-      values.push(true);
-      updates.push(`investment_category = $${paramIndex++}`);
-      values.push('cash');
+      values.push(classification.investmentCategory);
     }
 
     // Auto-update institution_id when account_type changes
