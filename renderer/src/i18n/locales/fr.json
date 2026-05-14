@@ -812,6 +812,11 @@
       "liquidHint": "Investissements accessibles",
       "noLiquid": "Aucun investissement liquide",
       "addLiquidHint": "Ajoutez des comptes de courtage, crypto ou épargne",
+      "illiquid": "Immobilier illiquide",
+      "illiquidTotal": "Total illiquide : {{amount}}",
+      "illiquidHint": "Biens immobiliers et actifs difficiles à mobiliser rapidement",
+      "noIlliquid": "Aucun actif illiquide",
+      "addIlliquidHint": "Ajoutez un compte immobilier",
       "restricted": "Investissements restreints",
       "restrictedTotal": "Total restreint : {{amount}}",
       "restrictedHint": "Retraite, prévoyance et fonds d'étude",
@@ -1956,6 +1961,7 @@
       "buckets": {
         "cash": "Liquidités",
         "liquid": "Liquide",
+        "illiquid": "Illiquide",
         "restricted": "Long terme",
         "stability": "Assurance",
         "other": "Autre"
@@ -2025,6 +2031,7 @@
       "group": {
         "cash": "Liquidités",
         "liquid": "Investissements liquides",
+        "illiquid": "Immobilier illiquide",
         "restricted": "Épargne long terme",
         "stability": "Assurance et stabilité",
         "other": "Autres actifs",

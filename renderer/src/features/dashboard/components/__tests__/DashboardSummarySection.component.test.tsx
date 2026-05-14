@@ -48,6 +48,7 @@ function buildProps(overrides: Record<string, unknown> = {}) {
     },
     portfolioValue: 0,
     liquidPortfolio: [],
+    illiquidPortfolio: [],
     restrictedPortfolio: [],
     budgetUsage: undefined,
     breakdownData: {},

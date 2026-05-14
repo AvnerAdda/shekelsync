@@ -105,6 +105,7 @@ const DashboardHomeContent: React.FC = () => {
   const {
     portfolioValue,
     liquidPortfolio,
+    illiquidPortfolio,
     restrictedPortfolio,
     refresh: refreshPortfolio,
   } = usePortfolioSummary();
@@ -710,6 +711,7 @@ const DashboardHomeContent: React.FC = () => {
         data={effectiveData}
         portfolioValue={portfolioValue}
         liquidPortfolio={liquidPortfolio}
+        illiquidPortfolio={illiquidPortfolio}
         restrictedPortfolio={restrictedPortfolio}
         budgetUsage={budgetUsage}
         breakdownData={effectiveBreakdownData}
@@ -753,6 +755,7 @@ const DashboardHomeContent: React.FC = () => {
           waterfallData={effectiveWaterfallData}
           waterfallLoading={shouldUseFallback ? fallbackWaterfallLoading : waterfallLoading}
           liquidPortfolio={liquidPortfolio}
+          illiquidPortfolio={illiquidPortfolio}
           restrictedPortfolio={restrictedPortfolio}
           formatCurrencyValue={formatCurrencyValue}
           breakdownData={effectiveBreakdownData}

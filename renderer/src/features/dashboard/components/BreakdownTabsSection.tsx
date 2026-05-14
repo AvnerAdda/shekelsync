@@ -154,6 +154,7 @@ interface BreakdownTabsSectionProps {
   waterfallData: any;
   waterfallLoading: boolean;
   liquidPortfolio: any[];
+  illiquidPortfolio: any[];
   restrictedPortfolio: any[];
   formatCurrencyValue: (value: number) => string;
   breakdownData: Record<string, any>;
@@ -169,6 +170,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
   waterfallData,
   waterfallLoading,
   liquidPortfolio,
+  illiquidPortfolio,
   restrictedPortfolio,
   formatCurrencyValue,
   breakdownData,
@@ -389,6 +391,20 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
                   emptyTitle={t('investment.noLiquid')}
                   emptyHint={t('investment.addLiquidHint')}
                   color={theme.palette.info.main}
+                  chartColors={chartColors}
+                  formatCurrencyValue={formatCurrencyValue}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <PortfolioPieChart
+                  title={t('investment.illiquid')}
+                  data={illiquidPortfolio}
+                  total={illiquidPortfolio.reduce((sum, item) => sum + item.value, 0)}
+                  hint={t('investment.illiquidHint')}
+                  emptyTitle={t('investment.noIlliquid')}
+                  emptyHint={t('investment.addIlliquidHint')}
+                  color={theme.palette.secondary.main}
                   chartColors={chartColors}
                   formatCurrencyValue={formatCurrencyValue}
                 />

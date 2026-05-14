@@ -65,6 +65,14 @@ const ACCOUNT_CATEGORIES = {
         color: '#b5f8bf',
         types: ['brokerage', 'crypto', 'mutual_fund', 'savings']
       },
+      ILLIQUID: {
+        id: 'illiquid',
+        label: 'Illiquid / Real Estate',
+        label_he: 'לא נזיל / נדל"ן',
+        icon: 'Business',
+        color: '#64B5F6',
+        types: ['real_estate']
+      },
       RESTRICTED: {
         id: 'restricted',
         label: 'Long-term Savings',
@@ -87,7 +95,7 @@ const ACCOUNT_CATEGORIES = {
         label_he: 'נכסים אלטרנטיביים',
         icon: 'Business',
         color: '#facfc8',
-        types: ['bonds', 'real_estate', 'other']
+        types: ['bonds', 'other']
       }
     }
   },
@@ -121,7 +129,7 @@ const INVESTMENT_ACCOUNT_TYPES = [
   { value: 'crypto', label: 'Crypto', label_he: 'קריפטו', category: 'liquid' },
   { value: 'mutual_fund', label: 'Mutual Funds', label_he: 'קרנות נאמנות', category: 'liquid' },
   { value: 'bonds', label: 'Bonds', label_he: 'אג"ח', category: 'alternative' },
-  { value: 'real_estate', label: 'Real Estate', label_he: 'נדל"ן', category: 'alternative' },
+  { value: 'real_estate', label: 'Real Estate', label_he: 'נדל"ן', category: 'illiquid' },
   { value: 'insurance', label: 'Insurance', label_he: 'ביטוח', category: 'stability' },
   { value: 'bank_balance', label: 'Bank Balance', label_he: 'יתרת בנק', category: 'other' },
   { value: 'cash', label: 'Cash', label_he: 'מזומן', category: 'other' },

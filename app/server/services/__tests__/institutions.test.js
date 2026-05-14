@@ -159,6 +159,40 @@ describe('institutions service', () => {
     await expect(institutionsService.getInstitutionTree(db)).resolves.toEqual([{ id: 1, hierarchy_path: 'banking/hapoalim' }]);
   });
 
+  it('ensures the manual real estate institution branch exists before tree reads', async () => {
+    const db = {
+      query: vi.fn(async (sql) => {
+        const text = String(sql);
+        if (text.includes('ORDER BY hierarchy_path')) {
+          return {
+            rows: [
+              { id: 100003, hierarchy_path: '/investment', node_type: 'root' },
+              { id: 100030, hierarchy_path: '/investment/illiquid', node_type: 'group' },
+              { id: 100031, hierarchy_path: '/investment/illiquid/real_estate', node_type: 'group' },
+              {
+                id: 510,
+                vendor_code: 'real_estate',
+                hierarchy_path: '/investment/illiquid/real_estate/real_estate',
+                node_type: 'institution',
+              },
+            ],
+            rowCount: 4,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      }),
+    };
+
+    const nodes = await institutionsService.getInstitutionTree(db);
+
+    expect(nodes).toContainEqual(expect.objectContaining({
+      vendor_code: 'real_estate',
+      hierarchy_path: '/investment/illiquid/real_estate/real_estate',
+    }));
+    expect(db.query.mock.calls.some(([sql]) => String(sql).includes('/investment/illiquid'))).toBe(true);
+    expect(db.query.mock.calls.some(([sql]) => String(sql).includes("vendor_code = 'real_estate'"))).toBe(true);
+  });
+
   it('backfills missing institution ids and logs both success and failures', async () => {
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
