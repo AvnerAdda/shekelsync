@@ -1211,10 +1211,12 @@ const INSTITUTION_GROUPS = [
   { key: 'investment_liquid_brokerage', parentKey: 'investment_liquid', path: '/investment/liquid/brokerage', nodeType: 'group', nameHe: 'ברוקראז׳', nameEn: 'Brokerage', institutionType: 'broker', category: 'brokerage', subcategory: 'brokerage', displayOrder: 32, depth: 2 },
   { key: 'investment_liquid_crypto', parentKey: 'investment_liquid', path: '/investment/liquid/crypto', nodeType: 'group', nameHe: 'קריפטו', nameEn: 'Crypto', institutionType: 'crypto', category: 'crypto', subcategory: 'crypto', displayOrder: 33, depth: 2 },
   { key: 'investment_liquid_cash', parentKey: 'investment_liquid', path: '/investment/liquid/cash', nodeType: 'group', nameHe: 'מזומן ופיקדונות', nameEn: 'Cash & Deposits', institutionType: 'investment', category: 'investments', subcategory: 'cash', displayOrder: 34, depth: 2 },
-  { key: 'investment_long_term', parentKey: 'investment', path: '/investment/long_term', nodeType: 'group', nameHe: 'חיסכון ארוך טווח', nameEn: 'Long-Term Savings', institutionType: 'investment', category: 'investments', subcategory: 'long_term', displayOrder: 35, depth: 1 },
-  { key: 'investment_long_term_pension', parentKey: 'investment_long_term', path: '/investment/long_term/pension', nodeType: 'group', nameHe: 'פנסיה', nameEn: 'Pension', institutionType: 'investment', category: 'investments', subcategory: 'pension', displayOrder: 36, depth: 2 },
-  { key: 'investment_long_term_provident', parentKey: 'investment_long_term', path: '/investment/long_term/provident', nodeType: 'group', nameHe: 'גמל / השתלמות', nameEn: 'Provident / Study Fund', institutionType: 'investment', category: 'investments', subcategory: 'provident', displayOrder: 37, depth: 2 },
-  { key: 'investment_long_term_other', parentKey: 'investment_long_term', path: '/investment/long_term/other', nodeType: 'group', nameHe: 'השקעות אחרות', nameEn: 'Other Long-Term', institutionType: 'investment', category: 'investments', subcategory: 'other', displayOrder: 38, depth: 2 },
+  { key: 'investment_illiquid', parentKey: 'investment', path: '/investment/illiquid', nodeType: 'group', nameHe: 'נכסים לא נזילים', nameEn: 'Illiquid Assets', institutionType: 'investment', category: 'investments', subcategory: 'illiquid', displayOrder: 35, depth: 1 },
+  { key: 'investment_illiquid_real_estate', parentKey: 'investment_illiquid', path: '/investment/illiquid/real_estate', nodeType: 'group', nameHe: 'נדל"ן', nameEn: 'Real Estate', institutionType: 'investment', category: 'investments', subcategory: 'real_estate', displayOrder: 36, depth: 2 },
+  { key: 'investment_long_term', parentKey: 'investment', path: '/investment/long_term', nodeType: 'group', nameHe: 'חיסכון ארוך טווח', nameEn: 'Long-Term Savings', institutionType: 'investment', category: 'investments', subcategory: 'long_term', displayOrder: 37, depth: 1 },
+  { key: 'investment_long_term_pension', parentKey: 'investment_long_term', path: '/investment/long_term/pension', nodeType: 'group', nameHe: 'פנסיה', nameEn: 'Pension', institutionType: 'investment', category: 'investments', subcategory: 'pension', displayOrder: 38, depth: 2 },
+  { key: 'investment_long_term_provident', parentKey: 'investment_long_term', path: '/investment/long_term/provident', nodeType: 'group', nameHe: 'גמל / השתלמות', nameEn: 'Provident / Study Fund', institutionType: 'investment', category: 'investments', subcategory: 'provident', displayOrder: 39, depth: 2 },
+  { key: 'investment_long_term_other', parentKey: 'investment_long_term', path: '/investment/long_term/other', nodeType: 'group', nameHe: 'השקעות אחרות', nameEn: 'Other Long-Term', institutionType: 'investment', category: 'investments', subcategory: 'other', displayOrder: 40, depth: 2 },
   { key: 'insurance', parentKey: null, path: '/insurance', nodeType: 'root', nameHe: 'ביטוח', nameEn: 'Insurance', institutionType: 'insurance', category: 'insurance', subcategory: null, displayOrder: 40, depth: 0 }
 ];
 
@@ -1268,7 +1270,8 @@ const FINANCIAL_INSTITUTIONS = [
   { code: 'more_provident', type: 'investment', nameHe: 'מור קופת גמל / השתלמות', nameEn: 'More Provident / Study Fund', category: 'investments', subcategory: 'provident', scrapable: 0, displayOrder: 490 },
 
   { code: 'bank_deposit', type: 'investment', nameHe: 'פיקדון בנקאי', nameEn: 'Bank Deposit', category: 'investments', subcategory: 'cash', scrapable: 0, displayOrder: 500 },
-  { code: 'investment_unknown', type: 'investment', nameHe: 'השקעה לא מזוהה', nameEn: 'Unknown Investment', category: 'investments', subcategory: 'other', scrapable: 0, displayOrder: 510, notes: 'Fallback for legacy mappings' },
+  { code: 'real_estate', type: 'investment', nameHe: 'נדל"ן', nameEn: 'Real Estate', category: 'investments', subcategory: 'real_estate', scrapable: 0, displayOrder: 510, notes: 'Manual real estate asset tracking' },
+  { code: 'investment_unknown', type: 'investment', nameHe: 'השקעה לא מזוהה', nameEn: 'Unknown Investment', category: 'investments', subcategory: 'other', scrapable: 0, displayOrder: 520, notes: 'Fallback for legacy mappings' },
 
   // ========== INSURANCE COMPANIES ==========
   { code: 'harel', type: 'insurance', nameHe: 'הראל', nameEn: 'Harel Insurance', category: 'insurance', scrapable: 0, displayOrder: 500 },
@@ -1680,6 +1683,7 @@ function resolveInstitutionParentKey(institution) {
 
   if (institution.type === 'investment') {
     if (institution.subcategory === 'cash') return 'investment_liquid_cash';
+    if (institution.subcategory === 'real_estate') return 'investment_illiquid_real_estate';
     if (institution.subcategory === 'pension') return 'investment_long_term_pension';
     if (institution.subcategory === 'provident') return 'investment_long_term_provident';
     return 'investment_long_term_other';

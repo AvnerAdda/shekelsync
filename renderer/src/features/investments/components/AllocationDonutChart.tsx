@@ -45,7 +45,7 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
       name: account.account_name,
       value: account.current_value,
       color: CHART_COLORS[index % CHART_COLORS.length],
-      category: normalizeInvestmentCategory(account.investment_category),
+      category: normalizeInvestmentCategory(account.investment_category, account.account_type),
     }));
 
   const totalValue = portfolioData.summary.totalPortfolioValue;

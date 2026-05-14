@@ -172,6 +172,7 @@ function createForecastRouter({ sqliteDb = null } = {}) {
         topProbability: d.topPredictions?.[0]?.probability || null,
         topPredictions: (d.topPredictions || []).map(p => ({
           category: p.category,
+          categoryDefinitionId: p.categoryDefinitionId || null,
           amount: p.expectedAmount,
           probability: p.probability
         }))
@@ -279,8 +280,10 @@ function createForecastRouter({ sqliteDb = null } = {}) {
           (day.predictions || [])
             .filter(p => p.categoryType === 'expense')
             .forEach(p => {
-              const catDef = categoryDefinitions[p.category] || categoryDefinitions[p.transactionName];
-              const catId = catDef?.id || null;
+              const catDef = p.categoryDefinitionId
+                ? categoryDefinitionsById[p.categoryDefinitionId]
+                : (categoryDefinitions[p.category] || categoryDefinitions[p.transactionName]);
+              const catId = catDef?.id || p.categoryDefinitionId || null;
               const catName = catDef?.name || p.category;
               const key = makeCategoryKey(catId, catName);
               const current = forecastRemainingByCategory.get(key) || { amount: 0, categoryDefinitionId: catId, categoryName: catName };
