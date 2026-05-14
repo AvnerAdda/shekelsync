@@ -206,6 +206,11 @@ describe('investment summary service', () => {
       totalCost: 1000,
       accountsCount: 1,
     });
+    expect(result.summary.illiquid).toMatchObject({
+      totalValue: 0,
+      totalCost: 0,
+      accountsCount: 0,
+    });
     expect(result.summary.restricted).toMatchObject({
       totalValue: 800,
       totalCost: 900,
@@ -214,6 +219,7 @@ describe('investment summary service', () => {
     expect(result.categoryBuckets).toMatchObject({
       cash: expect.objectContaining({ totalValue: 0, accountsCount: 0 }),
       liquid: expect.objectContaining({ totalValue: 1200, totalCost: 1000, accountsCount: 1 }),
+      illiquid: expect.objectContaining({ totalValue: 0, totalCost: 0, accountsCount: 0 }),
       restricted: expect.objectContaining({ totalValue: 800, totalCost: 900, accountsCount: 1 }),
       stability: expect.objectContaining({ totalValue: 0, accountsCount: 0 }),
       other: expect.objectContaining({ totalValue: 0, accountsCount: 0 }),
@@ -240,8 +246,76 @@ describe('investment summary service', () => {
       cost_basis: 600,
     });
     expect(result.liquidAccounts).toHaveLength(2);
+    expect(result.illiquidAccounts).toHaveLength(0);
     expect(result.restrictedAccounts).toHaveLength(1);
     expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes stale real estate accounts into illiquid totals', async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM investment_accounts ia')) {
+        return {
+          rows: [
+            {
+              id: 4,
+              account_name: 'Rental Apartment',
+              account_type: 'real_estate',
+              investment_category: 'liquid',
+              institution_id: null,
+            },
+          ],
+        };
+      }
+
+      if (isStandardSnapshotQuery(sql)) {
+        return {
+          rows: [
+            {
+              id: 41,
+              account_id: 4,
+              holding_type: 'standard',
+              status: 'active',
+              current_value: '2500000',
+              cost_basis: '2100000',
+              as_of_date: '2026-05-01',
+            },
+          ],
+        };
+      }
+
+      if (isActivePikadonSnapshotQuery(sql)) return { rows: [] };
+      if (sql.includes('FROM investment_assets iasset')) return { rows: [] };
+      if (sql.includes('FROM transaction_account_links tal')) return { rows: [] };
+      if (sql.includes('FROM institution_nodes')) {
+        return {
+          rows: [{ id: 70, vendor_code: 'real_estate', display_name_en: 'Real Estate' }],
+        };
+      }
+      if (sql.includes('SUM(current_value) AS total_value')) return { rows: [] };
+
+      throw new Error(`Unexpected query in real estate summary test: ${sql.slice(0, 80)}`);
+    });
+
+    const result = await getInvestmentSummary({ historyMonths: 1 });
+
+    expect(result.summary.liquid.totalValue).toBe(0);
+    expect(result.summary.illiquid).toMatchObject({
+      totalValue: 2500000,
+      totalCost: 2100000,
+      accountsCount: 1,
+    });
+    expect(result.categoryBuckets.illiquid.accounts[0]).toMatchObject({
+      account_type: 'real_estate',
+      investment_category: 'illiquid',
+      current_value: 2500000,
+      cost_basis: 2100000,
+    });
+    expect(result.breakdown[0]).toMatchObject({
+      type: 'real_estate',
+      category: 'illiquid',
+      name: 'Real Estate',
+    });
+    expect(result.illiquidAccounts).toHaveLength(1);
   });
 
   it('subtracts Pikadon-backed savings from matching bank balances to avoid double counting', async () => {

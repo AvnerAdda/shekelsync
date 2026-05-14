@@ -825,6 +825,11 @@
       "liquidHint": "Accessible investments",
       "noLiquid": "No liquid investments",
       "addLiquidHint": "Add brokerage, crypto, or savings accounts",
+      "illiquid": "Illiquid Real Estate",
+      "illiquidTotal": "Total Illiquid: {{amount}}",
+      "illiquidHint": "Property and other assets that are not quickly accessible",
+      "noIlliquid": "No illiquid assets",
+      "addIlliquidHint": "Add a real estate account",
       "restricted": "Restricted Investments",
       "restrictedTotal": "Total Restricted: {{amount}}",
       "restrictedHint": "Pension, provident & study funds",
@@ -1961,6 +1966,7 @@
       "buckets": {
         "cash": "Cash",
         "liquid": "Liquid",
+        "illiquid": "Illiquid",
         "restricted": "Long-term",
         "stability": "Insurance",
         "other": "Other"
@@ -2030,6 +2036,7 @@
       "group": {
         "cash": "Cash",
         "liquid": "Liquid Investments",
+        "illiquid": "Illiquid Real Estate",
         "restricted": "Long-term Savings",
         "stability": "Insurance & Stability",
         "other": "Other Assets",

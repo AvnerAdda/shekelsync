@@ -468,6 +468,13 @@ const investmentsSummary = {
       roi: 20,
       accountsCount: 1,
     },
+    illiquid: {
+      totalValue: 0,
+      totalCost: 0,
+      unrealizedGainLoss: 0,
+      roi: 0,
+      accountsCount: 0,
+    },
     restricted: {
       totalValue: 14000,
       totalCost: 13000,
@@ -491,6 +498,14 @@ const investmentsSummary = {
       unrealizedGainLoss: 4000,
       roi: 20,
       accountsCount: 1,
+      accounts: [],
+    },
+    illiquid: {
+      totalValue: 0,
+      totalCost: 0,
+      unrealizedGainLoss: 0,
+      roi: 0,
+      accountsCount: 0,
       accounts: [],
     },
     restricted: {
@@ -716,6 +731,7 @@ const investmentsSummary = {
       cost_basis: 20000,
     },
   ],
+  illiquidAccounts: [],
   restrictedAccounts: [
     {
       id: 202,
@@ -734,6 +750,9 @@ investmentsSummary.categoryBuckets.cash.accounts = investmentsSummary.accounts.f
 );
 investmentsSummary.categoryBuckets.liquid.accounts = investmentsSummary.accounts.filter(
   (account) => account.investment_category === 'liquid',
+);
+investmentsSummary.categoryBuckets.illiquid.accounts = investmentsSummary.accounts.filter(
+  (account) => account.investment_category === 'illiquid',
 );
 investmentsSummary.categoryBuckets.restricted.accounts = investmentsSummary.accounts.filter(
   (account) => account.investment_category === 'restricted',
@@ -761,6 +780,13 @@ const investmentsBalanceSheet = {
         accountsWithValue: 1,
         missingValueCount: 0,
         newestUpdateDate: '2025-09-20T00:00:00.000Z',
+      },
+      illiquid: {
+        totalValue: 0,
+        accountsCount: 0,
+        accountsWithValue: 0,
+        missingValueCount: 0,
+        newestUpdateDate: null,
       },
       restricted: {
         totalValue: 14000,

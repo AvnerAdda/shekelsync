@@ -4,6 +4,10 @@ const {
   applyBankBalanceOverlapAdjustments,
   fetchActivePikadonOverlapSources,
 } = require('./bank-balance-overlap.js');
+const {
+  CATEGORY_KEYS,
+  normalizeInvestmentCategory,
+} = require('./categories.js');
 
 let database = actualDatabase;
 
@@ -56,13 +60,7 @@ function createBucket() {
 function getBucketKey(account) {
   if (account.account_type === 'bank_balance') return 'cash';
 
-  const category = typeof account.investment_category === 'string' ? account.investment_category : null;
-  if (category === 'cash') return 'cash';
-  if (category === 'liquid') return 'liquid';
-  if (category === 'restricted') return 'restricted';
-  if (category === 'stability') return 'stability';
-
-  return 'other';
+  return normalizeInvestmentCategory(account.investment_category, account.account_type);
 }
 
 async function fetchPendingCreditCardDebt() {
@@ -198,13 +196,10 @@ async function getInvestmentBalanceSheet(query = {}) {
     overlapSources,
   );
 
-  const buckets = {
-    cash: { ...createBucket(), accounts: includeAccounts ? [] : undefined },
-    liquid: { ...createBucket(), accounts: includeAccounts ? [] : undefined },
-    restricted: { ...createBucket(), accounts: includeAccounts ? [] : undefined },
-    stability: { ...createBucket(), accounts: includeAccounts ? [] : undefined },
-    other: { ...createBucket(), accounts: includeAccounts ? [] : undefined },
-  };
+  const buckets = CATEGORY_KEYS.reduce((accumulator, key) => {
+    accumulator[key] = { ...createBucket(), accounts: includeAccounts ? [] : undefined };
+    return accumulator;
+  }, {});
 
   const currencyCounts = new Map();
   let newestAssetsUpdateDate = null;
@@ -266,6 +261,7 @@ async function getInvestmentBalanceSheet(query = {}) {
       buckets: {
         cash: buckets.cash,
         liquid: buckets.liquid,
+        illiquid: buckets.illiquid,
         restricted: buckets.restricted,
         stability: buckets.stability,
         other: buckets.other,

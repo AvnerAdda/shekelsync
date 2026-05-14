@@ -20,9 +20,12 @@ const {
   applyBankBalanceOverlapAdjustments,
   fetchActivePikadonOverlapSources,
 } = require('./bank-balance-overlap.js');
+const {
+  CATEGORY_KEYS,
+  normalizeInvestmentCategory,
+} = require('./categories.js');
 
 let dateFnsPromise = null;
-const CATEGORY_KEYS = ['cash', 'liquid', 'restricted', 'stability', 'other'];
 
 const ACCOUNT_TYPE_LABELS = {
   pension: { name: 'Pension Fund', name_he: 'קרן פנסיה', category: 'restricted' },
@@ -34,7 +37,7 @@ const ACCOUNT_TYPE_LABELS = {
   bank_balance: { name: 'Available Cash', name_he: 'מזומן זמין', category: 'cash' },
   mutual_fund: { name: 'Mutual Funds', name_he: 'קרנות נאמנות', category: 'liquid' },
   bonds: { name: 'Bonds & Fixed Income', name_he: 'אג"ח והלוואות', category: 'liquid' },
-  real_estate: { name: 'Real Estate', name_he: 'נדל"ן והשקעות רע"ן', category: 'other' },
+  real_estate: { name: 'Real Estate', name_he: 'נדל"ן', category: 'illiquid' },
   insurance: { name: 'Insurance & Stability', name_he: 'ביטוח ויציבות', category: 'stability' },
   cash: { name: 'Cash Holdings', name_he: 'אחזקות מזומן', category: 'cash' },
   foreign_bank: { name: 'Foreign Cash', name_he: 'מזומן זר', category: 'cash' },
@@ -93,19 +96,6 @@ function createCategoryAccounts() {
     accumulator[key] = [];
     return accumulator;
   }, {});
-}
-
-function normalizeInvestmentCategory(category, accountType) {
-  if (CATEGORY_KEYS.includes(category)) {
-    return category;
-  }
-
-  const fallbackCategory = ACCOUNT_TYPE_LABELS[accountType]?.category;
-  if (CATEGORY_KEYS.includes(fallbackCategory)) {
-    return fallbackCategory;
-  }
-
-  return 'other';
 }
 
 async function fetchAssets(client) {
@@ -245,6 +235,7 @@ function buildAccountSummaries(accountsRows, bankAccountsRows) {
       accountsWithValues,
       categories: totalsByCategory,
       liquid: totalsByCategory.liquid,
+      illiquid: totalsByCategory.illiquid,
       restricted: totalsByCategory.restricted,
       oldestDate,
       newestDate,
@@ -424,6 +415,7 @@ async function getInvestmentSummary(params = {}) {
         return {
           ...group,
           ...label,
+          category: normalizeInvestmentCategory(label.category, group.type),
           percentage: totalPortfolioValue > 0 ? (group.totalValue / totalPortfolioValue) * 100 : 0,
         };
       });
@@ -473,12 +465,14 @@ async function getInvestmentSummary(params = {}) {
         oldestUpdateDate: summary.totals.oldestDate,
         newestUpdateDate: summary.totals.newestDate,
         liquid: categorySummary(summary.totals.liquid),
+        illiquid: categorySummary(summary.totals.illiquid),
         restricted: categorySummary(summary.totals.restricted),
       },
       breakdown,
       categoryBuckets,
       timeline,
       liquidAccounts: summary.accountsByCategory.liquid,
+      illiquidAccounts: summary.accountsByCategory.illiquid,
       restrictedAccounts: summary.accountsByCategory.restricted,
       accounts: investmentAccounts,
       totals: summary.totals,

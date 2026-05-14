@@ -138,6 +138,19 @@ describe('investment accounts service', () => {
       expect(result.accounts[0].institution).toMatchObject({ vendor_code: 'pension' });
     });
 
+    it('supports illiquid category filters', async () => {
+      queryMock.mockResolvedValueOnce({ rows: [] });
+
+      await accountsService.listAccounts({
+        includeInactive: true,
+        category: 'illiquid',
+      });
+
+      const [sql, params] = queryMock.mock.calls[0];
+      expect(sql).toContain('ia.investment_category = $1');
+      expect(params).toEqual(['illiquid']);
+    });
+
     it('rolls explicit account values forward from linked investment contributions', async () => {
       queryMock
         .mockResolvedValueOnce({
@@ -516,6 +529,24 @@ describe('investment accounts service', () => {
       expect(insertParams[6]).toBe(true);
       expect(insertParams[7]).toBe('cash');
     });
+
+    it('sets illiquid category for real estate accounts', async () => {
+      queryMock
+        .mockResolvedValueOnce({ rows: [{ id: 7 }] })
+        .mockResolvedValueOnce({
+          rows: [{ id: 7, account_type: 'real_estate', institution_id: 9, institution_vendor_code: 'real_estate' }],
+        });
+
+      await accountsService.createAccount({
+        account_name: 'Rental Apartment',
+        account_type: 'real_estate',
+        institution_id: 9,
+      });
+
+      const insertParams = queryMock.mock.calls[0][1];
+      expect(insertParams[6]).toBe(false);
+      expect(insertParams[7]).toBe('illiquid');
+    });
   });
 
   describe('updateAccount', () => {
@@ -636,17 +667,30 @@ describe('investment accounts service', () => {
 
     it.each([
       ['brokerage', true, 'liquid'],
+      ['real_estate', false, 'illiquid'],
       ['pension', false, 'restricted'],
       ['insurance', false, 'stability'],
     ])(
       'maps account_type %s to is_liquid=%s and investment_category=%s',
       async (accountType, expectedLiquid, expectedCategory) => {
-        queryMock
-          .mockResolvedValueOnce({ rows: [{ id: 55, vendor_code: accountType }] })
-          .mockResolvedValueOnce({ rows: [{ id: 55 }] })
-          .mockResolvedValueOnce({
-            rows: [{ id: 55, account_type: accountType, institution_id: 55, institution_vendor_code: accountType }],
-          });
+        queryMock.mockImplementation(async (sql: string) => {
+          const text = String(sql);
+          if (text.includes('FROM institution_nodes') && text.includes('ORDER BY category')) {
+            return { rows: [{ id: 55, vendor_code: accountType }] };
+          }
+          if (text.includes('FROM institution_nodes') && text.includes('WHERE vendor_code = $1')) {
+            return { rows: [{ id: 55, vendor_code: accountType }] };
+          }
+          if (text.includes('UPDATE investment_accounts')) {
+            return { rows: [{ id: 55 }] };
+          }
+          if (text.includes('FROM investment_accounts ia')) {
+            return {
+              rows: [{ id: 55, account_type: accountType, institution_id: 55, institution_vendor_code: accountType }],
+            };
+          }
+          return { rows: [], rowCount: 0 };
+        });
 
         await accountsService.updateAccount({
           id: 55,

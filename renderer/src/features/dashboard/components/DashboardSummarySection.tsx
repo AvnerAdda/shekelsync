@@ -15,6 +15,7 @@ interface DashboardSummarySectionProps {
   data: any;
   portfolioValue: number | null;
   liquidPortfolio: any[];
+  illiquidPortfolio: any[];
   restrictedPortfolio: any[];
   budgetUsage: any;
   breakdownData: Record<string, any>;
@@ -31,6 +32,7 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
   data,
   portfolioValue,
   liquidPortfolio,
+  illiquidPortfolio,
   restrictedPortfolio,
   budgetUsage,
   breakdownData,
@@ -79,7 +81,7 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
           portfolioValue={portfolioValue ?? 0}
           portfolioGains={undefined}
           monthlyPortfolioChange={undefined}
-          assetBreakdown={[...liquidPortfolio, ...restrictedPortfolio].map(item => ({
+          assetBreakdown={[...liquidPortfolio, ...illiquidPortfolio, ...restrictedPortfolio].map(item => ({
             name: item.name,
             value: item.value,
             percentage: item.percentage,

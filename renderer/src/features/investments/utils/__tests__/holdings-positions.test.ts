@@ -21,6 +21,13 @@ const portfolio: PortfolioSummary = {
       roi: 20,
       accountsCount: 1,
     },
+    illiquid: {
+      totalValue: 0,
+      totalCost: 0,
+      unrealizedGainLoss: 0,
+      roi: 0,
+      accountsCount: 0,
+    },
     restricted: {
       totalValue: 800,
       totalCost: 850,
@@ -44,6 +51,14 @@ const portfolio: PortfolioSummary = {
       unrealizedGainLoss: 200,
       roi: 20,
       accountsCount: 1,
+      accounts: [],
+    },
+    illiquid: {
+      totalValue: 0,
+      totalCost: 0,
+      unrealizedGainLoss: 0,
+      roi: 0,
+      accountsCount: 0,
       accounts: [],
     },
     restricted: {
@@ -112,6 +127,7 @@ const portfolio: PortfolioSummary = {
     },
   ],
   liquidAccounts: [],
+  illiquidAccounts: [],
   restrictedAccounts: [],
 };
 
@@ -191,5 +207,50 @@ describe('holdings-positions utilities', () => {
         rowKind: 'all',
       }).map((row) => row.rowId),
     ).toEqual(['holding-3']);
+  });
+
+  it('normalizes real estate holdings into the illiquid category', () => {
+    const realEstatePortfolio: PortfolioSummary = {
+      ...portfolio,
+      summary: {
+        ...portfolio.summary,
+        illiquid: {
+          totalValue: 5000,
+          totalCost: 4500,
+          unrealizedGainLoss: 500,
+          roi: 11.11,
+          accountsCount: 1,
+        },
+      },
+      accounts: [
+        {
+          id: 4,
+          account_name: 'Rental Apartment',
+          account_type: 'real_estate',
+          investment_category: null,
+          institution: 'Real Estate',
+          currency: 'ILS',
+          current_value: 5000,
+          cost_basis: 4500,
+          as_of_date: '2026-01-04',
+          assets: [],
+        },
+      ],
+    };
+
+    const rows = buildHybridHoldingsPositionRows(realEstatePortfolio, []);
+
+    expect(rows[0]).toMatchObject({
+      rowId: 'holding-4',
+      category: 'illiquid',
+      itemType: 'real_estate',
+    });
+    expect(
+      filterHybridHoldingsPositionRows(rows, {
+        search: '',
+        category: 'illiquid',
+        rowKind: 'all',
+      }).map((row) => row.rowId),
+    ).toEqual(['holding-4']);
   });
 });

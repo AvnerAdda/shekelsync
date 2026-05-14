@@ -355,19 +355,58 @@ describe('forecast service internals', () => {
       makeTxn('2025-03-11', 'Excluded Capital Return', -200, 'expense', 'החזר קרן'),
     ]);
 
-    const incomePattern = patterns['Salary Payroll'];
+    const patternValues = Object.values(patterns);
+    const incomePattern = patternValues.find((p: any) => p.transactionName === 'Salary Payroll') as any;
     expect(incomePattern).toBeTruthy();
     expect(incomePattern.patternType).toBe('monthly');
     expect(incomePattern.dominantDayCluster).toEqual(expect.arrayContaining([5, 6]));
 
-    const expensePattern = patterns.Groceries;
+    const expensePattern = patternValues.find((p: any) => p.category === 'Groceries') as any;
     expect(expensePattern.tailOnly).toBe(true);
 
-    const investmentPattern = patterns.Investments;
+    const investmentPattern = patternValues.find((p: any) => p.category === 'Investments') as any;
     expect(investmentPattern.tailOnly).toBe(true);
     expect(investmentPattern.skipReason).toBe('non_recurrent_investment');
 
-    expect(patterns['החזר קרן']).toBeUndefined();
+    expect(patternValues.some((p: any) => p.category === 'החזר קרן')).toBe(false);
+  });
+
+  it('keeps same-named income and expense categories in separate forecast patterns', () => {
+    const { analyzeCategoryPatterns } = forecastModule._internal;
+    const makeTxn = (
+      date: string,
+      name: string,
+      price: number,
+      categoryType: 'income' | 'expense',
+      categoryDefinitionId: number,
+    ) => ({
+      date,
+      name,
+      price,
+      category_type: categoryType,
+      category_definition_id: categoryDefinitionId,
+      category_name: 'Gifts',
+      parent_category_name: categoryType === 'expense' ? 'Shopping' : 'Income',
+      day_of_week: String(new Date(date).getDay()),
+      day_of_month: Number(date.slice(8, 10)),
+      month: date.slice(0, 7),
+    });
+
+    const patterns = analyzeCategoryPatterns([
+      makeTxn('2026-01-31', 'Flower Shop', -40, 'expense', 61),
+      makeTxn('2026-02-13', 'Flower Shop', -22, 'expense', 61),
+      makeTxn('2026-03-31', 'Gift Shop', -225, 'expense', 61),
+      makeTxn('2026-02-07', 'Family Gift', 40026, 'income', 93),
+      makeTxn('2026-04-26', 'Family Gift', 39000, 'income', 93),
+    ]);
+
+    const expensePattern = patterns['category:61'];
+    const incomePattern = patterns['category:93'];
+
+    expect(expensePattern.categoryType).toBe('expense');
+    expect(expensePattern.avgAmount).toBeLessThan(100);
+    expect(incomePattern.categoryType).toBe('income');
+    expect(incomePattern.avgAmount).toBeGreaterThan(39000);
   });
 
   it('builds pattern caches and reads probability threshold from cache', () => {

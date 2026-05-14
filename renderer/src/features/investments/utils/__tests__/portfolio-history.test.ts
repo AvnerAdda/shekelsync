@@ -18,6 +18,13 @@ const portfolio: PortfolioSummary = {
       roi: 9.09,
       accountsCount: 1,
     },
+    illiquid: {
+      totalValue: 0,
+      totalCost: 0,
+      unrealizedGainLoss: 0,
+      roi: 0,
+      accountsCount: 0,
+    },
     restricted: {
       totalValue: 200,
       totalCost: 190,
@@ -49,6 +56,14 @@ const portfolio: PortfolioSummary = {
       ],
     },
     liquid: {
+      totalValue: 0,
+      totalCost: 0,
+      unrealizedGainLoss: 0,
+      roi: 0,
+      accountsCount: 0,
+      accounts: [],
+    },
+    illiquid: {
       totalValue: 0,
       totalCost: 0,
       unrealizedGainLoss: 0,
@@ -98,6 +113,7 @@ const portfolio: PortfolioSummary = {
   timeline: [],
   accounts: [],
   liquidAccounts: [],
+  illiquidAccounts: [],
   restrictedAccounts: [],
 };
 

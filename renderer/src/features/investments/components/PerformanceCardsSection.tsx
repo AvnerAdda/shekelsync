@@ -72,7 +72,8 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
 
   const filteredAccounts = categoryFilter === 'all'
     ? allAccounts
-    : allAccounts.filter((account) => normalizeInvestmentCategory(account.investment_category) === categoryFilter);
+    : allAccounts.filter((account) =>
+      normalizeInvestmentCategory(account.investment_category, account.account_type) === categoryFilter);
 
   const handleScroll = (direction: 'left' | 'right') => {
     if (scrollContainerRef.current) {
