@@ -145,6 +145,7 @@
       "bronze": "תומך ברונזה",
       "silver": "תומך כסף",
       "gold": "תומך זהב",
+      "more": "עוד",
       "lifetime": "תומך לכל החיים"
     },
     "status": {
@@ -288,6 +289,11 @@
     "empty": {
       "welcomeTitle": "ברוכים הבאים ל-ShekelSync!",
       "welcomeDescription": "בואו נסדר את הכספים שלכם. עקבו אחרי השלבים כדי להתחיל לעקוב אחרי הוצאות והכנסות.",
+      "selectedRangeDescription": "יש לכם היסטוריית עסקאות, אבל אין עסקאות עבור {{selectedRange}}.",
+      "checkingPreviousRange": "לא נמצאו עסקאות עבור {{selectedRange}}. בודקים את הפעילות האחרונה הזמינה.",
+      "showPreviousRange": "הצג את {{fallbackRange}}",
+      "returnToSelectedRange": "חזרה אל {{selectedRange}}",
+      "showingPreviousRange": "מציגים את {{fallbackRange}} כי אין עסקאות עבור {{selectedRange}}.",
       "noTransactionsTitle": "אין עסקאות בחודש הנוכחי",
       "noTransactionsDescription": "יש לכם {{count}} עסקאות בסך הכל, אבל אין בחודש הנוכחי ({{month}}). נסו לגרד נתונים עדכניים או לצפות בניתוח היסטורי בעמוד הניתוח.",
       "noTransactionsDisclaimer": "לא נרשמו עסקאות עבור {{month}}. הנתונים המוצגים להלן משקפים את התקופה הזמינה האחרונה.",
@@ -1144,6 +1150,13 @@
       "subtitle": "תובנות חכמות, מעקב תקציב ומדדי בריאות פיננסית"
     },
     "dashboard": {
+      "overview": {
+        "title": "להתחיל עם העיקר",
+        "subtitle": "הקצב והאותות הצופי-פנים בתזרים נשארים ראשונים. פתחו מסגור אישיותי ותרגום לערך זמן רק כשצריך.",
+        "show": "הצג תובנות נוספות",
+        "hide": "הסתר תובנות נוספות",
+        "count": "{{count}} כרטיסים נוספים"
+      },
       "rhythm": {
         "title": "הקצב הפיננסי שלך",
         "spendingByHour": "הוצאות לפי שעה ביום",

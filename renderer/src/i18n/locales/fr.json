@@ -270,6 +270,11 @@
     "empty": {
       "welcomeTitle": "Bienvenue sur ShekelSync !",
       "welcomeDescription": "Organisons vos finances. Suivez ces étapes pour commencer à suivre vos dépenses et vos revenus.",
+      "selectedRangeDescription": "Vous avez un historique de transactions, mais aucune pour {{selectedRange}}.",
+      "checkingPreviousRange": "Aucune transaction pour {{selectedRange}}. Vérification de votre activité la plus récente.",
+      "showPreviousRange": "Afficher {{fallbackRange}}",
+      "returnToSelectedRange": "Retour à {{selectedRange}}",
+      "showingPreviousRange": "Affichage de {{fallbackRange}} car {{selectedRange}} ne contient aucune transaction.",
       "noTransactionsTitle": "Aucune transaction ce mois-ci",
       "noTransactionsDescription": "Vous avez {{count}} transactions au total, mais aucune ce mois-ci ({{month}}). Essayez de récupérer des données récentes ou consultez l'analyse historique dans la page Analyse.",
       "noTransactionsDisclaimer": "Aucune transaction enregistrée pour {{month}}. Les données affichées ci-dessous correspondent à votre dernière période disponible.",
@@ -947,6 +952,7 @@
       "actions": "Actions",
       "spending": "Dépenses",
       "budget": "Budget",
+      "more": "Plus",
       "scoring": "Score",
       "subscriptions": "Abonnements",
       "profiling": "Profilage"
@@ -1124,6 +1130,13 @@
       "subtitle": "Insights intelligents, suivi budgétaire et indicateurs de santé financière"
     },
     "dashboard": {
+      "overview": {
+        "title": "Commencez par l'essentiel",
+        "subtitle": "Le rythme et les signaux de trésorerie à venir restent visibles en premier. Ouvrez le cadrage comportemental et la lecture du temps seulement si nécessaire.",
+        "show": "Afficher les analyses plus poussées",
+        "hide": "Masquer les analyses plus poussées",
+        "count": "{{count}} cartes supplémentaires"
+      },
       "rhythm": {
         "title": "Votre rythme financier",
         "spendingByHour": "Dépenses par heure de la journée",
