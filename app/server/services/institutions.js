@@ -9,6 +9,7 @@
 let institutionsCache = null;
 let cacheTimestamp = null;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+let realEstateNodesEnsured = false;
 
 /**
  * SQL fragments for reusable queries
@@ -89,6 +90,100 @@ async function loadInstitutionsCache(db) {
 function clearInstitutionsCache() {
   institutionsCache = null;
   cacheTimestamp = null;
+  realEstateNodesEnsured = false;
+}
+
+async function ensureRealEstateInstitutionNodes(db) {
+  if (realEstateNodesEnsured) {
+    return;
+  }
+
+  await db.query(`
+    INSERT OR IGNORE INTO institution_nodes (
+      parent_id, vendor_code, node_type, institution_type, category, subcategory,
+      display_name_he, display_name_en, is_scrapable, is_active, display_order,
+      hierarchy_path, depth_level
+    )
+    SELECT
+      root.id, NULL, 'group', 'investment', 'investments', 'illiquid',
+      'נכסים לא נזילים', 'Illiquid Assets', 0, 1, 35,
+      '/investment/illiquid', 1
+    FROM institution_nodes root
+    WHERE root.hierarchy_path = '/investment'
+      AND NOT EXISTS (
+        SELECT 1 FROM institution_nodes existing
+        WHERE existing.hierarchy_path = '/investment/illiquid'
+      )
+  `);
+
+  await db.query(`
+    INSERT OR IGNORE INTO institution_nodes (
+      parent_id, vendor_code, node_type, institution_type, category, subcategory,
+      display_name_he, display_name_en, is_scrapable, is_active, display_order,
+      hierarchy_path, depth_level
+    )
+    SELECT
+      illiquid.id, NULL, 'group', 'investment', 'investments', 'real_estate',
+      'נדל"ן', 'Real Estate', 0, 1, 36,
+      '/investment/illiquid/real_estate', 2
+    FROM institution_nodes illiquid
+    WHERE illiquid.hierarchy_path = '/investment/illiquid'
+      AND NOT EXISTS (
+        SELECT 1 FROM institution_nodes existing
+        WHERE existing.hierarchy_path = '/investment/illiquid/real_estate'
+      )
+  `);
+
+  await db.query(`
+    INSERT OR IGNORE INTO institution_nodes (
+      parent_id, vendor_code, node_type, institution_type, category, subcategory,
+      display_name_he, display_name_en, is_scrapable, is_active, display_order,
+      notes, hierarchy_path, depth_level
+    )
+    SELECT
+      real_estate_group.id, 'real_estate', 'institution', 'investment', 'investments', 'real_estate',
+      'נדל"ן', 'Real Estate', 0, 1, 510,
+      'Manual real estate asset tracking',
+      '/investment/illiquid/real_estate/real_estate', 3
+    FROM institution_nodes real_estate_group
+    WHERE real_estate_group.hierarchy_path = '/investment/illiquid/real_estate'
+      AND NOT EXISTS (
+        SELECT 1 FROM institution_nodes existing
+        WHERE existing.vendor_code = 'real_estate'
+          AND existing.node_type = 'institution'
+      )
+  `);
+
+  await db.query(`
+    UPDATE institution_nodes
+    SET
+      parent_id = (
+        SELECT parent.id
+        FROM institution_nodes parent
+        WHERE parent.hierarchy_path = '/investment/illiquid/real_estate'
+        LIMIT 1
+      ),
+      institution_type = 'investment',
+      category = 'investments',
+      subcategory = 'real_estate',
+      display_name_he = 'נדל"ן',
+      display_name_en = 'Real Estate',
+      is_scrapable = 0,
+      is_active = 1,
+      display_order = 510,
+      hierarchy_path = '/investment/illiquid/real_estate/real_estate',
+      depth_level = 3
+    WHERE vendor_code = 'real_estate'
+      AND node_type = 'institution'
+      AND EXISTS (
+        SELECT 1 FROM institution_nodes parent
+        WHERE parent.hierarchy_path = '/investment/illiquid/real_estate'
+      )
+  `);
+
+  institutionsCache = null;
+  cacheTimestamp = null;
+  realEstateNodesEnsured = true;
 }
 
 /**
@@ -138,6 +233,10 @@ async function getInstitutionById(db, institutionId) {
 async function getInstitutionByVendorCode(db, vendorCode) {
   if (!vendorCode) return null;
 
+  if (vendorCode === 'real_estate') {
+    await ensureRealEstateInstitutionNodes(db);
+  }
+
   // Try cache first
   await loadInstitutionsCache(db);
   const cached = institutionsCache?.find(inst => inst.vendor_code === vendorCode);
@@ -175,6 +274,7 @@ async function getInstitutionByVendorCode(db, vendorCode) {
  * @returns {Promise<Array>} Array of institutions
  */
 async function getAllInstitutions(db, filters = {}) {
+  await ensureRealEstateInstitutionNodes(db);
   await loadInstitutionsCache(db);
 
   let institutions = [...institutionsCache];
@@ -228,6 +328,8 @@ async function getScrapableInstitutions(db) {
  * @returns {Promise<Array>} Array of institution nodes
  */
 async function getInstitutionTree(db) {
+  await ensureRealEstateInstitutionNodes(db);
+
   const result = await db.query(`
     SELECT
       id,
@@ -433,6 +535,7 @@ module.exports = {
   // Cache management
   loadInstitutionsCache,
   clearInstitutionsCache,
+  ensureRealEstateInstitutionNodes,
 
   // Lookup functions
   getInstitutionById,

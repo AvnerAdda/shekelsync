@@ -94,6 +94,11 @@ describe('investment balance sheet service', () => {
       accountsCount: 1,
       accountsWithValue: 1,
     });
+    expect(result.assets.buckets.illiquid).toMatchObject({
+      totalValue: 0,
+      accountsCount: 0,
+      accountsWithValue: 0,
+    });
     expect(result.assets.buckets.restricted).toMatchObject({
       totalValue: 0,
       accountsCount: 1,
@@ -117,6 +122,43 @@ describe('investment balance sheet service', () => {
     expect(result.netWorth).toBeNull();
     expect(result.netWorthStatus).toBe('partial');
     expect(result.missingValuationsCount).toBe(1);
+  });
+
+  it('classifies real estate accounts as illiquid even with stale liquid category values', async () => {
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 20,
+            account_name: 'Rental Apartment',
+            account_type: 'real_estate',
+            investment_category: 'liquid',
+            currency: 'ILS',
+            current_value: '2500000',
+            as_of_date: '2026-05-01',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await getInvestmentBalanceSheet({ includeAccounts: 'true' });
+
+    expect(result.assets.total).toBe(2500000);
+    expect(result.assets.buckets.liquid).toMatchObject({
+      totalValue: 0,
+      accountsCount: 0,
+    });
+    expect(result.assets.buckets.illiquid).toMatchObject({
+      totalValue: 2500000,
+      accountsCount: 1,
+      accountsWithValue: 1,
+    });
+    expect(result.assets.buckets.illiquid.accounts[0]).toMatchObject({
+      id: 20,
+      accountType: 'real_estate',
+      investmentCategory: 'liquid',
+      currentValue: 2500000,
+    });
   });
 
   it('computes net worth when pending credit card debt is available and includes account details', async () => {
