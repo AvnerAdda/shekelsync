@@ -9,6 +9,7 @@ const setMode = vi.fn();
 const setLocale = vi.fn();
 const checkForUpdates = vi.fn();
 const downloadUpdate = vi.fn();
+const openManualUpdatePage = vi.fn();
 const installUpdate = vi.fn();
 let latestLocation: { pathname: string; search: string; hash: string } = {
   pathname: '/',
@@ -137,6 +138,7 @@ vi.mock('../../hooks/useUpdateManager', () => ({
     updateState: { status: 'idle' },
     checkForUpdates,
     downloadUpdate,
+    openManualUpdatePage,
     installUpdate,
   }),
 }));
@@ -222,6 +224,7 @@ describe('TitleBar component', () => {
     setLocale.mockReset();
     checkForUpdates.mockReset();
     downloadUpdate.mockReset();
+    openManualUpdatePage.mockReset();
     installUpdate.mockReset();
     mockActualTheme = 'light';
     mockLocale = 'en';

@@ -2715,6 +2715,7 @@
         "checkForUpdates": "בדוק עדכונים",
         "checking": "בודק עדכונים...",
         "available": "עדכון זמין (גירסה {{version}})",
+        "availableManual": "עדכון זמין (גירסה {{version}}) - התקנה ידנית",
         "downloading": "מוריד עדכון... {{progress}}%",
         "downloaded": "עדכון מוכן להתקנה",
         "upToDate": "האפליקציה מעודכנת",
@@ -2725,9 +2726,11 @@
         "subtitle": "נהל עדכונים של ShekelSync",
         "checkForUpdates": "בדוק עדכונים",
         "downloadUpdate": "הורד עדכון",
+        "openDownloadPage": "פתח דף הורדה",
         "restartAndUpdate": "הפעל מחדש והתקן",
         "downloading": "מוריד עדכון",
         "version": "גירסה {{version}}",
+        "installManually": "התקן ידנית את גירסה {{version}}",
         "readyToInstall": "מוכן להתקנה",
         "releaseNotes": "הערות גירסה"
       }

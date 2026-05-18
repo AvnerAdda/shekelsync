@@ -295,6 +295,7 @@ const electronAPI = {
     downloadUpdate: () => ipcRenderer.invoke('updater:downloadUpdate'),
     quitAndInstall: () => ipcRenderer.invoke('updater:quitAndInstall'),
     getUpdateInfo: () => ipcRenderer.invoke('updater:getUpdateInfo'),
+    openManualUpdatePage: () => ipcRenderer.invoke('updater:openManualUpdatePage'),
   },
 
   // Development utilities (only available in development)

@@ -2686,6 +2686,7 @@
         "checkForUpdates": "Vérifier les mises à jour",
         "checking": "Vérification des mises à jour...",
         "available": "Mise à jour disponible (v{{version}})",
+        "availableManual": "Mise à jour disponible (v{{version}}) - installation manuelle",
         "downloading": "Téléchargement de la mise à jour... {{progress}}%",
         "downloaded": "Mise à jour prête à installer",
         "upToDate": "L'application est à jour",
@@ -2696,9 +2697,11 @@
         "subtitle": "Gérer les mises à jour de ShekelSync",
         "checkForUpdates": "Vérifier les mises à jour",
         "downloadUpdate": "Télécharger la mise à jour",
+        "openDownloadPage": "Ouvrir la page de téléchargement",
         "restartAndUpdate": "Redémarrer et installer",
         "downloading": "Téléchargement de la mise à jour",
         "version": "Version {{version}}",
+        "installManually": "Installer la version {{version}} manuellement",
         "readyToInstall": "Prêt à installer",
         "releaseNotes": "Notes de version"
       }

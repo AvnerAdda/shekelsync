@@ -21,6 +21,7 @@ import {
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
   Refresh as RefreshIcon,
+  OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@mui/material/styles';
@@ -29,6 +30,8 @@ export interface UpdateInfo {
   version: string;
   releaseDate?: string;
   releaseNotes?: string;
+  manualInstallUrl?: string | null;
+  updateMode?: 'automatic' | 'manual' | 'disabled';
 }
 
 export interface UpdateState {
@@ -36,12 +39,15 @@ export interface UpdateState {
   updateInfo: UpdateInfo | null;
   downloadProgress: number;
   error: string | null;
+  updateMode?: 'automatic' | 'manual' | 'disabled';
+  manualInstallUrl?: string | null;
 }
 
 interface UpdateButtonProps {
   updateState: UpdateState;
   onCheckForUpdates: () => void;
   onDownloadUpdate: () => void;
+  onOpenManualUpdatePage: () => void;
   onInstallUpdate: () => void;
 }
 
@@ -49,6 +55,7 @@ const UpdateButton: React.FC<UpdateButtonProps> = ({
   updateState,
   onCheckForUpdates,
   onDownloadUpdate,
+  onOpenManualUpdatePage,
   onInstallUpdate,
 }) => {
   const { t } = useTranslation('translation');
@@ -67,6 +74,8 @@ const UpdateButton: React.FC<UpdateButtonProps> = ({
     action();
     handleClose();
   };
+
+  const isManualUpdate = updateState.updateMode === 'manual';
 
   const getStatusIcon = () => {
     switch (updateState.status) {
@@ -92,7 +101,10 @@ const UpdateButton: React.FC<UpdateButtonProps> = ({
       case 'checking':
         return t('titleBar.update.tooltip.checking');
       case 'available':
-        return t('titleBar.update.tooltip.available', { version: updateState.updateInfo?.version });
+        return t(
+          isManualUpdate ? 'titleBar.update.tooltip.availableManual' : 'titleBar.update.tooltip.available',
+          { version: updateState.updateInfo?.version }
+        );
       case 'downloading':
         return t('titleBar.update.tooltip.downloading', { progress: updateState.downloadProgress });
       case 'downloaded':
@@ -211,18 +223,21 @@ const UpdateButton: React.FC<UpdateButtonProps> = ({
 
         {updateState.status === 'available' && (
           <MenuItem 
-            onClick={() => handleAction(onDownloadUpdate)}
+            onClick={() => handleAction(isManualUpdate ? onOpenManualUpdatePage : onDownloadUpdate)}
             sx={{ borderRadius: 1, mx: 0.5, my: 0.5 }}
           >
             <ListItemIcon>
-              <DownloadIcon fontSize="small" />
+              {isManualUpdate ? <OpenInNewIcon fontSize="small" /> : <DownloadIcon fontSize="small" />}
             </ListItemIcon>
             <ListItemText>
               <Typography variant="body2">
-                {t('titleBar.update.menu.downloadUpdate')}
+                {t(isManualUpdate ? 'titleBar.update.menu.openDownloadPage' : 'titleBar.update.menu.downloadUpdate')}
               </Typography>
               <Typography variant="caption" color={theme.palette.text.secondary}>
-                {t('titleBar.update.menu.version', { version: updateState.updateInfo?.version })}
+                {t(
+                  isManualUpdate ? 'titleBar.update.menu.installManually' : 'titleBar.update.menu.version',
+                  { version: updateState.updateInfo?.version }
+                )}
               </Typography>
             </ListItemText>
           </MenuItem>
