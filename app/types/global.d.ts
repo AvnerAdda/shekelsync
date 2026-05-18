@@ -30,6 +30,8 @@ declare global {
     version: string;
     releaseDate?: string;
     releaseNotes?: string;
+    manualInstallUrl?: string | null;
+    updateMode?: 'automatic' | 'manual' | 'disabled';
   }
 
   interface UpdateProgressInfo {
@@ -310,13 +312,18 @@ declare global {
       updateInfo?: UpdateInfo | null;
       isUpdateAvailable?: boolean;
       currentVersion?: string;
+      manualInstallUrl?: string | null;
+      updateMode?: 'automatic' | 'manual' | 'disabled';
     }>;
     downloadUpdate?: () => Promise<{ success: boolean; error?: string }>;
     quitAndInstall?: () => Promise<{ success: boolean; error?: string }>;
+    openManualUpdatePage?: () => Promise<{ success: boolean; error?: string; url?: string }>;
     getUpdateInfo?: () => Promise<{
       autoUpdateEnabled: boolean;
       currentVersion: string;
       platform: string;
+      manualInstallUrl?: string | null;
+      updateMode?: 'automatic' | 'manual' | 'disabled';
       reason?: string | null;
     }>;
   }

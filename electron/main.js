@@ -20,6 +20,7 @@ const {
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const https = require('https');
 const { getMainWindowAppearanceOptions } = require('./window-appearance');
 const {
   appRoot,
@@ -312,7 +313,197 @@ function resolveAutoUpdater() {
 }
 
 const AUTO_UPDATE_ENV_FLAG = 'ENABLE_AUTO_UPDATE';
+const UPDATE_MODE_AUTOMATIC = 'automatic';
+const UPDATE_MODE_MANUAL = 'manual';
+const UPDATE_MODE_DISABLED = 'disabled';
+const GITHUB_UPDATE_API_URL = 'https://api.github.com/repos/AvnerAdda/shekelsync/releases/latest';
+const MANUAL_UPDATE_PAGE_URL = 'https://github.com/AvnerAdda/shekelsync/releases/latest';
+const MANUAL_UPDATE_REASON =
+  'macOS updates are installed manually. Open the latest release page, download the newest DMG, and replace the app in Applications.';
 let cachedAutoUpdateAvailability = null;
+let lastManualUpdatePromptVersion = null;
+
+function normalizeUpdateVersion(version) {
+  if (typeof version !== 'string') {
+    return '';
+  }
+  return version.trim().toLowerCase().replace(/^v/, '').split('+')[0];
+}
+
+function compareUpdateVersions(left, right) {
+  const normalizedLeft = normalizeUpdateVersion(left);
+  const normalizedRight = normalizeUpdateVersion(right);
+  const leftCore = normalizedLeft.split('-')[0];
+  const rightCore = normalizedRight.split('-')[0];
+
+  if (!/^\d+(\.\d+)*$/.test(leftCore) || !/^\d+(\.\d+)*$/.test(rightCore)) {
+    return null;
+  }
+
+  const leftParts = leftCore.split('.').map((part) => Number.parseInt(part, 10));
+  const rightParts = rightCore.split('.').map((part) => Number.parseInt(part, 10));
+  const length = Math.max(leftParts.length, rightParts.length);
+
+  for (let index = 0; index < length; index += 1) {
+    const leftValue = leftParts[index] || 0;
+    const rightValue = rightParts[index] || 0;
+    if (leftValue > rightValue) return 1;
+    if (leftValue < rightValue) return -1;
+  }
+
+  return 0;
+}
+
+function isRemoteUpdateNewer(remoteVersion, currentVersion) {
+  const normalizedRemote = normalizeUpdateVersion(remoteVersion);
+  const normalizedCurrent = normalizeUpdateVersion(currentVersion);
+  if (!normalizedRemote) {
+    return false;
+  }
+
+  const comparison = compareUpdateVersions(normalizedRemote, normalizedCurrent);
+  if (comparison !== null) {
+    return comparison > 0;
+  }
+
+  return Boolean(normalizedCurrent) && normalizedRemote !== normalizedCurrent;
+}
+
+function fetchJson(url, redirectCount = 0) {
+  return new Promise((resolve, reject) => {
+    const request = https.get(
+      url,
+      {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'User-Agent': `ShekelSync/${app.getVersion()}`,
+        },
+      },
+      (response) => {
+        const { statusCode = 0, headers } = response;
+
+        if (statusCode >= 300 && statusCode < 400 && headers.location && redirectCount < 3) {
+          response.resume();
+          resolve(fetchJson(new URL(headers.location, url).toString(), redirectCount + 1));
+          return;
+        }
+
+        let rawBody = '';
+        let receivedBytes = 0;
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => {
+          receivedBytes += Buffer.byteLength(chunk);
+          if (receivedBytes > 1024 * 1024) {
+            request.destroy(new Error('GitHub update response was too large'));
+            return;
+          }
+          rawBody += chunk;
+        });
+        response.on('end', () => {
+          if (statusCode < 200 || statusCode >= 300) {
+            reject(new Error(`GitHub update check failed with status ${statusCode}`));
+            return;
+          }
+
+          try {
+            resolve(JSON.parse(rawBody));
+          } catch (error) {
+            reject(new Error(`GitHub update response was not valid JSON: ${error.message}`));
+          }
+        });
+      },
+    );
+
+    request.setTimeout(10_000, () => {
+      request.destroy(new Error('GitHub update check timed out'));
+    });
+    request.on('error', reject);
+  });
+}
+
+function buildManualUpdateInfo(release) {
+  const rawVersion = release?.tag_name || release?.name || '';
+  const version = normalizeUpdateVersion(rawVersion) || String(rawVersion || '').trim();
+
+  return {
+    version,
+    releaseDate: release?.published_at || release?.created_at,
+    releaseNotes: typeof release?.body === 'string' ? release.body : '',
+    manualInstallUrl: typeof release?.html_url === 'string' ? release.html_url : MANUAL_UPDATE_PAGE_URL,
+    updateMode: UPDATE_MODE_MANUAL,
+  };
+}
+
+async function checkForManualUpdateFromGitHub() {
+  const release = await fetchJson(GITHUB_UPDATE_API_URL);
+  const currentVersion = app.getVersion();
+  const updateInfo = buildManualUpdateInfo(release);
+  const isUpdateAvailable = isRemoteUpdateNewer(updateInfo.version, currentVersion);
+
+  return {
+    success: true,
+    currentVersion,
+    isUpdateAvailable,
+    updateInfo: isUpdateAvailable ? updateInfo : null,
+    manualInstallUrl: updateInfo.manualInstallUrl || MANUAL_UPDATE_PAGE_URL,
+    updateMode: UPDATE_MODE_MANUAL,
+  };
+}
+
+function emitUpdaterEvent(channel, payload) {
+  if (mainWindow?.webContents && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, payload);
+  }
+}
+
+async function promptManualUpdateInstall(updateInfo) {
+  if (!mainWindow || mainWindow.isDestroyed() || !updateInfo?.version) {
+    return;
+  }
+  if (lastManualUpdatePromptVersion === updateInfo.version) {
+    return;
+  }
+  lastManualUpdatePromptVersion = updateInfo.version;
+
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'ShekelSync Update Available',
+    message: `ShekelSync ${updateInfo.version} is available`,
+    detail: 'macOS updates are installed manually. Download the latest DMG, replace ShekelSync.app in Applications, then reopen the app.',
+    buttons: ['Open Download Page', 'Later'],
+    defaultId: 0,
+    cancelId: 1,
+  });
+
+  if (result.response === 0) {
+    await shell.openExternal(updateInfo.manualInstallUrl || MANUAL_UPDATE_PAGE_URL);
+  }
+}
+
+async function checkForManualUpdatesAndNotify() {
+  emitUpdaterEvent('updater:checking-for-update');
+
+  try {
+    const result = await checkForManualUpdateFromGitHub();
+    if (result.isUpdateAvailable && result.updateInfo) {
+      emitUpdaterEvent('updater:update-available', result.updateInfo);
+      await promptManualUpdateInstall(result.updateInfo);
+    } else {
+      emitUpdaterEvent('updater:update-not-available', {
+        version: result.currentVersion,
+        updateMode: UPDATE_MODE_MANUAL,
+      });
+    }
+  } catch (error) {
+    logger.warn('Manual GitHub update check failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    emitUpdaterEvent('updater:error', {
+      message: error instanceof Error ? error.message : String(error),
+      updateMode: UPDATE_MODE_MANUAL,
+    });
+  }
+}
 
 function getAutoUpdateAvailability() {
   if (cachedAutoUpdateAvailability) {
@@ -322,15 +513,10 @@ function getAutoUpdateAvailability() {
   if (isDev) {
     cachedAutoUpdateAvailability = {
       enabled: false,
+      canCheck: false,
+      updateMode: UPDATE_MODE_DISABLED,
+      manualInstallUrl: null,
       reason: 'Auto-updater is disabled in development mode.',
-    };
-    return cachedAutoUpdateAvailability;
-  }
-
-  if (!resolveAutoUpdater()) {
-    cachedAutoUpdateAvailability = {
-      enabled: false,
-      reason: 'Auto-updater module is not available.',
     };
     return cachedAutoUpdateAvailability;
   }
@@ -338,6 +524,9 @@ function getAutoUpdateAvailability() {
   if (process.env[AUTO_UPDATE_ENV_FLAG] === 'false') {
     cachedAutoUpdateAvailability = {
       enabled: false,
+      canCheck: false,
+      updateMode: UPDATE_MODE_DISABLED,
+      manualInstallUrl: null,
       reason: `Auto-updater is disabled by ${AUTO_UPDATE_ENV_FLAG}=false.`,
     };
     return cachedAutoUpdateAvailability;
@@ -351,21 +540,39 @@ function getAutoUpdateAvailability() {
     });
 
     if (!signingStatus.eligible) {
-      logger.warn('Disabling macOS auto-update because the installed app is not Developer ID signed.', {
+      logger.warn('Using manual macOS updates because the installed app is not Developer ID signed.', {
         reason: signingStatus.reason,
         bundlePath: signingStatus.bundlePath,
         signature: signingStatus.details,
       });
-      cachedAutoUpdateAvailability = {
-        enabled: false,
-        reason: signingStatus.reason,
-      };
-      return cachedAutoUpdateAvailability;
     }
+
+    cachedAutoUpdateAvailability = {
+      enabled: false,
+      canCheck: true,
+      updateMode: UPDATE_MODE_MANUAL,
+      manualInstallUrl: MANUAL_UPDATE_PAGE_URL,
+      reason: MANUAL_UPDATE_REASON,
+    };
+    return cachedAutoUpdateAvailability;
+  }
+
+  if (!resolveAutoUpdater()) {
+    cachedAutoUpdateAvailability = {
+      enabled: false,
+      canCheck: false,
+      updateMode: UPDATE_MODE_DISABLED,
+      manualInstallUrl: null,
+      reason: 'Auto-updater module is not available.',
+    };
+    return cachedAutoUpdateAvailability;
   }
 
   cachedAutoUpdateAvailability = {
     enabled: true,
+    canCheck: true,
+    updateMode: UPDATE_MODE_AUTOMATIC,
+    manualInstallUrl: null,
     reason: null,
   };
   return cachedAutoUpdateAvailability;
@@ -1350,59 +1557,64 @@ app.whenReady().then(async () => {
     }, 2000);
   }
 
-  // Auto-updater setup (production only)
-  if (shouldEnableAutoUpdate()) {
+  const updateAvailability = getAutoUpdateAvailability();
+
+  // Update setup (production only)
+  if (updateAvailability.updateMode === UPDATE_MODE_MANUAL && updateAvailability.canCheck) {
+    logger.info('Manual update checks enabled for macOS.', {
+      reason: updateAvailability.reason,
+      updatePage: updateAvailability.manualInstallUrl,
+    });
+    checkForManualUpdatesAndNotify().catch((error) => {
+      logger.warn('Manual update check rejected', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  } else if (shouldEnableAutoUpdate()) {
     console.log('Auto-updater enabled, checking for updates...');
     logger.info('Auto-updater enabled, checking for updates');
 
     autoUpdater.on('checking-for-update', () => {
       console.log('Checking for update...');
-      if (mainWindow?.webContents) {
-        mainWindow.webContents.send('updater:checking-for-update');
-      }
+      emitUpdaterEvent('updater:checking-for-update');
     });
 
     autoUpdater.on('update-available', (info) => {
       console.log('Update available:', info);
-      if (mainWindow?.webContents) {
-        mainWindow.webContents.send('updater:update-available', {
-          version: info.version,
-          releaseDate: info.releaseDate,
-          releaseNotes: info.releaseNotes,
-        });
-      }
+      emitUpdaterEvent('updater:update-available', {
+        version: info.version,
+        releaseDate: info.releaseDate,
+        releaseNotes: info.releaseNotes,
+        updateMode: UPDATE_MODE_AUTOMATIC,
+      });
     });
 
     autoUpdater.on('update-not-available', (info) => {
       console.log('Update not available:', info);
-      if (mainWindow?.webContents) {
-        mainWindow.webContents.send('updater:update-not-available', {
-          version: info.version,
-        });
-      }
+      emitUpdaterEvent('updater:update-not-available', {
+        version: info.version,
+        updateMode: UPDATE_MODE_AUTOMATIC,
+      });
     });
 
     autoUpdater.on('error', (error) => {
       console.error('Auto-updater error:', error);
       logger.error('Auto-updater error', { error: error.message });
-      if (mainWindow?.webContents) {
-        mainWindow.webContents.send('updater:error', {
-          message: error.message,
-        });
-      }
+      emitUpdaterEvent('updater:error', {
+        message: error.message,
+        updateMode: UPDATE_MODE_AUTOMATIC,
+      });
     });
 
     autoUpdater.on('download-progress', (progressObj) => {
       const logMessage = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}% (${progressObj.transferred}/${progressObj.total})`;
       console.log(logMessage);
-      if (mainWindow?.webContents) {
-        mainWindow.webContents.send('updater:download-progress', {
-          percent: Math.round(progressObj.percent),
-          bytesPerSecond: progressObj.bytesPerSecond,
-          transferred: progressObj.transferred,
-          total: progressObj.total,
-        });
-      }
+      emitUpdaterEvent('updater:download-progress', {
+        percent: Math.round(progressObj.percent),
+        bytesPerSecond: progressObj.bytesPerSecond,
+        transferred: progressObj.transferred,
+        total: progressObj.total,
+      });
     });
 
     autoUpdater.on('update-downloaded', (info) => {
@@ -1417,12 +1629,11 @@ app.whenReady().then(async () => {
           }
         });
       }
-      if (mainWindow?.webContents) {
-        mainWindow.webContents.send('updater:update-downloaded', {
-          version: info.version,
-          releaseDate: info.releaseDate,
-        });
-      }
+      emitUpdaterEvent('updater:update-downloaded', {
+        version: info.version,
+        releaseDate: info.releaseDate,
+        updateMode: UPDATE_MODE_AUTOMATIC,
+      });
     });
 
     // Prevent an unhandled rejection when GitHub releases are not yet configured.
@@ -2292,17 +2503,18 @@ ipcMain.handle('app:relaunch', (event) => {
 // Update-related handlers
 ipcMain.handle('updater:checkForUpdates', async () => {
   const availability = getAutoUpdateAvailability();
-  if (!availability.enabled || !autoUpdater) {
+  if (!availability.canCheck) {
     return { success: false, error: availability.reason || 'Auto-updater not available' };
   }
 
   try {
-    const normalizeVersion = (version) => {
-      if (typeof version !== 'string') {
-        return '';
-      }
-      return version.trim().toLowerCase().replace(/^v/, '').split('+')[0];
-    };
+    if (availability.updateMode === UPDATE_MODE_MANUAL) {
+      return await checkForManualUpdateFromGitHub();
+    }
+
+    if (!autoUpdater) {
+      return { success: false, error: 'Auto-updater not available' };
+    }
 
     const currentVersion = app.getVersion();
     const result = await autoUpdater.checkForUpdates();
@@ -2310,14 +2522,21 @@ ipcMain.handle('updater:checkForUpdates', async () => {
     const explicitAvailability = typeof result?.isUpdateAvailable === 'boolean' ? result.isUpdateAvailable : null;
     const inferredAvailability =
       Boolean(updateInfo?.version) &&
-      normalizeVersion(updateInfo.version) !== normalizeVersion(currentVersion);
+      normalizeUpdateVersion(updateInfo.version) !== normalizeUpdateVersion(currentVersion);
     const isUpdateAvailable = explicitAvailability ?? inferredAvailability;
 
     return {
       success: true,
       currentVersion,
       isUpdateAvailable,
-      updateInfo: isUpdateAvailable ? updateInfo : null,
+      updateInfo: isUpdateAvailable
+        ? {
+            ...updateInfo,
+            updateMode: availability.updateMode,
+          }
+        : null,
+      updateMode: availability.updateMode,
+      manualInstallUrl: availability.manualInstallUrl,
     };
   } catch (error) {
     console.error('Manual update check failed:', error);
@@ -2327,6 +2546,15 @@ ipcMain.handle('updater:checkForUpdates', async () => {
 
 ipcMain.handle('updater:downloadUpdate', async () => {
   const availability = getAutoUpdateAvailability();
+  if (availability.updateMode === UPDATE_MODE_MANUAL) {
+    return {
+      success: false,
+      error: MANUAL_UPDATE_REASON,
+      manualInstallUrl: availability.manualInstallUrl || MANUAL_UPDATE_PAGE_URL,
+      updateMode: UPDATE_MODE_MANUAL,
+    };
+  }
+
   if (!availability.enabled || !autoUpdater) {
     return { success: false, error: availability.reason || 'Auto-updater not available' };
   }
@@ -2342,6 +2570,15 @@ ipcMain.handle('updater:downloadUpdate', async () => {
 
 ipcMain.handle('updater:quitAndInstall', async () => {
   const availability = getAutoUpdateAvailability();
+  if (availability.updateMode === UPDATE_MODE_MANUAL) {
+    return {
+      success: false,
+      error: MANUAL_UPDATE_REASON,
+      manualInstallUrl: availability.manualInstallUrl || MANUAL_UPDATE_PAGE_URL,
+      updateMode: UPDATE_MODE_MANUAL,
+    };
+  }
+
   if (!availability.enabled || !autoUpdater) {
     return { success: false, error: availability.reason || 'Auto-updater not available' };
   }
@@ -2361,8 +2598,26 @@ ipcMain.handle('updater:getUpdateInfo', async () => {
     autoUpdateEnabled: availability.enabled,
     currentVersion: app.getVersion(),
     platform: process.platform,
+    updateMode: availability.updateMode,
+    manualInstallUrl: availability.manualInstallUrl,
     reason: availability.reason,
   };
+});
+
+ipcMain.handle('updater:openManualUpdatePage', async (event) => {
+  if (!requireTrustedIpcSender(event, 'updater:openManualUpdatePage')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+
+  try {
+    const availability = getAutoUpdateAvailability();
+    const url = availability.manualInstallUrl || MANUAL_UPDATE_PAGE_URL;
+    await shell.openExternal(url);
+    return { success: true, url };
+  } catch (error) {
+    console.error('Failed to open manual update page:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 // Development helpers
