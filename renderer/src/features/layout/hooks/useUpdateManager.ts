@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import type { UpdateState, UpdateInfo } from '../components/UpdateButton';
 
+type UpdateMode = 'automatic' | 'manual' | 'disabled';
+
 interface UpdateProgressInfo {
   percent: number;
   bytesPerSecond: number;
@@ -15,17 +17,24 @@ interface UpdateCheckResult {
   updateInfo?: UpdateInfo | null;
   isUpdateAvailable?: boolean;
   currentVersion?: string;
+  manualInstallUrl?: string | null;
+  updateMode?: UpdateMode;
 }
 
 interface UpdateActionResult {
   success: boolean;
   error?: string;
+  url?: string;
+  manualInstallUrl?: string | null;
+  updateMode?: UpdateMode;
 }
 
 interface UpdateRuntimeInfo {
   autoUpdateEnabled: boolean;
   currentVersion: string;
   platform: string;
+  manualInstallUrl?: string | null;
+  updateMode?: UpdateMode;
   reason?: string | null;
 }
 
@@ -33,6 +42,7 @@ interface UpdateManagerReturn {
   updateState: UpdateState;
   checkForUpdates: () => Promise<void>;
   downloadUpdate: () => Promise<void>;
+  openManualUpdatePage: () => Promise<void>;
   installUpdate: () => Promise<void>;
   isUpdateAvailable: boolean;
   isUpdateReady: boolean;
@@ -44,10 +54,14 @@ export const useUpdateManager = (): UpdateManagerReturn => {
     updateInfo: null,
     downloadProgress: 0,
     error: null,
+    updateMode: 'automatic',
+    manualInstallUrl: null,
   });
 
   const cleanupRef = useRef<Array<() => void>>([]);
   const currentVersionRef = useRef<string | null>(null);
+  const updateModeRef = useRef<UpdateMode>('automatic');
+  const manualInstallUrlRef = useRef<string | null>(null);
   const { showNotification } = useNotification();
 
   const normalizeVersion = useCallback((version?: string): string => {
@@ -82,6 +96,37 @@ export const useUpdateManager = (): UpdateManagerReturn => {
     }
   }, []);
 
+  const applyRuntimeUpdateInfo = useCallback((info?: {
+    updateMode?: UpdateMode;
+    manualInstallUrl?: string | null;
+    currentVersion?: string;
+  } | null) => {
+    if (!info) {
+      return;
+    }
+
+    if (info.currentVersion) {
+      currentVersionRef.current = info.currentVersion;
+    }
+
+    if (info.updateMode) {
+      updateModeRef.current = info.updateMode;
+    }
+
+    if (typeof info.manualInstallUrl !== 'undefined') {
+      manualInstallUrlRef.current = info.manualInstallUrl ?? null;
+    }
+
+    setUpdateState(prev => ({
+      ...prev,
+      updateMode: info.updateMode ?? prev.updateMode,
+      manualInstallUrl:
+        typeof info.manualInstallUrl !== 'undefined'
+          ? info.manualInstallUrl ?? null
+          : prev.manualInstallUrl,
+    }));
+  }, []);
+
   // Check for updates manually
   const checkForUpdates = useCallback(async () => {
     setUpdateState(prev => ({ ...prev, status: 'checking', error: null }));
@@ -106,22 +151,37 @@ export const useUpdateManager = (): UpdateManagerReturn => {
       currentVersionRef.current = result.currentVersion;
     }
 
+    applyRuntimeUpdateInfo(result);
+
     const inferredAvailability =
       Boolean(result?.updateInfo?.version) &&
       !isSameVersion(result?.currentVersion ?? currentVersionRef.current, result?.updateInfo?.version);
     const isUpdateAvailable = result?.isUpdateAvailable ?? inferredAvailability;
+    const updateMode = result?.updateMode ?? updateModeRef.current;
+    const manualInstallUrl =
+      result?.manualInstallUrl ?? result?.updateInfo?.manualInstallUrl ?? manualInstallUrlRef.current;
 
-    if (result?.success && isUpdateAvailable && result.updateInfo) {
+    const availableUpdateInfo = result?.updateInfo;
+    if (result?.success && isUpdateAvailable && availableUpdateInfo?.version) {
       setUpdateState(prev => ({
         ...prev,
         status: 'available',
-        updateInfo: result.updateInfo ?? null,
+        updateInfo: {
+          ...availableUpdateInfo,
+          version: availableUpdateInfo.version,
+          updateMode,
+          manualInstallUrl,
+        },
+        updateMode,
+        manualInstallUrl,
       }));
     } else if (result?.success) {
       setUpdateState(prev => ({ 
         ...prev, 
         status: 'not-available',
         updateInfo: null,
+        updateMode,
+        manualInstallUrl,
         error: null,
       }));
     } else {
@@ -131,11 +191,55 @@ export const useUpdateManager = (): UpdateManagerReturn => {
         error: result?.error || 'Failed to check for updates',
       }));
     }
-  }, [safeElectronCall, isSameVersion]);
+  }, [safeElectronCall, isSameVersion, applyRuntimeUpdateInfo]);
+
+  const openManualUpdatePage = useCallback(async () => {
+    if (updateState.status !== 'available') {
+      return;
+    }
+
+    const updaterApi = typeof window === 'undefined' ? undefined : window.electronAPI?.updater;
+    if (!updaterApi?.openManualUpdatePage) {
+      const fallbackUrl = updateState.manualInstallUrl ?? updateState.updateInfo?.manualInstallUrl;
+      if (fallbackUrl) {
+        window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      setUpdateState(prev => ({
+        ...prev,
+        status: 'error',
+        error: 'Manual update page is not available',
+      }));
+      return;
+    }
+    const openManualUpdatePageFn = updaterApi.openManualUpdatePage;
+
+    const result = await safeElectronCall<UpdateActionResult>(
+      () => openManualUpdatePageFn(),
+      { success: false, error: 'Manual update page is not available' }
+    );
+
+    if (result?.success) {
+      showNotification('Download page opened. Install the latest version manually.', 'info');
+      return;
+    }
+
+    setUpdateState(prev => ({
+      ...prev,
+      status: 'error',
+      error: result?.error || 'Failed to open manual update page',
+    }));
+  }, [updateState.status, updateState.manualInstallUrl, updateState.updateInfo, safeElectronCall, showNotification]);
 
   // Download update
   const downloadUpdate = useCallback(async () => {
     if (updateState.status !== 'available') {
+      return;
+    }
+
+    if (updateState.updateMode === 'manual') {
+      await openManualUpdatePage();
       return;
     }
 
@@ -164,7 +268,7 @@ export const useUpdateManager = (): UpdateManagerReturn => {
         error: result?.error || 'Failed to download update',
       }));
     }
-  }, [updateState.status, safeElectronCall]);
+  }, [updateState.status, updateState.updateMode, openManualUpdatePage, safeElectronCall]);
 
   // Install update and restart
   const installUpdate = useCallback(async () => {
@@ -219,11 +323,22 @@ export const useUpdateManager = (): UpdateManagerReturn => {
     // Update available
     if (eventsApi.onUpdateAvailable) {
       const unsubscribe = eventsApi.onUpdateAvailable((info: UpdateInfo) => {
+        const updateMode = info?.updateMode ?? updateModeRef.current;
+        const manualInstallUrl = info?.manualInstallUrl ?? manualInstallUrlRef.current;
+        if (info?.updateMode) {
+          updateModeRef.current = info.updateMode;
+        }
+        if (typeof info?.manualInstallUrl !== 'undefined') {
+          manualInstallUrlRef.current = info.manualInstallUrl ?? null;
+        }
+
         if (isSameVersion(currentVersionRef.current, info?.version)) {
           setUpdateState(prev => ({
             ...prev,
             status: 'not-available',
             updateInfo: null,
+            updateMode,
+            manualInstallUrl,
             error: null,
           }));
           return;
@@ -231,11 +346,19 @@ export const useUpdateManager = (): UpdateManagerReturn => {
         setUpdateState(prev => ({
           ...prev,
           status: 'available',
-          updateInfo: info,
+          updateInfo: {
+            ...info,
+            updateMode,
+            manualInstallUrl,
+          },
+          updateMode,
+          manualInstallUrl,
           error: null,
         }));
         showNotification(
-          `Update available: v${info.version}. Click the update button to download.`,
+          updateMode === 'manual'
+            ? `Update available: v${info.version}. Open the update menu to install the latest version manually.`
+            : `Update available: v${info.version}. Click the update button to download.`,
           'info'
         );
       });
@@ -246,11 +369,22 @@ export const useUpdateManager = (): UpdateManagerReturn => {
 
     // Update not available
     if (eventsApi.onUpdateNotAvailable) {
-      const unsubscribe = eventsApi.onUpdateNotAvailable(() => {
+      const unsubscribe = eventsApi.onUpdateNotAvailable((info?: UpdateInfo) => {
+        if (info?.updateMode) {
+          updateModeRef.current = info.updateMode;
+        }
+        if (typeof info?.manualInstallUrl !== 'undefined') {
+          manualInstallUrlRef.current = info.manualInstallUrl ?? null;
+        }
         setUpdateState(prev => ({ 
           ...prev, 
           status: 'not-available',
           updateInfo: null,
+          updateMode: info?.updateMode ?? prev.updateMode,
+          manualInstallUrl:
+            typeof info?.manualInstallUrl !== 'undefined'
+              ? info.manualInstallUrl ?? null
+              : prev.manualInstallUrl,
           error: null,
         }));
       });
@@ -261,10 +395,14 @@ export const useUpdateManager = (): UpdateManagerReturn => {
 
     // Update error
     if (eventsApi.onUpdateError) {
-      const unsubscribe = eventsApi.onUpdateError((errorInfo: { message: string }) => {
+      const unsubscribe = eventsApi.onUpdateError((errorInfo: { message: string; updateMode?: UpdateMode }) => {
+        if (errorInfo.updateMode) {
+          updateModeRef.current = errorInfo.updateMode;
+        }
         setUpdateState(prev => ({
           ...prev,
           status: 'error',
+          updateMode: errorInfo.updateMode ?? prev.updateMode,
           error: errorInfo.message,
         }));
         showNotification(
@@ -297,7 +435,8 @@ export const useUpdateManager = (): UpdateManagerReturn => {
         setUpdateState(prev => ({
           ...prev,
           status: 'downloaded',
-          updateInfo: { ...prev.updateInfo, ...info },
+          updateInfo: { ...prev.updateInfo, ...info, updateMode: info.updateMode ?? prev.updateMode },
+          updateMode: info.updateMode ?? prev.updateMode,
           downloadProgress: 100,
         }));
         showNotification(
@@ -327,11 +466,9 @@ export const useUpdateManager = (): UpdateManagerReturn => {
     const getUpdateInfoFn = updaterApi.getUpdateInfo;
 
     safeElectronCall<UpdateRuntimeInfo | null>(() => getUpdateInfoFn(), null).then((info) => {
-      if (info?.currentVersion) {
-        currentVersionRef.current = info.currentVersion;
-      }
+      applyRuntimeUpdateInfo(info);
     });
-  }, [safeElectronCall]);
+  }, [safeElectronCall, applyRuntimeUpdateInfo]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -348,6 +485,7 @@ export const useUpdateManager = (): UpdateManagerReturn => {
     updateState,
     checkForUpdates,
     downloadUpdate,
+    openManualUpdatePage,
     installUpdate,
     isUpdateAvailable,
     isUpdateReady,

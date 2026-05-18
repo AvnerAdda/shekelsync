@@ -14,6 +14,8 @@ type UpdateInfo = {
   version: string;
   releaseDate?: string;
   releaseNotes?: string;
+  manualInstallUrl?: string | null;
+  updateMode?: 'automatic' | 'manual' | 'disabled';
 };
 
 type EventCallbacks = {
@@ -37,8 +39,12 @@ function setupElectronApi(options?: {
     updateInfo?: UpdateInfo | null;
     isUpdateAvailable?: boolean;
     currentVersion?: string;
+    manualInstallUrl?: string | null;
+    updateMode?: 'automatic' | 'manual' | 'disabled';
   };
   currentVersion?: string;
+  updateMode?: 'automatic' | 'manual' | 'disabled';
+  manualInstallUrl?: string | null;
 }) {
   const callbacks: EventCallbacks = {};
 
@@ -48,10 +54,13 @@ function setupElectronApi(options?: {
       .mockResolvedValue(options?.checkForUpdatesResult ?? { success: true, updateInfo: null }),
     downloadUpdate: vi.fn().mockResolvedValue({ success: true }),
     quitAndInstall: vi.fn().mockResolvedValue({ success: true }),
+    openManualUpdatePage: vi.fn().mockResolvedValue({ success: true, url: options?.manualInstallUrl }),
     getUpdateInfo: vi.fn().mockResolvedValue({
       autoUpdateEnabled: true,
       currentVersion: options?.currentVersion ?? '0.1.13',
       platform: 'linux',
+      updateMode: options?.updateMode ?? 'automatic',
+      manualInstallUrl: options?.manualInstallUrl ?? null,
     }),
   };
 
@@ -163,5 +172,42 @@ describe('useUpdateManager', () => {
     });
     expect(result.current.updateState.updateInfo?.version).toBe('0.1.14');
     expect(showNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the manual update page instead of downloading in manual mode', async () => {
+    const { updater } = setupElectronApi({
+      currentVersion: '0.1.13',
+      updateMode: 'manual',
+      manualInstallUrl: 'https://github.com/AvnerAdda/shekelsync/releases/latest',
+      checkForUpdatesResult: {
+        success: true,
+        isUpdateAvailable: true,
+        currentVersion: '0.1.13',
+        updateMode: 'manual',
+        manualInstallUrl: 'https://github.com/AvnerAdda/shekelsync/releases/latest',
+        updateInfo: {
+          version: '0.1.14',
+          updateMode: 'manual',
+          manualInstallUrl: 'https://github.com/AvnerAdda/shekelsync/releases/latest',
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useUpdateManager());
+
+    await act(async () => {
+      await result.current.checkForUpdates();
+    });
+
+    await waitFor(() => {
+      expect(result.current.updateState.status).toBe('available');
+    });
+
+    await act(async () => {
+      await result.current.downloadUpdate();
+    });
+
+    expect(updater.openManualUpdatePage).toHaveBeenCalledTimes(1);
+    expect(updater.downloadUpdate).not.toHaveBeenCalled();
   });
 });

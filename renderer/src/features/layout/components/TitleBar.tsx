@@ -104,7 +104,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   }, [locale]);
 
   // Update manager
-  const { updateState, checkForUpdates, downloadUpdate, installUpdate } = useUpdateManager();
+  const { updateState, checkForUpdates, downloadUpdate, openManualUpdatePage, installUpdate } = useUpdateManager();
 
   // Platform detection
   const isMacOS = window.electronAPI?.platform?.isMacOS;
@@ -875,6 +875,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
           updateState={updateState}
           onCheckForUpdates={checkForUpdates}
           onDownloadUpdate={downloadUpdate}
+          onOpenManualUpdatePage={openManualUpdatePage}
           onInstallUpdate={installUpdate}
         />
 

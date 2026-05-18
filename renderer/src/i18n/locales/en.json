@@ -2704,6 +2704,7 @@
         "checkForUpdates": "Check for updates",
         "checking": "Checking for updates...",
         "available": "Update available (v{{version}})",
+        "availableManual": "Update available (v{{version}}) - install manually",
         "downloading": "Downloading update... {{progress}}%",
         "downloaded": "Update ready to install",
         "upToDate": "App is up to date",
@@ -2714,9 +2715,11 @@
         "subtitle": "Manage ShekelSync updates",
         "checkForUpdates": "Check for Updates",
         "downloadUpdate": "Download Update",
+        "openDownloadPage": "Open Download Page",
         "restartAndUpdate": "Restart & Install",
         "downloading": "Downloading update",
         "version": "Version {{version}}",
+        "installManually": "Install version {{version}} manually",
         "readyToInstall": "Ready to install",
         "releaseNotes": "Release Notes"
       }
