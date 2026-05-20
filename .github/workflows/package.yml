@@ -3,7 +3,7 @@ name: Package
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -19,9 +19,9 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     env:
-      ALLOW_DEV_NO_ENCRYPTION: 'true'
-      USE_VITE_RENDERER: 'true'
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      ALLOW_DEV_NO_ENCRYPTION: "true"
+      USE_VITE_RENDERER: "true"
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
     steps:
       - name: Checkout repository
@@ -30,8 +30,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22.12.0'
-          cache: 'npm'
+          node-version: "22.12.0"
+          cache: "npm"
 
       - name: Install root dependencies
         run: npm ci
@@ -135,31 +135,22 @@ jobs:
 
       - name: Build Electron distributable
         shell: bash
-        env:
-          CUSTOM_GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REF: ${{ github.ref }}
-        run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            if [ -n "$CUSTOM_GH_TOKEN" ]; then
-              export GH_TOKEN="$CUSTOM_GH_TOKEN"
-              echo "Using GH_RELEASE_TOKEN for release publishing."
-            else
-              export GH_TOKEN="$GITHUB_TOKEN"
-              echo "GH_RELEASE_TOKEN is not set; using default GITHUB_TOKEN for release publishing."
-            fi
-            npm --prefix app run release
-          else
-            echo "Non-tag ref detected; generating unsigned artifacts only."
-            npm --prefix app run dist
-          fi
+        run: npm --prefix app run dist
 
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: electron-dist-${{ matrix.os }}
-          path: dist/**
+          path: |
+            dist/*.AppImage
+            dist/*.dmg
+            dist/*.dmg.blockmap
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/*.zip
+            dist/*.zip.blockmap
+            dist/latest*.yml
           if-no-files-found: ignore
 
   finalize-release:
@@ -168,11 +159,20 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: electron-dist-*
+          path: release-artifacts
+          merge-multiple: true
+
       - name: Publish release after all platform builds succeed
         env:
           GH_RELEASE_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PROMPT_DISABLED: "1"
           TAG_NAME: ${{ github.ref_name }}
+        shell: bash
         run: |
           if [ -n "$GH_RELEASE_TOKEN" ]; then
             export GH_TOKEN="$GH_RELEASE_TOKEN"
@@ -180,8 +180,37 @@ jobs:
             export GH_TOKEN="$GITHUB_TOKEN"
           fi
 
+          VERSION="${TAG_NAME#v}"
+          for required_asset in "ShekelSync-${VERSION}.dmg" "ShekelSync-${VERSION}-arm64.dmg"; do
+            if [ ! -f "release-artifacts/$required_asset" ]; then
+              echo "::error::Missing required macOS DMG artifact: $required_asset"
+              find release-artifacts -maxdepth 2 -type f -print
+              exit 1
+            fi
+          done
+
+          shopt -s nullglob
+          release_assets=(
+            release-artifacts/*.AppImage
+            release-artifacts/*.dmg
+            release-artifacts/*.dmg.blockmap
+            release-artifacts/*.exe
+            release-artifacts/*.exe.blockmap
+            release-artifacts/*.zip
+            release-artifacts/*.zip.blockmap
+            release-artifacts/latest*.yml
+          )
+
+          if [ ${#release_assets[@]} -eq 0 ]; then
+            echo "::error::No release assets found."
+            exit 1
+          fi
+
           echo "Finalizing release for tag: $TAG_NAME"
-          gh release edit "$TAG_NAME" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "$TAG_NAME" \
-            --draft=false
+          if gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" "${release_assets[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG_NAME" "${release_assets[@]}" --repo "$GITHUB_REPOSITORY" --title "$TAG_NAME" --generate-notes --draft
+          fi
+
+          gh release edit "$TAG_NAME" --repo "$GITHUB_REPOSITORY" --title "$TAG_NAME" --draft=false
