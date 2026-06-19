@@ -36,6 +36,12 @@ import {
   getPikadonCandidateKey,
 } from './pikadon-linking';
 import { getCreatedInvestmentAccountId } from '../utils/account-response';
+import RealEstateSimulatorFields, {
+  createEmptyRealEstateProfile,
+  hasRealEstateProfileInput,
+  type RealEstateEstimatePreview,
+  type RealEstateProfileInput,
+} from './RealEstateSimulatorFields';
 
 interface Transaction {
   transactionIdentifier: string;
@@ -111,6 +117,9 @@ export default function SmartInvestmentAccountForm({
   const [currentValue, setCurrentValue] = useState('');
   const [costBasis, setCostBasis] = useState('');
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().split('T')[0]);
+  const [realEstateProfile, setRealEstateProfile] = useState<RealEstateProfileInput>(
+    () => createEmptyRealEstateProfile(),
+  );
 
   // Auto-fill from suggestion
 useEffect(() => {
@@ -131,6 +140,7 @@ useEffect(() => {
       // Reset other fields
       setAccountNumber('');
     setNotes('');
+    setRealEstateProfile(createEmptyRealEstateProfile());
     setActiveStep(0);
   }
 }, [suggestion, open]);
@@ -262,6 +272,21 @@ useEffect(() => {
         throw new Error('Failed to create account');
       }
 
+      if (accountType === 'real_estate' && hasRealEstateProfileInput(realEstateProfile)) {
+        try {
+          const profileResponse = await apiClient.put(
+            `/api/investments/real-estate/profiles/${accountId}`,
+            realEstateProfile,
+          );
+          if (!profileResponse.ok) {
+            throw new Error(profileResponse.statusText || 'Failed to save real estate details');
+          }
+        } catch (profileError) {
+          console.error('Error saving real estate details:', profileError);
+          showNotification('Account created, but real estate details were not saved.', 'warning');
+        }
+      }
+
       const holdingResponse = await apiClient.post('/api/investments/holdings', {
         account_id: accountId,
         ...holdingDetails,
@@ -346,6 +371,31 @@ useEffect(() => {
     setCurrentValue('');
     setCostBasis('');
     setAsOfDate(new Date().toISOString().split('T')[0]);
+    setRealEstateProfile(createEmptyRealEstateProfile());
+  };
+
+  const handleApplyRealEstateEstimate = (estimate: RealEstateEstimatePreview) => {
+    const portfolioValue = estimate.estimated_net_equity ?? estimate.scenario_base;
+    if (portfolioValue === null) {
+      return;
+    }
+    const holdingValue = Math.max(portfolioValue, 0);
+
+    const purchasePrice = Number.parseFloat(realEstateProfile.purchase_price || '');
+    const ownership = Number.parseFloat(realEstateProfile.ownership_percentage || '100');
+    const ownershipRatio = (Number.isFinite(ownership) ? ownership : 100) / 100;
+    const mortgageBalance = Number.parseFloat(realEstateProfile.mortgage_balance || '0') * ownershipRatio;
+    const ownedCostBasis = Number.isFinite(purchasePrice)
+      ? purchasePrice * ownershipRatio
+      : null;
+    const equityCostBasis = ownedCostBasis === null
+      ? null
+      : Math.max(ownedCostBasis - (Number.isFinite(mortgageBalance) ? mortgageBalance : 0), 0);
+
+    setCurrentValue(String(holdingValue));
+    if (!costBasis && equityCostBasis !== null) {
+      setCostBasis(String(Math.round(equityCostBasis)));
+    }
   };
 
   const calculateROI = (): number => {
@@ -482,6 +532,17 @@ useEffect(() => {
                   placeholder="Additional notes (optional)"
                 />
               </Grid>
+
+              {accountType === 'real_estate' && (
+                <Grid size={{ xs: 12 }}>
+                  <RealEstateSimulatorFields
+                    value={realEstateProfile}
+                    currency={currency}
+                    onChange={setRealEstateProfile}
+                    onApplyEstimate={handleApplyRealEstateEstimate}
+                  />
+                </Grid>
+              )}
             </Grid>
           </Box>
         );

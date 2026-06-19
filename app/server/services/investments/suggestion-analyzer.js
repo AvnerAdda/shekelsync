@@ -22,6 +22,7 @@ const INSTITUTIONS = {
   brokerage: ['interactive brokers', 'ib', 'etoro', 'trade station', 'פסגות', 'אקסלנס',
               'excellence', 'psagot', 'leader', 'לידר'],
   crypto: ['bits of gold', 'kraken', 'coinbase', 'binance', 'bit2c'],
+  real_estate: ['נדל"ן', 'נדלן', 'real estate', 'property'],
   savings: ['בנק הפועלים', 'בנק לאומי', 'בנק מזרחי', 'בנק דיסקונט', 'בנק מרכנתיל',
             'hapoalim', 'leumi', 'mizrahi', 'discount', 'mercantile']
 };
@@ -105,6 +106,10 @@ function extractInstitution(description, accountType) {
  * @returns {string} Clean account name
  */
 function extractAccountName(description, accountType, institution) {
+  if (accountType === 'real_estate') {
+    return getAccountTypeLabel(accountType);
+  }
+
   let cleaned = description.trim();
 
   // Remove common transaction prefixes in Hebrew
@@ -188,17 +193,19 @@ function detectAccountType(description) {
 
   // Try each account type
   for (const [accountType, patterns] of Object.entries(ACCOUNT_PATTERNS)) {
-    const confidence = calculateConfidence(description, accountType);
+    const matchedKeywords = (patterns.keywords || []).filter(kw =>
+      lowerDesc.includes(kw.toLowerCase())
+    );
+    let confidence = calculateConfidence(description, accountType);
+    if (accountType === 'real_estate' && matchedKeywords.length > 0) {
+      confidence = Math.max(confidence, 0.7);
+    }
 
     if (confidence > bestConfidence) {
       bestConfidence = confidence;
       bestMatch = accountType;
 
       // Determine match reason
-      const matchedKeywords = (patterns.keywords || []).filter(kw =>
-        lowerDesc.includes(kw.toLowerCase())
-      );
-
       if (matchedKeywords.length > 0) {
         bestReason = `Matched keywords: ${matchedKeywords.join(', ')}`;
       } else {

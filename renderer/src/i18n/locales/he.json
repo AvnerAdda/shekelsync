@@ -1899,6 +1899,14 @@
     "loading": {
       "setup": "טוען את מצב ההגדרה..."
     },
+    "tabs": {
+      "overview": "סקירה",
+      "holdings": "אחזקות ומאזן",
+      "realEstate": "נדל\"ן",
+      "performance": "ניתוח ביצועים",
+      "history": "היסטוריה ופרטים",
+      "ariaLabel": "אזורים בהשקעות"
+    },
     "warnings": {
       "multiCurrency": "קיימים מספר מטבעות. הסכומים והגרפים עדיין מציגים ערכים גולמיים ללא נרמול מט\"ח."
     },
@@ -1935,6 +1943,136 @@
       "noAccounts": "לא נמצאו חשבונות השקעה",
       "overviewTitle": "סקירת חשבונות",
       "overviewSubtitle": "השוו ביצועים לפי קטגוריה ותנועה אחרונה בכל חשבון."
+    },
+    "chartScope": {
+      "excludeRealEstate": "ללא נדל\"ן",
+      "all": "הכל",
+      "liquid": "נזיל",
+      "restricted": "טווח ארוך",
+      "illiquid": "לא נזיל"
+    },
+    "realEstate": {
+      "title": "סימולטור נדל\"ן",
+      "unsavedSuffix": " - שינויים שלא נשמרו",
+      "fields": {
+        "city": "עיר",
+        "neighborhood": "שכונה",
+        "propertyType": "סוג נכס",
+        "rooms": "חדרים",
+        "squareMeters": "מ\"ר",
+        "floor": "קומה",
+        "totalFloors": "קומות",
+        "purchasePrice": "מחיר רכישה",
+        "purchaseDate": "תאריך רכישה",
+        "ownership": "אחוז בעלות בנכס",
+        "manualValue": "שווי ידני",
+        "mortgageBalance": "יתרת משכנתה כוללת",
+        "monthlyMortgagePayment": "החזר משכנתה חודשי",
+        "mortgageInterestRate": "ריבית משכנתה",
+        "mortgageTermYears": "תקופת משכנתה",
+        "valuationMethod": "שיטת הערכה",
+        "rent": "שכר דירה",
+        "yearlyExpenses": "הוצאות שנתיות",
+        "pricePerSqm": "מחיר למ\"ר",
+        "growth": "צמיחה"
+      },
+      "helpers": {
+        "ownership": "אחוז הבעלות המשפטי בנכס, לא אחוז ההון העצמי. השתמשו ב-100% אם הנכס כולו שלכם."
+      },
+      "units": {
+        "years": "שנים"
+      },
+      "features": {
+        "elevator": "מעלית",
+        "parking": "חניה",
+        "balcony": "מרפסת",
+        "storage": "מחסן"
+      },
+      "propertyTypes": {
+        "apartment": "דירה",
+        "house": "בית",
+        "land": "קרקע",
+        "commercial": "מסחרי",
+        "other": "אחר"
+      },
+      "valuationMethods": {
+        "blended": "משולב",
+        "manual": "שווי ידני",
+        "purchaseGrowth": "צמיחה מהרכישה",
+        "purchasePrice": "מחיר רכישה",
+        "rentYield": "תשואה משכירות",
+        "pricePerSqm": "מחיר למ\"ר"
+      },
+      "confidence": {
+        "manual": "ידני",
+        "high": "גבוה",
+        "medium": "בינוני",
+        "low": "נמוך"
+      },
+      "scenarios": {
+        "conservative": "שמרני {{value}}",
+        "base": "בסיס {{value}}",
+        "optimistic": "אופטימי {{value}}"
+      },
+      "netEquity": "הון עצמי נטו: {{value}}",
+      "actions": {
+        "useEquity": "השתמש בהון נטו",
+        "cancel": "ביטול",
+        "save": "שמירה",
+        "saveApply": "שמור והחל הערכה"
+      },
+      "notifications": {
+        "saved": "סימולטור הנדל\"ן נשמר",
+        "applied": "הערכת הנדל\"ן הוחלה"
+      },
+      "errors": {
+        "missingAccount": "חסר חשבון נדל\"ן",
+        "emptyProfile": "יש להזין לפחות שדה נכס או הערכה אחד",
+        "loadFailed": "טעינת פרופיל הנדל\"ן נכשלה",
+        "saveFailed": "שמירת פרופיל הנדל\"ן נכשלה",
+        "applyFailed": "החלת ההערכה נכשלה"
+      }
+    },
+    "realEstateTab": {
+      "marketDataNotice": "הערכת השווי מבוססת כרגע על הנתונים ששמרתם בסימולטור. נתוני עסקאות השוואה לפי כתובת/סוג נכס עדיין לא מחוברים.",
+      "propertiesTitle": "נכסים",
+      "propertiesSubtitle": "בדקו שווי, חוב, הון עצמי והנחות תשלום חודשיות.",
+      "kpis": {
+        "marketValue": "שווי נכס",
+        "netEquity": "הון עצמי נטו",
+        "mortgage": "יתרת משכנתה",
+        "monthlyPayment": "החזר חודשי",
+        "loanToValue": "מימון ביחס לשווי"
+      },
+      "hints": {
+        "marketValue": "שווי הסימולטור לפני חוב",
+        "netEquity": "שווי בבעלות פחות חלק המשכנתה",
+        "mortgage": "יתרת המשכנתה הכוללת שהוזנה",
+        "monthlyPayment": "ההחזר החודשי הכולל",
+        "loanToValue": "משכנתה חלקי שווי נכס"
+      },
+      "property": {
+        "unknownLocation": "מיקום לא הוגדר",
+        "noConfidence": "טיוטה",
+        "marketValue": "שווי",
+        "netEquity": "הון נטו",
+        "mortgage": "משכנתה",
+        "payment": "החזר",
+        "ownership": "בעלות",
+        "loanToValue": "LTV",
+        "cashFlow": "תזרים חודשי",
+        "updated": "תאריך הערכה"
+      },
+      "actions": {
+        "edit": "עריכה"
+      },
+      "empty": {
+        "title": "אין עדיין נכסי נדל\"ן",
+        "description": "הוסיפו חשבון השקעה מסוג נדל\"ן ושמרו פרטי סימולטור כדי לעקוב אחרי הון עצמי וחשיפת משכנתה."
+      },
+      "errors": {
+        "loadFailed": "טעינת סקירת הנדל\"ן נכשלה"
+      }
     },
     "empty": {
       "title": "התחילו עם תיק ההשקעות",

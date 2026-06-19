@@ -132,6 +132,326 @@ describe('pikadon service', () => {
     });
   });
 
+  it('auto-closes active pikadon holdings when a matching principal return arrives', async () => {
+    queryMock.mockImplementation(async (sql: string, params: any[] = []) => {
+      const text = String(sql);
+
+      if (text.includes('FROM investment_holdings ih') && text.includes("COALESCE(ih.status, 'active') = 'active'")) {
+        return {
+          rows: [
+            {
+              id: 44,
+              account_id: 2,
+              current_value: '680000',
+              cost_basis: '680000',
+              as_of_date: '2026-03-10',
+              holding_type: 'pikadon',
+              status: 'active',
+              deposit_transaction_id: 'dep-680',
+              deposit_transaction_vendor: 'discount',
+              deposit_account_number: '111',
+              deposit_transaction_date: '2026-03-09T22:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      if (text.includes('LEFT JOIN investment_holdings linked_return')) {
+        return {
+          rows: [
+            {
+              identifier: 'ret-680',
+              vendor: 'discount',
+              date: '2026-05-25T21:00:00.000Z',
+              transaction_datetime: '2026-05-25T21:00:00.000Z',
+              name: 'משיכה מפיקדון נזיל שבועי',
+              memo: '',
+              price: '680000',
+              account_number: '111',
+            },
+          ],
+        };
+      }
+
+      if (text.includes('AND NOT (t.identifier = $4 AND t.vendor = $5)')) {
+        return {
+          rows: [
+            {
+              identifier: 'interest-680',
+              vendor: 'discount',
+              date: '2026-05-25T21:00:00.000Z',
+              name: 'רווחים ממשיכת הפקדה מפיקדון',
+              price: '358.63',
+              account_number: '111',
+            },
+            {
+              identifier: 'tax-680',
+              vendor: 'discount',
+              date: '2026-05-25T21:00:00.000Z',
+              name: 'תשלום מס על רווח מפיקדון',
+              price: '-53.79',
+              account_number: '111',
+            },
+          ],
+        };
+      }
+
+      if (text.includes("LOWER(COALESCE(name_en, '')) = 'capital returns'")) {
+        return { rows: [{ id: 95 }] };
+      }
+
+      if (text.includes('UPDATE transactions')) {
+        return { rows: [], rowCount: 1 };
+      }
+
+      if (text.includes('UPDATE investment_holdings')) {
+        return {
+          rows: [
+            {
+              id: params[5],
+              account_id: 2,
+              cost_basis: '680000',
+              current_value: String(params[2]),
+              maturity_date: params[3],
+              interest_rate: String(params[4]),
+              status: 'matured',
+              return_transaction_id: params[0],
+              return_transaction_vendor: params[1],
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      throw new Error(`Unexpected auto-close query: ${text}`);
+    });
+
+    const result = await pikadonModule.autoClosePikadonReturns({
+      vendor: 'discount',
+      accountNumber: '111',
+    });
+
+    expect(result.closed_count).toBe(1);
+    expect(result.matched_returns).toBe(1);
+    expect(result.matches[0]).toMatchObject({
+      return_transaction_id: 'ret-680',
+      principal_returned: 680000,
+      interest_earned: 358.63,
+      tax_paid: 53.79,
+    });
+
+    const categoryUpdate = queryMock.mock.calls.find(([sql]) => String(sql).includes('UPDATE transactions'));
+    expect(categoryUpdate?.[1]).toEqual([95, 0.95, 'ret-680', 'discount']);
+
+    const holdingUpdate = queryMock.mock.calls.find(([sql]) => String(sql).includes('UPDATE investment_holdings'));
+    expect(holdingUpdate?.[1]?.slice(0, 4)).toEqual([
+      'ret-680',
+      'discount',
+      680358.63,
+      '2026-05-26',
+    ]);
+    expect(holdingUpdate?.[1]?.[4]).toBeCloseTo(0.05273970588235294, 10);
+    expect(holdingUpdate?.[1]?.slice(5)).toEqual([
+      44,
+    ]);
+  });
+
+  it('does not double-count interest when the return transaction already includes it', async () => {
+    queryMock.mockImplementation(async (sql: string, params: any[] = []) => {
+      const text = String(sql);
+
+      if (text.includes('FROM investment_holdings ih') && text.includes("COALESCE(ih.status, 'active') = 'active'")) {
+        return {
+          rows: [
+            {
+              id: 46,
+              account_id: 2,
+              current_value: '100',
+              cost_basis: '100',
+              as_of_date: '2026-03-10',
+              holding_type: 'pikadon',
+              status: 'active',
+              deposit_transaction_id: 'dep-100',
+              deposit_transaction_vendor: 'discount',
+              deposit_account_number: '111',
+              deposit_transaction_date: '2026-03-09T22:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      if (text.includes('LEFT JOIN investment_holdings linked_return')) {
+        return {
+          rows: [
+            {
+              identifier: 'ret-101',
+              vendor: 'discount',
+              date: '2026-05-25T21:00:00.000Z',
+              transaction_datetime: '2026-05-25T21:00:00.000Z',
+              name: 'משיכה מפיקדון נזיל שבועי',
+              memo: '',
+              price: '101',
+              account_number: '111',
+            },
+          ],
+        };
+      }
+
+      if (text.includes('AND NOT (t.identifier = $4 AND t.vendor = $5)')) {
+        return { rows: [] };
+      }
+
+      if (text.includes("LOWER(COALESCE(name_en, '')) = 'capital returns'")) {
+        return { rows: [{ id: 95 }] };
+      }
+
+      if (text.includes('UPDATE transactions')) {
+        return { rows: [], rowCount: 1 };
+      }
+
+      if (text.includes('UPDATE investment_holdings')) {
+        return {
+          rows: [
+            {
+              id: params[5],
+              account_id: 2,
+              cost_basis: '100',
+              current_value: String(params[2]),
+              maturity_date: params[3],
+              interest_rate: String(params[4]),
+              status: 'matured',
+              return_transaction_id: params[0],
+              return_transaction_vendor: params[1],
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      throw new Error(`Unexpected interest-inclusive close query: ${text}`);
+    });
+
+    const result = await pikadonModule.autoClosePikadonReturns({
+      vendor: 'discount',
+      accountNumber: '111',
+    });
+
+    expect(result.closed_count).toBe(1);
+    expect(result.matches[0]).toMatchObject({
+      return_transaction_id: 'ret-101',
+      principal_returned: 100,
+      interest_earned: 1,
+    });
+
+    const holdingUpdate = queryMock.mock.calls.find(([sql]) => String(sql).includes('UPDATE investment_holdings'));
+    expect(holdingUpdate?.[1]).toEqual([
+      'ret-101',
+      'discount',
+      101,
+      '2026-05-26',
+      1,
+      46,
+    ]);
+  });
+
+  it('auto-closes a batch of recurring pikadon deposits from one aggregate return', async () => {
+    const holdings = [41, 42, 43, 45].map((id, index) => ({
+      id,
+      account_id: 2,
+      current_value: '100',
+      cost_basis: '100',
+      as_of_date: `2026-0${index + 1}-10`,
+      holding_type: 'pikadon',
+      status: 'active',
+      deposit_transaction_id: `dep-${id}`,
+      deposit_transaction_vendor: 'discount',
+      deposit_account_number: '111',
+      deposit_transaction_date: `2026-0${index + 1}-09T22:00:00.000Z`,
+    }));
+
+    queryMock.mockImplementation(async (sql: string, params: any[] = []) => {
+      const text = String(sql);
+
+      if (text.includes('FROM investment_holdings ih') && text.includes("COALESCE(ih.status, 'active') = 'active'")) {
+        return { rows: holdings };
+      }
+
+      if (text.includes('LEFT JOIN investment_holdings linked_return')) {
+        return {
+          rows: [
+            {
+              identifier: 'ret-400',
+              vendor: 'discount',
+              date: '2026-05-19T21:00:00.000Z',
+              transaction_datetime: '2026-05-19T21:00:00.000Z',
+              name: 'משיכה מפיקדון מפתח',
+              memo: '',
+              price: '400',
+              account_number: '111',
+            },
+          ],
+        };
+      }
+
+      if (text.includes('AND NOT (t.identifier = $4 AND t.vendor = $5)')) {
+        return { rows: [] };
+      }
+
+      if (text.includes("LOWER(COALESCE(name_en, '')) = 'capital returns'")) {
+        return { rows: [{ id: 95 }] };
+      }
+
+      if (text.includes('UPDATE transactions')) {
+        return { rows: [], rowCount: 1 };
+      }
+
+      if (text.includes('UPDATE investment_holdings')) {
+        return {
+          rows: [
+            {
+              id: params[5],
+              account_id: 2,
+              cost_basis: '100',
+              current_value: String(params[2]),
+              maturity_date: params[3],
+              interest_rate: String(params[4]),
+              status: 'matured',
+              return_transaction_id: params[0],
+              return_transaction_vendor: params[1],
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      throw new Error(`Unexpected aggregate close query: ${text}`);
+    });
+
+    const result = await pikadonModule.autoClosePikadonReturns({
+      vendor: 'discount',
+      accountNumber: '111',
+    });
+
+    expect(result.closed_count).toBe(4);
+    expect(result.matched_returns).toBe(1);
+
+    const holdingUpdates = queryMock.mock.calls.filter(([sql]) =>
+      String(sql).includes('UPDATE investment_holdings'),
+    );
+    expect(holdingUpdates).toHaveLength(4);
+    expect(holdingUpdates.map(([, params]) => params[5])).toEqual([41, 42, 43, 45]);
+    holdingUpdates.forEach(([, params]) => {
+      expect(params).toEqual([
+        'ret-400',
+        'discount',
+        100,
+        '2026-05-20',
+        0,
+        expect.any(Number),
+      ]);
+    });
+  });
+
   it('lists pikadon holdings with linked transactions when requested', async () => {
     queryMock
       .mockResolvedValueOnce({
@@ -1266,5 +1586,325 @@ describe('pikadon service', () => {
     );
     expect(result.transactions_marked).toBe(6);
     expect(markCalls).toHaveLength(5);
+  });
+
+  it('classifies pikadon return candidates conservatively', () => {
+    expect(pikadonModule.transactionLooksLikePikadonReturn({
+      name: 'משיכה מפיקדון נזיל',
+      memo: '',
+      price: '1000',
+    })).toBe(true);
+
+    expect(pikadonModule.transactionLooksLikePikadonReturn({
+      name: 'ריבית מפיקדון',
+      price: '100',
+    })).toBe(false);
+
+    expect(pikadonModule.transactionLooksLikePikadonReturn({
+      name: 'משיכה רגילה',
+      price: '1000',
+    })).toBe(false);
+
+    expect(pikadonModule.transactionLooksLikePikadonReturn({
+      name: 'משיכה מפיקדון',
+      price: '-1000',
+    })).toBe(false);
+  });
+
+  it('finds linked pikadon holdings by deposit transaction', async () => {
+    await expect(pikadonModule.findLinkedPikadonByDepositTransaction(null, 'bank-a')).resolves.toBeNull();
+    expect(queryMock).not.toHaveBeenCalled();
+
+    queryMock.mockResolvedValueOnce({
+      rows: [{
+        id: 91,
+        account_id: 7,
+        current_value: '1050',
+        cost_basis: '1000',
+        interest_rate: '5',
+      }],
+    });
+
+    const linked = await pikadonModule.findLinkedPikadonByDepositTransaction('dep-1', 'bank-a');
+
+    expect(queryMock).toHaveBeenCalledWith(expect.stringContaining('deposit_transaction_id = $1'), [
+      'dep-1',
+      'bank-a',
+    ]);
+    expect(linked).toMatchObject({
+      id: 91,
+      current_value: 1050,
+      cost_basis: 1000,
+      interest_rate: 5,
+      interest_earned: 50,
+    });
+  });
+
+  it('lists pending pikadon setup candidates and filters non-pikadon links', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [
+        {
+          account_id: 7,
+          transaction_identifier: 'dep-7',
+          transaction_vendor: 'discount',
+          date: '2025-01-15T22:30:00.000Z',
+          transaction_datetime: '2025-01-15T22:30:00.000Z',
+          name: 'הפקדה לפיקדון שבועי',
+          memo: '',
+          price: -1000,
+          account_name: 'Savings',
+        },
+        {
+          account_id: 7,
+          transaction_identifier: 'tx-ignored',
+          transaction_vendor: 'discount',
+          date: '2025-01-16T22:30:00.000Z',
+          transaction_datetime: '2025-01-16T22:30:00.000Z',
+          name: 'חיוב רגיל',
+          memo: '',
+          price: -50,
+          account_name: 'Savings',
+        },
+      ],
+    });
+
+    const pending = await pikadonModule.listPendingPikadonSetup({ accountId: 7 });
+
+    expect(queryMock.mock.calls[0][1]).toEqual([7]);
+    expect(pending).toEqual([
+      expect.objectContaining({
+        account_id: 7,
+        transaction_identifier: 'dep-7',
+        transaction_vendor: 'discount',
+        principal: 1000,
+        deposit_date: '2025-01-16',
+        account_name: 'Savings',
+      }),
+    ]);
+  });
+
+  it('ignores duplicate linked-pikadon insert conflicts while still marking the transaction', async () => {
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            account_id: 7,
+            transaction_identifier: 'tx-ignored',
+            transaction_vendor: 'discount',
+            date: '2025-01-14T22:30:00.000Z',
+            transaction_datetime: '2025-01-14T22:30:00.000Z',
+            name: 'חיוב רגיל',
+            memo: '',
+            price: -50,
+          },
+          {
+            account_id: 7,
+            transaction_identifier: 'dep-7',
+            transaction_vendor: 'discount',
+            date: '2025-01-15T22:30:00.000Z',
+            transaction_datetime: '2025-01-15T22:30:00.000Z',
+            name: 'הפקדה לפיקדון שבועי',
+            memo: '',
+            price: -1000,
+          },
+        ],
+      })
+      .mockRejectedValueOnce(new Error('UNIQUE constraint failed: investment_holdings.deposit_transaction_id'))
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+    const result = await pikadonModule.ensureLinkedPikadonHoldings({
+      accountId: 7,
+      transactionIdentifier: 'dep-7',
+      transactionVendor: 'discount',
+    });
+
+    expect(result).toEqual({ created: [], created_count: 0 });
+    expect(queryMock).toHaveBeenCalledTimes(3);
+    expect(queryMock.mock.calls[0][1]).toEqual([7, 'dep-7', 'discount']);
+    expect(queryMock.mock.calls[2][1]).toEqual(['dep-7', 'discount']);
+  });
+
+  it('returns no-op auto-close results when holdings or return transactions are missing', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] });
+
+    await expect(pikadonModule.autoClosePikadonReturns({
+      accountId: 7,
+      vendor: 'discount',
+      accountNumber: '123',
+    })).resolves.toEqual({
+      closed_count: 0,
+      matched_returns: 0,
+      matches: [],
+    });
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(queryMock.mock.calls[0][1]).toEqual([7, 'discount', '123']);
+
+    queryMock.mockReset();
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 44,
+          account_id: 7,
+          cost_basis: '1000',
+          current_value: '1000',
+          as_of_date: '2025-01-01',
+          holding_type: 'pikadon',
+          status: 'active',
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(pikadonModule.autoClosePikadonReturns({ vendor: 'discount' })).resolves.toEqual({
+      closed_count: 0,
+      matched_returns: 0,
+      matches: [],
+    });
+    expect(queryMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('auto-closes without a capital-return category and falls back when update returns no row', async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      const text = String(sql);
+
+      if (text.includes('FROM investment_holdings ih') && text.includes("COALESCE(ih.status, 'active') = 'active'")) {
+        return {
+          rows: [{
+            id: 44,
+            account_id: 7,
+            current_value: '1000',
+            cost_basis: '1000',
+            as_of_date: '2026-01-01',
+            holding_type: 'pikadon',
+            status: 'active',
+            deposit_transaction_id: 'dep-44',
+            deposit_transaction_vendor: 'discount',
+            deposit_transaction_date: '2026-01-01T00:00:00.000Z',
+          }],
+        };
+      }
+
+      if (text.includes('LEFT JOIN investment_holdings linked_return')) {
+        return {
+          rows: [{
+            identifier: 'ret-44',
+            vendor: 'discount',
+            date: '2026-02-01T00:00:00.000Z',
+            transaction_datetime: '2026-02-01T00:00:00.000Z',
+            name: 'משיכה מפיקדון',
+            memo: '',
+            price: '1000',
+            account_number: null,
+          }],
+        };
+      }
+
+      if (text.includes('AND NOT (t.identifier = $4 AND t.vendor = $5)')) {
+        return { rows: [] };
+      }
+
+      if (text.includes("LOWER(COALESCE(name_en, '')) = 'capital returns'")) {
+        return { rows: [] };
+      }
+
+      if (text.includes('UPDATE investment_holdings')) {
+        return { rows: [], rowCount: 0 };
+      }
+
+      throw new Error(`Unexpected fallback auto-close query: ${text}`);
+    });
+
+    const result = await pikadonModule.autoClosePikadonReturns({ vendor: 'discount' });
+
+    expect(result).toMatchObject({
+      closed_count: 1,
+      matched_returns: 1,
+      matches: [{
+        return_transaction_id: 'ret-44',
+        principal_returned: 1000,
+        interest_earned: 0,
+        tax_paid: 0,
+        closed: [{
+          id: 44,
+          return_transaction_id: 'ret-44',
+          current_value: 1000,
+          status: 'matured',
+        }],
+      }],
+    });
+    expect(queryMock.mock.calls.some(([sql]) => String(sql).includes('UPDATE transactions'))).toBe(false);
+  });
+
+  it('updates pikadon metadata and handles missing rows', async () => {
+    await expect(pikadonModule.updatePikadon(1, {})).rejects.toMatchObject({
+      status: 400,
+      message: 'maturity_date is required',
+    });
+
+    queryMock.mockResolvedValueOnce({ rows: [] });
+    await expect(pikadonModule.updatePikadon(404, { maturity_date: '2026-01-01' }))
+      .rejects.toMatchObject({ status: 404 });
+
+    queryMock.mockReset();
+    queryMock.mockResolvedValueOnce({
+      rows: [{
+        id: 9,
+        current_value: '1100',
+        cost_basis: '1000',
+        interest_rate: '4.5',
+        maturity_date: '2026-01-01',
+      }],
+    });
+
+    const updated = await pikadonModule.updatePikadon(9, {
+      maturity_date: '2026-01-01',
+      interest_rate: 4.5,
+      notes: 'Updated terms',
+    });
+
+    expect(queryMock.mock.calls[0][1]).toEqual([
+      '2026-01-01',
+      4.5,
+      'Updated terms',
+      9,
+    ]);
+    expect(updated.pikadon).toMatchObject({
+      current_value: 1100,
+      cost_basis: 1000,
+      interest_rate: 4.5,
+      interest_earned: 100,
+    });
+  });
+
+  it('returns zeroed summary metrics when aggregate fields are null', async () => {
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [{
+          total_count: null,
+          active_count: null,
+          matured_count: null,
+          rolled_over_count: null,
+          active_principal: null,
+          total_principal: null,
+          total_interest_earned: null,
+          avg_interest_rate: null,
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await pikadonModule.getPikadonSummary();
+
+    expect(result).toEqual({
+      summary: {
+        total_count: 0,
+        active_count: 0,
+        matured_count: 0,
+        rolled_over_count: 0,
+        active_principal: 0,
+        total_principal: 0,
+        total_interest_earned: 0,
+        avg_interest_rate: 0,
+      },
+      upcoming_maturities: [],
+    });
   });
 });

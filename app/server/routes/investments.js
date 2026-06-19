@@ -194,6 +194,9 @@ function createInvestmentsRouter({ services = {} } = {}) {
   const bankSummaryService = services.bankSummaryService || require('../services/investments/bank-summary.js');
   const suggestionAnalyzerCJS = services.suggestionAnalyzerCJS || require('../services/investments/suggestion-analyzer-cjs.js');
   const pikadonService = services.pikadonService || require('../services/investments/pikadon.js');
+  const realEstateService = services.realEstateService || require('../services/investments/real-estate.js');
+  const realEstateSimulatorService = services.realEstateSimulatorService
+    || require('../services/investments/real-estate-simulator.js');
   const ibkrSyncService = services.ibkrSyncService || require('../services/investments/ibkr-sync.js');
   const credentialsService = services.credentialsService || require('../services/credentials.js');
   const databaseService = services.databaseService || require('../services/database.js');
@@ -549,6 +552,81 @@ function createInvestmentsRouter({ services = {} } = {}) {
     }
   });
 
+  // ==========================================
+  // REAL ESTATE SIMULATOR ROUTES
+  // ==========================================
+
+  router.post('/real-estate/estimate', async (req, res) => {
+    try {
+      const estimate = realEstateSimulatorService.estimateRealEstateValue(req.body || {});
+      res.json({ estimate });
+    } catch (error) {
+      console.error('Real estate estimate error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to estimate real estate value',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/real-estate/overview', async (_req, res) => {
+    try {
+      const result = await realEstateSimulatorService.getRealEstateOverview();
+      res.json(result);
+    } catch (error) {
+      console.error('Real estate overview fetch error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch real estate overview',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/real-estate/profiles/:accountId', async (req, res) => {
+    try {
+      const result = await realEstateSimulatorService.getRealEstateProfile(req.params.accountId);
+      res.json(result);
+    } catch (error) {
+      console.error('Real estate profile fetch error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch real estate profile',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.put('/real-estate/profiles/:accountId', async (req, res) => {
+    try {
+      const result = await realEstateSimulatorService.upsertRealEstateProfile(
+        req.params.accountId,
+        req.body || {},
+      );
+      res.json(result);
+    } catch (error) {
+      console.error('Real estate profile upsert error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to save real estate profile',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.post('/real-estate/profiles/:accountId/apply-valuation', async (req, res) => {
+    try {
+      const result = await realEstateSimulatorService.applyRealEstateValuation({
+        accountId: req.params.accountId,
+        ...(req.body || {}),
+      });
+      res.status(201).json(result);
+    } catch (error) {
+      console.error('Real estate valuation apply error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to apply real estate valuation',
+        details: error?.stack,
+      });
+    }
+  });
+
   /**
    * GET /api/investments/bank-summary
    * Get comprehensive bank balance summary with historical data
@@ -804,6 +882,10 @@ function createInvestmentsRouter({ services = {} } = {}) {
           pikadonDetails: normalizedPikadonDetails,
           dbAdapter: client,
         });
+        const realEstateSync = await realEstateService.syncRealEstateHolding({
+          dbAdapter: client,
+          accountId: account_id,
+        });
 
         await client.query('COMMIT');
         transactionComplete = true;
@@ -820,6 +902,7 @@ function createInvestmentsRouter({ services = {} } = {}) {
           },
           pikadon: pikadonSync?.pikadon || null,
           pikadonSynced: Boolean(pikadonSync),
+          realEstateSynced: Boolean(realEstateSync?.synced),
         });
       } catch (error) {
         if (!transactionComplete) {
@@ -985,11 +1068,19 @@ function createInvestmentsRouter({ services = {} } = {}) {
         }
       }
 
+      const realEstateSync = (account.account_type || accountDetails.account_type) === 'real_estate'
+        ? await realEstateService.syncRealEstateHolding({
+          dbAdapter: databaseService,
+          accountId: account.id,
+        })
+        : null;
+
       res.status(201).json({
         success: true,
         account,
         holding,
         linkResult,
+        realEstateSynced: Boolean(realEstateSync?.synced),
         message: `Successfully created account "${accountDetails.account_name}" with ${linkResult?.successCount || 0} linked transactions`
       });
     } catch (error) {

@@ -108,6 +108,14 @@ describe('suggestion-analyzer', () => {
       expect(result.confidence).toBeGreaterThan(0);
     });
 
+    it('should detect real estate payment descriptions', () => {
+      const result = detectAccountType('תשלום שוברי גביה');
+
+      expect(result).toBeDefined();
+      expect(result.accountType).toBe('real_estate');
+      expect(result.confidence).toBeGreaterThan(0);
+    });
+
     it('should return null for non-investment descriptions', () => {
       const result = detectAccountType('Coffee at Starbucks');
 
@@ -208,6 +216,12 @@ describe('suggestion-analyzer', () => {
 
       expect(name).toContain('חשבון ברוקר');
       expect(name).toContain('Interactive Brokers');
+    });
+
+    it('should use a stable real estate account name', () => {
+      const name = extractAccountName('תשלום שוברי גביה', 'real_estate', null);
+
+      expect(name).toBe('נדל"ן');
     });
   });
 

@@ -21,9 +21,10 @@ import {
 import { useTranslation } from 'react-i18next';
 import InvestmentPerformanceCard from './InvestmentPerformanceCard';
 import {
-  getOrderedPortfolioAccounts,
-  getPortfolioCategoryBuckets,
+  getPortfolioAccountsForScope,
+  getPortfolioCategoryBucketsForScope,
   normalizeInvestmentCategory,
+  PortfolioScopeKey,
 } from '../utils/portfolio-categories';
 
 interface PerformanceCardsSectionProps {
@@ -32,6 +33,7 @@ interface PerformanceCardsSectionProps {
   categoryFilter: 'all' | InvestmentCategoryKey;
   onCategoryFilterChange: (category: 'all' | InvestmentCategoryKey) => void;
   onAccountClick?: (account: InvestmentAccountSummary) => void;
+  scope?: PortfolioScopeKey;
 }
 
 const CHART_COLORS = [
@@ -53,21 +55,22 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
   categoryFilter,
   onCategoryFilterChange,
   onAccountClick,
+  scope = 'all',
 }) => {
   const theme = useTheme();
   const { t } = useTranslation('translation');
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
   const allAccounts = React.useMemo(
-    () => getOrderedPortfolioAccounts(portfolioData),
-    [portfolioData],
+    () => getPortfolioAccountsForScope(portfolioData, scope),
+    [portfolioData, scope],
   );
 
   const categories = React.useMemo(
-    () => getPortfolioCategoryBuckets(portfolioData)
+    () => getPortfolioCategoryBucketsForScope(portfolioData, scope)
       .filter(({ bucket }) => (bucket.accounts?.length || 0) > 0)
       .map(({ key }) => key),
-    [portfolioData],
+    [portfolioData, scope],
   );
 
   const filteredAccounts = categoryFilter === 'all'
@@ -196,7 +199,7 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
             account={account}
             history={accountHistories[account.id] || []}
             color={CHART_COLORS[index % CHART_COLORS.length]}
-            onClick={account.account_type === 'savings' ? onAccountClick : undefined}
+            onClick={['savings', 'real_estate'].includes(account.account_type) ? onAccountClick : undefined}
           />
         ))}
 

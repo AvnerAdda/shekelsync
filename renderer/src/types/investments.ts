@@ -25,6 +25,8 @@ export interface InvestmentBreakdownEntry {
 export interface InvestmentSummaryResponse {
   summary?: InvestmentSummaryTotals | null;
   breakdown?: InvestmentBreakdownEntry[] | null;
+  categoryBuckets?: Partial<Record<InvestmentCategoryKey, PortfolioCategoryBucket>> | null;
+  accounts?: InvestmentAccountSummary[] | null;
 }
 
 export interface InvestmentData {
@@ -211,6 +213,63 @@ export interface InvestmentBalanceSheetResponse {
   netWorth: number | null;
   netWorthStatus: 'ok' | 'partial';
   missingValuationsCount: number;
+}
+
+export interface RealEstateOverviewProperty {
+  accountId: number;
+  accountName: string;
+  currency: string;
+  city: string | null;
+  neighborhood: string | null;
+  propertyType: string;
+  ownershipPercentage: number;
+  propertyMarketValue: number | null;
+  ownedPropertyValue: number | null;
+  netEquity: number | null;
+  totalMortgageBalance: number;
+  ownedMortgageBalance: number;
+  monthlyMortgagePayment: number | null;
+  mortgageInterestRate: number | null;
+  mortgageTermYears: number | null;
+  loanToValue: number | null;
+  equityRatio: number | null;
+  purchasePrice: number | null;
+  purchaseDate: string | null;
+  valueChange: number | null;
+  valueChangePercent: number | null;
+  monthlyRent: number | null;
+  annualExpenses: number | null;
+  monthlyCashFlow: number | null;
+  annualDebtService: number | null;
+  debtServiceCoverage: number | null;
+  valuationMethod: string | null;
+  confidence: string | null;
+  lastValuationDate: string | null;
+  scenarioConservative: number | null;
+  scenarioBase: number | null;
+  scenarioOptimistic: number | null;
+  hasProfile: boolean;
+}
+
+export interface RealEstateOverviewResponse {
+  generatedAt: string;
+  valuationSource: 'manual_simulator';
+  marketCompsAvailable: boolean;
+  summary: {
+    propertyCount: number;
+    propertyMarketValue: number;
+    ownedPropertyValue: number;
+    netEquity: number;
+    totalMortgageBalance: number;
+    ownedMortgageBalance: number;
+    monthlyMortgagePayment: number;
+    monthlyRent: number;
+    monthlyCashFlow: number;
+    missingProfiles: number;
+    averageLoanToValue: number | null;
+    equityRatio: number | null;
+  };
+  properties: RealEstateOverviewProperty[];
 }
 
 export interface InvestmentPerformanceTimelinePoint {

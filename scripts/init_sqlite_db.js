@@ -602,6 +602,46 @@ const TABLE_DEFINITIONS = [
         ON DELETE CASCADE,
       FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE
     );`,
+  `CREATE TABLE IF NOT EXISTS real_estate_properties (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL UNIQUE,
+      city TEXT,
+      neighborhood TEXT,
+      property_type TEXT NOT NULL DEFAULT 'apartment',
+      rooms REAL,
+      square_meters REAL,
+      floor REAL,
+      total_floors REAL,
+      has_elevator INTEGER CHECK (has_elevator IN (0,1) OR has_elevator IS NULL),
+      has_parking INTEGER CHECK (has_parking IN (0,1) OR has_parking IS NULL),
+      has_balcony INTEGER CHECK (has_balcony IN (0,1) OR has_balcony IS NULL),
+      has_storage INTEGER CHECK (has_storage IN (0,1) OR has_storage IS NULL),
+      ownership_percentage REAL NOT NULL DEFAULT 100,
+      purchase_price REAL,
+      purchase_date TEXT,
+      mortgage_balance REAL,
+      monthly_mortgage_payment REAL,
+      mortgage_interest_rate REAL,
+      mortgage_term_years REAL,
+      monthly_rent REAL,
+      annual_expenses REAL,
+      price_per_sqm REAL,
+      annual_growth_rate REAL,
+      rental_yield_rate REAL,
+      manual_estimated_value REAL,
+      valuation_method TEXT NOT NULL DEFAULT 'blended',
+      estimated_value REAL,
+      estimated_net_equity REAL,
+      confidence TEXT,
+      scenario_conservative REAL,
+      scenario_base REAL,
+      scenario_optimistic REAL,
+      assumptions_json TEXT,
+      last_valuation_date TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE
+    );`,
   `CREATE TABLE IF NOT EXISTS investment_positions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       account_id INTEGER NOT NULL,
@@ -1035,6 +1075,8 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_transaction_suggestions (status);',
   'CREATE INDEX IF NOT EXISTS idx_pending_account_type ON pending_transaction_suggestions (suggested_account_type);',
   'CREATE INDEX IF NOT EXISTS idx_pending_dismissed ON pending_transaction_suggestions (dismiss_count, last_dismissed_at);',
+  'CREATE INDEX IF NOT EXISTS idx_real_estate_properties_account ON real_estate_properties (account_id);',
+  'CREATE INDEX IF NOT EXISTS idx_real_estate_properties_city ON real_estate_properties (city);',
   'CREATE INDEX IF NOT EXISTS idx_investment_positions_account ON investment_positions (account_id, status);',
   'CREATE INDEX IF NOT EXISTS idx_investment_positions_status ON investment_positions (status, opened_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_investment_position_events_position ON investment_position_events (position_id, effective_date DESC);',
@@ -1592,18 +1634,30 @@ function seedCategorizationRules(db, helpers) {
     { pattern: 'קבלת תשלום', target: 'Refunds & Credits', categoryName: 'החזרים וזיכויים', priority: 80 },
     // Capital Returns - principal returned from investments (NOT counted as income)
     { pattern: 'פירעון פיקדון', target: 'Capital Returns', categoryName: 'החזר קרן', priority: 95 },
+    { pattern: 'פירעון פקדון', target: 'Capital Returns', categoryName: 'החזר קרן', priority: 95 },
+    { pattern: 'פרעון פיקדון', target: 'Capital Returns', categoryName: 'החזר קרן', priority: 95 },
+    { pattern: 'פרעון פקדון', target: 'Capital Returns', categoryName: 'החזר קרן', priority: 95 },
     { pattern: 'פירעון תכנית', target: 'Capital Returns', categoryName: 'החזר קרן', priority: 95 },
     { pattern: 'פדיון קרן', target: 'Capital Returns', categoryName: 'החזר קרן', priority: 95 },
     { pattern: 'החזר קרן', target: 'Capital Returns', categoryName: 'החזר קרן', priority: 95 },
+    { pattern: 'משיכה מפיקדון', target: 'Capital Returns', categoryName: 'החזר קרן', priority: 90 },
+    { pattern: 'משיכה מפקדון', target: 'Capital Returns', categoryName: 'החזר קרן', priority: 90 },
     // Investment Interest - actual income from investments
     { pattern: 'רווח מפיקדון', target: 'Investment Interest', categoryName: 'ריבית מהשקעות', priority: 95 },
+    { pattern: 'רווח מפקדון', target: 'Investment Interest', categoryName: 'ריבית מהשקעות', priority: 95 },
+    { pattern: 'רווחים ממשיכת הפקדה מפיקדון', target: 'Investment Interest', categoryName: 'ריבית מהשקעות', priority: 95 },
     { pattern: 'ריבית מפיקדון', target: 'Investment Interest', categoryName: 'ריבית מהשקעות', priority: 95 },
+    { pattern: 'ריבית מפקדון', target: 'Investment Interest', categoryName: 'ריבית מהשקעות', priority: 95 },
     { pattern: 'דיבידנד', target: 'Investment Interest', categoryName: 'ריבית מהשקעות', priority: 95 },
     { pattern: 'ריבית זכות', target: 'Investment Interest', categoryName: 'ריבית מהשקעות', priority: 90 }
   ];
 
   // Expense categorization rules aligned with synthetic seed vendors
   const expenseRules = [
+    { pattern: 'תשלום מס על רווח מפיקדון', target: 'Investment Tax Withholding', categoryName: 'מס על השקעות', priority: 95 },
+    { pattern: 'תשלום מס על רווח מפקדון', target: 'Investment Tax Withholding', categoryName: 'מס על השקעות', priority: 95 },
+    { pattern: 'חיוב מס בפרעון פיקדון', target: 'Investment Tax Withholding', categoryName: 'מס על השקעות', priority: 95 },
+    { pattern: 'חיוב מס בפירעון פיקדון', target: 'Investment Tax Withholding', categoryName: 'מס על השקעות', priority: 95 },
     { pattern: 'Cafe', target: 'Coffee', categoryName: 'קפה ומאפה', priority: 95 },
     { pattern: 'FreshFarm', target: 'Groceries', categoryName: 'סופרמרקט', priority: 95 },
     { pattern: 'SuperSave', target: 'Groceries', categoryName: 'סופרמרקט', priority: 95 },
@@ -1620,6 +1674,13 @@ function seedCategorizationRules(db, helpers) {
     { pattern: 'Market', target: 'Groceries', categoryName: 'סופרמרקט', priority: 85 },
     { pattern: 'Travel', target: 'Travel', categoryName: 'חופשות', priority: 85 },
     { pattern: 'Hardware', target: 'Office Supplies', categoryName: 'ציוד משרדי', priority: 80 }
+  ];
+
+  const investmentRules = [
+    { pattern: 'תשלום שוברי גביה', target: 'Real Estate', categoryName: 'נדל"ן', priority: 95 },
+    { pattern: 'לשוב ושות', target: 'Real Estate', categoryName: 'נדל"ן', priority: 95 },
+    { pattern: 'נדל"ן', target: 'Real Estate', categoryName: 'נדל"ן', priority: 90 },
+    { pattern: 'נדלן', target: 'Real Estate', categoryName: 'נדל"ן', priority: 90 },
   ];
 
   db.transaction(() => {
@@ -1666,6 +1727,29 @@ function seedCategorizationRules(db, helpers) {
         targetCategory: rule.target,
         categoryId: foundCategory.id,
         categoryType: 'expense',
+        priority: rule.priority
+      });
+    }
+
+    for (const rule of investmentRules) {
+      let foundCategory = null;
+      for (const [, info] of categoriesByKey.entries()) {
+        if (info.name === rule.categoryName) {
+          foundCategory = info;
+          break;
+        }
+      }
+
+      if (!foundCategory) {
+        console.warn(`Warning: Category '${rule.categoryName}' not found for rule '${rule.pattern}'`);
+        continue;
+      }
+
+      insert.run({
+        namePattern: rule.pattern,
+        targetCategory: rule.target,
+        categoryId: foundCategory.id,
+        categoryType: 'investment',
         priority: rule.priority
       });
     }
