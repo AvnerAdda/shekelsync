@@ -53,6 +53,7 @@ function calculateChartValue(
 interface PortfolioValuePanelProps {
   portfolioData: PortfolioSummary | null;
   overallHistory: PortfolioHistoryPoint[];
+  displayValue?: number;
   viewMode: 'value' | 'performance';
   onViewModeChange: (mode: 'value' | 'performance') => void;
   loading: boolean;
@@ -61,6 +62,7 @@ interface PortfolioValuePanelProps {
 const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
   portfolioData,
   overallHistory,
+  displayValue,
   viewMode,
   onViewModeChange,
   loading,
@@ -91,6 +93,7 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
   });
 
   const chartColor = isPositive ? theme.palette.success.main : theme.palette.error.main;
+  const headlineValue = displayValue ?? portfolioData?.summary.totalPortfolioValue ?? 0;
 
   if (loading) {
     return (
@@ -195,7 +198,7 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
         fontWeight={700}
         sx={{ mt: 0.5, mb: 0.5, lineHeight: 1.2 }}
       >
-        {maskAmounts ? '***' : formatCurrencyValue(portfolioData?.summary.totalPortfolioValue || 0)}
+        {maskAmounts ? '***' : formatCurrencyValue(headlineValue)}
       </Typography>
 
       {/* Change indicators */}

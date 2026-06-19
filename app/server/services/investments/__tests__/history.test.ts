@@ -248,6 +248,49 @@ describe('investment history service', () => {
     });
   });
 
+  it('normalizes timestamped pikadon return dates before forward filling', async () => {
+    vi.setSystemTime(new Date('2026-06-01T12:00:00.000Z'));
+
+    queryMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 44,
+            holding_type: 'pikadon',
+            status: 'matured',
+            snapshot_date: '2026-05-10',
+            return_date: '2026-05-25T21:00:00.000Z',
+            current_value: '680358.63',
+            cost_basis: '680000',
+            account_id: 2,
+            account_name: 'פיקדונות',
+            account_type: 'savings',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await getInvestmentHistory({ accountId: 2, timeRange: '1w' });
+
+    expect(result.history.some((point: any) => String(point.date).includes('T'))).toBe(false);
+    expect(result.history.find((point: any) => point.date === '2026-05-25')).toMatchObject({
+      currentValue: 680358.63,
+      costBasis: 680000,
+    });
+    expect(result.history.find((point: any) => point.date === '2026-05-26')).toMatchObject({
+      currentValue: 0,
+      costBasis: 0,
+    });
+    expect(result.history.at(-1)).toMatchObject({
+      date: '2026-06-01',
+      currentValue: 0,
+      costBasis: 0,
+    });
+  });
+
   it('aggregates multiple accounts and includes per-account histories when requested', async () => {
     queryMock
       .mockResolvedValueOnce({

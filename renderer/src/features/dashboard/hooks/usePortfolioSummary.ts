@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import {
+  InvestmentBreakdownEntry,
   InvestmentSummaryResponse,
   PortfolioBreakdownItem,
+  PortfolioSummary,
 } from '@renderer/types/investments';
+import {
+  getPortfolioScopeTotal,
+  PortfolioScopeKey,
+} from '@renderer/features/investments/utils/portfolio-categories';
 
 interface UsePortfolioSummaryResult {
   portfolioValue: number | null;
@@ -13,6 +19,27 @@ interface UsePortfolioSummaryResult {
   loading: boolean;
   error: Error | null;
   refresh: () => void;
+}
+
+const DASHBOARD_PORTFOLIO_SCOPE: PortfolioScopeKey = 'exclude_real_estate';
+
+function entryMatchesPortfolioScope(
+  entry: InvestmentBreakdownEntry,
+  scope: PortfolioScopeKey,
+): boolean {
+  if (scope === 'all') {
+    return true;
+  }
+
+  if (scope === 'exclude_real_estate') {
+    return entry.type !== 'real_estate';
+  }
+
+  return entry.category === scope;
+}
+
+function getBreakdownValue(entry: InvestmentBreakdownEntry): number {
+  return Number(entry.totalValue ?? 0) || 0;
 }
 
 export function usePortfolioSummary(): UsePortfolioSummaryResult {
@@ -37,39 +64,36 @@ export function usePortfolioSummary(): UsePortfolioSummaryResult {
 
       const result = response.data as InvestmentSummaryResponse;
       const summary = result?.summary ?? {};
-      const totalPortfolioValue = Number(summary?.totalPortfolioValue ?? 0);
-
       const breakdownEntries = Array.isArray(result?.breakdown) ? result.breakdown : [];
-      const liquidTotal = Number(summary?.liquid?.totalValue ?? 0);
-      const illiquidTotal = Number(summary?.illiquid?.totalValue ?? 0);
-      const restrictedTotal = Number(summary?.restricted?.totalValue ?? 0);
+      const scopedBreakdownEntries = breakdownEntries
+        .filter((entry) => entryMatchesPortfolioScope(entry, DASHBOARD_PORTFOLIO_SCOPE));
+      const hasAccountRows = Array.isArray(result?.accounts) && result.accounts.length > 0;
+      const scopedPortfolioValue = hasAccountRows
+        ? getPortfolioScopeTotal(result as unknown as PortfolioSummary, DASHBOARD_PORTFOLIO_SCOPE)
+        : scopedBreakdownEntries.reduce((sum, entry) => sum + getBreakdownValue(entry), 0);
+      const totalPortfolioValue = scopedBreakdownEntries.length > 0 || hasAccountRows
+        ? scopedPortfolioValue
+        : Number(summary?.totalPortfolioValue ?? 0);
 
-      const liquidItems: PortfolioBreakdownItem[] = breakdownEntries
-        .filter((entry) => entry.category === 'liquid')
-        .map((entry) => ({
-          name: entry.name || entry.type || 'Unknown',
-          value: entry.totalValue,
-          percentage: liquidTotal > 0 ? (entry.totalValue / liquidTotal) * 100 : 0,
-          category: entry.category,
-        }));
+      const buildItemsForCategory = (category: string): PortfolioBreakdownItem[] => {
+        const entries = scopedBreakdownEntries.filter((entry) => entry.category === category);
+        const categoryTotal = entries.reduce((sum, entry) => sum + getBreakdownValue(entry), 0);
 
-      const restrictedItems: PortfolioBreakdownItem[] = breakdownEntries
-        .filter((entry) => entry.category === 'restricted')
-        .map((entry) => ({
-          name: entry.name || entry.type || 'Unknown',
-          value: entry.totalValue,
-          percentage: restrictedTotal > 0 ? (entry.totalValue / restrictedTotal) * 100 : 0,
-          category: entry.category,
-        }));
+        return entries.map((entry) => {
+          const value = getBreakdownValue(entry);
 
-      const illiquidItems: PortfolioBreakdownItem[] = breakdownEntries
-        .filter((entry) => entry.category === 'illiquid')
-        .map((entry) => ({
-          name: entry.name || entry.type || 'Unknown',
-          value: entry.totalValue,
-          percentage: illiquidTotal > 0 ? (entry.totalValue / illiquidTotal) * 100 : 0,
-          category: entry.category,
-        }));
+          return {
+            name: entry.name || entry.type || 'Unknown',
+            value,
+            percentage: categoryTotal > 0 ? (value / categoryTotal) * 100 : 0,
+            category: entry.category,
+          };
+        });
+      };
+
+      const liquidItems = buildItemsForCategory('liquid');
+      const restrictedItems = buildItemsForCategory('restricted');
+      const illiquidItems = buildItemsForCategory('illiquid');
 
       if (requestId !== requestIdRef.current) {
         return;

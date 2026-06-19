@@ -132,6 +132,326 @@ describe('pikadon service', () => {
     });
   });
 
+  it('auto-closes active pikadon holdings when a matching principal return arrives', async () => {
+    queryMock.mockImplementation(async (sql: string, params: any[] = []) => {
+      const text = String(sql);
+
+      if (text.includes('FROM investment_holdings ih') && text.includes("COALESCE(ih.status, 'active') = 'active'")) {
+        return {
+          rows: [
+            {
+              id: 44,
+              account_id: 2,
+              current_value: '680000',
+              cost_basis: '680000',
+              as_of_date: '2026-03-10',
+              holding_type: 'pikadon',
+              status: 'active',
+              deposit_transaction_id: 'dep-680',
+              deposit_transaction_vendor: 'discount',
+              deposit_account_number: '111',
+              deposit_transaction_date: '2026-03-09T22:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      if (text.includes('LEFT JOIN investment_holdings linked_return')) {
+        return {
+          rows: [
+            {
+              identifier: 'ret-680',
+              vendor: 'discount',
+              date: '2026-05-25T21:00:00.000Z',
+              transaction_datetime: '2026-05-25T21:00:00.000Z',
+              name: 'משיכה מפיקדון נזיל שבועי',
+              memo: '',
+              price: '680000',
+              account_number: '111',
+            },
+          ],
+        };
+      }
+
+      if (text.includes('AND NOT (t.identifier = $4 AND t.vendor = $5)')) {
+        return {
+          rows: [
+            {
+              identifier: 'interest-680',
+              vendor: 'discount',
+              date: '2026-05-25T21:00:00.000Z',
+              name: 'רווחים ממשיכת הפקדה מפיקדון',
+              price: '358.63',
+              account_number: '111',
+            },
+            {
+              identifier: 'tax-680',
+              vendor: 'discount',
+              date: '2026-05-25T21:00:00.000Z',
+              name: 'תשלום מס על רווח מפיקדון',
+              price: '-53.79',
+              account_number: '111',
+            },
+          ],
+        };
+      }
+
+      if (text.includes("LOWER(COALESCE(name_en, '')) = 'capital returns'")) {
+        return { rows: [{ id: 95 }] };
+      }
+
+      if (text.includes('UPDATE transactions')) {
+        return { rows: [], rowCount: 1 };
+      }
+
+      if (text.includes('UPDATE investment_holdings')) {
+        return {
+          rows: [
+            {
+              id: params[5],
+              account_id: 2,
+              cost_basis: '680000',
+              current_value: String(params[2]),
+              maturity_date: params[3],
+              interest_rate: String(params[4]),
+              status: 'matured',
+              return_transaction_id: params[0],
+              return_transaction_vendor: params[1],
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      throw new Error(`Unexpected auto-close query: ${text}`);
+    });
+
+    const result = await pikadonModule.autoClosePikadonReturns({
+      vendor: 'discount',
+      accountNumber: '111',
+    });
+
+    expect(result.closed_count).toBe(1);
+    expect(result.matched_returns).toBe(1);
+    expect(result.matches[0]).toMatchObject({
+      return_transaction_id: 'ret-680',
+      principal_returned: 680000,
+      interest_earned: 358.63,
+      tax_paid: 53.79,
+    });
+
+    const categoryUpdate = queryMock.mock.calls.find(([sql]) => String(sql).includes('UPDATE transactions'));
+    expect(categoryUpdate?.[1]).toEqual([95, 0.95, 'ret-680', 'discount']);
+
+    const holdingUpdate = queryMock.mock.calls.find(([sql]) => String(sql).includes('UPDATE investment_holdings'));
+    expect(holdingUpdate?.[1]?.slice(0, 4)).toEqual([
+      'ret-680',
+      'discount',
+      680358.63,
+      '2026-05-26',
+    ]);
+    expect(holdingUpdate?.[1]?.[4]).toBeCloseTo(0.05273970588235294, 10);
+    expect(holdingUpdate?.[1]?.slice(5)).toEqual([
+      44,
+    ]);
+  });
+
+  it('does not double-count interest when the return transaction already includes it', async () => {
+    queryMock.mockImplementation(async (sql: string, params: any[] = []) => {
+      const text = String(sql);
+
+      if (text.includes('FROM investment_holdings ih') && text.includes("COALESCE(ih.status, 'active') = 'active'")) {
+        return {
+          rows: [
+            {
+              id: 46,
+              account_id: 2,
+              current_value: '100',
+              cost_basis: '100',
+              as_of_date: '2026-03-10',
+              holding_type: 'pikadon',
+              status: 'active',
+              deposit_transaction_id: 'dep-100',
+              deposit_transaction_vendor: 'discount',
+              deposit_account_number: '111',
+              deposit_transaction_date: '2026-03-09T22:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      if (text.includes('LEFT JOIN investment_holdings linked_return')) {
+        return {
+          rows: [
+            {
+              identifier: 'ret-101',
+              vendor: 'discount',
+              date: '2026-05-25T21:00:00.000Z',
+              transaction_datetime: '2026-05-25T21:00:00.000Z',
+              name: 'משיכה מפיקדון נזיל שבועי',
+              memo: '',
+              price: '101',
+              account_number: '111',
+            },
+          ],
+        };
+      }
+
+      if (text.includes('AND NOT (t.identifier = $4 AND t.vendor = $5)')) {
+        return { rows: [] };
+      }
+
+      if (text.includes("LOWER(COALESCE(name_en, '')) = 'capital returns'")) {
+        return { rows: [{ id: 95 }] };
+      }
+
+      if (text.includes('UPDATE transactions')) {
+        return { rows: [], rowCount: 1 };
+      }
+
+      if (text.includes('UPDATE investment_holdings')) {
+        return {
+          rows: [
+            {
+              id: params[5],
+              account_id: 2,
+              cost_basis: '100',
+              current_value: String(params[2]),
+              maturity_date: params[3],
+              interest_rate: String(params[4]),
+              status: 'matured',
+              return_transaction_id: params[0],
+              return_transaction_vendor: params[1],
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      throw new Error(`Unexpected interest-inclusive close query: ${text}`);
+    });
+
+    const result = await pikadonModule.autoClosePikadonReturns({
+      vendor: 'discount',
+      accountNumber: '111',
+    });
+
+    expect(result.closed_count).toBe(1);
+    expect(result.matches[0]).toMatchObject({
+      return_transaction_id: 'ret-101',
+      principal_returned: 100,
+      interest_earned: 1,
+    });
+
+    const holdingUpdate = queryMock.mock.calls.find(([sql]) => String(sql).includes('UPDATE investment_holdings'));
+    expect(holdingUpdate?.[1]).toEqual([
+      'ret-101',
+      'discount',
+      101,
+      '2026-05-26',
+      1,
+      46,
+    ]);
+  });
+
+  it('auto-closes a batch of recurring pikadon deposits from one aggregate return', async () => {
+    const holdings = [41, 42, 43, 45].map((id, index) => ({
+      id,
+      account_id: 2,
+      current_value: '100',
+      cost_basis: '100',
+      as_of_date: `2026-0${index + 1}-10`,
+      holding_type: 'pikadon',
+      status: 'active',
+      deposit_transaction_id: `dep-${id}`,
+      deposit_transaction_vendor: 'discount',
+      deposit_account_number: '111',
+      deposit_transaction_date: `2026-0${index + 1}-09T22:00:00.000Z`,
+    }));
+
+    queryMock.mockImplementation(async (sql: string, params: any[] = []) => {
+      const text = String(sql);
+
+      if (text.includes('FROM investment_holdings ih') && text.includes("COALESCE(ih.status, 'active') = 'active'")) {
+        return { rows: holdings };
+      }
+
+      if (text.includes('LEFT JOIN investment_holdings linked_return')) {
+        return {
+          rows: [
+            {
+              identifier: 'ret-400',
+              vendor: 'discount',
+              date: '2026-05-19T21:00:00.000Z',
+              transaction_datetime: '2026-05-19T21:00:00.000Z',
+              name: 'משיכה מפיקדון מפתח',
+              memo: '',
+              price: '400',
+              account_number: '111',
+            },
+          ],
+        };
+      }
+
+      if (text.includes('AND NOT (t.identifier = $4 AND t.vendor = $5)')) {
+        return { rows: [] };
+      }
+
+      if (text.includes("LOWER(COALESCE(name_en, '')) = 'capital returns'")) {
+        return { rows: [{ id: 95 }] };
+      }
+
+      if (text.includes('UPDATE transactions')) {
+        return { rows: [], rowCount: 1 };
+      }
+
+      if (text.includes('UPDATE investment_holdings')) {
+        return {
+          rows: [
+            {
+              id: params[5],
+              account_id: 2,
+              cost_basis: '100',
+              current_value: String(params[2]),
+              maturity_date: params[3],
+              interest_rate: String(params[4]),
+              status: 'matured',
+              return_transaction_id: params[0],
+              return_transaction_vendor: params[1],
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      throw new Error(`Unexpected aggregate close query: ${text}`);
+    });
+
+    const result = await pikadonModule.autoClosePikadonReturns({
+      vendor: 'discount',
+      accountNumber: '111',
+    });
+
+    expect(result.closed_count).toBe(4);
+    expect(result.matched_returns).toBe(1);
+
+    const holdingUpdates = queryMock.mock.calls.filter(([sql]) =>
+      String(sql).includes('UPDATE investment_holdings'),
+    );
+    expect(holdingUpdates).toHaveLength(4);
+    expect(holdingUpdates.map(([, params]) => params[5])).toEqual([41, 42, 43, 45]);
+    holdingUpdates.forEach(([, params]) => {
+      expect(params).toEqual([
+        'ret-400',
+        'discount',
+        100,
+        '2026-05-20',
+        0,
+        expect.any(Number),
+      ]);
+    });
+  });
+
   it('lists pikadon holdings with linked transactions when requested', async () => {
     queryMock
       .mockResolvedValueOnce({

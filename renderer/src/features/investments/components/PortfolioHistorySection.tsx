@@ -31,6 +31,7 @@ import { useInvestmentsFilters } from '../InvestmentsFiltersContext';
 import { useTranslation } from 'react-i18next';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
 import { buildStackedPortfolioHistoryData } from '../utils/portfolio-history';
+import { PortfolioScopeKey } from '../utils/portfolio-categories';
 
 interface PortfolioHistorySectionProps {
   overallHistory: PortfolioHistoryPoint[];
@@ -39,6 +40,7 @@ interface PortfolioHistorySectionProps {
   transactions: InvestmentData['transactions'];
   loadingHistory: boolean;
   loadingTransactions: boolean;
+  scope?: PortfolioScopeKey;
 }
 
 // Color palette for charts
@@ -74,6 +76,7 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
   transactions,
   loadingHistory,
   loadingTransactions,
+  scope = 'all',
 }) => {
   const theme = useTheme();
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
@@ -113,6 +116,7 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
     const { orderedAccounts, sortedDates, data } = buildStackedPortfolioHistoryData(
       portfolioData,
       accountHistories,
+      scope,
     );
 
     return (

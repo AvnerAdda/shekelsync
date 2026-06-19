@@ -1,5 +1,5 @@
 import type { PortfolioHistoryPoint, PortfolioSummary } from '@renderer/types/investments';
-import { getOrderedPortfolioAccounts } from './portfolio-categories';
+import { getPortfolioAccountsForScope, PortfolioScopeKey } from './portfolio-categories';
 
 export interface StackedPortfolioHistoryDataPoint {
   date: string;
@@ -14,6 +14,7 @@ function toDateKey(value: string): string {
 export function buildStackedPortfolioHistoryData(
   portfolio: PortfolioSummary | null,
   accountHistories: Record<number, PortfolioHistoryPoint[]>,
+  scope: PortfolioScopeKey = 'all',
 ): {
   orderedAccounts: Array<{ id: number; account_name: string }>;
   sortedDates: string[];
@@ -23,7 +24,7 @@ export function buildStackedPortfolioHistoryData(
     return { orderedAccounts: [], sortedDates: [], data: [] };
   }
 
-  const orderedAccounts = getOrderedPortfolioAccounts(portfolio).map((account) => ({
+  const orderedAccounts = getPortfolioAccountsForScope(portfolio, scope).map((account) => ({
     id: Number(account.id),
     account_name: account.account_name,
   }));

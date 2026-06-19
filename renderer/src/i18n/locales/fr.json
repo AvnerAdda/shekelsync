@@ -1879,6 +1879,14 @@
     "loading": {
       "setup": "Chargement de l'état de configuration..."
     },
+    "tabs": {
+      "overview": "Vue d'ensemble",
+      "holdings": "Avoirs et bilan",
+      "realEstate": "Immobilier",
+      "performance": "Analyse de performance",
+      "history": "Historique et détails",
+      "ariaLabel": "Sections d'investissement"
+    },
     "warnings": {
       "multiCurrency": "Plusieurs devises sont présentes. Les totaux et graphiques utilisent encore les valeurs brutes, sans normalisation FX."
     },
@@ -1915,6 +1923,136 @@
       "noAccounts": "Aucun compte d'investissement trouvé",
       "overviewTitle": "Vue des comptes",
       "overviewSubtitle": "Comparez la performance par catégorie et le mouvement récent de chaque compte."
+    },
+    "chartScope": {
+      "excludeRealEstate": "Hors immobilier",
+      "all": "Tout",
+      "liquid": "Liquide",
+      "restricted": "Long terme",
+      "illiquid": "Illiquide"
+    },
+    "realEstate": {
+      "title": "Simulateur immobilier",
+      "unsavedSuffix": " - modifications non enregistrées",
+      "fields": {
+        "city": "Ville",
+        "neighborhood": "Quartier",
+        "propertyType": "Type de bien",
+        "rooms": "Pièces",
+        "squareMeters": "m²",
+        "floor": "Étage",
+        "totalFloors": "Étages",
+        "purchasePrice": "Prix d'achat",
+        "purchaseDate": "Date d'achat",
+        "ownership": "Part de propriété",
+        "manualValue": "Valeur manuelle",
+        "mortgageBalance": "Solde du prêt total",
+        "monthlyMortgagePayment": "Mensualité du prêt",
+        "mortgageInterestRate": "Taux du prêt",
+        "mortgageTermYears": "Durée du prêt",
+        "valuationMethod": "Méthode d'évaluation",
+        "rent": "Loyer",
+        "yearlyExpenses": "Charges annuelles",
+        "pricePerSqm": "Prix / m²",
+        "growth": "Croissance"
+      },
+      "helpers": {
+        "ownership": "Part légale de propriété, pas l'apport. Utilisez 100% si vous possédez le bien."
+      },
+      "units": {
+        "years": "ans"
+      },
+      "features": {
+        "elevator": "Ascenseur",
+        "parking": "Parking",
+        "balcony": "Balcon",
+        "storage": "Cave"
+      },
+      "propertyTypes": {
+        "apartment": "Appartement",
+        "house": "Maison",
+        "land": "Terrain",
+        "commercial": "Commercial",
+        "other": "Autre"
+      },
+      "valuationMethods": {
+        "blended": "Mixte",
+        "manual": "Valeur manuelle",
+        "purchaseGrowth": "Croissance depuis l'achat",
+        "purchasePrice": "Prix d'achat",
+        "rentYield": "Rendement locatif",
+        "pricePerSqm": "Prix au m²"
+      },
+      "confidence": {
+        "manual": "Manuelle",
+        "high": "Élevée",
+        "medium": "Moyenne",
+        "low": "Faible"
+      },
+      "scenarios": {
+        "conservative": "Prudent {{value}}",
+        "base": "Base {{value}}",
+        "optimistic": "Optimiste {{value}}"
+      },
+      "netEquity": "Valeur nette: {{value}}",
+      "actions": {
+        "useEquity": "Utiliser la valeur nette",
+        "cancel": "Annuler",
+        "save": "Enregistrer",
+        "saveApply": "Enregistrer et appliquer"
+      },
+      "notifications": {
+        "saved": "Simulateur immobilier enregistré",
+        "applied": "Valorisation immobilière appliquée"
+      },
+      "errors": {
+        "missingAccount": "Compte immobilier manquant",
+        "emptyProfile": "Saisissez au moins un champ de bien ou d'évaluation",
+        "loadFailed": "Échec du chargement du profil immobilier",
+        "saveFailed": "Échec de l'enregistrement du profil immobilier",
+        "applyFailed": "Échec de l'application de la valorisation"
+      }
+    },
+    "realEstateTab": {
+      "marketDataNotice": "La valorisation est actuellement basée sur vos hypothèses enregistrées dans le simulateur. Les ventes comparables par adresse/type ne sont pas encore connectées.",
+      "propertiesTitle": "Biens",
+      "propertiesSubtitle": "Vérifiez la valeur, la dette, l'équité et les hypothèses de paiement mensuel.",
+      "kpis": {
+        "marketValue": "Valeur du bien",
+        "netEquity": "Valeur nette",
+        "mortgage": "Solde du prêt",
+        "monthlyPayment": "Mensualité",
+        "loanToValue": "Prêt / valeur"
+      },
+      "hints": {
+        "marketValue": "Valeur actuelle du simulateur avant dette",
+        "netEquity": "Valeur détenue moins part du prêt",
+        "mortgage": "Solde total du prêt saisi",
+        "monthlyPayment": "Mensualité totale du prêt",
+        "loanToValue": "Prêt divisé par valeur du bien"
+      },
+      "property": {
+        "unknownLocation": "Emplacement non défini",
+        "noConfidence": "brouillon",
+        "marketValue": "Valeur",
+        "netEquity": "Valeur nette",
+        "mortgage": "Prêt",
+        "payment": "Paiement",
+        "ownership": "Propriété",
+        "loanToValue": "LTV",
+        "cashFlow": "Cash-flow mensuel",
+        "updated": "Date d'évaluation"
+      },
+      "actions": {
+        "edit": "Modifier"
+      },
+      "empty": {
+        "title": "Aucun bien immobilier",
+        "description": "Ajoutez un compte immobilier et enregistrez les détails du simulateur pour suivre l'équité et l'exposition au prêt."
+      },
+      "errors": {
+        "loadFailed": "Échec du chargement de la vue immobilière"
+      }
     },
     "empty": {
       "title": "Commencez votre portefeuille d'investissement",

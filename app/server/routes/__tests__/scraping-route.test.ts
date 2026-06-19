@@ -56,6 +56,8 @@ describe('Shared /api/scrape routes', () => {
   });
 
   afterEach(() => {
+    delete process.env.SCRAPE_DIAGNOSTICS_BYPASS_RATE_LIMIT;
+    delete process.env.SCRAPE_DEBUG_VENDOR;
     vi.restoreAllMocks();
     mockRunScrape.mockReset();
     mockBulkScrape.mockReset();
@@ -227,6 +229,23 @@ describe('Shared /api/scrape routes', () => {
       .post('/api/scrape')
       .send({
         options: { companyId: 'isracard', force: true },
+        credentials: { dbId: 55, password: 'secret' },
+      })
+      .expect(200);
+
+    expect(mockWasScrapedRecently).not.toHaveBeenCalled();
+    expect(mockRunScrape).toHaveBeenCalledTimes(1);
+  });
+
+  it('bypasses rate-limit checks when diagnostics bypass is enabled for the vendor', async () => {
+    process.env.SCRAPE_DIAGNOSTICS_BYPASS_RATE_LIMIT = '1';
+    process.env.SCRAPE_DEBUG_VENDOR = 'isracard';
+    mockRunScrape.mockResolvedValue({ success: true, accounts: [] });
+
+    await request(app)
+      .post('/api/scrape')
+      .send({
+        options: { companyId: 'isracard' },
         credentials: { dbId: 55, password: 'secret' },
       })
       .expect(200);

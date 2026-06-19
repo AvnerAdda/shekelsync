@@ -7,13 +7,16 @@ import { useTranslation } from 'react-i18next';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
 import AccountAllocationModal from './AccountAllocationModal';
 import {
-  getOrderedPortfolioAccounts,
-  getPortfolioCategoryBuckets,
+  getPortfolioAccountsForScope,
+  getPortfolioCategoryBucketsForScope,
+  getPortfolioScopeTotal,
   normalizeInvestmentCategory,
+  PortfolioScopeKey,
 } from '../utils/portfolio-categories';
 
 interface AllocationDonutChartProps {
   portfolioData: PortfolioSummary;
+  scope?: PortfolioScopeKey;
 }
 
 const CHART_COLORS = [
@@ -29,7 +32,7 @@ const CHART_COLORS = [
   '#14B8A6', // Teal dark
 ];
 
-const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioData }) => {
+const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioData, scope = 'all' }) => {
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
   const { t } = useTranslation('translation');
   const [modalOpen, setModalOpen] = useState(false);
@@ -37,7 +40,7 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
   const formatCurrencyValue = (value: number) =>
     formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
 
-  const allAccounts = getOrderedPortfolioAccounts(portfolioData);
+  const allAccounts = getPortfolioAccountsForScope(portfolioData, scope);
 
   const chartData = allAccounts
     .filter((account) => account.current_value > 0)
@@ -48,8 +51,8 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
       category: normalizeInvestmentCategory(account.investment_category, account.account_type),
     }));
 
-  const totalValue = portfolioData.summary.totalPortfolioValue;
-  const categoryChips = getPortfolioCategoryBuckets(portfolioData)
+  const totalValue = getPortfolioScopeTotal(portfolioData, scope);
+  const categoryChips = getPortfolioCategoryBucketsForScope(portfolioData, scope)
     .filter(({ bucket }) => bucket.totalValue > 0);
 
   return (
@@ -227,6 +230,7 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
         onClose={() => setModalOpen(false)}
         portfolioData={portfolioData}
         colors={CHART_COLORS}
+        scope={scope}
       />
     </Paper>
   );

@@ -20,7 +20,11 @@ import { Close as CloseIcon } from '@mui/icons-material';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
-import { getOrderedPortfolioAccounts } from '../utils/portfolio-categories';
+import {
+  getPortfolioAccountsForScope,
+  getPortfolioScopeTotal,
+  PortfolioScopeKey,
+} from '../utils/portfolio-categories';
 import { resolvePortfolioInstitutionName } from './portfolio-breakdown-helpers';
 
 interface AccountAllocationModalProps {
@@ -28,6 +32,7 @@ interface AccountAllocationModalProps {
   onClose: () => void;
   portfolioData: PortfolioSummary;
   colors: string[];
+  scope?: PortfolioScopeKey;
 }
 
 type SortField = 'name' | 'value' | 'percentage';
@@ -38,6 +43,7 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
   onClose,
   portfolioData,
   colors,
+  scope = 'all',
 }) => {
   const theme = useTheme();
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
@@ -52,10 +58,13 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
 
   // Combine all accounts
   const allAccounts = useMemo(() => {
-    return getOrderedPortfolioAccounts(portfolioData);
-  }, [portfolioData]);
+    return getPortfolioAccountsForScope(portfolioData, scope);
+  }, [portfolioData, scope]);
 
-  const totalValue = portfolioData.summary.totalPortfolioValue;
+  const totalValue = useMemo(
+    () => getPortfolioScopeTotal(portfolioData, scope),
+    [portfolioData, scope],
+  );
 
   // Sort accounts
   const sortedAccounts = useMemo(() => {
@@ -64,7 +73,7 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
       .map((account, index) => ({
         ...account,
         color: colors[index % colors.length],
-        percentage: (account.current_value / totalValue) * 100,
+        percentage: totalValue > 0 ? (account.current_value / totalValue) * 100 : 0,
       }));
 
     return accounts.sort((a, b) => {

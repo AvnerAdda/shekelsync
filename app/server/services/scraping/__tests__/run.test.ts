@@ -1059,6 +1059,11 @@ describe('scraping run service', () => {
 
       const result = await internal.applyCategorizationRules(mockClient);
       expect(result).toEqual({ rulesApplied: 2, transactionsUpdated: 2 });
+      const updateSql = String(
+        mockClient.query.mock.calls.find(([sql]: any[]) => String(sql).includes('UPDATE transactions'))?.[0] || '',
+      );
+      expect(updateSql).toContain('child.parent_id = transactions.category_definition_id');
+      expect(updateSql).not.toContain('depth_level < 2');
     });
 
     it('applies account pairings including repayment category resolution and log insert', async () => {

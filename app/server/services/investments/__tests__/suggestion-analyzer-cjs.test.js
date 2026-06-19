@@ -46,6 +46,14 @@ describe('suggestion-analyzer-cjs', () => {
     it('returns null when no patterns match', () => {
       expect(analyzer.detectAccountType('Coffee at Starbucks')).toBeNull();
     });
+
+    it('detects real estate payment descriptions', () => {
+      const result = analyzer.detectAccountType('תשלום שוברי גביה');
+      expect(result).toMatchObject({
+        accountType: 'real_estate',
+      });
+      expect(result.confidence).toBeGreaterThan(0);
+    });
   });
 
   describe('analyzeTransaction', () => {
@@ -139,6 +147,34 @@ describe('suggestion-analyzer-cjs', () => {
         display_name_he: 'Bits of gold',
         display_name_en: 'Bits of gold',
         institution_type: 'investment',
+      });
+    });
+
+    it('uses a stable account name for real estate suggestions', async () => {
+      institutionLookupSpy.mockResolvedValue({
+        id: 78,
+        vendor_code: 'real_estate',
+        display_name_he: 'נדל"ן',
+        display_name_en: 'Real Estate',
+        institution_type: 'investment',
+      });
+
+      const result = await analyzer.analyzeTransaction({
+        identifier: 'txn-real-estate',
+        vendor: 'discount',
+        description: 'תשלום שוברי גביה',
+        date: '2026-05-26',
+        price: -682500,
+        category_name: 'נדל"ן',
+      });
+
+      expect(result).toMatchObject({
+        suggestedAccountType: 'real_estate',
+        suggestedAccountName: 'נדל"ן',
+      });
+      expect(result.institution).toMatchObject({
+        id: 78,
+        vendor_code: 'real_estate',
       });
     });
 

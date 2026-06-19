@@ -5,6 +5,8 @@ import type {
   PortfolioSummary,
 } from '@renderer/types/investments';
 
+export type PortfolioScopeKey = 'exclude_real_estate' | 'all' | InvestmentCategoryKey;
+
 export const INVESTMENT_CATEGORY_ORDER: InvestmentCategoryKey[] = [
   'cash',
   'liquid',
@@ -95,4 +97,52 @@ export function getOrderedPortfolioAccounts(
   portfolio: PortfolioSummary | null | undefined,
 ): InvestmentAccountSummary[] {
   return getPortfolioCategoryBuckets(portfolio).flatMap(({ bucket }) => bucket.accounts || []);
+}
+
+export function accountMatchesPortfolioScope(
+  account: InvestmentAccountSummary,
+  scope: PortfolioScopeKey = 'all',
+): boolean {
+  if (scope === 'all') {
+    return true;
+  }
+
+  if (scope === 'exclude_real_estate') {
+    return account.account_type !== 'real_estate';
+  }
+
+  return normalizeInvestmentCategory(account.investment_category, account.account_type) === scope;
+}
+
+export function getPortfolioAccountsForScope(
+  portfolio: PortfolioSummary | null | undefined,
+  scope: PortfolioScopeKey = 'all',
+): InvestmentAccountSummary[] {
+  return getOrderedPortfolioAccounts(portfolio)
+    .filter((account) => accountMatchesPortfolioScope(account, scope));
+}
+
+export function getPortfolioScopeTotal(
+  portfolio: PortfolioSummary | null | undefined,
+  scope: PortfolioScopeKey = 'all',
+): number {
+  return getPortfolioAccountsForScope(portfolio, scope)
+    .reduce((sum, account) => sum + (Number(account.current_value) || 0), 0);
+}
+
+export function getPortfolioCategoryBucketsForScope(
+  portfolio: PortfolioSummary | null | undefined,
+  scope: PortfolioScopeKey = 'all',
+): Array<{ key: InvestmentCategoryKey; bucket: PortfolioCategoryBucket }> {
+  const accounts = getPortfolioAccountsForScope(portfolio, scope);
+
+  return INVESTMENT_CATEGORY_ORDER.map((key) => {
+    const categoryAccounts = accounts.filter((account) =>
+      normalizeInvestmentCategory(account.investment_category, account.account_type) === key);
+
+    return {
+      key,
+      bucket: summarizeAccounts(categoryAccounts),
+    };
+  });
 }

@@ -93,6 +93,16 @@ const routeServices = {
     getRolloverChain: vi.fn(),
     findLinkedPikadonByDepositTransaction: vi.fn(),
   },
+  realEstateService: {
+    syncRealEstateHolding: vi.fn(),
+  },
+  realEstateSimulatorService: {
+    estimateRealEstateValue: vi.fn(),
+    getRealEstateOverview: vi.fn(),
+    getRealEstateProfile: vi.fn(),
+    upsertRealEstateProfile: vi.fn(),
+    applyRealEstateValuation: vi.fn(),
+  },
 };
 
 const patternsService = routeServices.patternsService;
@@ -111,6 +121,8 @@ const bankSummaryService = routeServices.bankSummaryService;
 const suggestionAnalyzerCJS = routeServices.suggestionAnalyzerCJS;
 const database = routeServices.databaseService;
 const pikadonService = routeServices.pikadonService;
+const realEstateService = routeServices.realEstateService;
+const realEstateSimulatorService = routeServices.realEstateSimulatorService;
 
 function buildApp() {
   const app = express();
@@ -334,6 +346,64 @@ describe('Shared /api/investments routes', () => {
     expect(event.body.event.id).toBe(10);
   });
 
+  it('estimates, saves, fetches, and applies real estate simulator profiles', async () => {
+    vi.spyOn(realEstateSimulatorService, 'estimateRealEstateValue').mockReturnValue({
+      estimated_value: 700000,
+      confidence: 'manual',
+    });
+    vi.spyOn(realEstateSimulatorService, 'upsertRealEstateProfile').mockResolvedValue({
+      profile: { account_id: 9, city: 'Tel Aviv', estimated_value: 700000 },
+      estimate: { estimated_value: 700000 },
+    });
+    vi.spyOn(realEstateSimulatorService, 'getRealEstateProfile').mockResolvedValue({
+      profile: { account_id: 9, city: 'Tel Aviv' },
+    });
+    vi.spyOn(realEstateSimulatorService, 'getRealEstateOverview').mockResolvedValue({
+      summary: { propertyCount: 1, netEquity: 700000 },
+      properties: [{ accountId: 9, accountName: 'Tel Aviv apartment' }],
+    });
+    vi.spyOn(realEstateSimulatorService, 'applyRealEstateValuation').mockResolvedValue({
+      holding: { id: 44, account_id: 9, current_value: 700000 },
+    });
+
+    const estimate = await request(app)
+      .post('/api/investments/real-estate/estimate')
+      .send({ manual_estimated_value: 700000 })
+      .expect(200);
+    expect(estimate.body.estimate.estimated_value).toBe(700000);
+    expect(realEstateSimulatorService.estimateRealEstateValue).toHaveBeenCalledWith({
+      manual_estimated_value: 700000,
+    });
+
+    const saved = await request(app)
+      .put('/api/investments/real-estate/profiles/9')
+      .send({ city: 'Tel Aviv', manual_estimated_value: 700000 })
+      .expect(200);
+    expect(saved.body.profile.city).toBe('Tel Aviv');
+    expect(realEstateSimulatorService.upsertRealEstateProfile).toHaveBeenCalledWith('9', {
+      city: 'Tel Aviv',
+      manual_estimated_value: 700000,
+    });
+
+    const fetched = await request(app).get('/api/investments/real-estate/profiles/9').expect(200);
+    expect(fetched.body.profile.account_id).toBe(9);
+    expect(realEstateSimulatorService.getRealEstateProfile).toHaveBeenCalledWith('9');
+
+    const overview = await request(app).get('/api/investments/real-estate/overview').expect(200);
+    expect(overview.body.summary.netEquity).toBe(700000);
+    expect(realEstateSimulatorService.getRealEstateOverview).toHaveBeenCalled();
+
+    const applied = await request(app)
+      .post('/api/investments/real-estate/profiles/9/apply-valuation')
+      .send({ asOfDate: '2026-06-01' })
+      .expect(201);
+    expect(applied.body.holding.current_value).toBe(700000);
+    expect(realEstateSimulatorService.applyRealEstateValuation).toHaveBeenCalledWith({
+      accountId: '9',
+      asOfDate: '2026-06-01',
+    });
+  });
+
   it('checks existing investments and lists patterns', async () => {
     vi.spyOn(checkExistingService, 'getExistingInvestments').mockResolvedValue({ exists: true });
     vi.spyOn(patternsService, 'listPatterns').mockResolvedValue([{ id: 'p1' }]);
@@ -448,6 +518,7 @@ describe('Shared /api/investments routes', () => {
   });
 
   it('creates, lists, and deletes transaction links', async () => {
+    (realEstateService.syncRealEstateHolding as any).mockResolvedValueOnce({ synced: true });
     const querySpy = vi.spyOn(database, 'query')
       // list links
       .mockResolvedValueOnce({
@@ -474,6 +545,11 @@ describe('Shared /api/investments routes', () => {
 
     expect(created.body.success).toBe(true);
     expect(created.body.link.account_id).toBe(7);
+    expect(created.body.realEstateSynced).toBe(true);
+    expect(realEstateService.syncRealEstateHolding).toHaveBeenCalledWith({
+      dbAdapter: expect.objectContaining({ query: expect.any(Function) }),
+      accountId: 7,
+    });
 
     const listed = await request(app)
       .get('/api/investments/transaction-links?account_id=7')

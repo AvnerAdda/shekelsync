@@ -125,6 +125,24 @@ export const ACCOUNT_PATTERNS = {
       'index fund'
     ],
     keywords: ['קרן נאמנות', 'mutual fund', 'etf']
+  },
+
+  real_estate: {
+    hebrew: [
+      'נדל"ן',
+      'נדלן',
+      'שוברי גביה',
+      'לשוב ושות',
+      'מקרקעין',
+      'דירה'
+    ],
+    english: [
+      'real estate',
+      'property',
+      'apartment',
+      'land purchase'
+    ],
+    keywords: ['נדל"ן', 'נדלן', 'שוברי גביה', 'real estate', 'property']
   }
 };
 
