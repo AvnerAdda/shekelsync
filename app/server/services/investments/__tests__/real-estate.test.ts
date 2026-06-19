@@ -32,6 +32,20 @@ describe('real estate investment service', () => {
     ]);
   });
 
+  it('ignores invalid rows and floors negative running values at zero', () => {
+    const snapshots = buildCumulativeRealEstateSnapshots([
+      { identifier: 'missing-amount', date: '2026-05-01', price: null },
+      { identifier: 'missing-date', date: null, price: -100 },
+      { identifier: 'purchase', transaction_datetime: '2026-05-01T21:00:00.000Z', price: -500 },
+      { identifier: 'refund', transaction_datetime: '2026-05-02T21:00:00.000Z', price: 700 },
+    ]);
+
+    expect(snapshots).toEqual([
+      { as_of_date: '2026-05-02', current_value: 500, cost_basis: 500 },
+      { as_of_date: '2026-05-03', current_value: 0, cost_basis: 0 },
+    ]);
+  });
+
   it('syncs holdings only for real estate accounts', async () => {
     const query = vi.fn()
       .mockResolvedValueOnce({ rows: [{ id: 9, account_type: 'real_estate' }] })
@@ -84,5 +98,35 @@ describe('real estate investment service', () => {
 
     expect(result).toBeNull();
     expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns null for invalid inputs or missing accounts', async () => {
+    await expect(syncRealEstateHolding()).resolves.toBeNull();
+    await expect(syncRealEstateHolding({ dbAdapter: { query: vi.fn() }, accountId: 'bad' })).resolves.toBeNull();
+
+    const query = vi.fn().mockResolvedValueOnce({ rows: [] });
+    await expect(syncRealEstateHolding({ dbAdapter: { query }, accountId: 99 })).resolves.toBeNull();
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('FROM investment_accounts'),
+      [99],
+    );
+  });
+
+  it('returns a no-op result when a real estate account has no valid linked transactions', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ id: 9, account_type: 'real_estate' }] })
+      .mockResolvedValueOnce({ rows: [{ identifier: 'bad', date: null, price: null }] });
+
+    const result = await syncRealEstateHolding({
+      dbAdapter: { query },
+      accountId: 9,
+    });
+
+    expect(result).toEqual({
+      accountId: 9,
+      synced: false,
+      snapshots: [],
+    });
+    expect(query).toHaveBeenCalledTimes(2);
   });
 });

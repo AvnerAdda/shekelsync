@@ -15,8 +15,13 @@ function buildCumulativeRealEstateSnapshots(rows = []) {
       return;
     }
 
+    const transactionDate = row.transaction_datetime || row.date;
+    if (!transactionDate) {
+      return;
+    }
+
     const date = toIsoDateInTimeZone(
-      row.transaction_datetime || row.date,
+      transactionDate,
       DEFAULT_INVESTMENT_TIME_ZONE,
     );
     if (!date) {

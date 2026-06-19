@@ -58,6 +58,32 @@ describe('real estate simulator service', () => {
     });
   });
 
+  it('blends multiple valuation sources and reports high confidence when profile data is rich', () => {
+    const estimate = simulatorService.estimateRealEstateValue({
+      city: 'Haifa',
+      purchase_price: 500000,
+      purchase_date: '2024-06-01',
+      annual_growth_rate: 4,
+      monthly_rent: 3000,
+      annual_expenses: 6000,
+      rental_yield_rate: 3,
+      square_meters: 80,
+      price_per_sqm: 8000,
+      valuation_method: 'blended',
+    }, {
+      valuationDate: '2026-06-01',
+    });
+
+    expect(estimate.confidence).toBe('high');
+    expect(estimate.valuation_method).toBe('blended');
+    expect(estimate.sources.map((source: any) => source.method)).toEqual([
+      'purchase_growth',
+      'rent_yield',
+      'price_per_sqm',
+    ]);
+    expect(estimate.estimated_value).toBeGreaterThan(0);
+  });
+
   it('supports purchase-price-only valuation when no purchase date is available', () => {
     const estimate = simulatorService.estimateRealEstateValue({
       purchase_price: 1000000,
@@ -142,6 +168,67 @@ describe('real estate simulator service', () => {
       700000,
       650000,
     ]));
+  });
+
+  it('normalizes profile payload values before saving', async () => {
+    const query = mockSchemaQueries(vi.fn())
+      .mockResolvedValueOnce({
+        rows: [{ id: 9, account_name: 'Property', account_type: 'real_estate', currency: 'ILS' }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 1,
+          account_id: 9,
+          property_type: 'other',
+          has_elevator: 1,
+          has_parking: 0,
+          has_balcony: '1',
+          has_storage: '0',
+          ownership_percentage: 100,
+          purchase_price: '1000',
+          estimated_value: '1000',
+          estimated_net_equity: '1000',
+          assumptions_json: '{"sources":[]}',
+        }],
+      });
+
+    const result = await simulatorService.upsertRealEstateProfile(9, {
+      city: '   ',
+      property_type: 'castle',
+      has_elevator: 'true',
+      has_parking: 'false',
+      has_balcony: 1,
+      has_storage: 0,
+      ownership_percentage: 150,
+      purchase_price: '1000',
+      valuation_method: 'unknown',
+    }, { query });
+
+    expect(query.mock.calls[7][1]).toEqual(expect.arrayContaining([
+      9,
+      null,
+      null,
+      'other',
+      null,
+      null,
+      null,
+      null,
+      1,
+      0,
+      1,
+      0,
+      100,
+    ]));
+    expect(result.profile).toMatchObject({
+      property_type: 'other',
+      has_elevator: true,
+      has_parking: false,
+      has_balcony: true,
+      has_storage: false,
+      ownership_percentage: 100,
+      purchase_price: 1000,
+      assumptions: { sources: [] },
+    });
   });
 
   it('applies an available valuation to investment holdings', async () => {
@@ -317,6 +404,104 @@ describe('real estate simulator service', () => {
       loanToValue: 75,
       monthlyMortgagePayment: 9500,
       monthlyCashFlow: -9500,
+    });
+  });
+
+  it('returns null profile rows and rejects invalid real estate account requests', async () => {
+    const noQuery = vi.fn();
+    await expect(simulatorService.getRealEstateProfile('not-a-number', { query: noQuery }))
+      .rejects.toMatchObject({ status: 400 });
+    expect(noQuery).not.toHaveBeenCalled();
+
+    const missingProfileQuery = mockSchemaQueries(vi.fn())
+      .mockResolvedValueOnce({
+        rows: [{ id: 9, account_name: 'Property', account_type: 'real_estate', currency: 'ILS' }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await simulatorService.getRealEstateProfile(9, { query: missingProfileQuery });
+    expect(result).toEqual({ profile: null });
+
+    const wrongTypeQuery = mockSchemaQueries(vi.fn())
+      .mockResolvedValueOnce({
+        rows: [{ id: 10, account_name: 'Brokerage', account_type: 'brokerage', currency: 'ILS' }],
+      });
+
+    await expect(simulatorService.getRealEstateProfile(10, { query: wrongTypeQuery }))
+      .rejects.toMatchObject({ status: 400 });
+  });
+
+  it('handles optional schema column duplicates and propagates unexpected schema errors', async () => {
+    const duplicateQuery = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockRejectedValueOnce(new Error('duplicate column name: monthly_mortgage_payment'))
+      .mockRejectedValueOnce(new Error('column already exists'))
+      .mockRejectedValueOnce(new Error('exists'));
+
+    await expect(simulatorService.ensureSchema({ query: duplicateQuery })).resolves.toBeUndefined();
+    expect(duplicateQuery).toHaveBeenCalledTimes(6);
+
+    const failingQuery = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockRejectedValueOnce(new Error('database locked'));
+
+    await expect(simulatorService.ensureSchema({ query: failingQuery }))
+      .rejects.toThrow('database locked');
+  });
+
+  it('rejects valuation application when no estimate is available', async () => {
+    const query = mockSchemaQueries(vi.fn())
+      .mockResolvedValueOnce({
+        rows: [{ id: 9, account_name: 'Property', account_type: 'real_estate', currency: 'ILS' }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          account_id: 9,
+          city: 'Empty estimate',
+          estimated_value: null,
+          assumptions_json: null,
+        }],
+      });
+
+    await expect(simulatorService.applyRealEstateValuation({ accountId: 9 }, { query }))
+      .rejects.toMatchObject({
+        status: 400,
+        message: 'No real estate estimate is available to apply',
+      });
+  });
+
+  it('builds overview fallbacks for accounts without simulator profiles', async () => {
+    const query = mockSchemaQueries(vi.fn())
+      .mockResolvedValueOnce({
+        rows: [{
+          account_id: 11,
+          account_name: 'Unprofiled property',
+          currency: 'ILS',
+          profile_id: null,
+          holding_current_value: 123000,
+          holding_cost_basis: 100000,
+          holding_as_of_date: '2026-06-01',
+        }],
+      });
+
+    const result = await simulatorService.getRealEstateOverview({ query });
+
+    expect(result.summary).toMatchObject({
+      propertyCount: 1,
+      propertyMarketValue: 123000,
+      ownedPropertyValue: 123000,
+      netEquity: 123000,
+      missingProfiles: 1,
+    });
+    expect(result.properties[0]).toMatchObject({
+      accountId: 11,
+      accountName: 'Unprofiled property',
+      hasProfile: false,
+      lastValuationDate: '2026-06-01',
     });
   });
 });
