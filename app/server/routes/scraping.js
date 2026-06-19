@@ -44,6 +44,32 @@ function emitLog(level, prefix, args = []) {
   }
 }
 
+function isTruthyEnvFlag(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true';
+}
+
+function shouldBypassRateLimitForDiagnostics(vendor) {
+  if (!isTruthyEnvFlag(process.env.SCRAPE_DIAGNOSTICS_BYPASS_RATE_LIMIT)) {
+    return false;
+  }
+
+  const vendorFilter = process.env.SCRAPE_DEBUG_VENDOR;
+  if (typeof vendorFilter !== 'string' || vendorFilter.trim().length === 0) {
+    return true;
+  }
+
+  const allowedVendors = vendorFilter
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return allowedVendors.includes('*') || allowedVendors.includes(vendor);
+}
+
 function createLogger(vendor) {
   const prefix = vendor ? `[Scrape:${vendor}]` : '[Scrape]';
   return {
@@ -352,7 +378,8 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
       }
 
       // Check rate limit (skip if force override is enabled)
-      const forceOverride = options?.force === true;
+      const diagnosticsRateLimitBypass = shouldBypassRateLimitForDiagnostics(vendor);
+      const forceOverride = options?.force === true || diagnosticsRateLimitBypass;
       if (dbId && !forceOverride) {
         const isRateLimited = await wasScrapedRecentlyFn(dbId);
         if (isRateLimited) {
@@ -390,7 +417,11 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
       }
 
       if (forceOverride) {
-        logger.warn?.('Force override used - bypassing rate limit. Use with caution!');
+        logger.warn?.(
+          diagnosticsRateLimitBypass
+            ? 'Diagnostics rate-limit bypass enabled via SCRAPE_DIAGNOSTICS_BYPASS_RATE_LIMIT. Use with caution!'
+            : 'Force override used - bypassing rate limit. Use with caution!',
+        );
       }
 
       const result = await runScrapeFn({

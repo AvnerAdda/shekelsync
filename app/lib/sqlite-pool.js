@@ -59,6 +59,14 @@ function getTableSql(db, tableName) {
   }
 }
 
+function addColumnIfMissing(db, tableName, columnName, definition) {
+  const columns = db.prepare(`PRAGMA table_info('${tableName}')`).all();
+  const exists = Array.isArray(columns) && columns.some((column) => column?.name === columnName);
+  if (!exists) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+}
+
 function rebuildInvestmentHoldingsForPikadonEntries(db) {
   const columns = db.prepare("PRAGMA table_info('investment_holdings')").all();
   if (!Array.isArray(columns) || columns.length === 0) {
@@ -282,11 +290,56 @@ function runStartupSchemaMigrations(db) {
           REFERENCES transactions(identifier, vendor)
           ON DELETE SET NULL
       );
+      CREATE TABLE IF NOT EXISTS real_estate_properties (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id INTEGER NOT NULL UNIQUE,
+        city TEXT,
+        neighborhood TEXT,
+        property_type TEXT NOT NULL DEFAULT 'apartment',
+        rooms REAL,
+        square_meters REAL,
+        floor REAL,
+        total_floors REAL,
+        has_elevator INTEGER CHECK (has_elevator IN (0,1) OR has_elevator IS NULL),
+        has_parking INTEGER CHECK (has_parking IN (0,1) OR has_parking IS NULL),
+        has_balcony INTEGER CHECK (has_balcony IN (0,1) OR has_balcony IS NULL),
+        has_storage INTEGER CHECK (has_storage IN (0,1) OR has_storage IS NULL),
+        ownership_percentage REAL NOT NULL DEFAULT 100,
+        purchase_price REAL,
+        purchase_date TEXT,
+        mortgage_balance REAL,
+        monthly_mortgage_payment REAL,
+        mortgage_interest_rate REAL,
+        mortgage_term_years REAL,
+        monthly_rent REAL,
+        annual_expenses REAL,
+        price_per_sqm REAL,
+        annual_growth_rate REAL,
+        rental_yield_rate REAL,
+        manual_estimated_value REAL,
+        valuation_method TEXT NOT NULL DEFAULT 'blended',
+        estimated_value REAL,
+        estimated_net_equity REAL,
+        confidence TEXT,
+        scenario_conservative REAL,
+        scenario_base REAL,
+        scenario_optimistic REAL,
+        assumptions_json TEXT,
+        last_valuation_date TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE
+      );
     `);
     db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_assessments_type ON profile_assessments(assessment_type);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_investment_positions_account ON investment_positions(account_id, status);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_investment_positions_status ON investment_positions(status, opened_at DESC);');
     db.exec('CREATE INDEX IF NOT EXISTS idx_investment_position_events_position ON investment_position_events(position_id, effective_date DESC);');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_real_estate_properties_account ON real_estate_properties(account_id);');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_real_estate_properties_city ON real_estate_properties(city);');
+    addColumnIfMissing(db, 'real_estate_properties', 'monthly_mortgage_payment', 'REAL');
+    addColumnIfMissing(db, 'real_estate_properties', 'mortgage_interest_rate', 'REAL');
+    addColumnIfMissing(db, 'real_estate_properties', 'mortgage_term_years', 'REAL');
   } catch (_error) {
     // Ignore: table may not exist yet (e.g., before init_sqlite_db runs).
   }

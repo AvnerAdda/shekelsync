@@ -59,6 +59,13 @@ import AccountPairingModal from './AccountPairingModal';
 import InvestmentAccountSuggestionsCard from '@renderer/features/investments/components/InvestmentAccountSuggestionsCard';
 import CreditCardSuggestionsCard from '@renderer/features/investments/components/CreditCardSuggestionsCard';
 import SmartInvestmentAccountForm from '@renderer/features/investments/components/SmartInvestmentAccountForm';
+import RealEstateSimulatorDialog from '@renderer/features/investments/components/RealEstateSimulatorDialog';
+import RealEstateSimulatorFields, {
+  createEmptyRealEstateProfile,
+  hasRealEstateProfileInput,
+  type RealEstateEstimatePreview,
+  type RealEstateProfileInput,
+} from '@renderer/features/investments/components/RealEstateSimulatorFields';
 import { getCreatedInvestmentAccountId } from '@renderer/features/investments/utils/account-response';
 import {
   CREDIT_CARD_VENDORS,
@@ -332,6 +339,7 @@ interface InvestmentAccount {
   investment_category?: string;
   current_value?: number;
   current_value_explicit?: number | null;
+  cost_basis?: number | null;
   total_invested?: number | null;
   holdings_count?: number;
   last_update_date?: string;
@@ -641,6 +649,9 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
     costBasis: '',
     asOfDate: new Date().toISOString().split('T')[0],
   });
+  const [realEstateProfile, setRealEstateProfile] = useState<RealEstateProfileInput>(
+    () => createEmptyRealEstateProfile(),
+  );
 
   // IBKR Flex Query credentials (shown when Interactive Brokers is selected)
   const [ibkrToken, setIbkrToken] = useState('');
@@ -943,6 +954,16 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
   const [isAddingAsset, setIsAddingAsset] = useState(false);
   const [showSmartForm, setShowSmartForm] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<any>(null);
+  const [selectedRealEstateAccount, setSelectedRealEstateAccount] = useState<InvestmentAccount | null>(null);
+  const selectedRealEstateDialogAccount = useMemo(() => (
+    selectedRealEstateAccount?.id ? {
+      id: selectedRealEstateAccount.id,
+      account_name: selectedRealEstateAccount.account_name,
+      currency: selectedRealEstateAccount.currency,
+      current_value: selectedRealEstateAccount.current_value ?? 0,
+      cost_basis: selectedRealEstateAccount.cost_basis ?? 0,
+    } : null
+  ), [selectedRealEstateAccount]);
 
   // Value update state
   const [valueUpdate, setValueUpdate] = useState({
@@ -1115,6 +1136,7 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
       costBasis: '',
       asOfDate: new Date().toISOString().split('T')[0],
     });
+    setRealEstateProfile(createEmptyRealEstateProfile());
     setIsAdding(true);
   }, []);
 
@@ -1323,7 +1345,33 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
 
     // Store transactions for later linking
     setPendingSuggestionTransactions(suggestion.transactions || []);
+    setRealEstateProfile(createEmptyRealEstateProfile());
   };
+
+  const handleApplyRealEstateEstimate = useCallback((estimate: RealEstateEstimatePreview) => {
+    const portfolioValue = estimate.estimated_net_equity ?? estimate.scenario_base;
+    if (portfolioValue === null) {
+      return;
+    }
+    const holdingValue = Math.max(portfolioValue, 0);
+
+    const purchasePrice = Number.parseFloat(realEstateProfile.purchase_price || '');
+    const ownership = Number.parseFloat(realEstateProfile.ownership_percentage || '100');
+    const ownershipRatio = (Number.isFinite(ownership) ? ownership : 100) / 100;
+    const mortgageBalance = Number.parseFloat(realEstateProfile.mortgage_balance || '0') * ownershipRatio;
+    const ownedCostBasis = Number.isFinite(purchasePrice)
+      ? purchasePrice * ownershipRatio
+      : null;
+    const equityCostBasis = ownedCostBasis === null
+      ? null
+      : Math.max(ownedCostBasis - (Number.isFinite(mortgageBalance) ? mortgageBalance : 0), 0);
+
+    setInitialValue((current) => ({
+      ...current,
+      currentValue: String(holdingValue),
+      costBasis: current.costBasis || (equityCostBasis !== null ? String(Math.round(equityCostBasis)) : ''),
+    }));
+  }, [realEstateProfile]);
 
   const handleAddInvestmentAccount = async () => {
     if (!newInvestmentAccount.account_name || !newInvestmentAccount.account_type) {
@@ -1341,9 +1389,43 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
 
       if (response.ok) {
         const newAccountId = getCreatedInvestmentAccountId(response.data);
+        let realEstateValuationApplied = false;
+
+        if (
+          newAccountId &&
+          newInvestmentAccount.account_type === 'real_estate' &&
+          hasRealEstateProfileInput(realEstateProfile)
+        ) {
+          try {
+            const profileResponse = await apiClient.put(
+              `/api/investments/real-estate/profiles/${newAccountId}`,
+              realEstateProfile,
+            );
+
+            if (!profileResponse.ok) {
+              throw new Error(profileResponse.statusText || 'Failed to save real estate profile');
+            }
+
+            const profileData = profileResponse.data as any;
+            const estimatedValue = Number(profileData?.profile?.estimated_value);
+            if (!initialValue.currentValue && Number.isFinite(estimatedValue) && estimatedValue > 0) {
+              const applyResponse = await apiClient.post(
+                `/api/investments/real-estate/profiles/${newAccountId}/apply-valuation`,
+                { asOfDate: initialValue.asOfDate },
+              );
+              realEstateValuationApplied = applyResponse.ok;
+              if (!applyResponse.ok) {
+                console.error('Failed to apply real estate simulator valuation:', applyResponse);
+              }
+            }
+          } catch (profileError) {
+            console.error('Error saving real estate profile:', profileError);
+            showNotification('Account created, but real estate details were not saved.', 'warning');
+          }
+        }
 
         // Create initial holding if initial value is provided
-        if (newAccountId && initialValue.currentValue) {
+        if (newAccountId && initialValue.currentValue && !realEstateValuationApplied) {
           try {
             const holdingResponse = await apiClient.post('/api/investments/holdings', {
               account_id: newAccountId,
@@ -1431,6 +1513,7 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
           notes: '',
           institution_id: null,
         });
+        setRealEstateProfile(createEmptyRealEstateProfile());
         setInitialValue({
           currentValue: '',
           costBasis: '',
@@ -2118,6 +2201,23 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                         <TrendingUpIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
+                    {account.account_type === 'real_estate' && (
+                      <Tooltip title="Real estate simulator">
+                        <IconButton
+                          onClick={() => setSelectedRealEstateAccount(account)}
+                          color="primary"
+                          size="small"
+                          sx={{
+                            transition: 'all 0.2s ease-in-out',
+                            '&:hover': {
+                              transform: 'scale(1.1)',
+                            },
+                          }}
+                        >
+                          <BusinessIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                     {account.account_type === 'brokerage' && (
                       <Tooltip title={t('tooltips.manageAssets')}>
                         <IconButton
@@ -2817,6 +2917,17 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                               />
                             </Grid>
 
+                            {newInvestmentAccount.account_type === 'real_estate' && (
+                              <Grid size={{ xs: 12 }}>
+                                <RealEstateSimulatorFields
+                                  value={realEstateProfile}
+                                  currency={newInvestmentAccount.currency}
+                                  onChange={setRealEstateProfile}
+                                  onApplyEstimate={handleApplyRealEstateEstimate}
+                                />
+                              </Grid>
+                            )}
+
                             {/* IBKR Flex Query Credentials (shown for Interactive Brokers) */}
                             {addWizardSelectedInstitution?.vendor_code === 'interactive_brokers' && (
                               <Grid size={{ xs: 12 }}>
@@ -3333,6 +3444,16 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                           placeholder={t('placeholders.notes')}
                         />
                       </Grid>
+                      {newInvestmentAccount.account_type === 'real_estate' && (
+                        <Grid size={{ xs: 12 }}>
+                          <RealEstateSimulatorFields
+                            value={realEstateProfile}
+                            currency={newInvestmentAccount.currency}
+                            onChange={setRealEstateProfile}
+                            onApplyEstimate={handleApplyRealEstateEstimate}
+                          />
+                        </Grid>
+                      )}
                       <Grid size={{ xs: 12 }}>
                         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
                           {t('sections.initialValue')} ({t('helpers.optional')})
@@ -4140,6 +4261,13 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         onClose={() => setShowSmartForm(false)}
         suggestion={selectedSuggestion}
         onSuccess={handleSmartFormSuccess}
+      />
+
+      <RealEstateSimulatorDialog
+        open={Boolean(selectedRealEstateAccount)}
+        account={selectedRealEstateDialogAccount}
+        onClose={() => setSelectedRealEstateAccount(null)}
+        onSaved={fetchInvestmentAccounts}
       />
 
       {/* License Read-Only Alert */}

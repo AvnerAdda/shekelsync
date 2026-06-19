@@ -26,6 +26,7 @@ import {
   Dashboard as DashboardIcon,
   AccountBalanceWallet as WalletIcon,
   History as HistoryIcon,
+  HomeWork as RealEstateIcon,
 } from '@mui/icons-material';
 import { apiClient } from '@/lib/api-client';
 import { useTranslation } from 'react-i18next';
@@ -43,6 +44,7 @@ import {
 import {
   HistoryTimeRangeOption,
   InvestmentsFiltersProvider,
+  PortfolioChartScopeOption,
   useInvestmentsFilters,
 } from '../InvestmentsFiltersContext';
 import PortfolioValuePanel from '../components/PortfolioValuePanel';
@@ -55,8 +57,14 @@ import PerformanceBreakdownPanel from '../components/PerformanceBreakdownPanel';
 import PortfolioCoveragePanel from '../components/PortfolioCoveragePanel';
 import HoldingsPositionsSection from '../components/HoldingsPositionsSection';
 import PikadonAccountDetailsDialog from '../components/PikadonAccountDetailsDialog';
+import RealEstateSimulatorDialog from '../components/RealEstateSimulatorDialog';
+import RealEstateOverviewSection from '../components/RealEstateOverviewSection';
 import { useInvestmentBalanceSheet } from '../hooks/useBalanceSheet';
 import { type AccountsModalOpenRequest } from '@renderer/shared/modals/AccountsModal';
+import {
+  getPortfolioAccountsForScope,
+  getPortfolioScopeTotal,
+} from '../utils/portfolio-categories';
 
 const TIME_RANGES: { value: HistoryTimeRangeOption; label: string }[] = [
   { value: '1w', label: '1W' },
@@ -69,9 +77,20 @@ const TIME_RANGES: { value: HistoryTimeRangeOption; label: string }[] = [
   { value: 'all', label: 'ALL' },
 ];
 
-function getPortfolioAccountIds(portfolio: PortfolioSummary | null | undefined): number[] {
+const CHART_SCOPE_OPTIONS: { value: PortfolioChartScopeOption; labelKey: string; fallback: string }[] = [
+  { value: 'exclude_real_estate', labelKey: 'chartScope.excludeRealEstate', fallback: 'Exclude real estate' },
+  { value: 'all', labelKey: 'chartScope.all', fallback: 'All' },
+  { value: 'liquid', labelKey: 'chartScope.liquid', fallback: 'Liquid' },
+  { value: 'restricted', labelKey: 'chartScope.restricted', fallback: 'Restricted' },
+  { value: 'illiquid', labelKey: 'chartScope.illiquid', fallback: 'Illiquid' },
+];
+
+function getPortfolioAccountIds(
+  portfolio: PortfolioSummary | null | undefined,
+  scope: PortfolioChartScopeOption,
+): number[] {
   return Array.from(new Set(
-    portfolio?.accounts
+    getPortfolioAccountsForScope(portfolio, scope)
       ?.map((account) => account.id)
       .filter((id): id is number => typeof id === 'number') || [],
   ));
@@ -137,6 +156,8 @@ const InvestmentsPageContent: React.FC = () => {
   const {
     historyTimeRange,
     setHistoryTimeRange,
+    chartScope,
+    setChartScope,
     refreshTrigger,
     isRefreshing,
     setIsRefreshing,
@@ -158,7 +179,9 @@ const InvestmentsPageContent: React.FC = () => {
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [investmentActivity, setInvestmentActivity] = useState<InvestmentData | null>(null);
   const [activityLoading, setActivityLoading] = useState(false);
+  const [realEstateRefreshKey, setRealEstateRefreshKey] = useState(0);
   const [selectedPikadonAccount, setSelectedPikadonAccount] = useState<InvestmentAccountSummary | null>(null);
+  const [selectedRealEstateAccount, setSelectedRealEstateAccount] = useState<InvestmentAccountSummary | null>(null);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -206,12 +229,17 @@ const InvestmentsPageContent: React.FC = () => {
 
     setHistoryLoading(true);
     try {
-      const uniqueAccountIds = getPortfolioAccountIds(sourcePortfolio);
-      const params = new URLSearchParams({ timeRange: historyTimeRange });
-      if (uniqueAccountIds.length > 0) {
-        params.append('includeAccounts', '1');
-        uniqueAccountIds.forEach((id) => params.append('accountIds', id.toString()));
+      const uniqueAccountIds = getPortfolioAccountIds(sourcePortfolio, chartScope);
+      if (uniqueAccountIds.length === 0) {
+        setOverallHistory([]);
+        setAccountHistories({});
+        return;
       }
+
+      const params = new URLSearchParams({ timeRange: historyTimeRange });
+      params.append('includeAccounts', '1');
+      params.append('assetScope', chartScope);
+      uniqueAccountIds.forEach((id) => params.append('accountIds', id.toString()));
 
       const response = await apiClient.get<PortfolioHistoryResponse>(
         `/api/investments/history?${params.toString()}`,
@@ -241,15 +269,25 @@ const InvestmentsPageContent: React.FC = () => {
     } finally {
       setHistoryLoading(false);
     }
-  }, [historyTimeRange, portfolioData, shouldBlockPageData]);
+  }, [chartScope, historyTimeRange, portfolioData, shouldBlockPageData]);
 
-  const fetchPerformanceData = useCallback(async () => {
+  const fetchPerformanceData = useCallback(async (portfolioOverride?: PortfolioSummary | null) => {
     if (shouldBlockPageData) return;
     setPerformanceLoading(true);
     try {
-      const response = await apiClient.get<InvestmentPerformanceResponse>('/api/investments/performance', {
-        params: { range: historyTimeRange },
+      const sourcePortfolio = portfolioOverride ?? portfolioData;
+      const params = new URLSearchParams({
+        range: historyTimeRange,
+        assetScope: chartScope,
       });
+      if (sourcePortfolio) {
+        const uniqueAccountIds = getPortfolioAccountIds(sourcePortfolio, chartScope);
+        uniqueAccountIds.forEach((id) => params.append('accountIds', id.toString()));
+      }
+
+      const response = await apiClient.get<InvestmentPerformanceResponse>(
+        `/api/investments/performance?${params.toString()}`,
+      );
       if (!response.ok) {
         throw new Error(response.statusText || 'Failed to fetch investment performance');
       }
@@ -260,7 +298,7 @@ const InvestmentsPageContent: React.FC = () => {
     } finally {
       setPerformanceLoading(false);
     }
-  }, [historyTimeRange, shouldBlockPageData]);
+  }, [chartScope, historyTimeRange, portfolioData, shouldBlockPageData]);
 
   const fetchInvestmentActivity = useCallback(async () => {
     if (shouldBlockPageData) return;
@@ -331,11 +369,12 @@ const InvestmentsPageContent: React.FC = () => {
       const nextPortfolio = await fetchPortfolioData();
       await Promise.all([
         fetchHistoryData(nextPortfolio),
-        fetchPerformanceData(),
+        fetchPerformanceData(nextPortfolio),
         fetchInvestmentActivity(),
         fetchPositions(),
         refreshBalanceSheet(),
       ]);
+      setRealEstateRefreshKey((current) => current + 1);
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {
@@ -360,11 +399,19 @@ const InvestmentsPageContent: React.FC = () => {
   }, [handleRefreshAll]);
 
   const handleAccountClick = useCallback((account: InvestmentAccountSummary) => {
-    if (account.account_type !== 'savings') {
-      return;
+    if (account.account_type === 'savings') {
+      setSelectedPikadonAccount(account);
+    } else if (account.account_type === 'real_estate') {
+      setSelectedRealEstateAccount(account);
     }
-    setSelectedPikadonAccount(account);
   }, []);
+
+  const handleRealEstatePropertyEdit = useCallback((accountId: number) => {
+    const account = portfolioData?.accounts?.find((item) => item.id === accountId);
+    if (account?.account_type === 'real_estate') {
+      setSelectedRealEstateAccount(account);
+    }
+  }, [portfolioData]);
 
   if (showLoading) {
     return <LoadingState fullHeight message={t('loading.setup')} />;
@@ -383,8 +430,9 @@ const InvestmentsPageContent: React.FC = () => {
   const investmentTabs = [
     { id: 0, icon: <DashboardIcon sx={{ fontSize: 20 }} />, label: t('tabs.overview', 'Overview') },
     { id: 1, icon: <WalletIcon sx={{ fontSize: 20 }} />, label: t('tabs.holdings', 'Holdings & Balance') },
-    { id: 2, icon: <ValuationIcon sx={{ fontSize: 20 }} />, label: t('tabs.performance', 'Performance Analytics') },
-    { id: 3, icon: <HistoryIcon sx={{ fontSize: 20 }} />, label: t('tabs.history', 'History & Details') },
+    { id: 2, icon: <RealEstateIcon sx={{ fontSize: 20 }} />, label: t('tabs.realEstate', 'Real Estate') },
+    { id: 3, icon: <ValuationIcon sx={{ fontSize: 20 }} />, label: t('tabs.performance', 'Performance Analytics') },
+    { id: 4, icon: <HistoryIcon sx={{ fontSize: 20 }} />, label: t('tabs.history', 'History & Details') },
   ];
 
   const actions = [
@@ -548,7 +596,7 @@ const InvestmentsPageContent: React.FC = () => {
             <Box sx={{ flex: 1 }} />
 
             {/* Time range selector */}
-            {(activeTab === 0 || activeTab === 3) && (
+            {(activeTab === 0 || activeTab === 3 || activeTab === 4) && (
               <Select
                 value={historyTimeRange}
                 onChange={(e) => setHistoryTimeRange(e.target.value as HistoryTimeRangeOption)}
@@ -575,6 +623,38 @@ const InvestmentsPageContent: React.FC = () => {
                 {TIME_RANGES.map((range) => (
                   <MenuItem key={range.value} value={range.value} sx={{ fontSize: '0.8125rem', fontWeight: 500 }}>
                     {range.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            )}
+
+            {(activeTab === 0 || activeTab === 3 || activeTab === 4) && (
+              <Select
+                value={chartScope}
+                onChange={(e) => setChartScope(e.target.value as PortfolioChartScopeOption)}
+                size="small"
+                variant="outlined"
+                sx={{
+                  minWidth: 146,
+                  height: 36,
+                  borderRadius: '10px',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: alpha(theme.palette.divider, 0.12),
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: alpha(theme.palette.divider, 0.3),
+                  },
+                  '& .MuiSelect-select': {
+                    py: 0.75,
+                    pr: '28px !important',
+                  },
+                }}
+              >
+                {CHART_SCOPE_OPTIONS.map((scope) => (
+                  <MenuItem key={scope.value} value={scope.value} sx={{ fontSize: '0.8125rem', fontWeight: 500 }}>
+                    {t(scope.labelKey, scope.fallback)}
                   </MenuItem>
                 ))}
               </Select>
@@ -657,6 +737,7 @@ const InvestmentsPageContent: React.FC = () => {
                     <PortfolioValuePanel
                       portfolioData={portfolio}
                       overallHistory={overallHistory}
+                      displayValue={getPortfolioScopeTotal(portfolio, chartScope)}
                       viewMode={chartViewMode}
                       onViewModeChange={setChartViewMode}
                       loading={portfolioLoading || historyLoading}
@@ -666,7 +747,10 @@ const InvestmentsPageContent: React.FC = () => {
 
                 <Grid size={{ xs: 12, lg: 4 }}>
                   <Box sx={{ height: { xs: 350, lg: 380 } }}>
-                    <AllocationDonutChart portfolioData={portfolio as PortfolioSummary} />
+                    <AllocationDonutChart
+                      portfolioData={portfolio as PortfolioSummary}
+                      scope={chartScope}
+                    />
                   </Box>
                 </Grid>
               </Grid>
@@ -677,6 +761,7 @@ const InvestmentsPageContent: React.FC = () => {
                 categoryFilter={categoryFilter}
                 onCategoryFilterChange={setCategoryFilter}
                 onAccountClick={handleAccountClick}
+                scope={chartScope}
               />
             </Box>
           )}
@@ -698,8 +783,16 @@ const InvestmentsPageContent: React.FC = () => {
             </Box>
           )}
 
-          {/* Performance Analytics Tab */}
+          {/* Real Estate Tab */}
           {activeTab === 2 && (
+            <RealEstateOverviewSection
+              refreshSignal={realEstateRefreshKey + refreshTrigger}
+              onEditProperty={handleRealEstatePropertyEdit}
+            />
+          )}
+
+          {/* Performance Analytics Tab */}
+          {activeTab === 3 && (
             <Grid role="tabpanel" container spacing={3}>
               <Grid size={{ xs: 12, lg: 8 }}>
                 <Box sx={{ minHeight: 420 }}>
@@ -723,7 +816,7 @@ const InvestmentsPageContent: React.FC = () => {
           )}
 
           {/* History Tab */}
-          {activeTab === 3 && (
+          {activeTab === 4 && (
             <Grid role="tabpanel" container spacing={3} sx={{ minHeight: 480 }}>
               <Grid size={{ xs: 12, lg: 8 }}>
                 <Box sx={{ height: { xs: 520, lg: 500 } }}>
@@ -734,6 +827,7 @@ const InvestmentsPageContent: React.FC = () => {
                     transactions={transactions}
                     loadingHistory={historyLoading}
                     loadingTransactions={activityLoading}
+                    scope={chartScope}
                   />
                 </Box>
               </Grid>
@@ -742,6 +836,7 @@ const InvestmentsPageContent: React.FC = () => {
                   <PortfolioBreakdownSection
                     portfolioData={portfolio as PortfolioSummary}
                     onAccountClick={handleAccountClick}
+                    scope={chartScope}
                   />
                 </Box>
               </Grid>
@@ -752,6 +847,12 @@ const InvestmentsPageContent: React.FC = () => {
             open={Boolean(selectedPikadonAccount)}
             account={selectedPikadonAccount}
             onClose={() => setSelectedPikadonAccount(null)}
+          />
+          <RealEstateSimulatorDialog
+            open={Boolean(selectedRealEstateAccount)}
+            account={selectedRealEstateAccount}
+            onClose={() => setSelectedRealEstateAccount(null)}
+            onSaved={handleRefreshAll}
           />
         </Box>
       ) : (

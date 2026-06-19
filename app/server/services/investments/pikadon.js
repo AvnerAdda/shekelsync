@@ -2,9 +2,44 @@ const actualDatabase = require('../database.js');
 const {
   PIKADON_KEYWORDS,
   buildPikadonCandidate,
+  toIsoDateInTimeZone,
 } = require('./pikadon-candidates.js');
 
 let database = actualDatabase;
+
+const PIKADON_RETURN_KEYWORDS = [
+  'פירעון',
+  'פרעון',
+  'פדיון',
+  'משיכה',
+  'משיכת',
+  'החזר',
+  'maturity',
+  'redemption',
+  'withdrawal',
+  'capital return',
+  'principal return',
+];
+
+const PIKADON_INTEREST_KEYWORDS = [
+  'רווח',
+  'רווחים',
+  'ריבית',
+  'interest',
+  'profit',
+];
+
+const PIKADON_TAX_KEYWORDS = [
+  'מס',
+  'ניכוי',
+  'tax',
+  'withholding',
+];
+
+const RETURN_MATCH_MIN_RATIO = 0.95;
+const RETURN_MATCH_MAX_RATIO = 1.2;
+const RETURN_MATCH_TOLERANCE_RATIO = 0.02;
+const RETURN_MATCH_MIN_TOLERANCE = 1;
 
 function serviceError(status, message) {
   const error = new Error(message);
@@ -27,6 +62,266 @@ function parsePikadonRow(row) {
     interest_rate: row.interest_rate !== null ? Number.parseFloat(row.interest_rate) : null,
     interest_earned: currentValue !== null && costBasis !== null ? currentValue - costBasis : 0,
   };
+}
+
+function lower(value) {
+  return String(value || '').toLowerCase();
+}
+
+function includesAny(text, keywords) {
+  const normalized = lower(text);
+  return keywords.some((keyword) => normalized.includes(lower(keyword)));
+}
+
+function buildTransactionHaystack(transaction) {
+  return [
+    transaction?.name,
+    transaction?.memo,
+    transaction?.category_name,
+    transaction?.category_name_en,
+  ].filter(Boolean).join(' ');
+}
+
+function transactionHasPikadonKeyword(transaction) {
+  return includesAny(buildTransactionHaystack(transaction), PIKADON_KEYWORDS);
+}
+
+function transactionLooksLikePikadonReturn(transaction) {
+  const amount = Number.parseFloat(transaction?.price);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return false;
+  }
+
+  const haystack = buildTransactionHaystack(transaction);
+  if (!transactionHasPikadonKeyword(transaction)) {
+    return false;
+  }
+
+  if (includesAny(haystack, PIKADON_INTEREST_KEYWORDS)) {
+    return false;
+  }
+
+  return includesAny(haystack, PIKADON_RETURN_KEYWORDS);
+}
+
+function transactionLooksLikePikadonInterest(transaction) {
+  const amount = Number.parseFloat(transaction?.price);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return false;
+  }
+
+  return transactionHasPikadonKeyword(transaction)
+    && includesAny(buildTransactionHaystack(transaction), PIKADON_INTEREST_KEYWORDS);
+}
+
+function transactionLooksLikePikadonTax(transaction) {
+  const amount = Number.parseFloat(transaction?.price);
+  if (!Number.isFinite(amount) || amount >= 0) {
+    return false;
+  }
+
+  return (
+    transactionHasPikadonKeyword(transaction)
+    || lower(transaction?.category_name_en).includes('investment tax')
+    || lower(transaction?.category_name).includes('מס על השקעות')
+  ) && includesAny(buildTransactionHaystack(transaction), PIKADON_TAX_KEYWORDS);
+}
+
+function toFiniteNumber(value) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getEffectiveDate(value) {
+  if (!value) {
+    return null;
+  }
+  return toIsoDateInTimeZone(value);
+}
+
+function getTimestamp(value) {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+}
+
+function amountsMatch(total, target) {
+  const totalNumber = toFiniteNumber(total);
+  const targetNumber = toFiniteNumber(target);
+  if (totalNumber === null || targetNumber === null || targetNumber <= 0) {
+    return false;
+  }
+
+  const diff = Math.abs(totalNumber - targetNumber);
+  const tolerance = Math.max(RETURN_MATCH_MIN_TOLERANCE, targetNumber * RETURN_MATCH_TOLERANCE_RATIO);
+  return diff <= tolerance;
+}
+
+function singleHoldingReturnRatioMatches(returnAmount, principal) {
+  const amount = toFiniteNumber(returnAmount);
+  const basis = toFiniteNumber(principal);
+  if (amount === null || basis === null || basis <= 0) {
+    return false;
+  }
+
+  const ratio = amount / basis;
+  return ratio >= RETURN_MATCH_MIN_RATIO && ratio <= RETURN_MATCH_MAX_RATIO;
+}
+
+function isReturnAfterDeposit(holding, transaction) {
+  const returnTime = getTimestamp(transaction?.transaction_datetime || transaction?.date);
+  const depositTime = getTimestamp(
+    holding?.deposit_transaction_datetime
+      || holding?.deposit_transaction_date
+      || holding?.as_of_date,
+  );
+
+  if (returnTime === null || depositTime === null) {
+    return true;
+  }
+
+  return returnTime >= depositTime;
+}
+
+function hasCompatibleAccountNumber(holding, transaction) {
+  const holdingAccount = String(holding?.deposit_account_number || '').trim();
+  const transactionAccount = String(transaction?.account_number || '').trim();
+
+  return !holdingAccount || !transactionAccount || holdingAccount === transactionAccount;
+}
+
+function buildReturnMatchCandidate(holding, transaction) {
+  if (!transactionLooksLikePikadonReturn(transaction)) {
+    return null;
+  }
+
+  const principal = toFiniteNumber(holding?.cost_basis);
+  const returnAmount = toFiniteNumber(transaction?.price);
+  if (principal === null || principal <= 0 || returnAmount === null || returnAmount <= 0) {
+    return null;
+  }
+
+  if (!singleHoldingReturnRatioMatches(returnAmount, principal)) {
+    return null;
+  }
+
+  if (!isReturnAfterDeposit(holding, transaction) || !hasCompatibleAccountNumber(holding, transaction)) {
+    return null;
+  }
+
+  const amountDiff = Math.abs(returnAmount - principal);
+  const maturityTime = getTimestamp(holding?.maturity_date);
+  const returnTime = getTimestamp(transaction?.transaction_datetime || transaction?.date);
+  const maturityDiff = maturityTime !== null && returnTime !== null
+    ? Math.abs(returnTime - maturityTime)
+    : Number.MAX_SAFE_INTEGER;
+
+  return {
+    holdings: [holding],
+    returnTransaction: transaction,
+    principal,
+    returnAmount,
+    score: amountDiff + (maturityDiff / (1000 * 60 * 60 * 24 * 365)),
+  };
+}
+
+function findAggregateReturnMatch(holdings, transaction) {
+  if (!transactionLooksLikePikadonReturn(transaction)) {
+    return null;
+  }
+
+  const returnAmount = toFiniteNumber(transaction?.price);
+  if (returnAmount === null || returnAmount <= 0) {
+    return null;
+  }
+
+  const eligible = holdings
+    .filter((holding) =>
+      isReturnAfterDeposit(holding, transaction)
+      && hasCompatibleAccountNumber(holding, transaction)
+      && toFiniteNumber(holding?.cost_basis) !== null
+      && toFiniteNumber(holding?.cost_basis) > 0,
+    )
+    .sort((left, right) => {
+      const leftTime = getTimestamp(left.deposit_transaction_datetime || left.deposit_transaction_date || left.as_of_date) || 0;
+      const rightTime = getTimestamp(right.deposit_transaction_datetime || right.deposit_transaction_date || right.as_of_date) || 0;
+      return leftTime - rightTime || Number(left.id || 0) - Number(right.id || 0);
+    });
+
+  const selected = [];
+  let totalPrincipal = 0;
+
+  for (const holding of eligible) {
+    selected.push(holding);
+    totalPrincipal += toFiniteNumber(holding.cost_basis) || 0;
+
+    if (amountsMatch(totalPrincipal, returnAmount)) {
+      return {
+        holdings: selected,
+        returnTransaction: transaction,
+        principal: totalPrincipal,
+        returnAmount,
+        score: Math.abs(totalPrincipal - returnAmount),
+      };
+    }
+
+    if (totalPrincipal > returnAmount * (1 + RETURN_MATCH_TOLERANCE_RATIO)) {
+      break;
+    }
+  }
+
+  return null;
+}
+
+function pickPikadonReturnMatches(holdings, returnTransactions) {
+  const unusedHoldings = new Map((holdings || []).map((holding) => [String(holding.id), holding]));
+  const unusedReturns = new Map((returnTransactions || []).map((transaction) => [
+    `${transaction.identifier}|${transaction.vendor}`,
+    transaction,
+  ]));
+  const matches = [];
+
+  const singleMatches = [];
+  for (const holding of unusedHoldings.values()) {
+    for (const transaction of unusedReturns.values()) {
+      const candidate = buildReturnMatchCandidate(holding, transaction);
+      if (candidate) {
+        singleMatches.push(candidate);
+      }
+    }
+  }
+
+  singleMatches
+    .sort((left, right) => left.score - right.score)
+    .forEach((candidate) => {
+      const holdingId = String(candidate.holdings[0].id);
+      const transactionKey = `${candidate.returnTransaction.identifier}|${candidate.returnTransaction.vendor}`;
+      if (!unusedHoldings.has(holdingId) || !unusedReturns.has(transactionKey)) {
+        return;
+      }
+
+      matches.push(candidate);
+      unusedHoldings.delete(holdingId);
+      unusedReturns.delete(transactionKey);
+    });
+
+  const returnsByDate = Array.from(unusedReturns.values()).sort((left, right) => {
+    const leftTime = getTimestamp(left.transaction_datetime || left.date) || 0;
+    const rightTime = getTimestamp(right.transaction_datetime || right.date) || 0;
+    return leftTime - rightTime;
+  });
+
+  for (const transaction of returnsByDate) {
+    const candidate = findAggregateReturnMatch(Array.from(unusedHoldings.values()), transaction);
+    if (!candidate) {
+      continue;
+    }
+
+    matches.push(candidate);
+    candidate.holdings.forEach((holding) => unusedHoldings.delete(String(holding.id)));
+    unusedReturns.delete(`${transaction.identifier}|${transaction.vendor}`);
+  }
+
+  return matches;
 }
 
 async function ensureLinkedPikadonHoldings(params = {}, dbAdapter = database) {
@@ -169,6 +464,367 @@ async function findLinkedPikadonByDepositTransaction(
   );
 
   return parsePikadonRow(result.rows[0] || null);
+}
+
+async function getCapitalReturnCategoryId(dbAdapter = database) {
+  const result = await dbAdapter.query(
+    `
+      SELECT id
+      FROM category_definitions
+      WHERE category_type = 'income'
+        AND (
+          name = 'החזר קרן'
+          OR LOWER(COALESCE(name_en, '')) = 'capital returns'
+        )
+      ORDER BY
+        CASE WHEN name = 'החזר קרן' THEN 0 ELSE 1 END,
+        id
+      LIMIT 1
+    `,
+  );
+
+  return result.rows[0]?.id || null;
+}
+
+async function updateTransactionToCapitalReturn(transaction, dbAdapter = database) {
+  if (!transaction?.identifier || !transaction?.vendor) {
+    return false;
+  }
+
+  const categoryId = await getCapitalReturnCategoryId(dbAdapter);
+  if (!categoryId) {
+    return false;
+  }
+
+  await dbAdapter.query(
+    `
+      UPDATE transactions
+      SET category_definition_id = $1,
+          category_type = 'income',
+          auto_categorized = true,
+          confidence_score = CASE
+            WHEN confidence_score IS NULL OR confidence_score < $2 THEN $2
+            ELSE confidence_score
+          END
+      WHERE identifier = $3
+        AND vendor = $4
+    `,
+    [categoryId, 0.95, transaction.identifier, transaction.vendor],
+  );
+
+  return true;
+}
+
+async function fetchActivePikadonHoldingsForReturnMatching(params = {}, dbAdapter = database) {
+  const {
+    accountId,
+    vendor,
+    accountNumber,
+  } = params;
+
+  const queryParams = [];
+  const filters = [
+    "ih.holding_type = 'pikadon'",
+    "COALESCE(ih.status, 'active') = 'active'",
+    'ih.return_transaction_id IS NULL',
+  ];
+
+  if (accountId) {
+    queryParams.push(accountId);
+    filters.push(`ih.account_id = $${queryParams.length}`);
+  }
+
+  if (vendor) {
+    queryParams.push(vendor);
+    filters.push(`ih.deposit_transaction_vendor = $${queryParams.length}`);
+  }
+
+  if (accountNumber) {
+    queryParams.push(accountNumber);
+    filters.push(`(dep.account_number = $${queryParams.length} OR dep.account_number IS NULL)`);
+  }
+
+  const result = await dbAdapter.query(
+    `
+      SELECT
+        ih.*,
+        dep.date AS deposit_transaction_date,
+        dep.transaction_datetime AS deposit_transaction_datetime,
+        dep.account_number AS deposit_account_number
+      FROM investment_holdings ih
+      LEFT JOIN transactions dep
+        ON dep.identifier = ih.deposit_transaction_id
+       AND dep.vendor = ih.deposit_transaction_vendor
+      WHERE ${filters.join('\n        AND ')}
+      ORDER BY ih.as_of_date ASC, ih.id ASC
+    `,
+    queryParams,
+  );
+
+  return Array.isArray(result?.rows) ? result.rows : [];
+}
+
+async function fetchCandidatePikadonReturnTransactions(params = {}, dbAdapter = database) {
+  const {
+    vendor,
+    accountNumber,
+    startDate,
+    endDate,
+  } = params;
+
+  const queryParams = [];
+  const filters = [
+    't.price > 0',
+    'linked_return.id IS NULL',
+  ];
+
+  if (vendor) {
+    queryParams.push(vendor);
+    filters.push(`t.vendor = $${queryParams.length}`);
+  }
+
+  if (accountNumber) {
+    queryParams.push(accountNumber);
+    filters.push(`(t.account_number = $${queryParams.length} OR t.account_number IS NULL)`);
+  }
+
+  if (startDate) {
+    queryParams.push(startDate);
+    filters.push(`t.date >= $${queryParams.length}`);
+  }
+
+  if (endDate) {
+    queryParams.push(endDate);
+    filters.push(`t.date <= $${queryParams.length}`);
+  }
+
+  const result = await dbAdapter.query(
+    `
+      SELECT
+        t.identifier,
+        t.vendor,
+        t.date,
+        t.transaction_datetime,
+        t.name,
+        t.memo,
+        t.price,
+        t.account_number,
+        cd.name AS category_name,
+        cd.name_en AS category_name_en,
+        cd.category_type AS category_type
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
+      LEFT JOIN investment_holdings linked_return
+        ON linked_return.return_transaction_id = t.identifier
+       AND linked_return.return_transaction_vendor = t.vendor
+       AND linked_return.holding_type = 'pikadon'
+      WHERE ${filters.join('\n        AND ')}
+      ORDER BY t.date ASC, t.identifier ASC
+    `,
+    queryParams,
+  );
+
+  return (Array.isArray(result?.rows) ? result.rows : [])
+    .filter(transactionLooksLikePikadonReturn);
+}
+
+function buildDayRange(dateValue) {
+  let dateKey = null;
+  if (typeof dateValue === 'string' && dateValue.trim()) {
+    dateKey = dateValue.trim().slice(0, 10);
+  } else if (dateValue) {
+    const parsed = new Date(dateValue);
+    dateKey = Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+  }
+  if (!dateKey) {
+    return null;
+  }
+
+  const start = new Date(`${dateKey}T00:00:00.000Z`);
+  if (Number.isNaN(start.getTime())) {
+    return null;
+  }
+
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+
+  return {
+    dateKey,
+    start: start.toISOString(),
+    end: end.toISOString(),
+  };
+}
+
+async function fetchPikadonReturnAdjustments(returnTransaction, dbAdapter = database) {
+  const range = buildDayRange(returnTransaction?.transaction_datetime || returnTransaction?.date);
+  if (!range || !returnTransaction?.vendor) {
+    return {
+      grossInterest: 0,
+      taxPaid: 0,
+      interestTransactions: [],
+      taxTransactions: [],
+    };
+  }
+
+  const params = [
+    returnTransaction.vendor,
+    range.start,
+    range.end,
+    returnTransaction.identifier,
+    returnTransaction.vendor,
+  ];
+  let accountFilter = '';
+
+  if (returnTransaction.account_number) {
+    params.push(returnTransaction.account_number);
+    accountFilter = `AND (t.account_number = $${params.length} OR t.account_number IS NULL)`;
+  }
+
+  const result = await dbAdapter.query(
+    `
+      SELECT
+        t.identifier,
+        t.vendor,
+        t.date,
+        t.transaction_datetime,
+        t.name,
+        t.memo,
+        t.price,
+        t.account_number,
+        cd.name AS category_name,
+        cd.name_en AS category_name_en
+      FROM transactions t
+      LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
+      WHERE t.vendor = $1
+        AND t.date >= $2
+        AND t.date < $3
+        AND NOT (t.identifier = $4 AND t.vendor = $5)
+        ${accountFilter}
+    `,
+    params,
+  );
+
+  const interestTransactions = [];
+  const taxTransactions = [];
+
+  (result.rows || []).forEach((row) => {
+    if (transactionLooksLikePikadonInterest(row)) {
+      interestTransactions.push(row);
+    } else if (transactionLooksLikePikadonTax(row)) {
+      taxTransactions.push(row);
+    }
+  });
+
+  return {
+    grossInterest: interestTransactions.reduce((sum, row) => sum + (toFiniteNumber(row.price) || 0), 0),
+    taxPaid: taxTransactions.reduce((sum, row) => sum + Math.abs(toFiniteNumber(row.price) || 0), 0),
+    interestTransactions,
+    taxTransactions,
+  };
+}
+
+async function closePikadonMatch(match, dbAdapter = database) {
+  const { holdings, returnTransaction, principal, returnAmount } = match;
+  const adjustments = await fetchPikadonReturnAdjustments(returnTransaction, dbAdapter);
+  const totalReturnedValue = adjustments.grossInterest > 0
+    ? returnAmount + adjustments.grossInterest
+    : returnAmount;
+  const totalInterest = adjustments.grossInterest > 0
+    ? adjustments.grossInterest
+    : Math.max(returnAmount - principal, 0);
+  const closed = [];
+
+  await updateTransactionToCapitalReturn(returnTransaction, dbAdapter);
+
+  for (const holding of holdings) {
+    const holdingPrincipal = toFiniteNumber(holding.cost_basis) || 0;
+    const weight = principal > 0 ? holdingPrincipal / principal : 1 / holdings.length;
+    const allocatedReturn = totalReturnedValue * weight;
+    const allocatedInterest = totalInterest * weight;
+    const currentValue = allocatedReturn;
+    const interestRate = holdingPrincipal > 0 ? (allocatedInterest / holdingPrincipal) * 100 : null;
+    const maturityDate = getEffectiveDate(returnTransaction.transaction_datetime || returnTransaction.date);
+
+    const updateResult = await dbAdapter.query(
+      `
+        UPDATE investment_holdings
+        SET
+          return_transaction_id = $1,
+          return_transaction_vendor = $2,
+          current_value = $3,
+          maturity_date = $4,
+          interest_rate = $5,
+          status = 'matured',
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $6
+          AND holding_type = 'pikadon'
+        RETURNING *
+      `,
+      [
+        returnTransaction.identifier,
+        returnTransaction.vendor,
+        currentValue,
+        maturityDate,
+        interestRate,
+        holding.id,
+      ],
+    );
+
+    const row = updateResult.rows?.[0] || {
+      ...holding,
+      return_transaction_id: returnTransaction.identifier,
+      return_transaction_vendor: returnTransaction.vendor,
+      current_value: currentValue,
+      maturity_date: maturityDate,
+      interest_rate: interestRate,
+      status: 'matured',
+    };
+
+    closed.push(parsePikadonRow(row));
+  }
+
+  return {
+    return_transaction_id: returnTransaction.identifier,
+    return_transaction_vendor: returnTransaction.vendor,
+    return_amount: returnAmount,
+    principal_returned: principal,
+    interest_earned: totalInterest,
+    tax_paid: adjustments.taxPaid,
+    closed,
+  };
+}
+
+async function autoClosePikadonReturns(params = {}, dbAdapter = database) {
+  const holdings = await fetchActivePikadonHoldingsForReturnMatching(params, dbAdapter);
+  if (holdings.length === 0) {
+    return {
+      closed_count: 0,
+      matched_returns: 0,
+      matches: [],
+    };
+  }
+
+  const returns = await fetchCandidatePikadonReturnTransactions(params, dbAdapter);
+  if (returns.length === 0) {
+    return {
+      closed_count: 0,
+      matched_returns: 0,
+      matches: [],
+    };
+  }
+
+  const matches = pickPikadonReturnMatches(holdings, returns);
+  const closedMatches = [];
+
+  for (const match of matches) {
+    closedMatches.push(await closePikadonMatch(match, dbAdapter));
+  }
+
+  return {
+    closed_count: closedMatches.reduce((sum, match) => sum + match.closed.length, 0),
+    matched_returns: closedMatches.length,
+    matches: closedMatches,
+  };
 }
 
 async function listPendingPikadonSetup(params = {}) {
@@ -1267,11 +1923,11 @@ async function autoDetectPikadonEvents(params = {}) {
     const name = txn.name.toLowerCase();
 
     // Categorize transaction
-    if (name.includes('פירעון') || name.includes('פרעון')) {
+    if (transactionLooksLikePikadonReturn(txn)) {
       event.principal_returns.push({ ...txn, amount: price });
-    } else if (name.includes('רווח')) {
+    } else if (transactionLooksLikePikadonInterest(txn)) {
       event.interest_earned.push({ ...txn, amount: price });
-    } else if (name.includes('מס') || name.includes('ניכוי')) {
+    } else if (transactionLooksLikePikadonTax(txn)) {
       event.tax_paid.push({ ...txn, amount: price });
     } else if (name.includes('הפקדה')) {
       event.new_deposits.push({ ...txn, amount: Math.abs(price) });
@@ -1691,6 +2347,8 @@ module.exports = {
   getPikadonMaturityBreakdown,
   autoDetectPikadonEvents,
   autoSetupPikadon,
+  autoClosePikadonReturns,
+  transactionLooksLikePikadonReturn,
   PIKADON_KEYWORDS,
   buildPikadonCandidate,
   findLinkedPikadonByDepositTransaction,

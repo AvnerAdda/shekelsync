@@ -34,7 +34,7 @@ describe('investment performance service', () => {
       accounts: [],
     });
 
-    const result = await getInvestmentPerformance({ range: '1m' });
+    const result = await getInvestmentPerformance({ range: '1m', assetScope: 'all' });
 
     expect(result).toMatchObject({
       range: '1m',
@@ -43,6 +43,39 @@ describe('investment performance service', () => {
       timeline: [],
     });
     expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('defaults performance history to non-real-estate accounts', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{ id: 1 }, { id: 3 }],
+    });
+    getInvestmentHistoryMock.mockResolvedValue({
+      startDate: '2026-03-01',
+      history: [],
+      accounts: [],
+    });
+
+    await getInvestmentPerformance({ range: '1m' });
+
+    expect(String(queryMock.mock.calls[0][0])).toContain("ia.account_type <> 'real_estate'");
+    expect(getInvestmentHistoryMock).toHaveBeenCalledWith({
+      timeRange: '1m',
+      includeAccounts: true,
+      accountIds: [1, 3],
+    });
+  });
+
+  it('returns empty performance when a scoped request has no matching accounts', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] });
+
+    const result = await getInvestmentPerformance({ range: '1m', assetScope: 'liquid' });
+
+    expect(result).toMatchObject({
+      range: '1m',
+      valueChange: 0,
+      timeline: [],
+    });
+    expect(getInvestmentHistoryMock).not.toHaveBeenCalled();
   });
 
   it('separates contributions, capital returns, income, and market move', async () => {
@@ -94,13 +127,19 @@ describe('investment performance service', () => {
           {
             return_transaction_id: 'ret-1',
             return_transaction_vendor: 'bank',
-            cost_basis: '50',
-            interest_amount: '10',
+            cost_basis: '30',
+            interest_amount: '6',
+          },
+          {
+            return_transaction_id: 'ret-1',
+            return_transaction_vendor: 'bank',
+            cost_basis: '20',
+            interest_amount: '4',
           },
         ],
       });
 
-    const result = await getInvestmentPerformance({ range: '1m' });
+    const result = await getInvestmentPerformance({ range: '1m', assetScope: 'all' });
 
     expect(getInvestmentHistoryMock).toHaveBeenCalledWith({
       timeRange: '1m',
@@ -142,7 +181,7 @@ describe('investment performance service', () => {
       accounts: [],
     });
 
-    const result = await getInvestmentPerformance({ range: '1m' });
+    const result = await getInvestmentPerformance({ range: '1m', assetScope: 'all' });
 
     expect(queryMock).not.toHaveBeenCalled();
     expect(result.netFlows).toEqual({

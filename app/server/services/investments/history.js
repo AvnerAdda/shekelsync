@@ -413,7 +413,7 @@ function buildAccountHistoryPoints(rows, institutionByVendorCode) {
       return String(left.snapshot_date || '').localeCompare(String(right.snapshot_date || ''));
     })
     .forEach((row) => {
-      const snapshotDate = row.snapshot_date;
+      const snapshotDate = toDateStr(row.snapshot_date);
       if (!snapshotDate) {
         return;
       }
@@ -434,11 +434,12 @@ function buildAccountHistoryPoints(rows, institutionByVendorCode) {
           costBasis,
         });
 
-        if (holdingStatus !== 'active' && row.return_date) {
-          if (!eventsByDate.has(row.return_date)) {
-            eventsByDate.set(row.return_date, []);
+        const returnDate = toIsoDateInTimeZone(row.return_date, DEFAULT_INVESTMENT_TIME_ZONE);
+        if (holdingStatus !== 'active' && returnDate) {
+          if (!eventsByDate.has(returnDate)) {
+            eventsByDate.set(returnDate, []);
           }
-          eventsByDate.get(row.return_date).push({
+          eventsByDate.get(returnDate).push({
             kind: 'delta',
             currentValue: -currentValue,
             costBasis: -costBasis,

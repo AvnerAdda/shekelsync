@@ -129,7 +129,8 @@ async function fetchPendingCreditCardDebt() {
 
 /**
  * Unified balance sheet snapshot (tracked assets + limited liabilities).
- * Note: loan/mortgage liabilities are not modeled yet; this only includes pending CC debt (when available).
+ * Note: standalone loan liabilities are not modeled yet. Real estate simulator
+ * valuations are stored as net equity when a mortgage balance is known.
  */
 async function getInvestmentBalanceSheet(query = {}) {
   const includeAccounts = coerceBoolean(query.includeAccounts);

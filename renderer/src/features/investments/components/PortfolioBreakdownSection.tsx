@@ -23,18 +23,21 @@ import {
   resolvePortfolioInstitutionName,
 } from './portfolio-breakdown-helpers';
 import {
-  getOrderedPortfolioAccounts,
-  getPortfolioCategoryBuckets,
+  getPortfolioAccountsForScope,
+  getPortfolioCategoryBucketsForScope,
+  PortfolioScopeKey,
 } from '../utils/portfolio-categories';
 
 interface PortfolioBreakdownSectionProps {
   portfolioData: PortfolioSummary;
   onAccountClick?: (account: InvestmentAccountSummary) => void;
+  scope?: PortfolioScopeKey;
 }
 
 const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
   portfolioData,
   onAccountClick,
+  scope = 'all',
 }) => {
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
@@ -48,8 +51,8 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
     return null;
   }
 
-  const orderedAccounts = getOrderedPortfolioAccounts(portfolioData);
-  const groups = getPortfolioCategoryBuckets(portfolioData)
+  const orderedAccounts = getPortfolioAccountsForScope(portfolioData, scope);
+  const groups = getPortfolioCategoryBucketsForScope(portfolioData, scope)
     .filter(({ bucket }) => (bucket.accounts?.length || 0) > 0);
 
   const renderAccountList = (accounts: InvestmentAccountSummary[], title: string) => {
@@ -63,7 +66,8 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
         {accounts.map((account) => {
           const roi = calculatePortfolioRoi(account.current_value, account.cost_basis);
           const isPositive = roi >= 0;
-          const isClickable = Boolean(onAccountClick) && account.account_type === 'savings';
+          const isClickable = Boolean(onAccountClick)
+            && ['savings', 'real_estate'].includes(account.account_type);
 
           return (
             <ListItem

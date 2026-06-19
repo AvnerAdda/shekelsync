@@ -1897,6 +1897,14 @@
     "loading": {
       "setup": "Loading setup status..."
     },
+    "tabs": {
+      "overview": "Overview",
+      "holdings": "Holdings & Balance",
+      "realEstate": "Real Estate",
+      "performance": "Performance Analytics",
+      "history": "History & Details",
+      "ariaLabel": "Investment sections"
+    },
     "warnings": {
       "multiCurrency": "Multiple currencies are present. Totals and charts still reflect raw account values, not FX-normalized values."
     },
@@ -1933,6 +1941,136 @@
       "noAccounts": "No investment accounts found",
       "overviewTitle": "Account Overview",
       "overviewSubtitle": "Compare category performance and recent account movement."
+    },
+    "chartScope": {
+      "excludeRealEstate": "Exclude real estate",
+      "all": "All",
+      "liquid": "Liquid",
+      "restricted": "Restricted",
+      "illiquid": "Illiquid"
+    },
+    "realEstate": {
+      "title": "Real estate simulator",
+      "unsavedSuffix": " - unsaved changes",
+      "fields": {
+        "city": "City",
+        "neighborhood": "Neighborhood",
+        "propertyType": "Property type",
+        "rooms": "Rooms",
+        "squareMeters": "Sqm",
+        "floor": "Floor",
+        "totalFloors": "Floors",
+        "purchasePrice": "Purchase price",
+        "purchaseDate": "Purchase date",
+        "ownership": "Ownership share",
+        "manualValue": "Manual value",
+        "mortgageBalance": "Mortgage balance (total)",
+        "monthlyMortgagePayment": "Monthly mortgage payment",
+        "mortgageInterestRate": "Mortgage rate",
+        "mortgageTermYears": "Mortgage term",
+        "valuationMethod": "Valuation method",
+        "rent": "Rent",
+        "yearlyExpenses": "Yearly expenses",
+        "pricePerSqm": "Price / sqm",
+        "growth": "Growth"
+      },
+      "helpers": {
+        "ownership": "Legal ownership share, not down payment. Use 100% if you own the property."
+      },
+      "units": {
+        "years": "yrs"
+      },
+      "features": {
+        "elevator": "Elevator",
+        "parking": "Parking",
+        "balcony": "Balcony",
+        "storage": "Storage"
+      },
+      "propertyTypes": {
+        "apartment": "Apartment",
+        "house": "House",
+        "land": "Land",
+        "commercial": "Commercial",
+        "other": "Other"
+      },
+      "valuationMethods": {
+        "blended": "Blended",
+        "manual": "Manual value",
+        "purchaseGrowth": "Purchase growth",
+        "purchasePrice": "Purchase price",
+        "rentYield": "Rental yield",
+        "pricePerSqm": "Price per sqm"
+      },
+      "confidence": {
+        "manual": "Manual",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "scenarios": {
+        "conservative": "Conservative {{value}}",
+        "base": "Base {{value}}",
+        "optimistic": "Optimistic {{value}}"
+      },
+      "netEquity": "Net equity: {{value}}",
+      "actions": {
+        "useEquity": "Use equity",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saveApply": "Save & Apply Valuation"
+      },
+      "notifications": {
+        "saved": "Real estate simulator saved",
+        "applied": "Real estate valuation applied"
+      },
+      "errors": {
+        "missingAccount": "Missing real estate account",
+        "emptyProfile": "Enter at least one property or valuation field",
+        "loadFailed": "Failed to load real estate profile",
+        "saveFailed": "Failed to save real estate profile",
+        "applyFailed": "Failed to apply valuation"
+      }
+    },
+    "realEstateTab": {
+      "marketDataNotice": "Valuation is currently based on your saved simulator assumptions. Comparable sale data by address/type is not connected yet.",
+      "propertiesTitle": "Properties",
+      "propertiesSubtitle": "Review value, debt, equity and monthly payment assumptions.",
+      "kpis": {
+        "marketValue": "Property market value",
+        "netEquity": "Net equity",
+        "mortgage": "Mortgage balance",
+        "monthlyPayment": "Monthly payment",
+        "loanToValue": "Loan to value"
+      },
+      "hints": {
+        "marketValue": "Current simulator value before debt",
+        "netEquity": "Owned value minus mortgage share",
+        "mortgage": "Total mortgage balance entered",
+        "monthlyPayment": "Total monthly mortgage payment",
+        "loanToValue": "Mortgage divided by property value"
+      },
+      "property": {
+        "unknownLocation": "Location not set",
+        "noConfidence": "draft",
+        "marketValue": "Market value",
+        "netEquity": "Net equity",
+        "mortgage": "Mortgage",
+        "payment": "Payment",
+        "ownership": "Ownership",
+        "loanToValue": "LTV",
+        "cashFlow": "Monthly cash flow",
+        "updated": "Valuation date"
+      },
+      "actions": {
+        "edit": "Edit"
+      },
+      "empty": {
+        "title": "No real estate assets yet",
+        "description": "Add a real estate investment account and save simulator details to track equity and mortgage exposure."
+      },
+      "errors": {
+        "loadFailed": "Failed to load real estate overview"
+      }
     },
     "empty": {
       "title": "Get Started with Your Investment Portfolio",

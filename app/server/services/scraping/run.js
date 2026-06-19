@@ -1,5 +1,6 @@
 const { CompanyTypes, createScraper } = require('israeli-bank-scrapers-core');
 const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const baseDatabase = require('../database.js');
 const Mutex = require('../../../lib/mutex.js');
@@ -18,6 +19,7 @@ const {
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const { getInstitutionById, mapInstitutionToVendorCode } = require('../institutions.js');
 const { syncBankBalanceToInvestments, forwardFillForCredential } = require('../investments/balance-sync.js');
+const { autoClosePikadonReturns } = require('../investments/pikadon.js');
 const { getCreditCardRepaymentCategoryId } = require('../accounts/repayment-category.js');
 const lastTransactionDateService = require('../accounts/last-transaction-date.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
@@ -103,6 +105,194 @@ function buildBrowserLaunchArgs() {
   }
 
   return args;
+}
+
+function sanitizeDebugFilenamePart(value, fallback = 'unknown') {
+  const text = String(value || '').trim();
+  if (!text) return fallback;
+  return text.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || fallback;
+}
+
+function redactDiagnosticUrl(value) {
+  if (!value) return '';
+  return String(value)
+    .replace(/([?&](?:password|pass|token|otp|id|tz|aidnum|num)=)[^&]*/gi, '$1[redacted]')
+    .replace(/\d{5,}/g, '[digits]');
+}
+
+function isDiagnosticUrlRelevant(url, status = 0) {
+  const text = String(url || '');
+  return (
+    status >= 400 ||
+    /start\.telebank\.co\.il/i.test(text) ||
+    /Titan\/gatewayAPI/i.test(text) ||
+    /userAccountsData|lastTransactions/i.test(text)
+  );
+}
+
+function resolveScrapeDiagnosticsConfig(options = {}) {
+  const enabled =
+    isTruthyEnvFlag(process.env.SCRAPE_DIAGNOSTICS) ||
+    hasNonEmptyString(process.env.SCRAPE_DEBUG_DIR);
+  if (!enabled) return null;
+
+  const vendor = String(options.companyId || '');
+  const vendorFilter = process.env.SCRAPE_DEBUG_VENDOR;
+  if (hasNonEmptyString(vendorFilter)) {
+    const allowedVendors = vendorFilter
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (!allowedVendors.includes('*') && !allowedVendors.includes(vendor)) {
+      return null;
+    }
+  }
+
+  return {
+    dir: hasNonEmptyString(process.env.SCRAPE_DEBUG_DIR)
+      ? path.resolve(process.env.SCRAPE_DEBUG_DIR)
+      : null,
+  };
+}
+
+function createScrapeDiagnostics(options = {}, credentials = {}, logger = console) {
+  const config = resolveScrapeDiagnosticsConfig(options);
+  if (!config) return null;
+
+  const vendor = sanitizeDebugFilenamePart(options.companyId, 'scrape');
+  const credentialLabel = sanitizeDebugFilenamePart(
+    credentials.dbId ? `credential-${credentials.dbId}` : credentials.nickname,
+    'credential',
+  );
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  let screenshotPath = null;
+
+  if (config.dir) {
+    try {
+      fs.mkdirSync(config.dir, { recursive: true });
+      screenshotPath = path.join(config.dir, `${timestamp}-${vendor}-${credentialLabel}.png`);
+    } catch (error) {
+      logger?.warn?.(
+        `[Scrape:${options.companyId}:debug] Failed to prepare debug directory ${config.dir}: ${error?.message || error}`,
+      );
+    }
+  }
+
+  const state = {
+    latestUrl: null,
+    latestTitle: null,
+    navigations: [],
+    failedRequests: [],
+    trackedResponses: [],
+    pageErrors: [],
+  };
+
+  const remember = (key, value, max = 25) => {
+    state[key].push(value);
+    if (state[key].length > max) {
+      state[key].shift();
+    }
+  };
+
+  const log = (message) => {
+    logger?.info?.(`[Scrape:${options.companyId}:debug] ${message}`);
+  };
+
+  return {
+    enabled: true,
+    screenshotPath,
+    attachPage(page) {
+      if (!page || typeof page.on !== 'function') return;
+
+      const updatePageState = async (reason, rawUrl) => {
+        const url = redactDiagnosticUrl(rawUrl || (typeof page.url === 'function' ? page.url() : ''));
+        if (url) {
+          state.latestUrl = url;
+        }
+        try {
+          if (typeof page.title === 'function') {
+            state.latestTitle = await page.title();
+          }
+        } catch (_) {
+          // Page may already be navigating or closed.
+        }
+        log(`${reason}: url=${state.latestUrl || '(unknown)'} title=${state.latestTitle || '(unknown)'}`);
+      };
+
+      page.on('framenavigated', (frame) => {
+        let isMainFrame = true;
+        try {
+          isMainFrame = typeof page.mainFrame !== 'function' || frame === page.mainFrame();
+        } catch (_) {
+          isMainFrame = true;
+        }
+        if (!isMainFrame) return;
+
+        const rawUrl = typeof frame?.url === 'function' ? frame.url() : '';
+        const url = redactDiagnosticUrl(rawUrl);
+        if (url) {
+          state.latestUrl = url;
+          remember('navigations', { at: new Date().toISOString(), url });
+          log(`navigation: ${url}`);
+        }
+
+        const timer = setTimeout(() => {
+          void updatePageState('page-state-after-navigation', rawUrl);
+        }, 750);
+        if (typeof timer.unref === 'function') {
+          timer.unref();
+        }
+      });
+
+      page.on('requestfailed', (request) => {
+        const url = redactDiagnosticUrl(typeof request?.url === 'function' ? request.url() : '');
+        const method = typeof request?.method === 'function' ? request.method() : 'GET';
+        const failure = typeof request?.failure === 'function' ? request.failure() : null;
+        const errorText = failure?.errorText || 'request failed';
+        const event = { at: new Date().toISOString(), method, url, errorText };
+        remember('failedRequests', event);
+        if (isDiagnosticUrlRelevant(url, 500)) {
+          log(`request failed: ${method} ${url} (${errorText})`);
+        }
+      });
+
+      page.on('response', (response) => {
+        const status = typeof response?.status === 'function' ? response.status() : 0;
+        const rawUrl = typeof response?.url === 'function' ? response.url() : '';
+        if (!isDiagnosticUrlRelevant(rawUrl, status)) return;
+
+        const request = typeof response?.request === 'function' ? response.request() : null;
+        const method = request && typeof request.method === 'function' ? request.method() : 'GET';
+        const url = redactDiagnosticUrl(rawUrl);
+        const event = { at: new Date().toISOString(), status, method, url };
+        remember('trackedResponses', event);
+        if (status >= 400 || /Titan\/gatewayAPI|userAccountsData|lastTransactions/i.test(rawUrl)) {
+          log(`response: ${status} ${method} ${url}`);
+        }
+      });
+
+      page.on('pageerror', (error) => {
+        const message = error?.message || String(error);
+        remember('pageErrors', { at: new Date().toISOString(), message });
+        log(`page error: ${message}`);
+      });
+
+      if (screenshotPath) {
+        log(`failure screenshot path: ${screenshotPath}`);
+      }
+    },
+    getSummary() {
+      return {
+        latestUrl: state.latestUrl,
+        latestTitle: state.latestTitle,
+        screenshotPath,
+        recentNavigations: state.navigations.slice(-5),
+        failedRequests: state.failedRequests.slice(-10),
+        trackedResponses: state.trackedResponses.slice(-10),
+        pageErrors: state.pageErrors.slice(-5),
+      };
+    },
+  };
 }
 
 function createHttpError(statusCode, message, extra = {}) {
@@ -429,7 +619,7 @@ async function resolveStartDate(input, credentials, options = {}) {
   }
 }
 
-function buildScraperOptions(options, isBank, executablePath, startDate) {
+function buildScraperOptions(options, isBank, executablePath, startDate, diagnostics = null) {
   // Show browser for banks and problematic credit card scrapers (MAX)
   const shouldShowBrowser = isBank || options.companyId === 'max';
   const showBrowser =
@@ -447,6 +637,9 @@ function buildScraperOptions(options, isBank, executablePath, startDate) {
     if (typeof page?.setDefaultNavigationTimeout === 'function') {
       page.setDefaultNavigationTimeout(timeout);
     }
+    if (diagnostics?.enabled) {
+      diagnostics.attachPage(page);
+    }
     if (userPreparePage) {
       await userPreparePage(page);
     }
@@ -463,6 +656,9 @@ function buildScraperOptions(options, isBank, executablePath, startDate) {
     preparePage,
     executablePath,
     args: buildBrowserLaunchArgs(),
+    ...(diagnostics?.screenshotPath
+      ? { storeFailureScreenShotPath: diagnostics.screenshotPath }
+      : {}),
   };
 }
 
@@ -1373,9 +1569,9 @@ async function applyCategorizationRules(client) {
              SELECT id FROM category_definitions
              WHERE name = $4 OR category_type = 'income'
            )
-           OR category_definition_id IN (
-             SELECT id FROM category_definitions
-             WHERE depth_level < 2
+           OR EXISTS (
+             SELECT 1 FROM category_definitions child
+             WHERE child.parent_id = transactions.category_definition_id
            )
          )`,
       [pattern, categoryId, confidence, BANK_CATEGORY_NAME],
@@ -1647,6 +1843,22 @@ async function processScrapeResult(client, { options, credentials, result, isBan
         `[Scrape:${options.companyId}] Reconciled ${reconciliation.duplicatePairsResolved} duplicate lifecycle pair(s) for account ${account.accountNumber || 'N/A'}`,
       );
     }
+
+    if (isBank) {
+      const pikadonCloseResult = await autoClosePikadonReturns(
+        {
+          vendor: options.companyId,
+          accountNumber: account.accountNumber,
+        },
+        client,
+      );
+
+      if (pikadonCloseResult.closed_count > 0) {
+        logger?.info?.(
+          `[Scrape:${options.companyId}] Auto-closed ${pikadonCloseResult.closed_count} pikadon holding(s) from ${pikadonCloseResult.matched_returns} return transaction(s) for account ${account.accountNumber || 'N/A'}`,
+        );
+      }
+    }
   }
 
   await updateVendorAccountNumbers(client, options, credentials, discoveredAccountNumbers, isBank);
@@ -1738,7 +1950,14 @@ async function _runScrapeInternal({
         { errorType: 'browserNotFound' }
       );
     }
-    const scraperOptions = buildScraperOptions(options, isBank, executablePath, resolvedStartDate);
+    const scrapeDiagnostics = createScrapeDiagnostics(options, credentials, logger);
+    const scraperOptions = buildScraperOptions(
+      options,
+      isBank,
+      executablePath,
+      resolvedStartDate,
+      scrapeDiagnostics,
+    );
     const scraperCredentials = prepareScraperCredentials(companyType, options, credentials);
 
     if (shouldSimulateDemoSync(options, credentials)) {
@@ -1889,6 +2108,11 @@ async function _runScrapeInternal({
         // Include any additional fields that might provide context
         ...(result?.error && { error: String(result.error) }),
       })}`);
+      if (scrapeDiagnostics?.enabled) {
+        logger?.info?.(
+          `[Scrape:${options.companyId}:debug] Failure diagnostics: ${JSON.stringify(scrapeDiagnostics.getSummary())}`,
+        );
+      }
 
       const baseMessage = `${result?.errorType || 'ScrapeError'}: ${result?.errorMessage || 'Unknown error'}`;
       failureMessage = buildScrapeFailureMessage({

@@ -7,6 +7,7 @@ const {
 let database = actualDatabase;
 let historyService = historyModule;
 
+const DEFAULT_ASSET_SCOPE = 'exclude_real_estate';
 const FEE_KEYWORDS = ['fee', 'fees', 'commission', 'עמלה', 'עמלות'];
 const INVESTMENT_INCOME_KEYWORDS = ['interest', 'dividend', 'ריבית', 'דיבידנד'];
 const CAPITAL_RETURN_KEYWORDS = ['capital return', 'capital returns', 'החזר קרן'];
@@ -45,6 +46,85 @@ function addFlow(map, date, updater) {
   }
 
   updater(map.get(date));
+}
+
+function buildEmptyPerformanceResponse(range, startDate = null) {
+  return {
+    range,
+    startDate,
+    endDate: null,
+    startValue: 0,
+    endValue: 0,
+    valueChange: 0,
+    netFlows: {
+      contributions: 0,
+      withdrawals: 0,
+      netContributions: 0,
+    },
+    capitalReturns: 0,
+    income: 0,
+    fees: 0,
+    marketMove: 0,
+    twr: 0,
+    mwr: null,
+    timeline: [],
+  };
+}
+
+function normalizeAccountIds(accountIds) {
+  if (!accountIds) return [];
+  const values = Array.isArray(accountIds) ? accountIds : [accountIds];
+  return Array.from(new Set(
+    values
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value)),
+  ));
+}
+
+function normalizeAssetScope(value) {
+  const normalized = String(value || DEFAULT_ASSET_SCOPE).trim().toLowerCase();
+  if (normalized === 'without_real_estate' || normalized === 'exclude-real-estate') {
+    return 'exclude_real_estate';
+  }
+  if (['all', 'liquid', 'restricted', 'illiquid', 'exclude_real_estate'].includes(normalized)) {
+    return normalized;
+  }
+  return DEFAULT_ASSET_SCOPE;
+}
+
+async function loadAccountIdsForScope(scope) {
+  if (scope === 'all') {
+    return [];
+  }
+
+  const conditions = ['ia.is_active = true'];
+  const params = [];
+
+  if (scope === 'exclude_real_estate') {
+    conditions.push("ia.account_type <> 'real_estate'");
+  } else if (scope === 'illiquid') {
+    conditions.push("(ia.account_type = 'real_estate' OR ia.investment_category = 'illiquid')");
+  } else {
+    params.push(scope);
+    conditions.push(`ia.investment_category = $${params.length}`);
+    if (scope !== 'illiquid') {
+      conditions.push("ia.account_type <> 'real_estate'");
+    }
+  }
+
+  const result = await database.query(
+    `
+      SELECT ia.id
+      FROM investment_accounts ia
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY ia.id ASC
+    `,
+    params,
+  );
+
+  return (result.rows || [])
+    .map((row) => Number(row.id))
+    .filter((id) => Number.isFinite(id));
 }
 
 function calculateTwr(timeline) {
@@ -144,13 +224,12 @@ async function loadPikadonReturnMap(accountIds = []) {
 
   const map = new Map();
   (result.rows || []).forEach((row) => {
-    map.set(
-      `${row.return_transaction_id}|${row.return_transaction_vendor}`,
-      {
-        principal: Math.max(toNumber(row.cost_basis), 0),
-        interest: Math.max(toNumber(row.interest_amount), 0),
-      },
-    );
+    const key = `${row.return_transaction_id}|${row.return_transaction_vendor}`;
+    const existing = map.get(key) || { principal: 0, interest: 0 };
+    map.set(key, {
+      principal: existing.principal + Math.max(toNumber(row.cost_basis), 0),
+      interest: existing.interest + Math.max(toNumber(row.interest_amount), 0),
+    });
   });
   return map;
 }
@@ -214,33 +293,30 @@ function classifyTransactions(rows, pikadonReturns) {
 
 async function getInvestmentPerformance(params = {}) {
   const range = params.range || params.timeRange || '3m';
-  const historyResult = await historyService.getInvestmentHistory({
+  const assetScope = normalizeAssetScope(params.assetScope || params.scope || params.chartScope);
+  const explicitAccountIds = normalizeAccountIds(params.accountIds || params.accountId);
+  const scopedAccountIds = explicitAccountIds.length > 0
+    ? explicitAccountIds
+    : await loadAccountIdsForScope(assetScope);
+  if (assetScope !== 'all' && explicitAccountIds.length === 0 && scopedAccountIds.length === 0) {
+    return buildEmptyPerformanceResponse(range);
+  }
+
+  const historyParams = {
     timeRange: range,
     includeAccounts: true,
+  };
+  if (scopedAccountIds.length > 0) {
+    historyParams.accountIds = scopedAccountIds;
+  }
+
+  const historyResult = await historyService.getInvestmentHistory({
+    ...historyParams,
   });
   const history = Array.isArray(historyResult?.history) ? historyResult.history : [];
 
   if (history.length === 0) {
-    return {
-      range,
-      startDate: historyResult?.startDate || null,
-      endDate: null,
-      startValue: 0,
-      endValue: 0,
-      valueChange: 0,
-      netFlows: {
-        contributions: 0,
-        withdrawals: 0,
-        netContributions: 0,
-      },
-      capitalReturns: 0,
-      income: 0,
-      fees: 0,
-      marketMove: 0,
-      twr: 0,
-      mwr: null,
-      timeline: [],
-    };
+    return buildEmptyPerformanceResponse(range, historyResult?.startDate || null);
   }
 
   const startDate = historyResult?.startDate || history[0]?.date;

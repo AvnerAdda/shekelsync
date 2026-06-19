@@ -93,6 +93,23 @@ const routeServices = {
     getRolloverChain: vi.fn(),
     findLinkedPikadonByDepositTransaction: vi.fn(),
   },
+  realEstateService: {
+    syncRealEstateHolding: vi.fn(),
+  },
+  realEstateSimulatorService: {
+    estimateRealEstateValue: vi.fn(),
+    getRealEstateOverview: vi.fn(),
+    getRealEstateProfile: vi.fn(),
+    upsertRealEstateProfile: vi.fn(),
+    applyRealEstateValuation: vi.fn(),
+  },
+  ibkrSyncService: {
+    getIBKRStatus: vi.fn(),
+    syncFromIBKR: vi.fn(),
+  },
+  credentialsService: {
+    listCredentials: vi.fn(),
+  },
 };
 
 const patternsService = routeServices.patternsService;
@@ -111,6 +128,10 @@ const bankSummaryService = routeServices.bankSummaryService;
 const suggestionAnalyzerCJS = routeServices.suggestionAnalyzerCJS;
 const database = routeServices.databaseService;
 const pikadonService = routeServices.pikadonService;
+const realEstateService = routeServices.realEstateService;
+const realEstateSimulatorService = routeServices.realEstateSimulatorService;
+const ibkrSyncService = routeServices.ibkrSyncService;
+const credentialsService = routeServices.credentialsService;
 
 function buildApp() {
   const app = express();
@@ -334,6 +355,64 @@ describe('Shared /api/investments routes', () => {
     expect(event.body.event.id).toBe(10);
   });
 
+  it('estimates, saves, fetches, and applies real estate simulator profiles', async () => {
+    vi.spyOn(realEstateSimulatorService, 'estimateRealEstateValue').mockReturnValue({
+      estimated_value: 700000,
+      confidence: 'manual',
+    });
+    vi.spyOn(realEstateSimulatorService, 'upsertRealEstateProfile').mockResolvedValue({
+      profile: { account_id: 9, city: 'Tel Aviv', estimated_value: 700000 },
+      estimate: { estimated_value: 700000 },
+    });
+    vi.spyOn(realEstateSimulatorService, 'getRealEstateProfile').mockResolvedValue({
+      profile: { account_id: 9, city: 'Tel Aviv' },
+    });
+    vi.spyOn(realEstateSimulatorService, 'getRealEstateOverview').mockResolvedValue({
+      summary: { propertyCount: 1, netEquity: 700000 },
+      properties: [{ accountId: 9, accountName: 'Tel Aviv apartment' }],
+    });
+    vi.spyOn(realEstateSimulatorService, 'applyRealEstateValuation').mockResolvedValue({
+      holding: { id: 44, account_id: 9, current_value: 700000 },
+    });
+
+    const estimate = await request(app)
+      .post('/api/investments/real-estate/estimate')
+      .send({ manual_estimated_value: 700000 })
+      .expect(200);
+    expect(estimate.body.estimate.estimated_value).toBe(700000);
+    expect(realEstateSimulatorService.estimateRealEstateValue).toHaveBeenCalledWith({
+      manual_estimated_value: 700000,
+    });
+
+    const saved = await request(app)
+      .put('/api/investments/real-estate/profiles/9')
+      .send({ city: 'Tel Aviv', manual_estimated_value: 700000 })
+      .expect(200);
+    expect(saved.body.profile.city).toBe('Tel Aviv');
+    expect(realEstateSimulatorService.upsertRealEstateProfile).toHaveBeenCalledWith('9', {
+      city: 'Tel Aviv',
+      manual_estimated_value: 700000,
+    });
+
+    const fetched = await request(app).get('/api/investments/real-estate/profiles/9').expect(200);
+    expect(fetched.body.profile.account_id).toBe(9);
+    expect(realEstateSimulatorService.getRealEstateProfile).toHaveBeenCalledWith('9');
+
+    const overview = await request(app).get('/api/investments/real-estate/overview').expect(200);
+    expect(overview.body.summary.netEquity).toBe(700000);
+    expect(realEstateSimulatorService.getRealEstateOverview).toHaveBeenCalled();
+
+    const applied = await request(app)
+      .post('/api/investments/real-estate/profiles/9/apply-valuation')
+      .send({ asOfDate: '2026-06-01' })
+      .expect(201);
+    expect(applied.body.holding.current_value).toBe(700000);
+    expect(realEstateSimulatorService.applyRealEstateValuation).toHaveBeenCalledWith({
+      accountId: '9',
+      asOfDate: '2026-06-01',
+    });
+  });
+
   it('checks existing investments and lists patterns', async () => {
     vi.spyOn(checkExistingService, 'getExistingInvestments').mockResolvedValue({ exists: true });
     vi.spyOn(patternsService, 'listPatterns').mockResolvedValue([{ id: 'p1' }]);
@@ -448,6 +527,7 @@ describe('Shared /api/investments routes', () => {
   });
 
   it('creates, lists, and deletes transaction links', async () => {
+    (realEstateService.syncRealEstateHolding as any).mockResolvedValueOnce({ synced: true });
     const querySpy = vi.spyOn(database, 'query')
       // list links
       .mockResolvedValueOnce({
@@ -474,6 +554,11 @@ describe('Shared /api/investments routes', () => {
 
     expect(created.body.success).toBe(true);
     expect(created.body.link.account_id).toBe(7);
+    expect(created.body.realEstateSynced).toBe(true);
+    expect(realEstateService.syncRealEstateHolding).toHaveBeenCalledWith({
+      dbAdapter: expect.objectContaining({ query: expect.any(Function) }),
+      accountId: 7,
+    });
 
     const listed = await request(app)
       .get('/api/investments/transaction-links?account_id=7')
@@ -1044,5 +1129,80 @@ describe('Shared /api/investments routes', () => {
     expect((await request(app).delete('/api/investments/pikadon/1').expect(500)).body.error).toBe('delete failed');
     expect((await request(app).post('/api/investments/pikadon/1/rollover').send({}).expect(500)).body.error).toBe('rollover failed');
     expect((await request(app).get('/api/investments/pikadon/1/chain').expect(500)).body.error).toBe('chain failed');
+  });
+
+  it('handles IBKR status and sync validation flows', async () => {
+    vi.spyOn(ibkrSyncService, 'getIBKRStatus')
+      .mockResolvedValueOnce({ isConfigured: true, lastSyncStatus: 'ok' })
+      .mockResolvedValueOnce({ isConfigured: false })
+      .mockResolvedValueOnce({ isConfigured: true })
+      .mockResolvedValueOnce({ isConfigured: true })
+      .mockResolvedValueOnce({ isConfigured: true });
+    vi.spyOn(credentialsService, 'listCredentials')
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 2, password: '', identification_code: 'query-1' }])
+      .mockResolvedValueOnce([{ id: 3, password: 'token-1', identification_code: 'query-1' }]);
+    const syncSpy = vi.spyOn(ibkrSyncService, 'syncFromIBKR').mockResolvedValue({
+      success: true,
+      imported: 4,
+    });
+
+    const status = await request(app).get('/api/investments/ibkr/status').expect(200);
+    expect(status.body).toEqual({
+      success: true,
+      isConfigured: true,
+      lastSyncStatus: 'ok',
+    });
+
+    const notConfigured = await request(app).post('/api/investments/ibkr/sync').expect(400);
+    expect(notConfigured.body.error).toMatch(/not configured/i);
+
+    const missingCredentials = await request(app).post('/api/investments/ibkr/sync').expect(400);
+    expect(missingCredentials.body.error).toMatch(/credentials not found/i);
+
+    const missingToken = await request(app).post('/api/investments/ibkr/sync').expect(400);
+    expect(missingToken.body.error).toMatch(/token or query ID missing/i);
+
+    const synced = await request(app).post('/api/investments/ibkr/sync').expect(200);
+    expect(synced.body).toEqual({ success: true, imported: 4 });
+    expect(syncSpy).toHaveBeenCalledWith({
+      token: 'token-1',
+      queryId: 'query-1',
+      credentialId: 3,
+      logger: console,
+    });
+  });
+
+  it('surfaces IBKR status errors', async () => {
+    vi.spyOn(ibkrSyncService, 'getIBKRStatus').mockRejectedValue({
+      status: 503,
+      message: 'IBKR status unavailable',
+    });
+
+    const response = await request(app).get('/api/investments/ibkr/status').expect(503);
+
+    expect(response.body.error).toBe('IBKR status unavailable');
+  });
+
+  it('marks IBKR credentials failed when sync throws', async () => {
+    vi.spyOn(ibkrSyncService, 'getIBKRStatus')
+      .mockResolvedValueOnce({ isConfigured: true })
+      .mockResolvedValueOnce({ credentialId: 7 });
+    vi.spyOn(credentialsService, 'listCredentials').mockResolvedValue([
+      { id: 7, password: 'token-7', identification_code: 'query-7' },
+    ]);
+    vi.spyOn(ibkrSyncService, 'syncFromIBKR').mockRejectedValue({
+      status: 502,
+      message: 'IBKR unavailable',
+    });
+    vi.spyOn(database, 'query').mockResolvedValue({ rows: [] });
+
+    const response = await request(app).post('/api/investments/ibkr/sync').expect(502);
+
+    expect(response.body.error).toBe('IBKR unavailable');
+    expect(database.query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE vendor_credentials'),
+      [7],
+    );
   });
 });
