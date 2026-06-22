@@ -9,13 +9,11 @@ import {
   alpha,
   useTheme,
 } from '@mui/material';
-import {
-  Autorenew as SubscriptionIcon,
-  CalendarMonth as MonthlyIcon,
-  DateRange as YearlyIcon,
-  TrendingUp as TrendUpIcon,
-  TrendingDown as TrendDownIcon,
-} from '@mui/icons-material';
+import SubscriptionIcon from '@mui/icons-material/Autorenew';
+import MonthlyIcon from '@mui/icons-material/CalendarMonth';
+import YearlyIcon from '@mui/icons-material/DateRange';
+import TrendUpIcon from '@mui/icons-material/TrendingUp';
+import TrendDownIcon from '@mui/icons-material/TrendingDown';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useTranslation } from 'react-i18next';
 import type { SubscriptionSummary } from '@renderer/types/subscriptions';

@@ -20,5 +20,5 @@ test('Sidebar navigation reaches Analysis and shows Budget health statuses', asy
   await expect(page.getByText('Groceries').first()).toBeVisible();
   await expect(page.getByText('Transport').first()).toBeVisible();
   await expect(page.getByText(/At risk/i)).toBeVisible();
-  await expect(page.getByText(/Over Budget/i)).toBeVisible();
+  await expect(page.getByText(/Exceeded/i)).toBeVisible();
 });

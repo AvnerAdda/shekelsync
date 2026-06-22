@@ -13,12 +13,10 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import {
-  CheckCircle as VerifiedIcon,
-  Close as CloseIcon,
-  HourglassTop as PendingIcon,
-  LocalCafe as CoffeeIcon,
-} from '@mui/icons-material';
+import VerifiedIcon from '@mui/icons-material/CheckCircle';
+import CloseIcon from '@mui/icons-material/Close';
+import PendingIcon from '@mui/icons-material/HourglassTop';
+import CoffeeIcon from '@mui/icons-material/LocalCafe';
 import { useTranslation } from 'react-i18next';
 import { useDonationStatus } from '../hooks/useDonationStatus';
 import type { DonationStatus } from '../types';

@@ -11,16 +11,14 @@ import { InvestmentAccountSummary, PortfolioHistoryPoint } from '@renderer/types
 import { useTranslation } from 'react-i18next';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
 import { resolvePortfolioInstitutionName } from './portfolio-breakdown-helpers';
-import {
-  AccountBalance as BankIcon,
-  TrendingUp as StockIcon,
-  Savings as SavingsIcon,
-  Home as RealEstateIcon,
-  CurrencyBitcoin as CryptoIcon,
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  TrendingFlat as TrendingFlatIcon,
-} from '@mui/icons-material';
+import BankIcon from '@mui/icons-material/AccountBalance';
+import StockIcon from '@mui/icons-material/TrendingUp';
+import SavingsIcon from '@mui/icons-material/Savings';
+import RealEstateIcon from '@mui/icons-material/Home';
+import CryptoIcon from '@mui/icons-material/CurrencyBitcoin';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import TrendingFlatIcon from '@mui/icons-material/TrendingFlat';
 
 interface InvestmentPerformanceCardProps {
   account: InvestmentAccountSummary;

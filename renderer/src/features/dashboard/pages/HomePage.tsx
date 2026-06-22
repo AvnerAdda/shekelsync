@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Box, Paper, Typography, CircularProgress, useTheme, Alert, Button } from '@mui/material';
-import { AccountBalance as AccountBalanceIcon, InfoOutlined as InfoIcon } from '@mui/icons-material';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import InfoIcon from '@mui/icons-material/InfoOutlined';
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
@@ -11,6 +12,7 @@ import { usePortfolioSummary } from '@renderer/features/dashboard/hooks/usePortf
 import { useWaterfallData } from '@renderer/features/dashboard/hooks/useWaterfallData';
 import { useBreakdownData } from '@renderer/features/dashboard/hooks/useBreakdownData';
 import { useAccountSignals } from '@renderer/features/dashboard/hooks/useAccountSignals';
+import { useDashboardInsights } from '@renderer/features/dashboard/hooks/useDashboardInsights';
 import { useTransactionsByDate } from '@renderer/features/dashboard/hooks/useTransactionsByDate';
 import { useCurrentMonthPairingGap } from '@renderer/shared/hooks/useCurrentMonthPairingGap';
 import { PortfolioBreakdownItem } from '@renderer/types/investments';
@@ -109,6 +111,13 @@ const DashboardHomeContent: React.FC = () => {
     restrictedPortfolio,
     refresh: refreshPortfolio,
   } = usePortfolioSummary();
+  const {
+    forecastData,
+    forecastLoading,
+    forecastError,
+    healthSnapshot,
+    refresh: refreshInsights,
+  } = useDashboardInsights();
   const waterfallEnabled = selectedBreakdownType === 'overall';
   const {
     data: waterfallData,
@@ -383,6 +392,7 @@ const DashboardHomeContent: React.FC = () => {
       }
       refreshPortfolio();
       refreshPairingGap();
+      refreshInsights();
 
       if (showFallbackData) {
         refreshFallbackBreakdowns(['expense', 'income']);
@@ -423,6 +433,7 @@ const DashboardHomeContent: React.FC = () => {
     refreshFallbackBreakdowns,
     refreshFallbackWaterfall,
     refreshPortfolio,
+    refreshInsights,
     refreshWaterfall,
     showFallbackData,
     waterfallEnabled,
@@ -671,7 +682,7 @@ const DashboardHomeContent: React.FC = () => {
   };
 
   return (
-    <Box>
+    <Box data-dashboard-ready="true">
       {!primaryHasHistory && hasTransactions && (
         <Alert
           severity="info"
@@ -722,6 +733,8 @@ const DashboardHomeContent: React.FC = () => {
         pairingGapLoading={pairingGapLoading}
         isCurrentMonthWindow={periodDays === 30}
         pairingGapExpensesBase={Number(data?.summary?.totalExpenses || 0)}
+        forecastData={forecastData}
+        healthSnapshot={healthSnapshot}
       />
 
       <Box id="transactions">
@@ -745,6 +758,10 @@ const DashboardHomeContent: React.FC = () => {
         loadingTransactions={loadingTransactions}
           parseLocalDate={parseLocalDate}
           formatCurrency={formatCurrency}
+          forecastData={forecastData}
+          forecastLoading={forecastLoading}
+          forecastError={forecastError}
+          refreshForecast={refreshInsights}
         />
       </Box>
 

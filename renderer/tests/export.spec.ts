@@ -10,6 +10,7 @@ test.describe('Data export flow', () => {
     await goHome(page);
     await page.getByRole('button', { name: 'Settings' }).click();
     await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible({ timeout: 30000 });
+    await page.getByRole('tab', { name: 'System' }).click();
     const exportPanel = page.getByTestId('data-export-panel');
     await expect(exportPanel).toBeVisible({ timeout: 30000 });
     await exportPanel.scrollIntoViewIfNeeded();

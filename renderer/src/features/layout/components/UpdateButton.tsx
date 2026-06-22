@@ -14,15 +14,13 @@ import {
   Divider,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import {
-  SystemUpdateAlt as UpdateIcon,
-  Download as DownloadIcon,
-  RestartAlt as RestartIcon,
-  CheckCircle as CheckIcon,
-  Error as ErrorIcon,
-  Refresh as RefreshIcon,
-  OpenInNew as OpenInNewIcon,
-} from '@mui/icons-material';
+import UpdateIcon from '@mui/icons-material/SystemUpdateAlt';
+import DownloadIcon from '@mui/icons-material/Download';
+import RestartIcon from '@mui/icons-material/RestartAlt';
+import CheckIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@mui/material/styles';
 

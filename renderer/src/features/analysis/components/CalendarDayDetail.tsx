@@ -12,10 +12,8 @@ import {
   useTheme,
   useMediaQuery,
 } from '@mui/material';
-import {
-  Edit as EditIcon,
-  Close as CloseIcon,
-} from '@mui/icons-material';
+import EditIcon from '@mui/icons-material/Edit';
+import CloseIcon from '@mui/icons-material/Close';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useTranslation } from 'react-i18next';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';

@@ -11,16 +11,14 @@ import {
   Paper,
   Alert
 } from '@mui/material';
-import {
-  CheckCircle as CheckCircleIcon,
-  RadioButtonUnchecked as RadioButtonUncheckedIcon,
-  Lock as LockIcon,
-  Person as PersonIcon,
-  AccountBalance as AccountBalanceIcon,
-  CreditCard as CreditCardIcon,
-  CloudDownload as CloudDownloadIcon,
-  Explore as ExploreIcon
-} from '@mui/icons-material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import LockIcon from '@mui/icons-material/Lock';
+import PersonIcon from '@mui/icons-material/Person';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
+import ExploreIcon from '@mui/icons-material/Explore';
 import { useTranslation } from 'react-i18next';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
 

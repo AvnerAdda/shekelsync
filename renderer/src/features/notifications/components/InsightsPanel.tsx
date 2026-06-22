@@ -12,15 +12,13 @@ import {
   Fade,
   Grow,
 } from '@mui/material';
-import {
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  TrendingFlat as TrendingFlatIcon,
-  CalendarToday as CalendarIcon,
-  MonetizationOn as MoneyIcon,
-  Category as CategoryIcon,
-  Insights as InsightsIcon,
-} from '@mui/icons-material';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import TrendingFlatIcon from '@mui/icons-material/TrendingFlat';
+import CalendarIcon from '@mui/icons-material/CalendarToday';
+import MoneyIcon from '@mui/icons-material/MonetizationOn';
+import CategoryIcon from '@mui/icons-material/Category';
+import InsightsIcon from '@mui/icons-material/Insights';
 
 interface InsightsPanelProps {
   insights: any;

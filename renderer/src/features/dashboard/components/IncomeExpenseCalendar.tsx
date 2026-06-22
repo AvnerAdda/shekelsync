@@ -11,11 +11,9 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import {
-  ChevronLeft as PrevIcon,
-  ChevronRight as NextIcon,
-  Today as TodayIcon,
-} from '@mui/icons-material';
+import PrevIcon from '@mui/icons-material/ChevronLeft';
+import NextIcon from '@mui/icons-material/ChevronRight';
+import TodayIcon from '@mui/icons-material/Today';
 import { addMonths, endOfMonth, format, isSameMonth, startOfMonth, subMonths } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';

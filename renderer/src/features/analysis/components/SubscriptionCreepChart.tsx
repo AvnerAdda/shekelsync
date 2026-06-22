@@ -10,11 +10,9 @@ import {
   alpha,
   useTheme,
 } from '@mui/material';
-import {
-  TrendingUp as UpIcon,
-  TrendingDown as DownIcon,
-  TrendingFlat as FlatIcon,
-} from '@mui/icons-material';
+import UpIcon from '@mui/icons-material/TrendingUp';
+import DownIcon from '@mui/icons-material/TrendingDown';
+import FlatIcon from '@mui/icons-material/TrendingFlat';
 import {
   AreaChart,
   Area,

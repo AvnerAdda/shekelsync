@@ -18,26 +18,24 @@ import {
   Tabs,
   Tab,
 } from '@mui/material';
-import {
-  Notifications as NotificationsIcon,
-  Warning as WarningIcon,
-  Error as CriticalIcon,
-  Info as InfoIcon,
-  TrendingUp as BudgetIcon,
-  ShoppingCart as SpendingIcon,
-  Store as VendorIcon,
-  MonetizationOn as HighTransactionIcon,
-  Timeline as CashFlowIcon,
-  CheckCircle as GoalIcon,
-  Close as CloseIcon,
-  Refresh as RefreshIcon,
-  Sync as SyncIcon,
-  Category as CategoryIcon,
-  CloudDone as SyncSuccessIcon,
-  Lightbulb as LightbulbIcon,
-  DoneAll as DoneAllIcon,
-  VisibilityOff as DismissIcon,
-} from '@mui/icons-material';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import WarningIcon from '@mui/icons-material/Warning';
+import CriticalIcon from '@mui/icons-material/Error';
+import InfoIcon from '@mui/icons-material/Info';
+import BudgetIcon from '@mui/icons-material/TrendingUp';
+import SpendingIcon from '@mui/icons-material/ShoppingCart';
+import VendorIcon from '@mui/icons-material/Store';
+import HighTransactionIcon from '@mui/icons-material/MonetizationOn';
+import CashFlowIcon from '@mui/icons-material/Timeline';
+import GoalIcon from '@mui/icons-material/CheckCircle';
+import CloseIcon from '@mui/icons-material/Close';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import SyncIcon from '@mui/icons-material/Sync';
+import CategoryIcon from '@mui/icons-material/Category';
+import SyncSuccessIcon from '@mui/icons-material/CloudDone';
+import LightbulbIcon from '@mui/icons-material/Lightbulb';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
+import DismissIcon from '@mui/icons-material/VisibilityOff';
 import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
 import { useNotification } from '../NotificationContext';
 import { apiClient } from '@/lib/api-client';

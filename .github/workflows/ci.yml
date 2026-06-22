@@ -97,9 +97,48 @@ jobs:
           path: app/coverage
           if-no-files-found: ignore
 
+  performance:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: 'npm'
+          cache-dependency-path: |
+            app/package-lock.json
+            renderer/package-lock.json
+
+      - name: Install app dependencies
+        run: npm --prefix app ci
+
+      - name: Install renderer dependencies
+        run: npm --prefix renderer ci
+
+      - name: Build renderer
+        run: npm --prefix renderer run build
+
+      - name: Enforce renderer bundle budgets
+        run: npm --prefix renderer run performance:budget
+
+      - name: Install Playwright Chromium
+        run: npm --prefix renderer exec -- playwright install --with-deps chromium
+
+      - name: Enforce dashboard startup and API request budgets
+        env:
+          PLAYWRIGHT_USE_PREVIEW: 'true'
+          DASHBOARD_STARTUP_BUDGET_MS: '5000'
+          DASHBOARD_FORECAST_REQUEST_BUDGET: '1'
+        run: npm --prefix renderer run test:performance
+
   package-smoke:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
-    needs: test
+    needs: [test, performance]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

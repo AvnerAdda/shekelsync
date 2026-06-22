@@ -5,6 +5,10 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SummaryCards from './SummaryCards';
 import { useTranslation } from 'react-i18next';
 import type { CurrentMonthPairingGapResponse } from '@renderer/types/accounts';
+import type {
+  DashboardForecastData,
+  DashboardHealthSnapshot,
+} from '@renderer/features/dashboard/hooks/useDashboardInsights';
 import {
   buildDashboardTopCategories,
   getDashboardCategoryCount,
@@ -26,6 +30,8 @@ interface DashboardSummarySectionProps {
   pairingGapLoading?: boolean;
   isCurrentMonthWindow?: boolean;
   pairingGapExpensesBase?: number | null;
+  forecastData?: DashboardForecastData | null;
+  healthSnapshot?: DashboardHealthSnapshot | null;
 }
 
 const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
@@ -43,6 +49,8 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
   pairingGapLoading = false,
   isCurrentMonthWindow = false,
   pairingGapExpensesBase = null,
+  forecastData = null,
+  healthSnapshot = null,
 }) => {
   const { t } = useTranslation('translation', { keyPrefix: 'dashboard.summarySection' });
   const theme = useTheme();
@@ -94,6 +102,8 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
             t('fallbackCategory'),
           )}
           categoryCount={getDashboardCategoryCount(breakdownData)}
+          forecastData={forecastData}
+          healthSnapshot={healthSnapshot}
         />
       </Box>
 

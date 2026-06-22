@@ -12,12 +12,10 @@ import {
   useTheme,
   Stack,
 } from '@mui/material';
-import {
-  CheckCircle as CheckCircleIcon,
-  Error as ErrorIcon,
-  HowToReg as HowToRegIcon,
-  Security as SecurityIcon,
-} from '@mui/icons-material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
+import HowToRegIcon from '@mui/icons-material/HowToReg';
+import SecurityIcon from '@mui/icons-material/Security';
 import { useTranslation } from 'react-i18next';
 
 interface RegistrationStepProps {

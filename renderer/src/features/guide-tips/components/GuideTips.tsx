@@ -16,24 +16,22 @@ import {
   Chip,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
-import {
-  Lightbulb as LightbulbIcon,
-  AccountBalance as BankIcon,
-  CreditCard as CreditCardIcon,
-  Link as PairIcon,
-  Category as CategoryIcon,
-  Label as TagIcon,
-  Rule as RuleIcon,
-  Search as SearchIcon,
-  TrendingUp as InvestIcon,
-  AccountBalanceWallet as BudgetIcon,
-  Note as NoteIcon,
-  SmartToy as ChatbotIcon,
-  EmojiEvents as QuestIcon,
-  Sync as SyncIcon,
-  CheckCircle as CheckIcon,
-  SkipNext as SkipIcon,
-} from '@mui/icons-material';
+import LightbulbIcon from '@mui/icons-material/Lightbulb';
+import BankIcon from '@mui/icons-material/AccountBalance';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
+import PairIcon from '@mui/icons-material/Link';
+import CategoryIcon from '@mui/icons-material/Category';
+import TagIcon from '@mui/icons-material/Label';
+import RuleIcon from '@mui/icons-material/Rule';
+import SearchIcon from '@mui/icons-material/Search';
+import InvestIcon from '@mui/icons-material/TrendingUp';
+import BudgetIcon from '@mui/icons-material/AccountBalanceWallet';
+import NoteIcon from '@mui/icons-material/Note';
+import ChatbotIcon from '@mui/icons-material/SmartToy';
+import QuestIcon from '@mui/icons-material/EmojiEvents';
+import SyncIcon from '@mui/icons-material/Sync';
+import CheckIcon from '@mui/icons-material/CheckCircle';
+import SkipIcon from '@mui/icons-material/SkipNext';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useGuideTips, type GuideTip } from '../hooks/useGuideTips';

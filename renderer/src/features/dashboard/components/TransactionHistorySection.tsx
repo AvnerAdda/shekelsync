@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Paper,
   Box,
@@ -32,8 +32,8 @@ import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
 import IncomeExpenseCalendar from './IncomeExpenseCalendar';
 import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
-import { apiClient } from '@/lib/api-client';
 import TransactionDetailModal, { TransactionForModal } from '@renderer/shared/modals/TransactionDetailModal';
+import type { DashboardForecastData } from '@renderer/features/dashboard/hooks/useDashboardInsights';
 
 interface TransactionHistorySectionProps {
   data: any;
@@ -55,6 +55,10 @@ interface TransactionHistorySectionProps {
   loadingTransactions: boolean;
   parseLocalDate: (value: string) => Date;
   formatCurrency: (value: number, options?: any) => string;
+  forecastData?: DashboardForecastData | null;
+  forecastLoading?: boolean;
+  forecastError?: string | null;
+  refreshForecast?: () => void;
 }
 
 const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
@@ -77,6 +81,10 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   loadingTransactions,
   parseLocalDate,
   formatCurrency,
+  forecastData = null,
+  forecastLoading = false,
+  forecastError = null,
+  refreshForecast = () => undefined,
 }) => {
   const theme = useTheme();
   const { aggregationPeriod, setAggregationPeriod, periodDays, setPeriodDays } = useDashboardFilters();
@@ -95,12 +103,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const [showAverageGuides, setShowAverageGuides] = useState(true);
   const [showForecastLines, setShowForecastLines] = useState(true);
   
-  // Forecast state
-  const [forecastData, setForecastData] = useState<any>(null);
-  const [forecastLoading, setForecastLoading] = useState(false);
-  const [forecastError, setForecastError] = useState<string | null>(null);
-  const forecastRequestInFlightRef = React.useRef(false);
-
   // Transaction Detail Modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionForModal | null>(null);
@@ -257,52 +259,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     });
     setDetailModalOpen(true);
   };
-
-  // Fetch forecast data - always 30 days ahead
-  const buildForecastErrorMessage = useCallback((response: { status: number; statusText: string; data?: unknown }) => {
-    const payload = (response.data ?? null) as { message?: string; retryAfter?: number } | null;
-    if (response.status === 429) {
-      const retryAfter = Number(payload?.retryAfter);
-      if (Number.isFinite(retryAfter) && retryAfter > 0) {
-        return `Rate limit exceeded. Try again in ${Math.ceil(retryAfter)} seconds.`;
-      }
-      return payload?.message || 'Rate limit exceeded. Try again shortly.';
-    }
-    if (payload?.message && payload.message.trim()) {
-      return payload.message;
-    }
-    if (response.statusText) {
-      return `Failed to fetch forecast: ${response.statusText}`;
-    }
-    return `Failed to fetch forecast: HTTP ${response.status}`;
-  }, []);
-
-  const fetchForecast = useCallback(async () => {
-    if (forecastRequestInFlightRef.current) {
-      return;
-    }
-    forecastRequestInFlightRef.current = true;
-    setForecastLoading(true);
-    setForecastError(null);
-    try {
-      const response = await apiClient.get<any>('/api/forecast/daily?days=30');
-      if (!response.ok) {
-        throw new Error(buildForecastErrorMessage(response));
-      }
-      setForecastData(response.data);
-    } catch (err) {
-      console.error('[TransactionHistory] Forecast fetch error:', err);
-      setForecastError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setForecastLoading(false);
-      forecastRequestInFlightRef.current = false;
-    }
-  }, [buildForecastErrorMessage]);
-
-  useEffect(() => {
-    // Avoid implicit retry loops: retries should be user-initiated from the alert action.
-    void fetchForecast();
-  }, [fetchForecast]);
 
   // Calculate cumulative net position data (historical only, filtered by periodDays)
   const getNetPositionData = useCallback(() => {
@@ -1327,7 +1283,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               severity="error" 
               sx={{ mb: 2 }}
               action={
-                <Button color="inherit" size="small" onClick={() => fetchForecast()}>
+                <Button color="inherit" size="small" onClick={refreshForecast}>
                   Retry
                 </Button>
               }

@@ -9,11 +9,9 @@ import {
   Box,
   Alert,
 } from '@mui/material';
-import {
-  Block as BlockIcon,
-  Star as StarIcon,
-  Wifi as WifiIcon,
-} from '@mui/icons-material';
+import BlockIcon from '@mui/icons-material/Block';
+import StarIcon from '@mui/icons-material/Star';
+import WifiIcon from '@mui/icons-material/Wifi';
 import { useTranslation } from 'react-i18next';
 
 interface LicenseReadOnlyAlertProps {

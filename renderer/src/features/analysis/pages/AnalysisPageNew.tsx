@@ -18,33 +18,30 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  Menu,
   MenuItem,
   Select,
   Skeleton,
+  Tab,
+  Tabs,
   TextField,
   Tooltip,
   alpha,
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  Close as CloseIcon,
-  Dashboard as DashboardIcon,
-  Lightbulb as ActionsIcon,
-  PieChart as SpendingIcon,
-  AccountBalance as BudgetIcon,
-  Speed as ScoringIcon,
-  CalendarToday as CalendarIcon,
-  Psychology as PsychologyIcon,
-  AttachMoney as MoneyIcon,
-  Timeline as TimelineIcon,
-  Refresh as RefreshIcon,
-  ZoomOutMap as ZoomOutMapIcon,
-  Autorenew as SubscriptionsIcon,
-  AssignmentInd as ProfilingTabIcon,
-  MoreHoriz as MoreTabsIcon,
-  ExpandMore as ExpandMoreIcon,
-} from '@mui/icons-material';
+import AddIcon from '@mui/icons-material/Add';
+import CloseIcon from '@mui/icons-material/Close';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import ActionsIcon from '@mui/icons-material/Lightbulb';
+import SpendingIcon from '@mui/icons-material/PieChart';
+import BudgetIcon from '@mui/icons-material/AccountBalance';
+import ScoringIcon from '@mui/icons-material/Speed';
+import CalendarIcon from '@mui/icons-material/CalendarToday';
+import PsychologyIcon from '@mui/icons-material/Psychology';
+import MoneyIcon from '@mui/icons-material/AttachMoney';
+import TimelineIcon from '@mui/icons-material/Timeline';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
+import SubscriptionsIcon from '@mui/icons-material/Autorenew';
+import ProfilingTabIcon from '@mui/icons-material/AssignmentInd';
 import {
   BarChart as RechartsBarChart,
   Bar,
@@ -76,9 +73,7 @@ import { apiClient } from '@renderer/lib/api-client';
 import {
   ANALYSIS_TAB_DEFINITIONS,
   ANALYSIS_TAB_INDEX,
-  getActiveOverflowTab,
   isAnalysisTabKey,
-  partitionAnalysisTabs,
 } from '../analysis-tabs';
 import { useTranslation } from 'react-i18next';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
@@ -434,7 +429,6 @@ const AnalysisPageNew: React.FC = () => {
   const isHebrew = i18n.language === 'he';
   const locale = (i18n.language || 'he').toLowerCase();
   const [currentTab, setCurrentTab] = useState(0);
-  const [overflowTabsAnchorEl, setOverflowTabsAnchorEl] = useState<null | HTMLElement>(null);
   const [showSecondaryDashboardCards, setShowSecondaryDashboardCards] = useState(false);
   const [loading, setLoading] = useState(false);
   const [intelligence, setIntelligence] = useState<PersonalIntelligence | null>(null);
@@ -696,29 +690,6 @@ const AnalysisPageNew: React.FC = () => {
     })),
     [t],
   );
-
-  const { primaryTabs, overflowTabs } = useMemo(
-    () => partitionAnalysisTabs(analysisTabs),
-    [analysisTabs],
-  );
-
-  const activeOverflowTab = useMemo(
-    () => getActiveOverflowTab(currentTab, overflowTabs),
-    [currentTab, overflowTabs],
-  );
-
-  const handleOpenOverflowTabs = (event: React.MouseEvent<HTMLElement>) => {
-    setOverflowTabsAnchorEl(event.currentTarget);
-  };
-
-  const handleCloseOverflowTabs = () => {
-    setOverflowTabsAnchorEl(null);
-  };
-
-  const handleOverflowTabSelect = (tabIndex: number) => {
-    setCurrentTab(tabIndex);
-    handleCloseOverflowTabs();
-  };
 
   const secondaryDashboardSectionId = 'analysis-dashboard-deeper-insights';
 
@@ -1598,7 +1569,7 @@ const AnalysisPageNew: React.FC = () => {
   }
 
   return (
-    <Box sx={{ width: '100%', p: 3 }}>
+    <Box sx={{ width: '100%', minWidth: 0, p: 3 }}>
       {/* Header */}
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
@@ -1658,152 +1629,108 @@ const AnalysisPageNew: React.FC = () => {
       <Box sx={{
         mb: 3,
         p: 0.75,
+        width: '100%',
+        minWidth: 0,
         borderRadius: '16px',
         bgcolor: (theme) => alpha(theme.palette.background.paper, 0.5),
         backdropFilter: 'blur(24px)',
         border: '1px solid',
         borderColor: (theme) => alpha(theme.palette.divider, 0.08),
         boxShadow: (theme) => `0 4px 24px 0 ${alpha(theme.palette.common.black, 0.04)}, 0 1px 2px 0 ${alpha(theme.palette.common.black, 0.03)}`,
-        display: 'flex',
-        gap: 0.75,
-        alignItems: 'stretch',
-        flexWrap: 'wrap',
       }}>
-        <Box
-          role="tablist"
+        <Tabs
+          value={currentTab}
+          onChange={handleTabChange}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           aria-label={t('tabs.ariaLabel')}
           sx={{
-            display: 'flex',
-            gap: 0.5,
-            flexWrap: 'wrap',
-            flex: 1,
+            width: '100%',
             minWidth: 0,
+            minHeight: 44,
+            '& .MuiTabs-flexContainer': {
+              gap: 0.5,
+            },
+            '& .MuiTabs-indicator': {
+              display: 'none',
+            },
+            '& .MuiTabs-scrollButtons': {
+              width: 32,
+              minHeight: 44,
+              flexShrink: 0,
+              borderRadius: '12px',
+              color: 'text.secondary',
+              '&:hover': {
+                bgcolor: alpha(theme.palette.primary.main, 0.08),
+                color: 'text.primary',
+              },
+              '&.Mui-disabled': {
+                opacity: 0,
+              },
+            },
           }}
         >
-        {primaryTabs.map((tab) => {
-          const isSelected = currentTab === tab.index;
-          return (
-            <Box
-              key={tab.index}
-              role="tab"
-              id={`analysis-tab-${tab.index}`}
-              aria-controls={`analysis-tabpanel-${tab.index}`}
-              aria-selected={isSelected}
-              tabIndex={isSelected ? 0 : -1}
-              onClick={(e) => handleTabChange(e, tab.index)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleTabChange(e, tab.index);
-                }
-              }}
-              sx={{
-                flex: 1,
-                minWidth: 'fit-content',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 1,
-                px: 2,
-                py: 1.25,
-                borderRadius: '12px',
-                cursor: 'pointer',
-                userSelect: 'none',
-                fontSize: '0.875rem',
-                fontWeight: isSelected ? 700 : 500,
-                letterSpacing: '-0.01em',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                color: isSelected
-                  ? theme.palette.primary.contrastText
-                  : theme.palette.text.secondary,
-                background: isSelected
-                  ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`
-                  : 'transparent',
-                boxShadow: isSelected
-                  ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}, 0 1px 3px ${alpha(theme.palette.primary.main, 0.2)}`
-                  : 'none',
-                '&:hover': isSelected
-                  ? {}
-                  : {
-                      bgcolor: alpha(theme.palette.primary.main, 0.08),
-                      color: theme.palette.text.primary,
-                    },
-                '&:active': {
-                  transform: 'scale(0.97)',
-                },
-                '& .MuiSvgIcon-root': {
-                  opacity: isSelected ? 1 : 0.6,
-                  transition: 'opacity 0.2s',
-                },
-              }}
-            >
-              {tab.icon}
-              {tab.label}
-            </Box>
-          );
-        })}
-        </Box>
-
-        <Button
-          aria-haspopup="menu"
-          aria-expanded={Boolean(overflowTabsAnchorEl)}
-          aria-controls={overflowTabsAnchorEl ? 'analysis-overflow-tabs-menu' : undefined}
-          onClick={handleOpenOverflowTabs}
-          endIcon={<ExpandMoreIcon />}
-          startIcon={activeOverflowTab?.icon || <MoreTabsIcon sx={{ fontSize: 20 }} />}
-          sx={{
-            minWidth: 'fit-content',
-            px: 2,
-            py: 1.25,
-            borderRadius: '12px',
-            textTransform: 'none',
-            fontSize: '0.875rem',
-            fontWeight: activeOverflowTab ? 700 : 500,
-            letterSpacing: '-0.01em',
-            color: activeOverflowTab
-              ? theme.palette.primary.contrastText
-              : theme.palette.text.secondary,
-            background: activeOverflowTab
-              ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`
-              : 'transparent',
-            boxShadow: activeOverflowTab
-              ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}, 0 1px 3px ${alpha(theme.palette.primary.main, 0.2)}`
-              : 'none',
-            '&:hover': activeOverflowTab
-              ? {}
-              : {
-                  bgcolor: alpha(theme.palette.primary.main, 0.08),
-                  color: theme.palette.text.primary,
-                },
-          }}
-        >
-          {activeOverflowTab?.label || t('tabs.more')}
-        </Button>
-
-        <Menu
-          id="analysis-overflow-tabs-menu"
-          anchorEl={overflowTabsAnchorEl}
-          open={Boolean(overflowTabsAnchorEl)}
-          onClose={handleCloseOverflowTabs}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        >
-          {overflowTabs.map((tab) => (
-            <MenuItem
-              key={tab.index}
-              selected={currentTab === tab.index}
-              onClick={() => handleOverflowTabSelect(tab.index)}
-              sx={{ minWidth: 220, gap: 1.25 }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', color: 'primary.main' }}>
-                {tab.icon}
-              </Box>
-              <Typography variant="body2" fontWeight={currentTab === tab.index ? 700 : 500}>
-                {tab.label}
-              </Typography>
-            </MenuItem>
-          ))}
-        </Menu>
+          {analysisTabs.map((tab) => {
+            const isSelected = currentTab === tab.index;
+            return (
+              <Tab
+                key={tab.index}
+                value={tab.index}
+                id={`analysis-tab-${tab.index}`}
+                aria-controls={`analysis-tabpanel-${tab.index}`}
+                aria-label={tab.label}
+                title={tab.label}
+                icon={tab.icon}
+                iconPosition="start"
+                label={(
+                  <Typography
+                    component="span"
+                    variant="body2"
+                    fontWeight={isSelected ? 700 : 500}
+                    sx={{
+                      display: { xs: 'none', md: 'block' },
+                      whiteSpace: 'nowrap',
+                      fontSize: '0.875rem',
+                      letterSpacing: '-0.01em',
+                    }}
+                  >
+                    {tab.label}
+                  </Typography>
+                )}
+                sx={{
+                  flex: '0 0 auto',
+                  minWidth: { xs: 44, md: 'auto' },
+                  minHeight: 44,
+                  height: 44,
+                  gap: 1,
+                  px: { xs: 1.5, md: 2 },
+                  py: 0,
+                  borderRadius: '12px',
+                  textTransform: 'none',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  color: 'text.secondary',
+                  '&.Mui-selected': {
+                    color: theme.palette.primary.contrastText,
+                    background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+                    boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}, 0 1px 3px ${alpha(theme.palette.primary.main, 0.2)}`,
+                  },
+                  '&:hover:not(.Mui-selected)': {
+                    bgcolor: alpha(theme.palette.primary.main, 0.08),
+                    color: 'text.primary',
+                  },
+                  '&:active': {
+                    transform: 'scale(0.97)',
+                  },
+                  '& .MuiSvgIcon-root': {
+                    opacity: isSelected ? 1 : 0.6,
+                    transition: 'opacity 0.2s',
+                  },
+                }}
+              />
+            );
+          })}
+        </Tabs>
       </Box>
 
       {/* Tab Content */}

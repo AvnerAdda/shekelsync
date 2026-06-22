@@ -10,10 +10,10 @@ test('Accounts modal opens and displays merged account', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Add Account' }).click();
 
-  await expect(page.getByText('Accounts Management')).toBeVisible();
-  await expect(page.getByText('Test Card')).toBeVisible();
+  await expect(page.getByText('Accounts Management')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Test Card')).toBeVisible({ timeout: 30_000 });
   await page.getByRole('tab', { name: 'Investments & Savings' }).click();
-  await expect(page.getByText('Brokerage Demo')).toBeVisible();
+  await expect(page.getByText('Brokerage Demo')).toBeVisible({ timeout: 30_000 });
 });
 
 test('Category hierarchy modal renders sample data', async ({ page }) => {

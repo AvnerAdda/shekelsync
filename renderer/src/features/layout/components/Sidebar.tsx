@@ -34,11 +34,7 @@ import StorageIcon from '@mui/icons-material/Storage';
 import SyncIcon from '@mui/icons-material/Sync';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useTranslation } from 'react-i18next';
-import AccountsModal, {
-  type AccountsModalOpenRequest,
-} from '@renderer/shared/modals/AccountsModal';
-import ScrapeModal from '@renderer/shared/modals/ScrapeModal';
-import CategoryHierarchyModal from '@renderer/shared/modals/CategoryHierarchyModal';
+import type { AccountsModalOpenRequest } from '@renderer/shared/modals/AccountsModal';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
 import { STALE_SYNC_THRESHOLD_MS } from '@app/utils/constants';
@@ -53,6 +49,10 @@ import {
   type AccountSyncStatusColor,
 } from './sidebar-helpers';
 import { resolveOnboardingGate } from './onboarding-gate';
+
+const AccountsModal = React.lazy(() => import('@renderer/shared/modals/AccountsModal'));
+const ScrapeModal = React.lazy(() => import('@renderer/shared/modals/ScrapeModal'));
+const CategoryHierarchyModal = React.lazy(() => import('@renderer/shared/modals/CategoryHierarchyModal'));
 
 const DRAWER_WIDTH = 260;
 const DRAWER_WIDTH_COLLAPSED = 65;
@@ -1113,37 +1113,49 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         </IconButton>
       )}
 
-      {/* Modals */}
-      <AccountsModal
-        isOpen={accountsModalOpen}
-        openRequest={accountsModalRequest}
-        onClose={() => {
-          setAccountsModalRequest(null);
-          setAccountsModalOpen(false);
-          fetchStats();
-          fetchAccountStatus();
-        }}
-      />
+      {/* Closed modals stay out of the startup dependency graph. */}
+      {accountsModalOpen && (
+        <React.Suspense fallback={null}>
+          <AccountsModal
+            isOpen
+            openRequest={accountsModalRequest}
+            onClose={() => {
+              setAccountsModalRequest(null);
+              setAccountsModalOpen(false);
+              fetchStats();
+              fetchAccountStatus();
+            }}
+          />
+        </React.Suspense>
+      )}
 
-      <ScrapeModal
-        isOpen={scrapeModalOpen}
-        onClose={() => setScrapeModalOpen(false)}
-        onSuccess={handleScrapeComplete}
-      />
+      {scrapeModalOpen && (
+        <React.Suspense fallback={null}>
+          <ScrapeModal
+            isOpen
+            onClose={() => setScrapeModalOpen(false)}
+            onSuccess={handleScrapeComplete}
+          />
+        </React.Suspense>
+      )}
 
-      <CategoryHierarchyModal
-        open={categoryModalOpen}
-        onClose={() => {
-          setCategoryModalOpen(false);
-          setCategoryInitialRuleVendor(null);
-          setCategoryFocusedTransaction(null);
-          fetchUncategorizedCount();
-        }}
-        onCategoriesUpdated={handleScrapeComplete}
-        initialTab={categoryInitialTab}
-        initialRuleVendor={categoryInitialRuleVendor}
-        focusedTransaction={categoryFocusedTransaction}
-      />
+      {categoryModalOpen && (
+        <React.Suspense fallback={null}>
+          <CategoryHierarchyModal
+            open
+            onClose={() => {
+              setCategoryModalOpen(false);
+              setCategoryInitialRuleVendor(null);
+              setCategoryFocusedTransaction(null);
+              fetchUncategorizedCount();
+            }}
+            onCategoriesUpdated={handleScrapeComplete}
+            initialTab={categoryInitialTab}
+            initialRuleVendor={categoryInitialRuleVendor}
+            focusedTransaction={categoryFocusedTransaction}
+          />
+        </React.Suspense>
+      )}
 
       <LicenseReadOnlyAlert
         open={licenseAlertOpen}

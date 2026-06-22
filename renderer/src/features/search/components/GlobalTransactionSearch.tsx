@@ -21,19 +21,17 @@ import {
   Stack,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import {
-  Search as SearchIcon,
-  Close as CloseIcon,
-  Receipt as TransactionIcon,
-  ArrowUpward as IncomeIcon,
-  ArrowDownward as ExpenseIcon,
-  TrendingUp as InvestmentIcon,
-  Notes as NotesIcon,
-  LocalOffer as TagIcon,
-  Store as VendorIcon,
-  Category as CategoryFilterIcon,
-  CalendarMonth as CalendarIcon,
-} from '@mui/icons-material';
+import SearchIcon from '@mui/icons-material/Search';
+import CloseIcon from '@mui/icons-material/Close';
+import TransactionIcon from '@mui/icons-material/Receipt';
+import IncomeIcon from '@mui/icons-material/ArrowUpward';
+import ExpenseIcon from '@mui/icons-material/ArrowDownward';
+import InvestmentIcon from '@mui/icons-material/TrendingUp';
+import NotesIcon from '@mui/icons-material/Notes';
+import TagIcon from '@mui/icons-material/LocalOffer';
+import VendorIcon from '@mui/icons-material/Store';
+import CategoryFilterIcon from '@mui/icons-material/Category';
+import CalendarIcon from '@mui/icons-material/CalendarMonth';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';
 

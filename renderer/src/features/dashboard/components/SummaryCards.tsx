@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -13,17 +13,15 @@ import {
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { CurrencyTypography } from '@renderer/components/CurrencyTypography';
-import {
-  AccountBalance as AccountBalanceIcon,
-  TrendingUp as TrendingUpIcon,
-  Savings as SavingsIcon,
-  Diversity3 as DiversityIcon,
-  ShoppingCart as ImpulseIcon,
-  Schedule as RunwayIcon,
-  Warning as WarningIcon,
-  HourglassEmpty as PendingIcon,
-  Info as InfoIcon,
-} from '@mui/icons-material';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import SavingsIcon from '@mui/icons-material/Savings';
+import DiversityIcon from '@mui/icons-material/Diversity3';
+import ImpulseIcon from '@mui/icons-material/ShoppingCart';
+import RunwayIcon from '@mui/icons-material/Schedule';
+import WarningIcon from '@mui/icons-material/Warning';
+import PendingIcon from '@mui/icons-material/HourglassEmpty';
+import InfoIcon from '@mui/icons-material/Info';
 import {
   PieChart,
   Pie,
@@ -34,24 +32,17 @@ import {
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpendingCategories';
 import type { SpendingCategory } from '@renderer/types/spending-categories';
-import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
+import type {
+  DashboardForecastData,
+  DashboardHealthSnapshot,
+} from '@renderer/features/dashboard/hooks/useDashboardInsights';
 import {
   computeEffectiveNetInvestments,
   computeNetSavings,
   computePendingExpenseImpact,
   computeSummaryHealthMetrics,
 } from './summary-cards-helpers';
-
-interface FinancialHealthSnapshot {
-  overallHealthScore: number;
-  healthBreakdown: {
-    savingsScore?: number;
-    diversityScore?: number;
-    impulseScore?: number;
-    runwayScore?: number;
-  };
-}
 
 interface SummaryCardsProps {
   // Card 1: Current Month Finance
@@ -77,6 +68,8 @@ interface SummaryCardsProps {
 
   // Financial Intelligence Metrics
   categoryCount?: number; // For diversity calculation
+  forecastData?: DashboardForecastData | null;
+  healthSnapshot?: DashboardHealthSnapshot | null;
 }
 
 const SummaryCards: React.FC<SummaryCardsProps> = ({
@@ -92,6 +85,8 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   assetBreakdown = [],
   topCategories = [],
   categoryCount = 0,
+  forecastData = null,
+  healthSnapshot = null,
 }) => {
   const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'dashboard' });
@@ -164,56 +159,23 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     fetchBreakdown: fetchSpendingBreakdown,
   } = useSpendingCategories({ autoLoad: false, currentMonthOnly: true });
 
-  const [healthSnapshot, setHealthSnapshot] = useState<FinancialHealthSnapshot | null>(null);
-  const [forecastSummary, setForecastSummary] = useState<{ totalSpent: number; totalForecasted: number; onTrack: number; atRisk: number; exceeded: number } | null>(null);
-
   useEffect(() => {
     void fetchSpendingBreakdown();
   }, [fetchSpendingBreakdown]);
 
-  // Fetch forecast data for budget outlook
-  useEffect(() => {
-    let isMounted = true;
-    const fetchForecastData = async () => {
-      try {
-        const response = await apiClient.get<{ budgetOutlook?: Array<{ actualSpent: number; forecasted: number; status: string }> }>('/api/forecast/daily?days=30');
-        if (response.ok && isMounted) {
-          const outlook = response.data?.budgetOutlook || [];
-          // Filter to only categories with activity
-          const activeCategories = outlook.filter(item => item.forecasted > 0 || item.actualSpent > 0);
-          const totalSpent = activeCategories.reduce((sum, item) => sum + item.actualSpent, 0);
-          const totalForecasted = activeCategories.reduce((sum, item) => sum + item.forecasted, 0);
-          const onTrack = activeCategories.filter(item => item.status === 'on_track').length;
-          const atRisk = activeCategories.filter(item => item.status === 'at_risk').length;
-          const exceeded = activeCategories.filter(item => item.status === 'exceeded').length;
-          setForecastSummary({ totalSpent, totalForecasted, onTrack, atRisk, exceeded });
-        }
-      } catch (error) {
-        console.error('Failed to fetch forecast data for dashboard:', error);
-      }
-    };
-    fetchForecastData();
-    return () => { isMounted = false; };
-  }, []);
+  const forecastSummary = React.useMemo(() => {
+    const activeCategories = (forecastData?.budgetOutlook || [])
+      .filter((item) => item.forecasted > 0 || item.actualSpent > 0);
+    if (activeCategories.length === 0) return null;
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchHealthSnapshot = async () => {
-      try {
-        const response = await apiClient.get<FinancialHealthSnapshot>('/api/analytics/personal-intelligence?days=60');
-        if (response.ok && isMounted) {
-          setHealthSnapshot(response.data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch financial health snapshot for dashboard card:', error);
-      }
+    return {
+      totalSpent: activeCategories.reduce((sum, item) => sum + item.actualSpent, 0),
+      totalForecasted: activeCategories.reduce((sum, item) => sum + item.forecasted, 0),
+      onTrack: activeCategories.filter((item) => item.status === 'on_track').length,
+      atRisk: activeCategories.filter((item) => item.status === 'at_risk').length,
+      exceeded: activeCategories.filter((item) => item.status === 'exceeded').length,
     };
-
-    fetchHealthSnapshot();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  }, [forecastData]);
 
   const allocationTargets = spendingBreakdown?.targets ?? DEFAULT_TARGETS;
 
