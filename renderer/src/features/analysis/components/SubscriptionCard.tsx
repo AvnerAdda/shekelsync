@@ -14,14 +14,12 @@ import {
   ListItemIcon,
   ListItemText,
 } from '@mui/material';
-import {
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Pause as PauseIcon,
-  PlayArrow as ResumeIcon,
-  MoreVert as MoreIcon,
-  NotificationsActive as AlertIcon,
-} from '@mui/icons-material';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import PauseIcon from '@mui/icons-material/Pause';
+import ResumeIcon from '@mui/icons-material/PlayArrow';
+import MoreIcon from '@mui/icons-material/MoreVert';
+import AlertIcon from '@mui/icons-material/NotificationsActive';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useTranslation } from 'react-i18next';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';

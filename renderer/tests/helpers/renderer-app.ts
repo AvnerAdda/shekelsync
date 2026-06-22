@@ -1566,7 +1566,7 @@ export async function setupRendererTest(
 export const goHome = async (page: Page) => {
   await page.goto('/#/', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('banner').getByText('ShekelSync', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add Account' })).toBeVisible();
+  await expect(page.locator('[data-dashboard-ready="true"]')).toBeVisible({ timeout: 30_000 });
 };
 
 export const openAnalysisPage = async (page: Page, mode: 'sidebar' | 'route' = 'sidebar') => {

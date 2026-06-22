@@ -14,13 +14,11 @@ import {
   keyframes,
   useTheme,
 } from '@mui/material';
-import {
-  Schedule as ScheduleIcon,
-  Sync as SyncIcon,
-  Event as EventIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-} from '@mui/icons-material';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import SyncIcon from '@mui/icons-material/Sync';
+import EventIcon from '@mui/icons-material/Event';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { addHours, formatDistanceToNow } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';

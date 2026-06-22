@@ -27,18 +27,16 @@ import {
   FormControlLabel,
   Checkbox,
 } from '@mui/material';
-import {
-  Person as PersonIcon,
-  Save as SaveIcon,
-  Work as WorkIcon,
-  Cake as AgeIcon,
-  ExpandMore as ExpandMoreIcon,
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  ChildCare as ChildIcon,
-  Favorite as SpouseIcon,
-} from '@mui/icons-material';
+import PersonIcon from '@mui/icons-material/Person';
+import SaveIcon from '@mui/icons-material/Save';
+import WorkIcon from '@mui/icons-material/Work';
+import AgeIcon from '@mui/icons-material/Cake';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ChildIcon from '@mui/icons-material/ChildCare';
+import SpouseIcon from '@mui/icons-material/Favorite';
 import {
   ChildProfile,
   EnhancedUserProfile,

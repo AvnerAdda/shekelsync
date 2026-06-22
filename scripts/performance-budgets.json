@@ -1,0 +1,8 @@
+{
+  "initialJsBytes": 1400000,
+  "dashboardJsBytes": 2100000,
+  "totalJsBytes": 3300000,
+  "maxChunkBytes": 1000000,
+  "dashboardStartupMs": 5000,
+  "dashboardForecastRequests": 1
+}

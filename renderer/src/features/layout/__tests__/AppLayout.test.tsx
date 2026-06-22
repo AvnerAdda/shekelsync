@@ -17,9 +17,20 @@ vi.mock('@renderer/features/layout/components/TitleBar', () => ({
   default: () => <div data-testid="title-bar" />,
 }));
 
-vi.mock('@renderer/features/chatbot/components/FinancialChatbot', () => ({
-  default: () => null,
-}));
+vi.mock('@renderer/features/chatbot/components/FinancialChatbot', async () => {
+  const ReactModule = await import('react');
+  return {
+    default: () => {
+      const [open, setOpen] = ReactModule.useState(false);
+      ReactModule.useEffect(() => {
+        const handleOpen = () => setOpen(true);
+        window.addEventListener('openChatbotDrawer', handleOpen);
+        return () => window.removeEventListener('openChatbotDrawer', handleOpen);
+      }, []);
+      return open ? <div data-testid="chatbot-open" /> : null;
+    },
+  };
+});
 
 vi.mock('@renderer/features/support', () => ({
   DonationReminderDialog: () => null,
@@ -138,6 +149,18 @@ describe('AppLayout', () => {
     expect(latestSearchProps.initialFilters).toEqual({
       vendor: 'Mega Store',
       tag: 'groceries',
+    });
+  });
+
+  it('loads the deferred chatbot when an early open event is dispatched', async () => {
+    renderAppLayout();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('openChatbotDrawer'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chatbot-open')).toBeInTheDocument();
     });
   });
 

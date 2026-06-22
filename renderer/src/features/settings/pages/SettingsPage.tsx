@@ -13,20 +13,18 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import {
-  BugReport as BugReportIcon,
-  DarkMode as DarkIcon,
-  FormatSize as TextSizeIcon,
-  LightMode as LightIcon,
-  Palette as ThemeIcon,
-  Person as ProfileTabIcon,
-  Security as SecurityIcon,
-  SettingsBrightness as SystemIcon,
-  Sync as SyncTabIcon,
-  SmartToy as ChatbotIcon,
-  Translate as LanguageIcon,
-  VisibilityOff as MaskIcon,
-} from '@mui/icons-material';
+import BugReportIcon from '@mui/icons-material/BugReport';
+import DarkIcon from '@mui/icons-material/DarkMode';
+import TextSizeIcon from '@mui/icons-material/FormatSize';
+import LightIcon from '@mui/icons-material/LightMode';
+import ThemeIcon from '@mui/icons-material/Palette';
+import ProfileTabIcon from '@mui/icons-material/Person';
+import SecurityIcon from '@mui/icons-material/Security';
+import SystemIcon from '@mui/icons-material/SettingsBrightness';
+import SyncTabIcon from '@mui/icons-material/Sync';
+import ChatbotIcon from '@mui/icons-material/SmartToy';
+import LanguageIcon from '@mui/icons-material/Translate';
+import MaskIcon from '@mui/icons-material/VisibilityOff';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useThemeMode } from '@renderer/contexts/ThemeContext';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';

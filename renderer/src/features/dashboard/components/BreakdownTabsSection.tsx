@@ -382,7 +382,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
                 </Paper>
               </Grid>
 
-              <Grid size={{ xs: 12, md: 6 }}>
+              <Grid size={{ xs: 12, md: 4 }}>
                 <PortfolioPieChart
                   title={t('investment.liquid')}
                   data={liquidPortfolio}
@@ -396,7 +396,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
                 />
               </Grid>
 
-              <Grid size={{ xs: 12, md: 6 }}>
+              <Grid size={{ xs: 12, md: 4 }}>
                 <PortfolioPieChart
                   title={t('investment.illiquid')}
                   data={illiquidPortfolio}
@@ -410,7 +410,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
                 />
               </Grid>
 
-              <Grid size={{ xs: 12, md: 6 }}>
+              <Grid size={{ xs: 12, md: 4 }}>
                 <PortfolioPieChart
                   title={t('investment.restricted')}
                   data={restrictedPortfolio}

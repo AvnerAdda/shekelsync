@@ -15,18 +15,16 @@ import {
   alpha,
   useTheme,
 } from '@mui/material';
-import {
-  Security as SecurityIcon,
-  Lock as LockIcon,
-  VpnKey as KeyIcon,
-  Fingerprint as FingerprintIcon,
-  CheckCircle as CheckIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  Info as InfoIcon,
-  Visibility as ViewIcon,
-  TouchApp as TouchAppIcon,
-} from '@mui/icons-material';
+import SecurityIcon from '@mui/icons-material/Security';
+import LockIcon from '@mui/icons-material/Lock';
+import KeyIcon from '@mui/icons-material/VpnKey';
+import FingerprintIcon from '@mui/icons-material/Fingerprint';
+import CheckIcon from '@mui/icons-material/CheckCircle';
+import WarningIcon from '@mui/icons-material/Warning';
+import ErrorIcon from '@mui/icons-material/Error';
+import InfoIcon from '@mui/icons-material/Info';
+import ViewIcon from '@mui/icons-material/Visibility';
+import TouchAppIcon from '@mui/icons-material/TouchApp';
 import { apiClient } from '@/lib/api-client';
 import SecurityDetailsModal from '@renderer/features/security/components/SecurityDetailsModal';
 

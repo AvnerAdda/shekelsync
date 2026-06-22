@@ -22,13 +22,11 @@ import {
   alpha,
   useTheme,
 } from '@mui/material';
-import {
-  Close as CloseIcon,
-  Autorenew as SubscriptionIcon,
-  TrendingUp as TrendIcon,
-  Schedule as ScheduleIcon,
-  Percent as PercentIcon,
-} from '@mui/icons-material';
+import CloseIcon from '@mui/icons-material/Close';
+import SubscriptionIcon from '@mui/icons-material/Autorenew';
+import TrendIcon from '@mui/icons-material/TrendingUp';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import PercentIcon from '@mui/icons-material/Percent';
 import { useTranslation } from 'react-i18next';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import type {

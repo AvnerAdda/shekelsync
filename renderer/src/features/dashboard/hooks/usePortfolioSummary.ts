@@ -76,7 +76,7 @@ export function usePortfolioSummary(): UsePortfolioSummaryResult {
         : Number(summary?.totalPortfolioValue ?? 0);
 
       const buildItemsForCategory = (category: string): PortfolioBreakdownItem[] => {
-        const entries = scopedBreakdownEntries.filter((entry) => entry.category === category);
+        const entries = breakdownEntries.filter((entry) => entry.category === category);
         const categoryTotal = entries.reduce((sum, entry) => sum + getBreakdownValue(entry), 0);
 
         return entries.map((entry) => {

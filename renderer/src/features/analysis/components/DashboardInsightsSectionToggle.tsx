@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Button, Chip, Paper, Typography, alpha, useTheme } from '@mui/material';
-import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useTranslation } from 'react-i18next';
 
 interface DashboardInsightsSectionToggleProps {

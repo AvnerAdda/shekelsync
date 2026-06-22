@@ -11,9 +11,7 @@ import {
   Divider,
   useTheme,
 } from '@mui/material';
-import {
-  Circle as CircleIcon,
-} from '@mui/icons-material';
+import CircleIcon from '@mui/icons-material/Circle';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { InvestmentAccountSummary, PortfolioSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';

@@ -12,15 +12,13 @@ import {
   LinearProgress,
   Paper,
 } from '@mui/material';
-import {
-  TrendingUp as TrendIcon,
-  Savings as SavingsIcon,
-  Diversity3 as DiversityIcon,
-  ShoppingCart as ImpulseIcon,
-  Schedule as RunwayIcon,
-  HelpOutline as HelpIcon,
-  Refresh as RefreshIcon,
-} from '@mui/icons-material';
+import TrendIcon from '@mui/icons-material/TrendingUp';
+import SavingsIcon from '@mui/icons-material/Savings';
+import DiversityIcon from '@mui/icons-material/Diversity3';
+import ImpulseIcon from '@mui/icons-material/ShoppingCart';
+import RunwayIcon from '@mui/icons-material/Schedule';
+import HelpIcon from '@mui/icons-material/HelpOutline';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
 import HealthScoreTrendModal from './HealthScoreTrendModal';

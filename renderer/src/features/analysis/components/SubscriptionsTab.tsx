@@ -13,13 +13,11 @@ import {
   alpha,
   useTheme,
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  Refresh as RefreshIcon,
-  ViewList as ViewListIcon,
-  CalendarMonth as CalendarMonthIcon,
-  FilterList as FilterListIcon,
-} from '@mui/icons-material';
+import AddIcon from '@mui/icons-material/Add';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import ViewListIcon from '@mui/icons-material/ViewList';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import { useTranslation } from 'react-i18next';
 import { useSubscriptions } from '@renderer/features/analysis/hooks/useSubscriptions';
 import { useSubscriptionCategoryFilter } from '@renderer/features/analysis/hooks/useSubscriptionCategoryFilter';

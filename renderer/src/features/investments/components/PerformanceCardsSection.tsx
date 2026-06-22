@@ -11,7 +11,8 @@ import {
   IconButton,
   Paper,
 } from '@mui/material';
-import { ChevronLeft, ChevronRight } from '@mui/icons-material';
+import ChevronLeft from '@mui/icons-material/ChevronLeft';
+import ChevronRight from '@mui/icons-material/ChevronRight';
 import {
   InvestmentAccountSummary,
   InvestmentCategoryKey,

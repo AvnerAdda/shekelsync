@@ -17,13 +17,11 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import {
-  AutoAwesome as GenerateIcon,
-  OpenInNew as OpenInNewIcon,
-  Psychology as ProfilingIcon,
-  Refresh as RefreshIcon,
-  Settings as SettingsIcon,
-} from '@mui/icons-material';
+import GenerateIcon from '@mui/icons-material/AutoAwesome';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import ProfilingIcon from '@mui/icons-material/Psychology';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 

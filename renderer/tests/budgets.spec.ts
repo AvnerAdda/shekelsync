@@ -15,5 +15,5 @@ test('budget forecast list shows categories and statuses', async ({ page }) => {
   await expect(page.getByText('Groceries').first()).toBeVisible();
   await expect(page.getByText('Transport').first()).toBeVisible();
   await expect(page.getByText(/At risk/i)).toBeVisible();
-  await expect(page.getByText(/Over Budget/i)).toBeVisible();
+  await expect(page.getByText(/Exceeded/i)).toBeVisible();
 });

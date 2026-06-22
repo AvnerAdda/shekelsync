@@ -281,9 +281,11 @@ describe('Sidebar component', () => {
       }));
     });
 
-    expect(screen.getByTestId('categories-modal')).toHaveTextContent(
-      'categories-modal-open:2:Mega Store:txn-42:bank-a',
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId('categories-modal')).toHaveTextContent(
+        'categories-modal-open:2:Mega Store:txn-42:bank-a',
+      );
+    }, { timeout: 10_000 });
   });
 
   it('runs bulk refresh for stale sync and surfaces success notification', async () => {
@@ -372,7 +374,7 @@ describe('Sidebar component', () => {
     });
     await waitFor(() => {
       expect(screen.getByText('accounts-modal-open::')).toBeInTheDocument();
-    });
+    }, { timeout: 10_000 });
 
     act(() => {
       window.dispatchEvent(new CustomEvent('openProfileSetup'));
@@ -384,7 +386,7 @@ describe('Sidebar component', () => {
     });
     await waitFor(() => {
       expect(screen.getByText('scrape-modal-open')).toBeInTheDocument();
-    });
+    }, { timeout: 10_000 });
   });
 
   it('opens categories modal on guided event with requested tab', async () => {

@@ -33,5 +33,11 @@ module.exports = {
     'no-constant-condition': 'off',
     'no-constant-binary-expression': 'off',
     'no-extra-boolean-cast': 'off',
+    'no-restricted-imports': ['error', {
+      paths: [{
+        name: '@mui/icons-material',
+        message: 'Import icons from @mui/icons-material/<IconName> to avoid loading the full catalog.',
+      }],
+    }],
   },
 };

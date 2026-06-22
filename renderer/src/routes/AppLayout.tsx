@@ -1,11 +1,10 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   useTheme,
 } from '@mui/material';
 import Sidebar from '@renderer/features/layout/components/Sidebar';
-import FinancialChatbot from '@renderer/features/chatbot/components/FinancialChatbot';
 import TitleBar from '@renderer/features/layout/components/TitleBar';
 import GlobalTransactionSearch, {
   type TransactionSearchFilters,
@@ -20,6 +19,65 @@ import { useNotification } from '@renderer/features/notifications/NotificationCo
 import { useTranslation } from 'react-i18next';
 
 const DRAWER_WIDTH_COLLAPSED = 65;
+const FinancialChatbot = lazy(() => import('@renderer/features/chatbot/components/FinancialChatbot'));
+
+const ChatbotLoadedSignal = ({
+  openOnMount,
+  onLoaded,
+}: {
+  openOnMount: boolean;
+  onLoaded: () => void;
+}) => {
+  useEffect(() => {
+    onLoaded();
+    if (!openOnMount) return undefined;
+
+    const openTimer = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('openChatbotDrawer'));
+    }, 0);
+    return () => window.clearTimeout(openTimer);
+  }, [onLoaded, openOnMount]);
+
+  return null;
+};
+
+const DeferredFinancialChatbot = () => {
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const [openOnLoad, setOpenOnLoad] = useState(false);
+  const chatbotLoadedRef = useRef(false);
+
+  const handleChatbotLoaded = useCallback(() => {
+    chatbotLoadedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    const loadChatbot = () => setShouldLoad(true);
+    const handleOpenChatbot = () => {
+      if (chatbotLoadedRef.current) return;
+      setOpenOnLoad(true);
+      loadChatbot();
+    };
+    const deferredLoad = window.setTimeout(loadChatbot, 750);
+
+    window.addEventListener('openChatbotDrawer', handleOpenChatbot);
+    return () => {
+      window.clearTimeout(deferredLoad);
+      window.removeEventListener('openChatbotDrawer', handleOpenChatbot);
+    };
+  }, []);
+
+  if (!shouldLoad) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <FinancialChatbot />
+      <ChatbotLoadedSignal
+        openOnMount={openOnLoad}
+        onLoaded={handleChatbotLoaded}
+      />
+    </Suspense>
+  );
+};
 
 const pageToPath: Record<string, string> = {
   home: '/',
@@ -376,7 +434,7 @@ const AppLayout: React.FC = () => {
         </Box>
       </Box>
 
-      <FinancialChatbot />
+      <DeferredFinancialChatbot />
       
       <GlobalTransactionSearch
         open={searchOpen}

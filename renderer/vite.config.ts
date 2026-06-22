@@ -103,22 +103,17 @@ export default defineConfig(({ command }) => ({
   },
   build: {
     outDir: 'dist',
+    manifest: true,
     sourcemap: process.env.RENDERER_SOURCEMAP === 'true',
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Vendor chunks for better caching
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'mui-vendor': ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
-          'chart-vendor': ['recharts', 'd3', 'd3-sankey'],
-          // Feature-based code splitting
-          'dashboard': [
-            './src/features/dashboard/pages/HomePage.tsx',
-            './src/features/dashboard/components/SummaryCards.tsx',
-            './src/features/dashboard/components/TransactionHistorySection.tsx'
-          ].map(p => path.resolve(__dirname, p)),
-          'analysis': ['./src/features/analysis/pages/AnalysisPageNew.tsx'].map(p => path.resolve(__dirname, p)),
-          'investments': ['./src/features/investments/pages/InvestmentsPage.tsx'].map(p => path.resolve(__dirname, p)),
+        manualChunks(id) {
+          const normalizedId = normalizePath(id);
+          if (!normalizedId.includes('/node_modules/')) return undefined;
+          const packagePath = normalizedId.split('/node_modules/').pop() || '';
+          return /^(react|react-dom|react-router|react-router-dom)\//.test(packagePath)
+            ? 'react-vendor'
+            : undefined;
         },
       },
     },

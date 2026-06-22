@@ -16,7 +16,7 @@ import {
   useTheme,
   alpha,
 } from '@mui/material';
-import { Close as CloseIcon } from '@mui/icons-material';
+import CloseIcon from '@mui/icons-material/Close';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { PortfolioSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';

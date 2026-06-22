@@ -14,15 +14,13 @@ import {
   keyframes,
   useTheme,
 } from '@mui/material';
-import {
-  Sync as SyncIcon,
-  Visibility,
-  VisibilityOff,
-  CheckCircle as CheckIcon,
-  Error as ErrorIcon,
-  ShowChart as BrokerIcon,
-  OpenInNew as OpenInNewIcon,
-} from '@mui/icons-material';
+import SyncIcon from '@mui/icons-material/Sync';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import CheckIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
+import BrokerIcon from '@mui/icons-material/ShowChart';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { formatDistanceToNow } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';

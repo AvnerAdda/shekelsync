@@ -21,14 +21,12 @@ import {
   Checkbox,
   FormGroup,
 } from '@mui/material';
-import {
-  Download as DownloadIcon,
-  GetApp as ExportIcon,
-  DateRange as DateIcon,
-  Description as FileIcon,
-  CheckCircle as SuccessIcon,
-  Error as ErrorIcon,
-} from '@mui/icons-material';
+import DownloadIcon from '@mui/icons-material/Download';
+import ExportIcon from '@mui/icons-material/GetApp';
+import DateIcon from '@mui/icons-material/DateRange';
+import FileIcon from '@mui/icons-material/Description';
+import SuccessIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';

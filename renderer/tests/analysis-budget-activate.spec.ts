@@ -16,5 +16,5 @@ test('Analysis Budget tab shows forecast risk status', async ({ page }) => {
   await expect(page.getByText('Groceries').first()).toBeVisible();
   await expect(page.getByText('Transport').first()).toBeVisible();
   await expect(page.getByText(/At Risk/i)).toBeVisible();
-  await expect(page.getByText(/Over Budget/i)).toBeVisible();
+  await expect(page.getByText(/Exceeded/i)).toBeVisible();
 });

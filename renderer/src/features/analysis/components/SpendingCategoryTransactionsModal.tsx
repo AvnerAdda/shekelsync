@@ -22,10 +22,8 @@ import {
   Button,
   alpha,
 } from '@mui/material';
-import {
-  Close as CloseIcon,
-  SwapHoriz as SwapHorizIcon,
-} from '@mui/icons-material';
+import CloseIcon from '@mui/icons-material/Close';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@renderer/lib/api-client';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';

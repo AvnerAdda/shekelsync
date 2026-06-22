@@ -17,17 +17,15 @@ import {
   alpha,
   useTheme,
 } from '@mui/material';
-import {
-  Close as CloseIcon,
-  Security as SecurityIcon,
-  Lock as LockIcon,
-  VpnKey as KeyIcon,
-  Fingerprint as FingerprintIcon,
-  CheckCircle as CheckIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  Info as InfoIcon,
-} from '@mui/icons-material';
+import CloseIcon from '@mui/icons-material/Close';
+import SecurityIcon from '@mui/icons-material/Security';
+import LockIcon from '@mui/icons-material/Lock';
+import KeyIcon from '@mui/icons-material/VpnKey';
+import FingerprintIcon from '@mui/icons-material/Fingerprint';
+import CheckIcon from '@mui/icons-material/CheckCircle';
+import WarningIcon from '@mui/icons-material/Warning';
+import ErrorIcon from '@mui/icons-material/Error';
+import InfoIcon from '@mui/icons-material/Info';
 import { apiClient } from '@/lib/api-client';
 
 interface SecurityDetailsModalProps {
