@@ -16,13 +16,11 @@ import {
   useTheme,
 } from '@mui/material';
 import type { Theme } from '@mui/material/styles';
-import {
-  TrendingUp as GrowthIcon,
-  Security as StabilityIcon,
-  Home as EssentialIcon,
-  CardGiftcard as RewardIcon,
-  MoreHoriz as OtherIcon,
-} from '@mui/icons-material';
+import GrowthIcon from '@mui/icons-material/TrendingUp';
+import StabilityIcon from '@mui/icons-material/Security';
+import EssentialIcon from '@mui/icons-material/Home';
+import RewardIcon from '@mui/icons-material/CardGiftcard';
+import OtherIcon from '@mui/icons-material/MoreHoriz';
 import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpendingCategories';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import type {

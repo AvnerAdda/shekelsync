@@ -10,11 +10,9 @@ import {
   useTheme,
   useMediaQuery,
 } from '@mui/material';
-import {
-  ChevronLeft as PrevIcon,
-  ChevronRight as NextIcon,
-  Today as TodayIcon,
-} from '@mui/icons-material';
+import PrevIcon from '@mui/icons-material/ChevronLeft';
+import NextIcon from '@mui/icons-material/ChevronRight';
+import TodayIcon from '@mui/icons-material/Today';
 import { addMonths, subMonths, isSameMonth } from 'date-fns';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useTranslation } from 'react-i18next';

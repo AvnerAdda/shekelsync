@@ -9,15 +9,13 @@ import {
   useTheme,
   Collapse,
 } from '@mui/material';
-import {
-  Schedule as ScheduleIcon,
-  Warning as WarningIcon,
-  Block as BlockIcon,
-  Star as StarIcon,
-  WifiOff as WifiOffIcon,
-  CheckCircle as CheckCircleIcon,
-  PersonAdd as PersonAddIcon,
-} from '@mui/icons-material';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import WarningIcon from '@mui/icons-material/Warning';
+import BlockIcon from '@mui/icons-material/Block';
+import StarIcon from '@mui/icons-material/Star';
+import WifiOffIcon from '@mui/icons-material/WifiOff';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import { useTranslation } from 'react-i18next';
 
 interface LicenseStatusBannerProps {

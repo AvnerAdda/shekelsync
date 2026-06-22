@@ -19,17 +19,15 @@ import {
   TextField,
 } from '@mui/material';
 import type { ChipProps } from '@mui/material';
-import {
-  Warning as WarningIcon,
-  CheckCircle as CheckIcon,
-  Cancel as CancelIcon,
-  Snooze as SnoozeIcon,
-  TrendingUp as TrendingUpIcon,
-  Money as MoneyIcon,
-  ExpandMore as ExpandIcon,
-  ExpandLess as CollapseIcon,
-  Refresh as RefreshIcon,
-} from '@mui/icons-material';
+import WarningIcon from '@mui/icons-material/Warning';
+import CheckIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+import SnoozeIcon from '@mui/icons-material/Snooze';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import MoneyIcon from '@mui/icons-material/Money';
+import ExpandIcon from '@mui/icons-material/ExpandMore';
+import CollapseIcon from '@mui/icons-material/ExpandLess';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { useSmartActions } from '@renderer/features/analysis/hooks/useSmartActions';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import type { SmartAction } from '@renderer/types/smart-actions';

@@ -14,14 +14,12 @@ import {
   useTheme,
   alpha,
 } from '@mui/material';
-import {
-  ArrowBack as BackIcon,
-  TrendingUp as TrendIcon,
-  ShoppingCart as ShoppingIcon,
-  MonetizationOn as IncomeIcon,
-  TrendingUp as InvestmentIcon,
-  ChevronRight as ChevronRightIcon,
-} from '@mui/icons-material';
+import BackIcon from '@mui/icons-material/ArrowBack';
+import TrendIcon from '@mui/icons-material/TrendingUp';
+import ShoppingIcon from '@mui/icons-material/ShoppingCart';
+import IncomeIcon from '@mui/icons-material/MonetizationOn';
+import InvestmentIcon from '@mui/icons-material/TrendingUp';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import useBreakdownDrilldown from '@renderer/features/breakdown/hooks/useBreakdownDrilldown';
 import OverviewView from '@renderer/features/breakdown/components/OverviewView';

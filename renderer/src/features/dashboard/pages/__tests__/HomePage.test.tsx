@@ -14,6 +14,7 @@ const mockFetchBreakdown = vi.fn();
 const mockFetchFallbackBreakdown = vi.fn();
 const mockRefreshAccountSignals = vi.fn();
 const mockRefreshPairingGap = vi.fn();
+const mockRefreshInsights = vi.fn();
 const mockSetHoveredDate = vi.fn();
 const mockFetchTransactionsByDate = vi.fn();
 
@@ -138,6 +139,17 @@ vi.mock('@renderer/features/dashboard/hooks/useAccountSignals', () => ({
   }),
 }));
 
+vi.mock('@renderer/features/dashboard/hooks/useDashboardInsights', () => ({
+  useDashboardInsights: () => ({
+    forecastData: null,
+    forecastLoading: false,
+    forecastError: null,
+    healthSnapshot: null,
+    healthLoading: false,
+    refresh: mockRefreshInsights,
+  }),
+}));
+
 vi.mock('@renderer/features/dashboard/hooks/useTransactionsByDate', () => ({
   useTransactionsByDate: () => ({
     transactions: [],
@@ -213,6 +225,7 @@ describe('HomePage dashboard fallback', () => {
     mockFetchFallbackBreakdown.mockReset();
     mockRefreshAccountSignals.mockReset();
     mockRefreshPairingGap.mockReset();
+    mockRefreshInsights.mockReset();
     mockSetHoveredDate.mockReset();
     mockFetchTransactionsByDate.mockReset();
   });

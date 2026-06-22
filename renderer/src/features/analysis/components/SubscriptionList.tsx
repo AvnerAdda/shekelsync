@@ -18,19 +18,17 @@ import {
   useTheme,
   useMediaQuery,
 } from '@mui/material';
-import {
-  Search as SearchIcon,
-  Sort as SortIcon,
-  ArrowUpward as AscIcon,
-  ArrowDownward as DescIcon,
-  AttachMoney as AmountIcon,
-  SortByAlpha as AlphaIcon,
-  Schedule as DateIcon,
-  Category as CategoryIcon,
-  Inbox as EmptyIcon,
-  Check as CheckIcon,
-  KeyboardArrowDown as ShowMoreIcon,
-} from '@mui/icons-material';
+import SearchIcon from '@mui/icons-material/Search';
+import SortIcon from '@mui/icons-material/Sort';
+import AscIcon from '@mui/icons-material/ArrowUpward';
+import DescIcon from '@mui/icons-material/ArrowDownward';
+import AmountIcon from '@mui/icons-material/AttachMoney';
+import AlphaIcon from '@mui/icons-material/SortByAlpha';
+import DateIcon from '@mui/icons-material/Schedule';
+import CategoryIcon from '@mui/icons-material/Category';
+import EmptyIcon from '@mui/icons-material/Inbox';
+import CheckIcon from '@mui/icons-material/Check';
+import ShowMoreIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useTranslation } from 'react-i18next';
 import SubscriptionCard from './SubscriptionCard';
 import type { Subscription, SubscriptionStatus } from '@renderer/types/subscriptions';

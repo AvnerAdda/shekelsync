@@ -7,27 +7,28 @@ import {
   Alert,
   Box,
   Button,
-  CircularProgress, Skeleton,
+  CircularProgress,
   Grid,
   IconButton,
   MenuItem,
   Paper,
   Select,
+  Skeleton,
+  Tab,
+  Tabs,
   Tooltip,
   Typography,
   alpha,
   useTheme,
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  AccountBalance as AccountIcon,
-  Refresh as RefreshIcon,
-  TrendingUp as ValuationIcon,
-  Dashboard as DashboardIcon,
-  AccountBalanceWallet as WalletIcon,
-  History as HistoryIcon,
-  HomeWork as RealEstateIcon,
-} from '@mui/icons-material';
+import AddIcon from '@mui/icons-material/Add';
+import AccountIcon from '@mui/icons-material/AccountBalance';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import ValuationIcon from '@mui/icons-material/TrendingUp';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import WalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import HistoryIcon from '@mui/icons-material/History';
+import RealEstateIcon from '@mui/icons-material/HomeWork';
 import { apiClient } from '@/lib/api-client';
 import { useTranslation } from 'react-i18next';
 import {
@@ -457,6 +458,8 @@ const InvestmentsPageContent: React.FC = () => {
       sx={{
         p: 3,
         height: { xs: 'auto', lg: 'calc(100vh - 64px)' },
+        width: '100%',
+        minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'auto',
@@ -506,8 +509,11 @@ const InvestmentsPageContent: React.FC = () => {
             sx={{
               display: 'flex',
               alignItems: 'center',
+              flexWrap: { xs: 'wrap', lg: 'nowrap' },
               gap: 1.5,
               p: 0.75,
+              width: '100%',
+              minWidth: 0,
               borderRadius: '16px',
               bgcolor: alpha(theme.palette.background.paper, 0.5),
               backdropFilter: 'blur(24px)',
@@ -517,65 +523,53 @@ const InvestmentsPageContent: React.FC = () => {
             }}
           >
             {/* Tab buttons */}
-            <Box
-              role="tablist"
+            <Tabs
+              value={activeTab}
+              onChange={(_event, nextTab: number) => setActiveTab(nextTab)}
+              variant="scrollable"
+              scrollButtons="auto"
+              allowScrollButtonsMobile
               aria-label={t('tabs.ariaLabel', 'Investment sections')}
               sx={{
-                display: 'flex',
-                gap: 0.5,
-                flexWrap: 'nowrap',
-                flex: '0 0 auto',
+                flex: { xs: '1 0 100%', lg: '1 1 auto' },
+                width: { xs: '100%', lg: 'auto' },
+                minWidth: 0,
+                minHeight: 36,
+                '& .MuiTabs-flexContainer': {
+                  gap: 0.5,
+                },
+                '& .MuiTabs-indicator': {
+                  display: 'none',
+                },
+                '& .MuiTabs-scrollButtons': {
+                  width: 28,
+                  minHeight: 36,
+                  flexShrink: 0,
+                  borderRadius: '10px',
+                  color: 'text.secondary',
+                  '&:hover': {
+                    bgcolor: alpha(theme.palette.primary.main, 0.08),
+                    color: 'text.primary',
+                  },
+                  '&.Mui-disabled': {
+                    opacity: 0,
+                  },
+                },
               }}
             >
               {investmentTabs.map((tab) => {
                 const isSelected = activeTab === tab.id;
                 return (
-                  <Tooltip title={tab.label} placement="top" disableInteractive key={tab.id}>
-                    <Box
-                      role="tab"
-                      aria-selected={isSelected}
-                      tabIndex={isSelected ? 0 : -1}
-                      onClick={() => setActiveTab(tab.id)}
-                      sx={{
-                        flex: '0 0 auto',
-                        minWidth: { xs: 40, md: 'auto' },
-                        height: 36,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 0.75,
-                        px: { xs: 1.25, md: 1.75 },
-                        borderRadius: '10px',
-                        cursor: 'pointer',
-                        userSelect: 'none',
-                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                        color: isSelected
-                          ? theme.palette.primary.contrastText
-                          : theme.palette.text.secondary,
-                        background: isSelected
-                          ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`
-                          : 'transparent',
-                        boxShadow: isSelected
-                          ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}, 0 1px 3px ${alpha(theme.palette.primary.main, 0.2)}`
-                          : 'none',
-                        '&:hover': isSelected
-                          ? {}
-                          : {
-                              bgcolor: alpha(theme.palette.primary.main, 0.08),
-                              color: theme.palette.text.primary,
-                            },
-                        '&:active': {
-                          transform: 'scale(0.97)',
-                        },
-                        '& .MuiSvgIcon-root': {
-                          fontSize: 18,
-                          opacity: isSelected ? 1 : 0.6,
-                          transition: 'opacity 0.2s',
-                        },
-                      }}
-                    >
-                      {tab.icon}
+                  <Tab
+                    key={tab.id}
+                    value={tab.id}
+                    icon={tab.icon}
+                    iconPosition="start"
+                    aria-label={tab.label}
+                    title={tab.label}
+                    label={(
                       <Typography
+                        component="span"
                         variant="body2"
                         fontWeight={isSelected ? 600 : 500}
                         sx={{
@@ -586,14 +580,41 @@ const InvestmentsPageContent: React.FC = () => {
                       >
                         {tab.label}
                       </Typography>
-                    </Box>
-                  </Tooltip>
+                    )}
+                    sx={{
+                      flex: '0 0 auto',
+                      minWidth: { xs: 40, md: 'auto' },
+                      minHeight: 36,
+                      height: 36,
+                      gap: 0.75,
+                      px: { xs: 1.25, md: 1.75 },
+                      py: 0,
+                      borderRadius: '10px',
+                      textTransform: 'none',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      color: 'text.secondary',
+                      '&.Mui-selected': {
+                        color: theme.palette.primary.contrastText,
+                        background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+                        boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}, 0 1px 3px ${alpha(theme.palette.primary.main, 0.2)}`,
+                      },
+                      '&:hover:not(.Mui-selected)': {
+                        bgcolor: alpha(theme.palette.primary.main, 0.08),
+                        color: 'text.primary',
+                      },
+                      '&:active': {
+                        transform: 'scale(0.97)',
+                      },
+                      '& .MuiSvgIcon-root': {
+                        fontSize: 18,
+                        opacity: isSelected ? 1 : 0.6,
+                        transition: 'opacity 0.2s',
+                      },
+                    }}
+                  />
                 );
               })}
-            </Box>
-
-            {/* Spacer */}
-            <Box sx={{ flex: 1 }} />
+            </Tabs>
 
             {/* Time range selector */}
             {(activeTab === 0 || activeTab === 3 || activeTab === 4) && (

@@ -14,15 +14,13 @@ import {
   useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import {
-  Notes as NotesIcon,
-  LocalOffer as TagIcon,
-  ArrowUpward as IncomeIcon,
-  ArrowDownward as ExpenseIcon,
-  TrendingUp as InvestmentIcon,
-  CalendarToday as CalendarIcon,
-  Category as CategoryIcon,
-} from '@mui/icons-material';
+import NotesIcon from '@mui/icons-material/Notes';
+import TagIcon from '@mui/icons-material/LocalOffer';
+import IncomeIcon from '@mui/icons-material/ArrowUpward';
+import ExpenseIcon from '@mui/icons-material/ArrowDownward';
+import InvestmentIcon from '@mui/icons-material/TrendingUp';
+import CalendarIcon from '@mui/icons-material/CalendarToday';
+import CategoryIcon from '@mui/icons-material/Category';
 import { useTranslation } from 'react-i18next';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';

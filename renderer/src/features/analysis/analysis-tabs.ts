@@ -37,28 +37,3 @@ export const ANALYSIS_TAB_INDEX: Record<AnalysisTabKey, number> = ANALYSIS_TAB_D
 export function isAnalysisTabKey(value: string): value is AnalysisTabKey {
   return ANALYSIS_TAB_KEY_SET.has(value as AnalysisTabKey);
 }
-
-const PRIMARY_ANALYSIS_TAB_KEYS = new Set<AnalysisTabKey>([
-  'dashboard',
-  'actions',
-  'spending',
-  'budget',
-]);
-
-export function partitionAnalysisTabs<T extends AnalysisTabDefinition>(tabs: T[]) {
-  return tabs.reduce(
-    (accumulator, tab) => {
-      if (PRIMARY_ANALYSIS_TAB_KEYS.has(tab.key)) {
-        accumulator.primaryTabs.push(tab);
-      } else {
-        accumulator.overflowTabs.push(tab);
-      }
-      return accumulator;
-    },
-    { primaryTabs: [] as T[], overflowTabs: [] as T[] },
-  );
-}
-
-export function getActiveOverflowTab<T extends AnalysisTabDefinition>(currentTab: number, overflowTabs: T[]) {
-  return overflowTabs.find((tab) => tab.index === currentTab);
-}

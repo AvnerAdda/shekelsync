@@ -25,20 +25,18 @@ import {
 } from '@mui/material';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import {
-  Chat as ChatIcon,
-  Close as CloseIcon,
-  Send as SendIcon,
-  SmartToy as BotIcon,
-  Person as PersonIcon,
-  Lock as LockIcon,
-  Add as AddIcon,
-  History as HistoryIcon,
-  Delete as DeleteIcon,
-  ExpandLess,
-  ExpandMore,
-  Refresh as RefreshIcon,
-} from '@mui/icons-material';
+import ChatIcon from '@mui/icons-material/Chat';
+import CloseIcon from '@mui/icons-material/Close';
+import SendIcon from '@mui/icons-material/Send';
+import BotIcon from '@mui/icons-material/SmartToy';
+import PersonIcon from '@mui/icons-material/Person';
+import LockIcon from '@mui/icons-material/Lock';
+import AddIcon from '@mui/icons-material/Add';
+import HistoryIcon from '@mui/icons-material/History';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ExpandLess from '@mui/icons-material/ExpandLess';
+import ExpandMore from '@mui/icons-material/ExpandMore';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';
 import { useChatbotPermissions, MODEL_TIERS } from '@app/contexts/ChatbotPermissionsContext';

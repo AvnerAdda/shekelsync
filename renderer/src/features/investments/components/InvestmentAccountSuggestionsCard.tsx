@@ -18,14 +18,12 @@ import {
   Menu,
   MenuItem
 } from '@mui/material';
-import {
-  ExpandMore,
-  ExpandLess,
-  Close,
-  Lightbulb,
-  Link as LinkIcon,
-  Add as AddIcon
-} from '@mui/icons-material';
+import ExpandMore from '@mui/icons-material/ExpandMore';
+import ExpandLess from '@mui/icons-material/ExpandLess';
+import Close from '@mui/icons-material/Close';
+import Lightbulb from '@mui/icons-material/Lightbulb';
+import LinkIcon from '@mui/icons-material/Link';
+import AddIcon from '@mui/icons-material/Add';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import { apiClient } from '@/lib/api-client';
 import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';

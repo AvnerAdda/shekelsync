@@ -18,21 +18,19 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import type { ChipProps } from '@mui/material';
-import {
-  EmojiEvents as TrophyIcon,
-  LocalFireDepartment as StreakIcon,
-  Star as StarIcon,
-  CheckCircle as CheckIcon,
-  Close as CloseIcon,
-  Timer as TimerIcon,
-  TrendingDown as ReduceIcon,
-  Savings as SavingsIcon,
-  AccountBalance as BudgetIcon,
-  Refresh as RefreshIcon,
-  PlayArrow as AcceptIcon,
-  Storefront as MerchantIcon,
-  Weekend as WeekendIcon,
-} from '@mui/icons-material';
+import TrophyIcon from '@mui/icons-material/EmojiEvents';
+import StreakIcon from '@mui/icons-material/LocalFireDepartment';
+import StarIcon from '@mui/icons-material/Star';
+import CheckIcon from '@mui/icons-material/CheckCircle';
+import CloseIcon from '@mui/icons-material/Close';
+import TimerIcon from '@mui/icons-material/Timer';
+import ReduceIcon from '@mui/icons-material/TrendingDown';
+import SavingsIcon from '@mui/icons-material/Savings';
+import BudgetIcon from '@mui/icons-material/AccountBalance';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import AcceptIcon from '@mui/icons-material/PlayArrow';
+import MerchantIcon from '@mui/icons-material/Storefront';
+import WeekendIcon from '@mui/icons-material/Weekend';
 import { useQuests } from '@renderer/features/analysis/hooks/useQuests';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import type { SmartAction, QuestDifficulty } from '@renderer/types/quests';

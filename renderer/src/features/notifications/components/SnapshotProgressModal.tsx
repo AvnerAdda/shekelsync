@@ -1,6 +1,8 @@
 import React from 'react';
 import { Alert, Box, Card, CardContent, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, Divider, Grid, IconButton, Stack, Typography } from '@mui/material';
-import { ArrowDownward as DownIcon, ArrowUpward as UpIcon, Close as CloseIcon } from '@mui/icons-material';
+import DownIcon from '@mui/icons-material/ArrowDownward';
+import UpIcon from '@mui/icons-material/ArrowUpward';
+import CloseIcon from '@mui/icons-material/Close';
 import { useTranslation } from 'react-i18next';
 import SpendComparisonBar from './SpendComparisonBar';
 

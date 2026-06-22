@@ -15,19 +15,17 @@ import {
   useTheme,
   useMediaQuery,
 } from '@mui/material';
-import {
-  TrendingUp as PriceIncreaseIcon,
-  TrendingDown as PriceDecreaseIcon,
-  Warning as MissedIcon,
-  ContentCopy as DuplicateIcon,
-  NotInterested as UnusedIcon,
-  Event as RenewalIcon,
-  Error as CancelledChargingIcon,
-  Close as DismissIcon,
-  ExpandMore as ExpandIcon,
-  ExpandLess as CollapseIcon,
-  KeyboardArrowDown as ShowMoreIcon,
-} from '@mui/icons-material';
+import PriceIncreaseIcon from '@mui/icons-material/TrendingUp';
+import PriceDecreaseIcon from '@mui/icons-material/TrendingDown';
+import MissedIcon from '@mui/icons-material/Warning';
+import DuplicateIcon from '@mui/icons-material/ContentCopy';
+import UnusedIcon from '@mui/icons-material/NotInterested';
+import RenewalIcon from '@mui/icons-material/Event';
+import CancelledChargingIcon from '@mui/icons-material/Error';
+import DismissIcon from '@mui/icons-material/Close';
+import ExpandIcon from '@mui/icons-material/ExpandMore';
+import CollapseIcon from '@mui/icons-material/ExpandLess';
+import ShowMoreIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useTranslation } from 'react-i18next';
 import type { SubscriptionAlert, AlertType } from '@renderer/types/subscriptions';

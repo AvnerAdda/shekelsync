@@ -17,15 +17,13 @@ import {
   useTheme,
   Alert,
 } from '@mui/material';
-import {
-  Close as CloseIcon,
-  Star as StarIcon,
-  CheckCircle as CheckCircleIcon,
-  Schedule as ScheduleIcon,
-  Warning as WarningIcon,
-  Block as BlockIcon,
-  PersonAdd as PersonAddIcon,
-} from '@mui/icons-material';
+import CloseIcon from '@mui/icons-material/Close';
+import StarIcon from '@mui/icons-material/Star';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import WarningIcon from '@mui/icons-material/Warning';
+import BlockIcon from '@mui/icons-material/Block';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import { useTranslation } from 'react-i18next';
 import { useLicense } from '../hooks/useLicense';
 
