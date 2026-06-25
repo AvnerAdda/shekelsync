@@ -6,6 +6,10 @@
 - **[Migration Complete Summary](./MIGRATION_COMPLETE_SUMMARY.md)** - Start here! Complete overview and next steps
 - **[Category Schema Migration Guide](./CATEGORY_SCHEMA_MIGRATION.md)** - Detailed technical guide
 
+### Audits & Product Notes
+- **[Dashboard Number Audit - 2026-06-25](./dashboard-number-audit-2026-06-25.md)** - Current dashboard reconciliation against SQLite
+- **[LinkedIn Post Ideas](./marketing/linkedin-post-ideas.md)** - Engineering story and launch-content draft ideas
+
 ### Scripts
 - **Database Init:** `../scripts/init_sqlite_db.js`
 - **Migrations:** `../scripts/migrations/`
@@ -60,9 +64,17 @@
 - Category Constants: `../app/lib/category-constants.js`
 - SQL Dialect: `../app/lib/sql-dialect.js`
 
+#### Dashboard Audits
+- [Dashboard Number Audit - 2026-06-25](./dashboard-number-audit-2026-06-25.md) - Latest dashboard number reconciliation
+- [Dashboard Number Audit - 2026-03-26](./dashboard-number-audit-2026-03-26.md) - Historical audit, superseded for current DB state
+
+#### Marketing
+- [LinkedIn Post Ideas](./marketing/linkedin-post-ideas.md) - Draft engineering story angles and image ideas
+
 #### TypeScript Types
-- Category Types: `../app/components/CategoryDashboard/types/index.ts`
-- Interfaces: `CategorySummary`, `Expense`, `CategoryOption`
+- Transaction Types: `../renderer/src/types/transactions.ts`
+- Spending Category Types: `../renderer/src/types/spending-categories.ts`
+- Breakdown Types: `../renderer/src/features/breakdown/types.ts`
 
 ### For Operations
 
@@ -71,14 +83,8 @@
 # Initialize new SQLite database
 node scripts/init_sqlite_db.js
 
-# Run schema migration v2
-node scripts/migrate_schema_v2.js
-
-# Deprecate legacy category columns (analyze)
-node scripts/deprecate_legacy_category_columns.js
-
-# Deprecate legacy category columns (execute with backup)
-node scripts/deprecate_legacy_category_columns.js --drop
+# Verify the current normalized transaction schema
+sqlite3 dist/shekelsync.sqlite "PRAGMA table_info(transactions);"
 ```
 
 #### Development
@@ -145,7 +151,10 @@ Pattern-based auto-categorization rules.
 CREATE TABLE categorization_rules (
   id INTEGER PRIMARY KEY,
   name_pattern TEXT NOT NULL,
-  category_definition_id INTEGER,   -- FK instead of string
+  target_category TEXT NOT NULL,     -- Compatibility/display metadata
+  category_definition_id INTEGER,    -- Normalized FK target
+  category_type TEXT,                -- Compatibility/display metadata
+  category_path TEXT,                -- Compatibility/display metadata
   is_active BOOLEAN DEFAULT true,
   priority INTEGER DEFAULT 0,
   FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id)
@@ -246,7 +255,7 @@ const budget = await db.query(`
 ### ✅ Completed
 - Backend API migration (100%)
 - Frontend component migration (90%)
-- Database migration script
+- Current `transactions` schema cleanup
 - Documentation
 - Type definitions
 

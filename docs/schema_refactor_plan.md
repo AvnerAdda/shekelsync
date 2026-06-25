@@ -1,5 +1,7 @@
 # SQLite Schema Normalisation Plan
 
+Status note (2026-06-25): this is a historical plan. The current `transactions` table has already dropped legacy `category`, `parent_category`, and `subcategory` columns. `categorization_rules` still keeps `target_category`, `category_type`, and `category_path` as compatibility/display metadata alongside `category_definition_id`.
+
 ## Goals
 
 1. Eliminate duplicated category text columns and rely on `category_definitions` everywhere.
@@ -11,12 +13,10 @@
 
 | Area | Current Situation | Target |
 | --- | --- | --- |
-| `transactions` | Stores `category`, `parent_category`, `subcategory`, `category_type` text copies alongside `category_definition_id`. | Keep only `category_definition_id` (nullable), derive labels via joins/views when needed. |
-| `category_actionability_settings` | Has `category_definition_id` AND `parent_category` / `subcategory` text. | Store `category_definition_id` only; API joins to provide names. |
-| `category_budgets` | References category by name. | Reference category by ID instead of text. |
-| `categorization_rules` | Stores target category names + IDs. | Store `target_category_id` (FK) and drop redundant text columns. |
-| `category_mapping` | Maps Hebrew term → parent/subcategory strings. | Map to `category_definition_id`; derive display labels via joins. |
-| `merchant_catalog` | Stores merchant patterns + text categories. | Reference `category_definition_id`; keep optional notes only. |
+| `transactions` | Current schema keeps `category_definition_id` plus denormalized `category_type`; legacy string columns are gone. | Complete for current schema cleanup. |
+| `category_budgets` | Current schema references `category_definition_id`. | Complete. |
+| `categorization_rules` | Current schema stores target category metadata plus `category_definition_id`. | Decide whether metadata remains as compatibility/display cache or moves fully to joins in a future API cleanup. |
+| `category_mapping` | Maps legacy/source category terms to `category_definition_id`. | Keep as an import/resolution compatibility table unless rule resolution is redesigned. |
 | `transactions` dependants | Tables like `manual_exclusions`, `transaction_account_links`, `pending_transaction_suggestions` reference transactions by `identifier`/`vendor`. | Keep existing PK but enforce FKs; enrich with category IDs if necessary. |
 | Indexing | Many indexes on text columns that will go away. | Rebuild indexes on ID columns once schema updated. |
 
@@ -44,7 +44,7 @@
    - Copy text columns into a temporary mapping table.
    - Drop redundant columns after verification.
    - Apply new constraints (`FOREIGN KEY`, `NOT NULL` where appropriate).
-2. Run migration against current `shekelsync.sqlite` and validate counts. *(script: `node scripts/migrate_schema_v2.js` — creates a timestamped backup automatically)*
+2. Current `dist/shekelsync.sqlite` is already migrated for `transactions`. For older databases, write a one-off migration and validate counts against a backup.
 
 ### Phase 4 – Clean-up & Verification
 
@@ -60,4 +60,4 @@
 
 ---
 
-**Next action:** Update the API layer to rely on `category_definition_id` (Phase 1) before altering the schema in `init_sqlite_db.js`. This keeps the app functional while we gradually drop redundant columns. 
+**Next action:** If further cleanup is desired, focus on whether `categorization_rules` should keep its display/cache metadata or derive all labels from `category_definitions` joins. 

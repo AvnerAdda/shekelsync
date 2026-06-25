@@ -196,45 +196,34 @@ interface CategoryOption {
 - [x] `/api/investments/check-existing.js`
 - [x] `/api/chat.js`
 
-### ✅ Frontend Components (Mostly Complete)
-- [x] CategoryDashboard (fully migrated)
-- [x] BudgetsPage (fully migrated)
-- [x] ManualModal, ManualResolutionPanel, PatternSuggestionsPanel
-- [x] SmartNotifications, SummaryCards
-- [ ] CostBreakdownPanel (needs update)
-- [ ] HomePage (partially needs update - investment filtering)
-- [ ] AccountsModal (needs update)
-- [ ] DuplicateManagementModal (needs update)
-- [ ] AnalysisPage/ActionabilitySetupModal (needs update)
+### ✅ Frontend Components
+- [x] Current renderer paths use normalized category IDs for transactional category updates and filtering.
+- [x] Dashboard, breakdown, budgets, transaction history, search, notifications, subscriptions, and category hierarchy flows consume `category_definition_id` plus joined display names.
+- [x] Remaining `parent_category_name`, `subcategory`, and `category_name` references are display/API payload fields, not reads from legacy `transactions` columns.
 
 ### Database Schema
-- [x] Migration script created (`scripts/deprecate_legacy_category_columns.js`)
-- [ ] Run migration script (analyze mode): `node scripts/deprecate_legacy_category_columns.js`
-- [ ] Verify all legacy columns are empty
-- [ ] Run migration script (drop mode): `node scripts/deprecate_legacy_category_columns.js --drop`
+- [x] Current `transactions` schema omits legacy string category columns.
+- [x] Current `transactions` schema keeps `category_definition_id` and denormalized `category_type`.
+- [x] `categorization_rules` still keeps `target_category`, `category_type`, and `category_path` as compatibility/display metadata while `category_definition_id` is the normalized target.
+- [x] The old cleanup script has been removed after schema cleanup was applied.
 
-## Running the Database Migration
+## Current-State Verification
 
-### Step 1: Analyze Current State (Safe)
+Verify the current SQLite schema:
+
 ```bash
-node scripts/deprecate_legacy_category_columns.js
+sqlite3 dist/shekelsync.sqlite "PRAGMA table_info(transactions);"
+sqlite3 dist/shekelsync.sqlite "PRAGMA table_info(categorization_rules);"
 ```
 
-This will show which columns exist and how many rows have data.
+Expected current state:
 
-### Step 2: Verify No Data in Legacy Columns
-The output should show all legacy columns have 0 non-null rows. If not, there's still data migration needed.
+- `transactions` has `category_definition_id` and no `category`, `parent_category`, or `subcategory` columns.
+- `categorization_rules` has `category_definition_id` plus compatibility metadata fields.
 
-### Step 3: Drop Legacy Columns (Creates Backup Automatically)
-```bash
-node scripts/deprecate_legacy_category_columns.js --drop
-```
+If you are migrating an older database that still has legacy transaction columns, create a one-off migration for that database, take a backup first, and then test:
 
-A backup will be created at `dist/shekelsync.sqlite.bak-YYYYMMDDHHMMSS` before any changes.
-
-### Step 4: Test Application
-After dropping columns:
-1. Start the app: `cd app && npm run dev`
+1. Start the app: `npm run dev:electron`
 2. Test all major features:
    - Category dashboard
    - Budget creation/editing
@@ -280,17 +269,17 @@ interface Props {
 
 ## Backward Compatibility
 
-During the transition period, some APIs may return **both** old and new fields:
+Some APIs still return display names and compatibility fields alongside normalized IDs:
 
 ```json
 {
   "category_definition_id": 42,
   "category_name": "מסעדות",
-  "legacy_category": "Restaurants"  // For backward compatibility
+  "parent_category_name": "אוכל"
 }
 ```
 
-This allows gradual frontend migration. Once all frontend components are updated, legacy fields can be removed.
+This is expected. These fields are derived from `category_definitions` joins or rule metadata; they are not legacy `transactions.category` columns.
 
 ## Testing
 
@@ -352,22 +341,21 @@ npm test -- --testPathPattern=components
 
 For questions or issues with the migration:
 1. Check this guide first
-2. Review git diff: `git diff app/pages/api app/components`
-3. Check migration script logs
+2. Review current backend services in `app/server/services`
+3. Review renderer category consumers in `renderer/src`
 4. Restore from backup if needed
 
 ## Next Steps
 
 After completing the migration:
-1. ✅ Remove legacy field references from codebase
+1. ✅ Remove legacy transaction column references from codebase
 2. ✅ Update API documentation
-3. ✅ Remove backward compatibility code
+3. ✅ Keep display-name compatibility fields where they are part of current API contracts
 4. ✅ Add indexes on `category_definition_id` columns (already done)
-5. ✅ Consider adding database constraints (NOT NULL where appropriate)
+5. Consider adding database constraints (NOT NULL where appropriate)
 
 ## References
 
-- Migration script: `scripts/deprecate_legacy_category_columns.js`
 - Schema init script: `scripts/init_sqlite_db.js`
 - Category helpers: `app/lib/category-helpers.js`
-- TypeScript types: `app/components/CategoryDashboard/types/index.ts`
+- TypeScript types: `renderer/src/types/transactions.ts`, `renderer/src/types/spending-categories.ts`, `renderer/src/features/breakdown/types.ts`
