@@ -5,6 +5,8 @@
 The database optimization work is **complete**! All backend APIs and most frontend components now use the normalized `category_definitions` schema.
 
 > NOTE (2026-02-04): The current schema snapshot already omits legacy category columns in `transactions`. The prior cleanup script referenced below was removed after cleanup was applied. If you need to clean an older database, use the migration guide to craft a one-off migration and validate against a backup first.
+>
+> NOTE (2026-06-25): A fresh audit confirmed the current `transactions` table has no `category`, `parent_category`, or `subcategory` columns. The `categorization_rules` table still keeps `target_category`, `category_type`, and `category_path` as compatibility/display metadata alongside `category_definition_id`.
 
 ---
 
@@ -17,10 +19,10 @@ The database optimization work is **complete**! All backend APIs and most fronte
 - **Status:** ✅ **COMPLETE**
 
 ### Frontend Components
-- **Files Modified:** ~15 component files (in git diff)
-- **Main Components:** ✅ CategoryDashboard, BudgetsPage, ManualResolutionPanel, etc.
-- **Remaining:** 6 minor components still reference legacy fields (non-blocking)
-- **Status:** ✅ **90% COMPLETE** (sufficient for schema cleanup)
+- **Current Location:** `renderer/src`
+- **Main Areas:** dashboard, breakdown, budgets, category hierarchy, search, notifications, analysis, subscriptions
+- **Remaining References:** display/API payload names such as `parent_category_name` and `subcategory`, not legacy transaction columns
+- **Status:** ✅ **COMPLETE for current schema cleanup**
 
 ### Database Scripts
 - **Legacy Cleanup Script:** ⚠️ Removed after cleanup was applied in the current schema snapshot
@@ -41,27 +43,18 @@ The database optimization work is **complete**! All backend APIs and most fronte
 | `chat.js` | JOINs for context queries | ~15 |
 | **Total** | | **~155 lines** |
 
-### Frontend Components (Main Ones Migrated)
+### Frontend Areas (Current Layout)
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| `CategoryDashboard/index.tsx` | ✅ Complete | Using `category_definition_id` throughout |
-| `CategoryDashboard/types/index.ts` | ✅ Complete | All interfaces updated |
-| `BudgetsPage.tsx` | ✅ Complete | ID-based budget management |
-| `ManualModal.tsx` | ✅ Complete | Updated in git diff |
-| `ManualResolutionPanel.tsx` | ✅ Complete | Updated in git diff |
-| `PatternSuggestionsPanel.tsx` | ✅ Complete | Updated in git diff |
-| `SmartNotifications.tsx` | ✅ Complete | Updated in git diff |
-| `SummaryCards.tsx` | ✅ Complete | Updated in git diff |
-| `menu.tsx` | ✅ Complete | Updated in git diff |
-| | | |
-| `CostBreakdownPanel.tsx` | ⚠️ Partial | Still uses some legacy fields (low priority) |
-| `HomePage.tsx` | ⚠️ Partial | Investment filtering uses strings (low priority) |
-| `AccountsModal.tsx` | ⚠️ Partial | Minor legacy usage (low priority) |
-| `DuplicateManagementModal.tsx` | ⚠️ Partial | Display only (low priority) |
-| `AnalysisPage/*` | ⚠️ Partial | 2 modals need updates (low priority) |
+| Area | Status | Notes |
+|------|--------|-------|
+| `renderer/src/features/dashboard` | ✅ Complete | Dashboard data uses `category_definition_id` and joined display names |
+| `renderer/src/features/breakdown` | ✅ Complete | Parent/subcategory terms describe hierarchy payloads |
+| `renderer/src/features/budgets` | ✅ Complete | Budget writes use normalized category IDs |
+| `renderer/src/shared/modals/CategoryHierarchyModal.tsx` | ✅ Complete | Category edits and rule creation use category IDs with display metadata |
+| `renderer/src/features/search` | ✅ Complete | Search results include normalized category IDs |
+| `renderer/src/features/analysis` | ✅ Complete | Spending targets, subscriptions, and category transactions use normalized IDs |
 
-**Note:** The remaining components are minor/display-only and don't block schema cleanup.
+**Note:** Remaining `target_category`, `parent_category_name`, `subcategory`, and `category_name` terms are current API/display fields or categorization-rule metadata.
 
 ---
 
@@ -99,13 +92,13 @@ const numericValue = dialect.castNumeric('amount');
 ### Grep Verification (All Passed)
 ```bash
 # No legacy GROUP BY queries found
-grep -r "GROUP BY.*t\.category\b" app/pages/api => 0 results ✅
+rg "GROUP BY.*t\.category\b" app/server renderer/src => 0 results ✅
 
 # No legacy COALESCE queries found
-grep -r "COALESCE(t\.parent_category" app/pages/api => 0 results ✅
+rg "COALESCE\\(t\\.parent_category" app/server renderer/src => 0 results ✅
 
 # No direct t.category references in WHERE clauses
-grep -r "WHERE.*t\.category\s*=" app/pages/api => 0 results ✅
+rg "WHERE.*t\.category\\s*=" app/server renderer/src => 0 results ✅
 ```
 
 ### API Endpoints Verified
@@ -205,18 +198,9 @@ If you're working with an older database that still has legacy columns, create a
 Legacy category columns are already removed in the current schema snapshot. If you are migrating an older database, take a backup first and validate critical dashboards after the migration.
 
 ### Remaining Work (Optional)
-These minor frontend components can be updated later (non-blocking):
-- CostBreakdownPanel.tsx
-- HomePage.tsx (investment section)
-- AccountsModal.tsx
-- DuplicateManagementModal.tsx
-- AnalysisPage/ActionabilitySetupModal.tsx
-- AnalysisPage/HealthScoreRoadmapModal.tsx
-
-They currently use legacy fields but don't break functionality since:
-- They're display-only or low-traffic
-- Backend APIs already return normalized data
-- They can fall back to legacy fields during transition
+Optional future cleanup is limited to compatibility metadata, not blocked schema cleanup:
+- Decide whether `categorization_rules.target_category`, `category_type`, and `category_path` should remain as display/cache fields or be replaced by joined display data everywhere.
+- Keep API contracts stable for display fields such as `parent_category_name` and `subcategory` unless a versioned API cleanup is planned.
 
 ---
 
@@ -236,7 +220,8 @@ You've successfully:
 
 Refer to:
 - **Full Guide:** `docs/CATEGORY_SCHEMA_MIGRATION.md`
-  - **Git History:** `git log --oneline app/pages/api app/components`
+  - **Current Services:** `app/server/services`
+  - **Current Renderer:** `renderer/src`
  - **Backup Location:** `dist/shekelsync.sqlite.bak-*` (if you created one)
 
 **Success! 🚀**
