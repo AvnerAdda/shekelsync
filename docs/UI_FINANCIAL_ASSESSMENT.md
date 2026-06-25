@@ -5,6 +5,8 @@
 **Overall Score:** 6.5/10 → **7.0/10** (Round 1) → **7.5/10** (Round 2)
 **Last Updated:** October 21, 2025 (Round 2 - PM)
 
+> Archive note (2026-06-25): this assessment predates the current `renderer/src` layout. File paths that mention `/app/components` are historical references, not current implementation paths.
+
 ---
 
 ## ✅ Design Improvements Implemented (October 21, 2025)

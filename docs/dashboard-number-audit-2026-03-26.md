@@ -1,5 +1,7 @@
 # Dashboard Number Audit - 2026-03-26
 
+Follow-up: a newer audit on 2026-06-25 found that the current SQLite database no longer reproduces the March mismatch described here, and that dashboard summary totals reconcile with daily history totals for both March 2026 and June 2026. See `docs/dashboard-number-audit-2026-06-25.md`.
+
 ## Summary
 
 - Source of truth: `/home/addavner/shekelsync/dist/shekelsync.sqlite`
