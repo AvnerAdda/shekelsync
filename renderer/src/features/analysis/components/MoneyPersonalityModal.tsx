@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -37,6 +37,8 @@ interface MoneyPersonalityModalProps {
   onClose: () => void;
 }
 
+const CACHE_DURATION_MS = 5 * 60 * 1000;
+
 interface FrequencyConfig {
   name: string;
   icon: React.ReactNode;
@@ -54,8 +56,6 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<number>(0);
 
-  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
   const FREQUENCY_MULTIPLIERS: Record<string, number> = {
     daily: 30,
     weekly: 4,
@@ -72,13 +72,7 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
     { name: 'bimonthly', icon: <ScheduleIcon sx={{ fontSize: 16 }} />, label: t('frequencies.bimonthly'), color: '#00bcd4', description: t('frequencies.bimonthlyDesc') },
   ];
 
-  useEffect(() => {
-    if (open && (!data || (Date.now() - lastFetch) > CACHE_DURATION)) {
-      fetchData();
-    }
-  }, [open]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -94,7 +88,13 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    if (open && (!data || (Date.now() - lastFetch) > CACHE_DURATION_MS)) {
+      fetchData();
+    }
+  }, [data, fetchData, lastFetch, open]);
 
   const getCategoryColor = (amount: number, minAmount: number, maxAmount: number): string => {
     if (maxAmount === minAmount) return theme.palette.success.main;

@@ -85,3 +85,5 @@ scripts/send-launch-email-test.js
 
 linux-gpg.key
 app/shekelsync.pfx
+
+docs/

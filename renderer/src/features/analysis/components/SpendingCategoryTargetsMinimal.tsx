@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -65,12 +65,11 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
     fetchBreakdown();
   }, [fetchBreakdown]);
 
-  const savedTargets = normalizeTargets(breakdown?.targets);
-  const savedTargetsSignature = TARGET_KEYS.map((key) => savedTargets[key]).join('|');
+  const savedTargets = useMemo(() => normalizeTargets(breakdown?.targets), [breakdown?.targets]);
 
   useEffect(() => {
     setLocalTargets(savedTargets);
-  }, [savedTargetsSignature]);
+  }, [savedTargets]);
 
   const totalIncome = breakdown?.total_income || 0;
   const totalPercentage = calculateTargetTotal(localTargets);

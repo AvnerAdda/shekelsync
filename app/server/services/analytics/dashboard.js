@@ -184,6 +184,11 @@ async function getDashboardAnalytics(query = {}) {
   const creditCardRepaymentCondition = getCreditCardRepaymentCategoryCondition('cd');
 
   const { groupBy: dateGroupBy, select: dateSelect } = resolveDateAggregation('t.date', aggregation);
+  const pendingProcessedAtExpr = 'COALESCE(t.processed_datetime, t.processed_date)';
+  const pendingProcessedDateExpr = dialect.useSqlite
+    ? `DATE(${pendingProcessedAtExpr}, 'localtime')`
+    : `DATE(${pendingProcessedAtExpr})`;
+  const currentLocalDateExpr = dialect.useSqlite ? "DATE('now', 'localtime')" : 'CURRENT_DATE';
 
   const historyResult = await database.query(
     `WITH base_history AS (
@@ -374,6 +379,7 @@ async function getDashboardAnalytics(query = {}) {
   let totalAccounts = 0;
   let pendingExpenses = 0;
   let pendingCount = 0;
+  let pendingByProcessedDate = [];
   let currentBankBalance = 0;
   let monthStartBankBalance = 0;
   let bankBalanceChange = 0;
@@ -420,9 +426,10 @@ async function getDashboardAnalytics(query = {}) {
         [start, end, BANK_CATEGORY_NAME],
       ),
 
-      // Query for pending expenses (processed_date > today)
+      // Query for pending expenses grouped by future processed date.
       database.query(
         `SELECT
+          ${pendingProcessedDateExpr} as processed_date,
           SUM(CASE
             WHEN ${EXPENSE_SQL} THEN ABS(t.price)
             ELSE 0
@@ -438,9 +445,15 @@ async function getDashboardAnalytics(query = {}) {
           AND t.vendor = tpe.transaction_vendor
         WHERE t.date >= $1 AND t.date <= $2
           AND t.processed_date IS NOT NULL
-          AND DATE(t.processed_date) > DATE('now')
+          AND ${pendingProcessedDateExpr} > ${currentLocalDateExpr}
           AND tpe.transaction_identifier IS NULL
-          AND ${dialect.excludePikadon('t')}`,
+          AND ${dialect.excludePikadon('t')}
+        GROUP BY ${pendingProcessedDateExpr}
+        HAVING SUM(CASE
+          WHEN ${EXPENSE_SQL} THEN ABS(t.price)
+          ELSE 0
+        END) > 0
+        ORDER BY processed_date ASC`,
         [start, end],
       ),
     ]);
@@ -455,9 +468,13 @@ async function getDashboardAnalytics(query = {}) {
     netBalance = totalIncome - totalExpenses;
     totalAccounts = Number.parseInt(summary.total_accounts || 0, 10) || 0;
 
-    const pendingData = pendingExpensesResult.rows[0] || {};
-    pendingExpenses = Number.parseFloat(pendingData.pending_expenses || 0);
-    pendingCount = Number.parseInt(pendingData.pending_count || 0, 10);
+    pendingByProcessedDate = pendingExpensesResult.rows.map((row) => ({
+      date: row.processed_date,
+      amount: Number.parseFloat(row.pending_expenses || 0),
+      count: Number.parseInt(row.pending_count || 0, 10) || 0,
+    }));
+    pendingExpenses = pendingByProcessedDate.reduce((sum, item) => sum + item.amount, 0);
+    pendingCount = pendingByProcessedDate.reduce((sum, item) => sum + item.count, 0);
 
     const startDateStr = start.toISOString().split('T')[0];
     const monthStartDate = `${startDateStr.substring(0, 7)}-01`;
@@ -615,6 +632,7 @@ async function getDashboardAnalytics(query = {}) {
       // Pending expenses (future processed_date)
       pendingExpenses,
       pendingCount,
+      pendingByProcessedDate,
       // Bank balance summary fields
       currentBankBalance,
       monthStartBankBalance,

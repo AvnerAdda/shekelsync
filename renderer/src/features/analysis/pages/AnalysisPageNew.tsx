@@ -42,6 +42,9 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
 import SubscriptionsIcon from '@mui/icons-material/Autorenew';
 import ProfilingTabIcon from '@mui/icons-material/AssignmentInd';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import {
   BarChart as RechartsBarChart,
   Bar,
@@ -222,6 +225,41 @@ interface CategoryVariabilitySummary {
   by_type: Record<VariabilityType, number>;
 }
 
+interface SnapshotWindow {
+  start: string;
+  end: string;
+  range?: string;
+  income: number;
+  expenses: number;
+  investmentOutflow: number;
+  investmentInflow: number;
+  capitalReturns?: number;
+  net: number;
+  txCount: number;
+}
+
+interface SnapshotPeriod {
+  key: string;
+  label: string;
+  current: SnapshotWindow;
+  previous: SnapshotWindow;
+  spendDelta: number;
+  spendDeltaPct: number | null;
+  hasData: boolean;
+}
+
+interface SnapshotProgressData {
+  triggerKey: string;
+  generatedAt: string;
+  periods: SnapshotPeriod[];
+}
+
+interface SnapshotProgressResponse {
+  success?: boolean;
+  data?: SnapshotProgressData;
+  error?: string | { message?: string };
+}
+
 type BudgetPreviewStatus = 'exceeded' | 'at_risk' | 'on_track';
 
 interface BudgetPreviewMetrics {
@@ -386,6 +424,12 @@ const formatYearMonthLabel = (yearMonth: string | null | undefined, language: st
   });
 };
 
+const getSnapshotResponseError = (payload: SnapshotProgressResponse | null | undefined): string | null => {
+  if (!payload?.error) return null;
+  if (typeof payload.error === 'string') return payload.error;
+  return payload.error.message || null;
+};
+
 interface PersonalIntelligence extends FinancialHealthSnapshot {
   temporalIntelligence?: TemporalIntelligence | null;
   behavioralIntelligence?: BehavioralIntelligence | null;
@@ -441,14 +485,17 @@ const AnalysisPageNew: React.FC = () => {
   const [behavioralData, setBehavioralData] = useState<any | null>(null);
   const [futureData, setFutureData] = useState<any | null>(null);
   const [timeValueData, setTimeValueData] = useState<any | null>(null);
+  const [snapshotData, setSnapshotData] = useState<SnapshotProgressData | null>(null);
   const [temporalLoading, setTemporalLoading] = useState(false);
   const [behavioralLoading, setBehavioralLoading] = useState(false);
   const [futureLoading, setFutureLoading] = useState(false);
   const [timeValueLoading, setTimeValueLoading] = useState(false);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [temporalError, setTemporalError] = useState<string | null>(null);
   const [behavioralError, setBehavioralError] = useState<string | null>(null);
   const [futureError, setFutureError] = useState<string | null>(null);
   const [timeValueError, setTimeValueError] = useState<string | null>(null);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
   
   // Modal states
   const [rhythmModalOpen, setRhythmModalOpen] = useState(false);
@@ -485,20 +532,21 @@ const AnalysisPageNew: React.FC = () => {
     behavioral: false,
     future: false,
     timeValue: false,
+    snapshot: false,
     budget: false,
     variability: false,
   });
   const handledBudgetDeepLinkRef = useRef<string | null>(null);
 
   // Helper function to format hour based on locale
-  const formatHour = (hour: number): string => {
+  const formatHour = useCallback((hour: number): string => {
     const date = new Date(2000, 0, 1, hour);
     return date.toLocaleTimeString(i18n.language, {
       hour: 'numeric',
       minute: '2-digit',
       hour12: i18n.language !== 'he'
     });
-  };
+  }, [i18n.language]);
 
   const fetchTemporalData = useCallback(async () => {
     if (shouldBlockPageData) return;
@@ -592,6 +640,30 @@ const AnalysisPageNew: React.FC = () => {
       console.error('Error fetching personal intelligence:', err);
     } finally {
       setLoading(false);
+    }
+  }, [shouldBlockPageData, t]);
+
+  const fetchSnapshotProgress = useCallback(async () => {
+    if (shouldBlockPageData) {
+      return;
+    }
+
+    setSnapshotLoading(true);
+    setSnapshotError(null);
+
+    try {
+      const response = await apiClient.get<SnapshotProgressResponse>('/api/notifications/snapshot-progress');
+      const responseError = getSnapshotResponseError(response.data);
+      if (!response.ok || response.data?.success === false) {
+        throw new Error(responseError || t('dashboard.previousMonth.loadFailed'));
+      }
+
+      setSnapshotData(response.data?.data || null);
+    } catch (err) {
+      setSnapshotError(err instanceof Error ? err.message : t('errors.generic'));
+      console.error('Error fetching previous month snapshot:', err);
+    } finally {
+      setSnapshotLoading(false);
     }
   }, [shouldBlockPageData, t]);
 
@@ -727,12 +799,16 @@ const AnalysisPageNew: React.FC = () => {
     if (fetchOnceRef.current.timeValue) {
       fetchTimeValueData();
     }
+    if (fetchOnceRef.current.snapshot) {
+      fetchSnapshotProgress();
+    }
   }, [
     fetchBehavioralData,
     fetchBudgetForecast,
     fetchCategoryVariability,
     fetchFutureData,
     fetchIntelligence,
+    fetchSnapshotProgress,
     fetchTemporalData,
     fetchTimeValueData,
   ]);
@@ -788,6 +864,11 @@ const AnalysisPageNew: React.FC = () => {
         fetchOnceRef.current.timeValue = true;
         timers.push(setTimeout(() => fetchTimeValueData(), 250));
       }
+
+      if (!fetchOnceRef.current.snapshot) {
+        fetchOnceRef.current.snapshot = true;
+        timers.push(setTimeout(() => fetchSnapshotProgress(), 150));
+      }
     }
 
     if (currentTab === 3 && !fetchOnceRef.current.budget) {
@@ -809,12 +890,13 @@ const AnalysisPageNew: React.FC = () => {
     fetchCategoryVariability,
     fetchBudgetForecast,
     fetchFutureData,
+    fetchSnapshotProgress,
     fetchTemporalData,
     fetchTimeValueData,
     shouldBlockPageData,
   ]);
 
-  const formatCurrencyValue = (
+  const formatCurrencyValue = useCallback((
     value: number,
     options?: { absolute?: boolean; showSign?: boolean; minimumFractionDigits?: number; maximumFractionDigits?: number }
   ) =>
@@ -823,7 +905,7 @@ const AnalysisPageNew: React.FC = () => {
       minimumFractionDigits: options?.minimumFractionDigits ?? 0,
       ...(options?.absolute !== undefined ? { absolute: options.absolute } : {}),
       ...(options?.showSign ? { showSign: true } : {}),
-    });
+    }), [formatCurrency]);
 
   const normalizedLocale = locale.startsWith('fr')
     ? 'fr'
@@ -1359,7 +1441,98 @@ const AnalysisPageNew: React.FC = () => {
     openAddBudgetDialog,
   ]);
 
-  const isRefreshing = loading || budgetForecastLoading || temporalLoading || behavioralLoading || futureLoading || timeValueLoading;
+  const previousMonthPeriod = useMemo(() => (
+    snapshotData?.periods.find((period) => period.key === 'month' && period.hasData) || null
+  ), [snapshotData?.periods]);
+
+  const previousMonthSpendImproved = (previousMonthPeriod?.spendDelta ?? 0) >= 0;
+  const previousMonthSpendDeltaAmount = Math.abs(previousMonthPeriod?.spendDelta ?? 0);
+  const previousMonthSpendDeltaPct = previousMonthPeriod?.spendDeltaPct === null || previousMonthPeriod?.spendDeltaPct === undefined
+    ? null
+    : Math.abs(previousMonthPeriod.spendDeltaPct).toFixed(1);
+  const previousMonthIncomeDelta = previousMonthPeriod
+    ? previousMonthPeriod.current.income - previousMonthPeriod.previous.income
+    : 0;
+  const previousMonthNetDelta = previousMonthPeriod
+    ? previousMonthPeriod.current.net - previousMonthPeriod.previous.net
+    : 0;
+  const previousMonthTransactionDelta = previousMonthPeriod
+    ? previousMonthPeriod.current.txCount - previousMonthPeriod.previous.txCount
+    : 0;
+
+  const formatCountValue = useCallback((value: number) => (
+    new Intl.NumberFormat(i18n.language || undefined).format(value || 0)
+  ), [i18n.language]);
+
+  const formatSignedCountDelta = useCallback((value: number) => (
+    `${value > 0 ? '+' : ''}${formatCountValue(value)}`
+  ), [formatCountValue]);
+
+  const previousMonthSpendDeltaText = useMemo(() => {
+    if (!previousMonthPeriod) return '';
+    if (previousMonthSpendDeltaAmount < 1) {
+      return t('dashboard.previousMonth.noSpendChange');
+    }
+
+    const amount = formatCurrencyValue(previousMonthSpendDeltaAmount, { maximumFractionDigits: 0 });
+    const pctSuffix = previousMonthSpendDeltaPct ? ` (${previousMonthSpendDeltaPct}%)` : '';
+    return `${t(previousMonthSpendImproved ? 'dashboard.previousMonth.spendDown' : 'dashboard.previousMonth.spendUp', { amount })}${pctSuffix}`;
+  }, [
+    formatCurrencyValue,
+    previousMonthPeriod,
+    previousMonthSpendDeltaAmount,
+    previousMonthSpendDeltaPct,
+    previousMonthSpendImproved,
+    t,
+  ]);
+
+  const previousMonthMetrics = useMemo(() => {
+    if (!previousMonthPeriod) return [];
+
+    return [
+      {
+        key: 'spend',
+        label: t('dashboard.previousMonth.spend'),
+        value: formatCurrencyValue(previousMonthPeriod.current.expenses, { maximumFractionDigits: 0 }),
+        delta: previousMonthSpendDeltaText,
+        tone: previousMonthSpendImproved ? 'success.main' : 'error.main',
+      },
+      {
+        key: 'income',
+        label: t('dashboard.previousMonth.income'),
+        value: formatCurrencyValue(previousMonthPeriod.current.income, { maximumFractionDigits: 0 }),
+        delta: formatCurrencyValue(previousMonthIncomeDelta, { showSign: true, maximumFractionDigits: 0 }),
+        tone: previousMonthIncomeDelta >= 0 ? 'success.main' : 'error.main',
+      },
+      {
+        key: 'net',
+        label: t('dashboard.previousMonth.net'),
+        value: formatCurrencyValue(previousMonthPeriod.current.net, { showSign: true, maximumFractionDigits: 0 }),
+        delta: formatCurrencyValue(previousMonthNetDelta, { showSign: true, maximumFractionDigits: 0 }),
+        tone: previousMonthNetDelta >= 0 ? 'success.main' : 'error.main',
+      },
+      {
+        key: 'transactions',
+        label: t('dashboard.previousMonth.transactions'),
+        value: formatCountValue(previousMonthPeriod.current.txCount),
+        delta: formatSignedCountDelta(previousMonthTransactionDelta),
+        tone: 'info.main',
+      },
+    ];
+  }, [
+    formatCountValue,
+    formatCurrencyValue,
+    formatSignedCountDelta,
+    previousMonthIncomeDelta,
+    previousMonthNetDelta,
+    previousMonthPeriod,
+    previousMonthSpendDeltaText,
+    previousMonthSpendImproved,
+    previousMonthTransactionDelta,
+    t,
+  ]);
+
+  const isRefreshing = loading || budgetForecastLoading || temporalLoading || behavioralLoading || futureLoading || timeValueLoading || snapshotLoading;
 
   const hourlySeries = useMemo(() => {
     const series = temporalData?.hourlySpending ?? intelligence?.temporalIntelligence?.hourlyHeatmap;
@@ -1377,7 +1550,7 @@ const AnalysisPageNew: React.FC = () => {
         amount,
       };
     });
-  }, [hourlySeries, i18n.language]);
+  }, [formatHour, hourlySeries]);
 
   const rhythmStats = useMemo(() => {
     if (hourlySeries.length === 0 && !temporalData && !intelligence?.temporalIntelligence) {
@@ -1450,7 +1623,7 @@ const AnalysisPageNew: React.FC = () => {
           return null;
       }
     }).filter((descriptor): descriptor is NonNullable<typeof descriptor> => descriptor !== null);
-  }, [formatCurrencyValue, rhythmStats, t]);
+  }, [formatCurrencyValue, formatHour, rhythmStats, t]);
 
   const personalityHighlights = useMemo(
     () => buildPersonalityHighlightDescriptors(personalityMetrics).map((descriptor) => {
@@ -1736,7 +1909,7 @@ const AnalysisPageNew: React.FC = () => {
       {/* Tab Content */}
       <TabPanel value={currentTab} index={0}>
         {/* Dashboard Tab */}
-        {isRefreshing && !intelligence && !temporalData && !behavioralData && !futureData && !timeValueData ? (
+        {isRefreshing && !intelligence && !temporalData && !behavioralData && !futureData && !timeValueData && !snapshotData ? (
           <Grid container spacing={2}>
             {[1, 2, 3, 4].map((i) => (
               <Grid size={{ xs: 12, md: 6 }} key={i}>
@@ -1756,14 +1929,14 @@ const AnalysisPageNew: React.FC = () => {
               </Grid>
             ))}
           </Grid>
-        ) : (error && !temporalData && !behavioralData && !futureData && !timeValueData) ? (
+        ) : (error && !temporalData && !behavioralData && !futureData && !timeValueData && !snapshotData) ? (
           <Alert severity="error" sx={{ mb: 3 }}>
             {error}
             <Button variant="contained" onClick={fetchIntelligence} sx={{ mt: 2 }}>
               {t('actions.retry')}
             </Button>
           </Alert>
-        ) : (!intelligence && !temporalData && !behavioralData && !futureData && !timeValueData) ? (
+        ) : (!intelligence && !temporalData && !behavioralData && !futureData && !timeValueData && !snapshotData) ? (
           <Alert severity="info" sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Typography variant="body2" fontWeight="bold">
               {t('states.noDataTitle', { defaultValue: 'No Analysis Data Available' })}
@@ -1996,6 +2169,118 @@ const AnalysisPageNew: React.FC = () => {
                         </Grid>
                       </Grid>
                     </>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid size={{ xs: 12 }}>
+              <Card elevation={0} sx={{
+                height: '100%',
+                borderRadius: 4,
+                bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
+                backdropFilter: 'blur(20px)',
+                border: '1px solid',
+                borderColor: (theme) => alpha(theme.palette.info.main, 0.18),
+                boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
+              }}>
+                <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, minWidth: 0 }}>
+                      <ReceiptLongIcon color="info" sx={{ mt: 0.25 }} />
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          {t('dashboard.previousMonth.title')}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {t('dashboard.previousMonth.subtitle')}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    {previousMonthPeriod && (
+                      <Chip
+                        size="small"
+                        icon={previousMonthSpendImproved ? <TrendingDownIcon /> : <TrendingUpIcon />}
+                        label={
+                          previousMonthSpendDeltaAmount < 1
+                            ? t('dashboard.previousMonth.spendFlat')
+                            : previousMonthSpendImproved
+                              ? t('dashboard.previousMonth.spendLower')
+                              : t('dashboard.previousMonth.spendHigher')
+                        }
+                        color={
+                          previousMonthSpendDeltaAmount < 1
+                            ? 'default'
+                            : previousMonthSpendImproved
+                              ? 'success'
+                              : 'error'
+                        }
+                        variant="outlined"
+                        sx={{ fontWeight: 700 }}
+                      />
+                    )}
+                  </Box>
+
+                  {snapshotLoading && !previousMonthPeriod ? (
+                    <Grid container spacing={1.5}>
+                      {[0, 1, 2, 3].map((item) => (
+                        <Grid key={item} size={{ xs: 12, sm: 6, md: 3 }}>
+                          <Skeleton variant="rounded" height={92} sx={{ borderRadius: 2 }} />
+                        </Grid>
+                      ))}
+                    </Grid>
+                  ) : snapshotError && !previousMonthPeriod ? (
+                    <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                      {snapshotError}
+                    </Alert>
+                  ) : previousMonthPeriod ? (
+                    <>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={t('dashboard.previousMonth.currentRange', { range: previousMonthPeriod.current.range || `${previousMonthPeriod.current.start} - ${previousMonthPeriod.current.end}` })}
+                        />
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={t('dashboard.previousMonth.previousRange', { range: previousMonthPeriod.previous.range || `${previousMonthPeriod.previous.start} - ${previousMonthPeriod.previous.end}` })}
+                        />
+                      </Box>
+
+                      <Grid container spacing={1.5}>
+                        {previousMonthMetrics.map((metric) => (
+                          <Grid key={metric.key} size={{ xs: 12, sm: 6, md: 3 }}>
+                            <Box sx={{
+                              height: '100%',
+                              minHeight: 96,
+                              p: 1.5,
+                              borderRadius: 2,
+                              bgcolor: alpha(theme.palette.background.paper, 0.55),
+                              border: `1px solid ${alpha(theme.palette.divider, 0.65)}`,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between',
+                              gap: 0.75,
+                            }}>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                                {metric.label}
+                              </Typography>
+                              <Typography variant="h6" fontWeight={900} sx={{ lineHeight: 1.15, overflowWrap: 'anywhere' }}>
+                                {metric.value}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: metric.tone, fontWeight: 800 }}>
+                                {metric.delta}
+                              </Typography>
+                            </Box>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    </>
+                  ) : (
+                    <Alert severity="info" sx={{ borderRadius: 2 }}>
+                      {t('dashboard.previousMonth.empty')}
+                    </Alert>
                   )}
                 </CardContent>
               </Card>

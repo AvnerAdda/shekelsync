@@ -108,8 +108,14 @@ describe('analytics dashboard service', () => {
       {
         rows: [
           {
-            pending_expenses: '30',
-            pending_count: '2',
+            processed_date: '2025-02-05',
+            pending_expenses: '10',
+            pending_count: '1',
+          },
+          {
+            processed_date: '2025-02-15',
+            pending_expenses: '20',
+            pending_count: '1',
           },
         ],
       },
@@ -157,6 +163,11 @@ describe('analytics dashboard service', () => {
     expect(historySql).not.toContain("LOWER(COALESCE(t.name, '')) LIKE '%salary%'");
     const summaryArgs = queryMock.mock.calls[4][1];
     expect(summaryArgs[2]).toBe(BANK_CATEGORY_NAME);
+    const pendingExpensesSql = String(queryMock.mock.calls[5][0]);
+    expect(pendingExpensesSql).toContain("DATE(COALESCE(t.processed_datetime, t.processed_date), 'localtime') as processed_date");
+    expect(pendingExpensesSql).toContain("DATE(COALESCE(t.processed_datetime, t.processed_date), 'localtime') > DATE('now', 'localtime')");
+    expect(pendingExpensesSql).toContain("GROUP BY DATE(COALESCE(t.processed_datetime, t.processed_date), 'localtime')");
+    expect(pendingExpensesSql).toContain('ORDER BY processed_date ASC');
     const monthStartBalanceSql = String(queryMock.mock.calls[7][0]);
     expect(monthStartBalanceSql).toContain('ih2.as_of_date <= $1');
     const pendingCcDebtSql = String(queryMock.mock.calls[10][0]);
@@ -177,6 +188,10 @@ describe('analytics dashboard service', () => {
       bankBalanceChange: 500.25,
       pendingExpenses: 30,
       pendingCount: 2,
+      pendingByProcessedDate: [
+        { date: '2025-02-05', amount: 10, count: 1 },
+        { date: '2025-02-15', amount: 20, count: 1 },
+      ],
       pikkadonBalance: 200,
       checkingBalance: 1300.25,
       pendingCCDebt: 50,
@@ -271,6 +286,7 @@ describe('analytics dashboard service', () => {
       bankBalanceChange: 0,
       pendingExpenses: 0,
       pendingCount: 0,
+      pendingByProcessedDate: [],
       pikkadonBalance: 0,
       checkingBalance: 0,
       pendingCCDebt: 0,
@@ -327,7 +343,7 @@ describe('analytics dashboard service', () => {
           },
         ],
       },
-      { rows: [{ pending_expenses: '0', pending_count: '0' }] },
+      { rows: [] },
       { rows: [] },
       { rows: [] },
       { rows: [] },
@@ -356,6 +372,7 @@ describe('analytics dashboard service', () => {
       bankBalanceChange: 0,
       pendingExpenses: 0,
       pendingCount: 0,
+      pendingByProcessedDate: [],
       pikkadonBalance: 0,
       checkingBalance: 0,
       pendingCCDebt: 0,
@@ -409,7 +426,7 @@ describe('analytics dashboard service', () => {
           },
         ],
       },
-      { rows: [{ pending_expenses: '0', pending_count: '0' }] },
+      { rows: [] },
       { rows: [] }, // current bank balances
       { rows: [{ total_balance: '0' }] }, // month start balance
       { rows: [] }, // balance history

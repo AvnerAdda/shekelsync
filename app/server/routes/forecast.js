@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { generateDailyForecast } = require('../services/forecast.js');
+const forecastService = require('../services/forecast.js');
 
 // Initialize database for category lookups
 const preferredDbPath = path.join(__dirname, '../../dist/shekelsync.sqlite');
@@ -23,16 +23,28 @@ function getDatabase() {
   return dbInstance;
 }
 
-// Simple in-memory cache for forecast results
-const forecastCache = {
-  data: null,
-  timestamp: null,
-  cacheDuration: 5 * 60 * 1000, // 5 minutes
-};
+const FORECAST_CACHE_DURATION_MS = 5 * 60 * 1000;
+const forecastCache = new Map();
 
-function isCacheValid() {
-  if (!forecastCache.data || !forecastCache.timestamp) return false;
-  return Date.now() - forecastCache.timestamp < forecastCache.cacheDuration;
+function getCachedForecast(cacheKey) {
+  const cached = forecastCache.get(cacheKey);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp >= FORECAST_CACHE_DURATION_MS) {
+    forecastCache.delete(cacheKey);
+    return null;
+  }
+  return cached.data;
+}
+
+function setCachedForecast(cacheKey, data) {
+  const now = Date.now();
+  forecastCache.set(cacheKey, { data, timestamp: now });
+
+  for (const [key, value] of forecastCache.entries()) {
+    if (now - value.timestamp >= FORECAST_CACHE_DURATION_MS) {
+      forecastCache.delete(key);
+    }
+  }
 }
 
 function formatLocalDate(date) {
@@ -51,56 +63,97 @@ function parseLocalDate(dateStr) {
   return new Date(year, month - 1, day);
 }
 
-function createForecastRouter({ sqliteDb = null } = {}) {
+function readSingleQueryParam(value) {
+  if (value === undefined || value === null) return undefined;
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+function parseIntegerQueryParam(value, name, { min = 1, max } = {}) {
+  const raw = readSingleQueryParam(value);
+  if (raw === undefined || raw === '') return undefined;
+  if (typeof raw !== 'string' && typeof raw !== 'number') {
+    const error = new Error(`${name} must be an integer`);
+    error.status = 400;
+    throw error;
+  }
+
+  const stringValue = String(raw).trim();
+  if (!/^\d+$/.test(stringValue)) {
+    const error = new Error(`${name} must be an integer`);
+    error.status = 400;
+    throw error;
+  }
+
+  const parsed = Number(stringValue);
+  if (!Number.isSafeInteger(parsed) || parsed < min || (max !== undefined && parsed > max)) {
+    const range = max === undefined ? `at least ${min}` : `between ${min} and ${max}`;
+    const error = new Error(`${name} must be ${range}`);
+    error.status = 400;
+    throw error;
+  }
+
+  return parsed;
+}
+
+function parseBooleanQueryParam(value) {
+  const raw = readSingleQueryParam(value);
+  return raw === 'true' || raw === '1' || raw === true;
+}
+
+function createForecastRouter({ sqliteDb = null, generateForecast = forecastService.generateDailyForecast } = {}) {
   const router = express.Router();
   const getDbInstance = () => sqliteDb || getDatabase();
 
   router.get('/daily', async (req, res) => {
     try {
       const { months, days, includeToday, verbose, noCache, budgetDays: budgetDaysParam } = req.query;
-      const skipCache = noCache === 'true' || noCache === '1';
-      
-      // Budget lookback period (default 30 days)
-      const budgetDays = budgetDaysParam ? Number.parseInt(budgetDaysParam, 10) : 30;
-      const budgetMultiplier = budgetDays / 30; // Pro-rate monthly budgets
+      const skipCache = parseBooleanQueryParam(noCache);
 
-      // Check cache first (unless explicitly skipped)
-      if (!skipCache && isCacheValid()) {
-        console.log('[Forecast] Returning cached forecast result');
-        return res.json(forecastCache.data);
-      }
+      // Budget lookback period (default 30 days)
+      const budgetDays = parseIntegerQueryParam(budgetDaysParam, 'budgetDays', { min: 1, max: 365 }) || 30;
+      const budgetMultiplier = budgetDays / 30; // Pro-rate monthly budgets
 
       // Default to 30 days forecast (not end of month)
       const now = new Date();
+      const todayStr = formatLocalDate(now);
 
-      let forecastDaysValue;
-      let forecastMonthsValue;
-
-      if (days) {
-        forecastDaysValue = Number.parseInt(days, 10);
-      } else {
-        forecastDaysValue = 30; // Default to 30 days forecast
-      }
-
-      if (months) {
-        forecastMonthsValue = Number.parseInt(months, 10);
-      } else if (!days) {
-        forecastMonthsValue = undefined; // Use forecastDays instead
-      }
+      const requestedDays = parseIntegerQueryParam(days, 'days', { min: 1, max: 366 });
+      const requestedMonths = parseIntegerQueryParam(months, 'months', { min: 1, max: 24 });
+      const forecastDaysValue = requestedDays ?? (requestedMonths ? undefined : 30);
+      const forecastMonthsValue = requestedMonths;
+      const includeTodayValue = parseBooleanQueryParam(includeToday);
+      const verboseValue = parseBooleanQueryParam(verbose);
 
       const opts = {
         forecastMonths: forecastMonthsValue,
         forecastDays: forecastDaysValue,
-        includeToday: includeToday === 'true' || includeToday === '1',
-        verbose: verbose === 'true' || verbose === '1',
+        includeToday: includeTodayValue,
+        verbose: verboseValue,
       };
+      const cacheKey = JSON.stringify({
+        date: todayStr,
+        forecastMonths: forecastMonthsValue ?? null,
+        forecastDays: forecastDaysValue ?? null,
+        includeToday: includeTodayValue,
+        budgetDays,
+      });
+
+      // Check cache first (unless explicitly skipped)
+      if (!skipCache) {
+        const cached = getCachedForecast(cacheKey);
+        if (cached) {
+          console.log('[Forecast] Returning cached forecast result');
+          return res.json(cached);
+        }
+      }
+
       console.log('[Forecast] Generating daily forecast with options:', opts);
-      const result = await generateDailyForecast(opts);
+      const result = await generateForecast(opts);
       console.log('[Forecast] Successfully generated forecast with', result.dailyForecasts?.length || 0, 'days');
 
       // Date calculations for budget period (last X days based on budgetDays)
-      const today = new Date();
-      const todayStr = formatLocalDate(today);
+      const today = now;
       const budgetStartDate = new Date(today);
       budgetStartDate.setDate(budgetStartDate.getDate() - budgetDays);
       const budgetStartStr = formatLocalDate(budgetStartDate);
@@ -457,13 +510,19 @@ function createForecastRouter({ sqliteDb = null } = {}) {
       };
 
       // Cache the response
-      forecastCache.data = response;
-      forecastCache.timestamp = Date.now();
+      if (!skipCache) {
+        setCachedForecast(cacheKey, response);
+      }
 
       return res.json(response);
     } catch (error) {
-      console.error('[Forecast] Generation error:', error);
-      res.status(error?.status || 500).json({
+      const status = error?.status || 500;
+      if (status >= 500) {
+        console.error('[Forecast] Generation error:', error);
+      } else {
+        console.warn('[Forecast] Request error:', error?.message || error);
+      }
+      res.status(status).json({
         error: error?.message || 'Failed to generate forecast',
         details: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
       });
@@ -473,4 +532,11 @@ function createForecastRouter({ sqliteDb = null } = {}) {
   return router;
 }
 
-module.exports = { createForecastRouter };
+module.exports = {
+  createForecastRouter,
+  _internal: {
+    clearForecastCache() {
+      forecastCache.clear();
+    },
+  },
+};
