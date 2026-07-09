@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -26,6 +26,8 @@ interface MakeItRealModalProps {
   onClose: () => void;
 }
 
+const CACHE_DURATION_MS = 5 * 60 * 1000;
+
 const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
   const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'analysisPage.modals.makeItReal' });
@@ -35,15 +37,7 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<number>(0);
 
-  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-  useEffect(() => {
-    if (open && (!data || (Date.now() - lastFetch) > CACHE_DURATION)) {
-      fetchData();
-    }
-  }, [open]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -59,7 +53,13 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    if (open && (!data || (Date.now() - lastFetch) > CACHE_DURATION_MS)) {
+      fetchData();
+    }
+  }, [data, fetchData, lastFetch, open]);
 
   const formatCurrencyValue = (value: number) => formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
 

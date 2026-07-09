@@ -248,12 +248,17 @@
           "subtitle": "Bank: {{amount}}",
           "income": "Income",
           "expenses": "Expenses",
+          "expensesIncludingPending": "Expenses (incl. pending settlement)",
           "investments": "Investments",
           "capitalReturns": "Capital Returns",
           "capitalReturnsNote": "Principal returned from investments (pikadon, deposits). Not counted as income but offsets investment outflows.",
-          "pendingLabel": "Pending ({{count}})",
+          "pendingLabel": "Pending settlement ({{count}})",
           "pendingDeficit": "Pending expenses will cause deficit of {{amount}}",
-          "pendingDeficitCovered": "Pending expenses exceed this period by {{amount}} — covered by your bank balance"
+          "pendingDeficitCovered": "Pending expenses exceed this period by {{amount}} — covered by your bank balance",
+          "pendingBreakdownTitle": "Future settlement dates",
+          "pendingBreakdownLine": "{{amount}} ({{count}} tx)",
+          "pendingBreakdownFallback": "No future settlement date breakdown available",
+          "pendingIncludedNote": "Already included in Expenses above; shown separately by settlement date."
         },
         "portfolio": {
           "title": "Investment Portfolio"
@@ -1154,6 +1159,24 @@
         "show": "Show deeper insights",
         "hide": "Hide deeper insights",
         "count": "{{count}} extra cards"
+      },
+      "previousMonth": {
+        "title": "Previous month analytics",
+        "subtitle": "Last full month compared with the month before.",
+        "spend": "Spend",
+        "income": "Income",
+        "net": "Net cash flow",
+        "transactions": "Transactions",
+        "spendDown": "Down {{amount}}",
+        "spendUp": "Up {{amount}}",
+        "noSpendChange": "No spend change",
+        "spendLower": "Spending lower",
+        "spendHigher": "Spending higher",
+        "spendFlat": "Spending flat",
+        "currentRange": "Last month: {{range}}",
+        "previousRange": "Previous: {{range}}",
+        "empty": "No previous-month comparison is available yet.",
+        "loadFailed": "Failed to load previous-month analytics."
       },
       "rhythm": {
         "title": "Your Financial Rhythm",

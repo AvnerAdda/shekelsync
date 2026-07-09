@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -26,6 +26,64 @@ interface PersonalizedFutureModalProps {
 }
 
 type ForecastScenario = 'pessimistic' | 'base' | 'optimistic';
+const CACHE_DURATION_MS = 5 * 60 * 1000;
+
+const formatDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const applySixMonthHorizon = (rawData: any) => {
+  if (!rawData) return rawData;
+
+  const horizonDate = new Date();
+  horizonDate.setHours(0, 0, 0, 0);
+  horizonDate.setMonth(horizonDate.getMonth() + 6);
+  const horizon = formatDateString(horizonDate);
+
+  const filterByHorizon = (list: any[] = []) =>
+    list.filter(item => item?.date && item.date <= horizon);
+
+  const summarizeScenario = (entries: any[] = []) => {
+    const totals = entries.reduce(
+      (acc, day) => {
+        const income = day?.income || 0;
+        const expenses = day?.expenses || 0;
+        const netFlow = day?.netFlow ?? (income - expenses);
+        acc.income += income;
+        acc.expenses += expenses;
+        acc.netCashFlow += netFlow;
+        return acc;
+      },
+      { income: 0, expenses: 0, netCashFlow: 0 }
+    );
+
+    return {
+      netCashFlow: Math.round(totals.netCashFlow),
+      income: Math.round(totals.income),
+      expenses: Math.round(totals.expenses)
+    };
+  };
+
+  const scenarios = {
+    p10: filterByHorizon(rawData.scenarios?.p10),
+    p50: filterByHorizon(rawData.scenarios?.p50),
+    p90: filterByHorizon(rawData.scenarios?.p90)
+  };
+
+  return {
+    ...rawData,
+    combinedData: filterByHorizon(rawData.combinedData || []),
+    scenarios,
+    summaries: {
+      pessimistic: summarizeScenario(scenarios.p10),
+      base: summarizeScenario(scenarios.p50),
+      optimistic: summarizeScenario(scenarios.p90)
+    }
+  };
+};
 
 const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open, onClose }) => {
   const theme = useTheme();
@@ -36,72 +94,7 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<number>(0);
 
-  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-  const formatDateString = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const applySixMonthHorizon = (rawData: any) => {
-    if (!rawData) return rawData;
-
-    const horizonDate = new Date();
-    horizonDate.setHours(0, 0, 0, 0);
-    horizonDate.setMonth(horizonDate.getMonth() + 6);
-    const horizon = formatDateString(horizonDate);
-
-    const filterByHorizon = (list: any[] = []) =>
-      list.filter(item => item?.date && item.date <= horizon);
-
-    const summarizeScenario = (entries: any[] = []) => {
-      const totals = entries.reduce(
-        (acc, day) => {
-          const income = day?.income || 0;
-          const expenses = day?.expenses || 0;
-          const netFlow = day?.netFlow ?? (income - expenses);
-          acc.income += income;
-          acc.expenses += expenses;
-          acc.netCashFlow += netFlow;
-          return acc;
-        },
-        { income: 0, expenses: 0, netCashFlow: 0 }
-      );
-
-      return {
-        netCashFlow: Math.round(totals.netCashFlow),
-        income: Math.round(totals.income),
-        expenses: Math.round(totals.expenses)
-      };
-    };
-
-    const scenarios = {
-      p10: filterByHorizon(rawData.scenarios?.p10),
-      p50: filterByHorizon(rawData.scenarios?.p50),
-      p90: filterByHorizon(rawData.scenarios?.p90)
-    };
-
-    return {
-      ...rawData,
-      combinedData: filterByHorizon(rawData.combinedData || []),
-      scenarios,
-      summaries: {
-        pessimistic: summarizeScenario(scenarios.p10),
-        base: summarizeScenario(scenarios.p50),
-        optimistic: summarizeScenario(scenarios.p90)
-      }
-    };
-  };
-
-  useEffect(() => {
-    if (open && (!data || (Date.now() - lastFetch) > CACHE_DURATION)) {
-      fetchData();
-    }
-  }, [open]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -117,7 +110,13 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    if (open && (!data || (Date.now() - lastFetch) > CACHE_DURATION_MS)) {
+      fetchData();
+    }
+  }, [data, fetchData, lastFetch, open]);
 
   const formatCurrencyValue = (value: number) => formatCurrency(value, { absolute: false, maximumFractionDigits: 0 });
 

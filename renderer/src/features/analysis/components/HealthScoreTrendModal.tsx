@@ -61,6 +61,7 @@ const BREAKDOWN_COLORS = {
   impulseScore: '#ff9800',
   runwayScore: '#9c27b0',
 };
+const CACHE_DURATION_MS = 5 * 60 * 1000;
 
 const BREAKDOWN_ICONS: Record<string, React.ReactNode> = {
   savingsScore: <SavingsIcon fontSize="small" />,
@@ -85,12 +86,10 @@ const HealthScoreTrendModal: React.FC<HealthScoreTrendModalProps> = ({ open, onC
   const [lastFetch, setLastFetch] = useState(0);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
-  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
   useEffect(() => {
     if (!open) return;
 
-    if (data && (Date.now() - lastFetch) < CACHE_DURATION && data.historyDays === days && data.windowDays === windowDays) {
+    if (data && (Date.now() - lastFetch) < CACHE_DURATION_MS && data.historyDays === days && data.windowDays === windowDays) {
       return;
     }
 

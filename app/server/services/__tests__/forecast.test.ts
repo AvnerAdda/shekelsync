@@ -161,6 +161,26 @@ describe('forecast service internals', () => {
     expect(adjustments.coffee.probabilityMultiplier).toBeLessThan(1);
   });
 
+  it('allows another monthly income prediction when current month deposits are below expected cadence', () => {
+    const { adjustProbabilitiesForCurrentMonth } = forecastModule._internal;
+    const patterns = {
+      salary: {
+        categoryType: 'income',
+        patternType: 'monthly',
+        avgOccurrencesPerMonth: 1.4,
+      },
+    };
+    const txns = [
+      { name: 'salary', category_name: 'Salary', date: '2026-02-05', day_of_month: 5, day_of_week: 4, price: 8000 },
+    ];
+
+    const adjustments = adjustProbabilitiesForCurrentMonth(patterns, txns, 10);
+
+    expect(adjustments.salary.expectedRemaining).toBeCloseTo(0.4, 6);
+    expect(adjustments.salary.probabilityMultiplier).toBeGreaterThan(0);
+    expect(adjustments.salary.probabilityMultiplier).toBeLessThan(1);
+  });
+
   it('uses dominant day cluster to suppress stale monthly expenses with no current-month occurrences', () => {
     const { adjustProbabilitiesForCurrentMonth } = forecastModule._internal;
     const patterns = {
@@ -369,6 +389,76 @@ describe('forecast service internals', () => {
     expect(investmentPattern.skipReason).toBe('non_recurrent_investment');
 
     expect(patternValues.some((p: any) => p.category === 'החזר קרן')).toBe(false);
+  });
+
+  it('uses a recent median baseline for stable income and excludes one-off bonuses', () => {
+    const { analyzeCategoryPatterns } = forecastModule._internal;
+    const makeTxn = (
+      date: string,
+      name: string,
+      price: number,
+      categoryName = 'Salary',
+    ) => ({
+      date,
+      name,
+      price,
+      category_type: 'income',
+      category_name: categoryName,
+      parent_category_name: null,
+      day_of_week: String(new Date(date).getDay()),
+      day_of_month: Number(date.slice(8, 10)),
+      month: date.slice(0, 7),
+    });
+
+    const patterns = analyzeCategoryPatterns([
+      makeTxn('2026-01-05', 'Salary Payroll', 12000),
+      makeTxn('2026-02-05', 'Salary Payroll', 12100),
+      makeTxn('2026-03-05', 'Salary Payroll', 12050),
+      makeTxn('2026-04-28', 'Salary Payroll', 50000),
+      makeTxn('2026-05-05', 'Salary Payroll', 12200),
+    ]);
+
+    const incomePattern = Object.values(patterns).find((p: any) => p.transactionName === 'Salary Payroll') as any;
+    expect(incomePattern).toBeTruthy();
+    expect(incomePattern.avgAmount).toBe(12100);
+    expect(incomePattern.maxAmount).toBe(12200);
+    expect(incomePattern.incomeOneOffCount).toBe(1);
+    expect(incomePattern.incomeAmountBaseline).toBe('recent_median');
+    expect(incomePattern.confidence).toBeGreaterThan(0.5);
+  });
+
+  it('marks low-history income as insufficient so one-off deposits are not forecast', () => {
+    const { analyzeCategoryPatterns, buildPatternCaches, forecastDay } = forecastModule._internal;
+    const makeTxn = (
+      date: string,
+      name: string,
+      price: number,
+    ) => ({
+      date,
+      name,
+      price,
+      category_type: 'income',
+      category_name: 'Gifts',
+      parent_category_name: 'Income',
+      day_of_week: String(new Date(date).getDay()),
+      day_of_month: Number(date.slice(8, 10)),
+      month: date.slice(0, 7),
+    });
+
+    const patterns = analyzeCategoryPatterns([
+      makeTxn('2026-02-07', 'Family Gift', 40000),
+      makeTxn('2026-04-26', 'Family Gift', 39000),
+    ]);
+
+    const incomePattern = Object.values(patterns).find((p: any) => p.category === 'Gifts') as any;
+    expect(incomePattern.insufficientData).toBe(true);
+    expect(incomePattern.skipReason).toBe('insufficient_income_history');
+    expect(incomePattern.confidence).toBeLessThanOrEqual(0.2);
+
+    const entries = buildPatternCaches(patterns);
+    const dayForecast = forecastDay(new Date('2026-06-26T00:00:00.000Z'), patterns, {}, entries, []);
+    expect(dayForecast.expectedIncome).toBe(0);
+    expect(dayForecast.predictions.some((p: any) => p.categoryType === 'income')).toBe(false);
   });
 
   it('keeps same-named income and expense categories in separate forecast patterns', () => {
