@@ -1,9 +1,11 @@
 /**
  * License Service for ShekelSync
  *
- * Manages license registration, validation, and enforcement.
- * Supports email-based licensing with 30-day trial,
- * single-device enforcement, and offline grace periods.
+ * Legacy license registration utilities.
+ *
+ * ShekelSync now uses public, donation-supported access. The registration
+ * helpers remain for backwards compatibility with existing installations,
+ * but legacy license checks no longer restrict any feature.
  */
 
 const crypto = require('crypto');
@@ -13,6 +15,11 @@ const { v4: uuidv4 } = require('uuid');
 const { dbManager } = require('./database');
 const { getSupabaseClient, isSupabaseConfigured } = require('./supabase-client');
 const { logger } = require('./logger');
+const {
+  PUBLIC_ACCESS_STATUS,
+  getPublicAccessStatus,
+  isPublicWriteAllowed,
+} = require('./public-access-policy');
 
 // Constants
 const TRIAL_DAYS = 30;
@@ -20,11 +27,6 @@ const OFFLINE_GRACE_DAYS = 7;
 
 let licenseSchemaChecked = false;
 let licenseSchemaInfo = { emailAvailable: false, teudatZehutNullable: false };
-
-function getLicenseIdentifier(license) {
-  if (!license) return '';
-  return license.email || license.teudat_zehut || '';
-}
 
 function isMissingColumnError(error, columnName) {
   if (!error || !error.message) return false;
@@ -158,41 +160,6 @@ async function getLocalLicense() {
     logger.error('Failed to get local license', { error: error.message });
     return null;
   }
-}
-
-/**
- * Calculate days remaining in trial.
- *
- * @param {string} trialStartDate - ISO date string
- * @returns {number} Days remaining (can be negative if expired)
- */
-function calculateTrialDaysRemaining(trialStartDate) {
-  const start = new Date(trialStartDate);
-  const now = new Date();
-  const trialEnd = new Date(start);
-  trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
-
-  const diffMs = trialEnd - now;
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-}
-
-/**
- * Check if offline grace period has expired.
- *
- * @param {string} offlineGraceStart - ISO date string when offline grace started
- * @returns {boolean} True if grace period expired
- */
-function isOfflineGraceExpired(offlineGraceStart) {
-  if (!offlineGraceStart) {
-    return false;
-  }
-
-  const start = new Date(offlineGraceStart);
-  const now = new Date();
-  const graceEnd = new Date(start);
-  graceEnd.setDate(graceEnd.getDate() + OFFLINE_GRACE_DAYS);
-
-  return now > graceEnd;
 }
 
 /**
@@ -368,112 +335,7 @@ async function registerLicense(email) {
  * }>}
  */
 async function checkLicenseStatus() {
-  await ensureEmailColumn();
-  const license = await getLocalLicense();
-
-  // No license registered
-  if (!license) {
-    return {
-      registered: false,
-      licenseType: 'none',
-      isReadOnly: true,
-      canWrite: false,
-      offlineMode: false,
-      syncedToCloud: false,
-    };
-  }
-
-  const deviceHash = generateDeviceHash();
-
-  // Verify device hash matches
-  if (license.device_hash !== deviceHash) {
-    logger.warn('Device hash mismatch detected', {
-      expected: license.device_hash?.substring(0, 8),
-      actual: deviceHash.substring(0, 8),
-    });
-    return {
-      registered: false,
-      licenseType: 'none',
-      isReadOnly: true,
-      canWrite: false,
-      offlineMode: false,
-      syncedToCloud: false,
-      error: 'License was registered on a different device',
-    };
-  }
-
-  // Check if Pro license
-  if (license.license_type === 'pro') {
-    return {
-      registered: true,
-      licenseType: 'pro',
-      isReadOnly: false,
-      canWrite: true,
-      offlineMode: !license.is_synced_to_cloud,
-      syncedToCloud: Boolean(license.is_synced_to_cloud),
-      lastValidated: license.last_online_validation,
-      email: maskLicenseIdentifier(getLicenseIdentifier(license)),
-    };
-  }
-
-  // Check trial status
-  const trialDaysRemaining = calculateTrialDaysRemaining(license.trial_start_date);
-  const isTrialExpired = trialDaysRemaining <= 0;
-
-  // Check offline grace period
-  let offlineGraceDaysRemaining = null;
-  let offlineGraceExpired = false;
-
-  if (license.offline_grace_start) {
-    const graceStart = new Date(license.offline_grace_start);
-    const graceEnd = new Date(graceStart);
-    graceEnd.setDate(graceEnd.getDate() + OFFLINE_GRACE_DAYS);
-    offlineGraceDaysRemaining = Math.ceil((graceEnd - new Date()) / (1000 * 60 * 60 * 24));
-    offlineGraceExpired = offlineGraceDaysRemaining <= 0;
-  }
-
-  // Determine final status
-  let licenseType = license.license_type;
-  let isReadOnly = false;
-
-  if (isTrialExpired) {
-    licenseType = 'expired';
-    isReadOnly = true;
-  } else if (offlineGraceExpired) {
-    // Offline grace expired but trial not expired - read-only until online validation
-    isReadOnly = true;
-  }
-
-  return {
-    registered: true,
-    licenseType,
-    trialDaysRemaining: Math.max(0, trialDaysRemaining),
-    isReadOnly,
-    canWrite: !isReadOnly,
-    offlineMode: !license.is_synced_to_cloud || Boolean(license.offline_grace_start),
-    offlineGraceDaysRemaining: offlineGraceDaysRemaining !== null ? Math.max(0, offlineGraceDaysRemaining) : null,
-    syncedToCloud: Boolean(license.is_synced_to_cloud),
-    lastValidated: license.last_online_validation,
-    email: maskLicenseIdentifier(getLicenseIdentifier(license)),
-  };
-}
-
-/**
- * Mask license identifier (email preferred, fallback to ID-style masking).
- *
- * @param {string} value - Email or legacy ID
- * @returns {string} Masked identifier
- */
-function maskLicenseIdentifier(value) {
-  if (!value || typeof value !== 'string') return '****';
-  if (value.includes('@')) {
-    const [local, domain] = value.split('@');
-    if (!domain) return '****';
-    const maskedLocal = local.length <= 1 ? '*' : `${local[0]}***`;
-    return `${maskedLocal}@${domain}`;
-  }
-  if (value.length < 4) return '****';
-  return '*****' + value.slice(-4);
+  return getPublicAccessStatus();
 }
 
 /**
@@ -482,103 +344,11 @@ function maskLicenseIdentifier(value) {
  * @returns {Promise<{success: boolean, error?: string, status?: Object}>}
  */
 async function validateOnline() {
-  const license = await getLocalLicense();
-  if (!license) {
-    return { success: false, error: 'No license registered' };
-  }
-
-  if (!isSupabaseConfigured()) {
-    // Start offline grace if not already started
-    if (!license.offline_grace_start) {
-      await startOfflineGrace();
-    }
-    return { success: false, error: 'Supabase not configured' };
-  }
-
-  const supabase = getSupabaseClient();
-  if (!supabase) {
-    if (!license.offline_grace_start) {
-      await startOfflineGrace();
-    }
-    return { success: false, error: 'Supabase client unavailable' };
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('licenses')
-      .select('*')
-      .eq('unique_id', license.unique_id)
-      .single();
-
-    if (error) {
-      logger.warn('Online validation failed', { error: error.message });
-      if (!license.offline_grace_start) {
-        await startOfflineGrace();
-      }
-      return { success: false, error: error.message };
-    }
-
-    if (!data) {
-      return { success: false, error: 'License not found in cloud' };
-    }
-
-    // Update local license with cloud data
-    const now = new Date().toISOString();
-    const cloudLicenseType = data.license_status === 'active' ? 'pro' : data.license_status;
-
-    await dbManager.query(
-      `UPDATE license SET
-        license_type = ?,
-        subscription_date = ?,
-        last_online_validation = ?,
-        offline_grace_start = NULL,
-        is_synced_to_cloud = 1,
-        sync_error_message = NULL,
-        updated_at = ?
-      WHERE id = 1`,
-      [
-        cloudLicenseType,
-        data.subscription_date,
-        now,
-        now,
-      ]
-    );
-
-    logger.info('License validated online', {
-      licenseType: cloudLicenseType,
-      uniqueId: license.unique_id,
-    });
-
-    return {
-      success: true,
-      status: await checkLicenseStatus(),
-    };
-  } catch (error) {
-    logger.error('Online validation error', { error: error.message });
-    if (!license.offline_grace_start) {
-      await startOfflineGrace();
-    }
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Start offline grace period.
- */
-async function startOfflineGrace() {
-  const now = new Date().toISOString();
-  try {
-    await dbManager.query(
-      `UPDATE license SET
-        offline_grace_start = ?,
-        updated_at = ?
-      WHERE id = 1 AND offline_grace_start IS NULL`,
-      [now, now]
-    );
-    logger.info('Offline grace period started');
-  } catch (error) {
-    logger.error('Failed to start offline grace', { error: error.message });
-  }
+  // Online validation is no longer required for public access.
+  return {
+    success: true,
+    status: await checkLicenseStatus(),
+  };
 }
 
 /**
@@ -636,8 +406,7 @@ async function activateProLicense(paymentRef = null) {
  * @returns {Promise<boolean>}
  */
 async function isWriteOperationAllowed() {
-  const status = await checkLicenseStatus();
-  return status.canWrite;
+  return isPublicWriteAllowed();
 }
 
 /**
@@ -671,4 +440,5 @@ module.exports = {
   // Constants for testing
   TRIAL_DAYS,
   OFFLINE_GRACE_DAYS,
+  PUBLIC_ACCESS_STATUS,
 };
