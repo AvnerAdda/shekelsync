@@ -31,6 +31,7 @@ import {
 } from 'recharts';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpendingCategories';
+import type { PendingExpenseBreakdown } from '@renderer/types/dashboard';
 import type { SpendingCategory } from '@renderer/types/spending-categories';
 import { useTranslation } from 'react-i18next';
 import type {
@@ -54,6 +55,7 @@ interface SummaryCardsProps {
   monthStartBankBalance?: number;
   pendingExpenses?: number;
   pendingCount?: number;
+  pendingByProcessedDate?: PendingExpenseBreakdown[];
 
   // Card 2: Investment Portfolio
   portfolioValue?: number | null;
@@ -80,6 +82,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   currentBankBalance,
   pendingExpenses = 0,
   pendingCount = 0,
+  pendingByProcessedDate = [],
   portfolioValue,
   portfolioGains,
   assetBreakdown = [],
@@ -99,7 +102,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   );
   const netSavings = computeNetSavings(totalIncome, totalExpenses, effectiveNetInvestments);
   const pendingImpact = computePendingExpenseImpact({
-    netSavings,
+    netSavingsIncludingPending: netSavings,
     pendingExpenses,
     currentBankBalance,
   });
@@ -248,6 +251,55 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   const formatCurrencyValue = (amount: number) =>
     formatCurrency(amount, { absolute: true, maximumFractionDigits: 0 });
 
+  const formatPendingDate = (date: string) => {
+    const [year, month, day] = date.split('-').map((part) => Number.parseInt(part, 10));
+    if (!year || !month || !day) {
+      return date;
+    }
+
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+    }).format(new Date(year, month - 1, day));
+  };
+
+  const pendingBreakdownItems = pendingByProcessedDate.filter(
+    (item) => item.amount > 0 || item.count > 0,
+  );
+
+  const pendingBreakdownTooltipTitle = pendingBreakdownItems.length > 0 ? (
+    <Box sx={{ minWidth: 210, py: 0.5 }}>
+      <Typography variant="caption" fontWeight={700} sx={{ display: 'block', mb: 0.75 }}>
+        {t('summary.cards.finance.pendingBreakdownTitle')}
+      </Typography>
+      <Typography
+        variant="caption"
+        color="inherit"
+        sx={{ display: 'block', opacity: 0.82, mb: 1 }}
+      >
+        {t('summary.cards.finance.pendingIncludedNote')}
+      </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+        {pendingBreakdownItems.map((item) => (
+          <Box
+            key={item.date}
+            sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}
+          >
+            <Typography variant="caption" color="inherit">
+              {formatPendingDate(item.date)}
+            </Typography>
+            <Typography variant="caption" color="inherit" fontWeight={700}>
+              {t('summary.cards.finance.pendingBreakdownLine', {
+                amount: formatCurrencyValue(item.amount),
+                count: item.count,
+              })}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  ) : t('summary.cards.finance.pendingBreakdownFallback');
+
   const PIE_COLORS = [
     theme.palette.primary.main,
     theme.palette.secondary.main,
@@ -278,7 +330,9 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              {t('summary.cards.finance.expenses')}
+              {hasPendingExpenses
+                ? t('summary.cards.finance.expensesIncludingPending')
+                : t('summary.cards.finance.expenses')}
             </Typography>
             <CurrencyTypography variant="body2" color="error.main">-{formatCurrencyValue(totalExpenses)}</CurrencyTypography>
           </Box>
@@ -310,17 +364,34 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
           {hasPendingExpenses && (
             <>
               <Divider sx={{ my: 1.5 }} />
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <PendingIcon sx={{ fontSize: 16, color: 'warning.main' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    {t('summary.cards.finance.pendingLabel', { count: pendingCount })}
+              <Tooltip title={pendingBreakdownTooltipTitle} arrow placement="top">
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    mb: 1,
+                    cursor: 'help',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <PendingIcon sx={{ fontSize: 16, color: 'warning.main' }} />
+                    <Typography variant="body2" color="text.secondary">
+                      {t('summary.cards.finance.pendingLabel', { count: pendingCount })}
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="warning.main">
+                    -{formatCurrencyValue(pendingExpenses)}
                   </Typography>
                 </Box>
-                <Typography variant="body2" color="warning.main">
-                  -{formatCurrencyValue(pendingExpenses)}
-                </Typography>
-              </Box>
+              </Tooltip>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', mt: -0.5, mb: 1 }}
+              >
+                {t('summary.cards.finance.pendingIncludedNote')}
+              </Typography>
               {showPendingDeficitWarning && (
                 <Box
                   sx={{

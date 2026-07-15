@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 interface UseAsyncState<T> {
   data: T | null;
@@ -35,6 +35,7 @@ export function useAsync<T>(
   options: UseAsyncOptions<T> = {}
 ): UseAsyncState<T> & { execute: () => Promise<void>; reset: () => void } {
   const { immediate = false, onSuccess, onError, initialData = null } = options;
+  const hasRunImmediateRef = useRef(false);
 
   const [state, setState] = useState<UseAsyncState<T>>({
     data: initialData,
@@ -86,10 +87,11 @@ export function useAsync<T>(
   }, [initialData]);
 
   useEffect(() => {
-    if (immediate) {
+    if (immediate && !hasRunImmediateRef.current) {
+      hasRunImmediateRef.current = true;
       execute();
     }
-  }, [immediate]); // Only run on mount if immediate is true
+  }, [execute, immediate]); // Only run once when immediate becomes true.
 
   return {
     ...state,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -39,6 +39,7 @@ interface FinancialRhythmModalProps {
 }
 
 type TimeRange = 'all' | '6months' | '3months';
+const CACHE_DURATION_MS = 5 * 60 * 1000;
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -74,15 +75,7 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<Record<TimeRange, number>>({ all: 0, '6months': 0, '3months': 0 });
 
-  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-  useEffect(() => {
-    if (open && (Date.now() - lastFetch[timeRange]) > CACHE_DURATION) {
-      fetchData();
-    }
-  }, [open, timeRange]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -98,7 +91,13 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
     } finally {
       setLoading(false);
     }
-  };
+  }, [t, timeRange]);
+
+  useEffect(() => {
+    if (open && (Date.now() - lastFetch[timeRange]) > CACHE_DURATION_MS) {
+      fetchData();
+    }
+  }, [fetchData, lastFetch, open, timeRange]);
 
   const formatCurrencyValue = (value: number) => formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
 
