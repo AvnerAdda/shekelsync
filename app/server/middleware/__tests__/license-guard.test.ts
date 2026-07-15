@@ -6,6 +6,7 @@ const database = require('../../services/database.js');
 const {
   clearCache,
   EXEMPT_WRITE_ROUTES,
+  getLicenseStatus,
   isProtectedRoute,
   licenseGuardMiddleware,
   WRITE_METHODS,
@@ -147,5 +148,73 @@ describe('license guard middleware', () => {
     expect(next).toHaveBeenCalledTimes(1);
     expect(release).toHaveBeenCalledTimes(1);
     clearCache();
+  });
+
+  it('treats a missing license as read-only and caches the result', async () => {
+    const release = vi.fn();
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    const getClient = vi.spyOn(database, 'getClient').mockResolvedValue({ query, release });
+
+    await expect(getLicenseStatus()).resolves.toEqual({
+      isReadOnly: true,
+      reason: 'No license registered',
+    });
+    await expect(getLicenseStatus()).resolves.toEqual({
+      isReadOnly: true,
+      reason: 'No license registered',
+    });
+
+    expect(getClient).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    {
+      name: 'valid trial',
+      license: {
+        id: 1,
+        license_type: 'trial',
+        trial_start_date: new Date(Date.now() - 24 * 60 * 60 * 1_000).toISOString(),
+        offline_grace_start: null,
+      },
+      expected: { isReadOnly: false },
+    },
+    {
+      name: 'expired trial',
+      license: {
+        id: 1,
+        license_type: 'trial',
+        trial_start_date: new Date(Date.now() - 31 * 24 * 60 * 60 * 1_000).toISOString(),
+        offline_grace_start: null,
+      },
+      expected: { isReadOnly: true, reason: 'Trial period expired' },
+    },
+    {
+      name: 'expired offline grace',
+      license: {
+        id: 1,
+        license_type: 'trial',
+        trial_start_date: new Date().toISOString(),
+        offline_grace_start: new Date(Date.now() - 8 * 24 * 60 * 60 * 1_000).toISOString(),
+      },
+      expected: { isReadOnly: true, reason: 'Offline grace period expired' },
+    },
+  ])('evaluates a $name license', async ({ license, expected }) => {
+    const { release } = mockLicense(license);
+
+    await expect(getLicenseStatus()).resolves.toEqual(expected);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('fails open when the license database is unavailable', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(database, 'getClient').mockRejectedValue(new Error('database unavailable'));
+
+    await expect(getLicenseStatus()).resolves.toEqual({ isReadOnly: false });
+    expect(warning).toHaveBeenCalledWith(
+      '[LicenseGuard] Failed to check license status:',
+      'database unavailable',
+    );
   });
 });

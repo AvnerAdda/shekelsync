@@ -148,6 +148,72 @@ describe('optimizer service', () => {
     }).confidence).toBe(0);
   });
 
+  it('rejects malformed facts and oversized or unserializable evidence', () => {
+    expect(() => optimizerService.utils.normalizeIncomingFact(null)).toThrow(/must be an object/i);
+    expect(() => optimizerService.utils.normalizeIncomingFact({})).toThrow(/factKey is required/i);
+    expect(() => optimizerService.utils.normalizeIncomingFact({
+      factKey: 'start.location',
+      status: 'invalid',
+      value: 'Haifa',
+    })).toThrow(/invalid fact status/i);
+    expect(() => optimizerService.utils.normalizeIncomingFact({
+      factKey: 'start.location',
+      status: 'confirmed',
+      value: null,
+    })).toThrow(/requires a value/i);
+    expect(() => optimizerService.utils.normalizeIncomingFact({
+      factKey: 'income.monthly_take_home',
+      status: 'edited',
+      value: 1_000_000_000_001,
+    })).toThrow(/outside the supported range/i);
+    expect(() => optimizerService.utils.normalizeIncomingFact({
+      factKey: 'household.size',
+      status: 'edited',
+      value: 2.5,
+    })).toThrow(/whole number/i);
+    expect(() => optimizerService.utils.normalizeIncomingFact({
+      factKey: 'expenses.fixed_monthly',
+      status: 'edited',
+      value: -1,
+    })).toThrow(/cannot be negative/i);
+    expect(() => optimizerService.utils.normalizeIncomingFact({
+      factKey: 'start.location',
+      status: 'edited',
+      value: [],
+    })).toThrow(/non-empty value/i);
+
+    const circularEvidence: Record<string, unknown> = {};
+    circularEvidence.self = circularEvidence;
+    expect(() => optimizerService.utils.normalizeIncomingFact({
+      factKey: 'start.location',
+      status: 'confirmed',
+      value: 'Haifa',
+      evidence: circularEvidence,
+    })).toThrow(/JSON serializable/i);
+    expect(() => optimizerService.utils.normalizeIncomingFact({
+      factKey: 'start.location',
+      status: 'confirmed',
+      value: 'Haifa',
+      evidence: { note: 'x'.repeat(5_001) },
+    })).toThrow(/evidence is too large/i);
+    expect(() => optimizerService.utils.normalizeIncomingFact({
+      factKey: 'start.location',
+      status: 'confirmed',
+      value: 'Haifa',
+      confidence: null,
+    })).toThrow(/between 0 and 1/i);
+    expect(optimizerService.utils.normalizeIncomingFact({
+      factKey: 'start.location',
+      status: 'confirmed',
+      value: 'Haifa',
+      evidence: { source: 'user' },
+    }).evidence).toEqual({ source: 'user' });
+    expect(() => optimizerService.utils.parseRecommendationPayload('{bad json'))
+      .toThrow(/invalid JSON/i);
+    expect(() => optimizerService.utils.parseRecommendationPayload('[]'))
+      .toThrow(/invalid response shape/i);
+  });
+
   it('detects stale plans from the input snapshot even when timestamps match', async () => {
     const questions = optimizerService.utils.QUESTION_DEFS.filter(
       (question: { factKey: string }) => question.factKey !== 'start.location',
@@ -409,8 +475,91 @@ describe('optimizer service', () => {
     expect(client.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE user_profile'), ['Haifa', 1]);
   });
 
+  it('validates fact batches and rolls back persistence failures', async () => {
+    await expect(optimizerService.saveOptimizerFacts()).rejects.toThrow(/at least one item/i);
+    await expect(optimizerService.saveOptimizerFacts({
+      facts: Array.from({ length: 51 }, () => ({
+        factKey: 'start.location',
+        value: 'Haifa',
+        status: 'confirmed',
+      })),
+    })).rejects.toThrow(/more than 50 items/i);
+    await expect(optimizerService.saveOptimizerFacts({
+      facts: [
+        { factKey: 'start.location', value: 'Haifa', status: 'confirmed' },
+        { factKey: 'start.location', value: 'Tel Aviv', status: 'edited' },
+      ],
+    })).rejects.toThrow(/duplicate factKey/i);
+
+    const client = buildClient(async (sql) => {
+      if (sql.startsWith('CREATE ') || sql.startsWith('CREATE INDEX')) return { rows: [] };
+      if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('INSERT INTO optimizer_facts')) throw new Error('database write failed');
+      return { rows: [] };
+    });
+    setClient(client);
+
+    await expect(optimizerService.saveOptimizerFacts({
+      facts: [{ factKey: 'start.location', value: 'Haifa', status: 'confirmed' }],
+    })).rejects.toThrow(/database write failed/i);
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it('updates recommendation status and keeps its Smart Action in sync', async () => {
+    const client = buildClient(async (sql, params = []) => {
+      if (sql.startsWith('CREATE ') || sql.startsWith('CREATE INDEX')) return { rows: [] };
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('UPDATE optimizer_recommendations')) {
+        if (params[0] === 404) return { rows: [] };
+        return {
+          rows: [{
+            id: params[0],
+            run_id: 10,
+            smart_action_item_id: 30,
+            title: 'Review subscriptions',
+            section: 'subscriptions',
+            rationale: 'Remove unused services.',
+            evidence_json: '["Bills location: Haifa"]',
+            estimated_monthly_impact: 120,
+            hassle_level: 'low',
+            confidence: 0.8,
+            next_action: 'Review the list.',
+            caveat: null,
+            status: params[1],
+          }],
+        };
+      }
+      if (sql.includes('UPDATE smart_action_items')) return { rows: [] };
+      return { rows: [] };
+    });
+    setClient(client);
+
+    await expect(optimizerService.updateRecommendationStatus('invalid', { status: 'done' }))
+      .rejects.toThrow(/invalid recommendation ID/i);
+    await expect(optimizerService.updateRecommendationStatus(20, { status: 'invalid' }))
+      .rejects.toThrow(/invalid recommendation status/i);
+
+    const done = await optimizerService.updateRecommendationStatus('20', { status: 'done' });
+    const dismissed = await optimizerService.updateRecommendationStatus(21, { status: 'dismissed' });
+    const active = await optimizerService.updateRecommendationStatus(22, { status: 'active' });
+
+    expect(done.recommendation).toMatchObject({ id: 20, status: 'done', smartActionItemId: 30 });
+    expect(dismissed.recommendation).toMatchObject({ id: 21, status: 'dismissed' });
+    expect(active.recommendation).toMatchObject({ id: 22, status: 'active' });
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE smart_action_items'), [30, 'resolved']);
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE smart_action_items'), [30, 'dismissed']);
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE smart_action_items'), [30, 'active']);
+
+    await expect(optimizerService.updateRecommendationStatus(404, { status: 'done' }))
+      .rejects.toThrow(/not found/i);
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+    expect(client.release).toHaveBeenCalledTimes(4);
+  });
+
   it('stores generated recommendations and links them to Smart Actions', async () => {
     const recommendationRows: Array<Record<string, unknown>> = [];
+    let nextRecommendationId = 20;
     const client = buildClient(async (sql, params = []) => {
       if (sql.startsWith('CREATE ') || sql.startsWith('CREATE INDEX')) return { rows: [] };
       if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
@@ -456,7 +605,7 @@ describe('optimizer service', () => {
       }
       if (sql.includes('INSERT INTO optimizer_recommendations')) {
         const row = {
-          id: 20,
+          id: nextRecommendationId++,
           run_id: params[0],
           smart_action_item_id: null,
           title: params[1],
@@ -475,12 +624,19 @@ describe('optimizer service', () => {
         recommendationRows.push(row);
         return { rows: [row] };
       }
-      if (sql.includes('SELECT id FROM smart_action_items')) return { rows: [] };
-      if (sql.includes('INSERT INTO smart_action_items')) return { rows: [{ id: 30 }] };
+      if (sql.includes('SELECT id FROM smart_action_items')) {
+        return params[0] === 'optimizer_21' ? { rows: [{ id: 31 }] } : { rows: [] };
+      }
+      if (sql.includes('INSERT INTO smart_action_items')) {
+        if (params[8] === 'optimizer_22') throw new Error('Smart Actions unavailable');
+        return { rows: [{ id: 30 }] };
+      }
       if (sql.includes("SET status = 'dismissed'")) return { rows: [] };
       if (sql.includes('SET smart_action_item_id')) {
-        recommendationRows[0].smart_action_item_id = params[0];
-        return { rows: [recommendationRows[0]] };
+        const recommendation = recommendationRows.find((row) => row.id === params[1]);
+        if (!recommendation) return { rows: [] };
+        recommendation.smart_action_item_id = params[0];
+        return { rows: [recommendation] };
       }
       return { rows: [] };
     });
@@ -500,6 +656,26 @@ describe('optimizer service', () => {
             confidence: 0.82,
             nextAction: 'Cancel one unused subscription.',
             caveat: 'Keep services you actively use.',
+          }, {
+            title: 'Compare mobile plans',
+            section: 'utilities',
+            rationale: 'Comparable plans may cost less.',
+            evidence: ['start.location'],
+            estimatedMonthlyImpact: 80,
+            hassleLevel: 'medium',
+            confidence: 0.7,
+            nextAction: 'Compare two providers.',
+            caveat: null,
+          }, {
+            title: 'Review account fees',
+            section: 'banking',
+            rationale: 'Fee waivers may be available.',
+            evidence: ['start.location'],
+            estimatedMonthlyImpact: 40,
+            hassleLevel: 'low',
+            confidence: 0.65,
+            nextAction: 'Check the latest statement.',
+            caveat: null,
           }],
         }),
       },
@@ -508,18 +684,27 @@ describe('optimizer service', () => {
       isConfigured: vi.fn().mockReturnValue(true),
       createCompletion,
     });
+    const smartActionWarning = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const result = await optimizerService.generateOptimizerPlan({
       model: 'gpt-4o-mini',
       openaiApiKey: 'sk-test',
     });
 
-    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations).toHaveLength(3);
     expect(result.recommendations[0]).toMatchObject({
       title: 'Review streaming subscriptions',
       smartActionItemId: 30,
       estimatedMonthlyImpact: 120,
       evidence: ['Bills location: Tel Aviv'],
+    });
+    expect(result.recommendations[1]).toMatchObject({
+      title: 'Compare mobile plans',
+      smartActionItemId: 31,
+    });
+    expect(result.recommendations[2]).toMatchObject({
+      title: 'Review account fees',
+      smartActionItemId: null,
     });
     expect(createCompletion).toHaveBeenCalledWith(
       [
@@ -532,6 +717,10 @@ describe('optimizer service', () => {
       }),
     );
     expect(client.query).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO smart_action_items'), expect.any(Array));
+    expect(smartActionWarning).toHaveBeenCalledWith(
+      '[optimizer] Failed to create Smart Action for recommendation:',
+      'Smart Actions unavailable',
+    );
   });
 
   it('records a failed run when the optimizer model returns invalid JSON', async () => {
@@ -593,6 +782,74 @@ describe('optimizer service', () => {
     })).rejects.toThrow(/invalid JSON/i);
 
     expect(String(failedRunError)).toMatch(/invalid JSON/i);
+
+    optimizerService.__setOpenAI({
+      isConfigured: vi.fn().mockReturnValue(false),
+      createCompletion: vi.fn(),
+    });
+    await expect(optimizerService.generateOptimizerPlan())
+      .rejects.toMatchObject({ status: 503, code: 'OPENAI_API_KEY_MISSING' });
+
+    optimizerService.__setOpenAI({
+      isConfigured: vi.fn().mockReturnValue(true),
+      createCompletion: vi.fn().mockResolvedValue({
+        success: false,
+        error: 'UPSTREAM_FAILURE',
+        userMessage: 'AI service unavailable',
+      }),
+    });
+    await expect(optimizerService.generateOptimizerPlan({ openaiApiKey: 'sk-test' }))
+      .rejects.toMatchObject({ status: 502, code: 'UPSTREAM_FAILURE' });
+    expect(String(failedRunError)).toMatch(/AI service unavailable/i);
+
+    optimizerService.__setOpenAI({
+      isConfigured: vi.fn().mockReturnValue(true),
+      createCompletion: vi.fn().mockResolvedValue({
+        success: true,
+        finishReason: 'length',
+      }),
+    });
+    await expect(optimizerService.generateOptimizerPlan({ openaiApiKey: 'sk-test' }))
+      .rejects.toMatchObject({ status: 502, code: 'OPTIMIZER_RESPONSE_INCOMPLETE' });
+  });
+
+  it('requires a reviewed fact before calling the optimizer model', async () => {
+    const client = buildClient(async (sql, params = []) => {
+      if (sql.startsWith('CREATE ') || sql.startsWith('CREATE INDEX')) return { rows: [] };
+      if (sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('FROM user_profile')) return { rows: [] };
+      if (sql.includes('FROM transactions t')) return { rows: [] };
+      if (sql.includes('FROM vendor_credentials')) return { rows: [] };
+      if (sql.includes('FROM subscriptions')) return { rows: [] };
+      if (sql.includes('FROM optimizer_facts')) return { rows: [] };
+      if (sql.includes('FROM optimizer_runs')) return { rows: [] };
+      if (sql.includes('INSERT INTO optimizer_runs')) {
+        return {
+          rows: [{
+            id: 12,
+            run_uuid: 'missing-fact-run',
+            generated_at: '2026-07-09 10:03:00',
+            error_message: params[5],
+          }],
+        };
+      }
+      return { rows: [] };
+    });
+    setClient(client);
+    const createCompletion = vi.fn();
+    optimizerService.__setOpenAI({
+      isConfigured: vi.fn().mockReturnValue(true),
+      createCompletion,
+    });
+
+    await expect(optimizerService.generateOptimizerPlan({ openaiApiKey: 'sk-test' }))
+      .rejects.toMatchObject({ status: 400, code: 'OPTIMIZER_FACT_REQUIRED' });
+    expect(createCompletion).not.toHaveBeenCalled();
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO optimizer_runs'),
+      expect.arrayContaining([expect.stringContaining('Confirm at least one financial fact')]),
+    );
   });
 
   it('returns structured optimizer context for chat without using chat memory', async () => {
