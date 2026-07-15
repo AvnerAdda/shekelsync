@@ -36,12 +36,12 @@ interface UseLicenseReturn {
 }
 
 const DEFAULT_STATUS: LicenseStatus = {
-  registered: false,
-  licenseType: 'none',
-  isReadOnly: true,
-  canWrite: false,
+  registered: true,
+  licenseType: 'pro',
+  isReadOnly: false,
+  canWrite: true,
   offlineMode: false,
-  syncedToCloud: false,
+  syncedToCloud: true,
 };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
