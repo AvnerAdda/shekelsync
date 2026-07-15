@@ -249,12 +249,17 @@
           "subtitle": "יתרת בנק: {{amount}}",
           "income": "הכנסות",
           "expenses": "הוצאות",
+          "expensesIncludingPending": "הוצאות (כולל חיובים עתידיים)",
           "investments": "השקעות",
           "capitalReturns": "החזרי הון",
           "capitalReturnsNote": "קרן שהוחזרה מהשקעות (פיקדון/הפקדות). לא נספרת כהכנסה אך מקזזת יציאות להשקעה.",
-          "pendingLabel": "בהמתנה ({{count}})",
+          "pendingLabel": "חיוב עתידי ({{count}})",
           "pendingDeficit": "הוצאות בהמתנה יגרמו לגרעון של {{amount}}",
-          "pendingDeficitCovered": "הוצאות בהמתנה גבוהות מהתקופה ב־{{amount}} — יכוסה מיתרת הבנק"
+          "pendingDeficitCovered": "הוצאות בהמתנה גבוהות מהתקופה ב־{{amount}} — יכוסה מיתרת הבנק",
+          "pendingBreakdownTitle": "תאריכי חיוב עתידיים",
+          "pendingBreakdownLine": "{{amount}} ({{count}} עסקאות)",
+          "pendingBreakdownFallback": "אין פירוט לפי תאריך חיוב עתידי",
+          "pendingIncludedNote": "כבר כלול בהוצאות למעלה; מוצג בנפרד לפי תאריך חיוב."
         },
         "portfolio": {
           "title": "תיק השקעות"
@@ -1156,6 +1161,24 @@
         "show": "הצג תובנות נוספות",
         "hide": "הסתר תובנות נוספות",
         "count": "{{count}} כרטיסים נוספים"
+      },
+      "previousMonth": {
+        "title": "ניתוח החודש הקודם",
+        "subtitle": "החודש הקלנדרי המלא האחרון בהשוואה לחודש שלפניו.",
+        "spend": "הוצאות",
+        "income": "הכנסות",
+        "net": "תזרים נטו",
+        "transactions": "עסקאות",
+        "spendDown": "ירידה של {{amount}}",
+        "spendUp": "עלייה של {{amount}}",
+        "noSpendChange": "אין שינוי בהוצאות",
+        "spendLower": "ההוצאות ירדו",
+        "spendHigher": "ההוצאות עלו",
+        "spendFlat": "ההוצאות ללא שינוי",
+        "currentRange": "החודש האחרון: {{range}}",
+        "previousRange": "קודם: {{range}}",
+        "empty": "עדיין אין השוואה לחודש הקודם.",
+        "loadFailed": "טעינת ניתוח החודש הקודם נכשלה."
       },
       "rhythm": {
         "title": "הקצב הפיננסי שלך",

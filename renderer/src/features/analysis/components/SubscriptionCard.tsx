@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -105,27 +105,27 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
     return categoryColor;
   }, [isOverdue, daysUntil, categoryColor, theme]);
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+  const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>) => {
     setMenuAnchor(event.currentTarget);
-  };
+  }, []);
 
-  const handleMenuClose = () => {
+  const handleMenuClose = useCallback(() => {
     setMenuAnchor(null);
-  };
+  }, []);
 
-  const handlePauseResume = () => {
+  const handlePauseResume = useCallback(() => {
     if (subscription.id) {
       onStatusChange(subscription.id, isActive ? 'paused' : 'active');
     }
     handleMenuClose();
-  };
+  }, [handleMenuClose, isActive, onStatusChange, subscription.id]);
 
-  const handleDelete = () => {
+  const handleDelete = useCallback(() => {
     if (subscription.id) {
       onDelete(subscription.id);
     }
     handleMenuClose();
-  };
+  }, [handleMenuClose, onDelete, subscription.id]);
 
   // Build menu items for overflow menu
   const menuItems = useMemo(() => {
@@ -164,7 +164,7 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
     }
 
     return items;
-  }, [isActive, subscription.status, subscription.is_manual, subscription.id, t, theme]);
+  }, [handleDelete, handlePauseResume, isActive, subscription.status, subscription.is_manual, subscription.id, t, theme]);
 
   return (
     <Box

@@ -10,24 +10,29 @@ export const computeNetSavings = (
 ): number => totalIncome - (totalExpenses + effectiveNetInvestments);
 
 export const computePendingExpenseImpact = ({
-  netSavings,
+  netSavingsIncludingPending,
   pendingExpenses,
   currentBankBalance,
 }: {
-  netSavings: number;
+  netSavingsIncludingPending: number;
   pendingExpenses: number;
   currentBankBalance?: number;
 }) => {
-  const netSavingsAfterPending = netSavings - pendingExpenses;
+  // Dashboard totalExpenses already includes transactions awaiting settlement.
+  // Add them back only to determine whether those pending charges caused the deficit.
+  const netSavingsAfterPending = netSavingsIncludingPending;
+  const netSavingsBeforePending = netSavingsIncludingPending + pendingExpenses;
   const hasPendingExpenses = pendingExpenses > 0;
   const projectedBankBalanceAfterPending =
     currentBankBalance !== undefined ? currentBankBalance - pendingExpenses : null;
-  const pendingCreatesCashFlowDeficit = netSavingsAfterPending < 0;
+  const pendingCreatesCashFlowDeficit =
+    netSavingsAfterPending < 0 && netSavingsBeforePending >= 0;
   const pendingOverdrawsBank =
     projectedBankBalanceAfterPending !== null ? projectedBankBalanceAfterPending < 0 : null;
 
   return {
     netSavingsAfterPending,
+    netSavingsBeforePending,
     hasPendingExpenses,
     projectedBankBalanceAfterPending,
     pendingCreatesCashFlowDeficit,

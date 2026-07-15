@@ -119,11 +119,23 @@ function mean(values) {
   return values.reduce((sum, val) => sum + val, 0) / values.length;
 }
 
+function median(values) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[middle];
+  return (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
 function standardDeviation(values) {
   if (values.length === 0) return 0;
   const avg = mean(values);
   const squareDiffs = values.map(value => Math.pow(value - avg, 2));
   return Math.sqrt(mean(squareDiffs));
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function getDaysInMonth(year, month) {
@@ -191,6 +203,87 @@ function getTransactionNamePatternKey(txn, transactionName) {
   return `${getCategoryPatternKey(txn)}:name:${nameKey}`;
 }
 
+function applyIncomeAmountBaseline(pattern) {
+  if (pattern.categoryType !== 'income' || pattern.amounts.length < 3) return;
+
+  const medianAmount = median(pattern.amounts);
+  if (!Number.isFinite(medianAmount) || medianAmount <= 0) return;
+
+  const deviations = pattern.amounts.map(amount => Math.abs(amount - medianAmount));
+  const medianAbsoluteDeviation = median(deviations);
+  const tolerance = Math.max(500, medianAmount * 0.25, medianAbsoluteDeviation * 3);
+  const stableTransactions = pattern.transactions.filter((txn) => {
+    const amount = Math.abs(txn.price);
+    return Math.abs(amount - medianAmount) <= tolerance;
+  });
+
+  const minimumStableCount = Math.max(3, Math.ceil(pattern.amounts.length * 0.6));
+  if (stableTransactions.length < minimumStableCount) {
+    pattern.incomeAmountBaseline = 'median';
+    pattern.avgAmount = medianAmount;
+    return;
+  }
+
+  const stableAmounts = stableTransactions.map(txn => Math.abs(txn.price));
+  const recentStableAmounts = stableAmounts.slice(-Math.min(3, stableAmounts.length));
+
+  pattern.amounts = stableAmounts;
+  pattern.avgAmount = recentStableAmounts.length >= 2 ? median(recentStableAmounts) : median(stableAmounts);
+  pattern.stdDev = standardDeviation(stableAmounts);
+  pattern.minAmount = Math.min(...stableAmounts);
+  pattern.maxAmount = Math.max(...stableAmounts);
+  pattern.incomeOneOffCount = Math.max(0, pattern.totalCount - stableAmounts.length);
+  pattern.incomeAmountBaseline = recentStableAmounts.length >= 2 ? 'recent_median' : 'median';
+}
+
+function calculatePatternConfidence(pattern) {
+  if (pattern.insufficientData && !pattern.tailOnly) {
+    return pattern.categoryType === 'income' ? 0.2 : 0.25;
+  }
+
+  const monthsOfHistory = Number(pattern.monthsOfHistory || 0);
+  const totalCount = Number(pattern.totalCount || 0);
+  const coefficientOfVariation = Number(pattern.coefficientOfVariation || 0);
+
+  let confidence = 0.35;
+  confidence += clamp(monthsOfHistory / 12, 0, 1) * 0.25;
+  confidence += clamp(totalCount / 12, 0, 1) * 0.15;
+
+  if (pattern.isFixedAmount) {
+    confidence += 0.15;
+  } else if (coefficientOfVariation <= 0.35) {
+    confidence += 0.08;
+  } else if (coefficientOfVariation >= 1) {
+    confidence -= 0.15;
+  }
+
+  const topDayProbability = Number(pattern.mostLikelyDaysOfMonth?.[0]?.probability || 0);
+  if (pattern.patternType === 'monthly') {
+    if (Array.isArray(pattern.dominantDayCluster) && pattern.dominantDayCluster.length > 0) {
+      confidence += 0.1;
+    } else if (topDayProbability >= 0.5) {
+      confidence += 0.05;
+    }
+  }
+
+  if (pattern.categoryType === 'income') {
+    if (pattern.patternType === 'sporadic' || pattern.patternType === 'insufficient_data') {
+      confidence -= 0.2;
+    }
+    if ((pattern.incomeOneOffCount || 0) > 0) {
+      confidence -= Math.min(0.2, pattern.incomeOneOffCount * 0.05);
+    }
+    if ((pattern.uniqueTransactionNameCount || 0) > 2) {
+      confidence -= 0.1;
+    }
+    if (pattern.incomeAmountBaseline === 'recent_median') {
+      confidence += 0.05;
+    }
+  }
+
+  return clamp(confidence, 0.15, 0.95);
+}
+
 // ==================== PATTERN ANALYSIS ====================
 function analyzeCategoryPatterns(transactions) {
   const patterns = {};
@@ -252,6 +345,7 @@ function analyzeCategoryPatterns(transactions) {
           categoryType: txn.category_type,
           parentCategory: txn.parent_category_name,
           transactions: [],
+          transactionNames: {},
           amounts: [],
           ...(includeDailyTotals ? { dailyTotals: {} } : {}),
           daysOfWeek: {},
@@ -266,6 +360,10 @@ function analyzeCategoryPatterns(transactions) {
       patterns[patternKey].transactions.push(txn);
       patterns[patternKey].amounts.push(Math.abs(txn.price));
       patterns[patternKey].totalCount++;
+      const nameKey = typeof txn.name === 'string' ? txn.name.trim() : '';
+      if (nameKey) {
+        patterns[patternKey].transactionNames[nameKey] = (patterns[patternKey].transactionNames[nameKey] || 0) + 1;
+      }
 
       // Track first and last transaction dates for accurate time span calculation
       const txnDate = txn.date;
@@ -318,6 +416,7 @@ function analyzeCategoryPatterns(transactions) {
     const p = patterns[key];
     const uniqueMonths = Object.keys(p.monthlyOccurrences).length;
     p.monthsOfHistory = uniqueMonths;
+    p.uniqueTransactionNameCount = Object.keys(p.transactionNames || {}).length;
 
     const hasMinimumMonths = uniqueMonths >= 2;
     const minimumOccurrencesThreshold = p.categoryType === 'expense' ? 2 : 3;
@@ -348,8 +447,18 @@ function analyzeCategoryPatterns(transactions) {
       p.amounts = nonOutlierAmounts;
     }
 
+    applyIncomeAmountBaseline(p);
+
     p.coefficientOfVariation = p.stdDev / (p.avgAmount || 1);
     p.isFixedAmount = p.coefficientOfVariation < 0.1;
+
+    if (
+      p.categoryType === 'income' &&
+      (p.monthsOfHistory < 3 || p.totalCount < 3)
+    ) {
+      p.insufficientData = true;
+      p.skipReason = 'insufficient_income_history';
+    }
 
     // Calculate actual time span from first to last transaction (more accurate than counting months with transactions)
     const monthsWithTransactions = Object.keys(p.monthlyOccurrences).length;
@@ -535,7 +644,10 @@ function analyzeCategoryPatterns(transactions) {
       p.daysSinceLastOccurrence = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
     }
 
+    p.confidence = calculatePatternConfidence(p);
+
     delete p.transactions;
+    delete p.transactionNames;
   });
 
   return patterns;
@@ -700,7 +812,11 @@ function adjustProbabilitiesForCurrentMonth(patterns, currentMonthTransactions, 
 
     if (pattern.patternType === 'monthly' && occurred.length > 0) {
       if (pattern.categoryType === 'income') {
-        adjustments[patternKey].probabilityMultiplier = 0.0;
+        const expectedRemaining = Math.max(0, pattern.avgOccurrencesPerMonth - occurred.length);
+        adjustments[patternKey].expectedRemaining = expectedRemaining;
+        adjustments[patternKey].probabilityMultiplier = expectedRemaining <= 0.15
+          ? 0.0
+          : clamp((expectedRemaining / Math.max(pattern.avgOccurrencesPerMonth || 1, 1)) * 1.2, 0.15, 0.85);
       } else {
         adjustments[patternKey].probabilityMultiplier = 0.2;
       }
@@ -1393,6 +1509,18 @@ async function generateDailyForecast(options = {}) {
         patternType: p.patternType,
         avgAmount: p.avgAmount,
         stdDev: p.stdDev,
+        minAmount: p.minAmount,
+        maxAmount: p.maxAmount,
+        coefficientOfVariation: p.coefficientOfVariation,
+        isFixedAmount: p.isFixedAmount,
+        confidence: p.confidence,
+        monthsOfHistory: p.monthsOfHistory,
+        avgOccurrencesPerWeek: p.avgOccurrencesPerWeek,
+        incomeAmountBaseline: p.incomeAmountBaseline,
+        incomeOneOffCount: p.incomeOneOffCount || 0,
+        uniqueTransactionNameCount: p.uniqueTransactionNameCount,
+        insufficientData: p.insufficientData || false,
+        skipReason: p.skipReason || null,
         avgOccurrencesPerMonth: p.avgOccurrencesPerMonth,
         mostLikelyDaysOfWeek: p.mostLikelyDaysOfWeek,
         mostLikelyDaysOfMonth: p.mostLikelyDaysOfMonth,
@@ -1745,6 +1873,11 @@ async function getForecast(options = {}) {
       isFixedRecurring: isLikelyFixedRecurring,
       fixedAmount: isLikelyFixedRecurring ? p.avgAmount : null,
       fixedDayOfMonth,
+      incomeAmountBaseline: p.incomeAmountBaseline || null,
+      incomeOneOffCount: p.incomeOneOffCount || 0,
+      uniqueTransactionNameCount: p.uniqueTransactionNameCount || 0,
+      insufficientData: p.insufficientData || false,
+      skipReason: p.skipReason || null,
     };
   });
 

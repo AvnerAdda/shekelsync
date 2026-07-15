@@ -235,12 +235,17 @@
           "subtitle": "Solde bancaire : {{amount}}",
           "income": "Revenus",
           "expenses": "Dépenses",
+          "expensesIncludingPending": "Dépenses (règlements en attente inclus)",
           "investments": "Investissements",
           "capitalReturns": "Remboursements de capital",
           "capitalReturnsNote": "Capital retourné des placements (pékadon, dépôts). Pas compté comme revenu mais compense les sorties d'investissement.",
-          "pendingLabel": "En attente ({{count}})",
+          "pendingLabel": "Règlement en attente ({{count}})",
           "pendingDeficit": "Les dépenses en attente provoqueront un déficit de {{amount}}",
-          "pendingDeficitCovered": "Les dépenses en attente dépassent cette période de {{amount}} — couvert par votre solde bancaire"
+          "pendingDeficitCovered": "Les dépenses en attente dépassent cette période de {{amount}} — couvert par votre solde bancaire",
+          "pendingBreakdownTitle": "Dates de règlement futures",
+          "pendingBreakdownLine": "{{amount}} ({{count}} op.)",
+          "pendingBreakdownFallback": "Aucun détail par date de règlement futur disponible",
+          "pendingIncludedNote": "Déjà inclus dans les dépenses ci-dessus ; affiché séparément par date de règlement."
         },
         "portfolio": {
           "title": "Portefeuille d'investissement"
@@ -1136,6 +1141,24 @@
         "show": "Afficher les analyses plus poussées",
         "hide": "Masquer les analyses plus poussées",
         "count": "{{count}} cartes supplémentaires"
+      },
+      "previousMonth": {
+        "title": "Analyse du mois précédent",
+        "subtitle": "Dernier mois complet comparé au mois d'avant.",
+        "spend": "Dépenses",
+        "income": "Revenus",
+        "net": "Flux net",
+        "transactions": "Transactions",
+        "spendDown": "Baisse de {{amount}}",
+        "spendUp": "Hausse de {{amount}}",
+        "noSpendChange": "Aucun changement de dépense",
+        "spendLower": "Dépenses en baisse",
+        "spendHigher": "Dépenses en hausse",
+        "spendFlat": "Dépenses stables",
+        "currentRange": "Mois dernier : {{range}}",
+        "previousRange": "Précédent : {{range}}",
+        "empty": "Aucune comparaison avec le mois précédent n'est encore disponible.",
+        "loadFailed": "Impossible de charger l'analyse du mois précédent."
       },
       "rhythm": {
         "title": "Votre rythme financier",

@@ -26,6 +26,12 @@ export interface BankAccountBreakdown {
   institution?: BankInstitutionMetadata;
 }
 
+export interface PendingExpenseBreakdown {
+  date: string;
+  amount: number;
+  count: number;
+}
+
 export interface DashboardData {
   dateRange: { start: Date; end: Date };
   summary: {
@@ -42,6 +48,7 @@ export interface DashboardData {
     bankBalanceChange?: number;
     pendingExpenses?: number;
     pendingCount?: number;
+    pendingByProcessedDate?: PendingExpenseBreakdown[];
   };
   history: DashboardHistoryEntry[];
   breakdowns: {

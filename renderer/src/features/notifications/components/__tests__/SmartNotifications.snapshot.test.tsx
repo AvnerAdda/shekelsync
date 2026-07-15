@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SmartNotifications from '../SmartNotifications';
 
@@ -280,7 +280,7 @@ describe('SmartNotifications snapshot flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
 
-    expect(screen.getByText('Progress Snapshot')).toBeInTheDocument();
+    expect(await screen.findByText('Progress Snapshot')).toBeInTheDocument();
     expect(screen.getByText('See your progress across completed time periods.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View Snapshot' })).toBeInTheDocument();
   });
@@ -296,7 +296,7 @@ describe('SmartNotifications snapshot flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
 
-    expect(screen.getByText('See your progress across completed time periods.')).toBeInTheDocument();
+    expect(await screen.findByText('See your progress across completed time periods.')).toBeInTheDocument();
     expect(screen.getByText('Budget warning')).toBeInTheDocument();
   });
 
@@ -310,7 +310,7 @@ describe('SmartNotifications snapshot flow', () => {
     const alertsButton = screen.getByRole('button', { name: 'Smart Alerts' });
     fireEvent.click(alertsButton);
 
-    fireEvent.click(screen.getByRole('button', { name: 'View Snapshot' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View Snapshot' }));
 
     await waitFor(() => {
       expect(mockGet).toHaveBeenCalledWith('/api/notifications/snapshot-progress');
@@ -324,7 +324,7 @@ describe('SmartNotifications snapshot flow', () => {
 
     fireEvent.click(alertsButton);
 
-    expect(screen.getByText('See your progress across completed time periods.')).toBeInTheDocument();
+    expect(await screen.findByText('See your progress across completed time periods.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View Snapshot' })).toBeInTheDocument();
     expect(screen.getByText('1 Info')).toBeInTheDocument();
   });
@@ -368,9 +368,9 @@ describe('SmartNotifications snapshot flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
 
+    expect(await screen.findByText('Progress Snapshot')).toBeInTheDocument();
     expect(screen.queryByText('Old Snapshot')).not.toBeInTheDocument();
     expect(screen.queryByText('Old snapshot details')).not.toBeInTheDocument();
-    expect(screen.getByText('Progress Snapshot')).toBeInTheDocument();
   });
 
   it('shows API snapshot error details when fetch returns non-success', async () => {
@@ -391,7 +391,7 @@ describe('SmartNotifications snapshot flow', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
-    fireEvent.click(screen.getByRole('button', { name: 'View Snapshot' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View Snapshot' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('snapshot-modal')).toHaveTextContent('Snapshot endpoint unavailable');
@@ -416,7 +416,7 @@ describe('SmartNotifications snapshot flow', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
-    fireEvent.click(screen.getByRole('button', { name: 'View Snapshot' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View Snapshot' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('snapshot-modal')).toHaveTextContent('Failed to load snapshot progress.');
@@ -469,7 +469,7 @@ describe('SmartNotifications snapshot flow', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Sync now' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sync now' }));
 
     await waitFor(() => {
       expect(mockPost).toHaveBeenCalledWith('/api/scrape/bulk', { payload: {} });
@@ -523,7 +523,7 @@ describe('SmartNotifications snapshot flow', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Sync now' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sync now' }));
 
     await waitFor(() => {
       expect(showNotification).toHaveBeenCalledWith('Bulk sync denied', 'error');
@@ -566,7 +566,7 @@ describe('SmartNotifications snapshot flow', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open uncategorized' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open uncategorized' }));
 
     expect(categoriesListener).toHaveBeenCalledTimes(1);
     expect((categoriesListener.mock.calls[0][0] as CustomEvent).detail).toEqual({
@@ -632,18 +632,31 @@ describe('SmartNotifications snapshot flow', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open vendor' }));
-
-    expect((searchListener.mock.calls[0][0] as CustomEvent).detail).toEqual({
-      vendor: 'Mega Store',
+    const openVendorButton = await screen.findByRole('button', { name: 'Open vendor' });
+    await act(async () => {
+      fireEvent.click(openVendorButton);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open transaction' }));
+    await waitFor(() => {
+      expect((searchListener.mock.calls[0][0] as CustomEvent).detail).toEqual({
+        vendor: 'Mega Store',
+      });
+    });
 
-    expect((detailListener.mock.calls[0][0] as CustomEvent).detail).toEqual({
-      identifier: 'txn-77',
-      vendor: 'bank-a',
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
+    });
+
+    const openTransactionButton = await screen.findByRole('button', { name: 'Open transaction' });
+    await act(async () => {
+      fireEvent.click(openTransactionButton);
+    });
+
+    await waitFor(() => {
+      expect((detailListener.mock.calls[0][0] as CustomEvent).detail).toEqual({
+        identifier: 'txn-77',
+        vendor: 'bank-a',
+      });
     });
 
     window.removeEventListener('openTransactionSearch', searchListener as EventListener);
