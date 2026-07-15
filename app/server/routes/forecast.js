@@ -130,6 +130,7 @@ function createForecastRouter({ sqliteDb = null, generateForecast = forecastServ
         forecastDays: forecastDaysValue,
         includeToday: includeTodayValue,
         verbose: verboseValue,
+        noCache: skipCache,
       };
       const cacheKey = JSON.stringify({
         date: todayStr,
@@ -158,8 +159,7 @@ function createForecastRouter({ sqliteDb = null, generateForecast = forecastServ
       budgetStartDate.setDate(budgetStartDate.getDate() - budgetDays);
       const budgetStartStr = formatLocalDate(budgetStartDate);
       
-      // Legacy month calculations for forecast filtering
-      const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+      // End of the current month for forecast filtering.
       const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
       const monthEndStr = formatLocalDate(monthEnd);
 
