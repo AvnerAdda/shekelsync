@@ -71,7 +71,7 @@ describe('SummaryCards helpers', () => {
 
   it('derives pending expense risk states', () => {
     const overdraft = computePendingExpenseImpact({
-      netSavings: 300,
+      netSavingsIncludingPending: -400,
       pendingExpenses: 700,
       currentBankBalance: 200,
     });
@@ -82,13 +82,21 @@ describe('SummaryCards helpers', () => {
     expect(overdraft.pendingOverdraftAmount).toBe(500);
 
     const covered = computePendingExpenseImpact({
-      netSavings: 300,
+      netSavingsIncludingPending: -400,
       pendingExpenses: 700,
       currentBankBalance: 2000,
     });
     expect(covered.showPendingDeficitWarning).toBe(false);
     expect(covered.showPendingDeficitCovered).toBe(true);
     expect(covered.pendingOverdraftAmount).toBe(0);
+
+    const remainsPositive = computePendingExpenseImpact({
+      netSavingsIncludingPending: 300,
+      pendingExpenses: 700,
+      currentBankBalance: 2000,
+    });
+    expect(remainsPositive.netSavingsAfterPending).toBe(300);
+    expect(remainsPositive.pendingCreatesCashFlowDeficit).toBe(false);
   });
 
   it('computes savings/diversity/impulse/runway health metrics', () => {

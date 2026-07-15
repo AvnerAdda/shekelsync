@@ -137,6 +137,7 @@ describe('Shared /api/forecast routes', () => {
       .expect(200);
 
     expect(generateForecast).toHaveBeenCalledTimes(2);
+    expect(generateForecast.mock.calls[1][0]).toEqual(expect.objectContaining({ noCache: true }));
     expect(uncached.body.summaries.base.income).not.toBe(first.body.summaries.base.income);
   });
 

@@ -102,7 +102,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   );
   const netSavings = computeNetSavings(totalIncome, totalExpenses, effectiveNetInvestments);
   const pendingImpact = computePendingExpenseImpact({
-    netSavings,
+    netSavingsIncludingPending: netSavings,
     pendingExpenses,
     currentBankBalance,
   });
