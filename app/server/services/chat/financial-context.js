@@ -6,6 +6,7 @@
 const { dialect } = require('../../../lib/sql-dialect.js');
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
+const optimizerService = require('../optimizer.js');
 
 const PAIRING_EXCLUSION_JOIN = `
   LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
@@ -470,9 +471,42 @@ async function buildContext(db, permissions, options = {}) {
     } catch {
       // Investment tables might not exist
     }
+
+    if (options.includeOptimizer === true) {
+      try {
+        const optimizerContext = await optimizerService.getOptimizerContextForChat(db);
+        if (optimizerContext.facts.length > 0 || optimizerContext.recommendations.length > 0) {
+          context.optimizer = optimizerContext;
+        }
+      } catch {
+        // Optimizer tables might not exist in older DBs.
+      }
+    }
   }
 
   return context;
+}
+
+function formatOptimizerSections(optimizer) {
+  if (!optimizer) return [];
+  const parts = [];
+  if (optimizer.facts && optimizer.facts.length > 0) {
+    parts.push('\nOPTIMIZATOR CONFIRMED PROFILE FACTS:');
+    optimizer.facts.forEach((fact) => {
+      parts.push(`- ${fact.label}: ${fact.valueText}`);
+    });
+  }
+
+  if (optimizer.recommendations && optimizer.recommendations.length > 0) {
+    parts.push('\nACTIVE OPTIMIZATOR ACTIONS:');
+    optimizer.recommendations.forEach((recommendation, index) => {
+      const impact = recommendation.estimatedMonthlyImpact
+        ? `, estimated impact ₪${Math.round(recommendation.estimatedMonthlyImpact).toLocaleString()}/mo`
+        : '';
+      parts.push(`${index + 1}. ${recommendation.title}${impact}, hassle ${recommendation.hassleLevel}. Next: ${recommendation.nextAction || 'review action'}`);
+    });
+  }
+  return parts;
 }
 
 /**
@@ -483,8 +517,9 @@ async function buildContext(db, permissions, options = {}) {
 function formatContextForPrompt(context) {
   if (!context.hasData) {
     const profileLines = formatProfileSection(context?.profile);
-    if (profileLines.length > 0) {
-      return `${profileLines.join('\n')}\n\nNo financial data available yet. The user needs to connect their accounts first.`;
+    const optimizerLines = formatOptimizerSections(context?.optimizer);
+    if (profileLines.length > 0 || optimizerLines.length > 0) {
+      return `${[...profileLines, ...optimizerLines].join('\n')}\n\nNo financial data available yet.`;
     }
     return 'No financial data available yet. The user needs to connect their accounts first.';
   }
@@ -556,6 +591,8 @@ function formatContextForPrompt(context) {
       parts.push(`- Expenses: ${direction}${context.yearOverYear.expenseChange}% vs same period last year (was ₪${context.yearOverYear.prevPeriodExpenses.toLocaleString()})`);
     }
   }
+
+  parts.push(...formatOptimizerSections(context.optimizer));
 
   // Permission notices
   const denied = [];

@@ -17,6 +17,7 @@ const tokenMetadata = new Map(); // token -> { created, lastUsed }
 const rateLimitStore = new Map(); // token -> { endpoint -> { count, resetAt } }
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const RATE_LIMITS = {
+  '/api/optimizer/generate': { max: 6, window: RATE_LIMIT_WINDOW_MS },
   '/api/credentials': { max: 30, window: RATE_LIMIT_WINDOW_MS },
   '/api/scrape': { max: 10, window: 5 * RATE_LIMIT_WINDOW_MS },
   '/api/transactions': { max: 100, window: RATE_LIMIT_WINDOW_MS },

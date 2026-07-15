@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 
-const { createAnonymizer, anonymizeProfile, anonymizeContext } = require('../data-anonymizer.js');
+const {
+  createAnonymizer,
+  anonymizeProfile,
+  anonymizeOptimizerContext,
+  anonymizeContext,
+} = require('../data-anonymizer.js');
 
 describe('data-anonymizer', () => {
   describe('createAnonymizer', () => {
@@ -212,6 +217,35 @@ describe('data-anonymizer', () => {
         householdSize: 4,
         spouseIncomeBand: '₪10,000-₪19,999',
       });
+    });
+  });
+
+  describe('anonymizeOptimizerContext', () => {
+    it('drops exact location/free text and coarsens financial amounts', () => {
+      const result = anonymizeOptimizerContext({
+        facts: [
+          { factKey: 'start.location', label: 'Location', valueText: 'Tel Aviv', status: 'confirmed' },
+          { factKey: 'constraints.quality_minimums', label: 'Constraints', valueText: 'Dr. Personal', status: 'edited' },
+          { factKey: 'income.monthly_take_home', label: 'Income', valueText: '₪22,000', status: 'confirmed' },
+          { factKey: 'household.size', label: 'Household', valueText: '3', status: 'confirmed' },
+        ],
+        recommendations: [{
+          title: 'Cancel Dr. Personal in Tel Aviv',
+          section: 'subscriptions',
+          estimatedMonthlyImpact: 100,
+          nextAction: 'Call a named provider',
+        }],
+      });
+
+      expect(result.facts).toEqual([
+        expect.objectContaining({ factKey: 'income.monthly_take_home', valueText: '₪20,000-₪39,999' }),
+        expect.objectContaining({ factKey: 'household.size', valueText: '3' }),
+      ]);
+      expect(result.recommendations[0].title).toBe('Optimization action (subscriptions)');
+      expect(result.recommendations[0].nextAction).toBeNull();
+      expect(JSON.stringify(result)).not.toContain('Tel Aviv');
+      expect(JSON.stringify(result)).not.toContain('Dr. Personal');
+      expect(JSON.stringify(result)).not.toContain('named provider');
     });
   });
 });

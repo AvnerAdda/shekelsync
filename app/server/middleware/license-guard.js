@@ -8,7 +8,6 @@
  * Fails open on database errors to avoid blocking users due to bugs.
  */
 
-const { dialect } = require('../../lib/sql-dialect.js');
 const database = require('../services/database.js');
 
 // Cache for license status
@@ -19,17 +18,15 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 // Trial period in days
 const TRIAL_DAYS = 30;
 
-// Protected routes that require write permission
-const PROTECTED_ROUTES = [
-  '/api/transactions',
-  '/api/scrape',
-  '/api/credentials',
-  '/api/manual_transaction',
-  '/api/categorization',
-  '/api/budgets',
-  '/api/investments',
-  '/api/profile',
-  '/api/accounts',
+// Mutating API requests are protected by default. Keep this exemption list
+// deliberately small so new write routes cannot accidentally bypass read-only
+// mode. Donations must remain available to restore access, chat remains usable
+// without changing financial data, and biometric authentication is not a data
+// mutation.
+const EXEMPT_WRITE_ROUTES = [
+  '/api/donations',
+  '/api/chat',
+  '/api/security/authenticate',
 ];
 
 // HTTP methods that require write permission
@@ -42,10 +39,19 @@ const WRITE_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
  * @returns {boolean}
  */
 function isProtectedRoute(path) {
-  if (!path) return false;
-  return PROTECTED_ROUTES.some(route =>
-    path.startsWith(route) || path === route.slice(0, -1)
+  if (typeof path !== 'string' || path.length === 0) return false;
+
+  // Express routing is case-insensitive by default, and originalUrl includes
+  // the query string. Normalize both so alternate casing or query parameters
+  // cannot change the license decision.
+  const requestPath = path.split(/[?#]/, 1)[0].toLowerCase();
+  const isApiRoute = requestPath === '/api' || requestPath.startsWith('/api/');
+  if (!isApiRoute) return false;
+
+  const isExempt = EXEMPT_WRITE_ROUTES.some(route =>
+    requestPath === route || requestPath.startsWith(`${route}/`)
   );
+  return !isExempt;
 }
 
 /**
@@ -82,6 +88,15 @@ async function getLicenseStatus() {
       // Pro license - always writable
       if (license.license_type === 'pro') {
         licenseStatusCache = { isReadOnly: false };
+        cacheTimestamp = now;
+        return licenseStatusCache;
+      }
+
+      if (license.license_type === 'expired') {
+        licenseStatusCache = {
+          isReadOnly: true,
+          reason: 'Trial period expired',
+        };
         cacheTimestamp = now;
         return licenseStatusCache;
       }
@@ -154,7 +169,7 @@ async function licenseGuardMiddleware(req, res, next) {
   }
 
   // Only check protected routes
-  if (!isProtectedRoute(req.path)) {
+  if (!isProtectedRoute(req.originalUrl || req.path)) {
     return next();
   }
 
@@ -189,6 +204,6 @@ module.exports = {
   clearCache,
   isProtectedRoute,
   // For testing
-  PROTECTED_ROUTES,
+  EXEMPT_WRITE_ROUTES,
   WRITE_METHODS,
 };

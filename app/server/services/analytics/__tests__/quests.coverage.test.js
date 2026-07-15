@@ -584,11 +584,24 @@ describe('quest generation and lifecycle coverage', () => {
     );
     expect(cleanupCalls).toHaveLength(1);
     expect(
-      client.query.mock.calls.some(([sql]) => normalizeSql(sql).includes('DROP TRIGGER IF EXISTS old_trigger')),
+      client.query.mock.calls.some(([sql]) => normalizeSql(sql).includes('DROP TRIGGER IF EXISTS "old_trigger"')),
     ).toBe(true);
     expect(
       client.query.mock.calls.some(([sql]) => normalizeSql(sql).includes('CREATE TABLE IF NOT EXISTS action_item_history_new')),
     ).toBe(true);
+    const historyRebuildSql = client.query.mock.calls
+      .map(([sql]) => normalizeSql(sql))
+      .find((sql) => sql.includes('CREATE TABLE IF NOT EXISTS action_item_history_new'));
+    expect(historyRebuildSql).toContain("'snoozed'");
+    expect(historyRebuildSql).toContain("'reactivated'");
+    expect(historyRebuildSql).toContain("'updated'");
+    const statusTriggerSql = client.query.mock.calls
+      .map(([sql]) => normalizeSql(sql))
+      .find((sql) => sql.includes('CREATE TRIGGER IF NOT EXISTS log_smart_action_item_status_change'));
+    expect(statusTriggerSql).toContain("WHEN 'snoozed' THEN 'snoozed'");
+    expect(
+      client.query.mock.calls.some(([sql]) => normalizeSql(sql).includes('DROP TRIGGER IF EXISTS custom_trigger')),
+    ).toBe(false);
   });
 
   it('fails accept when quest does not exist', async () => {

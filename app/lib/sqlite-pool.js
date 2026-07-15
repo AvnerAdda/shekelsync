@@ -172,6 +172,327 @@ function rebuildInvestmentHoldingsForPikadonEntries(db) {
   }
 }
 
+const SMART_ACTION_COLUMNS = [
+  ['id', 'id', 'NULL'],
+  ['action_type', 'action_type', "'optimization'"],
+  ['trigger_category_id', 'trigger_category_id', 'NULL'],
+  ['severity', "COALESCE(severity, 'medium')", "'medium'"],
+  ['title', 'title', "'Untitled action'"],
+  ['description', 'description', 'NULL'],
+  ['detected_at', "COALESCE(detected_at, datetime('now'))", "datetime('now')"],
+  ['resolved_at', 'resolved_at', 'NULL'],
+  ['dismissed_at', 'dismissed_at', 'NULL'],
+  ['snoozed_until', 'snoozed_until', 'NULL'],
+  ['user_status', "COALESCE(user_status, 'active')", "'active'"],
+  ['metadata', 'metadata', 'NULL'],
+  ['potential_impact', 'potential_impact', 'NULL'],
+  ['detection_confidence', 'COALESCE(detection_confidence, 0.5)', '0.5'],
+  ['is_recurring', 'COALESCE(is_recurring, 0)', '0'],
+  ['recurrence_key', 'recurrence_key', 'NULL'],
+  ['deadline', 'deadline', 'NULL'],
+  ['accepted_at', 'accepted_at', 'NULL'],
+  ['points_reward', 'COALESCE(points_reward, 0)', '0'],
+  ['points_earned', 'COALESCE(points_earned, 0)', '0'],
+  ['completion_criteria', 'completion_criteria', 'NULL'],
+  ['completion_result', 'completion_result', 'NULL'],
+  ['quest_difficulty', 'quest_difficulty', 'NULL'],
+  ['quest_duration_days', 'quest_duration_days', 'NULL'],
+  ['created_at', "COALESCE(created_at, datetime('now'))", "datetime('now')"],
+  ['updated_at', "COALESCE(updated_at, datetime('now'))", "datetime('now')"],
+];
+
+const ACTION_ITEM_HISTORY_COLUMNS = [
+  ['id', 'id', 'NULL'],
+  ['smart_action_item_id', 'smart_action_item_id', 'NULL'],
+  [
+    'action',
+    `CASE
+      WHEN action IN (
+        'created', 'dismissed', 'resolved', 'snoozed', 'reactivated',
+        'updated', 'accepted', 'completed', 'failed'
+      ) THEN action
+      ELSE 'updated'
+    END`,
+    "'updated'",
+  ],
+  ['previous_status', 'previous_status', 'NULL'],
+  ['new_status', 'new_status', 'NULL'],
+  ['user_note', 'user_note', 'NULL'],
+  ['metadata', 'metadata', 'NULL'],
+  ['created_at', "COALESCE(created_at, datetime('now'))", "datetime('now')"],
+];
+
+function createSmartActionItemsTableSql(tableName = 'smart_action_items') {
+  return `
+    CREATE TABLE IF NOT EXISTS ${tableName} (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      action_type TEXT NOT NULL CHECK(action_type IN (
+        'anomaly', 'budget_overrun', 'optimization', 'fixed_variation',
+        'unusual_purchase', 'seasonal_alert', 'fixed_recurring_change',
+        'fixed_recurring_missing', 'fixed_recurring_duplicate',
+        'optimization_reallocate', 'optimization_add_budget',
+        'optimization_low_confidence',
+        'quest_reduce_spending', 'quest_savings_target', 'quest_budget_adherence',
+        'quest_set_budget', 'quest_reduce_fixed_cost', 'quest_income_goal',
+        'quest_merchant_limit', 'quest_weekend_limit'
+      )),
+      trigger_category_id INTEGER,
+      severity TEXT NOT NULL DEFAULT 'medium' CHECK(severity IN ('low', 'medium', 'high', 'critical')),
+      title TEXT NOT NULL,
+      description TEXT,
+      detected_at TEXT NOT NULL DEFAULT (datetime('now')),
+      resolved_at TEXT,
+      dismissed_at TEXT,
+      snoozed_until TEXT,
+      user_status TEXT NOT NULL DEFAULT 'active' CHECK(user_status IN ('active', 'dismissed', 'resolved', 'snoozed', 'accepted', 'failed')),
+      metadata TEXT,
+      potential_impact REAL,
+      detection_confidence REAL DEFAULT 0.5 CHECK(detection_confidence >= 0 AND detection_confidence <= 1),
+      is_recurring INTEGER NOT NULL DEFAULT 0 CHECK(is_recurring IN (0, 1)),
+      recurrence_key TEXT,
+      deadline TEXT,
+      accepted_at TEXT,
+      points_reward INTEGER DEFAULT 0,
+      points_earned INTEGER DEFAULT 0,
+      completion_criteria TEXT,
+      completion_result TEXT,
+      quest_difficulty TEXT CHECK(quest_difficulty IS NULL OR quest_difficulty IN ('easy', 'medium', 'hard')),
+      quest_duration_days INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (trigger_category_id) REFERENCES category_definitions(id) ON DELETE SET NULL
+    );
+  `;
+}
+
+function createActionItemHistoryTableSql(tableName = 'action_item_history') {
+  return `
+    CREATE TABLE IF NOT EXISTS ${tableName} (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      smart_action_item_id INTEGER NOT NULL,
+      action TEXT NOT NULL CHECK(action IN (
+        'created', 'dismissed', 'resolved', 'snoozed', 'reactivated',
+        'updated', 'accepted', 'completed', 'failed'
+      )),
+      previous_status TEXT,
+      new_status TEXT,
+      user_note TEXT,
+      metadata TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (smart_action_item_id) REFERENCES smart_action_items(id) ON DELETE CASCADE
+    );
+  `;
+}
+
+function createSmartActionIndexes(db) {
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_smart_action_items_type ON smart_action_items(action_type);
+    CREATE INDEX IF NOT EXISTS idx_smart_action_items_status ON smart_action_items(user_status);
+    CREATE INDEX IF NOT EXISTS idx_smart_action_items_severity ON smart_action_items(severity);
+    CREATE INDEX IF NOT EXISTS idx_smart_action_items_category ON smart_action_items(trigger_category_id);
+    CREATE INDEX IF NOT EXISTS idx_smart_action_items_detected_at ON smart_action_items(detected_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_smart_action_items_recurrence ON smart_action_items(recurrence_key, user_status);
+    CREATE INDEX IF NOT EXISTS idx_smart_action_items_deadline ON smart_action_items(deadline);
+    CREATE INDEX IF NOT EXISTS idx_smart_action_items_accepted_at ON smart_action_items(accepted_at);
+    CREATE INDEX IF NOT EXISTS idx_smart_action_items_quest_difficulty ON smart_action_items(quest_difficulty);
+  `);
+}
+
+function createSmartActionTriggers(db) {
+  db.exec('DROP TRIGGER IF EXISTS update_smart_action_items_timestamp');
+  db.exec('DROP TRIGGER IF EXISTS log_smart_action_item_status_change');
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS update_smart_action_items_timestamp
+    AFTER UPDATE ON smart_action_items
+    BEGIN
+      UPDATE smart_action_items SET updated_at = datetime('now') WHERE id = NEW.id;
+    END
+  `);
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS log_smart_action_item_status_change
+    AFTER UPDATE OF user_status ON smart_action_items
+    WHEN OLD.user_status != NEW.user_status
+    BEGIN
+      INSERT INTO action_item_history (smart_action_item_id, action, previous_status, new_status)
+      VALUES (
+        NEW.id,
+        CASE NEW.user_status
+          WHEN 'dismissed' THEN 'dismissed'
+          WHEN 'resolved' THEN 'resolved'
+          WHEN 'snoozed' THEN 'snoozed'
+          WHEN 'accepted' THEN 'accepted'
+          WHEN 'completed' THEN 'completed'
+          WHEN 'failed' THEN 'failed'
+          WHEN 'active' THEN 'reactivated'
+          ELSE 'updated'
+        END,
+        OLD.user_status,
+        NEW.user_status
+      );
+    END
+  `);
+}
+
+function ensureSmartActionCompatibility(db) {
+  const smartActionTableSql = getTableSql(db, 'smart_action_items');
+  if (!smartActionTableSql) {
+    return;
+  }
+
+  const historyTableSql = getTableSql(db, 'action_item_history');
+  const smartActionNeedsRebuild = !(
+    smartActionTableSql.includes("'optimization'")
+    && smartActionTableSql.includes("'fixed_recurring_change'")
+    && smartActionTableSql.includes("'optimization_reallocate'")
+    && smartActionTableSql.includes("'quest_reduce_spending'")
+    && smartActionTableSql.includes("'snoozed'")
+    && smartActionTableSql.includes('snoozed_until')
+    && smartActionTableSql.includes("'critical'")
+  );
+  const historyNeedsRebuild = !historyTableSql
+    || historyTableSql.includes('smart_action_items_old')
+    || !historyTableSql.includes("'snoozed'")
+    || !historyTableSql.includes("'reactivated'")
+    || !historyTableSql.includes("'updated'");
+
+  if (!smartActionNeedsRebuild && !historyNeedsRebuild) {
+    return;
+  }
+
+  const smartActionColumns = smartActionNeedsRebuild
+    ? db.prepare("PRAGMA table_info('smart_action_items')").all()
+    : [];
+  const existingSmartActionColumns = new Set(smartActionColumns.map((column) => column.name));
+  const historyColumns = historyTableSql
+    ? db.prepare("PRAGMA table_info('action_item_history')").all()
+    : [];
+  const existingHistoryColumns = new Set(historyColumns.map((column) => column.name));
+
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec('BEGIN');
+
+  try {
+    db.exec('DROP TRIGGER IF EXISTS update_smart_action_items_timestamp');
+    db.exec('DROP TRIGGER IF EXISTS log_smart_action_item_status_change');
+
+    if (smartActionNeedsRebuild) {
+      const insertColumns = SMART_ACTION_COLUMNS.map(([column]) => column);
+      const selectColumns = SMART_ACTION_COLUMNS.map(([column, existingExpression, fallback]) => (
+        existingSmartActionColumns.has(column)
+          ? `${existingExpression} AS ${column}`
+          : `${fallback} AS ${column}`
+      ));
+      db.exec('DROP TABLE IF EXISTS smart_action_items__new');
+      db.exec(createSmartActionItemsTableSql('smart_action_items__new'));
+      db.exec(`
+        INSERT INTO smart_action_items__new (${insertColumns.join(', ')})
+        SELECT ${selectColumns.join(', ')}
+        FROM smart_action_items
+      `);
+      db.exec('DROP TABLE smart_action_items');
+      db.exec('ALTER TABLE smart_action_items__new RENAME TO smart_action_items');
+    }
+
+    if (historyNeedsRebuild) {
+      db.exec('DROP TABLE IF EXISTS action_item_history__new');
+      db.exec(createActionItemHistoryTableSql('action_item_history__new'));
+      if (historyTableSql) {
+        const insertColumns = ACTION_ITEM_HISTORY_COLUMNS.map(([column]) => column);
+        const selectColumns = ACTION_ITEM_HISTORY_COLUMNS.map(([column, existingExpression, fallback]) => (
+          existingHistoryColumns.has(column)
+            ? `${existingExpression} AS ${column}`
+            : `${fallback} AS ${column}`
+        ));
+        db.exec(`
+          INSERT INTO action_item_history__new (${insertColumns.join(', ')})
+          SELECT ${selectColumns.join(', ')}
+          FROM action_item_history
+        `);
+        db.exec('DROP TABLE action_item_history');
+      }
+      db.exec('ALTER TABLE action_item_history__new RENAME TO action_item_history');
+    }
+
+    createSmartActionIndexes(db);
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_action_item_history_item_id
+      ON action_item_history(smart_action_item_id, created_at DESC)
+    `);
+    createSmartActionTriggers(db);
+
+    const foreignKeyViolations = db
+      .prepare("PRAGMA foreign_key_check('action_item_history')")
+      .all();
+    if (foreignKeyViolations.length > 0) {
+      throw new Error('action_item_history contains invalid smart action references');
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    if (db.inTransaction) {
+      db.exec('ROLLBACK');
+    }
+    throw error;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+}
+
+function ensureOptimizerTables(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS optimizer_facts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fact_key TEXT NOT NULL UNIQUE,
+      section TEXT NOT NULL,
+      label TEXT NOT NULL,
+      value_json TEXT,
+      value_text TEXT,
+      status TEXT NOT NULL DEFAULT 'detected' CHECK(status IN ('detected', 'confirmed', 'edited', 'unknown', 'skipped')),
+      source TEXT NOT NULL DEFAULT 'detected',
+      confidence REAL DEFAULT 0.5 CHECK(confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+      evidence_json TEXT,
+      confirmed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS optimizer_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_uuid TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'complete' CHECK(status IN ('complete', 'failed')),
+      prompt_version TEXT NOT NULL,
+      openai_model TEXT,
+      input_snapshot_json TEXT,
+      result_json TEXT,
+      error_message TEXT,
+      generated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS optimizer_recommendations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id INTEGER NOT NULL,
+      smart_action_item_id INTEGER,
+      title TEXT NOT NULL,
+      section TEXT NOT NULL,
+      rationale TEXT,
+      evidence_json TEXT,
+      estimated_monthly_impact REAL DEFAULT 0,
+      hassle_level TEXT NOT NULL DEFAULT 'medium' CHECK(hassle_level IN ('low', 'medium', 'high')),
+      confidence REAL DEFAULT 0.5 CHECK(confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+      next_action TEXT,
+      caveat TEXT,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'done', 'dismissed')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (run_id) REFERENCES optimizer_runs(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_optimizer_facts_status ON optimizer_facts(status);
+    CREATE INDEX IF NOT EXISTS idx_optimizer_facts_section ON optimizer_facts(section);
+    CREATE INDEX IF NOT EXISTS idx_optimizer_runs_generated ON optimizer_runs(generated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_optimizer_recommendations_status ON optimizer_recommendations(status);
+    CREATE INDEX IF NOT EXISTS idx_optimizer_recommendations_run ON optimizer_recommendations(run_id);
+  `);
+}
+
 /**
  * Run startup-critical, idempotent schema migrations/fixes before the pool is returned.
  * These tables/columns are queried immediately by request handlers, so they must exist
@@ -342,6 +663,18 @@ function runStartupSchemaMigrations(db) {
     addColumnIfMissing(db, 'real_estate_properties', 'mortgage_term_years', 'REAL');
   } catch (_error) {
     // Ignore: table may not exist yet (e.g., before init_sqlite_db runs).
+  }
+
+  try {
+    ensureOptimizerTables(db);
+  } catch (_error) {
+    // Ignore: database initialization may still be in progress.
+  }
+
+  try {
+    ensureSmartActionCompatibility(db);
+  } catch (_error) {
+    // Ignore: Smart Actions tables may not exist before init_sqlite_db runs.
   }
 
   // Chat tables migration
@@ -554,39 +887,7 @@ function runDeferredSchemaMaintenance(db) {
     `).get();
 
     if (tableExists) {
-      db.exec('DROP TRIGGER IF EXISTS update_smart_action_items_timestamp');
-      db.exec('DROP TRIGGER IF EXISTS log_smart_action_item_status_change');
-
-      db.exec(`
-        CREATE TRIGGER IF NOT EXISTS update_smart_action_items_timestamp
-        AFTER UPDATE ON smart_action_items
-        BEGIN
-          UPDATE smart_action_items SET updated_at = datetime('now') WHERE id = NEW.id;
-        END
-      `);
-
-      db.exec(`
-        CREATE TRIGGER IF NOT EXISTS log_smart_action_item_status_change
-        AFTER UPDATE OF user_status ON smart_action_items
-        WHEN OLD.user_status != NEW.user_status
-        BEGIN
-          INSERT INTO action_item_history (smart_action_item_id, action, previous_status, new_status)
-          VALUES (
-            NEW.id,
-            CASE NEW.user_status
-              WHEN 'dismissed' THEN 'dismissed'
-              WHEN 'resolved' THEN 'resolved'
-              WHEN 'accepted' THEN 'accepted'
-              WHEN 'completed' THEN 'completed'
-              WHEN 'failed' THEN 'failed'
-              WHEN 'active' THEN 'reactivated'
-              ELSE 'updated'
-            END,
-            OLD.user_status,
-            NEW.user_status
-          );
-        END
-      `);
+      createSmartActionTriggers(db);
     }
   } catch (_triggerError) {
     // Ignore: smart_action_items table may not exist yet

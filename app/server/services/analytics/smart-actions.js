@@ -11,7 +11,6 @@
 
 const actualDatabase = require('../database.js');
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
-const { CATEGORY_TYPES } = require('../../../lib/category-constants.js');
 const { resolveLocale, getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
 const forecastService = require('../forecast.js');
 
@@ -21,7 +20,6 @@ let database = actualDatabase;
 const ANOMALY_THRESHOLD = 0.20; // 20% increase from average
 const FIXED_VARIATION_THRESHOLD = 0.10; // 10% variation for fixed costs
 const UNUSUAL_PURCHASE_SIGMA = 2.0; // 2 standard deviations
-const BUDGET_WARNING_THRESHOLD = 0.80; // 80% of budget used
 
 // Quest System Configuration
 const MAX_ACTIVE_QUESTS = 5;
@@ -243,7 +241,6 @@ async function detectCategoryAnomalies(params = {}) {
     // Get forecast data with pattern predictions
     const forecastData = injectedForecast || await forecastService.getForecast({ months: 6 });
     const patterns = forecastData?.patterns || [];
-    const forecastByCategory = forecastData?.forecastByCategory || new Map();
     const outlookMap = new Map();
     (forecastData?.budgetOutlook || []).forEach(item => {
       if (item.categoryDefinitionId) {
@@ -1221,16 +1218,14 @@ async function updateSmartActionStatus(actionId, status, userNote) {
   const client = await database.getClient();
 
   try {
+    await client.query('BEGIN');
     const updateFields = ['user_status = $2'];
     const values = [actionId, status];
-    let paramCount = 2;
-
     if (status === 'resolved') {
       updateFields.push('resolved_at = datetime(\'now\')');
     } else if (status === 'dismissed') {
       updateFields.push('dismissed_at = datetime(\'now\')');
     } else if (status === 'snoozed') {
-      paramCount++;
       updateFields.push(`snoozed_until = datetime('now', '+7 days')`);
     }
 
@@ -1253,7 +1248,34 @@ async function updateSmartActionStatus(actionId, status, userNote) {
       `, [actionId, status, status, userNote]);
     }
 
+    if (result.rows[0].action_type === 'optimization') {
+      const optimizerStatus = status === 'resolved'
+        ? 'done'
+        : status === 'dismissed'
+          ? 'dismissed'
+          : status === 'active'
+            ? 'active'
+            : null;
+      if (optimizerStatus) {
+        await client.query(`
+          UPDATE optimizer_recommendations
+          SET status = $2,
+              updated_at = datetime('now')
+          WHERE smart_action_item_id = $1
+        `, [actionId, optimizerStatus]);
+      }
+    }
+
+    await client.query('COMMIT');
+
     return { action: result.rows[0] };
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // Ignore rollback errors.
+    }
+    throw error;
   } finally {
     client.release();
   }

@@ -972,6 +972,73 @@
       "refreshing": "מרענן...",
       "retry": "נסה שוב"
     },
+    "smartActions": {
+      "title": "פעולות חכמות",
+      "subtitle": "צעדים מעשיים מדפוסי הוצאות ומתוכניות Optimizator",
+      "actions": {
+        "generate": "צור",
+        "generating": "יוצר..."
+      },
+      "summary": {
+        "totalActions": "סה\"כ פעולות",
+        "criticalHigh": "עדיפות גבוהה",
+        "potentialImpact": "השפעה פוטנציאלית"
+      },
+      "empty": {
+        "title": "אין פעולות פעילות",
+        "description": "צרו פעולות או המתינו לזיהוי דפוסים חדשים."
+      },
+      "severities": {
+        "low": "נמוכה",
+        "medium": "בינונית",
+        "high": "גבוהה",
+        "critical": "קריטית"
+      },
+      "types": {
+        "anomaly": "חריגה",
+        "budget_overrun": "חריגה מתקציב",
+        "optimization": "אופטימיזציה",
+        "fixed_variation": "שינוי בעלות קבועה",
+        "unusual_purchase": "רכישה חריגה",
+        "seasonal_alert": "דפוס עונתי",
+        "fixed_recurring_change": "שינוי בתשלום",
+        "fixed_recurring_missing": "תשלום חסר",
+        "fixed_recurring_duplicate": "תשלום כפול",
+        "optimization_reallocate": "הזדמנות לחיסכון",
+        "optimization_add_budget": "הצעת תקציב",
+        "optimization_low_confidence": "דפוס לא סדיר"
+      },
+      "labels": {
+        "costIncrease": "עלייה בעלות",
+        "potentialSavings": "חיסכון פוטנציאלי"
+      },
+      "tooltips": {
+        "resolve": "סמן כטופל",
+        "dismiss": "דחה",
+        "snooze": "השהה ל-{{days}} ימים"
+      },
+      "details": {
+        "title": "פרטים",
+        "detected": "זוהה",
+        "confidence": "ביטחון",
+        "additionalInfo": "מידע נוסף"
+      },
+      "dialog": {
+        "resolve": {
+          "title": "סימון פעולה כטופלה"
+        },
+        "dismiss": {
+          "title": "דחיית פעולה"
+        },
+        "snooze": {
+          "title": "השהיית פעולה"
+        },
+        "noteLabel": "הערה",
+        "notePlaceholder": "הקשר אופציונלי",
+        "cancel": "ביטול",
+        "confirm": "אישור"
+      }
+    },
     "tabs": {
       "ariaLabel": "לשוניות ניתוח",
       "dashboard": "ראשי",
@@ -2414,6 +2481,115 @@
     "errors": {
       "loadFailed": "הטענת עסקאות לא משויכות נכשלה",
       "generic": "שגיאה בטעינת עסקאות"
+    }
+  },
+  "optimizer": {
+    "title": "Optimizator",
+    "subtitle": "אשרו פרטי פרופיל וצרו פעולות חיסכון מעשיות.",
+    "fabTooltip": "פתיחת Optimizator",
+    "unknown": "לא ידוע",
+    "answer": "תשובה",
+    "hassle": "טרחה",
+    "nextAction": "השלב הבא",
+    "reviewIntro": "בדקו קודם את הנתונים שזוהו. אשרו, ערכו או סמנו כלא ידוע.",
+    "quizIntro": "שאלון קצר לפעם הראשונה. אפשר לדלג או לסמן לא ידוע בכל שאלה.",
+    "quizComplete": "כל השאלות החיוניות טופלו.",
+    "emptyFacts": "עדיין לא זוהו נתונים. התחילו מהשאלות.",
+    "emptyPlan": "עדיין אין תוכנית פעולה. צרו אחת אחרי בדיקת הנתונים והשאלון הקצר.",
+    "missingApiKey": "הוסיפו מפתח API של OpenAI בהגדרות לפני יצירת תוכנית.",
+    "stale": "התשובות השתנו מאז התוכנית האחרונה. צרו תוכנית חדשה.",
+    "privacyNotice": "יצירת התוכנית שולחת ל-OpenAI את פרטי הפרופיל שנבדקו, באמצעות מפתח ה-API שהגדרתם.",
+    "activeCount": "{{count}} פעולות פעילות",
+    "tabs": {
+      "ariaLabel": "תצוגות Optimizator",
+      "review": "בדיקה",
+      "quiz": "שאלות",
+      "plan": "תוכנית"
+    },
+    "actions": {
+      "close": "סגירה",
+      "confirm": "אישור",
+      "edit": "עריכה",
+      "save": "שמירה",
+      "unknown": "לא ידוע",
+      "skip": "דילוג",
+      "goToQuestions": "מענה לשאלות חסרות",
+      "goToPlan": "מעבר לתוכנית פעולה",
+      "generate": "יצירת תוכנית פעולה",
+      "regenerate": "יצירה מחדש",
+      "done": "בוצע",
+      "dismiss": "דחייה",
+      "refresh": "רענון"
+    },
+    "errors": {
+      "status": "טעינת Optimizator נכשלה",
+      "save": "שמירת התשובה נכשלה",
+      "generate": "יצירת התוכנית נכשלה",
+      "recommendationStatus": "עדכון ההמלצה נכשל",
+      "missingApiKey": "הוסיפו מפתח API של OpenAI בהגדרות לפני יצירת תוכנית.",
+      "emptyAnswer": "הזינו תשובה, דלגו או סמנו כלא ידוע.",
+      "invalidNumber": "הזינו מספר תקין.",
+      "generic": "משהו השתבש"
+    },
+    "sections": {
+      "start": "סקירה",
+      "banking": "בנקאות",
+      "housing": "דיור",
+      "subscriptions": "מנויים",
+      "constraints": "מגבלות",
+      "food": "מזון",
+      "insurance": "ביטוח",
+      "utilities": "חשבונות בית",
+      "transportation": "תחבורה",
+      "taxes": "מסים",
+      "general": "כללי"
+    },
+    "statuses": {
+      "detected": "זוהה",
+      "confirmed": "אושר",
+      "edited": "נערך",
+      "unknown": "לא ידוע",
+      "skipped": "דולג",
+      "active": "פעיל",
+      "done": "בוצע",
+      "dismissed": "נדחה"
+    },
+    "hassleLevels": {
+      "low": "נמוכה",
+      "medium": "בינונית",
+      "high": "גבוהה"
+    },
+    "facts": {
+      "location": { "label": "מיקום החשבונות", "prompt": "באיזו עיר בישראל נמצאים רוב החשבונות שלכם?" },
+      "householdSize": { "label": "גודל משק הבית", "prompt": "כמה אנשים יש במשק הבית, כולל מבוגרים ותלויים?" },
+      "monthlyIncome": { "label": "הכנסה חודשית נטו", "prompt": "מהי ההכנסה החודשית נטו המשוערת שלכם בשקלים?" },
+      "fixedExpenses": { "label": "הוצאות קבועות חודשיות", "prompt": "מהו הסכום החודשי המשוער של ההוצאות הקבועות בשקלים?" },
+      "variableExpenses": { "label": "הוצאות משתנות חודשיות", "prompt": "מהו הסכום החודשי המשוער של ההוצאות המשתנות בשקלים?" },
+      "totalExpenses": { "label": "הוצאה חודשית ממוצעת", "prompt": "מהי ההוצאה החודשית הכוללת הממוצעת בשקלים?" },
+      "topExpenses": { "label": "הוצאות שמרגישות גבוהות מדי", "prompt": "אילו הוצאות מרגישות כרגע גבוהות מדי?" },
+      "urgentGoal": { "label": "יעד דחוף", "prompt": "מהו היעד הכספי הדחוף ביותר כרגע?" },
+      "hassleTolerance": { "label": "סבילות לטרחה", "prompt": "כמה טרחה אתם מוכנים להשקיע כדי לחסוך כסף?" },
+      "cashBalance": { "label": "יתרת עו״ש וחיסכון", "prompt": "כמה כסף נמצא כעת בחשבונות העו״ש והחיסכון?" },
+      "housingStatus": { "label": "מצב דיור", "prompt": "האם אתם שוכרים, בעלי דירה, גרים עם המשפחה או במצב אחר?" },
+      "subscriptionsTotal": { "label": "סך המנויים החודשי", "prompt": "באיזה סכום חודשי על Optimizator להשתמש עבור מנויים?" },
+      "protectedProviders": { "label": "ספקים שלא תעזבו", "prompt": "האם יש ספקים שאינכם מוכנים לעזוב?" },
+      "qualityMinimums": { "label": "דרישות איכות מינימליות", "prompt": "אילו דרישות מינימליות חייבות להישמר, כגון מהירות אינטרנט, קליטה, רופאים או כיסוי ביטוחי?" }
+    },
+    "options": {
+      "lower_bills": "הורדת חשבונות",
+      "debt_payoff": "סגירת חובות",
+      "rent": "שכר דירה",
+      "food": "מזון",
+      "subscriptions": "מנויים",
+      "travel": "נסיעות",
+      "investing": "השקעות",
+      "cash_buffer": "כרית מזומן",
+      "low": "נמוכה",
+      "medium": "בינונית",
+      "high": "גבוהה",
+      "own": "בעלות",
+      "family": "משפחה",
+      "other": "אחר"
     }
   },
   "chatbotWidget": {

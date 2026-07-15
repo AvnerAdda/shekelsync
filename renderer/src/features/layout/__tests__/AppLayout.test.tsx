@@ -32,6 +32,21 @@ vi.mock('@renderer/features/chatbot/components/FinancialChatbot', async () => {
   };
 });
 
+vi.mock('@renderer/features/optimizer/components/FinancialOptimizer', async () => {
+  const ReactModule = await import('react');
+  return {
+    default: () => {
+      const [open, setOpen] = ReactModule.useState(false);
+      ReactModule.useEffect(() => {
+        const handleOpen = () => setOpen(true);
+        window.addEventListener('openOptimizerDrawer', handleOpen);
+        return () => window.removeEventListener('openOptimizerDrawer', handleOpen);
+      }, []);
+      return open ? <div data-testid="optimizer-open" /> : null;
+    },
+  };
+});
+
 vi.mock('@renderer/features/support', () => ({
   DonationReminderDialog: () => null,
   useDonationStatus: () => ({
@@ -161,6 +176,18 @@ describe('AppLayout', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('chatbot-open')).toBeInTheDocument();
+    });
+  });
+
+  it('loads the deferred optimizer when an early open event is dispatched', async () => {
+    renderAppLayout();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('openOptimizerDrawer'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('optimizer-open')).toBeInTheDocument();
     });
   });
 
