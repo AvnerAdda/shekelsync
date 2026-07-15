@@ -233,7 +233,7 @@ async function processMessage(payload = {}) {
     // Build financial context
     let financialContext;
     try {
-      financialContext = await buildContext(client, perms);
+      financialContext = await buildContext(client, perms, { includeOptimizer: true });
       console.log('[chat] Financial context built:', {
         hasData: financialContext.hasData,
         hasProfile: Boolean(financialContext.profile),
@@ -261,7 +261,6 @@ async function processMessage(payload = {}) {
     const memoriesSection = formatMemoriesForPrompt(memories);
     const systemPrompt = getSystemPrompt(locale, contextString, schemaDesc, perms, memoriesSection);
 
-    console.log('[chat] Context string preview:', contextString.substring(0, 500));
     console.log('[chat] System prompt length:', systemPrompt.length);
 
     // Get conversation history
@@ -566,7 +565,7 @@ async function processMessageStream(payload = {}, onEvent) {
 
     let financialContext;
     try {
-      financialContext = await buildContext(client, perms);
+      financialContext = await buildContext(client, perms, { includeOptimizer: true });
     } catch {
       financialContext = { hasData: false, permissions: perms, summary: { transactionCount: 0 } };
     }

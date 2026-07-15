@@ -969,6 +969,73 @@
       "refreshing": "Refreshing...",
       "retry": "Retry"
     },
+    "smartActions": {
+      "title": "Smart Actions",
+      "subtitle": "Practical follow-ups from spending patterns and optimizer plans",
+      "actions": {
+        "generate": "Generate",
+        "generating": "Generating..."
+      },
+      "summary": {
+        "totalActions": "Total actions",
+        "criticalHigh": "High priority",
+        "potentialImpact": "Potential impact"
+      },
+      "empty": {
+        "title": "No active actions",
+        "description": "Generate actions or wait for new patterns to appear."
+      },
+      "severities": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "critical": "Critical"
+      },
+      "types": {
+        "anomaly": "Anomaly",
+        "budget_overrun": "Budget overrun",
+        "optimization": "Optimization",
+        "fixed_variation": "Fixed cost shift",
+        "unusual_purchase": "Unusual purchase",
+        "seasonal_alert": "Seasonal pattern",
+        "fixed_recurring_change": "Payment change",
+        "fixed_recurring_missing": "Missing payment",
+        "fixed_recurring_duplicate": "Duplicate payment",
+        "optimization_reallocate": "Savings opportunity",
+        "optimization_add_budget": "Budget suggestion",
+        "optimization_low_confidence": "Irregular pattern"
+      },
+      "labels": {
+        "costIncrease": "Cost increase",
+        "potentialSavings": "Potential savings"
+      },
+      "tooltips": {
+        "resolve": "Mark resolved",
+        "dismiss": "Dismiss",
+        "snooze": "Snooze for {{days}} days"
+      },
+      "details": {
+        "title": "Details",
+        "detected": "Detected",
+        "confidence": "Confidence",
+        "additionalInfo": "Additional info"
+      },
+      "dialog": {
+        "resolve": {
+          "title": "Resolve action"
+        },
+        "dismiss": {
+          "title": "Dismiss action"
+        },
+        "snooze": {
+          "title": "Snooze action"
+        },
+        "noteLabel": "Note",
+        "notePlaceholder": "Optional context",
+        "cancel": "Cancel",
+        "confirm": "Confirm"
+      }
+    },
     "tabs": {
       "ariaLabel": "analysis tabs",
       "dashboard": "Dashboard",
@@ -2412,6 +2479,115 @@
     "errors": {
       "loadFailed": "Failed to load unpaired transactions",
       "generic": "Error loading transactions"
+    }
+  },
+  "optimizer": {
+    "title": "Optimizator",
+    "subtitle": "Confirm profile facts and generate practical savings actions.",
+    "fabTooltip": "Open Optimizator",
+    "unknown": "Unknown",
+    "answer": "Answer",
+    "hassle": "Hassle",
+    "nextAction": "Next",
+    "reviewIntro": "Review detected facts first. Confirm what is right, edit what is wrong, or mark unknown.",
+    "quizIntro": "Short first-run quiz. Every question can be skipped or marked unknown.",
+    "quizComplete": "All essential questions are resolved.",
+    "emptyFacts": "No detected facts yet. Start with the questions.",
+    "emptyPlan": "No action plan yet. Generate one after reviewing facts and answering the short quiz.",
+    "missingApiKey": "Add an OpenAI API key in Settings before generating a plan.",
+    "stale": "Your profile answers changed after the latest plan. Generate a fresh plan.",
+    "privacyNotice": "Generating sends the reviewed profile facts to OpenAI using your configured API key.",
+    "activeCount": "{{count}} active actions",
+    "tabs": {
+      "ariaLabel": "Optimizator views",
+      "review": "Review",
+      "quiz": "Questions",
+      "plan": "Plan"
+    },
+    "actions": {
+      "close": "Close",
+      "confirm": "Confirm",
+      "edit": "Edit",
+      "save": "Save",
+      "unknown": "Unknown",
+      "skip": "Skip",
+      "goToQuestions": "Answer missing questions",
+      "goToPlan": "Go to action plan",
+      "generate": "Generate action plan",
+      "regenerate": "Regenerate plan",
+      "done": "Done",
+      "dismiss": "Dismiss",
+      "refresh": "Refresh"
+    },
+    "errors": {
+      "status": "Failed to load Optimizator",
+      "save": "Failed to save answer",
+      "generate": "Failed to generate plan",
+      "recommendationStatus": "Failed to update recommendation",
+      "missingApiKey": "Add an OpenAI API key in Settings before generating a plan.",
+      "emptyAnswer": "Enter an answer, skip it, or mark it unknown.",
+      "invalidNumber": "Enter a valid number.",
+      "generic": "Something went wrong"
+    },
+    "sections": {
+      "start": "Overview",
+      "banking": "Banking",
+      "housing": "Housing",
+      "subscriptions": "Subscriptions",
+      "constraints": "Constraints",
+      "food": "Food",
+      "insurance": "Insurance",
+      "utilities": "Utilities",
+      "transportation": "Transportation",
+      "taxes": "Taxes",
+      "general": "General"
+    },
+    "statuses": {
+      "detected": "Detected",
+      "confirmed": "Confirmed",
+      "edited": "Edited",
+      "unknown": "Unknown",
+      "skipped": "Skipped",
+      "active": "Active",
+      "done": "Done",
+      "dismissed": "Dismissed"
+    },
+    "hassleLevels": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "facts": {
+      "location": { "label": "Bills location", "prompt": "What city in Israel are most of your bills based in?" },
+      "householdSize": { "label": "Household size", "prompt": "How many people are in your household, including adults and dependents?" },
+      "monthlyIncome": { "label": "Monthly take-home income", "prompt": "What is your approximate monthly take-home income in ILS?" },
+      "fixedExpenses": { "label": "Monthly fixed expenses", "prompt": "What is your approximate monthly fixed expense total in ILS?" },
+      "variableExpenses": { "label": "Monthly variable spending", "prompt": "What is your approximate monthly variable spending in ILS?" },
+      "totalExpenses": { "label": "Average monthly spending", "prompt": "What is your average total monthly spending in ILS?" },
+      "topExpenses": { "label": "Expenses that feel too high", "prompt": "Which expenses feel too high right now?" },
+      "urgentGoal": { "label": "Urgent goal", "prompt": "What is the most urgent money goal right now?" },
+      "hassleTolerance": { "label": "Hassle tolerance", "prompt": "How much hassle are you willing to tolerate to save money?" },
+      "cashBalance": { "label": "Checking and savings cash", "prompt": "How much cash is currently sitting in checking and savings accounts?" },
+      "housingStatus": { "label": "Housing status", "prompt": "Do you rent, own, live with family, or something else?" },
+      "subscriptionsTotal": { "label": "Monthly subscription total", "prompt": "What monthly total should Optimizator use for subscriptions?" },
+      "protectedProviders": { "label": "Providers you refuse to leave", "prompt": "Are there any providers you refuse to leave?" },
+      "qualityMinimums": { "label": "Quality minimums", "prompt": "What quality minimums must be preserved, such as internet speed, phone coverage, doctors, or insurance coverage?" }
+    },
+    "options": {
+      "lower_bills": "Lower bills",
+      "debt_payoff": "Debt payoff",
+      "rent": "Rent",
+      "food": "Food",
+      "subscriptions": "Subscriptions",
+      "travel": "Travel",
+      "investing": "Investing",
+      "cash_buffer": "Cash buffer",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "own": "Own",
+      "family": "Family",
+      "other": "Other"
     }
   },
   "chatbotWidget": {

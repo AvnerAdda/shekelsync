@@ -24,6 +24,10 @@ function containsInsensitive(column, placeholder) {
   return `LOWER(${column}) LIKE '%' || LOWER(${placeholder}) || '%'`;
 }
 
+function quoteSqliteIdentifier(value) {
+  return `"${String(value).replace(/"/g, '""')}"`;
+}
+
 // Flag to track if trigger cleanup has been performed
 let triggerCleanupDone = false;
 
@@ -60,18 +64,13 @@ async function cleanupOrphanedTriggers(client) {
     for (const row of orphanedResult.rows) {
       console.log(`[Quests] Dropping orphaned trigger: ${row.name}`);
       console.log(`[Quests]   SQL: ${row.sql}`);
-      await client.query(`DROP TRIGGER IF EXISTS ${row.name}`);
+      await client.query(`DROP TRIGGER IF EXISTS ${quoteSqliteIdentifier(row.name)}`);
     }
 
-    // Drop and recreate ALL triggers on smart_action_items
-    const existingTriggers = await client.query(`
-      SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'smart_action_items'
-    `);
-    console.log(`[Quests] Found ${existingTriggers.rows.length} existing triggers on smart_action_items`);
-    for (const row of existingTriggers.rows) {
-      console.log(`[Quests] Dropping trigger: ${row.name}`);
-      await client.query(`DROP TRIGGER IF EXISTS ${row.name}`);
-    }
+    // Refresh only the two triggers owned by this service. Do not remove other
+    // triggers that may have been installed by newer migrations or features.
+    await client.query('DROP TRIGGER IF EXISTS update_smart_action_items_timestamp');
+    await client.query('DROP TRIGGER IF EXISTS log_smart_action_item_status_change');
 
     await client.query(`
       CREATE TRIGGER IF NOT EXISTS update_smart_action_items_timestamp
@@ -94,6 +93,7 @@ async function cleanupOrphanedTriggers(client) {
           CASE NEW.user_status
             WHEN 'dismissed' THEN 'dismissed'
             WHEN 'resolved' THEN 'resolved'
+            WHEN 'snoozed' THEN 'snoozed'
             WHEN 'accepted' THEN 'accepted'
             WHEN 'completed' THEN 'completed'
             WHEN 'failed' THEN 'failed'
@@ -121,7 +121,10 @@ async function cleanupOrphanedTriggers(client) {
         CREATE TABLE IF NOT EXISTS action_item_history_new (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           smart_action_item_id INTEGER NOT NULL,
-          action TEXT NOT NULL CHECK(action IN ('created', 'dismissed', 'resolved', 'accepted', 'completed', 'failed')),
+          action TEXT NOT NULL CHECK(action IN (
+            'created', 'dismissed', 'resolved', 'snoozed', 'reactivated',
+            'updated', 'accepted', 'completed', 'failed'
+          )),
           previous_status TEXT,
           new_status TEXT,
           user_note TEXT,

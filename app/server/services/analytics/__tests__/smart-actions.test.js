@@ -517,6 +517,24 @@ describe('analytics smart-actions service', () => {
     expect(missingClient.release).toHaveBeenCalledTimes(1);
   });
 
+  it('synchronizes optimizer recommendations when linked Smart Actions change', async () => {
+    const client = createClient(async (sql) => {
+      const text = String(sql);
+      if (text.includes('UPDATE smart_action_items') && text.includes('RETURNING *')) {
+        return { rows: [{ id: 8, action_type: 'optimization', user_status: 'resolved' }] };
+      }
+      return { rows: [] };
+    });
+    setDatabaseClient(client);
+
+    await smartActionsService.updateSmartActionStatus(8, 'resolved');
+
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE optimizer_recommendations'),
+      [8, 'done'],
+    );
+  });
+
   it('lists active quests with computed progress and time remaining', async () => {
     const client = createClient(async (sql) => {
       const text = String(sql);
