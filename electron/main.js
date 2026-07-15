@@ -45,6 +45,7 @@ const {
   createTelegramBotService,
   normalizeTelegramSettings,
 } = require('./telegram-bot');
+const { enforceSingleInstance } = require('./single-instance');
 const isPackaged = app.isPackaged;
 const isDev = process.env.NODE_ENV === 'development' || !isPackaged;
 const isMac = process.platform === 'darwin';
@@ -598,6 +599,7 @@ const chatbotSecretStore = require('./chatbot-secret-store');
 const { createScrapeAnchorRepairStateProvider } = require('./scrape-anchor-repair-state');
 const secureKeyManager = require('./secure-key-manager');
 const licenseService = require('./license-service');
+const { clearCache: clearLicenseGuardCache } = require(resolveAppPath('server', 'middleware', 'license-guard.js'));
 const { createSyncScheduler, normalizeBackgroundSettings } = require('./sync-scheduler');
 
 async function runLicenseSmokeTest(email) {
@@ -624,6 +626,7 @@ async function runLicenseSmokeTest(email) {
     }
 
     const result = await licenseService.registerLicense(email);
+    clearLicenseGuardCache();
     logger.info('[LicenseSmokeTest] Registration result', {
       success: result.success,
       error: result.error,
@@ -1099,6 +1102,7 @@ function shouldAttachChatbotApiKey(endpoint = '') {
     normalizedEndpoint === '/api/chat'
     || normalizedEndpoint === '/api/chat/stream'
     || normalizedEndpoint === '/api/analytics/profiling/generate'
+    || normalizedEndpoint === '/api/optimizer/generate'
   );
 }
 
@@ -1529,7 +1533,13 @@ async function createWindow() {
 }
 
 // App event handlers
-app.whenReady().then(async () => {
+const hasSingleInstanceLock = enforceSingleInstance({
+  app,
+  onSecondInstance: () => showMainWindow(),
+});
+
+const primaryInstanceReady = hasSingleInstanceLock ? app.whenReady() : null;
+primaryInstanceReady?.then(async () => {
   await loadInitialSettings();
 
   const isIpcSmokeTest = process.env.LICENSE_IPC_SMOKE_TEST === 'true';
@@ -2363,6 +2373,7 @@ ipcMain.handle('license:getStatus', async () => {
 ipcMain.handle('license:register', async (event, email) => {
   try {
     const result = await licenseService.registerLicense(email);
+    clearLicenseGuardCache();
     return result;
   } catch (error) {
     console.error('Failed to register license:', error);
@@ -2383,6 +2394,7 @@ ipcMain.handle('license:validateEmail', async (event, email) => {
 ipcMain.handle('license:activatePro', async (event, paymentRef) => {
   try {
     const result = await licenseService.activateProLicense(paymentRef);
+    clearLicenseGuardCache();
     return result;
   } catch (error) {
     console.error('Failed to activate Pro license:', error);
@@ -2403,6 +2415,7 @@ ipcMain.handle('license:canWrite', async () => {
 ipcMain.handle('license:validateOnline', async () => {
   try {
     const result = await licenseService.validateOnline();
+    clearLicenseGuardCache();
     return result;
   } catch (error) {
     console.error('Failed to validate license online:', error);

@@ -176,6 +176,90 @@ function anonymizeProfile(profile) {
   return Object.keys(filtered).length > 0 ? filtered : null;
 }
 
+const SAFE_OPTIMIZER_ENUM_FACTS = new Set([
+  'housing.status',
+  'goals.urgent_goal',
+  'preferences.hassle_tolerance',
+]);
+const OPTIMIZER_AMOUNT_FACTS = new Set([
+  'income.monthly_take_home',
+  'expenses.fixed_monthly',
+  'expenses.variable_monthly',
+  'expenses.monthly_total',
+  'banking.cash_balance',
+  'subscriptions.monthly_total',
+]);
+
+function parseAmountText(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.replace(/[^0-9.+-]/g, '');
+  return normalizeNumber(normalized);
+}
+
+function coarsenOptimizerAmount(valueText) {
+  const amount = parseAmountText(valueText);
+  if (amount === null) return null;
+  if (amount < 0) return 'Negative balance';
+  return coarsenIncome(amount);
+}
+
+function anonymizeOptimizerFact(fact) {
+  if (!fact || typeof fact !== 'object') return null;
+  const factKey = typeof fact.factKey === 'string' ? fact.factKey : '';
+  let valueText = null;
+
+  if (factKey === 'household.size') {
+    const size = normalizeInt(parseAmountText(fact.valueText));
+    valueText = size === null ? null : String(size);
+  } else if (OPTIMIZER_AMOUNT_FACTS.has(factKey)) {
+    valueText = coarsenOptimizerAmount(fact.valueText);
+  } else if (SAFE_OPTIMIZER_ENUM_FACTS.has(factKey)) {
+    valueText = typeof fact.valueText === 'string' ? fact.valueText.slice(0, 80) : null;
+  }
+
+  if (!valueText) return null;
+  return {
+    factKey,
+    section: fact.section,
+    label: fact.label,
+    valueText,
+    status: fact.status,
+    confidence: normalizeNumber(fact.confidence),
+  };
+}
+
+function anonymizeOptimizerContext(optimizer) {
+  if (!optimizer || typeof optimizer !== 'object') {
+    return null;
+  }
+
+  const facts = Array.isArray(optimizer.facts)
+    ? optimizer.facts.map(anonymizeOptimizerFact).filter(Boolean)
+    : [];
+
+  const recommendations = Array.isArray(optimizer.recommendations)
+    ? optimizer.recommendations.map((recommendation) => {
+      const section = typeof recommendation.section === 'string'
+        ? recommendation.section.slice(0, 40)
+        : 'general';
+      return {
+        // Model-generated titles can repeat provider, person, or location data.
+        // Preserve only the non-sensitive section when building chat context.
+        title: `Optimization action (${section})`,
+        section,
+        estimatedMonthlyImpact: normalizeNumber(recommendation.estimatedMonthlyImpact),
+        hassleLevel: recommendation.hassleLevel,
+        confidence: normalizeNumber(recommendation.confidence),
+        nextAction: null,
+      };
+    })
+    : [];
+
+  return facts.length > 0 || recommendations.length > 0
+    ? { facts, recommendations }
+    : null;
+}
+
 /**
  * Anonymize a financial context object
  * @param {Object} context - The financial context from getFinancialContext
@@ -196,6 +280,7 @@ function anonymizeContext(context, anonymizer) {
     monthlyTrends: context.monthlyTrends,
     analytics: context.analytics,
     investments: context.investments,
+    optimizer: anonymizeOptimizerContext(context.optimizer),
     // Anonymize transactions
     recentTransactions: anonymizer.anonymizeTransactions(context.recentTransactions),
     // Anonymize merchants
@@ -206,5 +291,6 @@ function anonymizeContext(context, anonymizer) {
 module.exports = {
   createAnonymizer,
   anonymizeProfile,
+  anonymizeOptimizerContext,
   anonymizeContext,
 };

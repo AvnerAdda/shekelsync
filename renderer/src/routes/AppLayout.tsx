@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 
 const DRAWER_WIDTH_COLLAPSED = 65;
 const FinancialChatbot = lazy(() => import('@renderer/features/chatbot/components/FinancialChatbot'));
+const FinancialOptimizer = lazy(() => import('@renderer/features/optimizer/components/FinancialOptimizer'));
 
 const ChatbotLoadedSignal = ({
   openOnMount,
@@ -74,6 +75,64 @@ const DeferredFinancialChatbot = () => {
       <ChatbotLoadedSignal
         openOnMount={openOnLoad}
         onLoaded={handleChatbotLoaded}
+      />
+    </Suspense>
+  );
+};
+
+const OptimizerLoadedSignal = ({
+  openOnMount,
+  onLoaded,
+}: {
+  openOnMount: boolean;
+  onLoaded: () => void;
+}) => {
+  useEffect(() => {
+    onLoaded();
+    if (!openOnMount) return undefined;
+
+    const openTimer = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('openOptimizerDrawer'));
+    }, 0);
+    return () => window.clearTimeout(openTimer);
+  }, [onLoaded, openOnMount]);
+
+  return null;
+};
+
+const DeferredFinancialOptimizer = () => {
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const [openOnLoad, setOpenOnLoad] = useState(false);
+  const optimizerLoadedRef = useRef(false);
+
+  const handleOptimizerLoaded = useCallback(() => {
+    optimizerLoadedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    const loadOptimizer = () => setShouldLoad(true);
+    const handleOpenOptimizer = () => {
+      if (optimizerLoadedRef.current) return;
+      setOpenOnLoad(true);
+      loadOptimizer();
+    };
+    const deferredLoad = window.setTimeout(loadOptimizer, 750);
+
+    window.addEventListener('openOptimizerDrawer', handleOpenOptimizer);
+    return () => {
+      window.clearTimeout(deferredLoad);
+      window.removeEventListener('openOptimizerDrawer', handleOpenOptimizer);
+    };
+  }, []);
+
+  if (!shouldLoad) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <FinancialOptimizer />
+      <OptimizerLoadedSignal
+        openOnMount={openOnLoad}
+        onLoaded={handleOptimizerLoaded}
       />
     </Suspense>
   );
@@ -434,6 +493,7 @@ const AppLayout: React.FC = () => {
         </Box>
       </Box>
 
+      <DeferredFinancialOptimizer />
       <DeferredFinancialChatbot />
       
       <GlobalTransactionSearch

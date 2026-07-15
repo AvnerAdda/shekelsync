@@ -272,6 +272,18 @@ describe('API Security', () => {
       expect(next).toHaveBeenCalledTimes(10);
     });
 
+    test('should apply the low-cost guardrail to optimizer generation', () => {
+      const token = createToken();
+      const optimizerReq = { ...req, path: '/api/optimizer/generate', apiToken: token };
+
+      for (let i = 0; i < 7; i++) {
+        rateLimitMiddleware(optimizerReq, res, next);
+      }
+
+      expect(next).toHaveBeenCalledTimes(6);
+      expect(res.status).toHaveBeenCalledWith(429);
+    });
+
     test('should allow health check without rate limiting', () => {
       req.path = '/health';
       delete req.apiToken;

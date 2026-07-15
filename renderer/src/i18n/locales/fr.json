@@ -951,6 +951,73 @@
       "refreshing": "Actualisation...",
       "retry": "Réessayer"
     },
+    "smartActions": {
+      "title": "Actions intelligentes",
+      "subtitle": "Suites concrètes issues des habitudes de dépense et des plans Optimizator",
+      "actions": {
+        "generate": "Générer",
+        "generating": "Génération..."
+      },
+      "summary": {
+        "totalActions": "Total actions",
+        "criticalHigh": "Priorité élevée",
+        "potentialImpact": "Impact potentiel"
+      },
+      "empty": {
+        "title": "Aucune action active",
+        "description": "Générez des actions ou attendez l'apparition de nouveaux schémas."
+      },
+      "severities": {
+        "low": "Faible",
+        "medium": "Moyenne",
+        "high": "Élevée",
+        "critical": "Critique"
+      },
+      "types": {
+        "anomaly": "Anomalie",
+        "budget_overrun": "Dépassement de budget",
+        "optimization": "Optimisation",
+        "fixed_variation": "Variation de coût fixe",
+        "unusual_purchase": "Achat inhabituel",
+        "seasonal_alert": "Schéma saisonnier",
+        "fixed_recurring_change": "Changement de paiement",
+        "fixed_recurring_missing": "Paiement manquant",
+        "fixed_recurring_duplicate": "Paiement en double",
+        "optimization_reallocate": "Opportunité d'économie",
+        "optimization_add_budget": "Suggestion de budget",
+        "optimization_low_confidence": "Schéma irrégulier"
+      },
+      "labels": {
+        "costIncrease": "Hausse de coût",
+        "potentialSavings": "Économies potentielles"
+      },
+      "tooltips": {
+        "resolve": "Marquer comme résolu",
+        "dismiss": "Ignorer",
+        "snooze": "Reporter de {{days}} jours"
+      },
+      "details": {
+        "title": "Détails",
+        "detected": "Détecté",
+        "confidence": "Confiance",
+        "additionalInfo": "Infos supplémentaires"
+      },
+      "dialog": {
+        "resolve": {
+          "title": "Résoudre l'action"
+        },
+        "dismiss": {
+          "title": "Ignorer l'action"
+        },
+        "snooze": {
+          "title": "Reporter l'action"
+        },
+        "noteLabel": "Note",
+        "notePlaceholder": "Contexte facultatif",
+        "cancel": "Annuler",
+        "confirm": "Confirmer"
+      }
+    },
     "tabs": {
       "ariaLabel": "onglets d'analyse",
       "dashboard": "Tableau de bord",
@@ -2394,6 +2461,115 @@
     "errors": {
       "loadFailed": "Échec du chargement des transactions non appariées",
       "generic": "Erreur de chargement des transactions"
+    }
+  },
+  "optimizer": {
+    "title": "Optimizator",
+    "subtitle": "Confirmez le profil et générez des actions d'économie concrètes.",
+    "fabTooltip": "Ouvrir Optimizator",
+    "unknown": "Inconnu",
+    "answer": "Réponse",
+    "hassle": "Effort",
+    "nextAction": "Prochaine étape",
+    "reviewIntro": "Vérifiez d'abord les faits détectés. Confirmez, corrigez ou marquez comme inconnu.",
+    "quizIntro": "Questionnaire court pour le premier passage. Chaque question peut être ignorée ou marquée inconnue.",
+    "quizComplete": "Toutes les questions essentielles sont résolues.",
+    "emptyFacts": "Aucun fait détecté pour le moment. Commencez par les questions.",
+    "emptyPlan": "Aucun plan d'action pour le moment. Générez-en un après la vérification.",
+    "missingApiKey": "Ajoutez une clé API OpenAI dans les Paramètres avant de générer un plan.",
+    "stale": "Vos réponses ont changé depuis le dernier plan. Générez un nouveau plan.",
+    "privacyNotice": "La génération transmet les informations de profil vérifiées à OpenAI avec votre clé API configurée.",
+    "activeCount": "{{count}} actions actives",
+    "tabs": {
+      "ariaLabel": "Vues d'Optimizator",
+      "review": "Vérifier",
+      "quiz": "Questions",
+      "plan": "Plan"
+    },
+    "actions": {
+      "close": "Fermer",
+      "confirm": "Confirmer",
+      "edit": "Modifier",
+      "save": "Enregistrer",
+      "unknown": "Inconnu",
+      "skip": "Ignorer",
+      "goToQuestions": "Répondre aux questions manquantes",
+      "goToPlan": "Voir le plan d'action",
+      "generate": "Générer le plan",
+      "regenerate": "Régénérer le plan",
+      "done": "Terminé",
+      "dismiss": "Ignorer",
+      "refresh": "Actualiser"
+    },
+    "errors": {
+      "status": "Échec du chargement d'Optimizator",
+      "save": "Échec de l'enregistrement",
+      "generate": "Échec de la génération du plan",
+      "recommendationStatus": "Échec de la mise à jour",
+      "missingApiKey": "Ajoutez une clé API OpenAI dans les Paramètres avant de générer un plan.",
+      "emptyAnswer": "Saisissez une réponse, ignorez la question ou marquez-la comme inconnue.",
+      "invalidNumber": "Saisissez un nombre valide.",
+      "generic": "Une erreur est survenue"
+    },
+    "sections": {
+      "start": "Vue d'ensemble",
+      "banking": "Banque",
+      "housing": "Logement",
+      "subscriptions": "Abonnements",
+      "constraints": "Contraintes",
+      "food": "Alimentation",
+      "insurance": "Assurance",
+      "utilities": "Services publics",
+      "transportation": "Transport",
+      "taxes": "Impôts",
+      "general": "Général"
+    },
+    "statuses": {
+      "detected": "Détecté",
+      "confirmed": "Confirmé",
+      "edited": "Modifié",
+      "unknown": "Inconnu",
+      "skipped": "Ignoré",
+      "active": "Actif",
+      "done": "Terminé",
+      "dismissed": "Écarté"
+    },
+    "hassleLevels": {
+      "low": "Faible",
+      "medium": "Moyen",
+      "high": "Élevé"
+    },
+    "facts": {
+      "location": { "label": "Lieu des factures", "prompt": "Dans quelle ville d'Israël se trouvent la plupart de vos factures ?" },
+      "householdSize": { "label": "Taille du foyer", "prompt": "Combien de personnes composent votre foyer, adultes et personnes à charge compris ?" },
+      "monthlyIncome": { "label": "Revenu mensuel net", "prompt": "Quel est votre revenu mensuel net approximatif en ILS ?" },
+      "fixedExpenses": { "label": "Dépenses fixes mensuelles", "prompt": "Quel est le total approximatif de vos dépenses fixes mensuelles en ILS ?" },
+      "variableExpenses": { "label": "Dépenses variables mensuelles", "prompt": "Quel est le montant approximatif de vos dépenses variables mensuelles en ILS ?" },
+      "totalExpenses": { "label": "Dépenses mensuelles moyennes", "prompt": "Quel est le total moyen de vos dépenses mensuelles en ILS ?" },
+      "topExpenses": { "label": "Dépenses jugées trop élevées", "prompt": "Quelles dépenses vous semblent actuellement trop élevées ?" },
+      "urgentGoal": { "label": "Objectif prioritaire", "prompt": "Quel est actuellement votre objectif financier le plus urgent ?" },
+      "hassleTolerance": { "label": "Tolérance à l'effort", "prompt": "Quel niveau d'effort acceptez-vous pour économiser ?" },
+      "cashBalance": { "label": "Liquidités bancaires", "prompt": "Combien d'argent se trouve actuellement sur vos comptes courants et d'épargne ?" },
+      "housingStatus": { "label": "Situation de logement", "prompt": "Êtes-vous locataire, propriétaire, hébergé par votre famille ou dans une autre situation ?" },
+      "subscriptionsTotal": { "label": "Total mensuel des abonnements", "prompt": "Quel total mensuel Optimizator doit-il utiliser pour les abonnements ?" },
+      "protectedProviders": { "label": "Fournisseurs à conserver", "prompt": "Y a-t-il des fournisseurs que vous refusez de quitter ?" },
+      "qualityMinimums": { "label": "Exigences minimales", "prompt": "Quelles exigences minimales faut-il préserver : débit internet, couverture mobile, médecins ou assurance ?" }
+    },
+    "options": {
+      "lower_bills": "Réduire les factures",
+      "debt_payoff": "Rembourser les dettes",
+      "rent": "Loyer",
+      "food": "Alimentation",
+      "subscriptions": "Abonnements",
+      "travel": "Voyage",
+      "investing": "Investir",
+      "cash_buffer": "Réserve de trésorerie",
+      "low": "Faible",
+      "medium": "Moyen",
+      "high": "Élevé",
+      "own": "Propriétaire",
+      "family": "Famille",
+      "other": "Autre"
     }
   },
   "chatbotWidget": {
