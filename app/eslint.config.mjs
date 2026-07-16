@@ -56,6 +56,15 @@ export default [
       'react/prop-types': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-require-imports': 'off',
+      // React-Compiler-era advisory rules added by eslint-plugin-react-hooks
+      // v7; not enforced pre-upgrade. Disabled to preserve the prior lint
+      // contract (rules-of-hooks and exhaustive-deps stay on). Lint debt.
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+      'react-hooks/immutability': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/purity': 'off',
+      'react-hooks/static-components': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
