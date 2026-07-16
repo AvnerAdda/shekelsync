@@ -155,18 +155,22 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
       onClose={onClose}
       maxWidth="sm"
       fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 3,
-          backgroundImage: 'none',
-        },
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: 3,
+            backgroundImage: 'none',
+          },
+        }
       }}
     >
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <StarIcon color="primary" />
-            <Typography variant="h6" component="span" fontWeight={700}>
+            <Typography variant="h6" component="span" sx={{
+              fontWeight: 700
+            }}>
               {t('license.title', 'License')}
             </Typography>
           </Box>
@@ -175,9 +179,7 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
           </IconButton>
         </Box>
       </DialogTitle>
-
       <Divider />
-
       <DialogContent sx={{ py: 3 }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -210,21 +212,32 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
                   {React.cloneElement(statusInfo.icon, { sx: { fontSize: 32 } })}
                 </Box>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="h6" fontWeight={600} sx={{ color: statusInfo.color }}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight: 600,
+                      color: statusInfo.color
+                    }}>
                     {statusInfo.label}
                   </Typography>
                   {status?.licenseType === 'trial' && status.trialDaysRemaining !== undefined && (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('license.daysRemaining', { days: status.trialDaysRemaining })}
                     </Typography>
                   )}
                   {status?.licenseType === 'pro' && (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('license.proDescription', 'Full access to all features')}
                     </Typography>
                   )}
                   {status?.licenseType === 'expired' && (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('license.readOnlyMode', 'App is in read-only mode')}
                     </Typography>
                   )}
@@ -235,10 +248,14 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
               {status?.licenseType === 'trial' && status.trialDaysRemaining !== undefined && (
                 <Box sx={{ mt: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('license.trialProgress', 'Trial Progress')}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {TRIAL_DAYS - status.trialDaysRemaining} / {TRIAL_DAYS} {t('license.days', 'days')}
                     </Typography>
                   </Box>
@@ -269,10 +286,17 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
                   backgroundColor: alpha(theme.palette.background.paper, 0.5),
                 }}
               >
-                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                <Typography variant="subtitle1" gutterBottom sx={{
+                  fontWeight: 600
+                }}>
                   {t('license.registerTitle', 'Start Your Free Trial')}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2
+                  }}>
                   {t('license.registerDescription', 'Enter your email to start a 30-day free trial with full access to all features.')}
                 </Typography>
 
@@ -291,8 +315,10 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
                       helperText={validationError || (isValidating ? t('license.validating', 'Validating...') : ' ')}
                       placeholder="you@example.com"
                       type="email"
-                      inputProps={{ autoComplete: 'email' }}
                       sx={{ mb: 2 }}
+                      slotProps={{
+                        htmlInput: { autoComplete: 'email' }
+                      }}
                     />
 
                     {registrationError && (
@@ -313,7 +339,14 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
                   </>
                 )}
 
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, textAlign: 'center' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: 'block',
+                    mt: 2,
+                    textAlign: 'center'
+                  }}>
                   {t('license.privacyNote', 'Your email is used only for license verification and is stored securely.')}
                 </Typography>
               </Paper>
@@ -332,11 +365,18 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <StarIcon sx={{ color: theme.palette.warning.main }} />
-                  <Typography variant="subtitle1" fontWeight={600}>
+                  <Typography variant="subtitle1" sx={{
+                    fontWeight: 600
+                  }}>
                     {t('license.upgradeTitle', 'Upgrade to Pro')}
                   </Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2
+                  }}>
                   {t('license.upgradeDescription', 'Get unlimited access with no time restrictions. Support development and unlock all features permanently.')}
                 </Typography>
                 <Button
@@ -353,7 +393,9 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
 
             {/* Features List */}
             <Box sx={{ mt: 1 }}>
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              <Typography variant="subtitle2" gutterBottom sx={{
+                color: "text.secondary"
+              }}>
                 {status?.licenseType === 'pro'
                   ? t('license.includedFeatures', 'Your Pro license includes:')
                   : t('license.trialFeatures', 'Trial includes full access to:')}
@@ -379,9 +421,7 @@ const LicenseDetailsModal: React.FC<LicenseDetailsModalProps> = ({ open, onClose
           </Box>
         )}
       </DialogContent>
-
       <Divider />
-
       <DialogActions sx={{ px: 3, py: 2 }}>
         <Button onClick={onClose} color="inherit">
           {t('common.close', 'Close')}

@@ -73,7 +73,9 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ insights, onClose }) => {
           <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
               <MoneyIcon sx={{ mr: 0.5, color: 'primary.main', fontSize: 16 }} />
-              <Typography variant="caption" fontWeight="bold">
+              <Typography variant="caption" sx={{
+                fontWeight: "bold"
+              }}>
                 Today's Spending
               </Typography>
             </Box>
@@ -96,7 +98,12 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ insights, onClose }) => {
               />
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  fontSize: '0.7rem'
+                }}>
                 {percentOfAverage}% of avg ({formatCurrency(avgDailySpend)})
               </Typography>
               <Chip
@@ -109,32 +116,39 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ insights, onClose }) => {
             </Box>
           </CardContent>
         </Card>
-
         {/* Transaction Count */}
         <Card variant="outlined" sx={{ bgcolor: 'background.paper' }}>
           <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
               <CalendarIcon sx={{ mr: 0.5, color: 'info.main', fontSize: 16 }} />
-              <Typography variant="caption" fontWeight="bold">
+              <Typography variant="caption" sx={{
+                fontWeight: "bold"
+              }}>
                 Activity
               </Typography>
             </Box>
             <Typography variant="h6" sx={{ mb: 0 }}>
               {transactionCount} {transactionCount === 1 ? 'transaction' : 'transactions'}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                fontSize: '0.7rem'
+              }}>
               today
             </Typography>
           </CardContent>
         </Card>
-
         {/* Top Category */}
         {topCategory && (
           <Card variant="outlined" sx={{ bgcolor: 'background.paper' }}>
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
                 <CategoryIcon sx={{ mr: 0.5, color: 'secondary.main', fontSize: 16 }} />
-                <Typography variant="caption" fontWeight="bold">
+                <Typography variant="caption" sx={{
+                  fontWeight: "bold"
+                }}>
                   Top Category
                 </Typography>
               </Box>
@@ -165,7 +179,9 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ insights, onClose }) => {
           <CardContent sx={compactCardContentSx}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
               <MoneyIcon sx={{ ...compactIconSx, color: 'primary.main' }} />
-              <Typography variant="caption" fontWeight="bold">
+              <Typography variant="caption" sx={{
+                fontWeight: "bold"
+              }}>
                 This Week
               </Typography>
             </Box>
@@ -189,14 +205,15 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ insights, onClose }) => {
             </Box>
           </CardContent>
         </Card>
-
         {/* Top Categories */}
         {topCategories && topCategories.length > 0 && (
           <Card variant="outlined" sx={compactCardSx}>
             <CardContent sx={compactCardContentSx}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
                 <CategoryIcon sx={{ ...compactIconSx, color: 'secondary.main' }} />
-                <Typography variant="caption" fontWeight="bold">
+                <Typography variant="caption" sx={{
+                  fontWeight: "bold"
+                }}>
                   Top Categories
                 </Typography>
               </Box>
@@ -221,7 +238,9 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ insights, onClose }) => {
                         </Box>
                       )}
                     </Box>
-                    <Typography variant="body2" fontWeight="medium">
+                    <Typography variant="body2" sx={{
+                      fontWeight: "medium"
+                    }}>
                       {formatCurrency(cat.amount)}
                     </Typography>
                   </Box>
@@ -230,30 +249,39 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ insights, onClose }) => {
             </CardContent>
           </Card>
         )}
-
         {/* Weekend vs Weekday */}
         <Card variant="outlined" sx={compactCardSx}>
           <CardContent sx={compactCardContentSx}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
               <CalendarIcon sx={{ ...compactIconSx, color: 'info.main' }} />
-              <Typography variant="caption" fontWeight="bold">
+              <Typography variant="caption" sx={{
+                fontWeight: "bold"
+              }}>
                 Spending Pattern
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Box>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   Weekdays
                 </Typography>
-                <Typography variant="body1" fontWeight="medium">
+                <Typography variant="body1" sx={{
+                  fontWeight: "medium"
+                }}>
                   {formatCurrency(weekdaySpend)}
                 </Typography>
               </Box>
               <Box>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   Weekend
                 </Typography>
-                <Typography variant="body1" fontWeight="medium">
+                <Typography variant="body1" sx={{
+                  fontWeight: "medium"
+                }}>
                   {formatCurrency(weekendSpend)}
                 </Typography>
               </Box>
@@ -288,15 +316,21 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ insights, onClose }) => {
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <CalendarIcon sx={{ mr: 1, color: 'primary.main' }} fontSize="small" />
-              <Typography variant="subtitle2" fontWeight="bold">
+              <Typography variant="subtitle2" sx={{
+                fontWeight: "bold"
+              }}>
                 Month Progress
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{
+                color: "text.secondary"
+              }}>
                 Day {daysElapsed} of {daysElapsed + daysRemaining}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{
+                color: "text.secondary"
+              }}>
                 {daysRemaining} days remaining
               </Typography>
             </Box>
@@ -311,46 +345,51 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ insights, onClose }) => {
             />
           </CardContent>
         </Card>
-
         {/* Spending This Month */}
         <Card variant="outlined" sx={{ bgcolor: 'background.paper' }}>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <MoneyIcon sx={{ mr: 1, color: 'primary.main' }} fontSize="small" />
-              <Typography variant="subtitle2" fontWeight="bold">
+              <Typography variant="subtitle2" sx={{
+                fontWeight: "bold"
+              }}>
                 Spending This Month
               </Typography>
             </Box>
             <Typography variant="h5" gutterBottom>
               {formatCurrency(spentThisMonth)}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               Projected: {formatCurrency(projectedMonthEnd)}
               {lastMonthTotal > 0 && ` (Last month: ${formatCurrency(lastMonthTotal)})`}
             </Typography>
           </CardContent>
         </Card>
-
         {/* Savings Rate */}
         {savingsRate !== 0 && (
           <Card variant="outlined" sx={{ bgcolor: 'background.paper' }}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <TrendingUpIcon sx={{ mr: 1, color: 'success.main' }} fontSize="small" />
-                <Typography variant="subtitle2" fontWeight="bold">
+                <Typography variant="subtitle2" sx={{
+                  fontWeight: "bold"
+                }}>
                   Savings Rate
                 </Typography>
               </Box>
               <Typography variant="h5" color={savingsRate > 0 ? 'success.main' : 'error.main'}>
                 {savingsRate}%
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 of income this month
               </Typography>
             </CardContent>
           </Card>
         )}
-
         {/* Budget Health */}
         {(budgetsOnTrack > 0 || budgetsAtRisk > 0) && (
           <Card
@@ -368,7 +407,9 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ insights, onClose }) => {
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <InsightsIcon sx={{ mr: 1, color: 'info.main' }} fontSize="small" />
-                <Typography variant="subtitle2" fontWeight="bold">
+                <Typography variant="subtitle2" sx={{
+                  fontWeight: "bold"
+                }}>
                   Budget Health
                 </Typography>
               </Box>
@@ -411,7 +452,9 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ insights, onClose }) => {
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <CalendarIcon sx={{ mr: 1, color: 'primary.main' }} fontSize="small" />
-                <Typography variant="subtitle2" fontWeight="bold">
+                <Typography variant="subtitle2" sx={{
+                  fontWeight: "bold"
+                }}>
                   Tracking Since
                 </Typography>
               </Box>
@@ -424,67 +467,77 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ insights, onClose }) => {
             </CardContent>
           </Card>
         )}
-
         {/* Total Transactions */}
         <Card variant="outlined" sx={{ bgcolor: 'background.paper' }}>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <InsightsIcon sx={{ mr: 1, color: 'info.main' }} fontSize="small" />
-              <Typography variant="subtitle2" fontWeight="bold">
+              <Typography variant="subtitle2" sx={{
+                fontWeight: "bold"
+              }}>
                 Total Activity
               </Typography>
             </Box>
             <Typography variant="h5">
               {totalTransactions.toLocaleString()}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               transactions analyzed
             </Typography>
           </CardContent>
         </Card>
-
         {/* Average Monthly Spend */}
         <Card variant="outlined" sx={{ bgcolor: 'background.paper' }}>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <MoneyIcon sx={{ mr: 1, color: 'primary.main' }} fontSize="small" />
-              <Typography variant="subtitle2" fontWeight="bold">
+              <Typography variant="subtitle2" sx={{
+                fontWeight: "bold"
+              }}>
                 Average Monthly Spending
               </Typography>
             </Box>
             <Typography variant="h5">
               {formatCurrency(avgMonthlySpend)}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               across all months
             </Typography>
           </CardContent>
         </Card>
-
         {/* Total Spending */}
         <Card variant="outlined" sx={{ bgcolor: 'background.paper' }}>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <TrendingUpIcon sx={{ mr: 1, color: 'secondary.main' }} fontSize="small" />
-              <Typography variant="subtitle2" fontWeight="bold">
+              <Typography variant="subtitle2" sx={{
+                fontWeight: "bold"
+              }}>
                 Total Spending
               </Typography>
             </Box>
             <Typography variant="h5">
               {formatCurrency(totalSpending)}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               since you started tracking
             </Typography>
           </CardContent>
         </Card>
-
         {/* Health Score Trend */}
         <Card variant="outlined" sx={{ bgcolor: 'background.paper' }}>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <InsightsIcon sx={{ mr: 1, color: 'success.main' }} fontSize="small" />
-              <Typography variant="subtitle2" fontWeight="bold">
+              <Typography variant="subtitle2" sx={{
+                fontWeight: "bold"
+              }}>
                 Financial Health Trend
               </Typography>
             </Box>

@@ -317,7 +317,12 @@ export default function InvestmentAccountSuggestionsCard({
     return (
       <Card sx={{ mb: 2 }}>
         <CardContent sx={{ py: 2 }}>
-          <Box display="flex" alignItems="center" justifyContent="center">
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}>
             <CircularProgress size={20} sx={{ mr: 1 }} />
             <Typography variant="body2">Loading suggestions...</Typography>
           </Box>
@@ -336,9 +341,16 @@ export default function InvestmentAccountSuggestionsCard({
     <>
       <Card sx={{ mb: 2, border: (theme) => `1px solid ${theme.palette.divider}` }}>
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-          <Box display="flex" alignItems="center" mb={1.5}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              mb: 1.5
+            }}>
             <Lightbulb sx={{ fontSize: 20, mr: 1, color: 'warning.main' }} />
-            <Typography variant="subtitle2" fontWeight={600}>
+            <Typography variant="subtitle2" sx={{
+              fontWeight: 600
+            }}>
               Smart Suggestions ({visibleSuggestions.length})
             </Typography>
           </Box>
@@ -362,11 +374,28 @@ export default function InvestmentAccountSuggestionsCard({
                 >
                   <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                     {/* Compact Row Layout */}
-                    <Box display="flex" alignItems="center" gap={1.5}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1.5
+                      }}>
                       {/* LEFT: Description */}
-                      <Box flex={1} minWidth={0}>
-                        <Box display="flex" alignItems="center" gap={0.5} mb={0.25}>
-                          <Typography variant="body2" fontWeight={600} noWrap>
+                      <Box
+                        sx={{
+                          flex: 1,
+                          minWidth: 0
+                        }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 0.5,
+                            mb: 0.25
+                          }}>
+                          <Typography variant="body2" noWrap sx={{
+                            fontWeight: 600
+                          }}>
                             {ACCOUNT_TYPE_ICONS[suggestion.suggestedAccountType] || '💼'}{' '}
                             {suggestion.categoryName || suggestion.suggestedAccountName}
                           </Typography>
@@ -379,14 +408,22 @@ export default function InvestmentAccountSuggestionsCard({
                             />
                           )}
                         </Box>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.7rem' }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "text.secondary",
+                            display: 'block',
+                            fontSize: '0.7rem'
+                          }}>
                           {suggestion.transactionCount} txns • ₪{suggestion.totalAmount.toLocaleString()}
                           {suggestion.suggestedInstitution && ` • ${suggestion.suggestedInstitution}`}
                         </Typography>
                       </Box>
 
                       {/* RIGHT: Actions */}
-                      <Stack direction="row" spacing={0.5} alignItems="center">
+                      <Stack direction="row" spacing={0.5} sx={{
+                        alignItems: "center"
+                      }}>
                         {hasMatches && (
                           <Button
                             variant="contained"
@@ -464,16 +501,17 @@ export default function InvestmentAccountSuggestionsCard({
                                 <ListItemText
                                   primary={txn.transactionName}
                                   secondary={`${new Date(txn.transactionDate).toLocaleDateString('he-IL')} • ₪${Math.abs(txn.transactionAmount).toLocaleString()}`}
-                                  primaryTypographyProps={{
-                                    variant: 'caption',
-                                    fontWeight: 500,
-                                    sx: { fontSize: '0.7rem' }
-                                  }}
-                                  secondaryTypographyProps={{
-                                    variant: 'caption',
-                                    sx: { fontSize: '0.65rem' }
-                                  }}
-                                />
+                                  slotProps={{
+                                    primary: {
+                                      variant: 'caption',
+                                      sx: { fontSize: '0.7rem', fontWeight: 500 }
+                                    },
+
+                                    secondary: {
+                                      variant: 'caption',
+                                      sx: { fontSize: '0.65rem' }
+                                    }
+                                  }} />
                               </ListItem>
                             ))}
                           </List>
@@ -487,7 +525,6 @@ export default function InvestmentAccountSuggestionsCard({
           </Stack>
         </CardContent>
       </Card>
-
       <PikadonSetupDialog
         open={Boolean(pendingLinkBatch)}
         title={pendingLinkBatch ? `Complete pikadon setup for ${pendingLinkBatch.accountName}` : 'Complete pikadon setup'}
@@ -506,7 +543,6 @@ export default function InvestmentAccountSuggestionsCard({
           );
         }}
       />
-
       {/* Link Menu */}
       <Menu
         anchorEl={linkMenuAnchor?.element}
@@ -531,12 +567,16 @@ export default function InvestmentAccountSuggestionsCard({
               sx={{ fontSize: '0.8rem', minWidth: 200 }}
             >
               <Box>
-                <Typography variant="body2" fontWeight={500}>
+                <Typography variant="body2" sx={{
+                  fontWeight: 500
+                }}>
                   {account.account_name}
                 </Typography>
                 {account.current_value && (
                   <Box>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {account.currency} {account.current_value.toLocaleString()}
                     </Typography>
                     {!account.current_value_explicit && (
@@ -551,7 +591,6 @@ export default function InvestmentAccountSuggestionsCard({
           ));
         })()}
       </Menu>
-
       <LicenseReadOnlyAlert
         open={licenseAlertOpen}
         onClose={() => setLicenseAlertOpen(false)}

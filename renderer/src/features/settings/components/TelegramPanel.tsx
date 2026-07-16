@@ -258,7 +258,9 @@ const TelegramPanel: React.FC = () => {
   if (loading) {
     return (
       <Paper sx={{ p: 3, mb: 4 }}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{
+          alignItems: "center"
+        }}>
           <CircularProgress size={20} />
           <Typography variant="body2">
             {t('settings.telegram.loading', { defaultValue: 'Loading Telegram settings…' })}
@@ -270,25 +272,33 @@ const TelegramPanel: React.FC = () => {
 
   return (
     <Paper sx={{ p: 3, mb: 4 }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: "center",
+          mb: 2
+        }}>
         <TelegramIcon color="primary" />
         <Typography variant="h6">
           {t('settings.telegram.title', { defaultValue: 'Telegram' })}
         </Typography>
       </Stack>
-
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          mb: 2
+        }}>
         {t('settings.telegram.description', {
           defaultValue: 'Use a local-only Telegram bot for read-only commands and scheduled sync digests while the desktop app is running.',
         })}
       </Typography>
-
       {!supportsTelegram && (
         <Alert severity="warning">
           {error || t('settings.telegram.unsupported', { defaultValue: 'Telegram controls are not available in this build.' })}
         </Alert>
       )}
-
       {supportsTelegram && (
         <Stack spacing={2}>
           <Alert severity="info">
@@ -307,7 +317,9 @@ const TelegramPanel: React.FC = () => {
 
           {error && <Alert severity="error">{error}</Alert>}
 
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1} useFlexGap sx={{
+            flexWrap: "wrap"
+          }}>
             <Chip label={status?.configured ? 'Bot token saved' : 'Bot token missing'} color={status?.configured ? 'success' : 'default'} />
             <Chip label={status?.paired ? 'Chat paired' : 'Chat not paired'} color={status?.paired ? 'success' : 'default'} />
             <Chip label={status?.runtimeActive ? 'Runtime active' : 'Runtime idle'} color={status?.runtimeActive ? 'success' : 'default'} />
@@ -331,10 +343,14 @@ const TelegramPanel: React.FC = () => {
             }
             label={
               <Box>
-                <Typography variant="body2" fontWeight="bold">
+                <Typography variant="body2" sx={{
+                  fontWeight: "bold"
+                }}>
                   {t('settings.telegram.enableLabel', { defaultValue: 'Enable Telegram bot and scheduled digests' })}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('settings.telegram.enableHint', { defaultValue: 'Requires a saved bot token and a paired private chat.' })}
                 </Typography>
               </Box>
@@ -357,10 +373,14 @@ const TelegramPanel: React.FC = () => {
             }
             label={
               <Box>
-                <Typography variant="body2" fontWeight="bold">
+                <Typography variant="body2" sx={{
+                  fontWeight: "bold"
+                }}>
                   {t('settings.telegram.digestLabel', { defaultValue: 'Send scheduled sync digests' })}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('settings.telegram.digestHint', { defaultValue: 'Only scheduled syncs send Telegram messages automatically. Manual syncs stay in-app.' })}
                 </Typography>
               </Box>
@@ -418,14 +438,18 @@ const TelegramPanel: React.FC = () => {
 
           {status?.pairingCode && (
             <Alert severity="info">
-              <Typography variant="body2" fontWeight="bold" gutterBottom>
+              <Typography variant="body2" gutterBottom sx={{
+                fontWeight: "bold"
+              }}>
                 {t('settings.telegram.pairingCode', { defaultValue: 'Pairing code' })}: {status.pairingCode}
               </Typography>
               {pairingInstruction && (
                 <Typography variant="body2">{pairingInstruction}</Typography>
               )}
               {status.pairingExpiresAt && (
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('settings.telegram.pairingExpiry', {
                     defaultValue: 'Expires at {{time}}',
                     time: new Date(status.pairingExpiresAt).toLocaleString(),
@@ -462,7 +486,9 @@ const TelegramPanel: React.FC = () => {
                 })}
               </Typography>
               {settings.lastDigestResult.message && (
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {settings.lastDigestResult.message}
                 </Typography>
               )}

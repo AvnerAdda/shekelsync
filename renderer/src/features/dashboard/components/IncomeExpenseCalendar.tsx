@@ -57,10 +57,20 @@ const SummaryStat: React.FC<{
       bgcolor: alpha(color, 0.07),
     }}
   >
-    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+    <Typography
+      variant="caption"
+      sx={{
+        color: "text.secondary",
+        display: 'block'
+      }}>
       {label}
     </Typography>
-    <Typography variant="body2" fontWeight={700} sx={{ color }}>
+    <Typography
+      variant="body2"
+      sx={{
+        fontWeight: 700,
+        color
+      }}>
       {value}
     </Typography>
   </Box>
@@ -200,21 +210,27 @@ const IncomeExpenseCalendar: React.FC<IncomeExpenseCalendarProps> = ({
     <Box>
       <Stack
         direction={{ xs: 'column', lg: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', lg: 'center' }}
         spacing={2}
-        mb={2}
-      >
+        sx={{
+          justifyContent: "space-between",
+          alignItems: { xs: 'stretch', lg: 'center' },
+          mb: 2
+        }}>
         <Box>
-          <Stack direction="row" alignItems="center" spacing={1}>
+          <Stack direction="row" spacing={1} sx={{
+            alignItems: "center"
+          }}>
             <IconButton size="small" onClick={handlePrev} aria-label={t('previousMonth')}>
               <PrevIcon />
             </IconButton>
             <Typography
               variant={isCompact ? 'body1' : 'h6'}
-              fontWeight={700}
-              sx={{ minWidth: isCompact ? 150 : 210, textAlign: 'center', textTransform: 'capitalize' }}
-            >
+              sx={{
+                fontWeight: 700,
+                minWidth: isCompact ? 150 : 210,
+                textAlign: 'center',
+                textTransform: 'capitalize'
+              }}>
               {monthLabel}
             </Typography>
             <IconButton size="small" onClick={handleNext} aria-label={t('nextMonth')}>
@@ -231,12 +247,19 @@ const IncomeExpenseCalendar: React.FC<IncomeExpenseCalendarProps> = ({
               </Button>
             )}
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mt: 1
+            }}>
             {t('subtitle')}
           </Typography>
         </Box>
 
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+        <Stack direction="row" spacing={1} useFlexGap sx={{
+          flexWrap: "wrap"
+        }}>
           <SummaryStat
             label={t('monthIncome')}
             value={formatAmount(monthTotals.income)}
@@ -254,7 +277,6 @@ const IncomeExpenseCalendar: React.FC<IncomeExpenseCalendarProps> = ({
           />
         </Stack>
       </Stack>
-
       {error && (
         <Alert
           severity="error"
@@ -268,13 +290,16 @@ const IncomeExpenseCalendar: React.FC<IncomeExpenseCalendarProps> = ({
           {t('error')}: {error}
         </Alert>
       )}
-
       {!error && !hasCurrentMonthActivity && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mb: 2
+          }}>
           {t('emptyMonth')}
         </Typography>
       )}
-
       <Box
         sx={{
           display: 'grid',
@@ -301,10 +326,11 @@ const IncomeExpenseCalendar: React.FC<IncomeExpenseCalendarProps> = ({
           >
             <Typography
               variant="caption"
-              fontWeight={700}
-              color="text.secondary"
-              sx={{ fontSize: isCompact ? '0.65rem' : '0.75rem' }}
-            >
+              sx={{
+                fontWeight: 700,
+                color: "text.secondary",
+                fontSize: isCompact ? '0.65rem' : '0.75rem'
+              }}>
               {label}
             </Typography>
           </Box>
@@ -355,7 +381,12 @@ const IncomeExpenseCalendar: React.FC<IncomeExpenseCalendarProps> = ({
               }}
             >
               <Stack sx={{ height: '100%' }} spacing={0.75}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Stack
+                  direction="row"
+                  sx={{
+                    alignItems: "center",
+                    justifyContent: "space-between"
+                  }}>
                   <Typography
                     variant="caption"
                     sx={{

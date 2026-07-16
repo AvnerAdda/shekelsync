@@ -559,7 +559,6 @@ useEffect(() => {
                 {institution && ` | Institution: ${institution}`}
               </Typography>
             </Alert>
-
             <Grid container spacing={2}>
               <Grid size={{ xs: 12 }}>
                 <TextField
@@ -569,10 +568,12 @@ useEffect(() => {
                   label="Current Value"
                   value={currentValue}
                   onChange={(e) => setCurrentValue(e.target.value)}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start">₪</InputAdornment>
-                  }}
                   helperText="What is the current value of the account?"
+                  slotProps={{
+                    input: {
+                      startAdornment: <InputAdornment position="start">₪</InputAdornment>
+                    }
+                  }}
                 />
               </Grid>
 
@@ -584,14 +585,16 @@ useEffect(() => {
                   label="Cost Basis (Amount Invested)"
                   value={costBasis}
                   onChange={(e) => setCostBasis(e.target.value)}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start">₪</InputAdornment>
-                  }}
                   helperText={
                     suggestion
                       ? `Auto-calculated from ${suggestion.transactionCount} transactions. Can be edited.`
                       : 'How much was invested in total?'
                   }
+                  slotProps={{
+                    input: {
+                      startAdornment: <InputAdornment position="start">₪</InputAdornment>
+                    }
+                  }}
                 />
               </Grid>
 
@@ -602,8 +605,10 @@ useEffect(() => {
                   label="As of Date"
                   value={asOfDate}
                   onChange={(e) => setAsOfDate(e.target.value)}
-                  InputLabelProps={{
-                    shrink: true
+                  slotProps={{
+                    inputLabel: {
+                      shrink: true
+                    }
                   }}
                 />
               </Grid>
@@ -611,7 +616,12 @@ useEffect(() => {
               {currentValue && costBasis && (
                 <Grid size={{ xs: 12 }}>
                   <Alert severity={calculateROI() >= 0 ? 'success' : 'warning'}>
-                    <Box display="flex" alignItems="center" gap={1}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1
+                      }}>
                       <Typography variant="body2">
                         <strong>Estimated ROI:</strong>
                       </Typography>
@@ -644,12 +654,16 @@ useEffect(() => {
       <DialogTitle>
         Create Smart Investment Account
         {suggestion && (
-          <Typography variant="caption" color="text.secondary" display="block">
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary",
+              display: "block"
+            }}>
             Based on {suggestion.transactionCount} detected transactions
           </Typography>
         )}
       </DialogTitle>
-
       <DialogContent>
         <Stepper activeStep={activeStep} sx={{ mb: 4, mt: 2 }}>
           {steps.map((label) => (
@@ -661,7 +675,6 @@ useEffect(() => {
 
         {renderStepContent(activeStep)}
       </DialogContent>
-
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} disabled={loading}>
           Cancel
@@ -680,7 +693,6 @@ useEffect(() => {
           {activeStep === steps.length - 1 ? 'Create Account & Link Transactions' : 'Next'}
         </Button>
       </DialogActions>
-
       <PikadonSetupDialog
         open={pendingPikadonItems.length > 0}
         title="Complete pikadon setup"
@@ -692,7 +704,6 @@ useEffect(() => {
           await submitAccountAndLinks(detailsByKey);
         }}
       />
-
       <LicenseReadOnlyAlert
         open={licenseAlertOpen}
         onClose={() => setLicenseAlertOpen(false)}

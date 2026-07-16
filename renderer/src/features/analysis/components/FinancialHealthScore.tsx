@@ -17,7 +17,7 @@ import SavingsIcon from '@mui/icons-material/Savings';
 import DiversityIcon from '@mui/icons-material/Diversity3';
 import ImpulseIcon from '@mui/icons-material/ShoppingCart';
 import RunwayIcon from '@mui/icons-material/Schedule';
-import HelpIcon from '@mui/icons-material/HelpOutline';
+import HelpIcon from '@mui/icons-material/HelpOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
@@ -188,10 +188,14 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h6" fontWeight="bold" gutterBottom>
+          <Typography variant="h6" gutterBottom sx={{
+            fontWeight: "bold"
+          }}>
             {t('title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('subtitle')}
           </Typography>
         </Box>
@@ -205,7 +209,6 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
           {t('actions.refresh')}
         </Button>
       </Box>
-
       {/* Overall Health Score */}
       <Paper
         sx={{
@@ -216,10 +219,14 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
           border: `1px solid ${getHealthScoreColor(overallHealthScore)}30`,
         }}
       >
-        <Grid container spacing={3} alignItems="center">
+        <Grid container spacing={3} sx={{
+          alignItems: "center"
+        }}>
           {/* Overall Score Circle */}
           <Grid size={{ xs: 12, md: 4 }}>
-            <Box textAlign="center">
+            <Box sx={{
+              textAlign: "center"
+            }}>
               <Box sx={{ position: 'relative', display: 'inline-flex', mb: 1 }}>
                 <CircularProgress
                   variant="determinate"
@@ -246,10 +253,17 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
                   flexDirection: 'column',
                 }}
               >
-                <Typography variant="h3" fontWeight="bold" color={getHealthScoreColor(overallHealthScore)}>
+                <Typography variant="h3" color={getHealthScoreColor(overallHealthScore)} sx={{
+                  fontWeight: "bold"
+                }}>
                   {overallHealthScore}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    fontSize: '0.6875rem'
+                  }}>
                   {t('labels.healthScore')}
                 </Typography>
               </Box>
@@ -257,10 +271,14 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
 
               {/* Status Badge */}
               <Box sx={{ mt: 2 }}>
-                <Typography variant="h6" fontWeight="bold" color={description.color} gutterBottom>
+                <Typography variant="h6" color={description.color} gutterBottom sx={{
+                  fontWeight: "bold"
+                }}>
                   {description.status}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: "text.secondary"
+                }}>
                   {description.message}
                 </Typography>
               </Box>
@@ -288,7 +306,13 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
 
           {/* Health Breakdown Metrics */}
           <Grid size={{ xs: 12, md: 8 }}>
-            <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ mb: 2 }}>
+            <Typography
+              variant="subtitle2"
+              gutterBottom
+              sx={{
+                fontWeight: "bold",
+                mb: 2
+              }}>
               {t('scorecard.breakdown')}
             </Typography>
             <Grid container spacing={2}>
@@ -339,7 +363,9 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
                               justifyContent: 'center',
                             }}
                           >
-                            <Typography variant="h6" fontWeight="bold" color={color}>
+                            <Typography variant="h6" color={color} sx={{
+                              fontWeight: "bold"
+                            }}>
                               {score}
                             </Typography>
                           </Box>
@@ -354,13 +380,12 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
 
                         <Typography
                           variant="caption"
-                          color="text.secondary"
                           sx={{
+                            color: "text.secondary",
                             fontSize: '0.75rem',
                             fontWeight: 500,
-                            lineHeight: 1.2,
-                          }}
-                        >
+                            lineHeight: 1.2
+                          }}>
                           {getHealthMetricName(key)}
                         </Typography>
                       </Card>
@@ -372,7 +397,6 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
           </Grid>
         </Grid>
       </Paper>
-
       {/* Detailed Breakdown */}
       <Grid container spacing={2}>
         {Object.entries(healthBreakdown).map(([key, value]) => {
@@ -387,7 +411,9 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
                     <Box sx={{ color: color, display: 'flex' }}>
                       {getHealthMetricIcon(key)}
                     </Box>
-                    <Typography variant="subtitle1" fontWeight="bold">
+                    <Typography variant="subtitle1" sx={{
+                      fontWeight: "bold"
+                    }}>
                       {getHealthMetricName(key)}
                     </Typography>
                     <Tooltip title={getHealthMetricTooltip(key)} placement="top" arrow>
@@ -397,10 +423,14 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
 
                   <Box sx={{ mb: 1 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('labels.score')}
                     </Typography>
-                    <Typography variant="h6" fontWeight="bold" color={color}>
+                    <Typography variant="h6" color={color} sx={{
+                      fontWeight: "bold"
+                    }}>
                       {score}/100
                     </Typography>
                   </Box>
@@ -418,7 +448,13 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
                     />
                   </Box>
 
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.85rem', mt: 1 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      fontSize: '0.85rem',
+                      mt: 1
+                    }}>
                     {getHealthMetricTooltip(key)}
                   </Typography>
                 </CardContent>
@@ -427,7 +463,6 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
           );
         })}
       </Grid>
-
       <HealthScoreTrendModal open={trendModalOpen} onClose={() => setTrendModalOpen(false)} days={60} windowDays={60} />
     </Box>
   );

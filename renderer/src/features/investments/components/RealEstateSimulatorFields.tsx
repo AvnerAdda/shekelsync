@@ -293,9 +293,13 @@ export default function RealEstateSimulatorFields({
         gap: 2,
       }}
     >
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} sx={{
+        alignItems: "center"
+      }}>
         <HomeWorkIcon fontSize="small" color="primary" />
-        <Typography variant="subtitle2" fontWeight={700}>
+        <Typography variant="subtitle2" sx={{
+          fontWeight: 700
+        }}>
           {t('title', 'Real estate simulator')}
         </Typography>
         <Chip
@@ -304,7 +308,6 @@ export default function RealEstateSimulatorFields({
           variant="outlined"
         />
       </Stack>
-
       <Grid container spacing={1.5}>
         <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
@@ -381,8 +384,9 @@ export default function RealEstateSimulatorFields({
           />
         </Grid>
       </Grid>
-
-      <Stack direction="row" spacing={1.5} useFlexGap flexWrap="wrap">
+      <Stack direction="row" spacing={1.5} useFlexGap sx={{
+        flexWrap: "wrap"
+      }}>
         {FEATURE_FIELDS.map(({ field, labelKey, fallback }) => (
           <FormControlLabel
             key={field}
@@ -397,7 +401,6 @@ export default function RealEstateSimulatorFields({
           />
         ))}
       </Stack>
-
       <Grid container spacing={1.5}>
         <Grid size={{ xs: 12, sm: 4 }}>
           <TextField
@@ -407,7 +410,9 @@ export default function RealEstateSimulatorFields({
             label={t('fields.purchasePrice', 'Purchase price')}
             value={value.purchase_price || ''}
             onChange={(event) => updateField('purchase_price', event.target.value)}
-            InputProps={{ startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }}
+            slotProps={{
+              input: { startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
@@ -418,7 +423,9 @@ export default function RealEstateSimulatorFields({
             label={t('fields.purchaseDate', 'Purchase date')}
             value={value.purchase_date || ''}
             onChange={(event) => updateField('purchase_date', event.target.value)}
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true }
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
@@ -429,8 +436,10 @@ export default function RealEstateSimulatorFields({
             label={t('fields.ownership', 'Ownership')}
             value={value.ownership_percentage || '100'}
             onChange={(event) => updateField('ownership_percentage', event.target.value)}
-            InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
             helperText={t('helpers.ownership', 'Legal ownership share, not down payment. Use 100% if you own the property.')}
+            slotProps={{
+              input: { endAdornment: <InputAdornment position="end">%</InputAdornment> }
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
@@ -441,7 +450,9 @@ export default function RealEstateSimulatorFields({
             label={t('fields.manualValue', 'Manual value')}
             value={value.manual_estimated_value || ''}
             onChange={(event) => updateField('manual_estimated_value', event.target.value)}
-            InputProps={{ startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }}
+            slotProps={{
+              input: { startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
@@ -452,7 +463,9 @@ export default function RealEstateSimulatorFields({
             label={t('fields.monthlyMortgagePayment', 'Monthly mortgage payment')}
             value={value.monthly_mortgage_payment || ''}
             onChange={(event) => updateField('monthly_mortgage_payment', event.target.value)}
-            InputProps={{ startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }}
+            slotProps={{
+              input: { startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
@@ -463,7 +476,9 @@ export default function RealEstateSimulatorFields({
             label={t('fields.mortgageInterestRate', 'Mortgage rate')}
             value={value.mortgage_interest_rate || ''}
             onChange={(event) => updateField('mortgage_interest_rate', event.target.value)}
-            InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
+            slotProps={{
+              input: { endAdornment: <InputAdornment position="end">%</InputAdornment> }
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
@@ -474,7 +489,9 @@ export default function RealEstateSimulatorFields({
             label={t('fields.mortgageTermYears', 'Mortgage term')}
             value={value.mortgage_term_years || ''}
             onChange={(event) => updateField('mortgage_term_years', event.target.value)}
-            InputProps={{ endAdornment: <InputAdornment position="end">{t('units.years', 'yrs')}</InputAdornment> }}
+            slotProps={{
+              input: { endAdornment: <InputAdornment position="end">{t('units.years', 'yrs')}</InputAdornment> }
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
@@ -485,7 +502,9 @@ export default function RealEstateSimulatorFields({
             label={t('fields.mortgageBalance', 'Mortgage balance (total)')}
             value={value.mortgage_balance || ''}
             onChange={(event) => updateField('mortgage_balance', event.target.value)}
-            InputProps={{ startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }}
+            slotProps={{
+              input: { startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
@@ -512,7 +531,9 @@ export default function RealEstateSimulatorFields({
             label={t('fields.rent', 'Rent')}
             value={value.monthly_rent || ''}
             onChange={(event) => updateField('monthly_rent', event.target.value)}
-            InputProps={{ startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }}
+            slotProps={{
+              input: { startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 3 }}>
@@ -523,7 +544,9 @@ export default function RealEstateSimulatorFields({
             label={t('fields.yearlyExpenses', 'Yearly expenses')}
             value={value.annual_expenses || ''}
             onChange={(event) => updateField('annual_expenses', event.target.value)}
-            InputProps={{ startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }}
+            slotProps={{
+              input: { startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 3 }}>
@@ -534,7 +557,9 @@ export default function RealEstateSimulatorFields({
             label={t('fields.pricePerSqm', 'Price / sqm')}
             value={value.price_per_sqm || ''}
             onChange={(event) => updateField('price_per_sqm', event.target.value)}
-            InputProps={{ startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }}
+            slotProps={{
+              input: { startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 3 }}>
@@ -545,11 +570,12 @@ export default function RealEstateSimulatorFields({
             label={t('fields.growth', 'Growth')}
             value={value.annual_growth_rate || '3'}
             onChange={(event) => updateField('annual_growth_rate', event.target.value)}
-            InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
+            slotProps={{
+              input: { endAdornment: <InputAdornment position="end">%</InputAdornment> }
+            }}
           />
         </Grid>
       </Grid>
-
       <Alert
         severity={estimate.estimated_value ? 'info' : 'warning'}
         icon={<CalculateIcon fontSize="inherit" />}
@@ -560,7 +586,9 @@ export default function RealEstateSimulatorFields({
         ) : undefined}
       >
         <Stack spacing={0.75}>
-          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+          <Stack direction="row" spacing={1} useFlexGap sx={{
+            flexWrap: "wrap"
+          }}>
             <Chip
               size="small"
               label={t('scenarios.conservative', {
@@ -584,7 +612,9 @@ export default function RealEstateSimulatorFields({
               })}
             />
           </Stack>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {t('netEquity', {
               value: formatCurrency(estimate.estimated_net_equity, currency),
               defaultValue: 'Net equity: {{value}}',

@@ -148,7 +148,12 @@ const AllocationSettingsModal: React.FC<AllocationSettingsModalProps> = ({
         )}
 
         {/* Target Percentages Section */}
-        <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>
+        <Typography
+          variant="subtitle1"
+          sx={{
+            fontWeight: "bold",
+            mb: 2
+          }}>
           Target Allocation Percentages
         </Typography>
 
@@ -160,10 +165,17 @@ const AllocationSettingsModal: React.FC<AllocationSettingsModalProps> = ({
           {(Object.keys(editedTargets) as SpendingCategory[]).map((key) => (
             <Box key={key} sx={{ mb: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography variant="body2" fontWeight="bold" sx={{ color: CATEGORY_COLORS[key] }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: "bold",
+                    color: CATEGORY_COLORS[key]
+                  }}>
                   {CATEGORY_LABELS[key]}
                 </Typography>
-                <Typography variant="body2" fontWeight="bold">
+                <Typography variant="body2" sx={{
+                  fontWeight: "bold"
+                }}>
                   {editedTargets[key]}%
                 </Typography>
               </Box>
@@ -182,7 +194,12 @@ const AllocationSettingsModal: React.FC<AllocationSettingsModalProps> = ({
         <Divider sx={{ my: 3 }} />
 
         {/* Bulk Assignment Section */}
-        <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>
+        <Typography
+          variant="subtitle1"
+          sx={{
+            fontWeight: "bold",
+            mb: 2
+          }}>
           Assign Unallocated Categories
         </Typography>
 
@@ -269,7 +286,6 @@ const AllocationSettingsModal: React.FC<AllocationSettingsModalProps> = ({
           </>
         )}
       </DialogContent>
-
       <DialogActions>
         <Button onClick={handleCancel} disabled={saving}>
           Cancel

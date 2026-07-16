@@ -153,7 +153,13 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({
     return (
       <Box>
         {/* Search and filter skeleton */}
-        <Stack direction="row" spacing={2} mb={3} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{
+            mb: 3,
+            alignItems: "center"
+          }}>
           <Skeleton variant="rounded" width={280} height={40} sx={{ borderRadius: 3 }} />
           <Stack direction="row" spacing={1}>
             {[1, 2, 3, 4].map((i) => (
@@ -182,22 +188,16 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={2}
-        mb={3}
-        alignItems={{ xs: 'stretch', sm: 'center' }}
-        justifyContent="space-between"
-      >
+        sx={{
+          mb: 3,
+          alignItems: { xs: 'stretch', sm: 'center' },
+          justifyContent: "space-between"
+        }}>
         <TextField
           size="small"
           placeholder={t('list.searchPlaceholder')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
-              </InputAdornment>
-            ),
-          }}
           sx={{
             width: { xs: '100%', sm: 280 },
             '& .MuiOutlinedInput-root': {
@@ -212,9 +212,24 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({
               },
             },
           }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                </InputAdornment>
+              ),
+            }
+          }}
         />
 
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: "center",
+            flexWrap: "wrap"
+          }}>
           {/* Status filter chips */}
           {statusOptions.map((option) => (
             <Chip
@@ -299,12 +314,16 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({
           </Menu>
         </Stack>
       </Stack>
-
       {/* Results count */}
-      <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: "text.secondary",
+          mb: 2,
+          display: 'block'
+        }}>
         {t('list.showing', { count: filteredAndSortedSubscriptions.length, total: subscriptions.length })}
       </Typography>
-
       {/* Subscription cards */}
       {filteredAndSortedSubscriptions.length === 0 ? (
         <Fade in>
@@ -326,12 +345,23 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({
                 mb: 2,
               }}
             />
-            <Typography variant="h6" color="text.secondary" fontWeight={500}>
+            <Typography
+              variant="h6"
+              sx={{
+                color: "text.secondary",
+                fontWeight: 500
+              }}>
               {searchQuery || statusFilter !== 'all'
                 ? t('list.noResults')
                 : t('list.empty')}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, opacity: 0.7 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mt: 1,
+                opacity: 0.7
+              }}>
               {searchQuery || statusFilter !== 'all'
                 ? t('list.noResultsHint')
                 : t('list.emptyHint')}
@@ -394,7 +424,7 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({
               </Box>
             ) : (
               // Single column layout
-              <Stack spacing={1.5}>
+              (<Stack spacing={1.5}>
                 {(showAll
                   ? filteredAndSortedSubscriptions
                   : filteredAndSortedSubscriptions.slice(0, MAX_VISIBLE_ITEMS)
@@ -414,7 +444,7 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({
                     </div>
                   </Fade>
                 ))}
-              </Stack>
+              </Stack>)
             )}
           </Box>
 

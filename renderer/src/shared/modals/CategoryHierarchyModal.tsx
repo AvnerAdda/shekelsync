@@ -95,7 +95,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import SortIcon from '@mui/icons-material/Sort';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutlined';
 import { useTranslation } from 'react-i18next';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
@@ -954,7 +954,12 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 if (!cat) return t('labels.select');
                 const displayName = getLocalizedCategoryName(cat);
                 return (
-                  <Box display="flex" alignItems="center" gap={1}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1
+                    }}>
                     {getCategoryIcon(cat)}
                     <span>{displayName || cat.name}</span>
                   </Box>
@@ -966,7 +971,12 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               </MenuItem>
               {options.map((cat: CategoryDefinition) => (
                 <MenuItem key={cat.id} value={cat.id}>
-                  <Box display="flex" alignItems="center" gap={1}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1
+                    }}>
                     {getCategoryIcon(cat)}
                     <span>{getLocalizedCategoryName(cat) || cat.name}</span>
                   </Box>
@@ -1789,15 +1799,21 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                   <Typography
                     variant="body2"
-                    fontWeight={level === 0 ? 'bold' : 'medium'}
                     noWrap={false}
-                    sx={{ lineHeight: 1.2 }}
-                  >
+                    sx={{
+                      fontWeight: level === 0 ? 'bold' : 'medium',
+                      lineHeight: 1.2
+                    }}>
                     <HighlightedText text={displayName} highlight={categorySearchQuery} />
                   </Typography>
 
                   {/* Badges/Chips */}
-                  <Box display="flex" gap={0.5} alignItems="center">
+                  <Box
+                    sx={{
+                      display: "flex",
+                      gap: 0.5,
+                      alignItems: "center"
+                    }}>
                   {category.transaction_count !== undefined && category.transaction_count > 0 && (
                     <Chip
                       label={category.transaction_count}
@@ -1831,16 +1847,15 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 {category.description && (
                   <Typography
                     variant="caption"
-                    color="text.secondary"
                     sx={{
+                      color: "text.secondary",
                       display: '-webkit-box',
                       WebkitLineClamp: 1,
                       WebkitBoxOrient: 'vertical',
                       overflow: 'hidden',
                       mt: 0.25,
                       lineHeight: 1.2
-                    }}
-                  >
+                    }}>
                     <HighlightedText text={category.description} highlight={categorySearchQuery} />
                   </Typography>
                 )}
@@ -1913,7 +1928,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             </Box>
           </Box>
         </ListItem>
-
         {/* Children Container with Guide Line */}
         {hasChildren && (
           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
@@ -1939,7 +1953,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             </Box>
           </Collapse>
         )}
-
         {/* Inline Transactions for Leaf Categories */}
         {isLeafCategory && (
           <Collapse in={hasTransactionsExpanded} timeout="auto" unmountOnExit>
@@ -1961,14 +1974,30 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               }}
             >
               {isLoadingTransactions ? (
-                <Box display="flex" alignItems="center" gap={1} py={2} pl={2}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    py: 2,
+                    pl: 2
+                  }}>
                   <CircularProgress size={16} />
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {t('transactions.loading')}
                   </Typography>
                 </Box>
               ) : transactionsByName.length === 0 ? (
-                <Typography variant="caption" color="text.secondary" sx={{ py: 2, pl: 2, display: 'block' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    py: 2,
+                    pl: 2,
+                    display: 'block'
+                  }}>
                   {t('transactions.none')}
                 </Typography>
               ) : (
@@ -2033,14 +2062,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                           <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Typography
                               variant="body2"
-                              fontWeight={500}
                               noWrap
                               sx={{
+                                fontWeight: 500,
                                 flex: 1,
                                 minWidth: 0,
-                                color: 'text.primary',
-                              }}
-                            >
+                                color: 'text.primary'
+                              }}>
                               {txnName}
                             </Typography>
                             {/* Count Badge - Always Shown */}
@@ -2060,12 +2088,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                             >
                               <Typography
                                 variant="caption"
-                                fontWeight={600}
-                                sx={{ 
-                                  color: txns.length > 1 ? 'primary.main' : 'text.secondary', 
-                                  fontSize: '0.7rem' 
-                                }}
-                              >
+                                sx={{
+                                  fontWeight: 600,
+                                  color: txns.length > 1 ? 'primary.main' : 'text.secondary',
+                                  fontSize: '0.7rem'
+                                }}>
                                 {txns.length}x
                               </Typography>
                             </Box>
@@ -2087,12 +2114,11 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                           >
                             <Typography
                               variant="body2"
-                              fontWeight={700}
                               sx={{
+                                fontWeight: 700,
                                 color: totalAmount < 0 ? 'error.main' : 'success.main',
-                                fontVariantNumeric: 'tabular-nums',
-                              }}
-                            >
+                                fontVariantNumeric: 'tabular-nums'
+                              }}>
                               {formatCurrency(totalAmount)}
                             </Typography>
                           </Box>
@@ -2133,7 +2159,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                             </Tooltip>
                           </Box>
                         </Box>
-
                         {/* Expanded Transaction Details - Always available */}
                         <Collapse in={isNameExpanded} timeout="auto" unmountOnExit>
                           <Box
@@ -2195,14 +2220,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                                   {/* Amount */}
                                   <Typography
                                     variant="caption"
-                                    fontWeight={600}
                                     sx={{
+                                      fontWeight: 600,
                                       color: txn.price < 0 ? 'error.main' : 'success.main',
                                       fontVariantNumeric: 'tabular-nums',
                                       minWidth: 60,
-                                      textAlign: 'right',
-                                    }}
-                                  >
+                                      textAlign: 'right'
+                                    }}>
                                     {formatCurrency(txn.price)}
                                   </Typography>
 
@@ -2372,33 +2396,67 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 : '0 4px 20px rgba(0, 0, 0, 0.08)',
             })}
           >
-            <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-              <Box display="flex" alignItems="center" gap={2} flex={1}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                mb: 2
+              }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                  flex: 1
+                }}>
                 <CategoryIcon sx={{ fontSize: 40, color: '#c8facf' }} />
-                <Box flex={1}>
-                  <Typography variant="h5" fontWeight="bold" gutterBottom sx={{ mb: 0 }}>
+                <Box sx={{
+                  flex: 1
+                }}>
+                  <Typography
+                    variant="h5"
+                    gutterBottom
+                    sx={{
+                      fontWeight: "bold",
+                      mb: 0
+                    }}>
                     {t('summary.title')}
                   </Typography>
                   {uncategorized.totalCount === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('summary.allDone')}
                     </Typography>
                   ) : (
                     <Box>
-                      <Typography variant="body1" color="text.primary">
+                      <Typography variant="body1" sx={{
+                        color: "text.primary"
+                      }}>
                         {t('summary.pendingCount', {
                           count: uncategorized.totalCount,
                           countDisplay: uncategorized.totalCount.toLocaleString(),
                         })}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: "text.secondary",
+                          mt: 0.5
+                        }}>
                         {t('summary.totalPending', { amount: formatCurrency(uncategorized.totalAmount) })}
                       </Typography>
                     </Box>
                   )}
                 </Box>
               </Box>
-              <Box display="flex" alignItems="center" gap={1}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1
+                }}>
                 {uncategorized.totalCount > 0 && (
                   <>
                     <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -2441,11 +2499,21 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             {(uncategorized && uncategorized.totalCount >= 0) && (
               <>
                 <Box sx={{ mb: 3, mt: 2 }}>
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                    <Typography variant="body2" fontWeight="medium">
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      mb: 1
+                    }}>
+                    <Typography variant="body2" sx={{
+                      fontWeight: "medium"
+                    }}>
                       {t('summary.progress')}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {(() => {
                         // Helper to check if a category is a leaf (has no children)
                         const isLeafCategory = (cat: CategoryDefinition): boolean => {
@@ -2576,16 +2644,36 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                       );
                     })()}
                   </Box>
-                  <Box display="flex" gap={2} mt={1} justifyContent="flex-start">
-                  <Box display="flex" alignItems="center" gap={0.5}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      gap: 2,
+                      mt: 1,
+                      justifyContent: "flex-start"
+                    }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5
+                    }}>
                     <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#66bb6a' }} />
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                      }}>
                         {t('legend.assignedTerminal')}
                       </Typography>
                   </Box>
-                  <Box display="flex" alignItems="center" gap={0.5}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5
+                    }}>
                     <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#ef5350' }} />
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                      }}>
                         {t('legend.notAssignedTerminal')}
                       </Typography>
                   </Box>
@@ -2674,10 +2762,29 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                           },
                         })}
                       >
-                        <Box display="flex" justifyContent="space-between" width="100%" alignItems="flex-start">
-                          <Box flex={1}>
-                            <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                              <Typography variant="h6" fontWeight="600" sx={{ fontSize: '1.1rem' }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            width: "100%",
+                            alignItems: "flex-start"
+                          }}>
+                          <Box sx={{
+                            flex: 1
+                          }}>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1,
+                                mb: 0.5
+                              }}>
+                              <Typography
+                                variant="h6"
+                                sx={{
+                                  fontWeight: "600",
+                                  fontSize: '1.1rem'
+                                }}>
                                 {txn.name || t('transactions.unknown')}
                               </Typography>
                               {similarCount > 1 && (
@@ -2718,47 +2825,58 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                                 />
                               )}
                             </Box>
-                            <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1,
+                                mb: 0.5
+                              }}>
                               <Chip
                                 label={txn.vendor || t('transactions.unknownVendor')}
                                 size="small"
                                 variant="outlined"
                                 sx={{ fontWeight: 500 }}
                               />
-                              <Typography variant="caption" color="text.secondary">
+                              <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                              }}>
                                 {formatDate(txn.date)}
                               </Typography>
                               {txn.accountNumber && (
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                  color: "text.secondary"
+                                }}>
                                   • ****{txn.accountNumber}
                                 </Typography>
                               )}
                             </Box>
                           </Box>
-                          <Box textAlign="right">
+                          <Box sx={{
+                            textAlign: "right"
+                          }}>
                             <Typography
                               variant="h6"
-                              fontWeight="bold"
                               sx={{
+                                fontWeight: "bold",
                                 fontSize: '1.25rem',
-                                color: txn.price < 0 ? '#ef5350' : '#66bb6a',
-                              }}
-                            >
+                                color: txn.price < 0 ? '#ef5350' : '#66bb6a'
+                              }}>
                               {formatCurrency(txn.price)}
                             </Typography>
                           </Box>
                         </Box>
-
                         {/* Status helper text */}
-                            {hasExistingCategory && (
-                              <Alert severity="info" sx={{ mb: 1, py: 0.5 }}>
-                                <Typography variant="caption">
-                                  {t('uncategorized.parentAssigned')}
-                                </Typography>
-                              </Alert>
-                            )}
-
-                        <Grid container spacing={1.5} alignItems="center">
+                        {hasExistingCategory && (
+                          <Alert severity="info" sx={{ mb: 1, py: 0.5 }}>
+                            <Typography variant="caption">
+                              {t('uncategorized.parentAssigned')}
+                            </Typography>
+                          </Alert>
+                        )}
+                        <Grid container spacing={1.5} sx={{
+                          alignItems: "center"
+                        }}>
                           {renderCategorySelectors(key, draft, rootOptions)}
                           <Grid size={{ xs: 12, md: 4 }}>
                             <Box sx={{ display: 'flex', gap: 1 }}>
@@ -2811,7 +2929,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                   })}
                 </List>
                 {uncategorized.totalCount > uncategorizedPreview.length && (
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                      mt: 1,
+                      display: 'block'
+                    }}>
                     {t('uncategorized.showingLatest', {
                       previewCount: uncategorizedPreview.length,
                       total: uncategorized.totalCount.toLocaleString(),
@@ -2853,28 +2977,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             placeholder={t('search.categoryPlaceholder')}
             value={categorySearchQuery}
             onChange={(e) => setCategorySearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: <SearchIcon sx={{ mr: 1.5, color: 'text.secondary', fontSize: 22 }} />,
-              endAdornment: categorySearchQuery && (
-                <IconButton
-                  size="small"
-                  onClick={() => setCategorySearchQuery('')}
-                  sx={{ ml: 1, bgcolor: alpha(theme.palette.text.primary, 0.05) }}
-                >
-                  <ClearIcon fontSize="small" />
-                </IconButton>
-              ),
-              sx: {
-                borderRadius: 3,
-                bgcolor: alpha(theme.palette.background.default, 0.6),
-                '&.Mui-focused': {
-                  bgcolor: theme.palette.background.paper,
-                  boxShadow: `0 0 0 4px ${alpha(theme.palette.primary.main, 0.1)}`,
-                },
-                transition: 'all 0.2s ease',
-                pl: 2
-              }
-            }}
             variant="outlined"
             sx={{
               '& .MuiOutlinedInput-notchedOutline': {
@@ -2882,15 +2984,44 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               },
             }}
             helperText={!hasSearchQuery ? t('search.searchHint') : undefined}
-            FormHelperTextProps={{
-              sx: { ml: 2, mt: 0.5, opacity: 0.7 }
-            }}
-          />
+            slotProps={{
+              input: {
+                startAdornment: <SearchIcon sx={{ mr: 1.5, color: 'text.secondary', fontSize: 22 }} />,
+                endAdornment: categorySearchQuery && (
+                  <IconButton
+                    size="small"
+                    onClick={() => setCategorySearchQuery('')}
+                    sx={{ ml: 1, bgcolor: alpha(theme.palette.text.primary, 0.05) }}
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                ),
+                sx: {
+                  borderRadius: 3,
+                  bgcolor: alpha(theme.palette.background.default, 0.6),
+                  '&.Mui-focused': {
+                    bgcolor: theme.palette.background.paper,
+                    boxShadow: `0 0 0 4px ${alpha(theme.palette.primary.main, 0.1)}`,
+                  },
+                  transition: 'all 0.2s ease',
+                  pl: 2
+                }
+              },
+
+              formHelperText: {
+                sx: { ml: 2, mt: 0.5, opacity: 0.7 }
+              }
+            }} />
 
           {/* Search Results Info */}
           {hasSearchQuery && (
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1, mt: 1 }}>
-              <Typography variant="caption" fontWeight="bold" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  fontWeight: "bold",
+                  color: "text.secondary"
+                }}>
                 {t('search.resultsFound', {
                   count: filteredCategories.length,
                   query: categorySearchQuery
@@ -2899,10 +3030,14 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             </Box>
           )}
         </Box>
-
         {/* Category Tree Content */}
         {loading ? (
-          <Box display="flex" justifyContent="center" p={4}>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              p: 4
+            }}>
             <CircularProgress />
           </Box>
         ) : (
@@ -2929,26 +3064,66 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 bgcolor: alpha(theme.palette.background.default, 0.5),
               }}
             >
-              <Box display="flex" alignItems="center" gap={0.75}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.75
+                }}>
                 <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#ef5350' }} />
-                <Typography variant="caption" color="text.secondary" fontWeight={500}>{t('sections.expense')}</Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    fontWeight: 500
+                  }}>{t('sections.expense')}</Typography>
               </Box>
-              <Box display="flex" alignItems="center" gap={0.75}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.75
+                }}>
                 <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#66bb6a' }} />
-                <Typography variant="caption" color="text.secondary" fontWeight={500}>{t('sections.investment')}</Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    fontWeight: 500
+                  }}>{t('sections.investment')}</Typography>
               </Box>
-              <Box display="flex" alignItems="center" gap={0.75}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.75
+                }}>
                 <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#42a5f5' }} />
-                <Typography variant="caption" color="text.secondary" fontWeight={500}>{t('sections.income')}</Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    fontWeight: 500
+                  }}>{t('sections.income')}</Typography>
               </Box>
             </Box>
 
             {/* Unified Tree */}
             <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 1.5 }}>
               {filteredCategories.length === 0 ? (
-                <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={6} sx={{ opacity: 0.5 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    py: 6,
+                    opacity: 0.5
+                  }}>
                   <CategoryIcon sx={{ fontSize: 48, mb: 2, color: 'text.secondary' }} />
-                  <Typography variant="body1" color="text.secondary">
+                  <Typography variant="body1" sx={{
+                    color: "text.secondary"
+                  }}>
                     {t('search.noResults')}
                   </Typography>
                 </Box>
@@ -2984,7 +3159,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             </Box>
           </Paper>
         )}
-
         {/* Edit Category Dialog */}
         {editingCategory && (
           <Dialog open={true} onClose={() => { setEditingCategory(null); setEditingTags([]); setNewTagInput(''); }} maxWidth="sm" fullWidth>
@@ -3044,21 +3218,23 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                         setNewTagInput('');
                       }
                     }}
-                    InputProps={{
-                      endAdornment: newTagInput.trim() && (
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            const currentTags = editingCategory.tags || [];
-                            if (!currentTags.includes(newTagInput.trim())) {
-                              setEditingCategory({ ...editingCategory, tags: [...currentTags, newTagInput.trim()] });
-                            }
-                            setNewTagInput('');
-                          }}
-                        >
-                          <AddIcon fontSize="small" />
-                        </IconButton>
-                      ),
+                    slotProps={{
+                      input: {
+                        endAdornment: newTagInput.trim() && (
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              const currentTags = editingCategory.tags || [];
+                              if (!currentTags.includes(newTagInput.trim())) {
+                                setEditingCategory({ ...editingCategory, tags: [...currentTags, newTagInput.trim()] });
+                              }
+                              setNewTagInput('');
+                            }}
+                          >
+                            <AddIcon fontSize="small" />
+                          </IconButton>
+                        ),
+                      }
                     }}
                   />
                 </Grid>
@@ -3083,7 +3259,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             </DialogActions>
           </Dialog>
         )}
-
         {/* Re-categorize by Rule Dialog */}
         {recategorizeDialogOpen && recategorizeTransaction && (
           <Dialog
@@ -3093,7 +3268,12 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             fullWidth
           >
             <DialogTitle sx={{ pb: 1 }}>
-              <Box display="flex" alignItems="center" gap={1}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1
+                }}>
                 <AutoAwesomeIcon sx={{ color: 'primary.main' }} />
                 <Typography variant="h6" component="span">
                   {t('recategorize.title', 'Re-categorize by Rule')}
@@ -3104,7 +3284,9 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               <Box sx={{ pt: 1 }}>
                 {/* Transaction Name Display */}
                 <Box sx={{ mb: 3 }}>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                  <Typography variant="body2" gutterBottom sx={{
+                    color: "text.secondary"
+                  }}>
                     {t('recategorize.transactionName', 'Transaction name')}
                   </Typography>
                   <Paper
@@ -3114,7 +3296,9 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                       bgcolor: alpha(theme.palette.background.default, 0.5),
                     }}
                   >
-                    <Typography variant="body1" fontWeight={500}>
+                    <Typography variant="body1" sx={{
+                      fontWeight: 500
+                    }}>
                       {recategorizeTransaction.name}
                     </Typography>
                   </Paper>
@@ -3132,19 +3316,34 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                     }}
                   >
                     <MenuItem value="expense">
-                      <Box display="flex" alignItems="center" gap={1}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1
+                        }}>
                         <ExpenseIcon sx={{ fontSize: 20, color: '#ef5350' }} />
                         {t('types.expense', 'Expense')}
                       </Box>
                     </MenuItem>
                     <MenuItem value="investment">
-                      <Box display="flex" alignItems="center" gap={1}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1
+                        }}>
                         <InvestmentIcon sx={{ fontSize: 20, color: '#66bb6a' }} />
                         {t('types.investment', 'Investment')}
                       </Box>
                     </MenuItem>
                     <MenuItem value="income">
-                      <Box display="flex" alignItems="center" gap={1}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1
+                        }}>
                         <IncomeIcon sx={{ fontSize: 20, color: '#42a5f5' }} />
                         {t('types.income', 'Income')}
                       </Box>
@@ -3163,8 +3362,10 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                       setRecategorizeTargetCategoryId(value === '' ? null : Number(value));
                     }}
                     MenuProps={{
-                      PaperProps: {
-                        style: { maxHeight: 350 },
+                      slotProps: {
+                        paper: {
+                          style: { maxHeight: 350 },
+                        },
                       },
                     }}
                   >
@@ -3185,7 +3386,12 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                               value={cat.id}
                               sx={{ pl: 2 + depth * 2 }}
                             >
-                              <Box display="flex" alignItems="center" gap={1}>
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 1
+                                }}>
                                 {getCategoryIcon(cat)}
                                 <Typography
                                   sx={{
@@ -3210,7 +3416,13 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 </FormControl>
 
                 {/* Helper text */}
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    mt: 2,
+                    display: 'block'
+                  }}>
                   {t('recategorize.helperText', 'This will create a rule that automatically categorizes all transactions with this name.')}
                 </Typography>
               </Box>
@@ -3232,7 +3444,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             </DialogActions>
           </Dialog>
         )}
-
         {/* Move to Category Menu */}
         {transactionToMove && (
           <Menu
@@ -3242,15 +3453,19 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
               setTransactionMoveMenuAnchor(null);
               setTransactionToMove(null);
             }}
-            PaperProps={{
-              style: {
-                maxHeight: 400,
-                width: '300px',
+            slotProps={{
+              paper: {
+                style: {
+                  maxHeight: 400,
+                  width: '300px',
+                },
               },
             }}
           >
             <MenuItem disabled>
-              <Typography variant="caption" fontWeight="bold">
+              <Typography variant="caption" sx={{
+                fontWeight: "bold"
+              }}>
                 {t('labels.targetCategory')}
               </Typography>
             </MenuItem>
@@ -3314,10 +3529,14 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     return (
       <Box>
         <Paper sx={{ p: 2, mb: 3 }}>
-          <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+          <Typography variant="subtitle1" gutterBottom sx={{
+            fontWeight: "bold"
+          }}>
             {t('rulesForm.title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
+          <Typography variant="body2" gutterBottom sx={{
+            color: "text.secondary"
+          }}>
             {t('rulesForm.description')}
           </Typography>
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -3363,7 +3582,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                     const value = e.target.value as string | number;
                     setNewRuleCategoryId(value === '' ? null : Number(value));
                   }}
-                  MenuProps={{ PaperProps: { style: { maxHeight: 350 } } }}
+                  MenuProps={{ slotProps: { paper: { style: { maxHeight: 350 } } } }}
                 >
                   <MenuItem value="">
                     <em>{t('rulesForm.fields.selectCategory')}</em>
@@ -3382,7 +3601,12 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                             value={cat.id}
                             sx={{ pl: 2 + depth * 2 }}
                           >
-                            <Box display="flex" alignItems="center" gap={1}>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1
+                              }}>
                               {getCategoryIcon(cat)}
                               <Typography
                                 sx={{
@@ -3424,7 +3648,9 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
           {newRulePreview && newRulePreview.totalCount > 0 && (
             <Box sx={{ mt: 2 }}>
               <Alert severity="info" sx={{ mb: 1 }}>
-                <Typography variant="body2" fontWeight="bold" gutterBottom>
+                <Typography variant="body2" gutterBottom sx={{
+                  fontWeight: "bold"
+                }}>
                   {t('rulesForm.preview.title', { count: newRulePreview.totalCount })}
                 </Typography>
                 <Box sx={{ maxHeight: 200, overflowY: 'auto', mt: 1 }}>
@@ -3441,13 +3667,21 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                         <Typography variant="caption" sx={{ flex: 1 }}>
                           {new Date(txn.date).toLocaleDateString()} - {txn.name}
                         </Typography>
-                        <Typography variant="caption" fontWeight="bold">
+                        <Typography variant="caption" sx={{
+                          fontWeight: "bold"
+                        }}>
                         ₪{Math.abs(txn.price).toFixed(2)}
                       </Typography>
                     </Box>
                   ))}
                   {newRulePreview.totalCount > 5 && (
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        mt: 1,
+                        display: 'block'
+                      }}>
                       {t('rulesForm.preview.more', { count: newRulePreview.totalCount - 5 })}
                     </Typography>
                   )}
@@ -3467,11 +3701,18 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             </Button>
           </Box>
         </Paper>
-
         {/* Rules List */}
         <Box sx={{ mb: 2 }}>
-          <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-            <Typography variant="subtitle1" fontWeight="bold">
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              mb: 2
+            }}>
+            <Typography variant="subtitle1" sx={{
+              fontWeight: "bold"
+            }}>
               {ruleSearchQuery.trim()
                 ? t('rulesList.titleFiltered', { visible: filteredRules.length, total: rules.length })
                 : t('rulesList.title', { count: rules.length })}
@@ -3483,19 +3724,21 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
             placeholder={t('rulesList.searchPlaceholder')}
             value={ruleSearchQuery}
             onChange={(e) => setRuleSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-              endAdornment: ruleSearchQuery && (
-                <IconButton
-                  size="small"
-                  onClick={() => setRuleSearchQuery('')}
-                  sx={{ ml: 1 }}
-                >
-                  <ClearIcon fontSize="small" />
-                </IconButton>
-              ),
-            }}
             sx={{ mb: 2 }}
+            slotProps={{
+              input: {
+                startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                endAdornment: ruleSearchQuery && (
+                  <IconButton
+                    size="small"
+                    onClick={() => setRuleSearchQuery('')}
+                    sx={{ ml: 1 }}
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                ),
+              }
+            }}
           />
         </Box>
         {rules.length === 0 ? (
@@ -3525,10 +3768,25 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 <Grid size={{ xs: 12 }} key={rule.id}>
                   <Card variant="outlined">
                     <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                      <Box display="flex" alignItems="center" justifyContent="space-between">
-                        <Box flex={1}>
-                      <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                        <Typography variant="body2" fontWeight="medium">
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between"
+                        }}>
+                        <Box sx={{
+                          flex: 1
+                        }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                          mb: 0.5
+                        }}>
+                        <Typography variant="body2" sx={{
+                          fontWeight: "medium"
+                        }}>
                           {t('rulesList.ifContains', { pattern: rule.name_pattern })}
                         </Typography>
                         <Chip
@@ -3538,32 +3796,49 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                           variant="outlined"
                         />
                       </Box>
-                      <Box display="flex" alignItems="center" gap={0.5}>
-                        <Typography variant="body2" color="text.secondary">
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.5
+                        }}>
+                        <Typography variant="body2" sx={{
+                          color: "text.secondary"
+                        }}>
                           {t('rulesList.then')}
                         </Typography>
                         {categoryDisplayIcon && (
-                          <Box display="flex" alignItems="center">
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center"
+                            }}>
                             {categoryDisplayIcon}
                           </Box>
                             )}
                             <Typography
                               variant="body2"
-                              fontWeight="medium"
                               sx={{
-                                color: categoryDisplayColor || 'text.primary',
-                              }}
-                            >
+                                fontWeight: "medium",
+                                color: categoryDisplayColor || 'text.primary'
+                              }}>
                               {categoryDisplayName}
                             </Typography>
                             {subcategoryDisplay && (
-                              <Typography variant="body2" color="text.secondary">
+                              <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                              }}>
                                 › {subcategoryDisplay}
                               </Typography>
                             )}
                           </Box>
                         </Box>
-                    <Box display="flex" alignItems="center" gap={1}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1
+                      }}>
                       <Chip
                         label={rule.is_active ? t('rulesList.status.active') : t('rulesList.status.inactive')}
                         size="small"
@@ -3601,12 +3876,23 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                       <Collapse in={isExpanded}>
                         <Divider sx={{ my: 1.5 }} />
                       {loadingPreview && !previewData ? (
-                        <Box display="flex" justifyContent="center" py={2}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "center",
+                            py: 2
+                          }}>
                           <CircularProgress size={24} />
                         </Box>
                       ) : previewData && previewData.matchedTransactions.length > 0 ? (
                         <Box sx={{ mt: 1 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight="bold" gutterBottom>
+                          <Typography
+                            variant="caption"
+                            gutterBottom
+                            sx={{
+                              color: "text.secondary",
+                              fontWeight: "bold"
+                            }}>
                             {t('rulesList.matches.title')}
                           </Typography>
                             <Box sx={{ maxHeight: 300, overflowY: 'auto', mt: 1 }}>
@@ -3625,29 +3911,45 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                                     },
                                   }}
                                 >
-                                  <Box flex={1}>
-                                    <Typography variant="caption" display="block">
+                                  <Box sx={{
+                                    flex: 1
+                                  }}>
+                                    <Typography variant="caption" sx={{
+                                      display: "block"
+                                    }}>
                                       {txn.name}
                                     </Typography>
-                              <Typography variant="caption" color="text.secondary">
+                              <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                              }}>
                                 {new Date(txn.date).toLocaleDateString()} • {txn.vendor}
                                 {txn.accountNumber && ` • ****${txn.accountNumber}`}
                               </Typography>
                             </Box>
-                                  <Typography variant="caption" fontWeight="bold">
+                                  <Typography variant="caption" sx={{
+                                    fontWeight: "bold"
+                                  }}>
                                     ₪{Math.abs(txn.price).toFixed(2)}
                                   </Typography>
                                 </Box>
                               ))}
                             </Box>
                           {previewData.totalCount > previewData.matchedTransactions.length && (
-                            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: "text.secondary",
+                                mt: 1,
+                                display: 'block'
+                              }}>
                               {t('rulesList.matches.more', { count: previewData.totalCount - previewData.matchedTransactions.length })}
                             </Typography>
                           )}
                         </Box>
                       ) : (
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                          color: "text.secondary"
+                        }}>
                           {t('rulesList.matches.none')}
                         </Typography>
                       )}
@@ -3679,15 +3981,16 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       onClose={handleClose}
       maxWidth="lg"
       fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: '24px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-        },
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: '24px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          },
+        }
       }}
     >
       <ModalHeader title={t('header.title')} onClose={handleClose} />
-
       <DialogContent style={{ padding: '0 24px 24px 24px' }}>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
@@ -3767,7 +4070,6 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         {activeTab === 1 && renderCategoryTreeTab()}
         {activeTab === 2 && renderPatternRulesTab()}
       </DialogContent>
-
       <DialogActions style={{ padding: '16px 24px 24px 24px' }}>
         {pendingRefresh && (
           <Button onClick={handleRefreshNow} variant="contained">
@@ -3778,14 +4080,12 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
           {t('actions.close')}
         </Button>
       </DialogActions>
-
       {/* License Read-Only Alert */}
       <LicenseReadOnlyAlert
         open={licenseAlertOpen}
         onClose={() => setLicenseAlertOpen(false)}
         reason={licenseAlertReason}
       />
-
       {/* Transaction Detail Modal */}
       <TransactionDetailModal
         open={transactionDetailModalOpen}

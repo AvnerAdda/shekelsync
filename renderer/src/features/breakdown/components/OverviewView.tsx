@@ -146,16 +146,34 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                   pointerEvents: 'none',
                 }}
               >
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1, mb: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: 'block',
+                    lineHeight: 1,
+                    mb: 0.5
+                  }}>
                   Total
                 </Typography>
-                <Typography variant="h6" fontWeight={700} sx={{ color: theme.palette.text.primary }}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 700,
+                    color: theme.palette.text.primary
+                  }}>
                   {formatCurrencyValue(totalAmount)}
                 </Typography>
               </Box>
             </Box>
             {!isSubcategoryLevel && (
-              <Typography variant="caption" display="block" align="center" color="text.secondary">
+              <Typography
+                variant="caption"
+                align="center"
+                sx={{
+                  display: "block",
+                  color: "text.secondary"
+                }}>
                 <ZoomInIcon sx={{ fontSize: 14, verticalAlign: 'middle', mr: 0.5 }} />
                 {timelineStrings.hint}
               </Typography>
@@ -220,14 +238,18 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                         <CategoryIcon iconName={item.icon} color={item.color} size={24} />
                         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                        <Typography variant="body2" fontWeight="medium" noWrap>
+                        <Typography variant="body2" noWrap sx={{
+                          fontWeight: "medium"
+                        }}>
                           {item.name}
                         </Typography>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <Typography
                                 variant="body2"
-                                fontWeight="bold"
                                 color={categoryType === 'income' ? 'success.main' : undefined}
+                                sx={{
+                                  fontWeight: "bold"
+                                }}
                               >
                                 {formatCurrencyValue(item.value)}
                               </Typography>

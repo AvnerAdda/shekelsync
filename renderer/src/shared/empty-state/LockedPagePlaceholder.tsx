@@ -1,8 +1,8 @@
 import React from 'react';
 import { Box, Typography, Button, LinearProgress, Paper, Stack } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutlined';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 import SyncIcon from '@mui/icons-material/Sync';
@@ -106,7 +106,12 @@ export const LockedPagePlaceholder: React.FC<LockedPagePlaceholderProps> = ({
           <Typography variant="h4" gutterBottom sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
             {pageIcons[page]} {title}
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          <Typography
+            variant="body1"
+            sx={{
+              color: "text.secondary",
+              mb: 3
+            }}>
             {description}
           </Typography>
         </Box>
@@ -117,10 +122,17 @@ export const LockedPagePlaceholder: React.FC<LockedPagePlaceholderProps> = ({
             {t('completeSetup', 'Complete Setup to Unlock')}
           </Typography>
           <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {t('progress', { defaultValue: 'Progress: {{completed}} of {{total}} steps', completed: completedSteps, total: totalSteps })}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                fontWeight: 600
+              }}>
               {Math.round(progress)}%
             </Typography>
           </Box>
@@ -247,7 +259,12 @@ export const LockedPagePlaceholder: React.FC<LockedPagePlaceholderProps> = ({
               {!onboardingStatus?.completedSteps.firstScrape &&
                onboardingStatus?.completedSteps.bankAccount &&
                onboardingStatus?.completedSteps.creditCard && (
-                <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    fontStyle: 'italic'
+                  }}>
                   {t('steps.automatic', 'Automatic')}
                 </Typography>
               )}
@@ -292,7 +309,9 @@ export const LockedPagePlaceholder: React.FC<LockedPagePlaceholderProps> = ({
            !onboardingStatus?.completedSteps.firstScrape && (
             <Box sx={{ textAlign: 'center' }}>
               <SyncIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="body1" color="text.secondary">
+              <Typography variant="body1" sx={{
+                color: "text.secondary"
+              }}>
                 {t('actions.autoSyncWaiting', 'Auto-sync will begin automatically...')}
               </Typography>
             </Box>

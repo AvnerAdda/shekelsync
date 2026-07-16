@@ -116,11 +116,13 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
       onClose={onClose}
       maxWidth="md"
       fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 2,
-          maxHeight: '80vh',
-        },
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: 2,
+            maxHeight: '80vh',
+          },
+        }
       }}
     >
       <DialogTitle
@@ -131,14 +133,15 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
           pb: 2,
         }}
       >
-        <Typography variant="h6" component="span" fontWeight={600}>
+        <Typography variant="h6" component="span" sx={{
+          fontWeight: 600
+        }}>
           {t('title', 'Portfolio Allocation')}
         </Typography>
         <IconButton onClick={onClose} size="small">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-
       <DialogContent>
         {/* Summary Stats */}
         <Box
@@ -159,10 +162,17 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
               border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
             }}
           >
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('stats.totalAccounts', 'Total Accounts')}
             </Typography>
-            <Typography variant="h5" fontWeight={700} sx={{ mt: 0.5 }}>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 700,
+                mt: 0.5
+              }}>
               {sortedAccounts.length}
             </Typography>
           </Box>
@@ -177,10 +187,17 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
               border: `1px solid ${alpha(theme.palette.warning.main, 0.1)}`,
             }}
           >
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('stats.topAccount', 'Top Account')}
             </Typography>
-            <Typography variant="h5" fontWeight={700} sx={{ mt: 0.5 }}>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 700,
+                mt: 0.5
+              }}>
               {topAccountPercentage.toFixed(1)}%
             </Typography>
           </Box>
@@ -195,10 +212,17 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
               border: `1px solid ${alpha(theme.palette.success.main, 0.1)}`,
             }}
           >
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('stats.top3', 'Top 3 Combined')}
             </Typography>
-            <Typography variant="h5" fontWeight={700} sx={{ mt: 0.5 }}>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 700,
+                mt: 0.5
+              }}>
               {top3Percentage.toFixed(1)}%
             </Typography>
           </Box>
@@ -264,11 +288,15 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
                 {/* Account Name */}
                 <TableCell>
                   <Box>
-                    <Typography variant="body2" fontWeight={500}>
+                    <Typography variant="body2" sx={{
+                      fontWeight: 500
+                    }}>
                       {account.account_name}
                     </Typography>
                     {account.institution && (
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                      }}>
                         {resolvePortfolioInstitutionName(account.institution, locale)}
                       </Typography>
                     )}
@@ -277,7 +305,9 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
 
                 {/* Value */}
                 <TableCell align="right">
-                  <Typography variant="body2" fontWeight={600}>
+                  <Typography variant="body2" sx={{
+                    fontWeight: 600
+                  }}>
                     {maskAmounts ? '***' : formatCurrencyValue(account.current_value)}
                   </Typography>
                 </TableCell>
@@ -311,10 +341,21 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
               border: `1px solid ${alpha(theme.palette.warning.main, 0.2)}`,
             }}
           >
-            <Typography variant="body2" color="warning.main" fontWeight={500}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "warning.main",
+                fontWeight: 500
+              }}>
               ⚠️ {t('warning.concentration', 'High Concentration')}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                mt: 0.5,
+                display: 'block'
+              }}>
               {t(
                 'warning.concentrationMessage',
                 'Your top account represents over 50% of your portfolio. Consider diversifying to reduce risk.'

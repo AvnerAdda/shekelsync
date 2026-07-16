@@ -662,22 +662,24 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
               fullWidth
               required
               helperText={helperText}
-              InputProps={isPasswordField
-                ? {
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          edge="end"
-                          onClick={() => setShowPassword((prev) => !prev)}
-                          onMouseDown={(event) => event.preventDefault()}
-                          aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        >
-                          {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }
-                : undefined}
+              slotProps={{
+                input: isPasswordField
+                  ? {
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            edge="end"
+                            onClick={() => setShowPassword((prev) => !prev)}
+                            onMouseDown={(event) => event.preventDefault()}
+                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }
+                  : undefined
+              }}
             />
           );
         })}
@@ -750,7 +752,9 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
       {selectedInstitution && (
         <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
           <InstitutionBadge institution={selectedInstitution} fallback={selectedInstitution.vendor_code} />
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {getInstitutionLabel(selectedInstitution)}
           </Typography>
         </Box>
@@ -773,7 +777,9 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         {selectedInstitution && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <InstitutionBadge institution={selectedInstitution} fallback={selectedInstitution.vendor_code} />
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {getInstitutionLabel(selectedInstitution)}
             </Typography>
           </Box>
@@ -804,23 +810,25 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
               value={value}
               fullWidth
               disabled={!isPasswordField}
-              InputProps={isPasswordField
-                ? {
-                    readOnly: true,
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          edge="end"
-                          onClick={() => setShowPassword((prev) => !prev)}
-                          onMouseDown={(event) => event.preventDefault()}
-                          aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        >
-                          {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }
-                : undefined}
+              slotProps={{
+                input: isPasswordField
+                  ? {
+                      readOnly: true,
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            edge="end"
+                            onClick={() => setShowPassword((prev) => !prev)}
+                            onMouseDown={(event) => event.preventDefault()}
+                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }
+                  : undefined
+              }}
             />
           );
         })}
@@ -830,102 +838,126 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
 
   return (
     <>
-    <Dialog
-      open={isOpen}
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        style: {
-          backgroundColor: theme.palette.background.paper,
-          borderRadius: '24px',
-          boxShadow: theme.palette.mode === 'dark'
-            ? '0 8px 32px rgba(0, 0, 0, 0.5)'
-            : '0 8px 32px rgba(0, 0, 0, 0.1)'
-        }
-      }}
-    >
-      <ModalHeader title={t('title')} onClose={onClose} />
-      <DialogContent style={{ padding: '0 24px 24px' }}>
-        <Alert
-          severity={isRunning ? 'info' : 'success'}
-          sx={{ mt: 2 }}
-        >
-          <Typography variant="body2" fontWeight={500}>
-            {statusMessage}
-          </Typography>
-          {isRunning && (resolvedProgress !== null || typeof latestEvent?.transactions === 'number') && (
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-              {resolvedProgress !== null ? t('status.progressLabel', { progress: resolvedProgress }) : null}
-              {resolvedProgress !== null && typeof latestEvent?.transactions === 'number' ? ' • ' : ''}
-              {typeof latestEvent?.transactions === 'number'
-                ? t('status.transactionsSynced', { count: latestEvent.transactions })
-                : null}
-            </Typography>
-          )}
-          {isRunning ? (
-            <Typography variant="caption" color="text.secondary" display="block">
-              {t('status.background')}
-            </Typography>
-          ) : (
-            <Typography variant="caption" color="text.secondary" display="block">
-              {t('status.startHint')}
-            </Typography>
-          )}
-        </Alert>
-
-        {rateLimitSummary && (
-          <Alert severity={rateLimitSeverity} sx={{ mt: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              {rateLimitSummary}
-            </Typography>
-          </Alert>
-        )}
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 2, mt: 2 }}>
-            {error}
-          </Alert>
-        )}
-
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2 }}>
-          {initialConfig ? renderExistingAccountForm() : renderNewScrapeForm()}
-        </Box>
-      </DialogContent>
-      <DialogActions style={{ padding: '16px 24px' }}>
-        <Button 
-          onClick={onClose}
-          sx={{ color: theme.palette.text.secondary }}
-        >
-          {t('actions.cancel')}
-        </Button>
-        <Button
-          onClick={handleSync}
-          variant="contained"
-          disabled={primaryActionDisabled}
-          sx={{
-            backgroundColor: theme.palette.primary.main,
-            color: theme.palette.primary.contrastText,
-            padding: '8px 24px',
-            borderRadius: '8px',
-            textTransform: 'none',
-            fontWeight: 500,
-            '&:hover': {
-              backgroundColor: theme.palette.primary.dark,
+      <Dialog
+        open={isOpen}
+        onClose={onClose}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            style: {
+              backgroundColor: theme.palette.background.paper,
+              borderRadius: '24px',
+              boxShadow: theme.palette.mode === 'dark'
+                ? '0 8px 32px rgba(0, 0, 0, 0.5)'
+                : '0 8px 32px rgba(0, 0, 0, 0.1)'
             }
-          }}
-        >
-          {primaryActionLabel}
-        </Button>
-      </DialogActions>
-    </Dialog>
+          }
+        }}
+      >
+        <ModalHeader title={t('title')} onClose={onClose} />
+        <DialogContent style={{ padding: '0 24px 24px' }}>
+          <Alert
+            severity={isRunning ? 'info' : 'success'}
+            sx={{ mt: 2 }}
+          >
+            <Typography variant="body2" sx={{
+              fontWeight: 500
+            }}>
+              {statusMessage}
+            </Typography>
+            {isRunning && (resolvedProgress !== null || typeof latestEvent?.transactions === 'number') && (
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  display: "block",
+                  mt: 0.5
+                }}>
+                {resolvedProgress !== null ? t('status.progressLabel', { progress: resolvedProgress }) : null}
+                {resolvedProgress !== null && typeof latestEvent?.transactions === 'number' ? ' • ' : ''}
+                {typeof latestEvent?.transactions === 'number'
+                  ? t('status.transactionsSynced', { count: latestEvent.transactions })
+                  : null}
+              </Typography>
+            )}
+            {isRunning ? (
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  display: "block"
+                }}>
+                {t('status.background')}
+              </Typography>
+            ) : (
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  display: "block"
+                }}>
+                {t('status.startHint')}
+              </Typography>
+            )}
+          </Alert>
 
-    {/* License Read-Only Alert */}
-    <LicenseReadOnlyAlert
-      open={licenseAlertOpen}
-      onClose={() => setLicenseAlertOpen(false)}
-      reason={licenseAlertReason}
-    />
+          {rateLimitSummary && (
+            <Alert severity={rateLimitSeverity} sx={{ mt: 2 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  display: "block"
+                }}>
+                {rateLimitSummary}
+              </Typography>
+            </Alert>
+          )}
+
+          {error && (
+            <Alert severity="error" sx={{ mb: 2, mt: 2 }}>
+              {error}
+            </Alert>
+          )}
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2 }}>
+            {initialConfig ? renderExistingAccountForm() : renderNewScrapeForm()}
+          </Box>
+        </DialogContent>
+        <DialogActions style={{ padding: '16px 24px' }}>
+          <Button 
+            onClick={onClose}
+            sx={{ color: theme.palette.text.secondary }}
+          >
+            {t('actions.cancel')}
+          </Button>
+          <Button
+            onClick={handleSync}
+            variant="contained"
+            disabled={primaryActionDisabled}
+            sx={{
+              backgroundColor: theme.palette.primary.main,
+              color: theme.palette.primary.contrastText,
+              padding: '8px 24px',
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 500,
+              '&:hover': {
+                backgroundColor: theme.palette.primary.dark,
+              }
+            }}
+          >
+            {primaryActionLabel}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      {/* License Read-Only Alert */}
+      <LicenseReadOnlyAlert
+        open={licenseAlertOpen}
+        onClose={() => setLicenseAlertOpen(false)}
+        reason={licenseAlertReason}
+      />
     </>
   );
 } 

@@ -154,7 +154,6 @@ const UpdateButton: React.FC<UpdateButtonProps> = ({
           </Badge>
         </IconButton>
       </Tooltip>
-
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
@@ -179,7 +178,9 @@ const UpdateButton: React.FC<UpdateButtonProps> = ({
         }}
       >
         <Box sx={{ px: 2, py: 1.5 }}>
-          <Typography variant="subtitle2" fontWeight={600} color={theme.palette.text.primary}>
+          <Typography variant="subtitle2" color={theme.palette.text.primary} sx={{
+            fontWeight: 600
+          }}>
             {t('titleBar.update.menu.title')}
           </Typography>
           <Typography variant="caption" color={theme.palette.text.secondary}>
@@ -289,7 +290,9 @@ const UpdateButton: React.FC<UpdateButtonProps> = ({
           <>
             <Divider sx={{ borderColor: alpha(theme.palette.divider, 0.1) }} />
             <Box sx={{ px: 2, py: 1, maxHeight: 120, overflow: 'auto' }}>
-              <Typography variant="caption" fontWeight={600} color={theme.palette.text.primary}>
+              <Typography variant="caption" color={theme.palette.text.primary} sx={{
+                fontWeight: 600
+              }}>
                 {t('titleBar.update.menu.releaseNotes')}
               </Typography>
               <Typography 

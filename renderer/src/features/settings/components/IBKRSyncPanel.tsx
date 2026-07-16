@@ -200,8 +200,16 @@ const IBKRSyncPanel: React.FC = () => {
       }}
     >
       {/* Header */}
-      <Stack direction="row" spacing={2} alignItems="flex-start" justifyContent="space-between">
-        <Stack direction="row" spacing={2} alignItems="flex-start">
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={{
+          alignItems: "flex-start",
+          justifyContent: "space-between"
+        }}>
+        <Stack direction="row" spacing={2} sx={{
+          alignItems: "flex-start"
+        }}>
           <Box
             sx={{
               width: 48,
@@ -217,10 +225,14 @@ const IBKRSyncPanel: React.FC = () => {
             <BrokerIcon sx={{ color: '#fff', fontSize: 24 }} />
           </Box>
           <Box>
-            <Typography variant="h6" fontWeight={600}>
+            <Typography variant="h6" sx={{
+              fontWeight: 600
+            }}>
               {t('title')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {status?.isConfigured ? t('status.configured') : t('status.notConfigured')}
             </Typography>
           </Box>
@@ -240,11 +252,15 @@ const IBKRSyncPanel: React.FC = () => {
           }}
         />
       </Stack>
-
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 3 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          mt: 2,
+          mb: 3
+        }}>
         {t('description')}
       </Typography>
-
       {/* Last Sync Info */}
       {status?.isConfigured && lastSyncLabel && (
         <Box
@@ -264,25 +280,35 @@ const IBKRSyncPanel: React.FC = () => {
             animation: `${fadeIn} 0.3s ease-out`,
           }}
         >
-          <Typography variant="body2" fontWeight={600}>
+          <Typography variant="body2" sx={{
+            fontWeight: 600
+          }}>
             {t('status.lastSync', { timeAgo: lastSyncLabel })}
           </Typography>
           {status.currentBalance !== null && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mt: 0.5
+              }}>
               {t('status.balance', { value: status.currentBalance.toLocaleString() })}
             </Typography>
           )}
           {status.accounts.length > 0 && (
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {status.accounts.map((a) => a.account_name).join(', ')}
             </Typography>
           )}
         </Box>
       )}
-
       {/* Credential Form */}
       <Box sx={{ mb: 3 }}>
-        <Typography variant="subtitle2" fontWeight={500} gutterBottom>
+        <Typography variant="subtitle2" gutterBottom sx={{
+          fontWeight: 500
+        }}>
           {status?.isConfigured ? t('form.updateCredentials') : t('form.setupCredentials')}
         </Typography>
 
@@ -295,18 +321,20 @@ const IBKRSyncPanel: React.FC = () => {
             onChange={(e) => setToken(e.target.value)}
             type={showToken ? 'text' : 'password'}
             autoComplete="off"
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    size="small"
-                    onClick={() => setShowToken(!showToken)}
-                    edge="end"
-                  >
-                    {showToken ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                  </IconButton>
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => setShowToken(!showToken)}
+                      edge="end"
+                    >
+                      {showToken ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }
             }}
           />
 
@@ -318,18 +346,20 @@ const IBKRSyncPanel: React.FC = () => {
             onChange={(e) => setQueryId(e.target.value)}
             type={showQueryId ? 'text' : 'password'}
             autoComplete="off"
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    size="small"
-                    onClick={() => setShowQueryId(!showQueryId)}
-                    edge="end"
-                  >
-                    {showQueryId ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                  </IconButton>
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => setShowQueryId(!showQueryId)}
+                      edge="end"
+                    >
+                      {showQueryId ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }
             }}
           />
 
@@ -343,7 +373,6 @@ const IBKRSyncPanel: React.FC = () => {
           </Button>
         </Stack>
       </Box>
-
       {/* Help link */}
       <Alert
         severity="info"
@@ -362,7 +391,6 @@ const IBKRSyncPanel: React.FC = () => {
           {t('help.howTo')}
         </Typography>
       </Alert>
-
       {/* Sync Button */}
       <Button
         variant="contained"

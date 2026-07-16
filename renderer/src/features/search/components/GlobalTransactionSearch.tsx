@@ -338,20 +338,6 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
       fullWidth
       aria-labelledby="global-search-title"
       aria-describedby="global-search-description"
-      PaperProps={{
-        sx: {
-          mt: 8,
-          mx: 'auto',
-          borderRadius: 3,
-          backgroundColor: alpha(theme.palette.background.paper, 0.95),
-          backdropFilter: 'blur(20px)',
-          boxShadow: `0 8px 32px ${alpha(theme.palette.common.black, 0.2)}`,
-          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-          maxHeight: '80vh',
-          overflow: 'hidden',
-        },
-        role: 'dialog',
-      }}
       slotProps={{
         backdrop: {
           sx: {
@@ -359,8 +345,22 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
             backdropFilter: 'blur(4px)',
           },
         },
-      }}
-    >
+
+        paper: {
+          sx: {
+            mt: 8,
+            mx: 'auto',
+            borderRadius: 3,
+            backgroundColor: alpha(theme.palette.background.paper, 0.95),
+            backdropFilter: 'blur(20px)',
+            boxShadow: `0 8px 32px ${alpha(theme.palette.common.black, 0.2)}`,
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            maxHeight: '80vh',
+            overflow: 'hidden',
+          },
+          role: 'dialog',
+        }
+      }}>
       <Box sx={{ p: 2, borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
         <Typography
           id="global-search-title"
@@ -385,40 +385,42 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
           variant="outlined"
           autoComplete="off"
           aria-label={t('globalSearch.placeholder', 'Search transactions...')}
-          inputProps={{
-            'aria-describedby': 'global-search-description',
-          }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                {loading ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <SearchIcon sx={{ color: theme.palette.text.secondary }} />
-                )}
-              </InputAdornment>
-            ),
-            endAdornment: (searchQuery || hasSearchCriteria) && (
-              <InputAdornment position="end">
-                <IconButton size="small" onClick={resetState}>
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ),
-            sx: {
-              borderRadius: 2,
-              backgroundColor: alpha(theme.palette.text.primary, 0.05),
-              '& fieldset': { border: 'none' },
-              '&:hover': {
-                backgroundColor: alpha(theme.palette.text.primary, 0.08),
-              },
-              '&.Mui-focused': {
-                backgroundColor: alpha(theme.palette.background.paper, 0.8),
-                boxShadow: `0 2px 8px ${alpha(theme.palette.common.black, 0.1)}`,
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  {loading ? (
+                    <CircularProgress size={20} />
+                  ) : (
+                    <SearchIcon sx={{ color: theme.palette.text.secondary }} />
+                  )}
+                </InputAdornment>
+              ),
+              endAdornment: (searchQuery || hasSearchCriteria) && (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={resetState}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+              sx: {
+                borderRadius: 2,
+                backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                '& fieldset': { border: 'none' },
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.text.primary, 0.08),
+                },
+                '&.Mui-focused': {
+                  backgroundColor: alpha(theme.palette.background.paper, 0.8),
+                  boxShadow: `0 2px 8px ${alpha(theme.palette.common.black, 0.1)}`,
+                },
               },
             },
-          }}
-        />
+
+            htmlInput: {
+              'aria-describedby': 'global-search-description',
+            }
+          }} />
 
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mt: 2 }}>
           <TextField
@@ -428,14 +430,16 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
             onKeyDown={handleKeyDown}
             label={t('globalSearch.filters.vendor', 'Vendor')}
             placeholder={t('globalSearch.filters.vendorPlaceholder', 'Filter by vendor')}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <VendorIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
             sx={{ flex: 1 }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <VendorIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }
+            }}
           />
           <TextField
             select
@@ -443,14 +447,16 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
             value={categoryFilter}
             onChange={(event) => setCategoryFilter(event.target.value)}
             label={t('globalSearch.filters.category', 'Category')}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <CategoryFilterIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
             sx={{ flex: 1 }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <CategoryFilterIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }
+            }}
           >
             <MenuItem value="">
               <em>{t('globalSearch.filters.allCategories', 'All categories')}</em>
@@ -467,14 +473,16 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
             value={tagFilter}
             onChange={(event) => setTagFilter(event.target.value)}
             label={t('globalSearch.filters.tag', 'Tag')}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <TagIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
             sx={{ flex: 1 }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <TagIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }
+            }}
           >
             <MenuItem value="">
               <em>{t('globalSearch.filters.allTags', 'All tags')}</em>
@@ -494,32 +502,36 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
             label={t('globalSearch.filters.startDate', 'From')}
             value={startDate}
             onChange={(event) => setStartDate(event.target.value)}
-            InputLabelProps={{ shrink: true }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <CalendarIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
             sx={{ flex: 1 }}
-          />
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <CalendarIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              },
+
+              inputLabel: { shrink: true }
+            }} />
           <TextField
             size="small"
             type="date"
             label={t('globalSearch.filters.endDate', 'To')}
             value={endDate}
             onChange={(event) => setEndDate(event.target.value)}
-            InputLabelProps={{ shrink: true }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <CalendarIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
             sx={{ flex: 1 }}
-          />
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <CalendarIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              },
+
+              inputLabel: { shrink: true }
+            }} />
           <Box
             sx={{
               flex: 1,
@@ -537,7 +549,6 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
           </Box>
         </Stack>
       </Box>
-
       <DialogContent sx={{ p: 0, overflow: 'auto' }}>
         {results.length > 0 ? (
           <List sx={{ py: 0 }}>
@@ -564,18 +575,24 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
                     <ListItemText
                       primary={(
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2" fontWeight={500} noWrap sx={{ flex: 1 }}>
+                          <Typography
+                            variant="body2"
+                            noWrap
+                            sx={{
+                              fontWeight: 500,
+                              flex: 1
+                            }}>
                             {transaction.name}
                           </Typography>
                           <Typography
                             variant="body2"
-                            fontWeight={600}
                             sx={{
+                              fontWeight: 600,
+
                               color: transaction.price > 0
                                 ? theme.palette.success.main
-                                : theme.palette.error.main,
-                            }}
-                          >
+                                : theme.palette.error.main
+                            }}>
                             {transaction.price > 0 ? '+' : '-'}
                             {formatPrice(transaction.price)}
                           </Typography>
@@ -583,7 +600,9 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
                       )}
                       secondary={(
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                          }}>
                             {formatDate(transaction.date)}
                           </Typography>
                           {formatCategoryLabel(transaction) && (
@@ -623,20 +642,25 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
                                 />
                               ))}
                               {transaction.tags.length > 2 && (
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                  color: "text.secondary"
+                                }}>
                                   +{transaction.tags.length - 2}
                                 </Typography>
                               )}
                             </>
                           )}
-                          <Typography variant="caption" color="text.secondary" noWrap>
+                          <Typography variant="caption" noWrap sx={{
+                            color: "text.secondary"
+                          }}>
                             {transaction.vendor}
                           </Typography>
                         </Box>
                       )}
-                      primaryTypographyProps={{ component: 'div' }}
-                      secondaryTypographyProps={{ component: 'div' }}
-                    />
+                      slotProps={{
+                        primary: { component: 'div' },
+                        secondary: { component: 'div' }
+                      }} />
                   </ListItemButton>
                 </ListItem>
                 {index < results.length - 1 && (
@@ -648,20 +672,28 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
         ) : hasSearchCriteria && !loading ? (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <TransactionIcon sx={{ fontSize: 48, color: theme.palette.text.disabled, mb: 2 }} />
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {t('globalSearch.noResults', 'No transactions found')}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('globalSearch.emptyFilters', 'Try adjusting your filters or search terms.')}
             </Typography>
           </Box>
         ) : !hasSearchCriteria ? (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <SearchIcon sx={{ fontSize: 48, color: theme.palette.text.disabled, mb: 2 }} />
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {t('globalSearch.startTyping', 'Start typing to search transactions')}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('globalSearch.filtersHint', 'You can also search by vendor, category, tag, or date range.')}
             </Typography>
           </Box>

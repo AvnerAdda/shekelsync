@@ -132,23 +132,27 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
         <Box sx={{ overflow: 'hidden', flex: 1 }}>
           <Typography
             variant="body2"
-            fontWeight={600}
             noWrap
-            sx={{ lineHeight: 1.2 }}
-          >
+            sx={{
+              fontWeight: 600,
+              lineHeight: 1.2
+            }}>
             {account.account_name}
           </Typography>
           {account.institution && (
-            <Typography variant="caption" color="text.secondary" noWrap>
+            <Typography variant="caption" noWrap sx={{
+              color: "text.secondary"
+            }}>
               {resolvePortfolioInstitutionName(account.institution, locale)}
             </Typography>
           )}
         </Box>
       </Box>
-
       {/* Value with Trend Icon */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-        <Typography variant="h6" fontWeight={700}>
+        <Typography variant="h6" sx={{
+          fontWeight: 700
+        }}>
           {maskAmounts ? '***' : formatCurrencyValue(account.current_value)}
         </Typography>
         {sparklineData.length > 1 && (
@@ -164,24 +168,21 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
           />
         )}
       </Box>
-
       {/* ROI */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Typography
           variant="caption"
-          fontWeight={600}
           sx={{
+            fontWeight: 600,
             color: isPositive ? 'success.main' : 'error.main',
             bgcolor: alpha(isPositive ? theme.palette.success.main : theme.palette.error.main, 0.1),
             px: 0.75,
             py: 0.25,
-            borderRadius: 1,
-          }}
-        >
+            borderRadius: 1
+          }}>
           {isPositive ? '+' : ''}{roi.toFixed(1)}%
         </Typography>
       </Box>
-
       {/* Period High/Low */}
       {sparklineData.length > 1 && (
         <Box
@@ -194,24 +195,45 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
           }}
         >
           <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                fontSize: '0.65rem'
+              }}>
               {t('high')}
             </Typography>
-            <Typography variant="caption" fontWeight={600} display="block" sx={{ fontSize: '0.7rem' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight: 600,
+                display: "block",
+                fontSize: '0.7rem'
+              }}>
               {maskAmounts ? '***' : `₪${(maxValue / 1000).toFixed(0)}k`}
             </Typography>
           </Box>
           <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                fontSize: '0.65rem'
+              }}>
               {t('low')}
             </Typography>
-            <Typography variant="caption" fontWeight={600} display="block" sx={{ fontSize: '0.7rem' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight: 600,
+                display: "block",
+                fontSize: '0.7rem'
+              }}>
               {maskAmounts ? '***' : `₪${(minValue / 1000).toFixed(0)}k`}
             </Typography>
           </Box>
         </Box>
       )}
-
       {/* Sparkline */}
       {sparklineData.length > 1 && (
         <Box sx={{ height: 40, mt: 1 }}>

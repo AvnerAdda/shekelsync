@@ -107,14 +107,17 @@ const HoldingsPositionsSection: React.FC<HoldingsPositionsSectionProps> = ({
   return (
     <Paper sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Box>
-        <Typography variant="subtitle1" fontWeight={600}>
+        <Typography variant="subtitle1" sx={{
+          fontWeight: 600
+        }}>
           {t('title')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           {t('subtitle')}
         </Typography>
       </Box>
-
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr 1fr 1fr' }, gap: 1.5 }}>
         <TextField
           size="small"
@@ -149,10 +152,11 @@ const HoldingsPositionsSection: React.FC<HoldingsPositionsSectionProps> = ({
           <MenuItem value="holding">{t('filters.rowTypeHoldings')}</MenuItem>
         </TextField>
       </Box>
-
       {rows.length === 0 ? (
         <Box sx={{ py: 6, textAlign: 'center' }}>
-          <Typography color="text.secondary">{t('empty')}</Typography>
+          <Typography sx={{
+            color: "text.secondary"
+          }}>{t('empty')}</Typography>
         </Box>
       ) : (
         <TableContainer sx={{ maxHeight: 420 }}>
@@ -175,7 +179,9 @@ const HoldingsPositionsSection: React.FC<HoldingsPositionsSectionProps> = ({
               {rows.map((row) => (
                 <TableRow key={row.rowId} hover>
                   <TableCell>
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography variant="body2" sx={{
+                      fontWeight: 600
+                    }}>
                       {row.name}
                     </Typography>
                   </TableCell>
@@ -207,7 +213,12 @@ const HoldingsPositionsSection: React.FC<HoldingsPositionsSectionProps> = ({
                   <TableCell>
                     <Typography variant="body2">{row.accountName}</Typography>
                     {row.institution && (
-                      <Typography variant="caption" color="text.secondary" display="block">
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: "text.secondary",
+                          display: "block"
+                        }}>
                         {resolvePortfolioInstitutionName(row.institution, locale)}
                       </Typography>
                     )}

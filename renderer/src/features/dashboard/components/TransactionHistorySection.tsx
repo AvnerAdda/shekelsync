@@ -789,21 +789,22 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           </Box>
         )}
       </Box>
-
       <Popover
         open={settingsOpen}
         anchorEl={settingsAnchorEl}
         onClose={() => setSettingsAnchorEl(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        PaperProps={{
-          sx: {
-            mt: 1,
-            px: 1.5,
-            py: 1,
-            minWidth: 260,
-            borderRadius: '12px',
-          },
+        slotProps={{
+          paper: {
+            sx: {
+              mt: 1,
+              px: 1.5,
+              py: 1,
+              minWidth: 260,
+              borderRadius: '12px',
+            },
+          }
         }}
       >
         <Typography variant="subtitle2" sx={{ px: 1, pt: 0.5, pb: 1 }}>
@@ -854,18 +855,29 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           />
         </FormGroup>
       </Popover>
-
       {/* Tab 0: Daily Income vs Expenses with Forecast */}
       {activeTab === TAB_HISTORY && (
         <>
           {aggregationPeriod === 'daily' && forecastData && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1, textAlign: 'center' }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mb: 1,
+                textAlign: 'center'
+              }}>
               {t('periodDays.showingLast', { count: periodDays, defaultValue: `Last ${periodDays} days` })} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })}
               {` — ${t('settings.forecastLines')}: ${showForecastLines ? t('settings.on', { defaultValue: 'On' }) : t('settings.off', { defaultValue: 'Off' })}`}
             </Typography>
           )}
           {aggregationPeriod !== 'daily' && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1, textAlign: 'center' }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mb: 1,
+                textAlign: 'center'
+              }}>
               Switch to Daily view to see forecast predictions
             </Typography>
           )}
@@ -926,7 +938,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
                 })}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <Typography variant="body2" fontWeight="bold">
+                    <Typography variant="body2" sx={{
+                      fontWeight: "bold"
+                    }}>
                       {format(parseLocalDate(data.date), 'MMM dd, yyyy')}
                     </Typography>
                     {isInGap && <Chip label={t('legend.noData')} size="small" color="default" />}
@@ -1085,12 +1099,28 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               }}
               title={
                 <Box sx={{ p: 2 }}>
-                  <Typography variant="caption" fontWeight={700} sx={{ mb: 1.5, display: 'block', opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 700,
+                      mb: 1.5,
+                      display: 'block',
+                      opacity: 0.6,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5
+                    }}>
                     {t('avgTooltip.heading')}
                   </Typography>
 
                   {/* Daily averages */}
-                  <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block', opacity: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 600,
+                      mb: 0.5,
+                      display: 'block',
+                      opacity: 0.5
+                    }}>
                     {t('avgTooltip.daily')}
                   </Typography>
                   {[
@@ -1099,8 +1129,15 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     { label: t('avgTooltip.last90'), data: avgDailyMetrics.daily.last90 },
                   ].map(({ label, data: d }) => (
                     <Box key={label} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.3 }}>
-                      <Typography variant="caption" color="text.secondary">{label}</Typography>
-                      <Typography variant="caption" fontWeight={500} sx={{ ml: 2 }}>
+                      <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                      }}>{label}</Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontWeight: 500,
+                          ml: 2
+                        }}>
                         <Box component="span" sx={{ color: 'error.main' }}>↓ {formatCurrencyValue(d.expenses)}</Box>
                         {' / '}
                         <Box component="span" sx={{ color: 'success.main' }}>↑ {formatCurrencyValue(d.income)}</Box>
@@ -1111,7 +1148,14 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   <Divider sx={{ my: 1, opacity: 0.3 }} />
 
                   {/* Weekly averages */}
-                  <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block', opacity: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 600,
+                      mb: 0.5,
+                      display: 'block',
+                      opacity: 0.5
+                    }}>
                     {t('avgTooltip.weekly')}
                   </Typography>
                   {[
@@ -1120,8 +1164,15 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     { label: t('avgTooltip.last90'), data: avgDailyMetrics.weekly.last90 },
                   ].map(({ label, data: d }) => (
                     <Box key={label} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.3 }}>
-                      <Typography variant="caption" color="text.secondary">{label}</Typography>
-                      <Typography variant="caption" fontWeight={500} sx={{ ml: 2 }}>
+                      <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                      }}>{label}</Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontWeight: 500,
+                          ml: 2
+                        }}>
                         <Box component="span" sx={{ color: 'error.main' }}>↓ {formatCurrencyValue(d.expenses)}</Box>
                         {' / '}
                         <Box component="span" sx={{ color: 'success.main' }}>↑ {formatCurrencyValue(d.income)}</Box>
@@ -1132,20 +1183,41 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   <Divider sx={{ my: 1, opacity: 0.3 }} />
 
                   {/* Median & peaks */}
-                  <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block', opacity: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 600,
+                      mb: 0.5,
+                      display: 'block',
+                      opacity: 0.5
+                    }}>
                     {t('avgTooltip.insights')}
                   </Typography>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
-                    <Typography variant="caption" color="text.secondary">{t('avgTooltip.median30')}</Typography>
-                    <Typography variant="caption" fontWeight={500} sx={{ ml: 2 }}>
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>{t('avgTooltip.median30')}</Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: 500,
+                        ml: 2
+                      }}>
                       <Box component="span" sx={{ color: 'error.main' }}>↓ {formatCurrencyValue(avgDailyMetrics.median30.expenses)}</Box>
                       {' / '}
                       <Box component="span" sx={{ color: 'success.main' }}>↑ {formatCurrencyValue(avgDailyMetrics.median30.income)}</Box>
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
-                    <Typography variant="caption" color="text.secondary">{t('avgTooltip.allTimeAvg')}</Typography>
-                    <Typography variant="caption" fontWeight={500} sx={{ ml: 2 }}>
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>{t('avgTooltip.allTimeAvg')}</Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: 500,
+                        ml: 2
+                      }}>
                       <Box component="span" sx={{ color: 'error.main' }}>↓ {formatCurrencyValue(avgDailyMetrics.allTime.expenses)}</Box>
                       {' / '}
                       <Box component="span" sx={{ color: 'success.main' }}>↑ {formatCurrencyValue(avgDailyMetrics.allTime.income)}</Box>
@@ -1153,16 +1225,32 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   </Box>
                   {avgDailyMetrics.peakExpenseDay && (
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
-                      <Typography variant="caption" color="text.secondary">{t('avgTooltip.peakExpense')}</Typography>
-                      <Typography variant="caption" fontWeight={500} color="error.main" sx={{ ml: 2 }}>
+                      <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                      }}>{t('avgTooltip.peakExpense')}</Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontWeight: 500,
+                          color: "error.main",
+                          ml: 2
+                        }}>
                         {formatCurrencyValue(avgDailyMetrics.peakExpenseDay.expenses)} ({format(parseLocalDate(avgDailyMetrics.peakExpenseDay.date), 'MMM dd')})
                       </Typography>
                     </Box>
                   )}
                   {avgDailyMetrics.peakIncomeDay && avgDailyMetrics.peakIncomeDay.income > 0 && (
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
-                      <Typography variant="caption" color="text.secondary">{t('avgTooltip.peakIncome')}</Typography>
-                      <Typography variant="caption" fontWeight={500} color="success.main" sx={{ ml: 2 }}>
+                      <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                      }}>{t('avgTooltip.peakIncome')}</Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontWeight: 500,
+                          color: "success.main",
+                          ml: 2
+                        }}>
                         {formatCurrencyValue(avgDailyMetrics.peakIncomeDay.income)} ({format(parseLocalDate(avgDailyMetrics.peakIncomeDay.date), 'MMM dd')})
                       </Typography>
                     </Box>
@@ -1171,7 +1259,12 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               }
             >
               <Box sx={{ cursor: 'default' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: 'block'
+                  }}>
                   {t('patterns.avgByPeriod', {
                     period:
                       aggregationPeriod === 'daily'
@@ -1181,11 +1274,14 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                           : t('periods.monthly'),
                   })}
                 </Typography>
-                <Typography variant="body2" fontWeight="medium" sx={{
-                  borderBottom: (tt) => `1px dashed ${alpha(tt.palette.text.secondary, 0.3)}`,
-                  display: 'inline-block',
-                  pb: 0.25,
-                }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: "medium",
+                    borderBottom: (tt) => `1px dashed ${alpha(tt.palette.text.secondary, 0.3)}`,
+                    display: 'inline-block',
+                    pb: 0.25
+                  }}>
                   <Box component="span" sx={{ color: 'error.main' }}>
                     ↓ {formatCurrencyValue(avgDailyMetrics.periodAvgExpenses)}
                   </Box>
@@ -1199,38 +1295,62 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
             {chartTotalIncome > 0 && (
               <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: 'block'
+                  }}>
                   {t('patterns.savingsRate')}
                 </Typography>
-                <Typography variant="body2" fontWeight="medium" color={
+                <Typography variant="body2" color={
                   ((chartTotalIncome - chartTotalExpenses) / chartTotalIncome) > 0.2
                     ? 'success.main'
                     : 'error.main'
-                }>
+                } sx={{
+                  fontWeight: "medium"
+                }}>
                   {(((chartTotalIncome - chartTotalExpenses) / chartTotalIncome) * 100).toFixed(1)}%
                 </Typography>
               </Box>
             )}
             {chartTotalSalaryIncome > 0 && (
               <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: 'block'
+                  }}>
                   {t('patterns.savingsRateSalary')}
                 </Typography>
-                <Typography variant="body2" fontWeight="medium" color={
+                <Typography variant="body2" color={
                   ((chartTotalSalaryIncome - chartTotalExpenses) / chartTotalSalaryIncome) > 0.2
                     ? 'success.main'
                     : 'error.main'
-                }>
+                } sx={{
+                  fontWeight: "medium"
+                }}>
                   {(((chartTotalSalaryIncome - chartTotalExpenses) / chartTotalSalaryIncome) * 100).toFixed(1)}%
                 </Typography>
               </Box>
             )}
             {anomalies.length > 0 && (
               <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: 'block'
+                  }}>
                   {t('patterns.anomalies')}
                 </Typography>
-                <Typography variant="body2" fontWeight="medium" color="warning.main">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: "medium",
+                    color: "warning.main"
+                  }}>
                   ⚠ {t('patterns.spikes', { count: anomalies.length })}
                 </Typography>
               </Box>
@@ -1255,7 +1375,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       )}
         </>
       )}
-
       {/* Tab 1: Income and expense calendar */}
       {activeTab === TAB_CALENDAR && (
         <IncomeExpenseCalendar
@@ -1269,7 +1388,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           }}
         />
       )}
-
       {/* Tab 2: Net Position (Cumulative Cash Flow with Forecast) */}
       {activeTab === TAB_NET_POSITION && (
         <Box>
@@ -1294,12 +1412,24 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           {!forecastLoading && !forecastError && (
             <>
               {aggregationPeriod === 'daily' && forecastData && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2,
+                    textAlign: 'center'
+                  }}>
                   {t('periodDays.showingLast', { count: periodDays, defaultValue: `Last ${periodDays} days` })} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })} • {t('forecast.forecastData')} shown in orange
                 </Typography>
               )}
               {aggregationPeriod !== 'daily' && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2,
+                    textAlign: 'center'
+                  }}>
                   Switch to Daily view to see forecast predictions
                 </Typography>
               )}
@@ -1430,7 +1560,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           )}
         </Box>
       )}
-
       {hoveredDate && (() => {
         // Check if this is a forecast date
         const today = new Date();
@@ -1479,66 +1608,80 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 ✕
               </Button>
             </Box>
-
             {showingForecast ? (
               // Show forecast predictions
-              predictions.length > 0 ? (
-                <Box sx={{ maxHeight: 400, overflowY: 'auto' }}>
-                  {predictions.map((prediction: any, idx: number) => (
-                    <Box
-                      key={`${prediction.category}-${idx}`}
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        py: 1.5,
-                        px: 1,
-                        borderBottom: idx < predictions.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
-                        bgcolor: 'action.hover',
-                        borderRadius: 1,
-                        mb: 0.5,
-                        opacity: 0.9,
-                      }}
-                    >
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2" fontWeight="medium" sx={{ mb: 0.5 }}>
-                          {prediction.category}
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                          <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 500 }}>
-                            {(prediction.probability * 100).toFixed(0)}% probability
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Typography variant="body2" fontWeight="bold" color="text.secondary" sx={{ ml: 2 }}>
-                        ~{formatCurrency(Math.abs(prediction.amount), { maximumFractionDigits: 0 })}
+              (predictions.length > 0 ? (<Box sx={{ maxHeight: 400, overflowY: 'auto' }}>
+                {predictions.map((prediction: any, idx: number) => (
+                  <Box
+                    key={`${prediction.category}-${idx}`}
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      py: 1.5,
+                      px: 1,
+                      borderBottom: idx < predictions.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
+                      bgcolor: 'action.hover',
+                      borderRadius: 1,
+                      mb: 0.5,
+                      opacity: 0.9,
+                    }}
+                  >
+                    <Box sx={{ flex: 1 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: "medium",
+                          mb: 0.5
+                        }}>
+                        {prediction.category}
                       </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 500 }}>
+                          {(prediction.probability * 100).toFixed(0)}% probability
+                        </Typography>
+                      </Box>
                     </Box>
-                  ))}
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, textAlign: 'center', fontStyle: 'italic' }}>
-                    {t('forecast.basedOnPatterns') || 'Based on historical spending patterns'}
-                  </Typography>
-                </Box>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  {t('forecast.noPredictions') || 'No predictions for this date'}
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: "bold",
+                        color: "text.secondary",
+                        ml: 2
+                      }}>
+                      ~{formatCurrency(Math.abs(prediction.amount), { maximumFractionDigits: 0 })}
+                    </Typography>
+                  </Box>
+                ))}
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: 'block',
+                    mt: 2,
+                    textAlign: 'center',
+                    fontStyle: 'italic'
+                  }}>
+                  {t('forecast.basedOnPatterns') || 'Based on historical spending patterns'}
                 </Typography>
-              )
+              </Box>) : (<Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
+                {t('forecast.noPredictions') || 'No predictions for this date'}
+              </Typography>))
             ) : (
               // Show actual transactions (existing logic)
-              loadingTransactions ? (
-                <Box sx={{ width: '100%', px: 2 }}>
-                  {[...Array(5)].map((_, i) => (
-                    <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1.5 }}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1 }}>
-                        <Skeleton variant="text" width="60%" height={24} />
-                        <Skeleton variant="text" width="40%" height={16} />
-                      </Box>
-                      <Skeleton variant="text" width="80px" height={24} />
+              (loadingTransactions ? (<Box sx={{ width: '100%', px: 2 }}>
+                {[...Array(5)].map((_, i) => (
+                  <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1.5 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1 }}>
+                      <Skeleton variant="text" width="60%" height={24} />
+                      <Skeleton variant="text" width="40%" height={16} />
                     </Box>
-                  ))}
-                </Box>
-              ) : dateTransactions.length > 0 ? (
+                    <Skeleton variant="text" width="80px" height={24} />
+                  </Box>
+                ))}
+              </Box>) : dateTransactions.length > 0 ? (
                 <Box sx={{ maxHeight: 400, overflowY: 'auto' }}>
                   {dateTransactions.map((txn, idx) => (
                     <Box
@@ -1562,7 +1705,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     >
                       <Box sx={{ flex: 1 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                          <Typography variant="body2" fontWeight="medium">
+                          <Typography variant="body2" sx={{
+                            fontWeight: "medium"
+                          }}>
                             {txn.description || txn.vendor}
                           </Typography>
                           {txn.memo && (
@@ -1572,12 +1717,16 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                           )}
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                          }}>
                             {format(new Date(txn.date), 'HH:mm')}
                           </Typography>
                           {(txn.parent_name || txn.category_name) && (
                             <>
-                              <Typography variant="caption" color="text.secondary">
+                              <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                              }}>
                                 •
                               </Typography>
                               <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
@@ -1610,7 +1759,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                                 />
                               ))}
                               {txn.tags.length > 2 && (
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                  color: "text.secondary"
+                                }}>
                                   +{txn.tags.length - 2}
                                 </Typography>
                               )}
@@ -1618,7 +1769,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                           )}
                           {(txn.institution?.display_name_he || txn.vendor) && (
                             <>
-                              <Typography variant="caption" color="text.secondary">
+                              <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                              }}>
                                 •
                               </Typography>
                               <InstitutionBadge institution={txn.institution} fallback={txn.vendor} />
@@ -1626,7 +1779,13 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                           )}
                         </Box>
                       </Box>
-                      <Typography variant="body2" fontWeight="bold" color={txn.price > 0 ? 'success.main' : 'error.main'} sx={{ ml: 2 }}>
+                      <Typography
+                        variant="body2"
+                        color={txn.price > 0 ? 'success.main' : 'error.main'}
+                        sx={{
+                          fontWeight: "bold",
+                          ml: 2
+                        }}>
                         {txn.price > 0 ? '+' : ''}
                         {formatCurrency(Math.abs(txn.price), { maximumFractionDigits: 0 })}
                       </Typography>
@@ -1634,15 +1793,16 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   ))}
                 </Box>
               ) : (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('noTransactionsForDate')}
                 </Typography>
-              )
+              ))
             )}
           </Box>
         );
       })()}
-
       <TransactionDetailModal
         open={detailModalOpen}
         onClose={() => setDetailModalOpen(false)}

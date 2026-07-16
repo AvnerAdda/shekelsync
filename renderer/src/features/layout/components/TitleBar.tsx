@@ -644,7 +644,6 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
           ShekelSync
         </Typography>
       </Box>
-
       {/* Center section: Search Bar */}
       <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', maxWidth: 480, mx: 4, WebkitAppRegion: 'no-drag' }}>
         <Box sx={{ width: '100%', position: 'relative' }}>
@@ -682,51 +681,63 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
                   <Box sx={{ color: theme.palette.primary.main, display: 'flex', alignItems: 'center', p: 0.5, borderRadius: 1, backgroundColor: alpha(theme.palette.primary.main, 0.1) }}>
                     {option.icon}
                   </Box>
-                  <Typography variant="body2" fontWeight={500} sx={{ flexGrow: 1 }}>{option.label}</Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 500,
+                      flexGrow: 1
+                    }}>{option.label}</Typography>
                   {option.shortcut && (
-                    <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ letterSpacing: '0.04em' }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        fontWeight: 700,
+                        letterSpacing: '0.04em'
+                      }}>
                       {option.shortcut}
                     </Typography>
                   )}
                 </Box>
               );
             }}
-            PaperComponent={(props) => (
-              <Paper {...props} sx={{ mt: 1, borderRadius: 3, boxShadow: theme.shadows[10], border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, backdropFilter: 'blur(12px)', backgroundColor: alpha(theme.palette.background.paper, 0.9) }} />
-            )}
             sx={{ width: '100%' }}
             renderInput={(params) => (
               <TextField
                 {...params}
                 placeholder={t('titleBar.search.placeholder')}
                 variant="outlined"
-                InputProps={{
-                  ...params.InputProps,
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ fontSize: 20, color: theme.palette.text.secondary }} />
-                    </InputAdornment>
-                  ),
-                  sx: {
-                    height: 40,
-                    pr: 8,
-                    fontSize: '0.9rem',
-                    borderRadius: 3,
-                    backgroundColor: alpha(theme.palette.text.primary, 0.05),
-                    transition: 'all 0.2s ease-in-out',
-                    '& fieldset': { border: 'none' },
-                    '&:hover': {
-                      backgroundColor: alpha(theme.palette.text.primary, 0.08),
-                      transform: 'translateY(-1px)',
+                slotProps={{
+                  ...params.slotProps,
+
+                  input: {
+                    ...params.slotProps.input,
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ fontSize: 20, color: theme.palette.text.secondary }} />
+                      </InputAdornment>
+                    ),
+                    sx: {
+                      height: 40,
+                      pr: 8,
+                      fontSize: '0.9rem',
+                      borderRadius: 3,
+                      backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                      transition: 'all 0.2s ease-in-out',
+                      '& fieldset': { border: 'none' },
+                      '&:hover': {
+                        backgroundColor: alpha(theme.palette.text.primary, 0.08),
+                        transform: 'translateY(-1px)',
+                      },
+                      '&.Mui-focused': {
+                        backgroundColor: alpha(theme.palette.background.paper, 0.8),
+                        boxShadow: `0 4px 12px ${alpha(theme.palette.common.black, 0.1)}`,
+                        '& .MuiInputAdornment-root': {
+                          color: theme.palette.primary.main,
+                        }
+                      },
                     },
-                    '&.Mui-focused': {
-                      backgroundColor: alpha(theme.palette.background.paper, 0.8),
-                      boxShadow: `0 4px 12px ${alpha(theme.palette.common.black, 0.1)}`,
-                      '& .MuiInputAdornment-root': {
-                        color: theme.palette.primary.main,
-                      }
-                    },
-                  },
+                  }
                 }}
               />
             )}
@@ -734,6 +745,11 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
             clearOnBlur
             selectOnFocus
             handleHomeEndKeys
+            slots={{
+              paper: (props) => (
+                <Paper {...props} sx={{ mt: 1, borderRadius: 3, boxShadow: theme.shadows[10], border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, backdropFilter: 'blur(12px)', backgroundColor: alpha(theme.palette.background.paper, 0.9) }} />
+              )
+            }}
           />
 
           <Box
@@ -761,7 +777,6 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
           </Box>
         </Box>
       </Box>
-
       {/* Right section: Status + Notifications + Window Controls */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, WebkitAppRegion: 'no-drag' }}>
         {sessionDisplayName && (
@@ -976,12 +991,10 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
           </Box>
         )}
       </Box>
-
       <SecurityDetailsModal
         open={securityDetailsOpen}
         onClose={() => setSecurityDetailsOpen(false)}
       />
-
       <DonationModal
         open={donationModalOpen}
         onClose={() => setDonationModalOpen(false)}

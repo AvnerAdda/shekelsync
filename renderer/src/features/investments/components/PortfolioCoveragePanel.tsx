@@ -55,10 +55,14 @@ const PortfolioCoveragePanel: React.FC<PortfolioCoveragePanelProps> = ({
   if (!portfolioData || !balanceSheet) {
     return (
       <Paper sx={{ p: 2.5, height: '100%' }}>
-        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+        <Typography variant="subtitle1" gutterBottom sx={{
+          fontWeight: 600
+        }}>
           {t('title')}
         </Typography>
-        <Typography color="text.secondary">
+        <Typography sx={{
+          color: "text.secondary"
+        }}>
           {t('empty')}
         </Typography>
       </Paper>
@@ -123,10 +127,14 @@ const PortfolioCoveragePanel: React.FC<PortfolioCoveragePanelProps> = ({
     <Paper sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'flex-start' }}>
         <Box>
-          <Typography variant="subtitle1" fontWeight={600}>
+          <Typography variant="subtitle1" sx={{
+            fontWeight: 600
+          }}>
             {t('title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('subtitle')}
           </Typography>
         </Box>
@@ -141,7 +149,6 @@ const PortfolioCoveragePanel: React.FC<PortfolioCoveragePanelProps> = ({
           variant="outlined"
         />
       </Box>
-
       <Box>
         <LinearProgress
           variant="determinate"
@@ -157,7 +164,6 @@ const PortfolioCoveragePanel: React.FC<PortfolioCoveragePanelProps> = ({
           }}
         />
       </Box>
-
       <Box sx={{ display: 'grid', gap: 1.25 }}>
         {items.map((item) => (
           <Box
@@ -170,14 +176,20 @@ const PortfolioCoveragePanel: React.FC<PortfolioCoveragePanelProps> = ({
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center' }}>
-              <Typography variant="body2" fontWeight={600}>
+              <Typography variant="body2" sx={{
+                fontWeight: 600
+              }}>
                 {item.label}
               </Typography>
-              <Typography variant="body2" fontWeight={700}>
+              <Typography variant="body2" sx={{
+                fontWeight: 700
+              }}>
                 {item.value}
               </Typography>
             </Box>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {item.hint}
             </Typography>
           </Box>

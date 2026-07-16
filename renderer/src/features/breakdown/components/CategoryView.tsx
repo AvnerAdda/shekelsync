@@ -142,7 +142,6 @@ const CategoryView: React.FC<CategoryViewProps> = ({ data, categoryType, formatC
           </ToggleButton>
         </ToggleButtonGroup>
       </Box>
-
       <Box sx={{ height: 400, width: '100%', position: 'relative' }}>
         {chartType === 'pie' ? (
           <>
@@ -166,7 +165,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ data, categoryType, formatC
                   ))}
                 </Pie>
                 <RechartsTooltip
-                  formatter={(value: number | undefined) => value != null ? formatCurrencyValue(value) : ''}
+                  formatter={(value) => value != null ? formatCurrencyValue(Number(value)) : ''}
                   contentStyle={{
                     backgroundColor: alpha(theme.palette.background.paper, 0.8),
                     backdropFilter: 'blur(10px)',
@@ -193,10 +192,22 @@ const CategoryView: React.FC<CategoryViewProps> = ({ data, categoryType, formatC
                 pointerEvents: 'none',
               }}
             >
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1, mb: 0.5 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  display: 'block',
+                  lineHeight: 1,
+                  mb: 0.5
+                }}>
                 {valueLabel}
               </Typography>
-              <Typography variant="h5" fontWeight={700} sx={{ color: theme.palette.text.primary }}>
+              <Typography
+                variant="h5"
+                sx={{
+                  fontWeight: 700,
+                  color: theme.palette.text.primary
+                }}>
                 {formatCurrencyValue(totalValue)}
               </Typography>
             </Box>
@@ -213,7 +224,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ data, categoryType, formatC
                 textOptions={{ fill: 'transparent' }}
               >
                 <RechartsTooltip
-                  formatter={(value: number | undefined) => value != null ? formatCurrencyValue(value) : ''}
+                  formatter={(value) => value != null ? formatCurrencyValue(Number(value)) : ''}
                   contentStyle={{
                     backgroundColor: alpha(theme.palette.background.paper, 0.9),
                     backdropFilter: 'blur(10px)',

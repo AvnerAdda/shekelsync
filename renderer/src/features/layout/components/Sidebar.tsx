@@ -666,9 +666,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                       <>
                         <ListItemText 
                           primary={item.label} 
-                          primaryTypographyProps={{
-                            fontWeight: isActive ? 600 : 500,
-                            fontSize: '0.95rem',
+                          slotProps={{
+                            primary: {
+                              sx: {
+                                fontWeight: isActive ? 600 : 500,
+                                fontSize: '0.95rem',
+                              },
+                            }
                           }}
                         />
                         <Typography
@@ -785,10 +789,18 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     <AccountIcon fontSize="small" color="action" />
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        display: "block",
+                        lineHeight: 1
+                      }}>
                       {t('stats.accounts', 'Accounts')}
                     </Typography>
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography variant="body2" sx={{
+                      fontWeight: 600
+                    }}>
                       {stats.totalAccounts} {t('stats.connected', 'Connected')}
                     </Typography>
                   </Box>
@@ -850,17 +862,25 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     )}
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        display: "block",
+                        lineHeight: 1
+                      }}>
                       {t('stats.lastSync', 'Last Sync')}
                     </Typography>
                     <Typography
                       variant="body2"
-                      fontWeight={600}
                       color={
                         stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS
                           ? 'warning.main'
                           : 'text.primary'
                       }
+                      sx={{
+                        fontWeight: 600
+                      }}
                     >
                       {formatLastSync()}
                     </Typography>
@@ -902,7 +922,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                   </Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
                     {accountSyncStatuses.length === 0 ? (
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                      }}>
                         {t('popover.noAccounts')}
                       </Typography>
                     ) : (
@@ -941,9 +963,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                           </Box>
                           <Typography
                             variant="caption"
-                            color="text.secondary"
-                            sx={{ flexShrink: 0, fontSize: '0.7rem' }}
-                          >
+                            sx={{
+                              color: "text.secondary",
+                              flexShrink: 0,
+                              fontSize: '0.7rem'
+                            }}>
                             {formatAccountLastSync(account.lastSync)}
                           </Typography>
                         </Box>
@@ -984,13 +1008,21 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     )}
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        display: "block",
+                        lineHeight: 1
+                      }}>
                       {t('stats.database', 'Database')}
                     </Typography>
-                    <Typography variant="body2" fontWeight={600} color={
+                    <Typography variant="body2" color={
                       stats.dbStatus === 'connected' ? 'success.main' : 
                       stats.dbStatus === 'disconnected' ? 'error.main' : 'text.secondary'
-                    }>
+                    } sx={{
+                      fontWeight: 600
+                    }}>
                       {stats.dbStatus === 'connected' ? t('dbStatus.connected') : 
                        stats.dbStatus === 'disconnected' ? t('dbStatus.disconnected') : t('dbStatus.checking')}
                     </Typography>
@@ -1017,7 +1049,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                 borderRadius: '50%',
                 backgroundColor: alpha(theme.palette.text.primary, 0.05),
               }}>
-                <Typography variant="caption" fontWeight={600} color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 600,
+                    color: "text.secondary"
+                  }}>
                   {stats.totalAccounts}
                 </Typography>
               </Box>
@@ -1097,7 +1134,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
           </Box>
         )}
       </Drawer>
-
       {/* Mobile menu button */}
       {isMobile && !open && (
         <IconButton
@@ -1112,7 +1148,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
           <MenuIcon />
         </IconButton>
       )}
-
       {/* Closed modals stay out of the startup dependency graph. */}
       {accountsModalOpen && (
         <React.Suspense fallback={null}>
@@ -1128,7 +1163,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
           />
         </React.Suspense>
       )}
-
       {scrapeModalOpen && (
         <React.Suspense fallback={null}>
           <ScrapeModal
@@ -1138,7 +1172,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
           />
         </React.Suspense>
       )}
-
       {categoryModalOpen && (
         <React.Suspense fallback={null}>
           <CategoryHierarchyModal
@@ -1156,7 +1189,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
           />
         </React.Suspense>
       )}
-
       <LicenseReadOnlyAlert
         open={licenseAlertOpen}
         onClose={() => setLicenseAlertOpen(false)}

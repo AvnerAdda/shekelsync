@@ -477,15 +477,18 @@ const InvestmentsPageContent: React.FC = () => {
         }}
       >
         <Box>
-          <Typography variant="h5" fontWeight={700}>
+          <Typography variant="h5" sx={{
+            fontWeight: 700
+          }}>
             {t('header.title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('header.subtitle')}
           </Typography>
         </Box>
       </Box>
-
       {portfolioLoading && !hasPortfolio ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, p: 2 }}>
           <Grid container spacing={3}>
@@ -571,13 +574,12 @@ const InvestmentsPageContent: React.FC = () => {
                       <Typography
                         component="span"
                         variant="body2"
-                        fontWeight={isSelected ? 600 : 500}
                         sx={{
+                          fontWeight: isSelected ? 600 : 500,
                           display: { xs: 'none', md: 'block' },
                           whiteSpace: 'nowrap',
-                          fontSize: '0.8125rem',
-                        }}
-                      >
+                          fontSize: '0.8125rem'
+                        }}>
                         {tab.label}
                       </Typography>
                     )}
@@ -886,14 +888,19 @@ const InvestmentsPageContent: React.FC = () => {
           }}
         >
           <AccountIcon sx={{ fontSize: 72, color: 'text.secondary', mb: 3 }} />
-          <Typography variant="h5" gutterBottom fontWeight={600}>
+          <Typography variant="h5" gutterBottom sx={{
+            fontWeight: 600
+          }}>
             {t('empty.title')}
           </Typography>
           <Typography
             variant="body1"
-            color="text.secondary"
-            sx={{ mb: 4, maxWidth: 560, mx: 'auto' }}
-          >
+            sx={{
+              color: "text.secondary",
+              mb: 4,
+              maxWidth: 560,
+              mx: 'auto'
+            }}>
             {t('empty.description')}
           </Typography>
           <Box sx={{ display: 'flex', justifyContent: 'center' }}>

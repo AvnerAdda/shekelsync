@@ -167,7 +167,9 @@ const CreditCardSuggestionsCard: React.FC = () => {
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1.5 }}>
         <InfoOutlinedIcon sx={{ fontSize: 16, color: 'info.main' }} />
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: "text.secondary"
+        }}>
           Add these accounts manually in the form above to track credit card expenses
         </Typography>
       </Box>

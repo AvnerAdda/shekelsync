@@ -89,7 +89,7 @@ import VolunteerActivism from '@mui/icons-material/VolunteerActivism';
 import Water from '@mui/icons-material/Water';
 import Wifi from '@mui/icons-material/Wifi';
 import Work from '@mui/icons-material/Work';
-import WorkOutline from '@mui/icons-material/WorkOutline';
+import WorkOutline from '@mui/icons-material/WorkOutlined';
 
 export const CATEGORY_ICON_FALLBACK = Category;
 

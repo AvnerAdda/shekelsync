@@ -108,10 +108,14 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
         }}
       >
         <Box>
-          <Typography variant="subtitle1" fontWeight={600}>
+          <Typography variant="subtitle1" sx={{
+            fontWeight: 600
+          }}>
             {t('investmentsPage.performance.overviewTitle')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('investmentsPage.performance.overviewSubtitle')}
           </Typography>
         </Box>
@@ -168,7 +172,6 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
           </Box>
         </Box>
       </Box>
-
       {/* Scrollable Cards Container */}
       <Box
         ref={scrollContainerRef}
@@ -212,7 +215,9 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
               textAlign: 'center',
             }}
           >
-            <Typography color="text.secondary">
+            <Typography sx={{
+              color: "text.secondary"
+            }}>
               {t('investmentsPage.performance.noAccounts')}
             </Typography>
           </Box>

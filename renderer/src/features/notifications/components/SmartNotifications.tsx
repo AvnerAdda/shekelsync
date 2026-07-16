@@ -556,7 +556,6 @@ const SmartNotifications: React.FC = () => {
           </Badge>
         </IconButton>
       </Tooltip>
-
       <Popover
         open={open}
         anchorEl={anchorEl}
@@ -569,8 +568,10 @@ const SmartNotifications: React.FC = () => {
           vertical: 'top',
           horizontal: 'right',
         }}
-        PaperProps={{
-          sx: { width: 400, maxHeight: 600 }
+        slotProps={{
+          paper: {
+            sx: { width: 400, maxHeight: 600 }
+          }
         }}
       >
         <Box sx={{ p: 2 }}>
@@ -698,10 +699,17 @@ const SmartNotifications: React.FC = () => {
                         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
                           {notification.title}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: "text.secondary",
+                            mb: 1
+                          }}>
                           {notification.message}
                         </Typography>
-                        <Typography variant="caption" color="text.disabled">
+                        <Typography variant="caption" sx={{
+                          color: "text.disabled"
+                        }}>
                           {formatTimestamp(notification.timestamp)}
                         </Typography>
                       </Box>
@@ -742,7 +750,14 @@ const SmartNotifications: React.FC = () => {
               )}
 
               {lastFetch && (
-                <Typography variant="caption" color="text.disabled" sx={{ display: 'block', textAlign: 'center', mt: 2 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.disabled",
+                    display: 'block',
+                    textAlign: 'center',
+                    mt: 2
+                  }}>
                   Last updated: {formatDistanceToNow(lastFetch, { addSuffix: true })}
                 </Typography>
               )}
@@ -768,7 +783,6 @@ const SmartNotifications: React.FC = () => {
           )}
         </Box>
       </Popover>
-
       <SnapshotProgressModal
         open={snapshotModalOpen}
         onClose={() => setSnapshotModalOpen(false)}
@@ -776,7 +790,6 @@ const SmartNotifications: React.FC = () => {
         loading={snapshotLoading}
         error={snapshotError}
       />
-
       <LicenseReadOnlyAlert
         open={licenseAlertOpen}
         onClose={() => setLicenseAlertOpen(false)}

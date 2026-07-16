@@ -84,7 +84,12 @@ const SubscriptionSummaryCards: React.FC<SubscriptionSummaryCardsProps> = ({
               },
             }}
           >
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+            <Stack
+              direction="row"
+              sx={{
+                justifyContent: "space-between",
+                alignItems: "flex-start"
+              }}>
               <Box
                 sx={{
                   width: 48,
@@ -115,21 +120,40 @@ const SubscriptionSummaryCards: React.FC<SubscriptionSummaryCardsProps> = ({
             </Stack>
 
             <Box sx={{ mt: 2.5 }}>
-              <Typography variant="body2" color="text.secondary" fontWeight={500}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary",
+                  fontWeight: 500
+                }}>
                 {t('summary.totalSubscriptions')}
               </Typography>
-              <Typography variant="h3" fontWeight={700} sx={{ mt: 0.5 }}>
+              <Typography
+                variant="h3"
+                sx={{
+                  fontWeight: 700,
+                  mt: 0.5
+                }}>
                 {totalCount}
               </Typography>
             </Box>
 
             {/* Active ratio progress bar */}
             <Box sx={{ mt: 2 }}>
-              <Stack direction="row" justifyContent="space-between" mb={0.5}>
-                <Typography variant="caption" color="text.secondary">
+              <Stack
+                direction="row"
+                sx={{
+                  justifyContent: "space-between",
+                  mb: 0.5
+                }}>
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('summary.activeRatio')}
                 </Typography>
-                <Typography variant="caption" fontWeight={600}>
+                <Typography variant="caption" sx={{
+                  fontWeight: 600
+                }}>
                   {activeRatio.toFixed(0)}%
                 </Typography>
               </Stack>
@@ -167,7 +191,12 @@ const SubscriptionSummaryCards: React.FC<SubscriptionSummaryCardsProps> = ({
               },
             }}
           >
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+            <Stack
+              direction="row"
+              sx={{
+                justifyContent: "space-between",
+                alignItems: "flex-start"
+              }}>
               <Box
                 sx={{
                   width: 48,
@@ -183,7 +212,9 @@ const SubscriptionSummaryCards: React.FC<SubscriptionSummaryCardsProps> = ({
                 <MonthlyIcon sx={{ color: '#fff', fontSize: 24 }} />
               </Box>
               {monthlyTrend !== 0 && (
-                <Stack direction="row" spacing={0.5} alignItems="center">
+                <Stack direction="row" spacing={0.5} sx={{
+                  alignItems: "center"
+                }}>
                   {monthlyTrend > 0 ? (
                     <TrendUpIcon sx={{ fontSize: 16, color: theme.palette.error.main }} />
                   ) : (
@@ -203,16 +234,32 @@ const SubscriptionSummaryCards: React.FC<SubscriptionSummaryCardsProps> = ({
             </Stack>
 
             <Box sx={{ mt: 2.5 }}>
-              <Typography variant="body2" color="text.secondary" fontWeight={500}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary",
+                  fontWeight: 500
+                }}>
                 {t('summary.monthlyTotal')}
               </Typography>
-              <Typography variant="h3" fontWeight={700} sx={{ mt: 0.5 }}>
+              <Typography
+                variant="h3"
+                sx={{
+                  fontWeight: 700,
+                  mt: 0.5
+                }}>
                 {formatCurrency(summary?.monthly_total ?? 0, { maximumFractionDigits: 0 })}
               </Typography>
             </Box>
 
             {/* Category breakdown mini indicator */}
-            <Stack direction="row" spacing={1} mt={2} flexWrap="wrap">
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                mt: 2,
+                flexWrap: "wrap"
+              }}>
               {summary?.category_breakdown?.slice(0, 3).map((cat, idx) => (
                 <Typography
                   key={idx}
@@ -263,7 +310,12 @@ const SubscriptionSummaryCards: React.FC<SubscriptionSummaryCardsProps> = ({
               },
             }}
           >
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+            <Stack
+              direction="row"
+              sx={{
+                justifyContent: "space-between",
+                alignItems: "flex-start"
+              }}>
               <Box
                 sx={{
                   width: 48,
@@ -281,20 +333,37 @@ const SubscriptionSummaryCards: React.FC<SubscriptionSummaryCardsProps> = ({
             </Stack>
 
             <Box sx={{ mt: 2.5 }}>
-              <Typography variant="body2" color="text.secondary" fontWeight={500}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary",
+                  fontWeight: 500
+                }}>
                 {t('summary.yearlyTotal')}
               </Typography>
-              <Typography variant="h3" fontWeight={700} sx={{ mt: 0.5 }}>
+              <Typography
+                variant="h3"
+                sx={{
+                  fontWeight: 700,
+                  mt: 0.5
+                }}>
                 {formatCurrency(summary?.yearly_total ?? 0, { maximumFractionDigits: 0 })}
               </Typography>
             </Box>
 
             {/* Per day breakdown */}
             <Box sx={{ mt: 2 }}>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 {t('summary.perDay')}
               </Typography>
-              <Typography variant="body1" fontWeight={600} sx={{ color: theme.palette.error.main }}>
+              <Typography
+                variant="body1"
+                sx={{
+                  fontWeight: 600,
+                  color: theme.palette.error.main
+                }}>
                 {formatCurrency((summary?.yearly_total ?? 0) / 365, { maximumFractionDigits: 0 })}
               </Typography>
             </Box>

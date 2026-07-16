@@ -51,8 +51,16 @@ const CalendarDayDetail: React.FC<CalendarDayDetailProps> = ({
   const content = (
     <Box sx={{ p: 2, minWidth: isMobile ? 'auto' : 280, maxWidth: 360 }}>
       {/* Header */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.5}>
-        <Typography variant="subtitle2" fontWeight={700}>
+      <Stack
+        direction="row"
+        sx={{
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: 1.5
+        }}>
+        <Typography variant="subtitle2" sx={{
+          fontWeight: 700
+        }}>
           {t('dayDetail.title', { date: formattedDate })}
         </Typography>
         <IconButton size="small" onClick={onClose}>
@@ -100,10 +108,11 @@ const CalendarDayDetail: React.FC<CalendarDayDetailProps> = ({
                   color={sub.category_color || theme.palette.primary.main}
                 />
               </Box>
-
               {/* Name + frequency */}
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="body2" fontWeight={600} noWrap>
+                <Typography variant="body2" noWrap sx={{
+                  fontWeight: 600
+                }}>
                   {sub.display_name}
                 </Typography>
                 <Chip
@@ -117,12 +126,15 @@ const CalendarDayDetail: React.FC<CalendarDayDetailProps> = ({
                   }}
                 />
               </Box>
-
               {/* Amount */}
-              <Typography variant="body2" fontWeight={700} sx={{ flexShrink: 0 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 700,
+                  flexShrink: 0
+                }}>
                 {formatCurrency(entry.amount)}
               </Typography>
-
               {/* Edit button */}
               <IconButton
                 size="small"
@@ -144,11 +156,20 @@ const CalendarDayDetail: React.FC<CalendarDayDetailProps> = ({
       {subscriptions.length > 1 && (
         <>
           <Divider sx={{ mt: 1.5, mb: 1 }} />
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="caption" color="text.secondary">
+          <Stack
+            direction="row"
+            sx={{
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('dayDetail.total')}
             </Typography>
-            <Typography variant="subtitle2" fontWeight={700}>
+            <Typography variant="subtitle2" sx={{
+              fontWeight: 700
+            }}>
               {formatCurrency(dayTotal)}
             </Typography>
           </Stack>
@@ -164,12 +185,14 @@ const CalendarDayDetail: React.FC<CalendarDayDetailProps> = ({
         anchor="bottom"
         open={open}
         onClose={onClose}
-        PaperProps={{
-          sx: {
-            borderTopLeftRadius: 16,
-            borderTopRightRadius: 16,
-            maxHeight: '60vh',
-          },
+        slotProps={{
+          paper: {
+            sx: {
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
+              maxHeight: '60vh',
+            },
+          }
         }}
       >
         {content}

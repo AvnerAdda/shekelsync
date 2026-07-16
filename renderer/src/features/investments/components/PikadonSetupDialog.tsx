@@ -130,10 +130,14 @@ export default function PikadonSetupDialog({
               >
                 <Stack spacing={1.5}>
                   <Box>
-                    <Typography variant="subtitle2" fontWeight={600}>
+                    <Typography variant="subtitle2" sx={{
+                      fontWeight: 600
+                    }}>
                       {item.transaction_name || item.account_name || 'Pikadon'}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
                       {item.account_name ? `${item.account_name} • ` : ''}
                       {item.deposit_date} • ILS {item.principal.toLocaleString()}
                     </Typography>
@@ -146,8 +150,10 @@ export default function PikadonSetupDialog({
                         type="date"
                         value={formValue.maturity_date}
                         onChange={(event) => updateField(item, 'maturity_date', event.target.value)}
-                        InputLabelProps={{ shrink: true }}
                         required
+                        slotProps={{
+                          inputLabel: { shrink: true }
+                        }}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
@@ -157,7 +163,9 @@ export default function PikadonSetupDialog({
                         type="number"
                         value={formValue.interest_rate ?? ''}
                         onChange={(event) => updateField(item, 'interest_rate', event.target.value)}
-                        inputProps={{ min: 0, step: 0.01 }}
+                        slotProps={{
+                          htmlInput: { min: 0, step: 0.01 }
+                        }}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
@@ -165,7 +173,9 @@ export default function PikadonSetupDialog({
                         fullWidth
                         label="Status"
                         value={item.status || 'pending'}
-                        InputProps={{ readOnly: true }}
+                        slotProps={{
+                          input: { readOnly: true }
+                        }}
                       />
                     </Grid>
                     <Grid size={{ xs: 12 }}>

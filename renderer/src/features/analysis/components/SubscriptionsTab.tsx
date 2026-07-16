@@ -117,16 +117,21 @@ const SubscriptionsTab: React.FC = () => {
       {/* Header */}
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', sm: 'center' }}
         spacing={2}
-        mb={3}
-      >
+        sx={{
+          justifyContent: "space-between",
+          alignItems: { xs: 'stretch', sm: 'center' },
+          mb: 3
+        }}>
         <Box>
-          <Typography variant="h6" fontWeight="bold">
+          <Typography variant="h6" sx={{
+            fontWeight: "bold"
+          }}>
             {t('title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('subtitle')}
           </Typography>
         </Box>
@@ -177,7 +182,6 @@ const SubscriptionsTab: React.FC = () => {
           </Button>
         </Stack>
       </Stack>
-
       {/* Error alert */}
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
@@ -187,22 +191,18 @@ const SubscriptionsTab: React.FC = () => {
           </Button>
         </Alert>
       )}
-
       {/* Summary cards */}
       <SubscriptionSummaryCards summary={filteredSummary} loading={summaryLoading} />
-
       {/* Alerts panel */}
       <SubscriptionAlerts
         alerts={filteredAlerts}
         loading={alertsLoading}
         onDismiss={handleDismissAlert}
       />
-
       {/* Creep chart - between alerts and list */}
       <Box sx={{ mb: 3 }}>
         <SubscriptionCreepChart creep={creep} loading={creepLoading} />
       </Box>
-
       {/* Subscription list / calendar */}
       <Box
         sx={{
@@ -216,8 +216,16 @@ const SubscriptionsTab: React.FC = () => {
           overflow: 'hidden',
         }}
       >
-        <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
-          <Typography variant="subtitle1" fontWeight="bold">
+        <Stack
+          direction="row"
+          sx={{
+            alignItems: "center",
+            justifyContent: "space-between",
+            mb: 2
+          }}>
+          <Typography variant="subtitle1" sx={{
+            fontWeight: "bold"
+          }}>
             {t('list.title')}
           </Typography>
           <ToggleButtonGroup
@@ -269,7 +277,6 @@ const SubscriptionsTab: React.FC = () => {
           />
         )}
       </Box>
-
       {/* Add/Edit Modal */}
       <SubscriptionModal
         open={modalOpen}
@@ -278,7 +285,6 @@ const SubscriptionsTab: React.FC = () => {
         onSave={handleSaveSubscription}
         isEditing={!!editingSubscription}
       />
-
       {/* Category filter popover */}
       <SubscriptionCategoryFilterPopover
         open={Boolean(filterAnchorEl)}

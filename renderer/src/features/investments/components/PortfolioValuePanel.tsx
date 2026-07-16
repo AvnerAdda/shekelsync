@@ -139,7 +139,9 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
           mb: 2,
         }}
       >
-        <Typography variant="subtitle1" fontWeight={600}>
+        <Typography variant="subtitle1" sx={{
+          fontWeight: 600
+        }}>
           {t('title', 'Portfolio Value')}
         </Typography>
 
@@ -182,51 +184,50 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
           </ToggleButtonGroup>
         </Box>
       </Box>
-
       {/* Date label */}
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" sx={{
+        color: "text.secondary"
+      }}>
         {firstPoint && lastPoint ? (
           `${new Date(firstPoint.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} - ${new Date(lastPoint.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
         ) : (
           t('noData', 'No data')
         )}
       </Typography>
-
       {/* Main Value */}
       <Typography
         variant="h3"
-        fontWeight={700}
-        sx={{ mt: 0.5, mb: 0.5, lineHeight: 1.2 }}
-      >
+        sx={{
+          fontWeight: 700,
+          mt: 0.5,
+          mb: 0.5,
+          lineHeight: 1.2
+        }}>
         {maskAmounts ? '***' : formatCurrencyValue(headlineValue)}
       </Typography>
-
       {/* Change indicators */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <Typography
           variant="body2"
-          fontWeight={600}
           sx={{
-            color: isPositive ? 'success.main' : 'error.main',
-          }}
-        >
+            fontWeight: 600,
+            color: isPositive ? 'success.main' : 'error.main'
+          }}>
           {isPositive ? '+' : ''}{maskAmounts ? '***' : formatCurrencyValue(valueChange)}
         </Typography>
         <Typography
           variant="caption"
-          fontWeight={600}
           sx={{
+            fontWeight: 600,
             color: isPositive ? 'success.main' : 'error.main',
             bgcolor: alpha(isPositive ? theme.palette.success.main : theme.palette.error.main, 0.1),
             px: 1,
             py: 0.25,
-            borderRadius: 1,
-          }}
-        >
+            borderRadius: 1
+          }}>
           {isPositive ? '+' : ''}{percentChange.toFixed(1)}%
         </Typography>
       </Box>
-
       {/* Chart */}
       <Box sx={{ flexGrow: 1, minHeight: 200, height: '100%' }}>
         {chartData.length > 0 ? (
@@ -333,7 +334,9 @@ const PortfolioValuePanel: React.FC<PortfolioValuePanelProps> = ({
               justifyContent: 'center',
             }}
           >
-            <Typography color="text.secondary">
+            <Typography sx={{
+              color: "text.secondary"
+            }}>
               {t('noChartData', 'No history data available')}
             </Typography>
           </Box>

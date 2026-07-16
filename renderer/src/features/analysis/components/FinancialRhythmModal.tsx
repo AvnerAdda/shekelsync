@@ -45,7 +45,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
       <Paper sx={{ p: 1.5 }}>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: "text.secondary"
+        }}>
           {label}
         </Typography>
         {payload.map((entry: any, index: number) => (
@@ -165,19 +167,30 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
       onClose={onClose}
       maxWidth="lg"
       fullWidth
-      PaperProps={{
-        sx: {
-          bgcolor: alpha(theme.palette.background.paper, 0.8),
-          backdropFilter: 'blur(20px)',
-          backgroundImage: 'none',
-          boxShadow: theme.shadows[24],
-          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+      slotProps={{
+        paper: {
+          sx: {
+            bgcolor: alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(20px)',
+            backgroundImage: 'none',
+            boxShadow: theme.shadows[24],
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          }
         }
       }}
     >
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="h5" fontWeight="bold" sx={{ background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`, backgroundClip: 'text', textFillColor: 'transparent', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: "bold",
+              background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+              backgroundClip: 'text',
+              textFillColor: 'transparent',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent'
+            }}>
             {t('title')}
           </Typography>
           <IconButton onClick={onClose} size="small">
@@ -185,7 +198,6 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
           </IconButton>
         </Box>
       </DialogTitle>
-
       <DialogContent dividers sx={{ minHeight: { xs: '60vh', sm: '70vh', md: '80vh' }, maxHeight: { xs: '85vh', sm: '85vh', md: '80vh' }, overflow: 'auto', p: { xs: 2, sm: 3 } }}>
         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
           <ToggleButtonGroup
@@ -228,10 +240,18 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
             {/* Spending by Hour of Day */}
             <Grid size={{ xs: 12, md: 4 }}>
               <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
-                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                <Typography variant="subtitle2" gutterBottom sx={{
+                  fontWeight: "bold"
+                }}>
                   {t('hourOfDay.title')}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: "block",
+                    mb: 1
+                  }}>
                   {t('hourOfDay.subtitle')}
                 </Typography>
                 <ResponsiveContainer width="100%" height={200} minHeight={200}>
@@ -274,7 +294,9 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
             {/* Spending by Day of Week */}
             <Grid size={{ xs: 12, md: 4 }}>
               <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
-                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                <Typography variant="subtitle2" gutterBottom sx={{
+                  fontWeight: "bold"
+                }}>
                   {t('dayOfWeek.title')}
                 </Typography>
                 <ResponsiveContainer width="100%" height={200} minHeight={200}>
@@ -320,29 +342,57 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
             {/* Weekend vs Weekday */}
             <Grid size={{ xs: 12, md: 4 }}>
               <Paper sx={{ p: 2, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                <Typography variant="subtitle2" gutterBottom sx={{
+                  fontWeight: "bold"
+                }}>
                   {t('weekendVsWeekday.title')}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
                   <Box sx={{ flex: 1, p: 2, bgcolor: alpha(theme.palette.primary.main, 0.1), borderRadius: 2, textAlign: 'center' }}>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        display: "block",
+                        mb: 1
+                      }}>
                       {t('weekendVsWeekday.weekday')}
                     </Typography>
-                    <Typography variant="h6" color="primary.main" fontWeight="bold">
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        color: "primary.main",
+                        fontWeight: "bold"
+                      }}>
                       {formatCurrencyValue(data.weekdayTotal || 0)}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {data.weekdayPercentage?.toFixed(0)}%
                     </Typography>
                   </Box>
                   <Box sx={{ flex: 1, p: 2, bgcolor: alpha(theme.palette.secondary.main, 0.1), borderRadius: 2, textAlign: 'center' }}>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        display: "block",
+                        mb: 1
+                      }}>
                       {t('weekendVsWeekday.weekend')}
                     </Typography>
-                    <Typography variant="h6" color="secondary.main" fontWeight="bold">
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        color: "secondary.main",
+                        fontWeight: "bold"
+                      }}>
                       {formatCurrencyValue(data.weekendTotal || 0)}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {data.weekendPercentage?.toFixed(0)}%
                     </Typography>
                   </Box>
@@ -353,10 +403,18 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
             {/* Hour/Day Heatmap */}
             <Grid size={{ xs: 12 }}>
               <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
-                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                <Typography variant="subtitle2" gutterBottom sx={{
+                  fontWeight: "bold"
+                }}>
                   {t('heatmap.title')}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: "block",
+                    mb: 1
+                  }}>
                   {t('heatmap.subtitle')}
                 </Typography>
                 {heatmapMax > 0 ? (
@@ -375,16 +433,23 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                         <Typography
                           key={`hour-label-${hour}`}
                           variant="caption"
-                          color="text.secondary"
                           align="center"
-                          sx={{ fontSize: '0.65rem', lineHeight: 1 }}
-                        >
+                          sx={{
+                            color: "text.secondary",
+                            fontSize: '0.65rem',
+                            lineHeight: 1
+                          }}>
                           {hour % 3 === 0 ? hour : ''}
                         </Typography>
                       ))}
                       {dayLabels.map((dayLabel, dayIndex) => (
                         <React.Fragment key={`day-row-${dayLabel}`}>
-                          <Typography variant="caption" color="text.secondary" sx={{ pr: 1 }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: "text.secondary",
+                              pr: 1
+                            }}>
                             {dayLabel}
                           </Typography>
                           {hourLabels.map((hour) => {
@@ -394,10 +459,14 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                                 key={`cell-${dayIndex}-${hour}`}
                                 title={(
                                   <Box sx={{ p: 0.5 }}>
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" sx={{
+                                      color: "text.secondary"
+                                    }}>
                                       {dayLabel} • {String(hour).padStart(2, '0')}:00
                                     </Typography>
-                                    <Typography variant="body2" fontWeight="bold">
+                                    <Typography variant="body2" sx={{
+                                      fontWeight: "bold"
+                                    }}>
                                       {formatHeatmapValue(value)}
                                     </Typography>
                                   </Box>
@@ -422,12 +491,16 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                     </Box>
                   </Box>
                 ) : (
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>
                     {t('noData')}
                   </Typography>
                 )}
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1, mt: 1 }}>
-                  <Typography variant="caption" color="text.secondary">{t('heatmap.low')}</Typography>
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>{t('heatmap.low')}</Typography>
                   <Box
                     sx={{
                       width: 120,
@@ -436,7 +509,9 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                       background: `linear-gradient(90deg, ${alpha(theme.palette.primary.main, 0.15)}, ${alpha(theme.palette.primary.main, 0.9)})`
                     }}
                   />
-                  <Typography variant="caption" color="text.secondary">{t('heatmap.high')}</Typography>
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>{t('heatmap.high')}</Typography>
                 </Box>
               </Paper>
             </Grid>
@@ -446,10 +521,17 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
               <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Box>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    <Typography variant="subtitle2" gutterBottom sx={{
+                      fontWeight: "bold"
+                    }}>
                       {t('evolution.title')}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        display: "block"
+                      }}>
                       {t('evolution.subtitle')}
                     </Typography>
                   </Box>
@@ -504,22 +586,30 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
                 <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mt: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: alpha(theme.palette.background.paper, 0.5), px: 1.5, py: 0.5, borderRadius: 4 }}>
                     <Box sx={{ width: 12, height: 12, bgcolor: theme.palette.error.main, borderRadius: '50%' }} />
-                    <Typography variant="caption" color="text.secondary">{t('evolution.oldest')}</Typography>
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>{t('evolution.oldest')}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: alpha(theme.palette.background.paper, 0.5), px: 1.5, py: 0.5, borderRadius: 4 }}>
                     <Box sx={{ width: 12, height: 12, bgcolor: theme.palette.warning.main, borderRadius: '50%' }} />
-                    <Typography variant="caption" color="text.secondary">{t('evolution.recent')}</Typography>
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>{t('evolution.recent')}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: alpha(theme.palette.background.paper, 0.5), px: 1.5, py: 0.5, borderRadius: 4 }}>
                     <Box sx={{ width: 12, height: 12, bgcolor: theme.palette.success.main, borderRadius: '50%' }} />
-                    <Typography variant="caption" color="text.secondary">{t('evolution.latest')}</Typography>
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>{t('evolution.latest')}</Typography>
                   </Box>
                 </Box>
               </Paper>
             </Grid>
           </Grid>
         ) : (
-          <Typography color="text.secondary" align="center">
+          <Typography align="center" sx={{
+            color: "text.secondary"
+          }}>
             {t('noData')}
           </Typography>
         )}
