@@ -126,7 +126,9 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({ open, onC
       disableEnforceFocus
       disableRestoreFocus
       transitionDuration={0}
-      PaperProps={{ sx: { height: '55vh', width: '85vw', maxWidth: '85vw' } }}
+      slotProps={{
+        paper: { sx: { height: '55vh', width: '85vw', maxWidth: '85vw' } }
+      }}
     >
       <DialogTitle
         sx={{
@@ -137,14 +139,15 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({ open, onC
           px: 2,
         }}
       >
-        <Typography variant="subtitle1" fontWeight={600} component="span" role="heading" aria-level={2}>
+        <Typography variant="subtitle1" component="span" role="heading" aria-level={2} sx={{
+          fontWeight: 600
+        }}>
           {t('insights.snapshot.modal.title')}
         </Typography>
         <IconButton size="small" onClick={onClose} aria-label={t('common.close')}>
           <CloseIcon fontSize="small" />
         </IconButton>
       </DialogTitle>
-
       <DialogContent
         dividers
         sx={{
@@ -165,7 +168,9 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({ open, onC
             }}
           >
             <CircularProgress />
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {t('insights.snapshot.modal.loading')}
             </Typography>
           </Box>
@@ -210,7 +215,13 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({ open, onC
                               '&:last-child': { pb: 1 },
                             }}
                           >
-                            <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={0.5}>
+                            <Stack
+                              direction="row"
+                              spacing={0.5}
+                              sx={{
+                                justifyContent: "space-between",
+                                alignItems: "center"
+                              }}>
                               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                 {periodLabel}
                               </Typography>
@@ -241,7 +252,13 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({ open, onC
                             </Box>
 
                             {previousMissing && (
-                              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: "text.secondary",
+                                  mt: 0.75,
+                                  display: 'block'
+                                }}>
                                 {t('insights.snapshot.modal.insufficientHistory')}
                               </Typography>
                             )}
@@ -251,16 +268,22 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({ open, onC
                     );
                   })}
                 </Grid>
-
                 {visiblePeriods.length > 0 && <Divider />}
-
                 <Card variant="outlined" sx={{ flexShrink: 0 }}>
                   <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                    <Stack
+                      direction="row"
+                      sx={{
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        mb: 0.5
+                      }}>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         {t('insights.snapshot.periodLabels.sinceStart')}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                      }}>
                         {formatDateRange(data.sinceStart.startDate, data.sinceStart.endDate)}
                         {' \u00b7 '}
                         {t('insights.snapshot.modal.daysTracked', {
@@ -271,31 +294,45 @@ const SnapshotProgressModal: React.FC<SnapshotProgressModalProps> = ({ open, onC
 
                     <Grid container spacing={2}>
                       <Grid size={{ xs: 6, sm: 3 }}>
-                        <Typography variant="caption" color="text.secondary" component="div">
+                        <Typography variant="caption" component="div" sx={{
+                          color: "text.secondary"
+                        }}>
                           {t('insights.snapshot.metrics.totalSpend')}
                         </Typography>
-                        <Typography variant="h6" fontWeight="bold">
+                        <Typography variant="h6" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {formatCurrency(data.sinceStart.expenses)}
                         </Typography>
                       </Grid>
                       <Grid size={{ xs: 6, sm: 3 }}>
-                        <Typography variant="caption" color="text.secondary" component="div">
+                        <Typography variant="caption" component="div" sx={{
+                          color: "text.secondary"
+                        }}>
                           {t('insights.snapshot.metrics.investmentOutflow')}
                         </Typography>
-                        <Typography variant="h6" fontWeight="bold">
+                        <Typography variant="h6" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {formatCurrency(data.sinceStart.investmentOutflow)}
                         </Typography>
                       </Grid>
                       <Grid size={{ xs: 6, sm: 3 }}>
-                        <Typography variant="caption" color="text.secondary" component="div">
+                        <Typography variant="caption" component="div" sx={{
+                          color: "text.secondary"
+                        }}>
                           {t('insights.snapshot.metrics.investmentInflow')}
                         </Typography>
-                        <Typography variant="h6" fontWeight="bold">
+                        <Typography variant="h6" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {formatCurrency(data.sinceStart.investmentInflow)}
                         </Typography>
                       </Grid>
                       <Grid size={{ xs: 6, sm: 3 }}>
-                        <Typography variant="caption" color="text.secondary" component="div">
+                        <Typography variant="caption" component="div" sx={{
+                          color: "text.secondary"
+                        }}>
                           {t('insights.snapshot.metrics.txCount')}
                         </Typography>
                         <Typography variant="h6">{formatCount(data.sinceStart.txCount)}</Typography>

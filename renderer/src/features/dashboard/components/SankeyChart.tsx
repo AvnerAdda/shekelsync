@@ -189,7 +189,9 @@ const SankeyChart: React.FC<SankeyChartProps> = ({
             borderRadius: 2,
           }}
         >
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('sankey.empty')}
           </Typography>
         </Box>

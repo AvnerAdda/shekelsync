@@ -149,14 +149,15 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-          <Typography variant="subtitle2" fontWeight={600}>
+          <Typography variant="subtitle2" sx={{
+            fontWeight: 600
+          }}>
             {t('onboarding.gettingStarted')} ({completedCount}/{totalSteps})
           </Typography>
           <Button size="small" onClick={handleDismiss}>
             {t('onboarding.skip')}
           </Button>
         </Box>
-
         <List dense>
           {steps.map((step) => (
             <ListItem
@@ -177,9 +178,11 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
               </ListItemIcon>
               <ListItemText
                 primary={step.title}
-                primaryTypographyProps={{
-                  variant: 'body2',
-                  fontWeight: step.id === suggestedAction ? 600 : 400
+                slotProps={{
+                  primary: {
+                    variant: 'body2',
+                    sx: { fontWeight: step.id === suggestedAction ? 600 : 400 }
+                  }
                 }}
               />
               {shouldShowButton(steps.indexOf(step), step) && (
@@ -195,7 +198,6 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
             </ListItem>
           ))}
         </List>
-
         {!completedSteps.firstScrape && (
           <Alert severity="info" sx={{ mt: 2 }}>
             {t('onboarding.syncHintCompact')}
@@ -220,10 +222,14 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
     >
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
+          <Typography variant="h6" gutterBottom sx={{
+            fontWeight: 600
+          }}>
             {t('onboarding.gettingStarted')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('onboarding.completeSteps')}
           </Typography>
         </Box>
@@ -233,7 +239,6 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
           size="small"
         />
       </Box>
-
       <List>
         {steps.map((step, index) => {
           const StepIcon = step.icon;
@@ -287,12 +292,19 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
                     />
                     <Typography
                       variant="subtitle1"
-                      fontWeight={step.id === suggestedAction ? 600 : 500}
+                      sx={{
+                        fontWeight: step.id === suggestedAction ? 600 : 500
+                      }}
                     >
                       {step.title}
                     </Typography>
                   </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      ml: 4
+                    }}>
                     {step.description}
                   </Typography>
 
@@ -313,13 +325,11 @@ const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
           );
         })}
       </List>
-
       {!completedSteps.firstScrape && (
         <Alert severity="info" sx={{ mt: 3 }}>
           {t('onboarding.syncHint')}
         </Alert>
       )}
-
       <Box sx={{ mt: 3, textAlign: 'center' }}>
         <Button
           variant="text"

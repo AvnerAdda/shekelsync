@@ -90,13 +90,17 @@ const DonationModal: React.FC<DonationModalProps> = ({ open, onClose, onDonation
       onClose={onClose}
       fullWidth
       maxWidth="sm"
-      PaperProps={{ sx: { borderRadius: 3, backgroundImage: 'none' } }}
+      slotProps={{
+        paper: { sx: { borderRadius: 3, backgroundImage: 'none' } }
+      }}
     >
       <DialogTitle sx={{ pb: 1.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <CoffeeIcon color="primary" />
-            <Typography variant="h6" component="span" fontWeight={700}>
+            <Typography variant="h6" component="span" sx={{
+              fontWeight: 700
+            }}>
               {t('support.program.title', { defaultValue: 'Support ShekelSync' })}
             </Typography>
           </Box>
@@ -105,9 +109,7 @@ const DonationModal: React.FC<DonationModalProps> = ({ open, onClose, onDonation
           </IconButton>
         </Box>
       </DialogTitle>
-
       <Divider />
-
       <DialogContent sx={{ pt: 3 }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
@@ -145,7 +147,6 @@ const DonationModal: React.FC<DonationModalProps> = ({ open, onClose, onDonation
           </Stack>
         )}
       </DialogContent>
-
       <DialogActions sx={{ px: 3, pb: 2.5 }}>
         <Button onClick={onClose}>{t('support.program.actions.close', { defaultValue: 'Close' })}</Button>
       </DialogActions>

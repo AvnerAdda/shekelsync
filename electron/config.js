@@ -138,6 +138,17 @@ class ConfigManager {
       return config;
     } catch (error) {
       console.error('Failed to load config:', error);
+      // SyntaxError means decryption produced garbage (key mismatch after OS
+      // upgrade or keychain reset). Delete the stale file so it gets recreated
+      // cleanly on next save rather than failing on every startup.
+      if (error instanceof SyntaxError && fs.existsSync(this.configPath)) {
+        console.warn('Config file is corrupted (likely key mismatch). Deleting to allow fresh creation.');
+        try {
+          fs.unlinkSync(this.configPath);
+        } catch (unlinkError) {
+          console.error('Failed to delete corrupted config file:', unlinkError.message);
+        }
+      }
       console.log('Falling back to environment variables');
       return this.getDefaultConfig();
     }

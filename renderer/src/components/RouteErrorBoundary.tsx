@@ -1,5 +1,6 @@
+import React from 'react';
 import { Box, Button, Container, Paper, Typography } from '@mui/material';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { isRouteErrorResponse, useNavigate, useRouteError } from 'react-router-dom';
@@ -93,7 +94,12 @@ const RouteErrorBoundary: React.FC = () => {
           <Typography variant="h4" gutterBottom color="error">
             {title}
           </Typography>
-          <Typography variant="body1" color="text.secondary" paragraph>
+          <Typography
+            variant="body1"
+            sx={{
+              color: "text.secondary",
+              marginBottom: "16px"
+            }}>
             {message}
           </Typography>
 
@@ -146,3 +152,28 @@ const RouteErrorBoundary: React.FC = () => {
 };
 
 export default RouteErrorBoundary;
+
+// Class-based shell so that if RouteErrorBoundary itself throws (e.g. because
+// useRouteError()/useContext() is called during a Vite dual-React-instance
+// reload), the error is caught here rather than propagating further up.
+interface ShellState { crashed: boolean }
+export class RouteErrorBoundaryShell extends React.Component<Record<string, never>, ShellState> {
+  state: ShellState = { crashed: false };
+
+  static getDerivedStateFromError(): ShellState {
+    return { crashed: true };
+  }
+
+  render() {
+    if (this.state.crashed) {
+      return (
+        <div style={{ padding: 32, textAlign: 'center', fontFamily: 'sans-serif' }}>
+          <h2>Something went wrong</h2>
+          <p>The page failed to load.</p>
+          <button onClick={() => window.location.reload()}>Reload</button>
+        </div>
+      );
+    }
+    return <RouteErrorBoundary />;
+  }
+}

@@ -128,7 +128,16 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
     >
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="h5" fontWeight="bold" sx={{ background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`, backgroundClip: 'text', textFillColor: 'transparent', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: "bold",
+              background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+              backgroundClip: 'text',
+              textFillColor: 'transparent',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent'
+            }}>
             {t('title')}
           </Typography>
           <IconButton onClick={onClose} size="small">
@@ -136,7 +145,6 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
           </IconButton>
         </Box>
       </DialogTitle>
-
       <DialogContent dividers sx={{ minHeight: { xs: '60vh', sm: '70vh', md: '80vh' }, maxHeight: { xs: '85vh', sm: '85vh', md: '80vh' }, overflow: 'auto', p: { xs: 2, sm: 3 } }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -154,7 +162,12 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
             {/* Spending Behavior - Clean card design */}
             <Grid size={{ xs: 12, md: 3 }}>
               <Paper sx={{ p: 2.5, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
-                <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2 }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    fontWeight: "bold",
+                    mb: 2
+                  }}>
                   {t('spendingBehavior.title')}
                 </Typography>
 
@@ -167,10 +180,20 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                   border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
                 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                    <Typography variant="caption" fontWeight="medium" color="success.main">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: "medium",
+                        color: "success.main"
+                      }}>
                       {t('spendingBehavior.programmed')}
                     </Typography>
-                    <Typography variant="h6" fontWeight="bold" color="success.main">
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        fontWeight: "bold",
+                        color: "success.main"
+                      }}>
                       {data.programmedPercentage?.toFixed(0)}%
                     </Typography>
                   </Box>
@@ -187,7 +210,13 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                       borderRadius: 3,
                     }} />
                   </Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                      mt: 0.5,
+                      display: 'block'
+                    }}>
                     {formatCurrencyValue(data.programmedAmount || 0)}
                   </Typography>
                 </Box>
@@ -200,10 +229,20 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                   border: `1px solid ${alpha(theme.palette.warning.main, 0.2)}`,
                 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                    <Typography variant="caption" fontWeight="medium" color="warning.main">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: "medium",
+                        color: "warning.main"
+                      }}>
                       {t('spendingBehavior.impulse')}
                     </Typography>
-                    <Typography variant="h6" fontWeight="bold" color="warning.main">
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        fontWeight: "bold",
+                        color: "warning.main"
+                      }}>
                       {data.impulsePercentage?.toFixed(0)}%
                     </Typography>
                   </Box>
@@ -220,7 +259,13 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                       borderRadius: 3,
                     }} />
                   </Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                      mt: 0.5,
+                      display: 'block'
+                    }}>
                     {formatCurrencyValue(data.impulseAmount || 0)}
                   </Typography>
                 </Box>
@@ -231,7 +276,9 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
             <Grid size={{ xs: 12, md: 9 }}>
               <Paper sx={{ p: 2.5, height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="subtitle2" fontWeight="bold">
+                  <Typography variant="subtitle2" sx={{
+                    fontWeight: "bold"
+                  }}>
                     {t('recurring.title')}
                   </Typography>
                   {data.patternsByFrequency && (() => {
@@ -241,7 +288,12 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                       return total + patterns.reduce((sum: number, p: any) => sum + (p.avgAmount || 0) * multiplier, 0);
                     }, 0);
                     return grandTotal > 0 ? (
-                      <Typography variant="body2" fontWeight="medium" color="primary.main">
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: "medium",
+                          color: "primary.main"
+                        }}>
                         ~{formatCurrencyValue(grandTotal)}/mo
                       </Typography>
                     ) : null;
@@ -297,7 +349,12 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                               }}>
                                 {config.icon}
                               </Avatar>
-                              <Typography variant="body2" fontWeight="medium" sx={{ flex: 1 }}>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontWeight: "medium",
+                                  flex: 1
+                                }}>
                                 {config.label}
                               </Typography>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -312,7 +369,14 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                                     fontWeight: 500,
                                   }}
                                 />
-                                <Typography variant="body2" fontWeight="medium" sx={{ color: config.color, minWidth: 70, textAlign: 'right' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontWeight: "medium",
+                                    color: config.color,
+                                    minWidth: 70,
+                                    textAlign: 'right'
+                                  }}>
                                   {formatCurrencyValue(totalMonthly)}/mo
                                 </Typography>
                               </Box>
@@ -335,7 +399,12 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                                     <Typography variant="body2" noWrap sx={{ flex: 1, mr: 1 }}>
                                       {pattern.name}
                                     </Typography>
-                                    <Typography variant="body2" fontWeight="medium" sx={{ color: config.color }}>
+                                    <Typography
+                                      variant="body2"
+                                      sx={{
+                                        fontWeight: "medium",
+                                        color: config.color
+                                      }}>
                                       {formatCurrencyValue(pattern.avgAmount)}
                                     </Typography>
                                   </Box>
@@ -348,7 +417,9 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                     })}
                   </Box>
                 ) : (
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>
                     {t('recurring.noData')}
                   </Typography>
                 )}
@@ -358,10 +429,18 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
             {/* Average Spending per Category - Enhanced Design */}
             <Grid size={{ xs: 12 }}>
               <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
-                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                <Typography variant="subtitle2" gutterBottom sx={{
+                  fontWeight: "bold"
+                }}>
                   {t('categoryAverages.title')}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: "block",
+                    mb: 2
+                  }}>
                   {t('categoryAverages.subtitle')}
                 </Typography>
 
@@ -404,15 +483,24 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                                 </Avatar>
 
                                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                                  <Typography variant="body2" fontWeight="medium" noWrap>
+                                  <Typography variant="body2" noWrap sx={{
+                                    fontWeight: "medium"
+                                  }}>
                                     {cat.category}
                                   </Typography>
 
                                   <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, mt: 0.5 }}>
-                                    <Typography variant="h6" fontWeight="bold" sx={{ color: categoryColor }}>
+                                    <Typography
+                                      variant="h6"
+                                      sx={{
+                                        fontWeight: "bold",
+                                        color: categoryColor
+                                      }}>
                                       {formatCurrencyValue(cat.avgPerWeek)}
                                     </Typography>
-                                    <Typography variant="caption" color="text.secondary">/week</Typography>
+                                    <Typography variant="caption" sx={{
+                                      color: "text.secondary"
+                                    }}>/week</Typography>
                                   </Box>
 
                                   <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
@@ -451,7 +539,13 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
                     );
                   })()
                 ) : (
-                  <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 4 }}>
+                  <Typography
+                    variant="body2"
+                    align="center"
+                    sx={{
+                      color: "text.secondary",
+                      py: 4
+                    }}>
                     {t('categoryAverages.noData')}
                   </Typography>
                 )}
@@ -459,7 +553,9 @@ const MoneyPersonalityModal: React.FC<MoneyPersonalityModalProps> = ({ open, onC
             </Grid>
           </Grid>
         ) : (
-          <Typography color="text.secondary" align="center">
+          <Typography align="center" sx={{
+            color: "text.secondary"
+          }}>
             {t('noData')}
           </Typography>
         )}

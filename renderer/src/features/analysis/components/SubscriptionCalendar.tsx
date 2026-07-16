@@ -111,19 +111,24 @@ const SubscriptionCalendar: React.FC<SubscriptionCalendarProps> = ({
       {/* Month navigation */}
       <Stack
         direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        mb={2}
-      >
-        <Stack direction="row" alignItems="center" spacing={1}>
+        sx={{
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: 2
+        }}>
+        <Stack direction="row" spacing={1} sx={{
+          alignItems: "center"
+        }}>
           <IconButton size="small" onClick={handlePrev}>
             <PrevIcon />
           </IconButton>
           <Typography
             variant={isCompact ? 'body1' : 'h6'}
-            fontWeight={700}
-            sx={{ minWidth: isCompact ? 120 : 180, textAlign: 'center' }}
-          >
+            sx={{
+              fontWeight: 700,
+              minWidth: isCompact ? 120 : 180,
+              textAlign: 'center'
+            }}>
             {monthLabel}
           </Typography>
           <IconButton size="small" onClick={handleNext}>
@@ -131,7 +136,9 @@ const SubscriptionCalendar: React.FC<SubscriptionCalendarProps> = ({
           </IconButton>
         </Stack>
 
-        <Stack direction="row" alignItems="center" spacing={1}>
+        <Stack direction="row" spacing={1} sx={{
+          alignItems: "center"
+        }}>
           {!isCurrentMonthDisplayed && (
             <Button
               size="small"
@@ -143,13 +150,17 @@ const SubscriptionCalendar: React.FC<SubscriptionCalendarProps> = ({
             </Button>
           )}
           {monthTotal > 0 && (
-            <Typography variant="body2" color="text.secondary" fontWeight={600}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                fontWeight: 600
+              }}>
               {t('monthTotal', { amount: formatCurrency(monthTotal) })}
             </Typography>
           )}
         </Stack>
       </Stack>
-
       {/* Calendar grid */}
       <Box
         sx={{
@@ -176,10 +187,11 @@ const SubscriptionCalendar: React.FC<SubscriptionCalendarProps> = ({
           >
             <Typography
               variant="caption"
-              fontWeight={600}
-              color="text.secondary"
-              sx={{ fontSize: isCompact ? '0.6rem' : '0.75rem' }}
-            >
+              sx={{
+                fontWeight: 600,
+                color: "text.secondary",
+                fontSize: isCompact ? '0.6rem' : '0.75rem'
+              }}>
               {day}
             </Typography>
           </Box>
@@ -197,7 +209,6 @@ const SubscriptionCalendar: React.FC<SubscriptionCalendarProps> = ({
           />
         ))}
       </Box>
-
       {/* Day detail popover */}
       <CalendarDayDetail
         open={!!selectedDay}

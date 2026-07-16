@@ -172,10 +172,14 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 2, flexWrap: 'wrap' }}>
         <Box>
-          <Typography variant="subtitle2" fontWeight="bold">
+          <Typography variant="subtitle2" sx={{
+            fontWeight: "bold"
+          }}>
             {t('title')}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {totalIncome > 0
               ? t('subtitle.withIncome', { amount: totalIncome.toFixed(0) })
               : t('subtitle.noIncome')}
@@ -200,13 +204,11 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
           </Button>
         </Box>
       </Box>
-
       {saveError && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {saveError}
         </Alert>
       )}
-
       <Alert severity={!isValidTotal ? 'warning' : hasUnsavedChanges ? 'info' : 'success'} sx={{ mb: 2 }}>
         {!isValidTotal
           ? t('summary.invalid', {
@@ -223,7 +225,6 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
                 defaultValue: `Total: ${totalPercentage.toFixed(0)}%`,
               })}
       </Alert>
-
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {TARGET_KEYS.map((key) => {
           const target = localTargets[key] || 0;
@@ -244,7 +245,13 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                <Typography variant="body2" fontWeight="bold" sx={{ color, minWidth: 80 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: "bold",
+                    color,
+                    minWidth: 80
+                  }}>
                   {label}
                 </Typography>
                 <Box sx={{ flex: 1, mx: 2 }}>
@@ -266,11 +273,16 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
                     }}
                   />
                 </Box>
-                <Typography variant="body2" fontWeight="bold" sx={{ minWidth: 40, textAlign: 'right' }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: "bold",
+                    minWidth: 40,
+                    textAlign: 'right'
+                  }}>
                   {target}%
                 </Typography>
               </Box>
-
               <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 1, minHeight: 40, alignItems: 'center' }}>
                 {categories.length > 0 ? (
                   categories.map((category) => (
@@ -301,7 +313,12 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
                     </Tooltip>
                   ))
                 ) : (
-                  <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                      fontStyle: 'italic'
+                    }}>
                     {t('selected.empty')}
                   </Typography>
                 )}
@@ -327,7 +344,13 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
                 borderRadius: 2,
               }}
             >
-              <Typography variant="body2" fontWeight="bold" sx={{ color, mb: 1 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: "bold",
+                  color,
+                  mb: 1
+                }}>
                 {t('categories.unallocated', { defaultValue: CATEGORY_LABELS.unallocated })}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 1 }}>
@@ -363,7 +386,6 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
           );
         })()}
       </Box>
-
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}

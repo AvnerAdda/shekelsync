@@ -429,17 +429,19 @@ const EnhancedProfileSection: React.FC = () => {
           sx={{ ml: 'auto' }}
         />
       </Box>
-
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          mb: 3
+        }}>
         {t('intro')}
       </Typography>
-
       {loadError && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {loadError}
         </Alert>
       )}
-
       {/* Basic Information - Always Visible */}
       <Accordion defaultExpanded>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -456,12 +458,14 @@ const EnhancedProfileSection: React.FC = () => {
                 fullWidth
                 value={profileData.profile.username}
                 onChange={(e) => handleProfileChange('username', e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <PersonIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <PersonIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }
                 }}
               />
             </Grid>
@@ -488,16 +492,18 @@ const EnhancedProfileSection: React.FC = () => {
                     });
                   }
                 }}
-                InputLabelProps={{ shrink: true }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <AgeIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
                 helperText={profileData.profile.birth_date ? t('helpers.ageProfile', { age: calculateAge(profileData.profile.birth_date) }) : t('helpers.required')}
-              />
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <AgeIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  },
+
+                  inputLabel: { shrink: true }
+                }} />
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
@@ -533,7 +539,6 @@ const EnhancedProfileSection: React.FC = () => {
           </Grid>
         </AccordionDetails>
       </Accordion>
-
       {/* Professional Information */}
       <Accordion>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -550,14 +555,16 @@ const EnhancedProfileSection: React.FC = () => {
                 fullWidth
                 value={profileData.profile.occupation}
                 onChange={(e) => handleProfileChange('occupation', e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <WorkIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
                 placeholder={t('placeholders.occupation')}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <WorkIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }
+                }}
               />
             </Grid>
 
@@ -613,15 +620,17 @@ const EnhancedProfileSection: React.FC = () => {
                 fullWidth
                 value={profileData.profile.monthly_income || ''}
                 onChange={(e) => handleProfileChange('monthly_income', e.target.value ? parseFloat(e.target.value) : null)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      ₪
-                    </InputAdornment>
-                  ),
-                }}
                 placeholder={t('placeholders.income')}
                 helperText={t('helpers.grossIncome')}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        ₪
+                      </InputAdornment>
+                    ),
+                  }
+                }}
               />
               {shouldShowIncomeSuggestion && incomeSuggestion && (
                 <Alert severity="info" sx={{ mt: 1.5 }}>
@@ -638,7 +647,13 @@ const EnhancedProfileSection: React.FC = () => {
                           months: incomeSuggestion.monthsAnalyzed,
                         })}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.25 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                      display: 'block',
+                      mb: 1.25
+                    }}>
                     {t('helpers.detectedIncomeDisclaimer')}
                   </Typography>
                   <Button size="small" variant="outlined" onClick={handleUseIncomeSuggestion}>
@@ -665,7 +680,6 @@ const EnhancedProfileSection: React.FC = () => {
           </Grid>
         </AccordionDetails>
       </Accordion>
-
       {/* Spouse Information - Only if Married */}
       {profileData.profile.marital_status === 'Married' && (
         <Accordion>
@@ -686,12 +700,14 @@ const EnhancedProfileSection: React.FC = () => {
                   fullWidth
                   value={profileData.spouse?.name || ''}
                   onChange={(e) => handleSpouseChange('name', e.target.value)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SpouseIcon fontSize="small" />
-                      </InputAdornment>
-                    ),
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SpouseIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    }
                   }}
                 />
               </Grid>
@@ -709,8 +725,10 @@ const EnhancedProfileSection: React.FC = () => {
                     handleSpouseChange('birth_date', newValue);
                   }
                 }}
-                InputLabelProps={{ shrink: true }}
                 helperText={profileData.spouse?.birth_date ? t('helpers.ageSpouse', { age: calculateAge(profileData.spouse.birth_date) }) : ''}
+                slotProps={{
+                  inputLabel: { shrink: true }
+                }}
               />
             </Grid>
 
@@ -745,12 +763,14 @@ const EnhancedProfileSection: React.FC = () => {
                   fullWidth
                   value={profileData.spouse?.monthly_income || ''}
                   onChange={(e) => handleSpouseChange('monthly_income', e.target.value ? parseFloat(e.target.value) : null)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        ₪
-                      </InputAdornment>
-                    ),
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          ₪
+                        </InputAdornment>
+                      ),
+                    }
                   }}
                 />
               </Grid>
@@ -773,7 +793,6 @@ const EnhancedProfileSection: React.FC = () => {
           </AccordionDetails>
         </Accordion>
       )}
-
       {/* Children Information */}
       <Accordion>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -824,7 +843,9 @@ const EnhancedProfileSection: React.FC = () => {
                               </IconButton>
                             </Box>
                           </Box>
-                          <Typography color="text.secondary" gutterBottom>
+                          <Typography gutterBottom sx={{
+                            color: "text.secondary"
+                          }}>
                             {age !== null ? t('children.age', { age }) : ''}
                           </Typography>
                           {child.education_stage && (
@@ -853,7 +874,6 @@ const EnhancedProfileSection: React.FC = () => {
           </Box>
         </AccordionDetails>
       </Accordion>
-
       {/* Household Summary */}
       {(profileData.spouse || profileData.children.length > 0) && (
         <Alert severity="info" sx={{ mt: 3, mb: 2 }}>
@@ -868,14 +888,12 @@ const EnhancedProfileSection: React.FC = () => {
           </Typography>
         </Alert>
       )}
-
       {/* Privacy Notice */}
       <Alert severity="info" sx={{ mt: 3, mb: 2 }}>
         <Typography variant="body2">
           🔒 <strong>{t('privacyNote.title')}</strong> {t('privacyNote.body')}
         </Typography>
       </Alert>
-
       {/* Save Button */}
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
         <Button
@@ -887,20 +905,17 @@ const EnhancedProfileSection: React.FC = () => {
           {t('actions.save')}
         </Button>
       </Box>
-
       {/* Success/Error Messages */}
       {saveSuccess && (
         <Alert severity="success" sx={{ mt: 2 }}>
           {t('messages.saveSuccess')}
         </Alert>
       )}
-
       {saveError && (
         <Alert severity="error" sx={{ mt: 2 }}>
           {saveError}
         </Alert>
       )}
-
       {/* Child Dialog */}
       <Dialog open={childDialogOpen} onClose={() => setChildDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
@@ -932,8 +947,10 @@ const EnhancedProfileSection: React.FC = () => {
                     setTempChild({ ...tempChild, birth_date: newValue });
                   }
                 }}
-                InputLabelProps={{ shrink: true }}
                 helperText={tempChild.birth_date ? t('children.dialog.age', { age: calculateAge(tempChild.birth_date) }) : t('children.dialog.required')}
+                slotProps={{
+                  inputLabel: { shrink: true }
+                }}
               />
             </Grid>
 
@@ -987,7 +1004,6 @@ const EnhancedProfileSection: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
       {/* License Read-Only Alert */}
       <LicenseReadOnlyAlert
         open={licenseAlertOpen}

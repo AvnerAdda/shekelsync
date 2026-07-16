@@ -265,17 +265,25 @@ const DataExportPanel: React.FC = () => {
         <ExportIcon color="primary" />
         <Typography variant="h6">{t('title')}</Typography>
       </Box>
-
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          mb: 3
+        }}>
         {t('description')}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          mb: 3
+        }}>
         {t('institutionNote')}
       </Typography>
       <Alert severity="info" sx={{ mb: 3 }}>
         {hasElectronSaveBridge ? t('bridge.desktop') : t('bridge.web')}
       </Alert>
-
       <Grid container spacing={3}>
         {/* Export Configuration */}
         <Grid size={{ xs: 12, md: 6 }}>
@@ -355,7 +363,12 @@ const DataExportPanel: React.FC = () => {
                 </LocalizationProvider>
               )}
 
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary",
+                  mb: 1
+                }}>
                 <DateIcon sx={{ fontSize: 16, mr: 0.5 }} />
                 {t('config.exportPeriod', {
                   start: formatDate(startDate, 'MMM dd, yyyy'),
@@ -413,13 +426,13 @@ const DataExportPanel: React.FC = () => {
                     placeholder={t('filters.categories.placeholder')}
                   />
                 )}
-                renderTags={(value, getTagProps) =>
+                renderValue={(value, getItemProps) =>
                   value.map((option, index) => (
                     <Chip
                       variant="outlined"
                       label={option}
                       size="small"
-                      {...getTagProps({ index })}
+                      {...getItemProps({ index })}
                       key={option}
                     />
                   ))
@@ -440,7 +453,9 @@ const DataExportPanel: React.FC = () => {
                   <li {...props} key={option.name}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <InstitutionBadge institution={option.institution} fallback={option.name} />
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                      }}>
                         {t('filters.vendors.count', { count: option.count })}
                       </Typography>
                     </Box>
@@ -453,13 +468,13 @@ const DataExportPanel: React.FC = () => {
                     placeholder={t('filters.vendors.placeholder')}
                   />
                 )}
-                renderTags={(value, getTagProps) =>
+                renderValue={(value, getItemProps) =>
                   value.map((option, index) => (
                     <Chip
                       variant="outlined"
                       label={option.institution ? getInstitutionLabel(option.institution) || option.name : option.name}
                       size="small"
-                      {...getTagProps({ index })}
+                      {...getItemProps({ index })}
                       key={option.name}
                     />
                   ))
@@ -476,10 +491,14 @@ const DataExportPanel: React.FC = () => {
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Box>
                   <Typography variant="h6">Export Summary</Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>
                     {t('summary.estimated', { count: getEstimatedRecords() })}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>
                     {t('summary.formatType', { format: format.toUpperCase(), type: dataType })}
                   </Typography>
                 </Box>

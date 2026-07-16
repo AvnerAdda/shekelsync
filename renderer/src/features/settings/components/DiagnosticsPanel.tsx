@@ -335,17 +335,28 @@ export const DiagnosticsPanel: React.FC = () => {
 
   return (
     <Paper sx={{ p: 3 }}>
-      <Stack direction="row" spacing={1} alignItems="center" mb={2}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: "center",
+          mb: 2
+        }}>
         <BugReportIcon color="primary" />
         <Typography variant="h6">{t('title')}</Typography>
       </Stack>
-
-      <Typography variant="body2" color="text.secondary" paragraph>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          marginBottom: "16px"
+        }}>
         {t('description')}
       </Typography>
-
       {info.configHealth?.warnings?.length ? (
-        <Stack spacing={1} mb={2}>
+        <Stack spacing={1} sx={{
+          mb: 2
+        }}>
           {info.configHealth.warnings.map((warning, index) => (
             <Alert
               key={`${warning.code || 'warning'}-${index}`}
@@ -358,10 +369,16 @@ export const DiagnosticsPanel: React.FC = () => {
           ))}
         </Stack>
       ) : null}
-
       {info.configHealth?.database?.mode && (
-        <Box mb={2}>
-          <Typography variant="caption" color="text.secondary" display="block">
+        <Box sx={{
+          mb: 2
+        }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary",
+              display: "block"
+            }}>
             {t('config.databaseMode')}
           </Typography>
           <Typography variant="body2">
@@ -369,7 +386,13 @@ export const DiagnosticsPanel: React.FC = () => {
           </Typography>
           {info.configHealth.database.sqlitePath && (
             <>
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  display: "block",
+                  mt: 1
+                }}>
                 {t('config.sqlitePath')}
               </Typography>
               <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
@@ -379,20 +402,19 @@ export const DiagnosticsPanel: React.FC = () => {
           )}
         </Box>
       )}
-
       {!supportsDiagnostics && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           {t('notSupported')}
         </Alert>
       )}
-
       {errorMessage && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {errorMessage}
         </Alert>
       )}
-
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} mb={2}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{
+        mb: 2
+      }}>
         <Button
           startIcon={openStatus === 'loading' ? <CircularProgress size={16} /> : <FolderOpenIcon />}
           variant="outlined"
@@ -420,17 +442,21 @@ export const DiagnosticsPanel: React.FC = () => {
           {t('copy')}
         </Button>
       </Stack>
-
       <Divider sx={{ my: 2 }} />
-
       <Typography variant="subtitle2" gutterBottom>
         {t('backup.title')}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          mb: 2
+        }}>
         {t('backup.description')}
       </Typography>
-
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} mb={2}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{
+        mb: 2
+      }}>
         <Button
           startIcon={backupStatus === 'loading' ? <CircularProgress size={16} /> : <FileDownloadIcon />}
           variant="contained"
@@ -454,10 +480,14 @@ export const DiagnosticsPanel: React.FC = () => {
           </Button>
         )}
       </Stack>
-
       {info.logDirectory && (
         <Box>
-          <Typography variant="caption" color="text.secondary" display="block">
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary",
+              display: "block"
+            }}>
             {t('logDirectory')}
           </Typography>
           <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
@@ -465,43 +495,74 @@ export const DiagnosticsPanel: React.FC = () => {
           </Typography>
         </Box>
       )}
-
-      <Stack direction="row" spacing={2} mt={2}>
+      <Stack direction="row" spacing={2} sx={{
+        mt: 2
+      }}>
         {info.appVersion && (
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {t('version', { version: info.appVersion })}
           </Typography>
         )}
         {info.platform && (
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {t('platform', { platform: info.platform })}
           </Typography>
         )}
       </Stack>
-
       {info.telemetry && (
-        <Box mt={3} p={2} borderRadius={2} bgcolor={(theme) => theme.palette.action.hover}>
-          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+        <Box
+          sx={{
+            mt: 3,
+            p: 2,
+            borderRadius: 2,
+            bgcolor: (theme) => theme.palette.action.hover
+          }}>
+          <Typography
+            variant="caption"
+            gutterBottom
+            sx={{
+              color: "text.secondary",
+              display: "block"
+            }}>
             {t('telemetry.status')}
           </Typography>
-          <Typography variant="body2" fontWeight="bold">
+          <Typography variant="body2" sx={{
+            fontWeight: "bold"
+          }}>
             {info.telemetry.enabled ? t('telemetry.optedIn') : t('telemetry.optedOut')}
           </Typography>
           {!info.telemetry.dsnConfigured && (
-            <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                display: "block",
+                mt: 0.5
+              }}>
               {t('telemetry.noDsn')}
             </Typography>
           )}
           {info.telemetry.dsnConfigured && info.telemetry.dsnHost && (
-            <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                display: "block",
+                mt: 0.5
+              }}>
               {t('telemetry.destination', { host: info.telemetry.dsnHost })}
             </Typography>
           )}
         </Box>
       )}
-
       {metricsSummary.length > 0 && (
-        <Box mt={3}>
+        <Box sx={{
+          mt: 3
+        }}>
           <Typography variant="subtitle2" gutterBottom>
             {t('metrics.title')}
           </Typography>
@@ -514,22 +575,42 @@ export const DiagnosticsPanel: React.FC = () => {
               return (
                 <Grid size={{ xs: 12, md: 6 }} key={summary.bucket}>
                   <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="body2" fontWeight="bold">
+                    <Typography variant="body2" sx={{
+                      fontWeight: "bold"
+                    }}>
                       {summary.label}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        display: "block"
+                      }}>
                       {t('metrics.runs', { count: summary.totalRuns })}
                       {summary.avgDuration ? ` · ${t('metrics.avgDuration', { value: summary.avgDuration })}` : ''}
                     </Typography>
                     {lastRun && (
-                      <Typography variant="caption" color="text.secondary" display="block">
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: "text.secondary",
+                          display: "block"
+                        }}>
                         {t('metrics.lastRun', { date: lastRun })}
                       </Typography>
                     )}
                     {rowCountsEntries.length > 0 && (
-                      <Box mt={1}>
+                      <Box sx={{
+                        mt: 1
+                      }}>
                         {rowCountsEntries.map(([key, value]) => (
-                          <Typography variant="caption" color="text.secondary" display="block" key={key}>
+                          <Typography
+                            variant="caption"
+                            key={key}
+                            sx={{
+                              color: "text.secondary",
+                              display: "block"
+                            }}>
                             {formatMetricKey(key)}: {value}
                           </Typography>
                         ))}

@@ -163,14 +163,26 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
           <Box sx={{ color }}>{icon}</Box>
-          <Typography variant="subtitle2" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+          <Typography
+            variant="subtitle2"
+            sx={{
+              fontWeight: 700,
+              lineHeight: 1.2
+            }}>
             {label}
           </Typography>
         </Box>
-        <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.1 }}>
+        <Typography
+          variant="h6"
+          sx={{
+            fontWeight: 800,
+            lineHeight: 1.1
+          }}>
           {formatCurrencyValue(bucket.totalValue)}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: "text.secondary"
+        }}>
           {t('bucketMeta', {
             withValue: bucket.accountsWithValue,
             total: bucket.accountsCount,
@@ -203,14 +215,27 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
           <Box sx={{ color: theme.palette.error.main }}>
             <CreditCardIcon fontSize="small" />
           </Box>
-          <Typography variant="subtitle2" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+          <Typography
+            variant="subtitle2"
+            sx={{
+              fontWeight: 700,
+              lineHeight: 1.2
+            }}>
             {t('liabilities.pendingCcDebt')}
           </Typography>
         </Box>
-        <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.1, color: debtColor }}>
+        <Typography
+          variant="h6"
+          sx={{
+            fontWeight: 800,
+            lineHeight: 1.1,
+            color: debtColor
+          }}>
           {debtLabel}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: "text.secondary"
+        }}>
           {updated ? t('updated', { date: updated }) : t('liabilities.noBaseline')}
         </Typography>
       </Card>
@@ -222,10 +247,17 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2 }}>
         <AccountBalanceWalletIcon sx={{ fontSize: 30, color: 'primary.main', mt: 0.25 }} />
         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-          <Typography variant="h5" fontWeight={800} sx={{ lineHeight: 1.15 }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 800,
+              lineHeight: 1.15
+            }}>
             {t('title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('subtitle')} • {t('updated', { date: updatedLabel })}
           </Typography>
         </Box>
@@ -244,16 +276,27 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
           </Box>
         )}
       </Box>
-
-      <Grid container spacing={2} alignItems="stretch">
+      <Grid container spacing={2} sx={{
+        alignItems: "stretch"
+      }}>
         <Grid size={{ xs: 12, md: 4 }}>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {headlineLabel}
           </Typography>
-          <Typography variant="h3" fontWeight={900} color="primary.main" sx={{ letterSpacing: -0.5 }}>
+          <Typography
+            variant="h3"
+            sx={{
+              fontWeight: 900,
+              color: "primary.main",
+              letterSpacing: -0.5
+            }}>
             {headlineFormatted}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('footnote')}
           </Typography>
         </Grid>
@@ -272,7 +315,9 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
 
           {(data.liabilities.pendingCreditCardDebtStatus !== 'ok' || data.assets.currencies.hasMultiple) && (
             <Box sx={{ mt: 2 }}>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 {data.assets.currencies.hasMultiple
                   ? t('hints.multiCurrency', { currencies: data.assets.currencies.distinct.join(', ') })
                   : null}

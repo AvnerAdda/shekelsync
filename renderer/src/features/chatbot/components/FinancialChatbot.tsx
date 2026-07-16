@@ -597,26 +597,27 @@ const FinancialChatbot: React.FC = () => {
       >
         <ChatIcon />
       </Fab>
-
       {/* Chat Drawer */}
       <Drawer
         anchor="right"
         open={isOpen}
         onClose={() => setIsOpen(false)}
-        PaperProps={{
-          sx: {
-            width: { xs: '100%', sm: drawerWidth },
-            display: 'flex',
-            flexDirection: 'column',
-            zIndex: (muiTheme) => muiTheme.zIndex.drawer + 2,
-            bgcolor: (theme) => (theme.palette.mode === 'light' ? theme.palette.background.paper : alpha(theme.palette.background.paper, 0.95)),
-            backdropFilter: 'blur(20px)',
-            borderLeft: '1px solid',
-            borderColor: (theme) => (theme.palette.mode === 'light' ? alpha(theme.palette.grey[400], 0.3) : alpha(theme.palette.divider, 0.1)),
-          },
-        }}
         sx={{
           zIndex: (muiTheme) => muiTheme.zIndex.drawer + 2,
+        }}
+        slotProps={{
+          paper: {
+            sx: {
+              width: { xs: '100%', sm: drawerWidth },
+              display: 'flex',
+              flexDirection: 'column',
+              zIndex: (muiTheme) => muiTheme.zIndex.drawer + 2,
+              bgcolor: (theme) => (theme.palette.mode === 'light' ? theme.palette.background.paper : alpha(theme.palette.background.paper, 0.95)),
+              backdropFilter: 'blur(20px)',
+              borderLeft: '1px solid',
+              borderColor: (theme) => (theme.palette.mode === 'light' ? alpha(theme.palette.grey[400], 0.3) : alpha(theme.palette.divider, 0.1)),
+            },
+          }
         }}
       >
         {/* Resize Handle */}
@@ -664,10 +665,22 @@ const FinancialChatbot: React.FC = () => {
               <BotIcon />
             </Avatar>
             <Box>
-              <Typography variant="h6" fontWeight="bold" sx={{ lineHeight: 1.2 }}>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: "bold",
+                  lineHeight: 1.2
+                }}>
                 {t('header.title')}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5
+                }}>
                 <Box
                   sx={{
                     width: 6,
@@ -730,7 +743,13 @@ const FinancialChatbot: React.FC = () => {
                 <CircularProgress size={20} />
               </Box>
             ) : conversations.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary",
+                  p: 2,
+                  textAlign: 'center'
+                }}>
                 {t('history.empty')}
               </Typography>
             ) : (
@@ -747,12 +766,14 @@ const FinancialChatbot: React.FC = () => {
                       <ListItemText
                         primary={conv.title || t('history.untitled')}
                         secondary={new Date(conv.updatedAt).toLocaleDateString()}
-                        primaryTypographyProps={{
-                          noWrap: true,
-                          fontSize: '0.875rem',
-                        }}
-                        secondaryTypographyProps={{ fontSize: '0.7rem' }}
-                      />
+                        slotProps={{
+                          primary: {
+                            noWrap: true,
+                            sx: { fontSize: '0.875rem' },
+                          },
+
+                          secondary: { sx: { fontSize: '0.7rem' } }
+                        }} />
                       <ListItemSecondaryAction>
                         <IconButton
                           edge="end"
@@ -908,7 +929,9 @@ const FinancialChatbot: React.FC = () => {
                 }}
               >
                 <CircularProgress size={16} thickness={5} />
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('status.thinking')}
                 </Typography>
               </Paper>
@@ -928,7 +951,9 @@ const FinancialChatbot: React.FC = () => {
         {/* No Permissions Warning */}
         {!hasAnyPermission && (
           <Alert severity="warning" icon={<LockIcon />} sx={{ mx: 2 }}>
-            <Typography variant="body2" fontWeight="bold">
+            <Typography variant="body2" sx={{
+              fontWeight: "bold"
+            }}>
               {t('warnings.title')}
             </Typography>
             <Typography variant="caption">{t('warnings.description')}</Typography>
@@ -938,7 +963,9 @@ const FinancialChatbot: React.FC = () => {
         {/* Suggested Questions */}
         {!hasOpenAiApiKey && (
           <Alert severity="info" icon={<LockIcon />} sx={{ mx: 2 }}>
-            <Typography variant="body2" fontWeight="bold">
+            <Typography variant="body2" sx={{
+              fontWeight: "bold"
+            }}>
               {t('warnings.missingApiKeyTitle')}
             </Typography>
             <Typography variant="caption">{t('warnings.missingApiKeyDescription')}</Typography>
@@ -953,7 +980,14 @@ const FinancialChatbot: React.FC = () => {
               bgcolor: 'transparent',
             }}
           >
-            <Typography variant="caption" color="text.secondary" gutterBottom sx={{ fontWeight: 600, ml: 1 }}>
+            <Typography
+              variant="caption"
+              gutterBottom
+              sx={{
+                color: "text.secondary",
+                fontWeight: 600,
+                ml: 1
+              }}>
               {dynamicSuggestions.length > 0 ? t('suggestions.dynamicTitle') : t('suggestions.title')}
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
@@ -1049,12 +1083,19 @@ const FinancialChatbot: React.FC = () => {
               <SendIcon fontSize="small" />
             </IconButton>
           </Box>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, ml: 1, fontSize: '0.7rem' }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary",
+              display: 'block',
+              mt: 1,
+              ml: 1,
+              fontSize: '0.7rem'
+            }}>
             {canUseChatbot ? t('hints.enabled') : hasAnyPermission ? t('hints.missingApiKey') : t('hints.disabled')}
           </Typography>
         </Box>
       </Drawer>
-
       <LicenseReadOnlyAlert open={licenseAlertOpen} onClose={() => setLicenseAlertOpen(false)} reason={licenseAlertReason} />
     </>
   );

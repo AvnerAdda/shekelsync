@@ -197,7 +197,12 @@ const SecuritySettingsPanel: React.FC = () => {
           <Typography variant="h6">Security & Authentication</Typography>
         </Box>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mb: 3
+          }}>
           Manage security settings, encryption, and biometric authentication for ShekelSync.
         </Typography>
 
@@ -232,153 +237,170 @@ const SecuritySettingsPanel: React.FC = () => {
                     : 'Biometric';
               return (
                 <>
-            {/* Security Status Overview */}
-            <Box
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                backgroundColor: alpha(getSecurityColor(), 0.1),
-                border: `1px solid ${alpha(getSecurityColor(), 0.3)}`,
-                mb: 3,
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  {getSecurityIcon()}
-                  <Typography variant="subtitle1" fontWeight={600}>
-                    {getSecurityText()}
-                  </Typography>
-                </Box>
-                <Chip
-                  label={getSecurityLevel().toUpperCase()}
-                  size="small"
-                  sx={{
-                    backgroundColor: getSecurityColor(),
-                    color: 'white',
-                    fontWeight: 600,
-                  }}
-                />
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                Running on {status.platform.osName}
-              </Typography>
-            </Box>
+                  {/* Security Status Overview */}
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      backgroundColor: alpha(getSecurityColor(), 0.1),
+                      border: `1px solid ${alpha(getSecurityColor(), 0.3)}`,
+                      mb: 3,
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {getSecurityIcon()}
+                        <Typography variant="subtitle1" sx={{
+                          fontWeight: 600
+                        }}>
+                          {getSecurityText()}
+                        </Typography>
+                      </Box>
+                      <Chip
+                        label={getSecurityLevel().toUpperCase()}
+                        size="small"
+                        sx={{
+                          backgroundColor: getSecurityColor(),
+                          color: 'white',
+                          fontWeight: 600,
+                        }}
+                      />
+                    </Box>
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
+                      Running on {status.platform.osName}
+                    </Typography>
+                  </Box>
+                  {/* Security Features List */}
+                  <List dense>
+                    <ListItem>
+                      <ListItemIcon>
+                        {status.encryption.status === 'active' ? (
+                          <CheckIcon color="success" />
+                        ) : (
+                          <ErrorIcon color="error" />
+                        )}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary="Encryption"
+                        secondary={
+                          status.encryption.status === 'active'
+                            ? `${status.encryption.algorithm} encryption active`
+                            : 'Encryption not active'
+                        }
+                      />
+                    </ListItem>
 
-            {/* Security Features List */}
-            <List dense>
-              <ListItem>
-                <ListItemIcon>
-                  {status.encryption.status === 'active' ? (
-                    <CheckIcon color="success" />
-                  ) : (
-                    <ErrorIcon color="error" />
+                    <ListItem>
+                      <ListItemIcon>
+                        {keychainOk ? (
+                          <CheckIcon color="success" />
+                        ) : (
+                          <WarningIcon color="warning" />
+                        )}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary="Secure Key Storage"
+                        secondary={keychainDetails}
+                      />
+                    </ListItem>
+
+                    <ListItem>
+                      <ListItemIcon>
+                        {biometricAvailable ? (
+                          <CheckIcon color="success" />
+                        ) : (
+                          <InfoIcon color="info" />
+                        )}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary="Biometric Authentication"
+                        secondary={
+                          biometricAvailable
+                            ? `${biometricLabel} available`
+                            : status.biometric.reason || 'Not available on this system'
+                        }
+                      />
+                    </ListItem>
+                  </List>
+                  <Divider sx={{ my: 2 }} />
+                  {/* Actions */}
+                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                    <Button
+                      variant="outlined"
+                      startIcon={<ViewIcon />}
+                      onClick={() => setDetailsOpen(true)}
+                      sx={{ flex: '1 1 auto' }}
+                    >
+                      View Security Details
+                    </Button>
+
+                    {status.biometric.available && (
+                      <Button
+                        variant="contained"
+                        startIcon={authenticating ? <CircularProgress size={16} color="inherit" /> : <TouchAppIcon />}
+                        onClick={handleAuthenticate}
+                        disabled={authenticating}
+                        sx={{ flex: '1 1 auto' }}
+                      >
+                        {authenticating ? 'Authenticating...' : 'Test Biometric Auth'}
+                      </Button>
+                    )}
+                  </Box>
+                  {/* Authentication Result */}
+                  {authResult && (
+                    <Alert
+                      severity={authResult.success ? 'success' : 'error'}
+                      sx={{ mt: 2 }}
+                      onClose={() => setAuthResult(null)}
+                    >
+                      {authResult.message}
+                    </Alert>
                   )}
-                </ListItemIcon>
-                <ListItemText
-                  primary="Encryption"
-                  secondary={
-                    status.encryption.status === 'active'
-                      ? `${status.encryption.algorithm} encryption active`
-                      : 'Encryption not active'
-                  }
-                />
-              </ListItem>
-
-              <ListItem>
-                <ListItemIcon>
-                  {keychainOk ? (
-                    <CheckIcon color="success" />
-                  ) : (
-                    <WarningIcon color="warning" />
-                  )}
-                </ListItemIcon>
-                <ListItemText
-                  primary="Secure Key Storage"
-                  secondary={keychainDetails}
-                />
-              </ListItem>
-
-              <ListItem>
-                <ListItemIcon>
-                  {biometricAvailable ? (
-                    <CheckIcon color="success" />
-                  ) : (
-                    <InfoIcon color="info" />
-                  )}
-                </ListItemIcon>
-                <ListItemText
-                  primary="Biometric Authentication"
-                  secondary={
-                    biometricAvailable
-                      ? `${biometricLabel} available`
-                      : status.biometric.reason || 'Not available on this system'
-                  }
-                />
-              </ListItem>
-            </List>
-
-            <Divider sx={{ my: 2 }} />
-
-            {/* Actions */}
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Button
-                variant="outlined"
-                startIcon={<ViewIcon />}
-                onClick={() => setDetailsOpen(true)}
-                sx={{ flex: '1 1 auto' }}
-              >
-                View Security Details
-              </Button>
-
-              {status.biometric.available && (
-                <Button
-                  variant="contained"
-                  startIcon={authenticating ? <CircularProgress size={16} color="inherit" /> : <TouchAppIcon />}
-                  onClick={handleAuthenticate}
-                  disabled={authenticating}
-                  sx={{ flex: '1 1 auto' }}
-                >
-                  {authenticating ? 'Authenticating...' : 'Test Biometric Auth'}
-                </Button>
-              )}
-            </Box>
-
-            {/* Authentication Result */}
-            {authResult && (
-              <Alert
-                severity={authResult.success ? 'success' : 'error'}
-                sx={{ mt: 2 }}
-                onClose={() => setAuthResult(null)}
-              >
-                {authResult.message}
-              </Alert>
-            )}
-
-            {/* Security Info */}
-            <Alert severity="info" icon={<SecurityIcon />} sx={{ mt: 3 }}>
-              <Typography variant="body2" fontWeight="bold" gutterBottom>
-                Security Features
-              </Typography>
-              <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
-                • All credentials are encrypted at rest using AES-256-GCM
-              </Typography>
-              <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
-                • Encryption keys are stored in the OS keychain
-              </Typography>
-              <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
-                • Biometric authentication is used when available (Touch ID / Windows Hello)
-              </Typography>
-              <Typography variant="caption" display="block">
-                • Security events are logged for audit purposes
-              </Typography>
-            </Alert>
+                  {/* Security Info */}
+                  <Alert severity="info" icon={<SecurityIcon />} sx={{ mt: 3 }}>
+                    <Typography variant="body2" gutterBottom sx={{
+                      fontWeight: "bold"
+                    }}>
+                      Security Features
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: "block",
+                        mb: 0.5
+                      }}>
+                      • All credentials are encrypted at rest using AES-256-GCM
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: "block",
+                        mb: 0.5
+                      }}>
+                      • Encryption keys are stored in the OS keychain
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: "block",
+                        mb: 0.5
+                      }}>
+                      • Biometric authentication is used when available (Touch ID / Windows Hello)
+                    </Typography>
+                    <Typography variant="caption" sx={{
+                      display: "block"
+                    }}>
+                      • Security events are logged for audit purposes
+                    </Typography>
+                  </Alert>
                 </>
               );
             })()}
           </>
         ) : null}
       </Paper>
-
       <SecurityDetailsModal open={detailsOpen} onClose={() => setDetailsOpen(false)} />
     </>
   );

@@ -135,7 +135,9 @@ const SubscriptionAlerts: React.FC<SubscriptionAlertsProps> = ({
           },
         }}
       >
-        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+        <Stack direction="row" spacing={1.5} sx={{
+          alignItems: "flex-start"
+        }}>
           {/* Icon */}
           <Box
             sx={{
@@ -154,29 +156,56 @@ const SubscriptionAlerts: React.FC<SubscriptionAlertsProps> = ({
           </Box>
 
           {/* Content */}
-          <Box flex={1} minWidth={0}>
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
-              <Box minWidth={0}>
-                <Typography variant="body2" fontWeight={600} noWrap>
+          <Box
+            sx={{
+              flex: 1,
+              minWidth: 0
+            }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                justifyContent: "space-between",
+                alignItems: "flex-start"
+              }}>
+              <Box sx={{
+                minWidth: 0
+              }}>
+                <Typography variant="body2" noWrap sx={{
+                  fontWeight: 600
+                }}>
                   {alert.subscription_name}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" noWrap>
+                <Typography variant="caption" noWrap sx={{
+                  color: "text.secondary"
+                }}>
                   {alert.title}
                 </Typography>
               </Box>
 
               {/* Price change info */}
               {alert.old_amount != null && alert.new_amount != null && (
-                <Box textAlign="right" flexShrink={0}>
+                <Box
+                  sx={{
+                    textAlign: "right",
+                    flexShrink: 0
+                  }}>
                   <Typography
                     variant="caption"
                     color={alert.alert_type === 'price_increase' ? 'error.main' : 'success.main'}
-                    fontWeight={600}
+                    sx={{
+                      fontWeight: 600
+                    }}
                   >
                     {formatCurrency(alert.old_amount)} → {formatCurrency(alert.new_amount)}
                   </Typography>
                   {alert.percentage_change != null && (
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        display: 'block'
+                      }}>
                       {alert.percentage_change > 0 ? '+' : ''}
                       {alert.percentage_change.toFixed(1)}%
                     </Typography>
@@ -230,13 +259,19 @@ const SubscriptionAlerts: React.FC<SubscriptionAlertsProps> = ({
         {/* Header */}
         <Stack
           direction="row"
-          justifyContent="space-between"
-          alignItems="center"
           onClick={() => setExpanded(!expanded)}
-          sx={{ cursor: 'pointer', mb: expanded ? 2 : 0 }}
-        >
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Typography variant="subtitle1" fontWeight="bold">
+          sx={{
+            justifyContent: "space-between",
+            alignItems: "center",
+            cursor: 'pointer',
+            mb: expanded ? 2 : 0
+          }}>
+          <Stack direction="row" spacing={1.5} sx={{
+            alignItems: "center"
+          }}>
+            <Typography variant="subtitle1" sx={{
+              fontWeight: "bold"
+            }}>
               {t('alerts.title')}
             </Typography>
             {criticalAlerts.length > 0 && (
@@ -309,7 +344,7 @@ const SubscriptionAlerts: React.FC<SubscriptionAlertsProps> = ({
           >
             {useColumns ? (
               // Two-column layout for larger screens
-              <Box
+              (<Box
                 sx={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(2, 1fr)',
@@ -317,12 +352,12 @@ const SubscriptionAlerts: React.FC<SubscriptionAlertsProps> = ({
                 }}
               >
                 {visibleAlerts.map((alert, idx) => renderAlert(alert, idx))}
-              </Box>
+              </Box>)
             ) : (
               // Single column for smaller screens
-              <Stack spacing={1.5}>
+              (<Stack spacing={1.5}>
                 {visibleAlerts.map((alert, idx) => renderAlert(alert, idx))}
-              </Stack>
+              </Stack>)
             )}
           </Box>
 

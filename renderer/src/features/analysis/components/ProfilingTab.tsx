@@ -310,11 +310,20 @@ const ProfilingTab: React.FC = () => {
   };
 
   const renderMetricRow = (label: string, value: string) => (
-    <Stack direction="row" justifyContent="space-between" spacing={2}>
-      <Typography variant="body2" color="text.secondary">
+    <Stack direction="row" spacing={2} sx={{
+      justifyContent: "space-between"
+    }}>
+      <Typography variant="body2" sx={{
+        color: "text.secondary"
+      }}>
         {label}
       </Typography>
-      <Typography variant="body2" fontWeight={600} textAlign="right">
+      <Typography
+        variant="body2"
+        sx={{
+          fontWeight: 600,
+          textAlign: "right"
+        }}>
         {value}
       </Typography>
     </Stack>
@@ -323,7 +332,9 @@ const ProfilingTab: React.FC = () => {
   const renderNarrativeItems = (items: string[], emptyLabel: string) => {
     if (items.length === 0) {
       return (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           {emptyLabel}
         </Typography>
       );
@@ -367,18 +378,29 @@ const ProfilingTab: React.FC = () => {
       <Stack
         direction={{ xs: 'column', md: 'row' }}
         spacing={2}
-        justifyContent="space-between"
-        alignItems={{ xs: 'flex-start', md: 'center' }}
-        sx={{ mb: 3 }}
-      >
+        sx={{
+          justifyContent: "space-between",
+          alignItems: { xs: 'flex-start', md: 'center' },
+          mb: 3
+        }}>
         <Box>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: "center",
+              mb: 0.5
+            }}>
             <ProfilingIcon color="primary" />
-            <Typography variant="h6" fontWeight={700}>
+            <Typography variant="h6" sx={{
+              fontWeight: 700
+            }}>
               {t('title')}
             </Typography>
           </Stack>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('subtitle')}
           </Typography>
         </Box>
@@ -394,7 +416,6 @@ const ProfilingTab: React.FC = () => {
           </Button>
         )}
       </Stack>
-
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
@@ -405,7 +426,6 @@ const ProfilingTab: React.FC = () => {
           )}
         </Alert>
       )}
-
       {!assessment && !hasApiKey && (
         <Card
           elevation={0}
@@ -417,10 +437,14 @@ const ProfilingTab: React.FC = () => {
           }}
         >
           <CardContent sx={{ p: 4 }}>
-            <Typography variant="h6" fontWeight={700} gutterBottom>
+            <Typography variant="h6" gutterBottom sx={{
+              fontWeight: 700
+            }}>
               {t('missingKeyTitle')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {t('missingKeyDescription')}
             </Typography>
             <Button
@@ -434,7 +458,6 @@ const ProfilingTab: React.FC = () => {
           </CardContent>
         </Card>
       )}
-
       {!assessment && hasApiKey && hasIncompleteProfile && (
         <Card
           elevation={0}
@@ -446,10 +469,14 @@ const ProfilingTab: React.FC = () => {
           }}
         >
           <CardContent sx={{ p: 4 }}>
-            <Typography variant="h6" fontWeight={700} gutterBottom>
+            <Typography variant="h6" gutterBottom sx={{
+              fontWeight: 700
+            }}>
               {t('incompleteTitle')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {t('incompleteDescription')}
             </Typography>
             {renderMissingFields(missingFields)}
@@ -464,7 +491,6 @@ const ProfilingTab: React.FC = () => {
           </CardContent>
         </Card>
       )}
-
       {!assessment && hasApiKey && !hasIncompleteProfile && (
         <Card
           elevation={0}
@@ -476,10 +502,14 @@ const ProfilingTab: React.FC = () => {
           }}
         >
           <CardContent sx={{ p: 4 }}>
-            <Typography variant="h6" fontWeight={700} gutterBottom>
+            <Typography variant="h6" gutterBottom sx={{
+              fontWeight: 700
+            }}>
               {t('emptyTitle')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {t('emptyDescription')}
             </Typography>
             <Button
@@ -494,12 +524,13 @@ const ProfilingTab: React.FC = () => {
           </CardContent>
         </Card>
       )}
-
       {assessment && (
         <Stack spacing={3}>
           {isStale && (
             <Alert severity="warning" action={renderStaleAction()} sx={{ alignItems: 'center' }}>
-              <Typography variant="body2" fontWeight={700}>
+              <Typography variant="body2" sx={{
+                fontWeight: 700
+              }}>
                 {t('staleTitle')}
               </Typography>
               <Typography variant="body2">
@@ -507,7 +538,9 @@ const ProfilingTab: React.FC = () => {
               </Typography>
               <Stack spacing={0.5} sx={{ mt: 1 }}>
                 {staleReasons.map((reason) => (
-                  <Typography key={reason} variant="caption" color="text.secondary">
+                  <Typography key={reason} variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {t(`staleReasons.${reason}`)}
                   </Typography>
                 ))}
@@ -528,12 +561,25 @@ const ProfilingTab: React.FC = () => {
                 }}
               >
                 <CardContent sx={{ p: 3 }}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      justifyContent: "space-between",
+                      alignItems: "flex-start"
+                    }}>
                     <Box>
-                      <Typography variant="overline" color="text.secondary">
+                      <Typography variant="overline" sx={{
+                        color: "text.secondary"
+                      }}>
                         {t('scoreLabel')}
                       </Typography>
-                      <Typography variant="h2" fontWeight={800} sx={{ lineHeight: 1 }}>
+                      <Typography
+                        variant="h2"
+                        sx={{
+                          fontWeight: 800,
+                          lineHeight: 1
+                        }}>
                         {assessment.score}
                       </Typography>
                     </Box>
@@ -563,7 +609,9 @@ const ProfilingTab: React.FC = () => {
               <Card elevation={0} sx={{ height: '100%', borderRadius: 4 }}>
                 <CardContent sx={{ p: 0 }}>
                   <Box sx={{ px: 3, pt: 3, pb: 1.5 }}>
-                    <Typography variant="h6" fontWeight={700} gutterBottom>
+                    <Typography variant="h6" gutterBottom sx={{
+                      fontWeight: 700
+                    }}>
                       {assessment.narrative.headline}
                     </Typography>
                   </Box>
@@ -592,7 +640,9 @@ const ProfilingTab: React.FC = () => {
 
                   <Box sx={{ p: 3, minHeight: 212 }}>
                     {narrativeTab === 'summary' && (
-                      <Typography variant="body1" color="text.secondary">
+                      <Typography variant="body1" sx={{
+                        color: "text.secondary"
+                      }}>
                         {assessment.narrative.summary}
                       </Typography>
                     )}
@@ -624,7 +674,9 @@ const ProfilingTab: React.FC = () => {
 
           <Card elevation={0} sx={{ borderRadius: 4 }}>
             <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" fontWeight={700} gutterBottom>
+              <Typography variant="h6" gutterBottom sx={{
+                fontWeight: 700
+              }}>
                 {t('comparatorTitle')}
               </Typography>
               <Stack spacing={2}>
@@ -641,15 +693,20 @@ const ProfilingTab: React.FC = () => {
                       <Stack spacing={1.5}>
                         <Stack
                           direction={{ xs: 'column', sm: 'row' }}
-                          justifyContent="space-between"
-                          alignItems={{ xs: 'flex-start', sm: 'center' }}
                           spacing={1}
-                        >
+                          sx={{
+                            justifyContent: "space-between",
+                            alignItems: { xs: 'flex-start', sm: 'center' }
+                          }}>
                           <Box>
-                            <Typography variant="subtitle2" fontWeight={700}>
+                            <Typography variant="subtitle2" sx={{
+                              fontWeight: 700
+                            }}>
                               {t(`comparatorLabels.${comparator.key}`)}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                              color: "text.secondary"
+                            }}>
                               {t(`status.${comparator.status}`)}
                               {comparator.weighted
                                 ? ` • ${t('weightLabel', { value: Math.round(comparator.weight * 100) })}`
@@ -692,18 +749,24 @@ const ProfilingTab: React.FC = () => {
 
                           <Stack
                             direction="row"
-                            justifyContent="space-between"
-                            sx={{ mt: 0.75, px: 0.25 }}
-                          >
+                            sx={{
+                              justifyContent: "space-between",
+                              mt: 0.75,
+                              px: 0.25
+                            }}>
                             {['0', '50', '100'].map((mark) => (
-                              <Typography key={mark} variant="caption" color="text.secondary">
+                              <Typography key={mark} variant="caption" sx={{
+                                color: "text.secondary"
+                              }}>
                                 {mark}
                               </Typography>
                             ))}
                           </Stack>
                         </Box>
 
-                        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                        <Stack direction="row" spacing={1} useFlexGap sx={{
+                          flexWrap: "wrap"
+                        }}>
                           <Chip
                             size="small"
                             variant="outlined"
@@ -731,7 +794,9 @@ const ProfilingTab: React.FC = () => {
                           />
                         </Stack>
 
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                          color: "text.secondary"
+                        }}>
                           {comparator.note}
                         </Typography>
                       </Stack>
@@ -746,7 +811,9 @@ const ProfilingTab: React.FC = () => {
             <Grid size={{ xs: 12, md: 6 }}>
               <Card elevation={0} sx={{ borderRadius: 4, height: '100%' }}>
                 <CardContent sx={{ p: 3 }}>
-                  <Typography variant="h6" fontWeight={700} gutterBottom>
+                  <Typography variant="h6" gutterBottom sx={{
+                    fontWeight: 700
+                  }}>
                     {t('metricsTitle')}
                   </Typography>
                   <Stack spacing={1.25}>
@@ -793,16 +860,26 @@ const ProfilingTab: React.FC = () => {
             <Grid size={{ xs: 12, md: 6 }}>
               <Card elevation={0} sx={{ borderRadius: 4, height: '100%' }}>
                 <CardContent sx={{ p: 3 }}>
-                  <Typography variant="h6" fontWeight={700} gutterBottom>
+                  <Typography variant="h6" gutterBottom sx={{
+                    fontWeight: 700
+                  }}>
                     {t('sourcesTitle')}
                   </Typography>
                   <Stack spacing={1.5}>
                     {assessment.sources.map((source) => (
                       <Box key={source.id}>
-                        <Typography variant="subtitle2" fontWeight={700}>
+                        <Typography variant="subtitle2" sx={{
+                          fontWeight: 700
+                        }}>
                           {source.title}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "text.secondary",
+                            display: 'block',
+                            mb: 0.5
+                          }}>
                           {t('sourceCaption', { date: formatDateTime(source.effectiveDate) })}
                         </Typography>
                         <Link

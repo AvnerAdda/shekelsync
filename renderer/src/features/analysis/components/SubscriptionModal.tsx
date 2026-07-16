@@ -189,8 +189,15 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         }}
       >
         <DialogTitle sx={{ pb: 2 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Stack direction="row" spacing={2} alignItems="center">
+          <Stack
+            direction="row"
+            sx={{
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+            <Stack direction="row" spacing={2} sx={{
+              alignItems: "center"
+            }}>
               <Box
                 sx={{
                   width: 40,
@@ -206,11 +213,15 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 <SubscriptionIcon sx={{ color: '#fff', fontSize: 20 }} />
               </Box>
               <Box>
-                <Typography variant="h6" component="span" fontWeight={700}>
+                <Typography variant="h6" component="span" sx={{
+                  fontWeight: 700
+                }}>
                   {isEditing ? t('modal.titleEdit') : t('modal.titleAdd')}
                 </Typography>
                 {isEditing && subscription?.category_name && (
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {subscription.category_name}
                   </Typography>
                 )}
@@ -222,7 +233,6 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           </Stack>
         </DialogTitle>
       </Box>
-
       <DialogContent sx={{ pt: 3 }}>
         <Stack spacing={3}>
           {error && (
@@ -260,13 +270,15 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               type="number"
               fullWidth
               required
-              InputProps={{
-                startAdornment: <InputAdornment position="start">₪</InputAdornment>,
-              }}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
                 },
+              }}
+              slotProps={{
+                input: {
+                  startAdornment: <InputAdornment position="start">₪</InputAdornment>,
+                }
               }}
             />
 
@@ -295,12 +307,14 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               onChange={(e) => handleChange('billing_day', e.target.value)}
               type="number"
               fullWidth
-              inputProps={{ min: 1, max: 31 }}
               helperText={t('modal.hints.billingDay')}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
                 },
+              }}
+              slotProps={{
+                htmlInput: { min: 1, max: 31 }
               }}
             />
 
@@ -312,7 +326,9 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 label={t('modal.fields.status')}
                 sx={{ borderRadius: 2 }}
                 renderValue={(value) => (
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} sx={{
+                    alignItems: "center"
+                  }}>
                     <Box
                       sx={{
                         width: 8,
@@ -327,7 +343,9 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               >
                 {STATUSES.map((status) => (
                   <MenuItem key={status} value={status}>
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} sx={{
+                      alignItems: "center"
+                    }}>
                       <Box
                         sx={{
                           width: 8,
@@ -369,27 +387,56 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 border: `1px solid ${alpha(theme.palette.info.main, 0.15)}`,
               }}
             >
-              <Stack direction="row" spacing={1} alignItems="center" mb={2}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: "center",
+                  mb: 2
+                }}>
                 <TrendIcon sx={{ fontSize: 16, color: theme.palette.info.main }} />
-                <Typography variant="caption" fontWeight={600} color="info.main">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 600,
+                    color: "info.main"
+                  }}>
                   {t('modal.detectedInfo')}
                 </Typography>
               </Stack>
 
               <Stack direction="row" spacing={3}>
-                <Box flex={1}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                <Box sx={{
+                  flex: 1
+                }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                      display: 'block',
+                      mb: 0.5
+                    }}>
                     {t('modal.fields.detectedAmount')}
                   </Typography>
-                  <Typography variant="body1" fontWeight={700}>
+                  <Typography variant="body1" sx={{
+                    fontWeight: 700
+                  }}>
                     {subscription.detected_amount
                       ? formatCurrency(subscription.detected_amount, { maximumFractionDigits: 2 })
                       : '-'}
                   </Typography>
                 </Box>
 
-                <Box flex={1}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                <Box sx={{
+                  flex: 1
+                }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                      display: 'block',
+                      mb: 0.5
+                    }}>
                     {t('modal.fields.detectedFrequency')}
                   </Typography>
                   <Chip
@@ -406,14 +453,26 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                   />
                 </Box>
 
-                <Box flex={1}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                <Box sx={{
+                  flex: 1
+                }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                      display: 'block',
+                      mb: 0.5
+                    }}>
                     {t('modal.fields.consistency')}
                   </Typography>
                   <Stack spacing={0.5}>
-                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                    <Stack direction="row" spacing={0.5} sx={{
+                      alignItems: "center"
+                    }}>
                       <PercentIcon sx={{ fontSize: 14, color: consistencyColor }} />
-                      <Typography variant="body1" fontWeight={700} color={consistencyColor}>
+                      <Typography variant="body1" color={consistencyColor} sx={{
+                        fontWeight: 700
+                      }}>
                         {subscription.consistency_score != null
                           ? `${Math.round(subscription.consistency_score * 100)}%`
                           : '-'}
@@ -441,7 +500,6 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           )}
         </Stack>
       </DialogContent>
-
       <DialogActions
         sx={{
           px: 3,

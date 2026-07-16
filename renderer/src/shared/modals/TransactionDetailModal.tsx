@@ -186,12 +186,14 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
         onClose={onClose}
         maxWidth="sm"
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            backgroundColor: alpha(theme.palette.background.paper, 0.98),
-            backdropFilter: 'blur(20px)',
-          },
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: 3,
+              backgroundColor: alpha(theme.palette.background.paper, 0.98),
+              backdropFilter: 'blur(20px)',
+            },
+          }
         }}
       >
         <ModalHeader
@@ -214,18 +216,20 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
           >
             <Box sx={{ pt: 0.5 }}>{getTransactionIcon()}</Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="h6" fontWeight={600} noWrap>
+              <Typography variant="h6" noWrap sx={{
+                fontWeight: 600
+              }}>
                 {transaction.name}
               </Typography>
               <Typography
                 variant="h5"
-                fontWeight={700}
                 sx={{
+                  fontWeight: 700,
+
                   color: transaction.price > 0
                     ? theme.palette.success.main
-                    : theme.palette.error.main,
-                }}
-              >
+                    : theme.palette.error.main
+                }}>
                 {transaction.price > 0 ? '+' : '-'}{formatPrice(transaction.price)}
               </Typography>
             </Box>
@@ -235,7 +239,9 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CalendarIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{
+                color: "text.secondary"
+              }}>
                 {formatDate(transaction.date)}
               </Typography>
             </Box>
@@ -260,7 +266,9 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
           <Box sx={{ mb: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
               <NotesIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-              <Typography variant="subtitle2" fontWeight={600}>
+              <Typography variant="subtitle2" sx={{
+                fontWeight: 600
+              }}>
                 {t('transactionDetail.notes', 'Notes')}
               </Typography>
             </Box>
@@ -285,7 +293,9 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
               <TagIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-              <Typography variant="subtitle2" fontWeight={600}>
+              <Typography variant="subtitle2" sx={{
+                fontWeight: 600
+              }}>
                 {t('transactionDetail.tags', 'Tags')}
               </Typography>
             </Box>
@@ -337,20 +347,24 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                       handleAddTag(tagInput);
                     }
                   }}
-                  InputProps={{
-                    ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {loading ? <CircularProgress size={16} /> : null}
-                        {params.InputProps.endAdornment}
-                      </>
-                    ),
-                  }}
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       borderRadius: 2,
                       backgroundColor: alpha(theme.palette.text.primary, 0.02),
                     },
+                  }}
+                  slotProps={{
+                    ...params.slotProps,
+
+                    input: {
+                      ...params.slotProps.input,
+                      endAdornment: (
+                        <>
+                          {loading ? <CircularProgress size={16} /> : null}
+                          {params.slotProps.input.endAdornment}
+                        </>
+                      ),
+                    }
                   }}
                 />
               )}
@@ -363,7 +377,13 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 </li>
               )}
             />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                mt: 0.5,
+                display: 'block'
+              }}>
               {t('transactionDetail.tagHint', 'Press Enter to add a tag')}
             </Typography>
           </Box>
@@ -383,7 +403,6 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
-
       <LicenseReadOnlyAlert
         open={licenseError.open}
         onClose={() => setLicenseError({ open: false })}

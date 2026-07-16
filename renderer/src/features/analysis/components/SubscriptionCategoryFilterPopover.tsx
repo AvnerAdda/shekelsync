@@ -74,15 +74,25 @@ const SubscriptionCategoryFilterPopover: React.FC<SubscriptionCategoryFilterPopo
     >
       <Box sx={{ p: 2 }}>
         {/* Header */}
-        <Typography variant="subtitle2" fontWeight={700}>
+        <Typography variant="subtitle2" sx={{
+          fontWeight: 700
+        }}>
           {t('title')}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: "text.secondary"
+        }}>
           {t('subtitle')}
         </Typography>
 
         {/* Select all / Deselect all */}
-        <Stack direction="row" spacing={1} mt={1.5} mb={1}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            mt: 1.5,
+            mb: 1
+          }}>
           <Button size="small" onClick={selectAll} sx={{ textTransform: 'none', fontSize: '0.75rem' }}>
             {t('selectAll')}
           </Button>

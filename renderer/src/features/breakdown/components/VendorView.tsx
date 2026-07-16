@@ -84,12 +84,16 @@ const VendorView: React.FC<VendorViewProps> = ({ vendors, categoryType, formatCu
               </Box>
               <Typography
                 variant="h4"
-                fontWeight="bold"
                 color={categoryType === 'income' ? 'success.main' : undefined}
+                sx={{
+                  fontWeight: "bold"
+                }}
               >
                 {formatCurrencyValue(Math.abs(vendor.total))}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{
+                color: "text.secondary"
+              }}>
                 {`${vendor.count} ${generalStrings.transactions}`}
               </Typography>
               {vendor.history && vendor.history.length > 1 && (
