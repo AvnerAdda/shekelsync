@@ -94,18 +94,26 @@ export default defineConfig(({ command }) => ({
     extensions: ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.json'],
   },
   optimizeDeps: {
+    // Crawl all source files upfront so lazy-loaded pages' icon imports are
+    // discovered during cold start rather than incrementally per page visit,
+    // which would force repeated Vite reloads and temporary dual-React states.
+    entries: [
+      'src/**/*.{ts,tsx}',
+    ],
     include: [
       '@app/utils/constants',
     ],
-    esbuildOptions: {
-      mainFields: ['module', 'main'],
+    rolldownOptions: {
+      resolve: {
+        mainFields: ['module', 'main'],
+      },
     },
   },
   build: {
     outDir: 'dist',
     manifest: true,
     sourcemap: process.env.RENDERER_SOURCEMAP === 'true',
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         manualChunks(id) {
           const normalizedId = normalizePath(id);

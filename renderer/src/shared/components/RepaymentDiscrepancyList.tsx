@@ -140,7 +140,6 @@ export default function RepaymentDiscrepancyList({
   return (
     <Alert severity={alertSeverity} sx={{ mb: 2 }}>
       <AlertTitle>{t('discrepancy.title')}</AlertTitle>
-
       <Typography variant="body2" sx={{ mb: 1 }}>
         {isAcknowledged
           ? t('discrepancy.acknowledgedMessage', { defaultValue: 'Discrepancy acknowledged. This warning will reappear if new transactions change the totals.' })
@@ -150,13 +149,17 @@ export default function RepaymentDiscrepancyList({
               : t('discrepancy.underpaidMessage', { amount: formatCurrency(discrepancy.difference) }))
             : t('discrepancy.noDiscrepancyCycles', { cycles: discrepancy.matchedCycleCount || 0 })}
       </Typography>
-
       {hasMissingCycles && (
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+            display: "block",
+            mb: 1
+          }}>
           {t('discrepancy.missingCyclesNote')}
         </Typography>
       )}
-
       {discrepancy.matchPatternsUsed && discrepancy.matchPatternsUsed.length > 0 && (
         <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1 }}>
           {discrepancy.matchPatternsUsed.slice(0, 6).map((pattern) => (
@@ -167,7 +170,6 @@ export default function RepaymentDiscrepancyList({
           )}
         </Box>
       )}
-
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center', mb: 1 }}>
         <TextField
           size="small"
@@ -177,11 +179,12 @@ export default function RepaymentDiscrepancyList({
           sx={{ minWidth: 240 }}
           disabled={loading}
         />
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: "text.secondary"
+        }}>
           {t('discrepancy.feeNameHint')}
         </Typography>
       </Box>
-
       {cycles.map((cycle) => {
         const difference = cycle.difference;
         const canAddFee = canResolve && cycle.status === 'fee_candidate' && typeof difference === 'number' && difference > 0.01;
@@ -198,7 +201,9 @@ export default function RepaymentDiscrepancyList({
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
               <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 0.5 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 1, flexWrap: 'wrap' }}>
-                  <Typography variant="body2" fontWeight="medium">
+                  <Typography variant="body2" sx={{
+                    fontWeight: "medium"
+                  }}>
                     {cycle.cycleDate}
                   </Typography>
                   <Chip
@@ -208,7 +213,9 @@ export default function RepaymentDiscrepancyList({
                     variant="outlined"
                   />
                 </Box>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('discrepancy.bankRepayments')}: {formatCurrencySigned(bankNetTotal)}{' '}
                   {bankRefundsTotal > 0 && (
                     <>({t('discrepancy.bankRepaymentsPay', { defaultValue: 'pay' })} {formatCurrency(bankPaymentsTotal)} • {t('discrepancy.bankRepaymentsRefund', { defaultValue: 'refund' })} {formatCurrency(bankRefundsTotal)})</>
@@ -220,7 +227,6 @@ export default function RepaymentDiscrepancyList({
                 </Typography>
               </Box>
             </AccordionSummary>
-
             <AccordionDetails>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -243,24 +249,39 @@ export default function RepaymentDiscrepancyList({
                   </Button>
 
                   {!canResolve && (
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('discrepancy.createPairingFirst')}
                     </Typography>
                   )}
                 </Box>
 
                 <Box>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {t('discrepancy.repaymentsInCycle')}: {cycle.repayments.length}
                   </Typography>
                   {cycle.repayments.slice(0, 8).map((repayment) => (
-                    <Typography key={repayment.identifier} variant="caption" display="block" color="text.secondary">
+                    <Typography
+                      key={repayment.identifier}
+                      variant="caption"
+                      sx={{
+                        display: "block",
+                        color: "text.secondary"
+                      }}>
                       • {repayment.price < 0 ? t('discrepancy.repaymentLabel', { defaultValue: '→ Credit Card Repayment' }) : t('discrepancy.refundLabel', { defaultValue: '→ Refund' })}{' '}
                       {repayment.name} ({formatCurrency(repayment.price)}) — {new Date(repayment.date).toISOString().split('T')[0]}
                     </Typography>
                   ))}
                   {cycle.repayments.length > 8 && (
-                    <Typography variant="caption" color="text.secondary" display="block">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        display: "block"
+                      }}>
                       {t('discrepancy.moreRepayments', { count: cycle.repayments.length - 8 })}
                     </Typography>
                   )}

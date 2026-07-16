@@ -501,7 +501,12 @@ export default function AccountPairingModal({
     <Dialog open={isOpen} onClose={handleDialogClose} maxWidth="md" fullWidth>
       <ModalHeader title="Account Pairing" onClose={handleClose} />
       <DialogContent>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mb: 2
+          }}>
           Pairing credit cards to their bank repayments automatically.
         </Typography>
 
@@ -551,15 +556,18 @@ export default function AccountPairingModal({
                 >
                   <ListItemText
                     primary={primary}
-                    secondaryTypographyProps={{ component: 'div' }}
                     secondary={(
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                         {secondaryText ? (
-                          <Typography variant="body2" color="text.secondary">{secondaryText}</Typography>
+                          <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                          }}>{secondaryText}</Typography>
                         ) : null}
                         {isDetailsAvailable ? (
                           statsState?.loading ? (
-                            <Typography variant="caption" color="text.secondary">Loading match stats...</Typography>
+                            <Typography variant="caption" sx={{
+                              color: "text.secondary"
+                            }}>Loading match stats...</Typography>
                           ) : statsState?.summary ? (
                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                               <Chip label={`Cycles: ${statsState.summary.cyclesCount}`} size="small" variant="outlined" />
@@ -573,11 +581,16 @@ export default function AccountPairingModal({
                               <Chip label={`Ambiguous: ${statsState.summary.statusCounts.ambiguous}`} size="small" color="info" variant="outlined" />
                             </Box>
                           ) : statsState?.error ? (
-                            <Typography variant="caption" color="warning.main">Match stats unavailable</Typography>
+                            <Typography variant="caption" sx={{
+                              color: "warning.main"
+                            }}>Match stats unavailable</Typography>
                           ) : null
                         ) : null}
                       </Box>
                     )}
+                    slotProps={{
+                      secondary: { component: 'div' }
+                    }}
                   />
                   <Chip label={meta.label} size="small" color={meta.color} sx={{ ml: 2 }} />
                 </ListItem>
@@ -589,13 +602,11 @@ export default function AccountPairingModal({
       <DialogActions>
         <Button onClick={handleClose}>Close</Button>
       </DialogActions>
-
       <LicenseReadOnlyAlert
         open={licenseAlertOpen}
         onClose={() => setLicenseAlertOpen(false)}
         reason={licenseAlertReason}
       />
-
       <PairingMatchDetailsModal
         isOpen={Boolean(selectedPairingForDetails)}
         onClose={() => setSelectedPairingForDetails(null)}

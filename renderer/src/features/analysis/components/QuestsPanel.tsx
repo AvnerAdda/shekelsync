@@ -134,16 +134,28 @@ const QuestsPanel: React.FC = () => {
     return (
       <Card sx={{ mb: 2, background: 'linear-gradient(135deg, #286b33 0%, #3ea54d 50%, #6b3328 100%)' }}>
         <CardContent>
-          <Stack direction="row" spacing={3} alignItems="center" justifyContent="space-between">
+          <Stack
+            direction="row"
+            spacing={3}
+            sx={{
+              alignItems: "center",
+              justifyContent: "space-between"
+            }}>
             {/* Level */}
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={1} sx={{
+              alignItems: "center"
+            }}>
               <TrophyIcon sx={{ color: 'gold', fontSize: 32 }} />
               <Box>
-                <Typography variant="h6" color="white" fontWeight="bold">
+                <Typography variant="h6" color="white" sx={{
+                  fontWeight: "bold"
+                }}>
                   {t('stats.level', { level: stats.level })}
                 </Typography>
                 {!levelProgress.max_level_reached && (
-                  <Typography variant="caption" color="rgba(255,255,255,0.8)">
+                  <Typography variant="caption" sx={{
+                    color: "rgba(255,255,255,0.8)"
+                  }}>
                     {t('stats.nextLevel', {
                       points: levelProgress.points_needed,
                       level: levelProgress.next_level,
@@ -154,23 +166,35 @@ const QuestsPanel: React.FC = () => {
             </Stack>
 
             {/* Points */}
-            <Box textAlign="center">
-              <Typography variant="h5" color="white" fontWeight="bold">
+            <Box sx={{
+              textAlign: "center"
+            }}>
+              <Typography variant="h5" color="white" sx={{
+                fontWeight: "bold"
+              }}>
                 {stats.total_points}
               </Typography>
-              <Typography variant="caption" color="rgba(255,255,255,0.8)">
+              <Typography variant="caption" sx={{
+                color: "rgba(255,255,255,0.8)"
+              }}>
                 {t('stats.points', { points: '' }).replace('pts', 'points')}
               </Typography>
             </Box>
 
             {/* Streak */}
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={1} sx={{
+              alignItems: "center"
+            }}>
               <StreakIcon sx={{ color: stats.current_streak > 0 ? '#ff6b6b' : 'rgba(255,255,255,0.5)', fontSize: 28 }} />
               <Box>
-                <Typography variant="h6" color="white" fontWeight="bold">
+                <Typography variant="h6" color="white" sx={{
+                  fontWeight: "bold"
+                }}>
                   {stats.current_streak}
                 </Typography>
-                <Typography variant="caption" color="rgba(255,255,255,0.8)">
+                <Typography variant="caption" sx={{
+                  color: "rgba(255,255,255,0.8)"
+                }}>
                   {t('stats.streak', { count: stats.current_streak })}
                 </Typography>
               </Box>
@@ -178,19 +202,37 @@ const QuestsPanel: React.FC = () => {
 
             {/* Completed/Failed */}
             <Stack direction="row" spacing={2}>
-              <Box textAlign="center">
-                <Typography variant="h6" color="#4ade80" fontWeight="bold">
+              <Box sx={{
+                textAlign: "center"
+              }}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    color: "#4ade80",
+                    fontWeight: "bold"
+                  }}>
                   {stats.quests_completed}
                 </Typography>
-                <Typography variant="caption" color="rgba(255,255,255,0.8)">
+                <Typography variant="caption" sx={{
+                  color: "rgba(255,255,255,0.8)"
+                }}>
                   {t('stats.completed')}
                 </Typography>
               </Box>
-              <Box textAlign="center">
-                <Typography variant="h6" color="#f87171" fontWeight="bold">
+              <Box sx={{
+                textAlign: "center"
+              }}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    color: "#f87171",
+                    fontWeight: "bold"
+                  }}>
                   {stats.quests_failed}
                 </Typography>
-                <Typography variant="caption" color="rgba(255,255,255,0.8)">
+                <Typography variant="caption" sx={{
+                  color: "rgba(255,255,255,0.8)"
+                }}>
                   {t('stats.failed')}
                 </Typography>
               </Box>
@@ -241,7 +283,9 @@ const QuestsPanel: React.FC = () => {
         }}
       >
         <CardContent>
-          <Stack direction="row" spacing={2} alignItems="flex-start">
+          <Stack direction="row" spacing={2} sx={{
+            alignItems: "flex-start"
+          }}>
             {/* Icon */}
             <Box
               sx={{
@@ -257,9 +301,19 @@ const QuestsPanel: React.FC = () => {
             </Box>
 
             {/* Content */}
-            <Box flex={1}>
-              <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
-                <Typography variant="subtitle1" fontWeight="bold">
+            <Box sx={{
+              flex: 1
+            }}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: "center",
+                  mb: 0.5
+                }}>
+                <Typography variant="subtitle1" sx={{
+                  fontWeight: "bold"
+                }}>
                   {quest.title}
                 </Typography>
                 {quest.quest_difficulty && (
@@ -271,15 +325,29 @@ const QuestsPanel: React.FC = () => {
                 )}
               </Stack>
 
-              <Typography variant="body2" color="text.secondary" mb={1}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary",
+                  mb: 1
+                }}>
                 {quest.description}
               </Typography>
 
               {/* Progress bar for accepted quests */}
               {isAccepted && progress && (
-                <Box mb={1}>
-                  <Stack direction="row" justifyContent="space-between" mb={0.5}>
-                    <Typography variant="caption" color="text.secondary">
+                <Box sx={{
+                  mb: 1
+                }}>
+                  <Stack
+                    direction="row"
+                    sx={{
+                      justifyContent: "space-between",
+                      mb: 0.5
+                    }}>
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {quest.action_type === 'quest_merchant_limit'
                         ? `${progress.current} / ${progress.target} ${t('progress.visits')}`
                         : `${formatCurrency(progress.current)} / ${formatCurrency(progress.target)}`}
@@ -301,11 +369,17 @@ const QuestsPanel: React.FC = () => {
               )}
 
               {/* Meta info */}
-              <Stack direction="row" spacing={2} alignItems="center">
+              <Stack direction="row" spacing={2} sx={{
+                alignItems: "center"
+              }}>
                 {/* Duration / Time remaining */}
-                <Stack direction="row" spacing={0.5} alignItems="center">
+                <Stack direction="row" spacing={0.5} sx={{
+                  alignItems: "center"
+                }}>
                   <TimerIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {(() => {
                       if (isAccepted && timeRemaining) {
                         return timeRemaining.expired
@@ -328,7 +402,9 @@ const QuestsPanel: React.FC = () => {
 
                 {/* Potential impact */}
                 {quest.potential_impact && quest.potential_impact > 0 && (
-                  <Typography variant="caption" color="success.main">
+                  <Typography variant="caption" sx={{
+                    color: "success.main"
+                  }}>
                     {formatCurrency(quest.potential_impact)} potential savings
                   </Typography>
                 )}
@@ -382,12 +458,22 @@ const QuestsPanel: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+      <Stack
+        direction="row"
+        sx={{
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 2
+        }}>
         <Box>
-          <Typography variant="h6" fontWeight="bold">
+          <Typography variant="h6" sx={{
+            fontWeight: "bold"
+          }}>
             {t('title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('subtitle')}
           </Typography>
         </Box>
@@ -400,16 +486,13 @@ const QuestsPanel: React.FC = () => {
           {generating ? t('actions.generating') : t('actions.generate')}
         </Button>
       </Stack>
-
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
-
       {/* Stats bar */}
       {renderStatsBar()}
-
       {/* Tabs */}
       <Tabs
         value={tabValue}
@@ -425,11 +508,14 @@ const QuestsPanel: React.FC = () => {
           disabled={loading}
         />
       </Tabs>
-
       <Divider sx={{ mb: 2 }} />
-
       {loading ? (
-        <Box display="flex" justifyContent="center" py={4}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            py: 4
+          }}>
           <CircularProgress />
         </Box>
       ) : (

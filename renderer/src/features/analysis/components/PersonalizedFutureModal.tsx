@@ -154,7 +154,9 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
     if (active && payload && payload.length) {
       return (
         <Paper sx={{ p: 1.5 }}>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {payload[0].payload.date}
           </Typography>
           {payload.map((entry: any, index: number) => (
@@ -177,23 +179,40 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
       onClose={onClose}
       maxWidth="lg"
       fullWidth
-      PaperProps={{
-        sx: {
-          bgcolor: alpha(theme.palette.background.paper, 0.8),
-          backdropFilter: 'blur(20px)',
-          backgroundImage: 'none',
-          boxShadow: theme.shadows[24],
-          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+      slotProps={{
+        paper: {
+          sx: {
+            bgcolor: alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(20px)',
+            backgroundImage: 'none',
+            boxShadow: theme.shadows[24],
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          }
         }
       }}
     >
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
-            <Typography variant="h5" fontWeight="bold" sx={{ background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`, backgroundClip: 'text', textFillColor: 'transparent', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: "bold",
+                background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                backgroundClip: 'text',
+                textFillColor: 'transparent',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent'
+              }}>
               {t('title')}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                mt: 0.5,
+                display: 'block'
+              }}>
               6-month forecast based on your financial patterns
             </Typography>
           </Box>
@@ -202,7 +221,6 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
           </IconButton>
         </Box>
       </DialogTitle>
-
       <DialogContent dividers sx={{ minHeight: { xs: '60vh', sm: '70vh', md: '80vh' }, maxHeight: { xs: '85vh', sm: '85vh', md: '80vh' }, overflow: 'auto', p: { xs: 2, sm: 3 } }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -220,10 +238,18 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
             {/* Net Position with Three Scenario Curves */}
             <Grid size={{ xs: 12 }}>
               <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
-                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                <Typography variant="subtitle2" gutterBottom sx={{
+                  fontWeight: "bold"
+                }}>
                   {t('netPosition.title')}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: "block",
+                    mb: 1
+                  }}>
                   {t('netPosition.subtitle')}
                 </Typography>
                 <ResponsiveContainer width="100%" height={300} minHeight={300}>
@@ -340,7 +366,12 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                   >
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
                       <Box>
-                        <Typography variant="body2" fontWeight="medium" sx={{ opacity: 0.9 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: "medium",
+                            opacity: 0.9
+                          }}>
                           {t('scenarios.bad')} (P10)
                         </Typography>
                         <Typography variant="caption" sx={{ opacity: 0.8, display: 'block', mt: 0.5 }}>
@@ -351,19 +382,27 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                     <Box sx={{ my: 2 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                         <Typography variant="caption">Income:</Typography>
-                        <Typography variant="caption" fontWeight="bold">
+                        <Typography variant="caption" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {formatCurrencyValue(data.summaries?.pessimistic?.income || 0)}
                         </Typography>
                       </Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
                         <Typography variant="caption">Expenses:</Typography>
-                        <Typography variant="caption" fontWeight="bold">
+                        <Typography variant="caption" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {formatCurrencyValue(data.summaries?.pessimistic?.expenses || 0)}
                         </Typography>
                       </Box>
                       <Box sx={{ borderTop: '1px solid rgba(255, 255, 255, 0.3)', pt: 1, display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2" fontWeight="bold">Net:</Typography>
-                        <Typography variant="h6" fontWeight="bold">
+                        <Typography variant="body2" sx={{
+                          fontWeight: "bold"
+                        }}>Net:</Typography>
+                        <Typography variant="h6" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {formatCurrencyValue(data.summaries?.pessimistic?.netCashFlow || 0)}
                         </Typography>
                       </Box>
@@ -400,7 +439,12 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                   >
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
                       <Box>
-                        <Typography variant="body2" fontWeight="medium" sx={{ opacity: 0.9 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: "medium",
+                            opacity: 0.9
+                          }}>
                           {t('scenarios.normal')} (P50)
                         </Typography>
                         <Typography variant="caption" sx={{ opacity: 0.8, display: 'block', mt: 0.5 }}>
@@ -411,19 +455,27 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                     <Box sx={{ my: 2 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                         <Typography variant="caption">Income:</Typography>
-                        <Typography variant="caption" fontWeight="bold">
+                        <Typography variant="caption" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {formatCurrencyValue(data.summaries?.base?.income || 0)}
                         </Typography>
                       </Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
                         <Typography variant="caption">Expenses:</Typography>
-                        <Typography variant="caption" fontWeight="bold">
+                        <Typography variant="caption" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {formatCurrencyValue(data.summaries?.base?.expenses || 0)}
                         </Typography>
                       </Box>
                       <Box sx={{ borderTop: '1px solid rgba(255, 255, 255, 0.3)', pt: 1, display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2" fontWeight="bold">Net:</Typography>
-                        <Typography variant="h6" fontWeight="bold">
+                        <Typography variant="body2" sx={{
+                          fontWeight: "bold"
+                        }}>Net:</Typography>
+                        <Typography variant="h6" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {formatCurrencyValue(data.summaries?.base?.netCashFlow || 0)}
                         </Typography>
                       </Box>
@@ -460,7 +512,12 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                   >
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
                       <Box>
-                        <Typography variant="body2" fontWeight="medium" sx={{ opacity: 0.9 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: "medium",
+                            opacity: 0.9
+                          }}>
                           {t('scenarios.good')} (P90)
                         </Typography>
                         <Typography variant="caption" sx={{ opacity: 0.8, display: 'block', mt: 0.5 }}>
@@ -471,19 +528,27 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                     <Box sx={{ my: 2 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                         <Typography variant="caption">Income:</Typography>
-                        <Typography variant="caption" fontWeight="bold">
+                        <Typography variant="caption" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {formatCurrencyValue(data.summaries?.optimistic?.income || 0)}
                         </Typography>
                       </Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
                         <Typography variant="caption">Expenses:</Typography>
-                        <Typography variant="caption" fontWeight="bold">
+                        <Typography variant="caption" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {formatCurrencyValue(data.summaries?.optimistic?.expenses || 0)}
                         </Typography>
                       </Box>
                       <Box sx={{ borderTop: '1px solid rgba(255, 255, 255, 0.3)', pt: 1, display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2" fontWeight="bold">Net:</Typography>
-                        <Typography variant="h6" fontWeight="bold">
+                        <Typography variant="body2" sx={{
+                          fontWeight: "bold"
+                        }}>Net:</Typography>
+                        <Typography variant="h6" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {formatCurrencyValue(data.summaries?.optimistic?.netCashFlow || 0)}
                         </Typography>
                       </Box>
@@ -497,7 +562,9 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
             </Grid>
           </Grid>
         ) : (
-          <Typography color="text.secondary" align="center">
+          <Typography align="center" sx={{
+            color: "text.secondary"
+          }}>
             {t('noData')}
           </Typography>
         )}

@@ -95,10 +95,12 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
           key={notification.id}
           open={true}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-          TransitionComponent={SlideTransition}
           sx={{
             // Stack multiple notifications
             bottom: `${24 + index * 70}px !important`,
+          }}
+          slots={{
+            transition: SlideTransition
           }}
         >
           <Alert

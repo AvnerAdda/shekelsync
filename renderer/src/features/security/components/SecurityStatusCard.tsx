@@ -244,7 +244,9 @@ const SecurityStatusCard: React.FC<SecurityStatusCardProps> = ({ onViewDetails }
           >
             <SecurityIcon sx={{ fontSize: 20, color: getSecurityColor() }} />
           </Box>
-          <Typography variant="body2" fontWeight={600}>
+          <Typography variant="body2" sx={{
+            fontWeight: 600
+          }}>
             Security
           </Typography>
         </Box>
@@ -256,7 +258,6 @@ const SecurityStatusCard: React.FC<SecurityStatusCardProps> = ({ onViewDetails }
           </Tooltip>
         )}
       </Box>
-
       {/* Status Badge */}
       <Box sx={{ mb: 1.5 }}>
         <Chip
@@ -273,9 +274,7 @@ const SecurityStatusCard: React.FC<SecurityStatusCardProps> = ({ onViewDetails }
           variant="outlined"
         />
       </Box>
-
       <Divider sx={{ my: 1.5, borderColor: alpha(theme.palette.divider, 0.1) }} />
-
       {/* Status Items */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
         {/* Encryption */}
@@ -294,10 +293,21 @@ const SecurityStatusCard: React.FC<SecurityStatusCardProps> = ({ onViewDetails }
             />
           </Box>
           <Box sx={{ flex: 1 }}>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                display: "block",
+                lineHeight: 1
+              }}>
               Encryption
             </Typography>
-            <Typography variant="body2" fontWeight={600} fontSize="0.85rem">
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 600,
+                fontSize: "0.85rem"
+              }}>
               {status.encryption.status === 'active' ? 'Active' : 'Inactive'}
             </Typography>
           </Box>
@@ -319,10 +329,21 @@ const SecurityStatusCard: React.FC<SecurityStatusCardProps> = ({ onViewDetails }
             />
           </Box>
           <Box sx={{ flex: 1 }}>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                display: "block",
+                lineHeight: 1
+              }}>
               Key Storage
             </Typography>
-            <Typography variant="body2" fontWeight={600} fontSize="0.85rem">
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 600,
+                fontSize: "0.85rem"
+              }}>
               {keychainLabel}
             </Typography>
           </Box>

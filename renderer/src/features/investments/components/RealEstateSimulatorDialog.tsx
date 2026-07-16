@@ -231,7 +231,9 @@ export default function RealEstateSimulatorDialog({
             {t('title', 'Real estate simulator')}
           </Typography>
           {account && (
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {account.account_name}{isDirty ? t('unsavedSuffix', ' - unsaved changes') : ''}
             </Typography>
           )}

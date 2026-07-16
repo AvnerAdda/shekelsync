@@ -36,7 +36,9 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
         <CircularProgress size={16} />
         {message && (
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {message}
           </Typography>
         )}
@@ -59,7 +61,9 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
     >
       <CircularProgress size={spinnerSize} />
       {message && (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           {message}
         </Typography>
       )}

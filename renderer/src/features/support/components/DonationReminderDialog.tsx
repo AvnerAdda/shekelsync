@@ -46,7 +46,9 @@ const DonationReminderDialog: React.FC<DonationReminderDialogProps> = ({
       <DialogTitle>{t('support.reminder.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('support.reminder.message')}
           </Typography>
           <Alert severity="info">

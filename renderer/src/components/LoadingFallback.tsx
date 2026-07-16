@@ -20,7 +20,9 @@ export const LoadingFallback: React.FC<LoadingFallbackProps> = ({
       }}
     >
       <CircularProgress size={48} />
-      <Typography variant="body1" color="text.secondary">
+      <Typography variant="body1" sx={{
+        color: "text.secondary"
+      }}>
         {message}
       </Typography>
     </Box>

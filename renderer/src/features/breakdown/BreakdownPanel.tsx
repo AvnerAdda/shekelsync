@@ -197,10 +197,17 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
                 }}
               >
                 <CardContent>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {panelStrings.summary.total[categoryType]}
                   </Typography>
-                  <Typography variant="h6" fontWeight="bold" color="primary.main">
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight: "bold",
+                      color: "primary.main"
+                    }}>
                     {formatCurrencyValue(summary.total)}
                   </Typography>
                 </CardContent>
@@ -222,10 +229,14 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
                 }}
               >
                 <CardContent>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {panelStrings.summary.transactions || generalStrings.transactions}
                   </Typography>
-                  <Typography variant="h6" fontWeight="bold">
+                  <Typography variant="h6" sx={{
+                    fontWeight: "bold"
+                  }}>
                     {summary.count}
                   </Typography>
                 </CardContent>
@@ -247,10 +258,14 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
                 }}
               >
                 <CardContent>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {panelStrings.summary.average || generalStrings.average}
                   </Typography>
-                  <Typography variant="h6" fontWeight="bold">
+                  <Typography variant="h6" sx={{
+                    fontWeight: "bold"
+                  }}>
                     {formatCurrencyValue(summary.average)}
                   </Typography>
                 </CardContent>
@@ -356,7 +371,6 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
           />
         )}
       </Paper>
-
       <CategoryDetailsDialog
         open={detailsModalOpen}
         details={categoryDetails}

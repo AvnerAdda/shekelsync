@@ -26,10 +26,10 @@ import TipsAndUpdatesIcon from '@mui/icons-material/TipsAndUpdates';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckIcon from '@mui/icons-material/Check';
 import EditIcon from '@mui/icons-material/Edit';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutlined';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import DoneIcon from '@mui/icons-material/Done';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useTranslation } from 'react-i18next';
 
@@ -374,10 +374,21 @@ const FinancialOptimizer: React.FC = () => {
         sx={{ p: 1.5, borderRadius: 1, bgcolor: alpha(theme.palette.background.paper, 0.9) }}
       >
         <Stack spacing={1}>
-          <Stack direction="row" spacing={1} alignItems="flex-start" justifyContent="space-between">
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: "flex-start",
+              justifyContent: "space-between"
+            }}>
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="subtitle2">{translatedLabel}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary",
+                  overflowWrap: 'anywhere'
+                }}>
                 {getFactDisplayValue(fact)}
               </Typography>
             </Box>
@@ -416,7 +427,9 @@ const FinancialOptimizer: React.FC = () => {
             />
           ))}
 
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1} useFlexGap sx={{
+            flexWrap: "wrap"
+          }}>
             {fact.status === 'detected' && fact.value !== null && fact.value !== undefined && (
               <Button
                 size="small"
@@ -462,7 +475,9 @@ const FinancialOptimizer: React.FC = () => {
     <Paper key={question.factKey} variant="outlined" sx={{ p: 1.5, borderRadius: 1 }}>
       <Stack spacing={1.25}>
         <Typography variant="subtitle2">{getFactLabel(question.factKey, question.label)}</Typography>
-        <Typography variant="body2" color="text.secondary">{getQuestionPrompt(question)}</Typography>
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>{getQuestionPrompt(question)}</Typography>
         {question.inputType === 'select' ? (
           <FormControl size="small" fullWidth>
             <InputLabel id={`optimizer-question-${question.factKey}-label`}>{t('answer', 'Answer')}</InputLabel>
@@ -489,7 +504,9 @@ const FinancialOptimizer: React.FC = () => {
             fullWidth
           />
         )}
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={1} useFlexGap sx={{
+          flexWrap: "wrap"
+        }}>
           <Button
             size="small"
             variant="contained"
@@ -512,10 +529,20 @@ const FinancialOptimizer: React.FC = () => {
   const renderRecommendation = (recommendation: OptimizerRecommendation) => (
     <Paper key={recommendation.id} variant="outlined" sx={{ p: 1.5, borderRadius: 1 }}>
       <Stack spacing={1}>
-        <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="flex-start">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            justifyContent: "space-between",
+            alignItems: "flex-start"
+          }}>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle1" fontWeight={700}>{displayPlanText(recommendation.title)}</Typography>
-            <Typography variant="body2" color="text.secondary">{displayPlanText(recommendation.rationale)}</Typography>
+            <Typography variant="subtitle1" sx={{
+              fontWeight: 700
+            }}>{displayPlanText(recommendation.title)}</Typography>
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>{displayPlanText(recommendation.rationale)}</Typography>
           </Box>
           <Chip
             size="small"
@@ -523,7 +550,9 @@ const FinancialOptimizer: React.FC = () => {
             color={recommendation.estimatedMonthlyImpact > 0 ? 'success' : 'default'}
           />
         </Stack>
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={1} useFlexGap sx={{
+          flexWrap: "wrap"
+        }}>
           <Chip size="small" label={getSectionLabel(recommendation.section)} variant="outlined" />
           <Chip
             size="small"
@@ -541,7 +570,9 @@ const FinancialOptimizer: React.FC = () => {
         {recommendation.evidence.length > 0 && (
           <Stack spacing={0.5}>
             {recommendation.evidence.slice(0, 3).map((item) => (
-              <Typography key={item} variant="caption" color="text.secondary">- {displayPlanText(item)}</Typography>
+              <Typography key={item} variant="caption" sx={{
+                color: "text.secondary"
+              }}>- {displayPlanText(item)}</Typography>
             ))}
           </Stack>
         )}
@@ -549,7 +580,9 @@ const FinancialOptimizer: React.FC = () => {
           <Typography variant="body2"><strong>{t('nextAction', 'Next')}:</strong> {displayPlanText(recommendation.nextAction)}</Typography>
         )}
         {recommendation.caveat && (
-          <Typography variant="caption" color="text.secondary">{displayPlanText(recommendation.caveat)}</Typography>
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>{displayPlanText(recommendation.caveat)}</Typography>
         )}
         <Stack direction="row" spacing={1}>
           <Button
@@ -596,30 +629,41 @@ const FinancialOptimizer: React.FC = () => {
           {!isSmall && <span>{t('title', 'Optimizator')}</span>}
         </Fab>
       </Tooltip>
-
       <Drawer
         anchor="right"
         open={open}
         onClose={() => setOpen(false)}
         sx={{ zIndex: (muiTheme) => muiTheme.zIndex.drawer + 3 }}
-        PaperProps={{
-          'aria-labelledby': 'optimizer-drawer-title',
-          sx: {
-            width: { xs: '100%', sm: DRAWER_WIDTH },
-            maxWidth: '100%',
-            zIndex: (muiTheme) => muiTheme.zIndex.drawer + 3,
-            display: 'flex',
-            flexDirection: 'column',
-          },
+        slotProps={{
+          paper: {
+            'aria-labelledby': 'optimizer-drawer-title',
+            sx: {
+              width: { xs: '100%', sm: DRAWER_WIDTH },
+              maxWidth: '100%',
+              zIndex: (muiTheme) => muiTheme.zIndex.drawer + 3,
+              display: 'flex',
+              flexDirection: 'column',
+            },
+          }
         }}
       >
         <Box sx={{ p: 2, borderBottom: `1px solid ${theme.palette.divider}` }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
-            <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={2}
+            sx={{
+              alignItems: "center",
+              justifyContent: "space-between"
+            }}>
+            <Stack direction="row" spacing={1.5} sx={{
+              alignItems: "center"
+            }}>
               <TipsAndUpdatesIcon color="secondary" />
               <Box>
                 <Typography id="optimizer-drawer-title" variant="h6">{t('title', 'Optimizator')}</Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('subtitle', 'Confirm profile facts and generate practical savings actions.')}
                 </Typography>
               </Box>
@@ -658,7 +702,11 @@ const FinancialOptimizer: React.FC = () => {
 
         <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
           {loading && (
-            <Stack alignItems="center" sx={{ py: 4 }}>
+            <Stack
+              sx={{
+                alignItems: "center",
+                py: 4
+              }}>
               <CircularProgress size={28} />
             </Stack>
           )}
@@ -671,12 +719,16 @@ const FinancialOptimizer: React.FC = () => {
                 {t('reviewIntro', 'Review detected facts first. Confirm what is right, edit what is wrong, or mark unknown.')}
               </Alert>
               {factsBySection.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('emptyFacts', 'No detected facts yet. Start with the questions.')}
                 </Typography>
               ) : factsBySection.map(([section, facts]) => (
                 <Stack key={section} spacing={1}>
-                  <Typography variant="overline" color="text.secondary">{getSectionLabel(section)}</Typography>
+                  <Typography variant="overline" sx={{
+                    color: "text.secondary"
+                  }}>{getSectionLabel(section)}</Typography>
                   {facts.map(renderFactCard)}
                 </Stack>
               ))}
@@ -728,14 +780,18 @@ const FinancialOptimizer: React.FC = () => {
                   ? t('actions.regenerate', 'Regenerate plan')
                   : t('actions.generate', 'Generate action plan')}
               </Button>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 {t('activeCount', {
                   count: activeRecommendations.length,
                   defaultValue: '{{count}} active actions',
                 })}
               </Typography>
               {recommendations.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('emptyPlan', 'No action plan yet. Generate one after reviewing facts and answering the short quiz.')}
                 </Typography>
               ) : (

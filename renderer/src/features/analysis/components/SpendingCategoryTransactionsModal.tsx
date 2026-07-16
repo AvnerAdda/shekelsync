@@ -321,16 +321,22 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
           ) : error ? (
             <Alert severity="error">{error}</Alert>
           ) : transactions.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {t('transactionModal.empty')}
             </Typography>
           ) : (
             <Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, gap: 2, flexWrap: 'wrap' }}>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('transactionModal.count', { count: meta.totalCount })}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('transactionModal.total', {
                     amount: formatCurrency(meta.totalAmount, {
                       absolute: true,
@@ -357,7 +363,9 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
                       }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                        <Typography variant="subtitle2" fontWeight={700}>
+                        <Typography variant="subtitle2" sx={{
+                          fontWeight: 700
+                        }}>
                           {group.categoryName}
                         </Typography>
                         <Chip
@@ -365,13 +373,17 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
                           label={t('transactionModal.count', { count: group.transactions.length })}
                           sx={{ height: 20, fontSize: '0.7rem' }}
                         />
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                          color: "text.secondary"
+                        }}>
                           {formatCurrency(group.totalAmount, { absolute: true, maximumFractionDigits: 0 })}
                         </Typography>
                       </Box>
                       {group.categoryDefinitionId != null && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                          }}>
                             {t('transactionModal.moveTo')}
                           </Typography>
                           <Select
@@ -411,7 +423,9 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
                           sx={{ px: 1, py: 0.75 }}
                           secondaryAction={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                              <Typography variant="body2" fontWeight={700}>
+                              <Typography variant="body2" sx={{
+                                fontWeight: 700
+                              }}>
                                 {formatCurrency(Math.abs(transaction.price), { absolute: true, maximumFractionDigits: 0 })}
                               </Typography>
                               <IconButton
@@ -450,7 +464,9 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
                                 )}
                               </Box>
                             }
-                            secondaryTypographyProps={{ component: 'div' }}
+                            slotProps={{
+                              secondary: { component: 'div' }
+                            }}
                           />
                         </ListItem>
                         {index < group.transactions.length - 1 && <Divider variant="inset" />}
@@ -463,7 +479,6 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
           )}
         </DialogContent>
       </Dialog>
-
       {/* Reassign transaction dialog */}
       <Dialog
         open={Boolean(reassignTxn)}
@@ -475,12 +490,20 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
         <DialogContent>
           {reassignTxn && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{
+                color: "text.secondary"
+              }}>
                 {reassignTxn.name || reassignTxn.vendor}
               </Typography>
 
               <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 0.5,
+                    display: 'block'
+                  }}>
                   {t('transactionModal.assignToCategory')}
                 </Typography>
                 <Select
@@ -526,7 +549,9 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
                     <Typography variant="body2">
                       {t('transactionModal.applyToAll')}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('transactionModal.applyToAllHint')}
                     </Typography>
                   </Box>

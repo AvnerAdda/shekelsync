@@ -53,7 +53,6 @@ const EmptyState: React.FC<EmptyStateProps> = ({
       >
         {icon}
       </Box>
-
       {/* Title */}
       <Typography
         variant="h5"
@@ -63,19 +62,18 @@ const EmptyState: React.FC<EmptyStateProps> = ({
       >
         {title}
       </Typography>
-
       {/* Description */}
       <Typography
         variant="body1"
-        color="text.secondary"
-        sx={{ mb: 4, maxWidth: 500 }}
-      >
+        sx={{
+          color: "text.secondary",
+          mb: 4,
+          maxWidth: 500
+        }}>
         {description}
       </Typography>
-
       {/* Onboarding Checklist (if enabled) */}
       {showOnboardingChecklist && children}
-
       {/* Action Buttons */}
       {(primaryAction || secondaryActions.length > 0) && (
         <Stack

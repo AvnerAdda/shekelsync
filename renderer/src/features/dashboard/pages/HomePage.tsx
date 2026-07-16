@@ -645,21 +645,33 @@ const DashboardHomeContent: React.FC = () => {
 
       return (
         <Paper sx={{ p: 2, border: `1px solid ${theme.palette.divider}`, minWidth: 200 }}>
-          <Typography variant="body2" fontWeight="bold" sx={{ mb: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: "bold",
+              mb: 1
+            }}>
             {format(localDate, 'MMM dd, yyyy')}
           </Typography>
-          <Typography variant="body2" color="success.main">
+          <Typography variant="body2" sx={{
+            color: "success.main"
+          }}>
             ↑ {t('tooltip.income')}: {formatCurrencyValue(income)}
           </Typography>
-          <Typography variant="body2" color="error.main">
+          <Typography variant="body2" sx={{
+            color: "error.main"
+          }}>
             ↓ {t('tooltip.expenses')}: {formatCurrencyValue(expenses)}
           </Typography>
           <Typography
             variant="body2"
-            fontWeight="medium"
             color={netFlow > 0 ? 'success.main' : 'error.main'}
-            sx={{ mt: 0.5, pt: 0.5, borderTop: `1px solid ${theme.palette.divider}` }}
-          >
+            sx={{
+              fontWeight: "medium",
+              mt: 0.5,
+              pt: 0.5,
+              borderTop: `1px solid ${theme.palette.divider}`
+            }}>
             {t('tooltip.net')}: {netFlow > 0 ? '+' : ''}{formatCurrencyValue(netFlow)}
           </Typography>
           {Math.abs(percentDiff) > 20 && (
@@ -668,11 +680,24 @@ const DashboardHomeContent: React.FC = () => {
             </Typography>
           )}
           {isAnomaly && (
-            <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "warning.main",
+                display: 'block',
+                mt: 0.5
+              }}>
               ⚠ {t('tooltip.unusualSpending')}
             </Typography>
           )}
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', fontStyle: 'italic' }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary",
+              mt: 1,
+              display: 'block',
+              fontStyle: 'italic'
+            }}>
             {t('tooltip.clickForDetails')}
           </Typography>
         </Paper>

@@ -67,7 +67,9 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
     >
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="subtitle1" fontWeight={600}>
+        <Typography variant="subtitle1" sx={{
+          fontWeight: 600
+        }}>
           {t('investmentsPage.allocation.title')}
         </Typography>
         <Typography
@@ -82,7 +84,6 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
           {t('investmentsPage.allocation.viewMore')}
         </Typography>
       </Box>
-
       {/* Donut Chart with Center Value */}
       <Box sx={{ position: 'relative', flexGrow: 1, minHeight: 200, height: '100%' }}>
         <ResponsiveContainer width="100%" height={200}>
@@ -156,17 +157,20 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
         >
           <Typography
             variant="h5"
-            fontWeight={700}
-            sx={{ color: 'text.primary', lineHeight: 1.2 }}
-          >
+            sx={{
+              fontWeight: 700,
+              color: 'text.primary',
+              lineHeight: 1.2
+            }}>
             {maskAmounts ? '***' : formatCurrencyValue(totalValue)}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {t('investmentsPage.allocation.total')}
           </Typography>
         </Box>
       </Box>
-
       {/* Legend */}
       <Box sx={{ mt: 2 }}>
         <Box
@@ -194,7 +198,13 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
                   bgcolor: item.color,
                 }}
               />
-              <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 80 }}>
+              <Typography
+                variant="caption"
+                noWrap
+                sx={{
+                  color: "text.secondary",
+                  maxWidth: 80
+                }}>
                 {item.name}
               </Typography>
             </Box>
@@ -223,7 +233,6 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
           ))}
         </Box>
       </Box>
-
       {/* Account Allocation Modal */}
       <AccountAllocationModal
         open={modalOpen}

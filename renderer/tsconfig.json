@@ -14,11 +14,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
-    "baseUrl": ".",
     "paths": {
       "@app/*": ["../app/*"],
       "@/*": ["../app/*"],
-      "@renderer/*": ["src/*"]
+      "@renderer/*": ["./src/*"]
     },
     "types": ["vite/client", "node"],
     "typeRoots": ["./node_modules/@types"]

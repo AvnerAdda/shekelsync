@@ -217,7 +217,6 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
           />
         </Tooltip>
       )}
-
       {/* Left accent border */}
       <Box
         sx={{
@@ -231,9 +230,10 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
           borderBottomLeftRadius: 12,
         }}
       />
-
       <Box sx={{ p: 2, pl: 2.5 }}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{
+          alignItems: "center"
+        }}>
           {/* Category Icon */}
           <Box
             sx={{
@@ -267,16 +267,32 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
           </Box>
 
           {/* Main content */}
-          <Box flex={1} minWidth={0}>
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-              <Box minWidth={0} flex={1}>
-                <Stack direction="row" spacing={1} alignItems="center">
+          <Box
+            sx={{
+              flex: 1,
+              minWidth: 0
+            }}>
+            <Stack
+              direction="row"
+              sx={{
+                justifyContent: "space-between",
+                alignItems: "flex-start"
+              }}>
+              <Box
+                sx={{
+                  minWidth: 0,
+                  flex: 1
+                }}>
+                <Stack direction="row" spacing={1} sx={{
+                  alignItems: "center"
+                }}>
                   <Typography
                     variant="subtitle2"
-                    fontWeight={600}
                     noWrap
-                    sx={{ maxWidth: 200 }}
-                  >
+                    sx={{
+                      fontWeight: 600,
+                      maxWidth: 200
+                    }}>
                     {subscription.display_name}
                   </Typography>
                   {subscription.is_manual === 1 && (
@@ -297,21 +313,30 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
                     </Tooltip>
                   )}
                 </Stack>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {subscription.category_name || subscription.parent_category_name}
                 </Typography>
               </Box>
 
               {/* Amount */}
-              <Box textAlign="right" flexShrink={0}>
+              <Box
+                sx={{
+                  textAlign: "right",
+                  flexShrink: 0
+                }}>
                 <Typography
                   variant="subtitle1"
-                  fontWeight={700}
-                  sx={{ color: theme.palette.text.primary }}
-                >
+                  sx={{
+                    fontWeight: 700,
+                    color: theme.palette.text.primary
+                  }}>
                   {formatCurrency(amount, { maximumFractionDigits: 0 })}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {t(`frequency.${frequency}`, { defaultValue: FREQUENCY_LABELS[frequency] })}
                 </Typography>
               </Box>
@@ -321,11 +346,14 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
             <Stack
               direction="row"
               spacing={1.5}
-              alignItems="center"
-              mt={1}
-              justifyContent="space-between"
-            >
-              <Stack direction="row" spacing={1} alignItems="center">
+              sx={{
+                alignItems: "center",
+                mt: 1,
+                justifyContent: "space-between"
+              }}>
+              <Stack direction="row" spacing={1} sx={{
+                alignItems: "center"
+              }}>
                 <Chip
                   label={t(`status.${subscription.status}`)}
                   size="small"
@@ -415,11 +443,13 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
                   onClose={handleMenuClose}
                   anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                   transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                  PaperProps={{
-                    sx: {
-                      minWidth: 160,
-                      borderRadius: 2,
-                      boxShadow: `0 8px 32px -8px ${alpha(theme.palette.common.black, 0.2)}`,
+                  slotProps={{
+                    paper: {
+                      sx: {
+                        minWidth: 160,
+                        borderRadius: 2,
+                        boxShadow: `0 8px 32px -8px ${alpha(theme.palette.common.black, 0.2)}`,
+                      },
                     },
                   }}
                 >

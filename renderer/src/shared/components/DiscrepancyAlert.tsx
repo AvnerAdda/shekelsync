@@ -71,34 +71,41 @@ export default function DiscrepancyAlert({
           {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
         </IconButton>
       </AlertTitle>
-
       <Typography variant="body2" sx={{ mb: 1 }}>
         {isOverpaid
           ? t('discrepancy.overpaidMessage', { amount: formatCurrency(discrepancy.difference) })
           : t('discrepancy.underpaidMessage', { amount: formatCurrency(discrepancy.difference) })}
       </Typography>
-
       <Collapse in={expanded}>
         <Box sx={{ mt: 1, mb: 2, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('discrepancy.bankRepayments')}: {formatCurrency(discrepancy.totalBankRepayments)}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('discrepancy.ccExpenses')}: {formatCurrency(discrepancy.totalCCExpenses)}
           </Typography>
-          <Typography variant="body2" fontWeight="bold">
+          <Typography variant="body2" sx={{
+            fontWeight: "bold"
+          }}>
             {t('discrepancy.difference')}: {formatCurrency(discrepancy.difference)} ({discrepancy.differencePercentage}%)
           </Typography>
           {discrepancy.periodMonths && (
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('discrepancy.period', { months: discrepancy.periodMonths })}
             </Typography>
           )}
         </Box>
       </Collapse>
-
       <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <Typography variant="body2" fontWeight="medium">
+        <Typography variant="body2" sx={{
+          fontWeight: "medium"
+        }}>
           {t('discrepancy.howToResolve')}
         </Typography>
 
@@ -112,7 +119,9 @@ export default function DiscrepancyAlert({
             {t('discrepancy.ignore')}
           </Button>
 
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('common.or')}
           </Typography>
 

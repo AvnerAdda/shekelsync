@@ -219,10 +219,11 @@ const SettingsPage: React.FC = () => {
 
   return (
     <Box sx={{ pb: 10, maxWidth: 900, mx: 'auto' }}>
-      <Typography variant="h4" fontWeight="bold" gutterBottom>
+      <Typography variant="h4" gutterBottom sx={{
+        fontWeight: "bold"
+      }}>
         {tSettings('title')}
       </Typography>
-
       <Box
         role="tablist"
         aria-label={tSettings('title')}
@@ -317,13 +318,11 @@ const SettingsPage: React.FC = () => {
           );
         })}
       </Box>
-
       <SettingsTabPanel value={activeTabIndex} index={SETTINGS_TAB_INDEX_BY_ID.profile} tabId="profile">
         <Box id="profile" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}>
           <EnhancedProfileSection />
         </Box>
       </SettingsTabPanel>
-
       <SettingsTabPanel value={activeTabIndex} index={SETTINGS_TAB_INDEX_BY_ID.appearance} tabId="appearance">
         <Box id="appearance" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}>
           <Paper sx={{ p: 3 }}>
@@ -332,7 +331,12 @@ const SettingsPage: React.FC = () => {
               <Typography variant="h6">{tSettings('appearance.title')}</Typography>
             </Box>
 
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mb: 2
+              }}>
               {tSettings('appearance.description')}
             </Typography>
 
@@ -373,7 +377,12 @@ const SettingsPage: React.FC = () => {
               <Typography variant="h6">{tSettings('textSize.title')}</Typography>
             </Box>
 
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mb: 2
+              }}>
               {tSettings('textSize.description')}
             </Typography>
 
@@ -414,7 +423,12 @@ const SettingsPage: React.FC = () => {
               <LanguageIcon color="primary" />
               <Typography variant="h6">{tSettings('language.title')}</Typography>
             </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mb: 2
+              }}>
               {tSettings('language.description')}
             </Typography>
             <ToggleButtonGroup
@@ -436,7 +450,6 @@ const SettingsPage: React.FC = () => {
           </Paper>
         </Box>
       </SettingsTabPanel>
-
       <SettingsTabPanel value={activeTabIndex} index={SETTINGS_TAB_INDEX_BY_ID.sync} tabId="sync">
         <Box id="sync" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}>
           <Box sx={{ mb: 4 }}>
@@ -450,7 +463,6 @@ const SettingsPage: React.FC = () => {
           </Box>
         </Box>
       </SettingsTabPanel>
-
       <SettingsTabPanel value={activeTabIndex} index={SETTINGS_TAB_INDEX_BY_ID.privacy} tabId="privacy">
         <Box id="chatbot" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}>
           <Paper sx={{ p: 3, mb: 3 }}>
@@ -459,7 +471,12 @@ const SettingsPage: React.FC = () => {
               <Typography variant="h6">{tSettings('chatbot.title')}</Typography>
             </Box>
 
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mb: 3
+              }}>
               {tSettings('chatbot.description')}
             </Typography>
 
@@ -474,10 +491,14 @@ const SettingsPage: React.FC = () => {
                 }
                 label={
                   <Box>
-                    <Typography variant="body2" fontWeight="bold">
+                    <Typography variant="body2" sx={{
+                      fontWeight: "bold"
+                    }}>
                       {tSettings('chatbot.enable')}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {tSettings('chatbot.enableHint')}
                     </Typography>
                   </Box>
@@ -511,10 +532,21 @@ const SettingsPage: React.FC = () => {
 
             <Divider sx={{ my: 2 }} />
 
-            <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: "bold",
+                mb: 1
+              }}>
               {tSettings('chatbot.modelTierLabel')}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                display: 'block',
+                mb: 2
+              }}>
               {tSettings('chatbot.modelTierHint')}
             </Typography>
 
@@ -533,8 +565,12 @@ const SettingsPage: React.FC = () => {
               {(Object.entries(MODEL_TIERS) as [ModelTier, { model: string; label: string }][]).map(([tier, { label }]) => (
                 <ToggleButton key={tier} value={tier} sx={{ px: 3 }}>
                   <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="body2" fontWeight="bold">{label}</Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      fontWeight: "bold"
+                    }}>{label}</Typography>
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {tSettings(`chatbot.modelTiers.${tier}`)}
                     </Typography>
                   </Box>
@@ -544,11 +580,21 @@ const SettingsPage: React.FC = () => {
 
             <Divider sx={{ my: 2 }} />
 
-            <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: "bold",
+                mb: 2
+              }}>
               {tSettings('chatbot.permissionsTitle')}
             </Typography>
 
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mb: 2
+              }}>
               {tSettings('chatbot.permissionsDescription')}
               {!chatbotEnabled && ` ${tSettings('chatbot.permissionsEnableFirst')}`}
             </Typography>
@@ -565,10 +611,14 @@ const SettingsPage: React.FC = () => {
                 }
                 label={
                   <Box>
-                    <Typography variant="body2" fontWeight="bold">
+                    <Typography variant="body2" sx={{
+                      fontWeight: "bold"
+                    }}>
                       {tSettings('chatbot.permissions.transaction')}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {tSettings('chatbot.permissions.transactionHint')}
                     </Typography>
                   </Box>
@@ -586,10 +636,14 @@ const SettingsPage: React.FC = () => {
                 }
                 label={
                   <Box>
-                    <Typography variant="body2" fontWeight="bold">
+                    <Typography variant="body2" sx={{
+                      fontWeight: "bold"
+                    }}>
                       {tSettings('chatbot.permissions.category')}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {tSettings('chatbot.permissions.categoryHint')}
                     </Typography>
                   </Box>
@@ -607,10 +661,14 @@ const SettingsPage: React.FC = () => {
                 }
                 label={
                   <Box>
-                    <Typography variant="body2" fontWeight="bold">
+                    <Typography variant="body2" sx={{
+                      fontWeight: "bold"
+                    }}>
                       {tSettings('chatbot.permissions.analytics')}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {tSettings('chatbot.permissions.analyticsHint')}
                     </Typography>
                   </Box>
@@ -620,7 +678,12 @@ const SettingsPage: React.FC = () => {
 
             <Divider sx={{ my: 2 }} />
 
-            <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: "bold",
+                mb: 2
+              }}>
               {tSettings('chatbot.responseSettingsTitle')}
             </Typography>
 
@@ -636,10 +699,14 @@ const SettingsPage: React.FC = () => {
                 }
                 label={
                   <Box>
-                    <Typography variant="body2" fontWeight="bold">
+                    <Typography variant="body2" sx={{
+                      fontWeight: "bold"
+                    }}>
                       {tSettings('chatbot.responseSettings.longAnswers')}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {tSettings('chatbot.responseSettings.longAnswersHint')}
                     </Typography>
                   </Box>
@@ -657,10 +724,14 @@ const SettingsPage: React.FC = () => {
                 }
                 label={
                   <Box>
-                    <Typography variant="body2" fontWeight="bold">
+                    <Typography variant="body2" sx={{
+                      fontWeight: "bold"
+                    }}>
                       {tSettings('chatbot.responseSettings.longRequests')}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {tSettings('chatbot.responseSettings.longRequestsHint')}
                     </Typography>
                   </Box>
@@ -669,7 +740,9 @@ const SettingsPage: React.FC = () => {
             </Box>
 
             <Alert severity="info" icon={<SecurityIcon />}>
-              <Typography variant="body2" fontWeight="bold" gutterBottom>
+              <Typography variant="body2" gutterBottom sx={{
+                fontWeight: "bold"
+              }}>
                 {tSettings('chatbot.privacyTitle')}
               </Typography>
               <Typography variant="caption">
@@ -698,7 +771,12 @@ const SettingsPage: React.FC = () => {
             <Typography variant="h6">{tSettings('privacy.title')}</Typography>
           </Box>
 
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 2
+            }}>
             {tSettings('privacy.description')}
           </Typography>
 
@@ -724,7 +802,6 @@ const SettingsPage: React.FC = () => {
 
         <SecuritySettingsPanel />
       </SettingsTabPanel>
-
       <SettingsTabPanel value={activeTabIndex} index={SETTINGS_TAB_INDEX_BY_ID.system} tabId="system">
         <Box id="system" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}>
           <Box id="export" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN, mb: 4 }}>
@@ -740,7 +817,12 @@ const SettingsPage: React.FC = () => {
                 <Typography variant="h6">{tSettings('diagnostics.title')}</Typography>
               </Box>
 
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary",
+                  mb: 2
+                }}>
                 {tSettings('diagnostics.description')}
               </Typography>
 
@@ -772,10 +854,14 @@ const SettingsPage: React.FC = () => {
                   }
                   label={
                     <Box>
-                      <Typography variant="body2" fontWeight="bold">
+                      <Typography variant="body2" sx={{
+                        fontWeight: "bold"
+                      }}>
                         {tSettings('diagnostics.toggleLabel')}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                      }}>
                         {telemetryEnabled
                           ? tSettings('diagnostics.toggleOn')
                           : tSettings('diagnostics.toggleOff')}
@@ -785,7 +871,13 @@ const SettingsPage: React.FC = () => {
                 />
               )}
 
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  display: 'block',
+                  mt: 2
+                }}>
                 {tSettings('diagnostics.exportHint')}
               </Typography>
             </Paper>
@@ -799,25 +891,47 @@ const SettingsPage: React.FC = () => {
             <Typography variant="h6" gutterBottom>
               About ShekelSync
             </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                marginBottom: "16px"
+              }}>
               Version: {appTagVersion} (Personal Intelligence Edition)
             </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                marginBottom: "16px"
+              }}>
               ShekelSync is a personal finance tracking application for Israeli bank accounts and credit cards.
               It automatically scrapes transactions, categorizes expenses, and provides AI-powered analytics
               to help you manage your finances better.
             </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                marginBottom: "16px"
+              }}>
               <strong>New Features:</strong>
             </Typography>
-            <Typography variant="body2" color="text.secondary" component="ul">
+            <Typography variant="body2" component="ul" sx={{
+              color: "text.secondary"
+            }}>
               <li>🧠 Personal Financial Intelligence with 9 insight categories</li>
               <li>💬 AI-powered chatbot for financial questions</li>
               <li>📊 Behavioral analytics (impulse score, payday effect, FOMO score)</li>
               <li>🔮 Predictive analytics and savings recommendations</li>
               <li>📈 Peer comparisons based on age, income, and location</li>
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mt: 2
+              }}>
               Made with ❤️ for better financial sync
             </Typography>
           </Paper>

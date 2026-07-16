@@ -93,14 +93,22 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                     <Typography variant="body2" noWrap sx={{ maxWidth: '60%', fontWeight: 500 }}>
                       {account.account_name}
                     </Typography>
-                    <Typography variant="body2" fontWeight="600">
+                    <Typography variant="body2" sx={{
+                      fontWeight: "600"
+                    }}>
                       {formatCurrencyValue(account.current_value)}
                     </Typography>
                   </Box>
                 }
                 secondary={
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: '60%' }}>
+                    <Typography
+                      variant="caption"
+                      noWrap
+                      sx={{
+                        color: "text.secondary",
+                        maxWidth: '60%'
+                      }}>
                       {resolvePortfolioInstitutionName(account.institution, locale)}
                     </Typography>
                     {account.cost_basis > 0 && (
@@ -116,9 +124,10 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                     )}
                   </Box>
                 }
-                primaryTypographyProps={{ component: 'div' }}
-                secondaryTypographyProps={{ component: 'div' }}
-              />
+                slotProps={{
+                  primary: { component: 'div' },
+                  secondary: { component: 'div' }
+                }} />
             </ListItem>
           );
         })}
@@ -129,10 +138,14 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
   return (
     <Paper sx={{ height: '100%', overflow: 'auto', bgcolor: 'background.paper' }}>
       <Box sx={{ p: 2, pb: 1.5 }}>
-        <Typography variant="subtitle1" fontWeight={600}>
+        <Typography variant="subtitle1" sx={{
+          fontWeight: 600
+        }}>
           {t('listTitle')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           {t('listSubtitle')}
         </Typography>
       </Box>

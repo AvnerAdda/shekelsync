@@ -101,17 +101,29 @@ const SubscriptionCreepChart: React.FC<SubscriptionCreepChartProps> = ({
     >
       <CardContent>
         {/* Header */}
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={2}>
+        <Stack
+          direction="row"
+          sx={{
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            mb: 2
+          }}>
           <Box>
-            <Typography variant="subtitle1" fontWeight="bold">
+            <Typography variant="subtitle1" sx={{
+              fontWeight: "bold"
+            }}>
               {t('creep.title')}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('creep.subtitle', { months: creep.months_analyzed })}
             </Typography>
           </Box>
 
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{
+            alignItems: "center"
+          }}>
             <Box sx={{ color: trendColor }}>
               {getTrendIcon()}
             </Box>
@@ -128,28 +140,42 @@ const SubscriptionCreepChart: React.FC<SubscriptionCreepChartProps> = ({
         </Stack>
 
         {/* Stats */}
-        <Stack direction="row" spacing={4} mb={3}>
+        <Stack direction="row" spacing={4} sx={{
+          mb: 3
+        }}>
           <Box>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('creep.startingTotal')}
             </Typography>
-            <Typography variant="h6" fontWeight="bold">
+            <Typography variant="h6" sx={{
+              fontWeight: "bold"
+            }}>
               {formatCurrency(creep.starting_total, { maximumFractionDigits: 0 })}
             </Typography>
           </Box>
           <Box>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('creep.currentTotal')}
             </Typography>
-            <Typography variant="h6" fontWeight="bold" color={trendColor}>
+            <Typography variant="h6" color={trendColor} sx={{
+              fontWeight: "bold"
+            }}>
               {formatCurrency(creep.current_total, { maximumFractionDigits: 0 })}
             </Typography>
           </Box>
           <Box>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('creep.change')}
             </Typography>
-            <Typography variant="h6" fontWeight="bold" color={trendColor}>
+            <Typography variant="h6" color={trendColor} sx={{
+              fontWeight: "bold"
+            }}>
               {creep.current_total - creep.starting_total >= 0 ? '+' : ''}
               {formatCurrency(creep.current_total - creep.starting_total, { maximumFractionDigits: 0 })}
             </Typography>
@@ -192,8 +218,8 @@ const SubscriptionCreepChart: React.FC<SubscriptionCreepChartProps> = ({
                   borderRadius: 8,
                   boxShadow: theme.shadows[4],
                 }}
-                formatter={(value: number | undefined) => [
-                  formatCurrency(value ?? 0, { maximumFractionDigits: 0 }),
+                formatter={(value) => [
+                  formatCurrency(Number(value ?? 0), { maximumFractionDigits: 0 }),
                   t('creep.tooltipTotal'),
                 ]}
                 labelFormatter={(label) => label}
@@ -223,8 +249,16 @@ const SubscriptionCreepChart: React.FC<SubscriptionCreepChartProps> = ({
         </Box>
 
         {/* Legend */}
-        <Stack direction="row" justifyContent="center" spacing={3} mt={2}>
-          <Stack direction="row" spacing={0.5} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={3}
+          sx={{
+            justifyContent: "center",
+            mt: 2
+          }}>
+          <Stack direction="row" spacing={0.5} sx={{
+            alignItems: "center"
+          }}>
             <Box
               sx={{
                 width: 12,
@@ -233,11 +267,15 @@ const SubscriptionCreepChart: React.FC<SubscriptionCreepChartProps> = ({
                 borderRadius: 1,
               }}
             />
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('creep.legendMonthly')}
             </Typography>
           </Stack>
-          <Stack direction="row" spacing={0.5} alignItems="center">
+          <Stack direction="row" spacing={0.5} sx={{
+            alignItems: "center"
+          }}>
             <Box
               sx={{
                 width: 12,
@@ -245,7 +283,9 @@ const SubscriptionCreepChart: React.FC<SubscriptionCreepChartProps> = ({
                 borderTop: `2px dashed ${theme.palette.grey[400]}`,
               }}
             />
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('creep.legendAverage')}
             </Typography>
           </Stack>

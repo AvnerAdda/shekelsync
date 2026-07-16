@@ -227,9 +227,13 @@ const AutoSyncPanel: React.FC = () => {
           borderColor: alpha(theme.palette.primary.main, 0.15),
         }}
       >
-        <Stack direction="row" spacing={2} alignItems="flex-start">
+        <Stack direction="row" spacing={2} sx={{
+          alignItems: "flex-start"
+        }}>
           <Skeleton variant="circular" width={48} height={48} />
-          <Box flex={1}>
+          <Box sx={{
+            flex: 1
+          }}>
             <Skeleton variant="text" width="40%" height={28} />
             <Skeleton variant="text" width="60%" height={20} sx={{ mt: 0.5 }} />
           </Box>
@@ -258,8 +262,16 @@ const AutoSyncPanel: React.FC = () => {
       }}
     >
       {/* Header with Icon, Title, and Status */}
-      <Stack direction="row" spacing={2} alignItems="flex-start" justifyContent="space-between">
-        <Stack direction="row" spacing={2} alignItems="flex-start">
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={{
+          alignItems: "flex-start",
+          justifyContent: "space-between"
+        }}>
+        <Stack direction="row" spacing={2} sx={{
+          alignItems: "flex-start"
+        }}>
           <Box
             sx={{
               width: 48,
@@ -275,10 +287,14 @@ const AutoSyncPanel: React.FC = () => {
             <ScheduleIcon sx={{ color: '#fff', fontSize: 24 }} />
           </Box>
           <Box>
-            <Typography variant="h6" fontWeight={600}>
+            <Typography variant="h6" sx={{
+              fontWeight: 600
+            }}>
               {t('title')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {backgroundSync.enabled ? t('status.enabled') : t('status.disabled')}
             </Typography>
           </Box>
@@ -294,17 +310,20 @@ const AutoSyncPanel: React.FC = () => {
           }}
         />
       </Stack>
-
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 2 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          mt: 2,
+          mb: 2
+        }}>
         {t('description')}
       </Typography>
-
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
-
       {/* Enable Toggle */}
       <FormControlLabel
         control={
@@ -322,7 +341,6 @@ const AutoSyncPanel: React.FC = () => {
           },
         }}
       />
-
       {/* Next Sync Time Display */}
       {backgroundSync.enabled && (
         <Box
@@ -336,23 +354,30 @@ const AutoSyncPanel: React.FC = () => {
             animation: `${fadeIn} 0.3s ease-out`,
           }}
         >
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} sx={{
+            alignItems: "center"
+          }}>
             <EventIcon sx={{ color: theme.palette.primary.main, fontSize: 20 }} />
             <Box>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 {t('status.nextSync')}
               </Typography>
-              <Typography variant="body2" fontWeight={600}>
+              <Typography variant="body2" sx={{
+                fontWeight: 600
+              }}>
                 {nextSyncLabel || t('status.pending')}
               </Typography>
             </Box>
           </Stack>
         </Box>
       )}
-
       {/* Interval Selection Cards */}
       <Box sx={{ mb: 3 }}>
-        <Typography variant="subtitle2" gutterBottom fontWeight={500}>
+        <Typography variant="subtitle2" gutterBottom sx={{
+          fontWeight: 500
+        }}>
           {t('intervalLabel')}
         </Typography>
         <Stack direction="row" spacing={1.5}>
@@ -390,16 +415,19 @@ const AutoSyncPanel: React.FC = () => {
               >
                 <Typography
                   variant="h5"
-                  fontWeight={700}
-                  sx={{ color: isSelected ? theme.palette.primary.main : 'text.primary' }}
-                >
+                  sx={{
+                    fontWeight: 700,
+                    color: isSelected ? theme.palette.primary.main : 'text.primary'
+                  }}>
                   {option.display}
                 </Typography>
                 <Typography
                   variant="caption"
-                  color="text.secondary"
-                  sx={{ display: 'block', mt: 0.5 }}
-                >
+                  sx={{
+                    color: "text.secondary",
+                    display: 'block',
+                    mt: 0.5
+                  }}>
                   {t(option.labelKey)}
                 </Typography>
               </Box>
@@ -407,7 +435,6 @@ const AutoSyncPanel: React.FC = () => {
           })}
         </Stack>
       </Box>
-
       {/* Show Browser Toggle (applies to manual sync) */}
       <Box sx={{ mb: 2 }}>
         <FormControlLabel
@@ -421,11 +448,16 @@ const AutoSyncPanel: React.FC = () => {
           }
           label={t('showBrowserLabel')}
         />
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 6 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+            display: 'block',
+            ml: 6
+          }}>
           {t('showBrowserHint')}
         </Typography>
       </Box>
-
       {/* Advanced Settings (Collapsible) */}
       {backgroundSync.enabled && (
         <>
@@ -445,9 +477,10 @@ const AutoSyncPanel: React.FC = () => {
           >
             <Typography
               variant="subtitle2"
-              fontWeight={500}
-              sx={{ transition: 'color 0.2s' }}
-            >
+              sx={{
+                fontWeight: 500,
+                transition: 'color 0.2s'
+              }}>
               {t('advancedSettings')}
             </Typography>
             {advancedOpen ? (
@@ -477,7 +510,13 @@ const AutoSyncPanel: React.FC = () => {
                   }
                   label={t('keepRunningLabel')}
                 />
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 6 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: 'block',
+                    ml: 6
+                  }}>
                   {t('keepRunningHint')}
                 </Typography>
               </Box>
@@ -493,7 +532,13 @@ const AutoSyncPanel: React.FC = () => {
                   }
                   label={t('headlessLabel')}
                 />
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 6 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: 'block',
+                    ml: 6
+                  }}>
                   {t('headlessHint')}
                 </Typography>
               </Box>
@@ -501,7 +546,6 @@ const AutoSyncPanel: React.FC = () => {
           </Collapse>
         </>
       )}
-
       {/* Last Result Display (only when lastRunAt exists) */}
       {backgroundSync.lastRunAt && lastResult && (
         <Box
@@ -515,11 +559,21 @@ const AutoSyncPanel: React.FC = () => {
             animation: `${fadeIn} 0.3s ease-out`,
           }}
         >
-          <Typography variant="body2" fontWeight={600} sx={{ color: lastResultColor.main }}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 600,
+              color: lastResultColor.main
+            }}>
             {t('status.lastRun', { timeAgo: lastRunLabel })}
           </Typography>
           {lastResult.message && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mt: 0.5
+              }}>
               {lastResult.message}
             </Typography>
           )}
@@ -559,7 +613,6 @@ const AutoSyncPanel: React.FC = () => {
           )}
         </Box>
       )}
-
       {/* Enhanced Sync Now Button */}
       <Button
         variant="contained"

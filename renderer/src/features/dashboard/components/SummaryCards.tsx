@@ -269,14 +269,23 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
 
   const pendingBreakdownTooltipTitle = pendingBreakdownItems.length > 0 ? (
     <Box sx={{ minWidth: 210, py: 0.5 }}>
-      <Typography variant="caption" fontWeight={700} sx={{ display: 'block', mb: 0.75 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          fontWeight: 700,
+          display: 'block',
+          mb: 0.75
+        }}>
         {t('summary.cards.finance.pendingBreakdownTitle')}
       </Typography>
       <Typography
         variant="caption"
-        color="inherit"
-        sx={{ display: 'block', opacity: 0.82, mb: 1 }}
-      >
+        sx={{
+          color: "inherit",
+          display: 'block',
+          opacity: 0.82,
+          mb: 1
+        }}>
         {t('summary.cards.finance.pendingIncludedNote')}
       </Typography>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
@@ -285,10 +294,17 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             key={item.date}
             sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}
           >
-            <Typography variant="caption" color="inherit">
+            <Typography variant="caption" sx={{
+              color: "inherit"
+            }}>
               {formatPendingDate(item.date)}
             </Typography>
-            <Typography variant="caption" color="inherit" fontWeight={700}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "inherit",
+                fontWeight: 700
+              }}>
               {t('summary.cards.finance.pendingBreakdownLine', {
                 amount: formatCurrencyValue(item.amount),
                 count: item.count,
@@ -323,13 +339,17 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
       details: (
         <>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, mt: 2 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {t('summary.cards.finance.income')}
             </Typography>
             <CurrencyTypography variant="body2" color="success.main">+{formatCurrencyValue(totalIncome)}</CurrencyTypography>
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {hasPendingExpenses
                 ? t('summary.cards.finance.expensesIncludingPending')
                 : t('summary.cards.finance.expenses')}
@@ -338,7 +358,9 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
           </Box>
           {netInvestments > 0 && (
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{
+                color: "text.secondary"
+              }}>
                 {t('summary.cards.finance.investments')}
               </Typography>
               <CurrencyTypography variant="body2" color="info.main">-{formatCurrencyValue(netInvestments)}</CurrencyTypography>
@@ -347,7 +369,9 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
           {totalCapitalReturns > 0 && (
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('summary.cards.finance.capitalReturns')}
                 </Typography>
                 <Tooltip
@@ -376,20 +400,27 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <PendingIcon sx={{ fontSize: 16, color: 'warning.main' }} />
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('summary.cards.finance.pendingLabel', { count: pendingCount })}
                     </Typography>
                   </Box>
-                  <Typography variant="body2" color="warning.main">
+                  <Typography variant="body2" sx={{
+                    color: "warning.main"
+                  }}>
                     -{formatCurrencyValue(pendingExpenses)}
                   </Typography>
                 </Box>
               </Tooltip>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ display: 'block', mt: -0.5, mb: 1 }}
-              >
+                sx={{
+                  color: "text.secondary",
+                  display: 'block',
+                  mt: -0.5,
+                  mb: 1
+                }}>
                 {t('summary.cards.finance.pendingIncludedNote')}
               </Typography>
               {showPendingDeficitWarning && (
@@ -406,7 +437,12 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                   }}
                 >
                   <WarningIcon sx={{ fontSize: 16, color: 'error.main' }} />
-                  <Typography variant="caption" color="error.main" fontWeight="medium">
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "error.main",
+                      fontWeight: "medium"
+                    }}>
                     {t('summary.cards.finance.pendingDeficit', {
                       amount: formatCurrencyValue(pendingOverdraftAmount || pendingDeficitAmount),
                     })}
@@ -427,7 +463,12 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                   }}
                 >
                   <InfoIcon sx={{ fontSize: 16, color: 'info.main' }} />
-                  <Typography variant="caption" color="info.main" fontWeight="medium">
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "info.main",
+                      fontWeight: "medium"
+                    }}>
                     {t('summary.cards.finance.pendingDeficitCovered', {
                       amount: formatCurrencyValue(pendingDeficitAmount),
                       balance: currentBankBalance !== undefined ? formatCurrencyValue(currentBankBalance) : undefined,
@@ -492,10 +533,21 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
               pointerEvents: 'none',
             }}
           >
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                display: 'block',
+                lineHeight: 1
+              }}>
               {t('summary.cards.portfolio.total', { defaultValue: 'Total' })}
             </Typography>
-            <Typography variant="body2" fontWeight={700} sx={{ color: theme.palette.text.primary }}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 700,
+                color: theme.palette.text.primary
+              }}>
               {assetBreakdown.length} {t('summary.cards.portfolio.assets', { defaultValue: 'Assets' })}
             </Typography>
           </Box>
@@ -525,10 +577,14 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 {t('summary.budgets.utilization', { count: budgetCategoriesCount })}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 {forecastSummary ? `${forecastSummary.onTrack} / ${forecastSummary.atRisk} / ${forecastSummary.exceeded}` : '—'}
               </Typography>
             </Box>
@@ -584,10 +640,14 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.6 }}>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{
+                color: "text.secondary"
+              }}>
                 {t('summary.allocation.actual')}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 {t('summary.allocation.target', {
                   targets: (['essential', 'growth', 'stability', 'reward'] as SpendingCategory[])
                   .map((key) => Math.round(allocationTargets[key]))
@@ -651,7 +711,9 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                       justifyContent: 'center',
                     }}
                   >
-                    <Typography variant="caption" fontWeight={700}>
+                    <Typography variant="caption" sx={{
+                      fontWeight: 700
+                    }}>
                       {metric.value}
                     </Typography>
                   </Box>
@@ -704,7 +766,13 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                 }}>
                   {card.icon}
                 </Box>
-                <Typography variant="overline" color="text.secondary" fontWeight={600} letterSpacing={1}>
+                <Typography
+                  variant="overline"
+                  sx={{
+                    color: "text.secondary",
+                    fontWeight: 600,
+                    letterSpacing: 1
+                  }}>
                   {card.title}
                 </Typography>
               </Box>
@@ -719,7 +787,13 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
               </CurrencyTypography>
 
               {card.subtitle && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2,
+                    fontWeight: 500
+                  }}>
                   {card.subtitle}
                 </Typography>
               )}

@@ -129,10 +129,17 @@ const LicenseStatusBanner: React.FC<LicenseStatusBannerProps> = ({
             },
           }}
         >
-          <Typography variant="body2" fontWeight={500}>
+          <Typography variant="body2" sx={{
+            fontWeight: 500
+          }}>
             {title}
           </Typography>
-          <Typography variant="body2" color="inherit" sx={{ opacity: 0.8 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "inherit",
+              opacity: 0.8
+            }}>
             {message}
           </Typography>
         </Alert>
@@ -189,20 +196,31 @@ const LicenseStatusBanner: React.FC<LicenseStatusBannerProps> = ({
           </Box>
 
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+            <Typography variant="subtitle2" gutterBottom sx={{
+              fontWeight: 600
+            }}>
               {title}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mb: 1.5
+              }}>
               {message}
             </Typography>
 
             {licenseType === 'trial' && trialDaysRemaining !== undefined && (
               <Box sx={{ mb: 1.5 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {t('license.trialProgress')}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {TRIAL_DAYS - trialDaysRemaining} / {TRIAL_DAYS} {t('license.days')}
                   </Typography>
                 </Box>

@@ -106,7 +106,9 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
     if (!portfolioData || !accountHistories || Object.keys(accountHistories).length === 0) {
       return (
         <Box sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('empty.history')}
           </Typography>
         </Box>
@@ -241,10 +243,14 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
         }}
       >
         <Box>
-          <Typography variant="subtitle1" fontWeight={600}>
+          <Typography variant="subtitle1" sx={{
+            fontWeight: 600
+          }}>
             {t('title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {displayMode === 'chart'
               ? t('descriptions.chart')
               : t('descriptions.table')}
@@ -311,8 +317,10 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
                         <TableCell align="right">
                           <Typography
                             variant="body2"
-                            fontWeight="medium"
                             color={txn.price < 0 ? 'error.main' : 'success.main'}
+                            sx={{
+                              fontWeight: "medium"
+                            }}
                           >
                             {formatCurrencyValue(txn.price)}
                           </Typography>
@@ -325,16 +333,22 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
               {transactions.length > 50 && (
                 <Typography
                   variant="caption"
-                  color="text.secondary"
-                  sx={{ mt: 2, mb: 2, display: 'block', textAlign: 'center' }}
-                >
+                  sx={{
+                    color: "text.secondary",
+                    mt: 2,
+                    mb: 2,
+                    display: 'block',
+                    textAlign: 'center'
+                  }}>
                   {t('table.showing', { count: transactions.length })}
                 </Typography>
               )}
             </>
           ) : (
             <Box sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="text.secondary">{t('empty.transactions')}</Typography>
+              <Typography sx={{
+                color: "text.secondary"
+              }}>{t('empty.transactions')}</Typography>
             </Box>
           )}
         </Box>

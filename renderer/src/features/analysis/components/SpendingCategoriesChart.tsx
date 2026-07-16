@@ -133,7 +133,9 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
   if (!breakdown || breakdown.breakdown.length === 0) {
     return (
       <Alert severity="info">
-        <Typography variant="body1" fontWeight="bold">
+        <Typography variant="body1" sx={{
+          fontWeight: "bold"
+        }}>
           {t('empty.title')}
         </Typography>
         <Typography variant="body2">
@@ -247,17 +249,22 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
 
   return (
     <Box>
-      <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ 
-        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-      }}>
+      <Typography
+        variant="h6"
+        gutterBottom
+        sx={{
+          fontWeight: "bold",
+          background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent'
+        }}>
         {t('title')}
       </Typography>
-      <Typography variant="body2" color="text.secondary" gutterBottom>
+      <Typography variant="body2" gutterBottom sx={{
+        color: "text.secondary"
+      }}>
         {t('subtitle')}
       </Typography>
-
       <Box
         sx={{
           display: 'flex',
@@ -270,7 +277,12 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary",
+              fontWeight: 600
+            }}>
             {t('timeRanges.label')}
           </Typography>
           <ToggleButtonGroup
@@ -286,7 +298,9 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
           </ToggleButtonGroup>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {viewMode === 'current'
               ? t('viewToggle.currentHint')
               : viewMode === 'incomeIndexed'
@@ -314,7 +328,6 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
           </ToggleButtonGroup>
         </Box>
       </Box>
-
       <Grid container spacing={3} sx={{ mt: 1 }}>
         {/* Breakdown Details Full Width */}
         <Grid size={{ xs: 12 }}>
@@ -374,7 +387,9 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
                               {SPENDING_CATEGORY_ICONS[item.spending_category] || SPENDING_CATEGORY_ICONS.unallocated}
                             </Box>
                             <Box>
-                              <Typography variant="body2" fontWeight="bold">
+                              <Typography variant="body2" sx={{
+                                fontWeight: "bold"
+                              }}>
                                 {item.label}
                               </Typography>
                               <Chip
@@ -392,10 +407,20 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
                             </Box>
                           </Box>
                           <Box sx={{ textAlign: 'right' }}>
-                            <Typography variant="body1" fontWeight="800" sx={{ color: theme.palette.text.primary }}>
+                            <Typography
+                              variant="body1"
+                              sx={{
+                                fontWeight: "800",
+                                color: theme.palette.text.primary
+                              }}>
                               {formatCurrency(item.displayAmount, { absolute: true, maximumFractionDigits: 0 })}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: "text.secondary",
+                                display: 'block'
+                              }}>
                               {viewMode === 'incomeIndexed'
                                 ? t('labels.incomeTarget', { value: item.target_percentage.toFixed(0) })
                                 : viewMode === 'salaryIndexed'
@@ -403,7 +428,12 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
                                   : t('labels.target', { value: item.target_percentage.toFixed(0) })}
                             </Typography>
                             {viewMode !== 'current' && (
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: "text.secondary",
+                                  display: 'block'
+                                }}>
                                 {t('labels.currentSpend', {
                                   amount: formatCurrency(item.total_amount, { absolute: true, maximumFractionDigits: 0 }),
                                 })}
@@ -445,7 +475,9 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
 
                         {/* Status */}
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                          }}>
                             {t('labels.transactions', { count: item.transaction_count })}
                           </Typography>
                           {(isOver || isUnder) && (
@@ -475,7 +507,6 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
           </Card>
         </Grid>
       </Grid>
-
       {/* Total Spending */}
       <Card elevation={0} sx={{ 
         mt: 2,
@@ -487,20 +518,24 @@ const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ month
       }}>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="subtitle2" color="text.secondary">
+            <Typography variant="subtitle2" sx={{
+              color: "text.secondary"
+            }}>
               {t('labels.totalSpendingRange', { range: timeRangeLabel })}
             </Typography>
-            <Typography variant="h5" fontWeight="bold" sx={{
-              background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: "bold",
+                background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent'
+              }}>
               {formatCurrency(breakdown.total_spending, { absolute: true, maximumFractionDigits: 0 })}
             </Typography>
           </Box>
         </CardContent>
       </Card>
-
       <SpendingCategoryTransactionsModal
         open={Boolean(selectedCategory)}
         onClose={closeCategoryTransactionsModal}

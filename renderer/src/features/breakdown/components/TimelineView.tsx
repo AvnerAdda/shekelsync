@@ -496,7 +496,12 @@ const TimelineView: React.FC<TimelineViewProps> = ({
         </DialogTitle>
         <DialogContent>
           {selectedTransactions.length === 0 ? (
-            <Typography color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+            <Typography
+              sx={{
+                color: "text.secondary",
+                py: 2,
+                textAlign: 'center'
+              }}>
               {timelineStrings.noTransactions}
             </Typography>
           ) : (
@@ -550,22 +555,30 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                         }
                         secondary={
                           <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                              color: "text.secondary"
+                            }}>
                               {new Date(txn.date).toLocaleDateString()}
                             </Typography>
                             {pending && processedDate && (
                               <>
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                  color: "text.secondary"
+                                }}>
                                   •
                                 </Typography>
-                                <Typography variant="caption" color="warning.main">
+                                <Typography variant="caption" sx={{
+                                  color: "warning.main"
+                                }}>
                                   {`${generalStrings.processedDatePrefix}: ${new Date(processedDate).toLocaleDateString()}`}
                                 </Typography>
                               </>
                             )}
                             {(txn.institution || txn.vendor) && (
                               <>
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" sx={{
+                                  color: "text.secondary"
+                                }}>
                                   •
                                 </Typography>
                                 <InstitutionBadge institution={txn.institution} fallback={txn.vendor} />
@@ -573,13 +586,16 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                             )}
                           </Box>
                         }
-                        primaryTypographyProps={{ component: 'div' }}
-                        secondaryTypographyProps={{ component: 'div' }}
-                      />
+                        slotProps={{
+                          primary: { component: 'div' },
+                          secondary: { component: 'div' }
+                        }} />
                       <Typography
                         variant="body2"
-                        fontWeight="bold"
                         color={categoryType === 'income' ? 'success.main' : undefined}
+                        sx={{
+                          fontWeight: "bold"
+                        }}
                       >
                         {formatCurrencyValue(Math.abs(txn.price))}
                       </Typography>

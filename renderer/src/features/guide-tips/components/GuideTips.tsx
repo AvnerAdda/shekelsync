@@ -50,7 +50,9 @@ interface TipConfig {
 const tipConfigs: Record<string, TipConfig> = {
   add_bank: { icon: <BankIcon fontSize="small" />, skippable: false },
   add_credit_cards: { icon: <CreditCardIcon fontSize="small" />, skippable: true },
-  pair_accounts: { icon: <PairIcon fontSize="small" />, skippable: false },
+  pair_accounts: { icon: <PairIcon sx={{
+    fontSize: "small"
+  }} />, skippable: false },
   manage_categories: { icon: <CategoryIcon fontSize="small" />, skippable: true },
   categorize: { icon: <TagIcon fontSize="small" />, skippable: false },
   create_rules: { icon: <RuleIcon fontSize="small" />, skippable: true },
@@ -217,7 +219,6 @@ const GuideTips: React.FC = () => {
           </Badge>
         </IconButton>
       </Tooltip>
-
       <Popover
         open={open}
         anchorEl={anchorEl}
@@ -237,7 +238,9 @@ const GuideTips: React.FC = () => {
       >
         {/* Header */}
         <Box sx={{ p: 2, pb: 1 }}>
-          <Typography variant="subtitle1" fontWeight={600}>
+          <Typography variant="subtitle1" sx={{
+            fontWeight: 600
+          }}>
             {t('guideTips.header')}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
@@ -267,7 +270,9 @@ const GuideTips: React.FC = () => {
         <Box sx={{ maxHeight: 400, overflowY: 'auto' }}>
           {loading && tips.length === 0 ? (
             <Box sx={{ p: 3, textAlign: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{
+                color: "text.secondary"
+              }}>
                 {t('guideTips.loading')}
               </Typography>
             </Box>
@@ -291,13 +296,21 @@ const GuideTips: React.FC = () => {
                     </ListItemIcon>
                     <ListItemText
                       primary={
-                        <Typography variant="body2" fontWeight={500}>
+                        <Typography variant="body2" sx={{
+                          fontWeight: 500
+                        }}>
                           {t(`guideTips.tips.${tip.id}.title`)}
                         </Typography>
                       }
                       secondary={
                         <Box>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: "text.secondary",
+                              display: 'block',
+                              mb: 0.5
+                            }}>
                             {getDescription(tip)}
                           </Typography>
                           <Box sx={{ display: 'flex', gap: 0.5 }}>

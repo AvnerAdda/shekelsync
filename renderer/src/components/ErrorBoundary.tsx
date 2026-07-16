@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Box, Button, Typography, Paper, Container } from '@mui/material';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
 interface Props {
@@ -96,7 +96,12 @@ class ErrorBoundary extends Component<Props, State> {
               <Typography variant="h4" gutterBottom color="error">
                 Something went wrong
               </Typography>
-              <Typography variant="body1" color="text.secondary" paragraph>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: "text.secondary",
+                  marginBottom: "16px"
+                }}>
                 We're sorry for the inconvenience. An unexpected error has occurred.
               </Typography>
 
@@ -146,7 +151,13 @@ class ErrorBoundary extends Component<Props, State> {
               </Box>
 
               {!import.meta.env.DEV && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 3, display: 'block' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    mt: 3,
+                    display: 'block'
+                  }}>
                   If this problem persists, please contact support with the time this error occurred.
                 </Typography>
               )}

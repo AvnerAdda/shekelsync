@@ -84,10 +84,14 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
   if (!data) {
     return (
       <Paper sx={{ p: 2.5, height: '100%' }}>
-        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+        <Typography variant="subtitle1" gutterBottom sx={{
+          fontWeight: 600
+        }}>
           {t('title')}
         </Typography>
-        <Typography color="text.secondary">{t('empty')}</Typography>
+        <Typography sx={{
+          color: "text.secondary"
+        }}>{t('empty')}</Typography>
       </Paper>
     );
   }
@@ -96,10 +100,14 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
     <Paper sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
         <Box>
-          <Typography variant="subtitle1" fontWeight={600}>
+          <Typography variant="subtitle1" sx={{
+            fontWeight: 600
+          }}>
             {t('title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('subtitle')}
           </Typography>
         </Box>
@@ -113,13 +121,11 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
           />
         </Box>
       </Box>
-
       {multiCurrencyWarning && (
         <Alert severity="warning" sx={{ borderRadius: 2 }}>
           {t('mixedCurrencyWarning')}
         </Alert>
       )}
-
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 1.5 }}>
         {[
           { label: t('cards.valueChange'), value: data.valueChange, color: 'primary.main' },
@@ -138,16 +144,22 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
               border: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
             }}
           >
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {item.label}
             </Typography>
-            <Typography variant="h6" fontWeight={700} sx={{ color: item.color }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                color: item.color
+              }}>
               {maskAmounts ? '***' : formatCurrencyValue(item.value)}
             </Typography>
           </Box>
         ))}
       </Box>
-
       <Box sx={{ flexGrow: 1, minHeight: 260 }}>
         {chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height={280}>
@@ -189,7 +201,9 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
             </ComposedChart>
           </ResponsiveContainer>
         ) : (
-          <Typography color="text.secondary">{t('emptyTimeline')}</Typography>
+          <Typography sx={{
+            color: "text.secondary"
+          }}>{t('emptyTimeline')}</Typography>
         )}
       </Box>
     </Paper>

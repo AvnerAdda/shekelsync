@@ -117,29 +117,54 @@ const PortfolioPieChart: React.FC<PortfolioPieChartProps> = ({
                 pointerEvents: 'none',
               }}
             >
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  display: 'block',
+                  lineHeight: 1
+                }}>
                 Total
               </Typography>
-              <Typography variant="body2" fontWeight={700} sx={{ color: theme.palette.text.primary }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 700,
+                  color: theme.palette.text.primary
+                }}>
                 {formatCurrencyValue(total)}
               </Typography>
             </Box>
           </Box>
           <Box sx={{ mt: 2, textAlign: 'center' }}>
-            <Typography variant="body2" fontWeight="bold" sx={{ color }}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: "bold",
+                color
+              }}>
               {formatCurrencyValue(total)}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {hint}
             </Typography>
           </Box>
         </>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {emptyTitle}
           </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary",
+              mt: 1
+            }}>
             {emptyHint}
           </Typography>
         </Box>
@@ -221,18 +246,35 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
             }}
           >
             <Box>
-              <Typography variant="caption" color="text.secondary" display="block">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  display: "block"
+                }}>
                 Total Income
               </Typography>
-              <Typography variant="h6" fontWeight="bold" color="primary.main">
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: "bold",
+                  color: "primary.main"
+                }}>
                 {formatCurrencyValue(waterfallData.summary.totalIncome)}
               </Typography>
             </Box>
             <Box sx={{ textAlign: 'right' }}>
-              <Typography variant="caption" color="text.secondary" display="block">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  display: "block"
+                }}>
                 Period
               </Typography>
-              <Typography variant="body2" fontWeight="500">
+              <Typography variant="body2" sx={{
+                fontWeight: "500"
+              }}>
                 {t('periodDays.lastXDays', { count: periodDays, defaultValue: `Last ${periodDays} days` })}
               </Typography>
             </Box>
@@ -243,10 +285,14 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
 
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300 }}>
-        <Typography variant="body1" color="text.secondary" gutterBottom>
+        <Typography variant="body1" gutterBottom sx={{
+          color: "text.secondary"
+        }}>
           {t('overall.noData')}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: "text.secondary"
+        }}>
           {t('overall.noDataHint')}
         </Typography>
       </Box>
@@ -278,7 +324,9 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
 
     return (
       <Box sx={{ p: 4, textAlign: 'center' }}>
-        <Typography color="text.secondary">
+        <Typography sx={{
+          color: "text.secondary"
+        }}>
           {type === 'investment' ? t('investment.comingSoon') : t('shared.noDataPeriod')}
         </Typography>
       </Box>

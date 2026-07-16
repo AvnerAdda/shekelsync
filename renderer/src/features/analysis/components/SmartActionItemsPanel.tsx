@@ -161,10 +161,14 @@ const SmartActionItemsPanel: React.FC = () => {
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h6" fontWeight="bold">
+          <Typography variant="h6" sx={{
+            fontWeight: "bold"
+          }}>
             {t('title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('subtitle')}
           </Typography>
         </Box>
@@ -178,47 +182,62 @@ const SmartActionItemsPanel: React.FC = () => {
           {generating ? t('actions.generating') : t('actions.generate')}
         </Button>
       </Box>
-
       {/* Summary */}
       {summary && (
         <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
           <Card variant="outlined" sx={{ flex: 1, minWidth: 150 }}>
             <CardContent>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 {t('summary.totalActions')}
               </Typography>
-              <Typography variant="h4" fontWeight="bold">
+              <Typography variant="h4" sx={{
+                fontWeight: "bold"
+              }}>
                 {summary.total}
               </Typography>
             </CardContent>
           </Card>
           <Card variant="outlined" sx={{ flex: 1, minWidth: 150 }}>
             <CardContent>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 {t('summary.criticalHigh')}
               </Typography>
-              <Typography variant="h4" fontWeight="bold" color="error.main">
+              <Typography
+                variant="h4"
+                sx={{
+                  fontWeight: "bold",
+                  color: "error.main"
+                }}>
                 {summary.by_severity.critical + summary.by_severity.high}
               </Typography>
             </CardContent>
           </Card>
           <Card variant="outlined" sx={{ flex: 1, minWidth: 150 }}>
             <CardContent>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 {t('summary.potentialImpact')}
               </Typography>
-              <Typography variant="h4" fontWeight="bold" color={summary.total_potential_impact < 0 ? 'error.main' : 'success.main'}>
+              <Typography variant="h4" color={summary.total_potential_impact < 0 ? 'error.main' : 'success.main'} sx={{
+                fontWeight: "bold"
+              }}>
                 {formatCurrency(Math.abs(summary.total_potential_impact), { absolute: true, maximumFractionDigits: 0 })}
               </Typography>
             </CardContent>
           </Card>
         </Box>
       )}
-
       {/* Actions List */}
       {actions.length === 0 ? (
         <Alert severity="success">
-          <Typography variant="body1" fontWeight="bold">
+          <Typography variant="body1" sx={{
+            fontWeight: "bold"
+          }}>
             {t('empty.title')}
           </Typography>
           <Typography variant="body2">
@@ -250,16 +269,25 @@ const SmartActionItemsPanel: React.FC = () => {
                         <Chip label={action.category_name} size="small" variant="outlined" color="primary" />
                       )}
                     </Box>
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
+                    <Typography variant="h6" gutterBottom sx={{
+                      fontWeight: "bold"
+                    }}>
                       {action.title}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: "text.secondary",
+                        mb: 1
+                      }}>
                       {action.description}
                     </Typography>
                     {action.potential_impact !== undefined && action.potential_impact !== 0 && (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <MoneyIcon fontSize="small" color={action.potential_impact < 0 ? 'error' : 'success'} />
-                        <Typography variant="body2" color={action.potential_impact < 0 ? 'error.main' : 'success.main'} fontWeight="bold">
+                        <Typography variant="body2" color={action.potential_impact < 0 ? 'error.main' : 'success.main'} sx={{
+                          fontWeight: "bold"
+                        }}>
                           {action.potential_impact < 0 ? t('labels.costIncrease') : t('labels.potentialSavings')}{' '}
                           {formatCurrency(Math.abs(action.potential_impact), { absolute: true, maximumFractionDigits: 0 })}
                         </Typography>
@@ -292,12 +320,20 @@ const SmartActionItemsPanel: React.FC = () => {
                 {/* Expanded Details */}
                 <Collapse in={expandedAction === action.id}>
                   <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-                    <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                    <Typography
+                      variant="caption"
+                      gutterBottom
+                      sx={{
+                        color: "text.secondary",
+                        display: "block"
+                      }}>
                       {t('details.title')}
                     </Typography>
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
                       <Box>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                          color: "text.secondary"
+                        }}>
                           {t('details.detected')}
                         </Typography>
                         <Typography variant="body2">
@@ -305,7 +341,9 @@ const SmartActionItemsPanel: React.FC = () => {
                         </Typography>
                       </Box>
                       <Box>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                          color: "text.secondary"
+                        }}>
                           {t('details.confidence')}
                         </Typography>
                         <Typography variant="body2">
@@ -314,12 +352,16 @@ const SmartActionItemsPanel: React.FC = () => {
                       </Box>
                       {action.metadata && Object.keys(action.metadata).length > 0 && (
                         <Box sx={{ gridColumn: '1 / -1' }}>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                          }}>
                             {t('details.additionalInfo')}
                           </Typography>
                           <Box sx={{ mt: 0.5 }}>
                             {Object.entries(action.metadata).slice(0, 5).map(([key, value]) => (
-                              <Typography key={key} variant="caption" display="block">
+                              <Typography key={key} variant="caption" sx={{
+                                display: "block"
+                              }}>
                                 <strong>{key.replace(/_/g, ' ')}:</strong> {typeof value === 'number' ? value.toFixed(2) : String(value)}
                               </Typography>
                             ))}
@@ -334,7 +376,6 @@ const SmartActionItemsPanel: React.FC = () => {
           ))}
         </Stack>
       )}
-
       {/* Action Dialog */}
       <Dialog open={actionDialog.open} onClose={() => setActionDialog({ open: false, action: null, type: null })} maxWidth="sm" fullWidth>
         <DialogTitle>

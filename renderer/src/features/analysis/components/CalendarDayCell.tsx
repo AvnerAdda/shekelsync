@@ -93,33 +93,30 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({
       >
         {date.getDate()}
       </Typography>
-
       {/* Subscription pills or dots */}
       {isCompact ? (
         // Compact mode: colored dots
-        hasSubscriptions && (
-          <Box sx={{ display: 'flex', gap: 0.3, flexWrap: 'wrap', justifyContent: 'center' }}>
-            {subscriptions.slice(0, 4).map((entry, i) => (
-              <Box
-                key={i}
-                sx={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  bgcolor: entry.subscription.category_color || theme.palette.primary.main,
-                }}
-              />
-            ))}
-            {subscriptions.length > 4 && (
-              <Typography variant="caption" sx={{ fontSize: '0.55rem', color: 'text.secondary', lineHeight: 1 }}>
-                +{subscriptions.length - 4}
-              </Typography>
-            )}
-          </Box>
-        )
+        (hasSubscriptions && (<Box sx={{ display: 'flex', gap: 0.3, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {subscriptions.slice(0, 4).map((entry, i) => (
+            <Box
+              key={i}
+              sx={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                bgcolor: entry.subscription.category_color || theme.palette.primary.main,
+              }}
+            />
+          ))}
+          {subscriptions.length > 4 && (
+            <Typography variant="caption" sx={{ fontSize: '0.55rem', color: 'text.secondary', lineHeight: 1 }}>
+              +{subscriptions.length - 4}
+            </Typography>
+          )}
+        </Box>))
       ) : (
         // Full mode: pills with name and amount
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3 }}>
+        (<Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3 }}>
           {visibleSubs.map((entry, i) => (
             <Box
               key={i}
@@ -179,7 +176,7 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({
               {t('moreCharges', { count: overflowCount })}
             </Typography>
           )}
-        </Box>
+        </Box>)
       )}
     </Box>
   );

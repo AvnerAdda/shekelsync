@@ -155,11 +155,15 @@ export default function PikadonAccountDetailsDialog({
           ) : (
             <Stack spacing={3}>
               <Box>
-                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                <Typography variant="subtitle1" gutterBottom sx={{
+                  fontWeight: 600
+                }}>
                   Active entries
                 </Typography>
                 {pikadon.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>
                     No pikadon entries have been created yet.
                   </Typography>
                 ) : (
@@ -212,7 +216,9 @@ export default function PikadonAccountDetailsDialog({
                 <>
                   <Divider />
                   <Box>
-                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    <Typography variant="subtitle1" gutterBottom sx={{
+                      fontWeight: 600
+                    }}>
                       Pending setup
                     </Typography>
                     <Stack spacing={1.5}>
@@ -231,10 +237,14 @@ export default function PikadonAccountDetailsDialog({
                           }}
                         >
                           <Box>
-                            <Typography variant="body2" fontWeight={600}>
+                            <Typography variant="body2" sx={{
+                              fontWeight: 600
+                            }}>
                               {item.transaction_name || 'Pikadon deposit'}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                              color: "text.secondary"
+                            }}>
                               {item.deposit_date} • {formatCurrency(item.principal)}
                             </Typography>
                           </Box>
@@ -254,7 +264,6 @@ export default function PikadonAccountDetailsDialog({
           <Button onClick={onClose} disabled={saving}>Close</Button>
         </DialogActions>
       </Dialog>
-
       <PikadonSetupDialog
         open={Boolean(editingItems?.length)}
         title={editingItems?.[0]?.id ? 'Edit pikadon details' : 'Complete pikadon setup'}

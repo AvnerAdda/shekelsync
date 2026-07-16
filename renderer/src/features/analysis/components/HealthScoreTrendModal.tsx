@@ -178,24 +178,30 @@ const HealthScoreTrendModal: React.FC<HealthScoreTrendModalProps> = ({ open, onC
       onClose={onClose}
       maxWidth="md"
       fullWidth
-      PaperProps={{
-        sx: {
-          bgcolor: alpha(theme.palette.background.paper, 0.85),
-          backdropFilter: 'blur(20px)',
-          backgroundImage: 'none',
-          boxShadow: theme.shadows[24],
-          borderRadius: 3,
-          border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
-        },
+      slotProps={{
+        paper: {
+          sx: {
+            bgcolor: alpha(theme.palette.background.paper, 0.85),
+            backdropFilter: 'blur(20px)',
+            backgroundImage: 'none',
+            boxShadow: theme.shadows[24],
+            borderRadius: 3,
+            border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+          },
+        }
       }}
     >
       <DialogTitle sx={{ pr: 6 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
           <Box>
-            <Typography variant="h6" component="span" fontWeight="bold">
+            <Typography variant="h6" component="span" sx={{
+              fontWeight: "bold"
+            }}>
               {t('title')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {t('subtitle', { days, windowDays })}
             </Typography>
           </Box>
@@ -204,7 +210,6 @@ const HealthScoreTrendModal: React.FC<HealthScoreTrendModalProps> = ({ open, onC
           </IconButton>
         </Box>
       </DialogTitle>
-
       <DialogContent>
         {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -229,7 +234,9 @@ const HealthScoreTrendModal: React.FC<HealthScoreTrendModalProps> = ({ open, onC
                     fontWeight: 700,
                   }}
                 />
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('summary', { delta: trendDelta > 0 ? `+${trendDelta}` : `${trendDelta}` })}
                 </Typography>
               </Box>
@@ -243,7 +250,9 @@ const HealthScoreTrendModal: React.FC<HealthScoreTrendModalProps> = ({ open, onC
                     />
                   }
                   label={
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('showBreakdown', { defaultValue: 'Show breakdown' })}
                     </Typography>
                   }

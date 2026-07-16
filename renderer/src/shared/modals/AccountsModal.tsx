@@ -896,22 +896,24 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
               onChange={(e) => setNewAccount((prev) => ({ ...prev, [config.key]: e.target.value }))}
               required
               helperText={helperText}
-              InputProps={isPasswordField
-                ? {
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          edge="end"
-                          onClick={() => setShowNewAccountPassword((prev) => !prev)}
-                          onMouseDown={(event) => event.preventDefault()}
-                          aria-label={showNewAccountPassword ? 'Hide password' : 'Show password'}
-                        >
-                          {showNewAccountPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }
-                : undefined}
+              slotProps={{
+                input: isPasswordField
+                  ? {
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            edge="end"
+                            onClick={() => setShowNewAccountPassword((prev) => !prev)}
+                            onMouseDown={(event) => event.preventDefault()}
+                            aria-label={showNewAccountPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showNewAccountPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }
+                  : undefined
+              }}
             />
           </Grid>
         );
@@ -2118,7 +2120,9 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
               <StyledTableRow key={account.id}>
                 <TableCell sx={{ py: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography variant="body2" sx={{
+                      fontWeight: 600
+                    }}>
                       {account.account_name}
                     </Typography>
                   </Box>
@@ -2162,7 +2166,12 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                   </Box>
                 </TableCell>
                 <TableCell sx={{ py: 2 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      fontWeight: 500
+                    }}>
                     {account.last_update_date
                       ? new Date(account.last_update_date).toLocaleDateString()
                       : t('lastUpdate.never')
@@ -2379,7 +2388,9 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
               <StyledTableRow key={account.id}>
                 <TableCell sx={{ py: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography variant="body2" sx={{
+                      fontWeight: 600
+                    }}>
                       {account.nickname}
                     </Typography>
                     {account.lastScrapeStatus === 'success' && (
@@ -2522,34 +2533,34 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
 
   return (
     <>
-      <Dialog 
-        open={isOpen} 
+      <Dialog
+        open={isOpen}
         onClose={() => {
           if (isAdding) {
             setIsAdding(false);
           } else {
             onClose();
           }
-        }} 
-        maxWidth="lg" 
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: '16px',
-            boxShadow: (theme) => theme.palette.mode === 'dark'
-              ? '0 20px 60px rgba(0, 0, 0, 0.7)'
-              : '0 20px 60px rgba(0, 0, 0, 0.15)',
-          }
         }}
+        maxWidth="lg"
+        fullWidth
         slotProps={{
           backdrop: {
             sx: {
               backdropFilter: 'blur(4px)',
               backgroundColor: 'rgba(0, 0, 0, 0.6)',
             }
+          },
+
+          paper: {
+            sx: {
+              borderRadius: '16px',
+              boxShadow: (theme) => theme.palette.mode === 'dark'
+                ? '0 20px 60px rgba(0, 0, 0, 0.7)'
+                : '0 20px 60px rgba(0, 0, 0, 0.15)',
+            }
           }
-        }}
-      >
+        }}>
         <ModalHeader
           title={t('title')}
           onClose={() => {
@@ -2664,7 +2675,9 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                     {institutionNodes.length === 0 ? (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <CircularProgress size={18} />
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                          color: "text.secondary"
+                        }}>
                           {t('wizard.loadingInstitutions', { defaultValue: 'Loading institutions…' })}
                         </Typography>
                       </Box>
@@ -2682,8 +2695,10 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                             }
                             value={level.selectedId ?? ''}
                             onChange={(e) => setInstitutionSelectionAtLevel(levelIndex, e.target.value)}
-                            SelectProps={{ displayEmpty: true }}
                             sx={{ mb: 2 }}
+                            slotProps={{
+                              select: { displayEmpty: true }
+                            }}
                           >
                             <MenuItem value="">
                               <em>
@@ -2760,7 +2775,9 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                         {addWizardSelectedBadgeInstitution && (
                           <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                             <InstitutionBadge institution={addWizardSelectedBadgeInstitution} size="medium" />
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                              color: "text.secondary"
+                            }}>
                               {(() => {
                                 const rawType = addWizardSelectedInstitution.institution_type || '';
                                 const typeLabel = rawType.replace(/_/g, ' ').trim();
@@ -2842,7 +2859,9 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                                             sx={{ height: '20px', fontSize: '0.65rem' }}
                                           />
                                           {investmentMatch.count && (
-                                            <Typography variant="caption" color="text.secondary">
+                                            <Typography variant="caption" sx={{
+                                              color: "text.secondary"
+                                            }}>
                                               {t('helpers.transactionsCount', { count: investmentMatch.count })}
                                             </Typography>
                                           )}
@@ -2940,10 +2959,21 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                                     bgcolor: 'action.hover',
                                   }}
                                 >
-                                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                                  <Typography
+                                    variant="subtitle2"
+                                    sx={{
+                                      fontWeight: 600,
+                                      mb: 1
+                                    }}>
                                     {t('ibkr.title', { defaultValue: 'Flex Query Auto-Sync' })}
                                   </Typography>
-                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      color: "text.secondary",
+                                      display: 'block',
+                                      mb: 2
+                                    }}>
                                     {t('ibkr.description', { defaultValue: 'Enter your IBKR Flex Query credentials to automatically sync portfolio data. Create a Flex Query in IBKR Account Management under Reports > Flex Queries.' })}
                                   </Typography>
                                   <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
@@ -2955,14 +2985,16 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                                       type={ibkrShowToken ? 'text' : 'password'}
                                       autoComplete="off"
                                       sx={{ flex: 1, minWidth: 200 }}
-                                      InputProps={{
-                                        endAdornment: (
-                                          <InputAdornment position="end">
-                                            <IconButton size="small" onClick={() => setIbkrShowToken(!ibkrShowToken)} edge="end">
-                                              {ibkrShowToken ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                                            </IconButton>
-                                          </InputAdornment>
-                                        ),
+                                      slotProps={{
+                                        input: {
+                                          endAdornment: (
+                                            <InputAdornment position="end">
+                                              <IconButton size="small" onClick={() => setIbkrShowToken(!ibkrShowToken)} edge="end">
+                                                {ibkrShowToken ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                                              </IconButton>
+                                            </InputAdornment>
+                                          ),
+                                        }
                                       }}
                                     />
                                     <TextField
@@ -2974,7 +3006,13 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                                       sx={{ flex: 1, minWidth: 200 }}
                                     />
                                   </Box>
-                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      color: "text.secondary",
+                                      display: 'block',
+                                      mt: 1
+                                    }}>
                                     {t('ibkr.optional', { defaultValue: 'Optional — you can add these later and sync from the account details.' })}
                                   </Typography>
                                 </Box>
@@ -2982,7 +3020,12 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                             )}
 
                             <Grid size={{ xs: 12 }}>
-                              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                              <Typography
+                                variant="subtitle2"
+                                sx={{
+                                  color: "text.secondary",
+                                  mb: 1
+                                }}>
                                 {t('sections.initialValue', { defaultValue: 'Initial value' })} ({t('placeholders.optional')})
                               </Typography>
                             </Grid>
@@ -2995,8 +3038,10 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                                 value={initialValue.currentValue}
                                 onChange={(e) => setInitialValue({ ...initialValue, currentValue: e.target.value })}
                                 placeholder={t('placeholders.optional')}
-                                InputProps={{
-                                  startAdornment: newInvestmentAccount.currency === 'ILS' ? '₪' : newInvestmentAccount.currency === 'USD' ? '$' : '€',
+                                slotProps={{
+                                  input: {
+                                    startAdornment: newInvestmentAccount.currency === 'ILS' ? '₪' : newInvestmentAccount.currency === 'USD' ? '$' : '€',
+                                  }
                                 }}
                               />
                             </Grid>
@@ -3009,8 +3054,10 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                                 value={initialValue.costBasis}
                                 onChange={(e) => setInitialValue({ ...initialValue, costBasis: e.target.value })}
                                 placeholder={t('placeholders.optional')}
-                                InputProps={{
-                                  startAdornment: newInvestmentAccount.currency === 'ILS' ? '₪' : newInvestmentAccount.currency === 'USD' ? '$' : '€',
+                                slotProps={{
+                                  input: {
+                                    startAdornment: newInvestmentAccount.currency === 'ILS' ? '₪' : newInvestmentAccount.currency === 'USD' ? '$' : '€',
+                                  }
                                 }}
                               />
                             </Grid>
@@ -3022,7 +3069,9 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                                 label={t('fields.asOfDate', { defaultValue: 'As of Date' })}
                                 value={initialValue.asOfDate}
                                 onChange={(e) => setInitialValue({ ...initialValue, asOfDate: e.target.value })}
-                                InputLabelProps={{ shrink: true }}
+                                slotProps={{
+                                  inputLabel: { shrink: true }
+                                }}
                               />
                             </Grid>
 
@@ -3335,7 +3384,9 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                                       sx={{ height: '20px', fontSize: '0.65rem' }}
                                     />
                                     {investmentMatch.count && (
-                                      <Typography variant="caption" color="text.secondary">
+                                      <Typography variant="caption" sx={{
+                                        color: "text.secondary"
+                                      }}>
                                         {t('helpers.transactionsCount', { count: investmentMatch.count })}
                                       </Typography>
                                     )}
@@ -3398,8 +3449,10 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                               institution: updatedName,
                             });
                           }}
-                          SelectProps={{ displayEmpty: true }}
                           helperText={t('helpers.knownInstitution')}
+                          slotProps={{
+                            select: { displayEmpty: true }
+                          }}
                         >
                               <MenuItem value="">
                                 <em>{t('fields.none')}</em>
@@ -3455,7 +3508,12 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                         </Grid>
                       )}
                       <Grid size={{ xs: 12 }}>
-                        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                        <Typography
+                          variant="subtitle2"
+                          sx={{
+                            color: "text.secondary",
+                            mb: 1
+                          }}>
                           {t('sections.initialValue')} ({t('helpers.optional')})
                         </Typography>
                       </Grid>
@@ -3467,8 +3525,10 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                           value={initialValue.currentValue}
                           onChange={(e) => setInitialValue({ ...initialValue, currentValue: e.target.value })}
                           placeholder={t('placeholders.optional')}
-                          InputProps={{
-                            startAdornment: newInvestmentAccount.currency === 'ILS' ? '₪' : newInvestmentAccount.currency === 'USD' ? '$' : '€',
+                          slotProps={{
+                            input: {
+                              startAdornment: newInvestmentAccount.currency === 'ILS' ? '₪' : newInvestmentAccount.currency === 'USD' ? '$' : '€',
+                            }
                           }}
                         />
                       </Grid>
@@ -3480,8 +3540,10 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                           value={initialValue.costBasis}
                           onChange={(e) => setInitialValue({ ...initialValue, costBasis: e.target.value })}
                           placeholder={t('placeholders.optional')}
-                          InputProps={{
-                            startAdornment: newInvestmentAccount.currency === 'ILS' ? '₪' : newInvestmentAccount.currency === 'USD' ? '$' : '€',
+                          slotProps={{
+                            input: {
+                              startAdornment: newInvestmentAccount.currency === 'ILS' ? '₪' : newInvestmentAccount.currency === 'USD' ? '$' : '€',
+                            }
                           }}
                         />
                       </Grid>
@@ -3492,7 +3554,9 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                           label={t('fields.asOfDate')}
                           value={initialValue.asOfDate}
                           onChange={(e) => setInitialValue({ ...initialValue, asOfDate: e.target.value })}
-                          InputLabelProps={{ shrink: true }}
+                          slotProps={{
+                            inputLabel: { shrink: true }
+                          }}
                         />
                       </Grid>
                       <Grid size={{ xs: 12 }}>
@@ -3556,19 +3620,20 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
           )}
         </DialogContent>
       </Dialog>
-
       {/* Value Update Modal */}
       <Dialog 
         open={showValueUpdateModal} 
         onClose={() => setShowValueUpdateModal(false)} 
         maxWidth="sm" 
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: '16px',
-            boxShadow: (theme) => theme.palette.mode === 'dark'
-              ? '0 20px 60px rgba(0, 0, 0, 0.7)'
-              : '0 20px 60px rgba(0, 0, 0, 0.15)',
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '16px',
+              boxShadow: (theme) => theme.palette.mode === 'dark'
+                ? '0 20px 60px rgba(0, 0, 0, 0.7)'
+                : '0 20px 60px rgba(0, 0, 0, 0.15)',
+            }
           }
         }}
       >
@@ -3607,10 +3672,12 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                   label={t('valueModal.currentValue')}
                   value={valueUpdate.currentValue}
                   onChange={(e) => setValueUpdate({ ...valueUpdate, currentValue: e.target.value })}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start">₪</InputAdornment>,
-                  }}
                   required
+                  slotProps={{
+                    input: {
+                      startAdornment: <InputAdornment position="start">₪</InputAdornment>,
+                    }
+                  }}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
@@ -3620,8 +3687,10 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                   label={t('valueModal.asOfDate')}
                   value={valueUpdate.asOfDate}
                   onChange={(e) => setValueUpdate({ ...valueUpdate, asOfDate: e.target.value })}
-                  InputLabelProps={{ shrink: true }}
                   required
+                  slotProps={{
+                    inputLabel: { shrink: true }
+                  }}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
@@ -3631,10 +3700,12 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                   label={t('valueModal.costBasis')}
                   value={valueUpdate.costBasis}
                   onChange={(e) => setValueUpdate({ ...valueUpdate, costBasis: e.target.value })}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start">₪</InputAdornment>,
-                  }}
                   helperText={t('valueModal.costBasisHelper')}
+                  slotProps={{
+                    input: {
+                      startAdornment: <InputAdornment position="start">₪</InputAdornment>,
+                    }
+                  }}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
@@ -3675,19 +3746,20 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
           </Button>
         </DialogActions>
       </Dialog>
-
       {/* Asset Management Modal */}
       <Dialog 
         open={showAssetModal} 
         onClose={() => setShowAssetModal(false)} 
         maxWidth="md" 
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: '16px',
-            boxShadow: (theme) => theme.palette.mode === 'dark'
-              ? '0 20px 60px rgba(0, 0, 0, 0.7)'
-              : '0 20px 60px rgba(0, 0, 0, 0.15)',
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '16px',
+              boxShadow: (theme) => theme.palette.mode === 'dark'
+                ? '0 20px 60px rgba(0, 0, 0, 0.7)'
+                : '0 20px 60px rgba(0, 0, 0, 0.15)',
+            }
           }
         }}
       >
@@ -3775,8 +3847,10 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                             label={t('assets.avgPrice')}
                             value={newAsset.avgPrice}
                             onChange={(e) => setNewAsset({ ...newAsset, avgPrice: e.target.value })}
-                            InputProps={{
-                              startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                            slotProps={{
+                              input: {
+                                startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                              }
                             }}
                           />
                         </Grid>
@@ -3787,8 +3861,10 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                             label={t('valueModal.asOfDate')}
                             value={newAsset.asOfDate}
                             onChange={(e) => setNewAsset({ ...newAsset, asOfDate: e.target.value })}
-                            InputLabelProps={{ shrink: true }}
                             required
+                            slotProps={{
+                              inputLabel: { shrink: true }
+                            }}
                           />
                         </Grid>
                         <Grid size={{ xs: 12 }}>
@@ -3892,7 +3968,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
           <Button onClick={() => setShowAssetModal(false)}>{t('actions.close')}</Button>
         </DialogActions>
       </Dialog>
-
       {/* Credentials Update Modal */}
       <Dialog
         open={isCredentialsUpdateOpen}
@@ -3901,15 +3976,16 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
             handleCloseCredentialsUpdate();
           }
         }}
-        disableEscapeKeyDown={credentialsUpdateSaving}
         maxWidth="sm"
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: '16px',
-            boxShadow: (theme) => theme.palette.mode === 'dark'
-              ? '0 20px 60px rgba(0, 0, 0, 0.7)'
-              : '0 20px 60px rgba(0, 0, 0, 0.15)',
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '16px',
+              boxShadow: (theme) => theme.palette.mode === 'dark'
+                ? '0 20px 60px rgba(0, 0, 0, 0.7)'
+                : '0 20px 60px rgba(0, 0, 0, 0.15)',
+            }
           }
         }}
       >
@@ -3983,7 +4059,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                       {t('credentialsUpdate.otpCodeHint')}
                     </Alert>
                   )}
-
                   <Grid container spacing={2} sx={{ mb: optionalSectionVisible ? 2 : 0 }}>
                     <Grid size={{ xs: 12 }}>
                       <TextField
@@ -4069,24 +4144,25 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                         }
                         placeholder={t('credentialsUpdate.passwordPlaceholder')}
                         helperText={t('credentialsUpdate.passwordHelper')}
-                        InputProps={{
-                          endAdornment: (
-                            <InputAdornment position="end">
-                              <IconButton
-                                edge="end"
-                                onClick={() => setShowCredentialsUpdatePassword((prev) => !prev)}
-                                onMouseDown={(event) => event.preventDefault()}
-                                aria-label={showCredentialsUpdatePassword ? 'Hide password' : 'Show password'}
-                              >
-                                {showCredentialsUpdatePassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                              </IconButton>
-                            </InputAdornment>
-                          ),
+                        slotProps={{
+                          input: {
+                            endAdornment: (
+                              <InputAdornment position="end">
+                                <IconButton
+                                  edge="end"
+                                  onClick={() => setShowCredentialsUpdatePassword((prev) => !prev)}
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  aria-label={showCredentialsUpdatePassword ? 'Hide password' : 'Show password'}
+                                >
+                                  {showCredentialsUpdatePassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                                </IconButton>
+                              </InputAdornment>
+                            ),
+                          }
                         }}
                       />
                     </Grid>
                   </Grid>
-
                   {optionalSectionVisible && (
                     <Accordion
                       expanded={credentialsUpdateShowOptional}
@@ -4167,7 +4243,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
           </Button>
         </DialogActions>
       </Dialog>
-
       <SyncModal
         isOpen={isSyncModalOpen}
         onClose={() => {
@@ -4179,26 +4254,26 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         onComplete={() => setIsSyncing(false)}
         initialConfig={syncInitialConfig}
       />
-
       {/* Account Pairing Modal */}
       <AccountPairingModal
         isOpen={isPairingModalOpen}
         onClose={() => setIsPairingModalOpen(false)}
         creditCardAccounts={creditAccounts}
       />
-
       {/* Confirmation Dialog for Delete Operations */}
       <Dialog 
         open={confirmDeleteOpen} 
         onClose={() => setConfirmDeleteOpen(false)} 
         maxWidth="sm" 
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: '16px',
-            boxShadow: (theme) => theme.palette.mode === 'dark'
-              ? '0 20px 60px rgba(0, 0, 0, 0.7)'
-              : '0 20px 60px rgba(0, 0, 0, 0.15)',
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '16px',
+              boxShadow: (theme) => theme.palette.mode === 'dark'
+                ? '0 20px 60px rgba(0, 0, 0, 0.7)'
+                : '0 20px 60px rgba(0, 0, 0, 0.15)',
+            }
           }
         }}
       >
@@ -4254,7 +4329,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
           </Button>
         </DialogActions>
       </Dialog>
-
       {/* Smart Investment Account Form */}
       <SmartInvestmentAccountForm
         open={showSmartForm}
@@ -4262,14 +4336,12 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         suggestion={selectedSuggestion}
         onSuccess={handleSmartFormSuccess}
       />
-
       <RealEstateSimulatorDialog
         open={Boolean(selectedRealEstateAccount)}
         account={selectedRealEstateDialogAccount}
         onClose={() => setSelectedRealEstateAccount(null)}
         onSaved={fetchInvestmentAccounts}
       />
-
       {/* License Read-Only Alert */}
       <LicenseReadOnlyAlert
         open={licenseAlertOpen}

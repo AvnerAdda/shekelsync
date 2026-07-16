@@ -21,10 +21,17 @@ const SpendDetailRow: React.FC<SpendDetailRowProps> = ({ label, range, value, pe
         mb: 0.25,
       }}
     >
-      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: "text.secondary",
+          fontSize: '0.7rem'
+        }}>
         {label}
       </Typography>
-      <Typography variant="caption" fontWeight="bold">
+      <Typography variant="caption" sx={{
+        fontWeight: "bold"
+      }}>
         {formatCurrency(value)}
       </Typography>
     </Box>
@@ -46,7 +53,14 @@ const SpendDetailRow: React.FC<SpendDetailRowProps> = ({ label, range, value, pe
       />
     </Box>
     {range && (
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.25, display: 'block', fontSize: '0.65rem' }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: "text.secondary",
+          mt: 0.25,
+          display: 'block',
+          fontSize: '0.65rem'
+        }}>
         {range}
       </Typography>
     )}

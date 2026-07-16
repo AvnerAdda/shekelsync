@@ -120,10 +120,18 @@ const RealEstateOverviewSection: React.FC<RealEstateOverviewSectionProps> = ({
     return (
       <Paper role="tabpanel" sx={{ p: 4, textAlign: 'center' }}>
         <HomeWorkIcon sx={{ fontSize: 56, color: 'text.secondary', mb: 2 }} />
-        <Typography variant="h6" fontWeight={700}>
+        <Typography variant="h6" sx={{
+          fontWeight: 700
+        }}>
           {t('empty.title', 'No real estate assets yet')}
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 3 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mt: 1,
+            mb: 3
+          }}>
           {t('empty.description', 'Add a real estate investment account and save simulator details to track equity and mortgage exposure.')}
         </Typography>
       </Paper>
@@ -190,14 +198,25 @@ const RealEstateOverviewSection: React.FC<RealEstateOverviewSectionProps> = ({
       >
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 2 }}>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle1" fontWeight={800} noWrap>
+            <Typography variant="subtitle1" noWrap sx={{
+              fontWeight: 800
+            }}>
               {property.accountName}
             </Typography>
-            <Typography variant="body2" color="text.secondary" noWrap>
+            <Typography variant="body2" noWrap sx={{
+              color: "text.secondary"
+            }}>
               {location}
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" justifyContent="flex-end">
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{
+              flexWrap: "wrap",
+              justifyContent: "flex-end"
+            }}>
             <Chip
               size="small"
               label={property.confidence || t('property.noConfidence', 'draft')}
@@ -212,69 +231,103 @@ const RealEstateOverviewSection: React.FC<RealEstateOverviewSectionProps> = ({
             </Button>
           </Stack>
         </Box>
-
         <Grid container spacing={1.5}>
           <Grid size={{ xs: 6, md: 3 }}>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('property.marketValue', 'Market value')}
             </Typography>
-            <Typography variant="body1" fontWeight={800}>
+            <Typography variant="body1" sx={{
+              fontWeight: 800
+            }}>
               {money(property.propertyMarketValue)}
             </Typography>
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('property.netEquity', 'Net equity')}
             </Typography>
-            <Typography variant="body1" fontWeight={800}>
+            <Typography variant="body1" sx={{
+              fontWeight: 800
+            }}>
               {money(property.netEquity)}
             </Typography>
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('property.mortgage', 'Mortgage')}
             </Typography>
-            <Typography variant="body1" fontWeight={800}>
+            <Typography variant="body1" sx={{
+              fontWeight: 800
+            }}>
               {money(property.totalMortgageBalance)}
             </Typography>
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('property.payment', 'Payment')}
             </Typography>
-            <Typography variant="body1" fontWeight={800}>
+            <Typography variant="body1" sx={{
+              fontWeight: 800
+            }}>
               {money(property.monthlyMortgagePayment)}
             </Typography>
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('property.ownership', 'Ownership')}
             </Typography>
-            <Typography variant="body2" fontWeight={700}>
+            <Typography variant="body2" sx={{
+              fontWeight: 700
+            }}>
               {formatPercent(property.ownershipPercentage)}
             </Typography>
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('property.loanToValue', 'LTV')}
             </Typography>
-            <Typography variant="body2" fontWeight={700}>
+            <Typography variant="body2" sx={{
+              fontWeight: 700
+            }}>
               {formatPercent(property.loanToValue)}
             </Typography>
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('property.cashFlow', 'Monthly cash flow')}
             </Typography>
-            <Typography variant="body2" fontWeight={800} sx={{ color: cashFlowColor }}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 800,
+                color: cashFlowColor
+              }}>
               {money(monthlyCashFlow)}
             </Typography>
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('property.updated', 'Valuation date')}
             </Typography>
-            <Typography variant="body2" fontWeight={700}>
+            <Typography variant="body2" sx={{
+              fontWeight: 700
+            }}>
               {formatDate(property.lastValuationDate)}
             </Typography>
           </Grid>
@@ -288,7 +341,6 @@ const RealEstateOverviewSection: React.FC<RealEstateOverviewSectionProps> = ({
       <Alert severity="info" sx={{ borderRadius: 2 }}>
         {t('marketDataNotice', 'Valuation is currently based on your saved simulator assumptions. Comparable sale data by address/type is not connected yet.')}
       </Alert>
-
       <Grid container spacing={2}>
         {kpis.map((kpi) => (
           <Grid key={kpi.label} size={{ xs: 12, sm: 6, lg: 4 }}>
@@ -303,27 +355,39 @@ const RealEstateOverviewSection: React.FC<RealEstateOverviewSectionProps> = ({
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: kpi.color, mb: 1 }}>
                 {kpi.icon}
-                <Typography variant="caption" fontWeight={800}>
+                <Typography variant="caption" sx={{
+                  fontWeight: 800
+                }}>
                   {kpi.label}
                 </Typography>
               </Box>
-              <Typography variant="h5" fontWeight={900} sx={{ lineHeight: 1.1 }}>
+              <Typography
+                variant="h5"
+                sx={{
+                  fontWeight: 900,
+                  lineHeight: 1.1
+                }}>
                 {kpi.value}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 {kpi.hint}
               </Typography>
             </Paper>
           </Grid>
         ))}
       </Grid>
-
       <Paper sx={{ p: 2.5 }} elevation={0}>
         <Box sx={{ mb: 2 }}>
-          <Typography variant="h6" fontWeight={800}>
+          <Typography variant="h6" sx={{
+            fontWeight: 800
+          }}>
             {t('propertiesTitle', 'Properties')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('propertiesSubtitle', 'Review value, debt, equity and monthly payment assumptions.')}
           </Typography>
         </Box>

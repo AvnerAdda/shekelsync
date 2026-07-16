@@ -117,13 +117,17 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                 }}
               >
                 <CardContent>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {generalStrings.total} {getTotalLabel()}
                   </Typography>
                   <Typography
                     variant="h6"
-                    fontWeight="bold"
                     color={categoryType === 'income' ? 'success.main' : undefined}
+                    sx={{
+                      fontWeight: "bold"
+                    }}
                   >
                     {formatCurrencyValue(details.summary.total)}
                   </Typography>
@@ -141,14 +145,20 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                 }}
               >
                 <CardContent>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {generalStrings.transactions}
                   </Typography>
-                  <Typography variant="h6" fontWeight="bold">
+                  <Typography variant="h6" sx={{
+                    fontWeight: "bold"
+                  }}>
                     {details.summary.count}
                   </Typography>
                   {pendingCount > 0 && (
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {strings.categoryDetails.processedBreakdown(processedCount, pendingCount)}
                     </Typography>
                   )}
@@ -166,10 +176,14 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                 }}
               >
                 <CardContent>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {generalStrings.average}
                   </Typography>
-                  <Typography variant="h6" fontWeight="bold">
+                  <Typography variant="h6" sx={{
+                    fontWeight: "bold"
+                  }}>
                     {formatCurrencyValue(details.summary.average)}
                   </Typography>
                 </CardContent>
@@ -179,7 +193,9 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
 
           {details.subcategories && details.subcategories.length > 0 && (
             <>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              <Typography variant="subtitle1" gutterBottom sx={{
+                fontWeight: "bold"
+              }}>
                 {generalStrings.subcategories}
               </Typography>
               <Grid container spacing={1} sx={{ mb: 3 }}>
@@ -205,7 +221,9 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                       onClick={() => onSubcategoryClick(sub.id, sub.name)}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Typography variant="body2" fontWeight="medium">
+                        <Typography variant="body2" sx={{
+                          fontWeight: "medium"
+                        }}>
                           {sub.name}
                         </Typography>
                         <Chip
@@ -221,7 +239,9 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                         />
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" fontWeight="bold">
+                        <Typography variant="body2" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {formatCurrencyValue(sub.total)}
                         </Typography>
                         <ChevronRightIcon color="action" />
@@ -235,7 +255,9 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
 
           {details.byVendor && details.byVendor.length > 0 && (
             <>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              <Typography variant="subtitle1" gutterBottom sx={{
+                fontWeight: "bold"
+              }}>
                 {generalStrings.vendors}
               </Typography>
               <Grid container spacing={1} sx={{ mb: 3 }}>
@@ -259,7 +281,9 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <InstitutionBadge institution={vendor.institution} fallback={vendor.vendor} />
                       </Box>
-                      <Typography variant="body2" fontWeight="bold">
+                      <Typography variant="body2" sx={{
+                        fontWeight: "bold"
+                      }}>
                         {formatCurrencyValue(vendor.total)}
                       </Typography>
                     </Box>
@@ -271,7 +295,9 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
 
           {details.byCard && details.byCard.length > 0 && (
             <>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              <Typography variant="subtitle1" gutterBottom sx={{
+                fontWeight: "bold"
+              }}>
                 {generalStrings.cards}
               </Typography>
               <Grid container spacing={1} sx={{ mb: 3 }}>
@@ -294,12 +320,19 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                       }}
                     >
                       <Box>
-                        <Typography variant="body2" fontWeight="medium" sx={{ fontFamily: 'monospace' }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: "medium",
+                            fontFamily: 'monospace'
+                          }}>
                           ****{card.accountNumber}
                         </Typography>
                         <InstitutionBadge institution={card.institution} fallback={card.vendor} />
                       </Box>
-                      <Typography variant="body2" fontWeight="bold">
+                      <Typography variant="body2" sx={{
+                        fontWeight: "bold"
+                      }}>
                         {formatCurrencyValue(card.total)}
                       </Typography>
                     </Box>
@@ -309,7 +342,9 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
             </>
           )}
 
-          <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+          <Typography variant="subtitle1" gutterBottom sx={{
+            fontWeight: "bold"
+          }}>
             {generalStrings.recentTransactions}
           </Typography>
           <List dense>
@@ -362,22 +397,30 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                       }
                       secondary={
                         <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                          }}>
                             {new Date(txn.date).toLocaleDateString()}
                           </Typography>
                           {pending && processedDate && (
                             <>
-                              <Typography variant="caption" color="text.secondary">
+                              <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                              }}>
                                 •
                               </Typography>
-                              <Typography variant="caption" color="warning.main">
+                              <Typography variant="caption" sx={{
+                                color: "warning.main"
+                              }}>
                                 {`${generalStrings.processedDatePrefix}: ${new Date(processedDate).toLocaleDateString()}`}
                               </Typography>
                             </>
                           )}
                           {(txn.institution || txn.vendor) && (
                             <>
-                              <Typography variant="caption" color="text.secondary">
+                              <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                              }}>
                                 •
                               </Typography>
                               <InstitutionBadge institution={txn.institution} fallback={txn.vendor} />
@@ -385,13 +428,16 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                           )}
                         </Box>
                       }
-                      primaryTypographyProps={{ component: 'div' }}
-                      secondaryTypographyProps={{ component: 'div' }}
-                    />
+                      slotProps={{
+                        primary: { component: 'div' },
+                        secondary: { component: 'div' }
+                      }} />
                     <Typography
                       variant="body2"
-                      fontWeight="bold"
                       color={categoryType === 'income' ? 'success.main' : undefined}
+                      sx={{
+                        fontWeight: "bold"
+                      }}
                     >
                       {formatCurrencyValue(Math.abs(txn.price))}
                     </Typography>

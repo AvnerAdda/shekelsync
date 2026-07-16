@@ -33,7 +33,15 @@ const TrendSparkline: React.FC<TrendSparklineProps> = ({
     .join(' ');
 
   return (
-    <Box component="svg" width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={ariaLabel}>
+    <Box
+      component="svg"
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label={ariaLabel}
+      sx={{
+        width: width,
+        height: height
+      }}>
       <polyline
         fill="none"
         stroke={color}

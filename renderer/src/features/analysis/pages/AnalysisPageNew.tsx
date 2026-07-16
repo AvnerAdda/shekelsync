@@ -1746,15 +1746,21 @@ const AnalysisPageNew: React.FC = () => {
       {/* Header */}
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-          <Typography variant="h4" fontWeight="bold" gutterBottom sx={{ 
-            background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            mb: 1
-          }}>
+          <Typography
+            variant="h4"
+            gutterBottom
+            sx={{
+              fontWeight: "bold",
+              background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              mb: 1
+            }}>
             {t('header.title')}
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body1" sx={{
+            color: "text.secondary"
+          }}>
             {t('header.subtitle')}
           </Typography>
         </Box>
@@ -1797,7 +1803,6 @@ const AnalysisPageNew: React.FC = () => {
           </Button>
         </Box>
       </Box>
-
       {/* Tabs */}
       <Box sx={{
         mb: 3,
@@ -1860,14 +1865,13 @@ const AnalysisPageNew: React.FC = () => {
                   <Typography
                     component="span"
                     variant="body2"
-                    fontWeight={isSelected ? 700 : 500}
                     sx={{
+                      fontWeight: isSelected ? 700 : 500,
                       display: { xs: 'none', md: 'block' },
                       whiteSpace: 'nowrap',
                       fontSize: '0.875rem',
-                      letterSpacing: '-0.01em',
-                    }}
-                  >
+                      letterSpacing: '-0.01em'
+                    }}>
                     {tab.label}
                   </Typography>
                 )}
@@ -1905,7 +1909,6 @@ const AnalysisPageNew: React.FC = () => {
           })}
         </Tabs>
       </Box>
-
       {/* Tab Content */}
       <TabPanel value={currentTab} index={0}>
         {/* Dashboard Tab */}
@@ -1938,7 +1941,9 @@ const AnalysisPageNew: React.FC = () => {
           </Alert>
         ) : (!intelligence && !temporalData && !behavioralData && !futureData && !timeValueData && !snapshotData) ? (
           <Alert severity="info" sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Typography variant="body2" fontWeight="bold">
+            <Typography variant="body2" sx={{
+              fontWeight: "bold"
+            }}>
               {t('states.noDataTitle', { defaultValue: 'No Analysis Data Available' })}
             </Typography>
             <Typography variant="body2">
@@ -1968,7 +1973,9 @@ const AnalysisPageNew: React.FC = () => {
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <CalendarIcon color="primary" />
-                      <Typography variant="subtitle1" fontWeight="bold">
+                      <Typography variant="subtitle1" sx={{
+                        fontWeight: "bold"
+                      }}>
                         {t('dashboard.rhythm.title')}
                       </Typography>
                     </Box>
@@ -1993,11 +2000,18 @@ const AnalysisPageNew: React.FC = () => {
                   ) : rhythmBuckets.length > 0 ? (
                     <Box sx={{ mb: 2 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                          color: "text.secondary"
+                        }}>
                           {t('dashboard.rhythm.spendingByHour')}
                         </Typography>
                         {rhythmStats?.preciseTimePercentage !== undefined && rhythmStats.preciseTimePercentage < 50 && (
-                          <Typography variant="caption" color="warning.main" sx={{ fontSize: '0.75rem' }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: "warning.main",
+                              fontSize: '0.75rem'
+                            }}>
                             {t('dashboard.rhythm.lowPrecision', { percentage: Math.round(rhythmStats.preciseTimePercentage) })}
                           </Typography>
                         )}
@@ -2032,7 +2046,9 @@ const AnalysisPageNew: React.FC = () => {
                       {temporalError}
                     </Alert>
                   ) : (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('states.noData')}
                     </Typography>
                   )}
@@ -2086,7 +2102,9 @@ const AnalysisPageNew: React.FC = () => {
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <TimelineIcon color="success" />
-                      <Typography variant="subtitle1" fontWeight="bold">
+                      <Typography variant="subtitle1" sx={{
+                        fontWeight: "bold"
+                      }}>
                         {t('dashboard.future.title')}
                       </Typography>
                     </Box>
@@ -2115,7 +2133,9 @@ const AnalysisPageNew: React.FC = () => {
                     <>
                       {/* 6-Month Trajectory Sparkline */}
                       <Box sx={{ mb: 2 }}>
-                        <Typography variant="caption" color="text.secondary">{t('dashboard.future.trajectory')}</Typography>
+                        <Typography variant="caption" sx={{
+                          color: "text.secondary"
+                        }}>{t('dashboard.future.trajectory')}</Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography
                             variant="h6"
@@ -2141,18 +2161,26 @@ const AnalysisPageNew: React.FC = () => {
 
                       <Grid container spacing={1}>
                         <Grid size={{ xs: 6 }}>
-                          <Typography variant="caption" color="text.secondary">{t('dashboard.future.baseCase')}</Typography>
-                          <Typography variant="h6" color="primary.main">
+                          <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                          }}>{t('dashboard.future.baseCase')}</Typography>
+                          <Typography variant="h6" sx={{
+                            color: "primary.main"
+                          }}>
                             {scenarioEndBalances.p50 !== null && scenarioEndBalances.p50 !== undefined
                               ? formatCurrencyValue(scenarioEndBalances.p50 || 0)
                               : t('dashboard.future.na')}
                           </Typography>
                         </Grid>
                         <Grid size={{ xs: 6 }}>
-                          <Typography variant="caption" color="text.secondary">{t('dashboard.future.bestCase')}</Typography>
+                          <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                          }}>{t('dashboard.future.bestCase')}</Typography>
                           <Typography
                             variant="h6"
-                            color="success.main"
+                            sx={{
+                              color: "success.main"
+                            }}
                           >
                             {scenarioEndBalances.p90 !== null && scenarioEndBalances.p90 !== undefined
                               ? formatCurrencyValue(scenarioEndBalances.p90 || 0)
@@ -2160,8 +2188,15 @@ const AnalysisPageNew: React.FC = () => {
                           </Typography>
                         </Grid>
                         <Grid size={{ xs: 12 }}>
-                          <Typography variant="caption" color="text.secondary">{t('dashboard.future.worstCase')}</Typography>
-                          <Typography variant="body2" color="error.main" fontWeight="bold">
+                          <Typography variant="caption" sx={{
+                            color: "text.secondary"
+                          }}>{t('dashboard.future.worstCase')}</Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: "error.main",
+                              fontWeight: "bold"
+                            }}>
                             {scenarioEndBalances.p10 !== null && scenarioEndBalances.p10 !== undefined
                               ? formatCurrencyValue(scenarioEndBalances.p10 || 0)
                               : t('dashboard.future.na')}
@@ -2189,10 +2224,14 @@ const AnalysisPageNew: React.FC = () => {
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, minWidth: 0 }}>
                       <ReceiptLongIcon color="info" sx={{ mt: 0.25 }} />
                       <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="subtitle1" fontWeight="bold">
+                        <Typography variant="subtitle1" sx={{
+                          fontWeight: "bold"
+                        }}>
                           {t('dashboard.previousMonth.title')}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                          color: "text.secondary"
+                        }}>
                           {t('dashboard.previousMonth.subtitle')}
                         </Typography>
                       </Box>
@@ -2263,10 +2302,21 @@ const AnalysisPageNew: React.FC = () => {
                               justifyContent: 'space-between',
                               gap: 0.75,
                             }}>
-                              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: "text.secondary",
+                                  fontWeight: 700
+                                }}>
                                 {metric.label}
                               </Typography>
-                              <Typography variant="h6" fontWeight={900} sx={{ lineHeight: 1.15, overflowWrap: 'anywhere' }}>
+                              <Typography
+                                variant="h6"
+                                sx={{
+                                  fontWeight: 900,
+                                  lineHeight: 1.15,
+                                  overflowWrap: 'anywhere'
+                                }}>
                                 {metric.value}
                               </Typography>
                               <Typography variant="caption" sx={{ color: metric.tone, fontWeight: 800 }}>
@@ -2317,7 +2367,9 @@ const AnalysisPageNew: React.FC = () => {
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <PsychologyIcon color="secondary" />
-                            <Typography variant="subtitle1" fontWeight="bold">
+                            <Typography variant="subtitle1" sx={{
+                              fontWeight: "bold"
+                            }}>
                               {t('dashboard.personality.title')}
                             </Typography>
                           </Box>
@@ -2346,7 +2398,9 @@ const AnalysisPageNew: React.FC = () => {
                           <>
                             {/* Impulse vs Planned Visual */}
                             <Box sx={{ mb: 2 }}>
-                              <Typography variant="caption" color="text.secondary">{t('dashboard.personality.spendingStyle')}</Typography>
+                              <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                              }}>{t('dashboard.personality.spendingStyle')}</Typography>
                               <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, mb: 1 }}>
                                 <Box
                                   sx={{
@@ -2368,10 +2422,14 @@ const AnalysisPageNew: React.FC = () => {
                                 />
                               </Box>
                               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="caption" color="warning.main">
+                                <Typography variant="caption" sx={{
+                                  color: "warning.main"
+                                }}>
                                   {t('dashboard.personality.impulse', { value: Math.round(personalityMetrics.impulsePercentage) })}
                                 </Typography>
-                                <Typography variant="caption" color="success.main">
+                                <Typography variant="caption" sx={{
+                                  color: "success.main"
+                                }}>
                                   {t('dashboard.personality.planned', { value: Math.round(Math.max(0, 100 - personalityMetrics.impulsePercentage)) })}
                                 </Typography>
                               </Box>
@@ -2428,7 +2486,9 @@ const AnalysisPageNew: React.FC = () => {
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <MoneyIcon color="warning" />
-                            <Typography variant="subtitle1" fontWeight="bold">
+                            <Typography variant="subtitle1" sx={{
+                              fontWeight: "bold"
+                            }}>
                               {t('dashboard.reality.title')}
                             </Typography>
                           </Box>
@@ -2456,7 +2516,9 @@ const AnalysisPageNew: React.FC = () => {
                         ) : (
                           <>
                             <Box sx={{ mb: 2 }}>
-                              <Typography variant="caption" color="text.secondary">{t('dashboard.reality.timeValue')}</Typography>
+                              <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                              }}>{t('dashboard.reality.timeValue')}</Typography>
                               <Typography variant="h6">
                                 {t('dashboard.reality.hourlyRate', { value: formatCurrencyValue(primaryHourlyWage) })}
                               </Typography>
@@ -2468,11 +2530,19 @@ const AnalysisPageNew: React.FC = () => {
                             </Box>
 
                             <Box>
-                              <Typography variant="caption" color="text.secondary">{t('dashboard.reality.biggestPurchase')}</Typography>
+                              <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                              }}>{t('dashboard.reality.biggestPurchase')}</Typography>
                               <Typography variant="body2">
                                 {t('dashboard.reality.hoursOfWork', { hours: formatBiggestPurchaseHours() })}
                               </Typography>
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: "text.secondary",
+                                  display: 'block',
+                                  mt: 0.5
+                                }}>
                                 {t('dashboard.reality.topCategoryHours', { hours: formatAveragePurchaseHours() })}
                               </Typography>
                             </Box>
@@ -2488,7 +2558,6 @@ const AnalysisPageNew: React.FC = () => {
           </Grid>
         )}
       </TabPanel>
-
       <TabPanel value={currentTab} index={1}>
         {/* Quests Tab */}
         <Paper sx={{ 
@@ -2503,7 +2572,6 @@ const AnalysisPageNew: React.FC = () => {
           <QuestsPanel />
         </Paper>
       </TabPanel>
-
       <TabPanel value={currentTab} index={2}>
         {/* Spending Tab */}
         <Paper sx={{ 
@@ -2521,7 +2589,6 @@ const AnalysisPageNew: React.FC = () => {
           </Box>
         </Paper>
       </TabPanel>
-
       <TabPanel value={currentTab} index={3}>
         {/* Budget Tab */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -2538,7 +2605,9 @@ const AnalysisPageNew: React.FC = () => {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
               <Box>
                 <Typography variant="h6">{t('budgetForecast.title')}</Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: "text.secondary"
+                }}>
                   {t('budgetForecast.subtitleUnified')}
                 </Typography>
               </Box>
@@ -2605,7 +2674,9 @@ const AnalysisPageNew: React.FC = () => {
                     size="small"
                   />
                 </Box>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {categoryVariabilityLoading && categoryVariability.length === 0
                     ? t('actions.refreshing')
                     : t('budgetForecast.variability.subtitle', {
@@ -2638,7 +2709,9 @@ const AnalysisPageNew: React.FC = () => {
               </Box>
             ) : budgetOutlook.length === 0 ? (
               <Alert severity="info" sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <Typography variant="body2" fontWeight="bold">
+                <Typography variant="body2" sx={{
+                  fontWeight: "bold"
+                }}>
                   {t('budgetForecast.emptyTitle', { defaultValue: 'No Budget Categories' })}
                 </Typography>
                 <Typography variant="body2">
@@ -2760,19 +2833,37 @@ const AnalysisPageNew: React.FC = () => {
                           </Box>
 
                           <Box sx={{ position: 'relative', zIndex: 1, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ maxWidth: '72%' }}>
+                            <Typography
+                              variant="subtitle1"
+                              noWrap
+                              sx={{
+                                fontWeight: 700,
+                                maxWidth: '72%'
+                              }}>
                               {categoryName}
                             </Typography>
-                            <Typography variant="h6" fontWeight={800} sx={{ color: statusColor }}>
+                            <Typography
+                              variant="h6"
+                              sx={{
+                                fontWeight: 800,
+                                color: statusColor
+                              }}>
                               {Math.round(preview.actualPct)}%
                             </Typography>
                           </Box>
 
                           <Box sx={{ position: 'relative', zIndex: 1, width: '100%' }}>
-                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                color: "text.secondary",
+                                fontWeight: 500
+                              }}>
                               {formatCurrencyValue(preview.actualSpent, { maximumFractionDigits: 0 })} / {formatCurrencyValue(displayAmount, { maximumFractionDigits: 0 })}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{
+                              color: "text.secondary"
+                            }}>
                               {getOverUnderLabel(preview)}
                             </Typography>
 
@@ -2818,7 +2909,9 @@ const AnalysisPageNew: React.FC = () => {
                                     label={getVariabilityLabel(variability.variability_type)}
                                     sx={{ height: 20, fontSize: '0.68rem' }}
                                   />
-                                  <Typography variant="caption" color="text.secondary">
+                                  <Typography variant="caption" sx={{
+                                    color: "text.secondary"
+                                  }}>
                                     {t('budgetForecast.variability.confidence', {
                                       value: Math.round(variability.confidence * 100),
                                       defaultValue: 'Confidence {{value}}%',
@@ -2867,7 +2960,6 @@ const AnalysisPageNew: React.FC = () => {
 
         </Box>
       </TabPanel>
-
       <TabPanel value={currentTab} index={4}>
         {/* Scoring Tab */}
         <Paper sx={{
@@ -2887,7 +2979,6 @@ const AnalysisPageNew: React.FC = () => {
           />
         </Paper>
       </TabPanel>
-
       <TabPanel value={currentTab} index={5}>
         {/* Subscriptions Tab */}
         <Paper sx={{
@@ -2902,7 +2993,6 @@ const AnalysisPageNew: React.FC = () => {
           <SubscriptionsTab />
         </Paper>
       </TabPanel>
-
       <TabPanel value={currentTab} index={6}>
         <Paper sx={{
           p: 3,
@@ -2916,7 +3006,6 @@ const AnalysisPageNew: React.FC = () => {
           <ProfilingTab />
         </Paper>
       </TabPanel>
-
       <Dialog
         open={Boolean(selectedBudgetItem)}
         onClose={closeBudgetDetails}
@@ -2948,30 +3037,42 @@ const AnalysisPageNew: React.FC = () => {
               <Grid container spacing={1.5}>
                 <Grid size={{ xs: 6, md: 3 }}>
                   <Paper variant="outlined" sx={{ p: 1.5 }}>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('budgetForecast.actualLabel', { defaultValue: 'Actual' })}
                     </Typography>
-                    <Typography variant="h6" fontWeight={700}>
+                    <Typography variant="h6" sx={{
+                      fontWeight: 700
+                    }}>
                       {formatCurrencyValue(selectedBudgetPreview.actualSpent, { maximumFractionDigits: 0 })}
                     </Typography>
                   </Paper>
                 </Grid>
                 <Grid size={{ xs: 6, md: 3 }}>
                   <Paper variant="outlined" sx={{ p: 1.5 }}>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('budgetForecast.projectedTotalLabel', { defaultValue: 'Projected total' })}
                     </Typography>
-                    <Typography variant="h6" fontWeight={700}>
+                    <Typography variant="h6" sx={{
+                      fontWeight: 700
+                    }}>
                       {formatCurrencyValue(selectedBudgetPreview.projectedTotal, { maximumFractionDigits: 0 })}
                     </Typography>
                   </Paper>
                 </Grid>
                 <Grid size={{ xs: 6, md: 3 }}>
                   <Paper variant="outlined" sx={{ p: 1.5 }}>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('budgetForecast.limitLabelShort', { defaultValue: 'Limit' })}
                     </Typography>
-                    <Typography variant="h6" fontWeight={700}>
+                    <Typography variant="h6" sx={{
+                      fontWeight: 700
+                    }}>
                       {selectedBudgetPreview.hasLimit
                         ? formatCurrencyValue(selectedBudgetPreview.limit, { maximumFractionDigits: 0 })
                         : t('budgetForecast.notSet', { defaultValue: 'Not set' })}
@@ -2980,13 +3081,19 @@ const AnalysisPageNew: React.FC = () => {
                 </Grid>
                 <Grid size={{ xs: 6, md: 3 }}>
                   <Paper variant="outlined" sx={{ p: 1.5 }}>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('budgetForecast.riskNow', { defaultValue: 'Risk now' })}
                     </Typography>
-                    <Typography variant="h6" fontWeight={700}>
+                    <Typography variant="h6" sx={{
+                      fontWeight: 700
+                    }}>
                       {Math.round(selectedBudgetPreview.risk * 100)}%
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {getBudgetStatusLabel(selectedBudgetPreview.status)}
                     </Typography>
                   </Paper>
@@ -3002,7 +3109,9 @@ const AnalysisPageNew: React.FC = () => {
                       : 'success'
                 }
               >
-                <Typography variant="body2" fontWeight={600}>
+                <Typography variant="body2" sx={{
+                  fontWeight: 600
+                }}>
                   {t('budgetForecast.stabilityLabel', { defaultValue: 'Stability' })}: {getStabilityLabel(selectedStabilityBand)}
                 </Typography>
                 <Typography variant="caption">
@@ -3016,7 +3125,9 @@ const AnalysisPageNew: React.FC = () => {
                     <Typography variant="subtitle2">
                       {t('budgetForecast.variability.title', { defaultValue: 'Category variability' })}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('budgetForecast.variability.timelineBridge', {
                         count: categoryVariabilitySummary?.analyzed_months ?? 6,
                         defaultValue: 'Use this as context for reading the spending timeline below over the last {{count}} months.',
@@ -3109,14 +3220,18 @@ const AnalysisPageNew: React.FC = () => {
                         />
                       )}
                     </Box>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {t('budgetForecast.variability.timelineBridgeHint', {
                         defaultValue: 'The monthly curve stays in the timeline section below so the history appears only once.',
                       })}
                     </Typography>
                   </>
                 ) : (
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>
                     {t('budgetForecast.variability.empty', {
                       defaultValue: 'Not enough recurring category history yet to analyze variability.',
                     })}
@@ -3139,8 +3254,10 @@ const AnalysisPageNew: React.FC = () => {
                       }
                     }}
                     disabled={!selectedBudgetItem.categoryDefinitionId || selectedBudgetSaving}
-                    inputProps={{ inputMode: 'decimal' }}
                     sx={{ minWidth: 220 }}
+                    slotProps={{
+                      htmlInput: { inputMode: 'decimal' }
+                    }}
                   />
                   <Button
                     variant="contained"
@@ -3156,13 +3273,24 @@ const AnalysisPageNew: React.FC = () => {
                       : t('budgetForecast.saveLimit', { defaultValue: 'Save limit' })}
                   </Button>
                 </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: 'block',
+                    mt: 0.75
+                  }}>
                   {t('budgetForecast.suggestedLimit', {
                     value: formatCurrencyValue(selectedSuggestedLimit || 0, { maximumFractionDigits: 0 }),
                     defaultValue: 'Suggested (most plausible): {{value}}',
                   })}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: 'block'
+                  }}>
                   {t('budgetForecast.livePreview', {
                     status: getBudgetStatusLabel(selectedBudgetPreview.status),
                     risk: Math.round(selectedBudgetPreview.risk * 100),
@@ -3175,24 +3303,36 @@ const AnalysisPageNew: React.FC = () => {
               <Grid container spacing={1.5}>
                 <Grid size={{ xs: 4 }}>
                   <Paper variant="outlined" sx={{ p: 1.25 }}>
-                    <Typography variant="caption" color="text.secondary">P10</Typography>
-                    <Typography variant="subtitle1" fontWeight={700}>
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>P10</Typography>
+                    <Typography variant="subtitle1" sx={{
+                      fontWeight: 700
+                    }}>
                       {formatCurrencyValue(selectedBudgetItem.scenarios?.p10 ?? selectedBudgetItem.projectedTotal, { maximumFractionDigits: 0 })}
                     </Typography>
                   </Paper>
                 </Grid>
                 <Grid size={{ xs: 4 }}>
                   <Paper variant="outlined" sx={{ p: 1.25 }}>
-                    <Typography variant="caption" color="text.secondary">P50</Typography>
-                    <Typography variant="subtitle1" fontWeight={700}>
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>P50</Typography>
+                    <Typography variant="subtitle1" sx={{
+                      fontWeight: 700
+                    }}>
                       {formatCurrencyValue(selectedBudgetItem.scenarios?.p50 ?? selectedBudgetItem.projectedTotal, { maximumFractionDigits: 0 })}
                     </Typography>
                   </Paper>
                 </Grid>
                 <Grid size={{ xs: 4 }}>
                   <Paper variant="outlined" sx={{ p: 1.25 }}>
-                    <Typography variant="caption" color="text.secondary">P90</Typography>
-                    <Typography variant="subtitle1" fontWeight={700}>
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>P90</Typography>
+                    <Typography variant="subtitle1" sx={{
+                      fontWeight: 700
+                    }}>
                       {formatCurrencyValue(selectedBudgetItem.scenarios?.p90 ?? selectedBudgetItem.projectedTotal, { maximumFractionDigits: 0 })}
                     </Typography>
                   </Paper>
@@ -3226,7 +3366,9 @@ const AnalysisPageNew: React.FC = () => {
                     {selectedTimelineError}
                   </Alert>
                 ) : selectedTimeline.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>
                     {t('budgetForecast.noTimeline', { defaultValue: 'No timeline data yet for this category.' })}
                   </Typography>
                 ) : (
@@ -3256,7 +3398,6 @@ const AnalysisPageNew: React.FC = () => {
           <Button onClick={closeBudgetDetails}>{t('budgetForecast.close', { defaultValue: 'Close' })}</Button>
         </DialogActions>
       </Dialog>
-
       <Dialog
         open={addBudgetDialogOpen}
         onClose={closeAddBudgetDialog}
@@ -3269,7 +3410,9 @@ const AnalysisPageNew: React.FC = () => {
             {addBudgetError && (
               <Alert severity="error">{addBudgetError}</Alert>
             )}
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {t('budgetForecast.addBudgetDialogHint', {
                 defaultValue: 'Choose an expense category that is not listed yet, then set a monthly limit.',
               })}
@@ -3295,8 +3438,10 @@ const AnalysisPageNew: React.FC = () => {
               label={t('budgetForecast.limitInputLabel', { defaultValue: 'Monthly limit' })}
               value={addBudgetLimitInput}
               onChange={(event) => setAddBudgetLimitInput(event.target.value)}
-              inputProps={{ inputMode: 'decimal' }}
               disabled={addBudgetLoading}
+              slotProps={{
+                htmlInput: { inputMode: 'decimal' }
+              }}
             />
           </Box>
         </DialogContent>
@@ -3315,7 +3460,6 @@ const AnalysisPageNew: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
       {/* Detail Modals */}
       <FinancialRhythmModal open={rhythmModalOpen} onClose={() => setRhythmModalOpen(false)} />
       <MoneyPersonalityModal open={personalityModalOpen} onClose={() => setPersonalityModalOpen(false)} />

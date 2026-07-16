@@ -48,10 +48,17 @@ const DashboardInsightsSectionToggle: React.FC<DashboardInsightsSectionTogglePro
             color={expanded ? 'primary' : 'default'}
             sx={{ mb: 1 }}
           />
-          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.5 }}>
+          <Typography
+            variant="subtitle1"
+            sx={{
+              fontWeight: 700,
+              mb: 0.5
+            }}>
             {t('title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {t('subtitle')}
           </Typography>
         </Box>

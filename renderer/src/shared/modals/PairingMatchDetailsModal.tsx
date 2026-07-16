@@ -193,7 +193,6 @@ export default function PairingMatchDetailsModal({
   return (
     <Dialog open={isOpen} onClose={handleDialogClose} maxWidth="lg" fullWidth>
       <ModalHeader title={title} onClose={onClose} />
-
       <DialogContent>
         {loading ? (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
@@ -240,22 +239,34 @@ export default function PairingMatchDetailsModal({
               return (
                 <Paper key={cycle.cycleDate} variant="outlined" sx={{ p: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-                    <Typography variant="subtitle1" fontWeight={700}>{cycle.cycleDate}</Typography>
+                    <Typography variant="subtitle1" sx={{
+                      fontWeight: 700
+                    }}>{cycle.cycleDate}</Typography>
                     <Chip label={cycleStatus.label} color={cycleStatus.color} size="small" variant="outlined" />
                   </Box>
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      mb: 1.5
+                    }}>
                     Bank: {formatCurrency(cycle.bankTotal)} • Card: {formatCurrency(cycle.ccTotal)} • Difference: {formatCurrency(cycle.difference)}
                   </Typography>
                   {(cycle.pendingTransactionCount || 0) > 0 && (
-                    <Typography variant="body2" color="warning.main" sx={{ mb: 1.5 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: "warning.main",
+                        mb: 1.5
+                      }}>
                       With Pending ({cycle.pendingTransactionCount}): Card {formatCurrency(cycle.provisionalCardTotal)} • Difference {formatCurrency(cycle.provisionalDifference)} (Delta {formatCurrency(cycle.pendingCardDelta)})
                     </Typography>
                   )}
-
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>Bank repayments</Typography>
                   {cycle.repayments.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">No bank repayments in this cycle.</Typography>
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>No bank repayments in this cycle.</Typography>
                   ) : (
                     <TableContainer sx={{ mb: 2 }}>
                       <Table size="small">
@@ -297,12 +308,12 @@ export default function PairingMatchDetailsModal({
                       </Table>
                     </TableContainer>
                   )}
-
                   <Divider sx={{ my: 1.5 }} />
-
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>Card transactions</Typography>
                   {cycle.cardTransactions.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">No card transactions in this cycle.</Typography>
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>No card transactions in this cycle.</Typography>
                   ) : (
                     <TableContainer>
                       <Table size="small">
@@ -341,7 +352,6 @@ export default function PairingMatchDetailsModal({
           </Box>
         )}
       </DialogContent>
-
       <DialogActions>
         <Button onClick={onClose}>Close</Button>
       </DialogActions>

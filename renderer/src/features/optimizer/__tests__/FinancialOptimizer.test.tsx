@@ -191,7 +191,8 @@ describe('FinancialOptimizer', { timeout: 20_000 }, () => {
     expect(mockPut).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: /^close$/i }));
-    await user.click(screen.getByRole('button', { name: 'Optimizator' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await user.click(screen.getByLabelText('Optimizator'));
     await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
   });
 

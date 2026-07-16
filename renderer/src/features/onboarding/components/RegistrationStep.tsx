@@ -157,7 +157,9 @@ const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip 
           backgroundColor: theme.palette.background.paper,
         }}
       >
-        <Stack spacing={3} alignItems="center">
+        <Stack spacing={3} sx={{
+          alignItems: "center"
+        }}>
           {/* Icon */}
           <Box
             sx={{
@@ -174,11 +176,17 @@ const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip 
           </Box>
 
           {/* Title and description */}
-          <Box textAlign="center">
-            <Typography variant="h5" fontWeight={600} gutterBottom>
+          <Box sx={{
+            textAlign: "center"
+          }}>
+            <Typography variant="h5" gutterBottom sx={{
+              fontWeight: 600
+            }}>
               {t('registration.title')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {t('registration.description')}
             </Typography>
           </Box>
@@ -192,15 +200,17 @@ const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip 
             onChange={handleInputChange}
             error={Boolean(validation && !validation.valid)}
             helperText={validation && !validation.valid ? validation.error : ' '}
-            InputProps={{
-              endAdornment: getInputEndAdornment(),
-              inputProps: { autoComplete: 'email' },
-            }}
             type="email"
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,
               },
+            }}
+            slotProps={{
+              input: {
+                endAdornment: getInputEndAdornment(),
+                inputProps: { autoComplete: 'email' },
+              }
             }}
           />
 
@@ -245,14 +255,20 @@ const RegistrationStep: React.FC<RegistrationStepProps> = ({ onComplete, onSkip 
             }}
           >
             <SecurityIcon sx={{ fontSize: 18, color: theme.palette.info.main, mt: 0.25 }} />
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {t('registration.privacyNotice')}
             </Typography>
           </Box>
 
           {/* Trial info */}
-          <Box textAlign="center">
-            <Typography variant="body2" color="text.secondary">
+          <Box sx={{
+            textAlign: "center"
+          }}>
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {t('registration.trialInfo')}
             </Typography>
           </Box>
