@@ -190,19 +190,19 @@
     "mac": {
       "category": "public.app-category.finance",
       "icon": "../build-resources/logo.icns",
+      "x64ArchFiles": "**/*darwin-arm64*/**",
+      "mergeASARs": true,
       "target": [
         {
           "target": "dmg",
           "arch": [
-            "x64",
-            "arm64"
+            "universal"
           ]
         },
         {
           "target": "zip",
           "arch": [
-            "x64",
-            "arm64"
+            "universal"
           ]
         }
       ]
