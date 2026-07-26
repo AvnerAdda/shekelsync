@@ -35,6 +35,7 @@ const {
   recordRendererLog,
 } = require('./logger');
 const { proxyApiRequest } = require('./api-request-proxy');
+const { getOrCreateValidToken, revokeToken } = require('./api-security');
 const {
   getDiagnosticsInfo,
   openDiagnosticsLogDirectory,
@@ -46,6 +47,7 @@ const {
   normalizeTelegramSettings,
 } = require('./telegram-bot');
 const { enforceSingleInstance } = require('./single-instance');
+const { createAppLifecycleController } = require('./app-lifecycle');
 const isPackaged = app.isPackaged;
 const isDev = process.env.NODE_ENV === 'development' || !isPackaged;
 const isMac = process.platform === 'darwin';
@@ -895,10 +897,84 @@ let healthService = null;
 let scrapingService = null;
 let setupAPIServer = null;
 let backendInitializationPromise = null;
+let backendPrerequisitesReady = false;
+let embeddedApiStartupPromise = null;
+let deferredServiceStartHandle = null;
+let deferredServiceStartPromise = null;
+
+async function ensureEmbeddedApiServerStarted() {
+  if (apiServer && apiPort) {
+    return true;
+  }
+  if (!backendPrerequisitesReady || isQuitting || process.env.SKIP_EMBEDDED_API === 'true') {
+    return false;
+  }
+
+  if (!setupAPIServer) {
+    try {
+      setupAPIServer = require('./server').setupAPIServer;
+    } catch (error) {
+      console.log('API server module not available, running in basic mode:', error.message);
+      logger.warn('Embedded API server module is unavailable', { error: error.message });
+      return false;
+    }
+  }
+
+  if (!embeddedApiStartupPromise) {
+    const startupPromise = (async () => {
+      try {
+        const serverResult = await setupAPIServer(mainWindow, {
+          onProgress: sendScrapeProgress,
+        });
+        apiServer = serverResult.server;
+        apiPort = serverResult.port;
+        apiToken = serverResult.apiToken;
+        apiServerBackgroundShutdown = serverResult.shutdownBackgroundTasks;
+        const startedServer = serverResult.server;
+        startedServer.once?.('close', () => {
+          if (apiServer !== startedServer) {
+            return;
+          }
+          const closedToken = apiToken;
+          apiServer = null;
+          apiPort = undefined;
+          apiToken = undefined;
+          apiServerBackgroundShutdown = undefined;
+          if (closedToken) {
+            revokeToken(closedToken);
+          }
+          logger.warn('Embedded API server closed unexpectedly; it will restart on the next request');
+        });
+        console.log(`API server started on port ${apiPort}`);
+        logger.info('Embedded API server started', { port: apiPort });
+        return true;
+      } catch (error) {
+        console.error('Failed to start API server:', error);
+        logger.error('Failed to start embedded API server', { error: error.message });
+        console.log('Running without internal API server - using external Next.js dev server');
+        return false;
+      }
+    })();
+
+    embeddedApiStartupPromise = startupPromise;
+    void startupPromise.finally(() => {
+      if (embeddedApiStartupPromise === startupPromise) {
+        embeddedApiStartupPromise = null;
+      }
+    });
+  }
+
+  return embeddedApiStartupPromise;
+}
 
 async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit } = {}) {
   const shouldSkipDbInit = typeof skipDbInit === 'boolean' ? skipDbInit : skipEmbeddedApi;
   try {
+    if (isQuitting) {
+      logger.info('Skipping backend initialization because the app is quitting');
+      return;
+    }
+
     console.log('Initializing application configuration...');
     logger.info('Initializing configuration');
     await ensureEncryptionKey();
@@ -944,16 +1020,8 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
       return dbManager.initialize(config.database);
     })();
 
-    if (!skipEmbeddedApi && !setupAPIServer) {
-      try {
-        setupAPIServer = require('./server').setupAPIServer;
-      } catch (error) {
-        console.log('API server module not available, running in basic mode:', error.message);
-        setupAPIServer = null;
-      }
-    }
-
     const dbResult = await dbInitPromise;
+    backendPrerequisitesReady = true;
 
     if (!dbResult.success) {
       console.error('Database initialization failed:', dbResult.message);
@@ -967,34 +1035,35 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
       );
     }
 
-    if (!skipEmbeddedApi && setupAPIServer) {
-      try {
-        const serverResult = await setupAPIServer(mainWindow);
-        apiServer = serverResult.server;
-        apiPort = serverResult.port;
-        apiToken = serverResult.apiToken; // Store API token
-        console.log(`API server started on port ${apiPort}`);
-        logger.info('Embedded API server started', { port: apiPort });
-      } catch (error) {
-        console.error('Failed to start API server:', error);
-        logger.error('Failed to start embedded API server', { error: error.message });
-        console.log('Running without internal API server - using external Next.js dev server');
-      }
+    if (!skipEmbeddedApi && !isQuitting) {
+      await ensureEmbeddedApiServerStarted();
     } else if (skipEmbeddedApi) {
       console.log('Embedded API server disabled via SKIP_EMBEDDED_API flag.');
     } else {
       console.log('Running without internal API server - relying on external dev renderer');
     }
 
-    // Defer non-critical services so they don't block the window from becoming responsive
-    setImmediate(() => {
-      try { getSyncScheduler().start(); } catch (error) {
-        logger.warn('Failed to start sync scheduler', { error: error.message });
-      }
-      getTelegramBotService().start().catch((error) => {
-        logger.warn('Failed to start Telegram bot', { error: error.message });
+    // Defer non-critical services so they don't block the window from becoming responsive.
+    // Keep both the handle and promise so quit can cancel or await this work.
+    if (!isQuitting) {
+      deferredServiceStartHandle = setImmediate(() => {
+        deferredServiceStartHandle = null;
+        if (isQuitting) {
+          return;
+        }
+
+        deferredServiceStartPromise = Promise.all([
+          Promise.resolve(getSyncScheduler().start()).catch((error) => {
+            logger.warn('Failed to start sync scheduler', { error: error.message });
+          }),
+          getTelegramBotService().start().catch((error) => {
+            logger.warn('Failed to start Telegram bot', { error: error.message });
+          }),
+        ]).finally(() => {
+          deferredServiceStartPromise = null;
+        });
       });
-    });
+    }
   } catch (error) {
     console.error('Initialization error:', error);
     logger.error('Fatal initialization error', { error: error.message });
@@ -1022,8 +1091,20 @@ function ensureBackendInitialization(options = {}) {
   return backendInitializationPromise;
 }
 
-function waitForBackendInitialization() {
-  return backendInitializationPromise || Promise.resolve();
+async function waitForBackendInitialization() {
+  await (backendInitializationPromise || Promise.resolve());
+
+  // A listen failure during initial startup is recoverable (for example, a
+  // transient OS resource error). Renderer retries should get one fresh server
+  // startup attempt instead of remaining on a permanently settled promise.
+  if (
+    backendPrerequisitesReady
+    && !apiPort
+    && !isQuitting
+    && process.env.SKIP_EMBEDDED_API !== 'true'
+  ) {
+    await ensureEmbeddedApiServerStarted();
+  }
 }
 
 // Helper to lazy-load services only when needed (and not in SQLite dev mode)
@@ -1046,12 +1127,182 @@ let mainWindow;
 let apiServer;
 let apiPort;
 let apiToken; // API authentication token for internal API
+let apiServerBackgroundShutdown;
 let appTray;
 let syncScheduler;
 let telegramBotService;
 let appSettingsCache = null;
 let isQuitting = false;
+const activeBackendOperations = new Set();
 const scrapeAnchorRepairStateProvider = createScrapeAnchorRepairStateProvider();
+
+function getApiProxyState() {
+  if (apiPort) {
+    const nextToken = getOrCreateValidToken(apiToken);
+    if (nextToken !== apiToken) {
+      logger.info('Rotated expired embedded API token');
+      apiToken = nextToken;
+    }
+  }
+
+  return {
+    apiPort,
+    apiToken,
+    skipEmbeddedApi: process.env.SKIP_EMBEDDED_API === 'true',
+  };
+}
+
+function getLoadedModuleExports(modulePath) {
+  try {
+    const resolvedPath = require.resolve(modulePath);
+    return require.cache[resolvedPath]?.exports || null;
+  } catch (error) {
+    logger.warn('Failed to inspect loaded module during shutdown', {
+      modulePath,
+      error: error.message,
+    });
+    return null;
+  }
+}
+
+function runShutdownTask(label, task) {
+  try {
+    return Promise.resolve(task()).catch((error) => {
+      logger.warn(`Failed to close ${label}`, { error: error.message });
+    });
+  } catch (error) {
+    logger.warn(`Failed to close ${label}`, { error: error.message });
+    return Promise.resolve();
+  }
+}
+
+function runTrackedBackendOperation(task) {
+  if (isQuitting) {
+    return Promise.reject(new Error('Application is shutting down'));
+  }
+
+  let operation;
+  try {
+    operation = Promise.resolve(task());
+  } catch (error) {
+    operation = Promise.reject(error);
+  }
+
+  let trackedOperation;
+  trackedOperation = operation.finally(() => {
+    activeBackendOperations.delete(trackedOperation);
+  });
+  activeBackendOperations.add(trackedOperation);
+  return trackedOperation;
+}
+
+async function drainActiveBackendOperations() {
+  while (activeBackendOperations.size > 0) {
+    await Promise.allSettled([...activeBackendOperations]);
+  }
+}
+
+function closeApiServer(server) {
+  return new Promise((resolve) => {
+    try {
+      server.close((error) => {
+        if (error) {
+          logger.warn('Embedded API server reported an error while closing', {
+            error: error.message,
+          });
+        }
+        resolve();
+      });
+    } catch (error) {
+      logger.warn('Failed to close embedded API server', { error: error.message });
+      resolve();
+    }
+  });
+}
+
+async function shutdownBackendServices() {
+  if (deferredServiceStartHandle) {
+    clearImmediate(deferredServiceStartHandle);
+    deferredServiceStartHandle = null;
+  }
+
+  // Initialization is intentionally deferred during startup. If quit arrives
+  // first, wait for that work to settle so it cannot install a fresh server or
+  // restart background services after cleanup has already captured its state.
+  const initializationPromise = backendInitializationPromise;
+  if (initializationPromise) {
+    await runShutdownTask('backend initialization', () => initializationPromise);
+  }
+
+  const apiStartupPromise = embeddedApiStartupPromise;
+  if (apiStartupPromise) {
+    await runShutdownTask('embedded API startup', () => apiStartupPromise);
+  }
+
+  if (deferredServiceStartHandle) {
+    clearImmediate(deferredServiceStartHandle);
+    deferredServiceStartHandle = null;
+  }
+  if (deferredServiceStartPromise) {
+    await runShutdownTask('background service startup', () => deferredServiceStartPromise);
+  }
+
+  const server = apiServer;
+  const token = apiToken;
+  const shutdownApiBackgroundTasks = apiServerBackgroundShutdown;
+  apiServer = null;
+  apiPort = undefined;
+  apiToken = undefined;
+  apiServerBackgroundShutdown = undefined;
+  backendInitializationPromise = null;
+
+  if (token) {
+    revokeToken(token);
+  }
+
+  const serviceShutdownTasks = [];
+  if (syncScheduler) {
+    serviceShutdownTasks.push(runShutdownTask('sync scheduler', () => syncScheduler.stop()));
+  }
+  if (server) {
+    serviceShutdownTasks.push(runShutdownTask('embedded API server', () => closeApiServer(server)));
+  }
+  if (shutdownApiBackgroundTasks) {
+    serviceShutdownTasks.push(
+      runShutdownTask('embedded API background tasks', shutdownApiBackgroundTasks),
+    );
+  }
+
+  if (telegramBotService) {
+    serviceShutdownTasks.push(runShutdownTask('Telegram bot service', () => telegramBotService.stop()));
+  }
+  if (activeBackendOperations.size > 0) {
+    serviceShutdownTasks.push(
+      runShutdownTask('active backend operations', drainActiveBackendOperations),
+    );
+  }
+
+  // Stop request/background producers before closing pools they may still be
+  // using. server.close waits for in-flight HTTP handlers to finish.
+  await Promise.all(serviceShutdownTasks);
+
+  const databaseShutdownTasks = [
+    runShutdownTask('main database connection', () => dbManager.close()),
+  ];
+
+  const databaseModules = [
+    ['API database pool', resolveAppPath('server', 'services', 'database.js')],
+    ['application database pool', resolveAppPath('utils', 'db.js')],
+  ];
+  for (const [label, modulePath] of databaseModules) {
+    const databaseModule = getLoadedModuleExports(modulePath);
+    if (typeof databaseModule?.close === 'function') {
+      databaseShutdownTasks.push(runShutdownTask(label, () => databaseModule.close()));
+    }
+  }
+
+  await Promise.all(databaseShutdownTasks);
+}
 
 // Development mode logging
 if (isDev) {
@@ -1126,8 +1377,17 @@ async function buildTrustedProxyHeaders(endpoint, rendererHeaders = {}) {
 }
 
 function sendScrapeProgress(payload) {
-  if (mainWindow?.webContents) {
-    mainWindow.webContents.send('scrape:progress', payload);
+  if (
+    mainWindow
+    && !mainWindow.isDestroyed()
+    && mainWindow.webContents
+    && !mainWindow.webContents.isDestroyed()
+  ) {
+    try {
+      mainWindow.webContents.send('scrape:progress', payload);
+    } catch (error) {
+      logger.warn('Failed to emit scrape progress to renderer', { error: error.message });
+    }
   }
 }
 
@@ -1535,7 +1795,11 @@ async function createWindow() {
 // App event handlers
 const hasSingleInstanceLock = enforceSingleInstance({
   app,
-  onSecondInstance: () => showMainWindow(),
+  onSecondInstance: () => {
+    if (!isQuitting) {
+      showMainWindow();
+    }
+  },
 });
 
 const primaryInstanceReady = hasSingleInstanceLock ? app.whenReady() : null;
@@ -1629,14 +1893,23 @@ primaryInstanceReady?.then(async () => {
 
     autoUpdater.on('update-downloaded', (info) => {
       console.log('Update downloaded:', info);
-      if (dbManager.mode === 'sqlite' && info?.version && info.version !== lastUpdateBackupVersion) {
+      if (
+        !isQuitting
+        && dbManager.mode === 'sqlite'
+        && info?.version
+        && info.version !== lastUpdateBackupVersion
+      ) {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const backupDir = path.join(app.getPath('userData'), 'backups');
         const backupPath = path.join(backupDir, `clarify-update-${info.version}-${timestamp}.sqlite`);
-        backupSqliteDatabase(backupPath, { reason: 'auto-update' }).then((result) => {
+        void runTrackedBackendOperation(
+          () => backupSqliteDatabase(backupPath, { reason: 'auto-update' }),
+        ).then((result) => {
           if (result.success) {
             lastUpdateBackupVersion = info.version;
           }
+        }).catch((error) => {
+          logger.warn('Skipped auto-update backup', { error: error.message });
         });
       }
       emitUpdaterEvent('updater:update-downloaded', {
@@ -1662,51 +1935,33 @@ primaryInstanceReady?.then(async () => {
   }
 });
 
-app.on('window-all-closed', async () => {
-  // Close API server
-  if (apiServer) {
-    apiServer.close();
-  }
-
-  if (telegramBotService) {
-    try {
-      await telegramBotService.stop();
-    } catch (error) {
-      logger.warn('Failed to stop Telegram bot service', { error: error.message });
+const appLifecycle = createAppLifecycleController({
+  app,
+  platform: process.platform,
+  logger,
+  prepareForQuit: () => {
+    isQuitting = true;
+    if (appTray) {
+      appTray.destroy();
+      appTray = null;
     }
-  }
-
-  // Close database connection
-  try {
-    await dbManager.close();
-  } catch (error) {
-    console.error('Error closing database:', error);
-  }
-
-  // On macOS, keep app running even when all windows are closed
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  },
+  shutdownBackend: shutdownBackendServices,
 });
 
+app.on('window-all-closed', appLifecycle.handleWindowAllClosed);
+
 app.on('activate', () => {
+  if (isQuitting) {
+    return;
+  }
   // Restore an existing hidden/minimized window before creating a new one.
   if (!showMainWindow({ createIfMissing: false }) && BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
 
-app.on('before-quit', () => {
-  isQuitting = true;
-  if (appTray) {
-    appTray.destroy();
-  }
-  if (telegramBotService) {
-    telegramBotService.stop().catch((error) => {
-      logger.warn('Failed to stop Telegram bot service during quit', { error: error.message });
-    });
-  }
-});
+app.on('before-quit', appLifecycle.handleBeforeQuit);
 
 // Security: Prevent new window creation
 app.on('web-contents-created', (event, contents) => {
@@ -1787,14 +2042,22 @@ ipcMain.handle('database:backup', async (event, targetPath) => {
   if (!consumeApprovedFileWrite(targetPath)) {
     return { success: false, error: 'File write not approved. Please choose a destination again.' };
   }
-  return backupSqliteDatabase(targetPath, { reason: 'manual' });
+  if (isQuitting) {
+    return { success: false, error: 'Application is shutting down' };
+  }
+  return runTrackedBackendOperation(
+    () => backupSqliteDatabase(targetPath, { reason: 'manual' }),
+  );
 });
 
 ipcMain.handle('database:restore', async (event, sourcePath) => {
   if (!requireTrustedIpcSender(event, 'database:restore')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
-  return restoreSqliteDatabase(sourcePath);
+  if (isQuitting) {
+    return { success: false, error: 'Application is shutting down' };
+  }
+  return runTrackedBackendOperation(() => restoreSqliteDatabase(sourcePath));
 });
 
 // Biometric authentication
@@ -1994,6 +2257,9 @@ ipcMain.handle('scrape:start', async (event, options, credentials) => {
   const vendor = options?.companyId;
 
   try {
+    if (isQuitting) {
+      throw new Error('Application is shutting down');
+    }
     if (!vendor || !options?.startDate || !credentials) {
       throw new Error('Missing required fields: companyId, startDate, or credentials');
     }
@@ -2006,12 +2272,12 @@ ipcMain.handle('scrape:start', async (event, options, credentials) => {
     });
 
     const logger = createScrapeLogger(vendor);
-    const result = await getScrapingService().runScrape({
+    const result = await runTrackedBackendOperation(() => getScrapingService().runScrape({
       options,
       credentials,
       logger,
       repairStateProvider: scrapeAnchorRepairStateProvider,
-    });
+    }));
 
     const transactionCount = Array.isArray(result.accounts)
       ? result.accounts.reduce(
@@ -2161,11 +2427,7 @@ ipcMain.handle('api:request', async (event, { method, endpoint, data, headers = 
     data,
     headers: trustedHeaders,
     fetchImpl: fetch,
-    getState: () => ({
-      apiPort,
-      apiToken,
-      skipEmbeddedApi: process.env.SKIP_EMBEDDED_API === 'true',
-    }),
+    getState: getApiProxyState,
     waitForEmbeddedApi: waitForBackendInitialization,
   });
 });
@@ -2505,7 +2767,7 @@ ipcMain.handle('app:relaunch', (event) => {
       return { success: false, error: 'Untrusted IPC sender' };
     }
     app.relaunch();
-    app.exit(0);
+    app.quit();
     return { success: true };
   } catch (error) {
     console.error('App relaunch failed:', error);

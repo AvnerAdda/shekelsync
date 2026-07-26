@@ -22,13 +22,14 @@ function createTelegramClient({ token, fetchImpl = fetch } = {}) {
 
   const normalizedToken = token.trim();
 
-  async function request(method, body) {
+  async function request(method, body, { signal } = {}) {
     const response = await fetchImpl(`${TELEGRAM_API_BASE}/bot${normalizedToken}/${method}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body || {}),
+      ...(signal ? { signal } : {}),
     });
 
     let payload = null;
@@ -49,7 +50,7 @@ function createTelegramClient({ token, fetchImpl = fetch } = {}) {
     getMe() {
       return request('getMe', {});
     },
-    getUpdates({ offset, timeout = 25, limit = 20 } = {}) {
+    getUpdates({ offset, timeout = 25, limit = 20, signal } = {}) {
       const body = {
         timeout,
         limit,
@@ -58,7 +59,7 @@ function createTelegramClient({ token, fetchImpl = fetch } = {}) {
       if (typeof offset === 'number' && Number.isFinite(offset)) {
         body.offset = offset;
       }
-      return request('getUpdates', body);
+      return request('getUpdates', body, { signal });
     },
     sendMessage(chatId, text, options = {}) {
       if (chatId === undefined || chatId === null || chatId === '') {

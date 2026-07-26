@@ -164,8 +164,21 @@ function buildUnauthorizedChatText() {
   return 'This chat is not authorized for this ShekelSync desktop profile.';
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms, signal) {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve();
+      return;
+    }
+
+    const timeoutId = setTimeout(finish, ms);
+    function finish() {
+      clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', finish);
+      resolve();
+    }
+    signal?.addEventListener('abort', finish, { once: true });
+  });
 }
 
 function summarizeAlerts(notifications = []) {
@@ -338,6 +351,7 @@ function createTelegramBotService({
     secrets: {},
     running: false,
     loopPromise: null,
+    pollAbortController: null,
     pairingSession: null,
     backoffMs: MIN_BACKOFF_MS,
     lastPollAt: null,
@@ -550,7 +564,7 @@ function createTelegramBotService({
     }
   }
 
-  async function pollOnce() {
+  async function pollOnce(signal) {
     const client = getClient();
     const offset = typeof state.secrets?.lastUpdateId === 'number'
       ? state.secrets.lastUpdateId + 1
@@ -559,6 +573,7 @@ function createTelegramBotService({
       offset,
       timeout: POLL_TIMEOUT_SECONDS,
       limit: 20,
+      signal,
     });
     state.lastPollAt = new Date().toISOString();
 
@@ -578,6 +593,9 @@ function createTelegramBotService({
     }
 
     state.running = true;
+    const pollAbortController = new AbortController();
+    state.pollAbortController = pollAbortController;
+    const { signal } = pollAbortController;
     state.loopPromise = (async () => {
       if (state.telegramSettings.enabled && state.secrets?.chatId) {
         await advancePastBacklogIfNeeded();
@@ -595,20 +613,26 @@ function createTelegramBotService({
         }
 
         try {
-          const hadUpdates = await pollOnce();
+          const hadUpdates = await pollOnce(signal);
           state.backoffMs = MIN_BACKOFF_MS;
           state.lastError = null;
           if (!hadUpdates) {
-            await sleep(250);
+            await sleep(250, signal);
           }
         } catch (error) {
+          if (!state.running || signal.aborted) {
+            break;
+          }
           state.lastError = error instanceof Error ? error.message : String(error);
           logger.warn?.('[Telegram] Polling error', { error: state.lastError });
-          await sleep(state.backoffMs);
+          await sleep(state.backoffMs, signal);
           state.backoffMs = Math.min(state.backoffMs * 2, MAX_BACKOFF_MS);
         }
       }
     })().finally(() => {
+      if (state.pollAbortController === pollAbortController) {
+        state.pollAbortController = null;
+      }
       state.loopPromise = null;
       state.running = false;
     });
@@ -620,6 +644,11 @@ function createTelegramBotService({
     await ensureInitialized();
     state.running = false;
     state.pairingSession = null;
+    state.pollAbortController?.abort();
+    const loopPromise = state.loopPromise;
+    if (loopPromise) {
+      await loopPromise;
+    }
     return { success: true };
   }
 

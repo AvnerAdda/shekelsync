@@ -97,6 +97,18 @@ function revokeAllTokens() {
   rateLimitStore.clear();
 }
 
+/**
+ * Return the current token while it is valid, or transparently rotate it.
+ * The Electron main process owns this token and can safely replace it before
+ * proxying a renderer request to a long-running embedded API server.
+ */
+function getOrCreateValidToken(token) {
+  if (token && validateToken(token)) {
+    return token;
+  }
+  return createToken();
+}
+
 // Periodic cleanup of expired tokens (every hour)
 const _cleanupInterval = setInterval(() => {
   const now = Date.now();
@@ -306,6 +318,7 @@ function getTokenStats() {
 
 module.exports = {
   createToken,
+  getOrCreateValidToken,
   validateToken,
   revokeToken,
   revokeAllTokens,

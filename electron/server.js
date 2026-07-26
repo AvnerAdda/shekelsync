@@ -15,6 +15,7 @@ const {
   rateLimitMiddleware,
   securityHeadersMiddleware,
   createToken,
+  revokeToken,
 } = require('./api-security');
 const { createErrorHandler } = require(resolveAppPath('lib', 'server', 'error-sanitizer.js'));
 const { licenseGuardMiddleware } = require(resolveAppPath('server', 'middleware', 'license-guard.js'));
@@ -268,7 +269,10 @@ async function setupAPIServer(mainWindow, options = {}) {
 
   // Scraping API routes (shared router)
   app.use('/api', createScrapingRouter({
-    mainWindow,
+    // Use the main process callback when supplied so progress follows a
+    // recreated macOS window instead of retaining the original BrowserWindow.
+    mainWindow: typeof options.onProgress === 'function' ? null : mainWindow,
+    onProgress: options.onProgress,
     services: {
       runScrape: (payload = {}) => require(resolveAppPath('server', 'services', 'scraping', 'run.js')).runScrape({
         ...payload,
@@ -281,11 +285,18 @@ async function setupAPIServer(mainWindow, options = {}) {
     },
   }));
 
-  // Fire-and-forget backfill to ensure legacy accounts gain institution IDs (deferred to avoid slowing boot)
-  setTimeout(() => {
-    institutionsService.backfillMissingInstitutionIds()
-      .catch((error) => console.error('Institution backfill failed:', error));
-  }, 10000);
+  // Defer the legacy account backfill without letting it outlive server shutdown.
+  let institutionBackfillPromise = null;
+  let institutionBackfillTimer = null;
+  const shutdownBackgroundTasks = async () => {
+    if (institutionBackfillTimer) {
+      clearTimeout(institutionBackfillTimer);
+      institutionBackfillTimer = null;
+    }
+    if (institutionBackfillPromise) {
+      await institutionBackfillPromise;
+    }
+  };
 
   // Error handling middleware (with sanitization)
   app.use(createErrorHandler({
@@ -317,17 +328,34 @@ async function setupAPIServer(mainWindow, options = {}) {
       console.log(`Electron API server running on http://localhost:${port}`);
       console.log('[API Security] Authentication and rate limiting enabled');
 
+      institutionBackfillTimer = setTimeout(() => {
+        institutionBackfillTimer = null;
+        institutionBackfillPromise = Promise.resolve()
+          .then(() => institutionsService.backfillMissingInstitutionIds())
+          .catch((error) => console.error('Institution backfill failed:', error));
+      }, 10000);
+
       resolve({
         server,
         port,
         app,
         apiToken, // Return token so main process can provide to renderer
+        shutdownBackgroundTasks,
       });
     });
 
     server.on('error', (error) => {
       console.error('Server start error:', error);
+      if (!server.listening) {
+        revokeToken(apiToken);
+      }
       reject(error);
+    });
+    server.once('close', () => {
+      if (institutionBackfillTimer) {
+        clearTimeout(institutionBackfillTimer);
+        institutionBackfillTimer = null;
+      }
     });
   });
 }
