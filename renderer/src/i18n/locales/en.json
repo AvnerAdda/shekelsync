@@ -290,6 +290,11 @@
     }
   },
   "dashboardHome": {
+    "loadError": {
+      "title": "Your financial data could not be loaded",
+      "description": "The local data service may still be starting. Try again to reconnect without losing any saved data.",
+      "retry": "Try again"
+    },
     "empty": {
       "welcomeTitle": "Welcome to ShekelSync!",
       "welcomeDescription": "Let's get your finances organized. Follow these steps to start tracking your expenses and income.",

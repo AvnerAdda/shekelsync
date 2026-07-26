@@ -85,6 +85,7 @@ const DashboardHomeContent: React.FC = () => {
   const {
     data,
     loading: dashboardLoading,
+    error: dashboardError,
     refresh: refreshDashboard,
   } = useDashboardData({
     startDate,
@@ -96,6 +97,7 @@ const DashboardHomeContent: React.FC = () => {
   const {
     data: fallbackDashboardData,
     loading: fallbackDashboardLoading,
+    error: fallbackDashboardError,
     refresh: refreshFallbackDashboard,
   } = useDashboardData({
     startDate: fallbackStartDate,
@@ -384,61 +386,61 @@ const DashboardHomeContent: React.FC = () => {
     setShowFallbackData(false);
   }, [aggregationPeriod, endDate, startDate]);
 
-  useEffect(() => {
-    const handleDataRefresh = () => {
-      refreshDashboard();
-      if (fallbackEnabled) {
-        refreshFallbackDashboard();
-      }
-      refreshPortfolio();
-      refreshPairingGap();
-      refreshInsights();
+  const refreshAllData = useCallback(() => {
+    refreshDashboard();
+    if (fallbackEnabled) {
+      refreshFallbackDashboard();
+    }
+    refreshPortfolio();
+    refreshPairingGap();
+    refreshInsights();
 
-      if (showFallbackData) {
-        refreshFallbackBreakdowns(['expense', 'income']);
-        if (selectedBreakdownType === 'investment') {
-          void fetchFallbackBreakdown('investment');
-        }
-        if (waterfallEnabled) {
-          refreshFallbackWaterfall();
-        }
-      } else if (selectedBreakdownType === 'investment') {
-        void fetchBreakdown('investment');
-        refreshBreakdowns(['expense', 'income']);
-        if (waterfallEnabled) {
-          refreshWaterfall();
-        }
-      } else {
-        refreshBreakdowns(['expense', 'income']);
-        if (waterfallEnabled) {
-          refreshWaterfall();
-        }
+    if (showFallbackData) {
+      refreshFallbackBreakdowns(['expense', 'income']);
+      if (selectedBreakdownType === 'investment') {
+        void fetchFallbackBreakdown('investment');
       }
-      refreshAccountSignals();
-    };
-
-    globalThis.addEventListener('dataRefresh', handleDataRefresh);
-    return () => {
-      globalThis.removeEventListener('dataRefresh', handleDataRefresh);
-    };
+      if (waterfallEnabled) {
+        refreshFallbackWaterfall();
+      }
+    } else if (selectedBreakdownType === 'investment') {
+      void fetchBreakdown('investment');
+      refreshBreakdowns(['expense', 'income']);
+      if (waterfallEnabled) {
+        refreshWaterfall();
+      }
+    } else {
+      refreshBreakdowns(['expense', 'income']);
+      if (waterfallEnabled) {
+        refreshWaterfall();
+      }
+    }
+    refreshAccountSignals();
   }, [
+    fallbackEnabled,
     fetchBreakdown,
     fetchFallbackBreakdown,
-    fallbackEnabled,
     refreshAccountSignals,
     refreshBreakdowns,
     refreshDashboard,
-    refreshFallbackDashboard,
-    refreshPairingGap,
     refreshFallbackBreakdowns,
+    refreshFallbackDashboard,
     refreshFallbackWaterfall,
-    refreshPortfolio,
     refreshInsights,
+    refreshPairingGap,
+    refreshPortfolio,
     refreshWaterfall,
+    selectedBreakdownType,
     showFallbackData,
     waterfallEnabled,
-    selectedBreakdownType,
   ]);
+
+  useEffect(() => {
+    globalThis.addEventListener('dataRefresh', refreshAllData);
+    return () => {
+      globalThis.removeEventListener('dataRefresh', refreshAllData);
+    };
+  }, [refreshAllData]);
 
   useEffect(() => {
     if (selectedBreakdownType === 'investment') {
@@ -549,11 +551,37 @@ const DashboardHomeContent: React.FC = () => {
 
   // Show loading while primary data loads, or while explicitly switching to fallback data
   const isLoading = dashboardLoading || (showFallbackData && fallbackDashboardLoading);
+  const effectiveDashboardError = shouldUseFallback ? fallbackDashboardError : dashboardError;
 
-  if (isLoading || !effectiveData || !effectiveData.summary) {
+  if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (effectiveDashboardError || !effectiveData?.summary) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '70vh', px: 2 }}>
+        <Alert
+          severity="error"
+          sx={{ maxWidth: 640, width: '100%' }}
+          action={(
+            <Button
+              color="inherit"
+              size="small"
+              onClick={refreshAllData}
+            >
+              {t('loadError.retry')}
+            </Button>
+          )}
+        >
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+            {t('loadError.title')}
+          </Typography>
+          {t('loadError.description')}
+        </Alert>
       </Box>
     );
   }

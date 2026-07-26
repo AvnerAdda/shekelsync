@@ -74,4 +74,48 @@ describe('sync-scheduler', () => {
       message: 'network down',
     }));
   });
+
+  it('waits for an active sync and does not reschedule it after stop', async () => {
+    let finishScrape;
+    const scrapeFinished = new Promise((resolve) => {
+      finishScrape = resolve;
+    });
+    const bulkScrapeMock = vi.fn(() => scrapeFinished);
+
+    const { createSyncScheduler } = await import('../sync-scheduler.js');
+    const scheduler = createSyncScheduler({
+      getSettings: async () => ({
+        backgroundSync: {
+          enabled: true,
+          intervalHours: 48,
+          runOnStartup: false,
+        },
+      }),
+      bulkScrapeImpl: bulkScrapeMock,
+      autoDetectionImpl: vi.fn(),
+      logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), log: vi.fn() },
+    });
+
+    await scheduler.start();
+    const runPromise = scheduler.runSync('manual');
+    await vi.waitFor(() => expect(bulkScrapeMock).toHaveBeenCalledOnce());
+
+    const stopPromise = scheduler.stop();
+    let stopped = false;
+    void stopPromise.then(() => { stopped = true; });
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+
+    finishScrape({
+      successCount: 1,
+      failureCount: 0,
+      totalProcessed: 1,
+      totalTransactions: 1,
+      message: 'done',
+    });
+    await runPromise;
+    await stopPromise;
+
+    expect(stopped).toBe(true);
+  });
 });

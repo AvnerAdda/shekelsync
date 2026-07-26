@@ -25,6 +25,7 @@ let mockPrimaryLoading = false;
 let mockFallbackLoading = false;
 let mockPrimaryData: any = null;
 let mockFallbackData: any = null;
+let mockPrimaryError: Error | null = null;
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -44,6 +45,12 @@ vi.mock('react-i18next', () => ({
           return `Back to ${options?.selectedRange}`;
         case 'empty.showingPreviousRange':
           return `Showing ${options?.fallbackRange} because ${options?.selectedRange} has no transactions.`;
+        case 'loadError.title':
+          return 'Your financial data could not be loaded';
+        case 'loadError.description':
+          return 'The local data service may still be starting.';
+        case 'loadError.retry':
+          return 'Try again';
         default:
           return key;
       }
@@ -97,7 +104,7 @@ vi.mock('@renderer/features/dashboard/hooks/useDashboardData', () => ({
     return {
       data: mockPrimaryData,
       loading: mockPrimaryLoading,
-      error: null,
+      error: mockPrimaryError,
       cumulativeData: [],
       refresh: mockRefreshDashboard,
     };
@@ -187,6 +194,7 @@ describe('HomePage dashboard fallback', () => {
   beforeEach(() => {
     mockPrimaryLoading = false;
     mockFallbackLoading = false;
+    mockPrimaryError = null;
     mockPrimaryData = {
       marker: 'primary',
       summary: {
@@ -254,5 +262,24 @@ describe('HomePage dashboard fallback', () => {
     await waitFor(() => {
       expect(screen.getByTestId('summary-marker').textContent).toBe('primary');
     });
+  });
+
+  it('shows a retry action instead of an endless spinner when dashboard loading fails', () => {
+    mockPrimaryData = null;
+    mockPrimaryError = new Error('backend unavailable');
+
+    render(<HomePage />);
+
+    expect(screen.getByText('Your financial data could not be loaded')).toBeTruthy();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mockRefreshDashboard).toHaveBeenCalledOnce();
+    expect(mockRefreshPortfolio).toHaveBeenCalledOnce();
+    expect(mockRefreshPairingGap).toHaveBeenCalledOnce();
+    expect(mockRefreshInsights).toHaveBeenCalledOnce();
+    expect(mockRefreshBreakdowns).toHaveBeenCalledWith(['expense', 'income']);
+    expect(mockRefreshWaterfall).toHaveBeenCalledOnce();
+    expect(mockRefreshAccountSignals).toHaveBeenCalledOnce();
   });
 });

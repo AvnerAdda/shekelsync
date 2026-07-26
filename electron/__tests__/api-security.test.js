@@ -13,6 +13,7 @@ const securityLogger = {
 
 describe('API Security', () => {
   let createToken;
+  let getOrCreateValidToken;
   let validateToken;
   let revokeToken;
   let revokeAllTokens;
@@ -27,6 +28,7 @@ describe('API Security', () => {
     const apiSecurity = await import('../api-security.js');
     ({
       createToken,
+      getOrCreateValidToken,
       validateToken,
       revokeToken,
       revokeAllTokens,
@@ -88,6 +90,22 @@ describe('API Security', () => {
 
       expect(validateToken(token1)).toBe(false);
       expect(validateToken(token2)).toBe(false);
+    });
+
+    test('should transparently replace an expired token for a long-running app', () => {
+      const token = createToken();
+      const originalNow = Date.now;
+
+      try {
+        Date.now = vi.fn(() => originalNow() + 25 * 60 * 60 * 1000);
+
+        const replacement = getOrCreateValidToken(token);
+
+        expect(replacement).not.toBe(token);
+        expect(validateToken(replacement)).toBe(true);
+      } finally {
+        Date.now = originalNow;
+      }
     });
   });
 
