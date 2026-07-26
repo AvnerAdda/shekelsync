@@ -241,13 +241,18 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
     listScrapeEvents: listScrapeEventsFn = require('../services/scraping/events.js').listScrapeEvents,
     getScrapeStatusById: getScrapeStatusByIdFn = require('../services/scraping/status.js').getScrapeStatusById,
     wasScrapedRecently: wasScrapedRecentlyFn = getRunScrapeService().wasScrapedRecently,
+    maybeRunAutoDetection: maybeRunAutoDetectionFn = maybeRunAutoDetection,
   } = services;
 
   const router = express.Router();
 
   const sendProgress = (payload) => {
     if (typeof onProgress === 'function') {
-      onProgress(payload);
+      try {
+        onProgress(payload);
+      } catch (error) {
+        routeLogger.error('Failed to emit progress callback', error);
+      }
     }
 
     if (mainWindow?.webContents?.send) {
@@ -447,10 +452,11 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         scrapeAnchor: result.scrapeAnchor || null,
       });
 
-      maybeRunAutoDetection({ locale: req.locale })
-        .catch((detectError) => {
-          logger.warn?.('Auto-detection failed:', detectError?.message || detectError);
-        });
+      try {
+        await maybeRunAutoDetectionFn({ locale: req.locale });
+      } catch (detectError) {
+        logger.warn?.('Auto-detection failed:', detectError?.message || detectError);
+      }
 
       res.status(200).json({
         ...result,
@@ -528,10 +534,11 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         },
       });
 
-      maybeRunAutoDetection({ locale: req.locale })
-        .catch((detectError) => {
-          routeLogger.warn('Auto-detection failed:', detectError?.message || detectError);
-        });
+      try {
+        await maybeRunAutoDetectionFn({ locale: req.locale });
+      } catch (detectError) {
+        routeLogger.warn('Auto-detection failed:', detectError?.message || detectError);
+      }
 
       res.status(200).json(result);
     } catch (error) {

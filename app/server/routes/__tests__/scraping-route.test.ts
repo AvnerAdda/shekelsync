@@ -7,6 +7,7 @@ const mockBulkScrape = vi.fn();
 const mockListScrapeEvents = vi.fn();
 const mockGetScrapeStatusById = vi.fn();
 const mockWasScrapedRecently = vi.fn();
+const mockMaybeRunAutoDetection = vi.fn();
 
 vi.mock('israeli-bank-scrapers-core', () => ({
   CompanyTypes: {
@@ -36,6 +37,7 @@ function buildApp({
     listScrapeEvents: mockListScrapeEvents,
     getScrapeStatusById: mockGetScrapeStatusById,
     wasScrapedRecently: mockWasScrapedRecently,
+    maybeRunAutoDetection: mockMaybeRunAutoDetection,
   };
 
   const app = express();
@@ -49,6 +51,7 @@ describe('Shared /api/scrape routes', () => {
   let mockWindow: ReturnType<typeof buildApp>['mockWindow'];
 
   beforeEach(() => {
+    mockMaybeRunAutoDetection.mockResolvedValue(undefined);
     const setup = buildApp();
     app = setup.app;
     mockWindow = setup.mockWindow;
@@ -64,6 +67,7 @@ describe('Shared /api/scrape routes', () => {
     mockListScrapeEvents.mockReset();
     mockGetScrapeStatusById.mockReset();
     mockWasScrapedRecently.mockReset();
+    mockMaybeRunAutoDetection.mockReset();
   });
 
   it('triggers a single scrape job and streams updates', async () => {
@@ -399,8 +403,10 @@ describe('Shared /api/scrape routes', () => {
     expect(res.body.message).toMatch(/company id is required/i);
   });
 
-  it('keeps scrape flow running when renderer progress emit throws', async () => {
-    const onProgress = vi.fn();
+  it('keeps scrape flow running when progress emitters throw', async () => {
+    const onProgress = vi.fn(() => {
+      throw new Error('progress callback unavailable');
+    });
     const setup = buildApp({
       onProgress,
       webContentsSend: () => {

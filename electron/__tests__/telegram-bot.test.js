@@ -346,4 +346,58 @@ describe('telegram-bot', () => {
     expect(sentMessages.some((message) => message.chat_id === 55 && message.text.includes('ShekelSync status:'))).toBe(true);
     expect(sentMessages.some((message) => message.chat_id === 99 && message.text.includes('not authorized'))).toBe(true);
   });
+
+  it('aborts and drains an active long poll when stopped', async () => {
+    const store = createMemoryStore({
+      botToken: '123456:token',
+      botUsername: 'shekelsync_bot',
+      chatId: 55,
+      chatUsername: 'alice',
+      lastUpdateId: 100,
+    });
+    const settings = createSettingsHarness();
+    let longPollStarted = false;
+    let longPollAborted = false;
+    const fetchImpl = vi.fn(async (url, init) => {
+      if (!String(url).includes('/getUpdates')) {
+        throw new Error(`Unexpected Telegram method: ${url}`);
+      }
+
+      const body = JSON.parse(init.body);
+      if (body.timeout === 0) {
+        return okResult([]);
+      }
+
+      longPollStarted = true;
+      return new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => {
+          longPollAborted = true;
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        }, { once: true });
+      });
+    });
+
+    const { createTelegramBotService } = await import('../telegram-bot.js');
+    const service = createTelegramBotService({
+      getSettings: settings.getSettings,
+      updateSettings: settings.updateSettings,
+      store,
+      services: {
+        notificationsService: { getNotifications: getNotificationsMock },
+        insightsService: { getInsights: getInsightsMock },
+        investmentSummaryService: { getInvestmentSummary: getInvestmentSummaryMock },
+      },
+      fetchImpl,
+      logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), log: vi.fn() },
+    });
+
+    await service.start();
+    await vi.waitFor(() => expect(longPollStarted).toBe(true));
+    await service.stop();
+
+    expect(longPollAborted).toBe(true);
+    expect((await service.getStatus()).runtimeActive).toBe(false);
+  });
 });

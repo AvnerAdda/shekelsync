@@ -272,6 +272,11 @@
     }
   },
   "dashboardHome": {
+    "loadError": {
+      "title": "Impossible de charger vos données financières",
+      "description": "Le service de données local est peut-être encore en cours de démarrage. Réessayez pour vous reconnecter sans perdre les données enregistrées.",
+      "retry": "Réessayer"
+    },
     "empty": {
       "welcomeTitle": "Bienvenue sur ShekelSync !",
       "welcomeDescription": "Organisons vos finances. Suivez ces étapes pour commencer à suivre vos dépenses et vos revenus.",

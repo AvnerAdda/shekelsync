@@ -100,4 +100,66 @@ describe('api request proxy', () => {
     );
     expect(response.data).toBe('plain-text');
   });
+
+  it('returns a timeout response when a dashboard GET never settles', async () => {
+    const fetchImpl = vi.fn((_url, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => reject(new Error('aborted')));
+    }));
+
+    const response = await proxyApiRequest({
+      method: 'GET',
+      endpoint: '/api/analytics/dashboard',
+      fetchImpl,
+      getState: () => ({
+        apiPort: 43111,
+        apiToken: 'secret-token',
+        skipEmbeddedApi: false,
+      }),
+      waitForEmbeddedApi: vi.fn(),
+      apiGetTimeoutMs: 5,
+    });
+
+    expect(response).toMatchObject({
+      status: 504,
+      statusText: 'Gateway Timeout',
+      ok: false,
+    });
+  });
+
+  it('retries once when the embedded API token rotates at the expiry boundary', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce({
+        status: 401,
+        statusText: 'Unauthorized',
+        ok: false,
+        text: vi.fn().mockResolvedValue('{"error":"expired"}'),
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        statusText: 'OK',
+        ok: true,
+        text: vi.fn().mockResolvedValue('{"success":true}'),
+      });
+    let stateReadCount = 0;
+
+    const response = await proxyApiRequest({
+      method: 'GET',
+      endpoint: '/api/analytics/dashboard',
+      fetchImpl,
+      getState: () => {
+        stateReadCount += 1;
+        return {
+          apiPort: 43111,
+          apiToken: stateReadCount === 1 ? 'expiring-token' : 'replacement-token',
+          skipEmbeddedApi: false,
+        };
+      },
+      waitForEmbeddedApi: vi.fn(),
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBe('Bearer expiring-token');
+    expect(fetchImpl.mock.calls[1][1].headers.Authorization).toBe('Bearer replacement-token');
+    expect(response).toMatchObject({ status: 200, ok: true, data: { success: true } });
+  });
 });

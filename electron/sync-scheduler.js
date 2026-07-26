@@ -85,6 +85,7 @@ function createSyncScheduler({
   let timer = null;
   let running = false;
   let started = false;
+  let activeRunPromise = null;
   let currentBackground = normalizeBackgroundSettings();
 
   function clearTimer() {
@@ -108,7 +109,7 @@ function createSyncScheduler({
 
   function scheduleNext({ immediateIfOverdue = false } = {}) {
     clearTimer();
-    if (!currentBackground.enabled) {
+    if (!started || !currentBackground.enabled) {
       return;
     }
 
@@ -141,18 +142,13 @@ function createSyncScheduler({
     });
   }
 
-  async function runSync(reason = 'manual') {
-    if (running) {
-      return { success: false, status: 'skipped', message: 'Sync already running' };
-    }
-
+  async function executeSync(reason) {
     await loadSettings();
 
     if (!currentBackground.enabled && reason === 'scheduled') {
       return { success: false, status: 'skipped', message: 'Auto-sync disabled' };
     }
 
-    running = true;
     const headless = currentBackground.headless;
     const intervalMs = currentBackground.intervalHours * 60 * 60 * 1000;
 
@@ -258,27 +254,53 @@ function createSyncScheduler({
 
       return { success: false, status: 'failed', message: error?.message || 'Bulk sync failed' };
     } finally {
-      running = false;
       await loadSettings();
-      scheduleNext({ immediateIfOverdue: false });
+      if (started) {
+        scheduleNext({ immediateIfOverdue: false });
+      }
     }
+  }
+
+  function runSync(reason = 'manual') {
+    if (running || activeRunPromise) {
+      return Promise.resolve({ success: false, status: 'skipped', message: 'Sync already running' });
+    }
+
+    running = true;
+    const runPromise = executeSync(reason).finally(() => {
+      running = false;
+      if (activeRunPromise === runPromise) {
+        activeRunPromise = null;
+      }
+    });
+    activeRunPromise = runPromise;
+    return runPromise;
   }
 
   async function start() {
     if (started) return;
     started = true;
     await loadSettings();
-    scheduleNext({ immediateIfOverdue: currentBackground.runOnStartup });
+    if (started) {
+      scheduleNext({ immediateIfOverdue: currentBackground.runOnStartup });
+    }
   }
 
-  function stop() {
+  async function stop() {
     clearTimer();
     started = false;
+    const activeRun = activeRunPromise;
+    if (activeRun) {
+      await activeRun;
+    }
+    clearTimer();
   }
 
   async function update(nextSettings) {
     currentBackground = normalizeBackgroundSettings(nextSettings?.backgroundSync || {});
-    scheduleNext({ immediateIfOverdue: currentBackground.runOnStartup });
+    if (started) {
+      scheduleNext({ immediateIfOverdue: currentBackground.runOnStartup });
+    }
   }
 
   return {

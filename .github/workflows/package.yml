@@ -168,18 +168,11 @@ jobs:
 
       - name: Publish release after all platform builds succeed
         env:
-          GH_RELEASE_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           GH_PROMPT_DISABLED: "1"
           TAG_NAME: ${{ github.ref_name }}
         shell: bash
         run: |
-          if [ -n "$GH_RELEASE_TOKEN" ]; then
-            export GH_TOKEN="$GH_RELEASE_TOKEN"
-          else
-            export GH_TOKEN="$GITHUB_TOKEN"
-          fi
-
           VERSION="${TAG_NAME#v}"
           for required_asset in "ShekelSync-${VERSION}.dmg" "ShekelSync-${VERSION}-arm64.dmg"; do
             if [ ! -f "release-artifacts/$required_asset" ]; then
