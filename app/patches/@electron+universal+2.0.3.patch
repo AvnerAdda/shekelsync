@@ -1,0 +1,56 @@
+diff --git a/node_modules/@electron/universal/dist/cjs/asar-utils.js b/node_modules/@electron/universal/dist/cjs/asar-utils.js
+index c09cee6..0d78bdf 100644
+--- a/node_modules/@electron/universal/dist/cjs/asar-utils.js
++++ b/node_modules/@electron/universal/dist/cjs/asar-utils.js
+@@ -155,7 +155,22 @@ const mergeASARs = async ({ x64AsarPath, arm64AsarPath, outputAsarPath, singleAr
+             (0, child_process_1.execFileSync)(LIPO, [source, destination, '-create', '-output', destination]);
+         }
+         (0, debug_1.d)(`creating archive at ${outputAsarPath}`);
+-        const resolvedUnpack = Array.from(unpackedFiles).map((file) => path_1.default.join(x64Dir, file));
++        // Compress individual file paths to package-level globs to avoid brace-expansion
++        // strings exceeding minimatch's 65536-char limit (upstream bug in @electron/universal).
++        const pkgGlobs = new Set();
++        for (const file of unpackedFiles) {
++            const parts = file.split('/');
++            if (parts[0] === 'node_modules' && parts.length > 1) {
++                const pkg = parts[1].startsWith('@') && parts.length > 2
++                    ? `${parts[1]}/${parts[2]}`
++                    : parts[1];
++                pkgGlobs.add(`node_modules/${pkg}/**`);
++            }
++            else {
++                pkgGlobs.add(file);
++            }
++        }
++        const resolvedUnpack = Array.from(pkgGlobs);
+         let unpack;
+         if (resolvedUnpack.length > 1) {
+             unpack = `{${resolvedUnpack.join(',')}}`;
+diff --git a/node_modules/@electron/universal/dist/esm/asar-utils.js b/node_modules/@electron/universal/dist/esm/asar-utils.js
+index d863cf6..94e64c9 100644
+--- a/node_modules/@electron/universal/dist/esm/asar-utils.js
++++ b/node_modules/@electron/universal/dist/esm/asar-utils.js
+@@ -147,7 +147,22 @@ export const mergeASARs = async ({ x64AsarPath, arm64AsarPath, outputAsarPath, s
+             execFileSync(LIPO, [source, destination, '-create', '-output', destination]);
+         }
+         d(`creating archive at ${outputAsarPath}`);
+-        const resolvedUnpack = Array.from(unpackedFiles).map((file) => path.join(x64Dir, file));
++        // Compress individual file paths to package-level globs to avoid brace-expansion
++        // strings exceeding minimatch's 65536-char limit (upstream bug in @electron/universal).
++        const pkgGlobs = new Set();
++        for (const file of unpackedFiles) {
++            const parts = file.split('/');
++            if (parts[0] === 'node_modules' && parts.length > 1) {
++                const pkg = parts[1].startsWith('@') && parts.length > 2
++                    ? `${parts[1]}/${parts[2]}`
++                    : parts[1];
++                pkgGlobs.add(`node_modules/${pkg}/**`);
++            }
++            else {
++                pkgGlobs.add(file);
++            }
++        }
++        const resolvedUnpack = Array.from(pkgGlobs);
+         let unpack;
+         if (resolvedUnpack.length > 1) {
+             unpack = `{${resolvedUnpack.join(',')}}`;
