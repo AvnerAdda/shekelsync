@@ -3040,6 +3040,7 @@
         "checkForUpdates": "Vérifier les mises à jour",
         "downloadUpdate": "Télécharger la mise à jour",
         "openDownloadPage": "Ouvrir la page de téléchargement",
+        "checkFailedHint": "Vérification automatique impossible — obtenez la dernière version ici",
         "restartAndUpdate": "Redémarrer et installer",
         "downloading": "Téléchargement de la mise à jour",
         "version": "Version {{version}}",

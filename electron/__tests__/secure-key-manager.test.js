@@ -208,8 +208,11 @@ describe('SecureKeyManager', () => {
       const module = await import('../secure-key-manager.js');
       secureKeyManager = module.default || module;
 
+      // A keychain read failure looks like prior key material that's now
+      // unreadable, so this must refuse to silently generate a replacement
+      // key rather than fall through to "Cannot securely store...".
       await expect(secureKeyManager.getKey()).rejects.toThrow(
-        'Cannot securely store encryption key'
+        'Refusing to generate a replacement key'
       );
     });
 
@@ -223,6 +226,37 @@ describe('SecureKeyManager', () => {
 
       await expect(secureKeyManager.getKey()).rejects.toThrow(
         'Cannot securely store encryption key'
+      );
+    });
+
+    test('should refuse to generate a replacement key when keychain item is invalid rather than absent', async () => {
+      // Something is stored under this account, but it's not a valid 32-byte hex key -
+      // this must never be treated the same as "nothing stored yet".
+      mockKeytar.getPassword.mockResolvedValue('not-a-valid-key');
+
+      const module = await import('../secure-key-manager.js');
+      secureKeyManager = module.default || module;
+
+      await expect(secureKeyManager.getKey()).rejects.toThrow(
+        'Refusing to generate a replacement key'
+      );
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+    });
+
+    test('should still generate a new key on a genuine fresh install (no keytar or safeStorage data at all)', async () => {
+      mockKeytar.getPassword.mockResolvedValue(null);
+      mockKeytar.setPassword.mockResolvedValue(undefined);
+
+      const module = await import('../secure-key-manager.js');
+      secureKeyManager = module.default || module;
+
+      const key = await secureKeyManager.getKey();
+
+      expect(secureKeyManager.validateKey(key)).toBe(true);
+      expect(mockKeytar.setPassword).toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key',
+        key,
       );
     });
   });

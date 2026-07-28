@@ -3069,6 +3069,7 @@
         "checkForUpdates": "בדוק עדכונים",
         "downloadUpdate": "הורד עדכון",
         "openDownloadPage": "פתח דף הורדה",
+        "checkFailedHint": "לא ניתן היה לבדוק אוטומטית - קבל את הגירסה האחרונה כאן",
         "restartAndUpdate": "הפעל מחדש והתקן",
         "downloading": "מוריד עדכון",
         "version": "גירסה {{version}}",

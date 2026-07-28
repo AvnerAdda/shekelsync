@@ -49,7 +49,7 @@ interface ElectronEventsApi {
   onUpdateCheckingForUpdate: (callback: () => void) => () => void;
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
   onUpdateNotAvailable: (callback: (info?: UpdateInfo) => void) => () => void;
-  onUpdateError: (callback: (error: { message: string }) => void) => () => void;
+  onUpdateError: (callback: (error: { message: string; updateMode?: 'automatic' | 'manual' | 'disabled'; manualInstallUrl?: string | null }) => void) => () => void;
   onUpdateDownloadProgress: (callback: (progress: UpdateProgressInfo) => void) => () => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => () => void;
 }

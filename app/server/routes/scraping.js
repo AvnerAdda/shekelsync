@@ -343,7 +343,29 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
 
           if (Array.isArray(dbCredentials)) {
             const matchedCredential = dbCredentials.find((entry) => Number(entry?.id) === Number(dbId));
-            if (matchedCredential) {
+            if (matchedCredential?.decryptFailed) {
+              logger.error?.(
+                `Saved credential ${dbId} could not be decrypted (fields: ${
+                  matchedCredential.decryptFailedFields?.join(', ') || 'unknown'
+                }); the encryption key may have changed.`,
+              );
+
+              if (fromSavedCredential) {
+                sendProgress({
+                  vendor,
+                  status: 'failed',
+                  progress: 100,
+                  message: 'Saved credential could not be decrypted. Please re-enter the password for this account.',
+                  error: 'credential_decrypt_failed',
+                });
+
+                return res.status(409).json({
+                  success: false,
+                  message: 'Saved credential could not be decrypted. Please re-enter the password for this account.',
+                  reason: 'credential_decrypt_failed',
+                });
+              }
+            } else if (matchedCredential) {
               credentials = mergeCredentialsWithSaved(credentials, matchedCredential);
             } else if (fromSavedCredential) {
               sendProgress({
@@ -362,7 +384,23 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
             }
           }
         } catch (hydrateError) {
-          logger.warn?.('Failed to hydrate saved credential details; using request payload only:', hydrateError);
+          logger.warn?.('Failed to hydrate saved credential details:', hydrateError);
+
+          if (fromSavedCredential) {
+            sendProgress({
+              vendor,
+              status: 'failed',
+              progress: 100,
+              message: 'Could not load saved credential details. Please try again or re-enter this account\'s password.',
+              error: 'credential_hydrate_failed',
+            });
+
+            return res.status(409).json({
+              success: false,
+              message: 'Could not load saved credential details. Please try again or re-enter this account\'s password.',
+              reason: 'credential_hydrate_failed',
+            });
+          }
         }
       }
 

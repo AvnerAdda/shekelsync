@@ -129,28 +129,32 @@ class SecureKeyManager {
 
   /**
    * Try to read the encryption key from the safeStorage-encrypted file.
+   * Returns whether a file existed but couldn't be used, distinctly from
+   * "nothing was ever stored" - the former means real key material is
+   * being lost, not that this is a fresh install.
    */
   _readFromSafeStorage() {
     const safeStorage = getSafeStorage();
     const filePath = getSafeStoragePath();
     if (!safeStorage || !filePath) {
-      return null;
+      return { key: null, existedButUnusable: false };
     }
 
     try {
       if (!fs.existsSync(filePath)) {
-        return null;
+        return { key: null, existedButUnusable: false };
       }
       const encrypted = fs.readFileSync(filePath);
       const decrypted = safeStorage.decryptString(encrypted);
       if (this.validateKey(decrypted)) {
-        return decrypted;
+        return { key: decrypted, existedButUnusable: false };
       }
       console.warn('[SecureKeyManager] safeStorage file contained invalid key');
+      return { key: null, existedButUnusable: true };
     } catch (error) {
       console.warn('[SecureKeyManager] Failed to read from safeStorage file:', error.message);
+      return { key: null, existedButUnusable: true };
     }
-    return null;
   }
 
   /**
@@ -219,6 +223,12 @@ class SecureKeyManager {
           this._writeToSafeStorage(storedKey);
           return storedKey;
         }
+        if (storedKey) {
+          // Something was stored under this account, but it's not a valid key.
+          // Treat this as a real problem rather than "nothing stored yet".
+          console.warn('[SecureKeyManager] Keychain item exists but is not a valid key');
+          keytarReadFailed = true;
+        }
       } catch (error) {
         keytarReadFailed = true;
         console.warn('[SecureKeyManager] Failed to load key from keychain:', error.message);
@@ -226,7 +236,7 @@ class SecureKeyManager {
     }
 
     // 3. Try safeStorage fallback (protects against keytar read failures on macOS)
-    const safeStorageKey = this._readFromSafeStorage();
+    const { key: safeStorageKey, existedButUnusable: safeStorageUnusable } = this._readFromSafeStorage();
     if (safeStorageKey) {
       console.log('[SecureKeyManager] Loaded encryption key from safeStorage fallback');
       this.cachedKey = safeStorageKey;
@@ -240,6 +250,24 @@ class SecureKeyManager {
         }
       }
       return safeStorageKey;
+    }
+
+    // SECURITY: If either store shows evidence that a key previously existed
+    // but couldn't be read now (access denied, corrupted, wrong format), do
+    // NOT silently generate a replacement. A fresh key would encrypt new data
+    // fine but permanently orphan every credential already encrypted under
+    // the real key - exactly the failure mode that let one app instance
+    // silently fork the shared keychain secret out from under another.
+    // Only fall through to "generate new key" when there's genuinely no
+    // prior key material anywhere (a real first run).
+    if (keytarReadFailed || safeStorageUnusable) {
+      throw new Error(
+        'Existing encryption key material was found but could not be read ' +
+        '(keychain access denied, or the safeStorage backup file is unreadable/corrupted). ' +
+        'Refusing to generate a replacement key, since that would silently make all ' +
+        'previously stored credentials permanently undecryptable. Restore access to the ' +
+        '"ShekelSync" keychain item (or its safeStorage backup) for this app before retrying.',
+      );
     }
 
     // 4. Generate new key and store in both keychain + safeStorage

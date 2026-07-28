@@ -504,6 +504,7 @@ async function checkForManualUpdatesAndNotify() {
     emitUpdaterEvent('updater:error', {
       message: error instanceof Error ? error.message : String(error),
       updateMode: UPDATE_MODE_MANUAL,
+      manualInstallUrl: MANUAL_UPDATE_PAGE_URL,
     });
   }
 }
@@ -1877,6 +1878,7 @@ primaryInstanceReady?.then(async () => {
       emitUpdaterEvent('updater:error', {
         message: error.message,
         updateMode: UPDATE_MODE_AUTOMATIC,
+        manualInstallUrl: MANUAL_UPDATE_PAGE_URL,
       });
     });
 

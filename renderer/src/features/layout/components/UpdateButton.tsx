@@ -269,12 +269,31 @@ const UpdateButton: React.FC<UpdateButtonProps> = ({
           </MenuItem>
         )}
 
+        {updateState.status === 'error' && updateState.manualInstallUrl && (
+          <MenuItem
+            onClick={() => handleAction(onOpenManualUpdatePage)}
+            sx={{ borderRadius: 1, mx: 0.5, my: 0.5 }}
+          >
+            <ListItemIcon>
+              <OpenInNewIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>
+              <Typography variant="body2">
+                {t('titleBar.update.menu.openDownloadPage')}
+              </Typography>
+              <Typography variant="caption" color={theme.palette.text.secondary}>
+                {t('titleBar.update.menu.checkFailedHint')}
+              </Typography>
+            </ListItemText>
+          </MenuItem>
+        )}
+
         {updateState.error && (
           <Box sx={{ px: 2, py: 1 }}>
-            <Typography 
-              variant="caption" 
+            <Typography
+              variant="caption"
               color={theme.palette.error.main}
-              sx={{ 
+              sx={{
                 display: 'block',
                 backgroundColor: alpha(theme.palette.error.main, 0.1),
                 padding: 1,

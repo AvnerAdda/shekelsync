@@ -200,7 +200,11 @@ declare global {
     onUpdateAvailable?: (callback: (info: UpdateInfo) => void) => ElectronEventUnsubscribe | void;
     onUpdateNotAvailable?: (callback: (info?: UpdateInfo) => void) => ElectronEventUnsubscribe | void;
     onUpdateError?: (
-      callback: (error: { message: string }) => void,
+      callback: (error: {
+        message: string;
+        updateMode?: 'automatic' | 'manual' | 'disabled';
+        manualInstallUrl?: string | null;
+      }) => void,
     ) => ElectronEventUnsubscribe | void;
     onUpdateDownloadProgress?: (
       callback: (progress: UpdateProgressInfo) => void,
