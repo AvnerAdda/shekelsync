@@ -28,16 +28,25 @@ interface SecurityStatus {
     os: string;
     osName: string;
   };
+  credentialEncryption?: {
+    checked: boolean;
+    totalCount: number;
+    failedCount: number;
+    failedCredentials: Array<{ id: number; vendor: string; nickname: string | null }>;
+    error?: string;
+  };
 }
 
 interface SecuritySummary {
   level: 'secure' | 'warning' | 'error' | 'unknown';
   checks: {
-    encryption: boolean;
-    keychain: boolean;
+    encryptionActive: boolean;
+    keychainConnected: boolean;
     authenticated: boolean;
+    biometricAvailable: boolean;
+    credentialsVerified: boolean;
   };
-  warnings: string[];
+  warnings: Array<{ type: string; severity: 'low' | 'medium' | 'high'; message: string }>;
 }
 
 interface SecurityContextValue {

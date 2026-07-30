@@ -1,5 +1,27 @@
 const secureKeyManager = require('../secure-key-manager');
-const { logSecurityStatusCheck } = require('../security-logger');
+const realSecurityLogger = require('../security-logger');
+
+// Lazy-load the credentials service to avoid a hard require cycle at module
+// load time, and to allow tests to inject a mock the same way keytar/logger
+// injection already works elsewhere in electron/*.
+let credentialsServiceRef;
+function resolveCredentialsService() {
+  if (credentialsServiceRef) return credentialsServiceRef;
+  if (globalThis.__SHEKELSYNC_CREDENTIALS_SERVICE__) {
+    credentialsServiceRef = globalThis.__SHEKELSYNC_CREDENTIALS_SERVICE__;
+    return credentialsServiceRef;
+  }
+  const { resolveAppPath } = require('../paths');
+  credentialsServiceRef = require(resolveAppPath('server', 'services', 'credentials.js'));
+  return credentialsServiceRef;
+}
+
+// Same injectable-override convention used by electron/api-security.js for
+// the security logger - keeps this mockable without fighting CJS require
+// interception in tests.
+function resolveSecurityLogger() {
+  return globalThis.__SHEKELSYNC_SECURITY_LOGGER__ || realSecurityLogger;
+}
 
 /**
  * Security Status Manager
@@ -26,11 +48,12 @@ class SecurityStatusManager {
       authentication: this.getAuthenticationStatus(),
       platform: this.getPlatformInfo(),
       biometric: await this.getBiometricAvailability(),
+      credentialEncryption: await this.getCredentialEncryptionStatus(),
       timestamp: new Date().toISOString(),
     };
 
     // Log security status check
-    logSecurityStatusCheck(status);
+    resolveSecurityLogger().logSecurityStatusCheck(status);
 
     return status;
   }
@@ -141,7 +164,7 @@ class SecurityStatusManager {
    */
   async getBiometricAvailability() {
     try {
-      const biometricAuthManager = require('../auth/biometric-auth');
+      const biometricAuthManager = globalThis.__SHEKELSYNC_BIOMETRIC_AUTH__ || require('../auth/biometric-auth');
       if (biometricAuthManager?.getAvailabilityDetails) {
         return await biometricAuthManager.getAvailabilityDetails();
       }
@@ -158,6 +181,46 @@ class SecurityStatusManager {
       type: null,
       reason: 'Biometric authentication not available',
     };
+  }
+
+  /**
+   * Verify that the currently active encryption key can actually decrypt
+   * the credentials already stored on disk. A key can load "successfully"
+   * (valid format, no keychain error) while still being the wrong key for
+   * existing data - e.g. a second app install silently forking the shared
+   * keychain secret. This is what catches that gap: it checks the data
+   * itself, not just whether key retrieval threw.
+   */
+  async getCredentialEncryptionStatus() {
+    try {
+      const { listCredentials } = resolveCredentialsService();
+      const credentials = await listCredentials();
+      const failedCredentials = credentials
+        .filter((credential) => credential?.decryptFailed)
+        .map((credential) => ({
+          id: credential.id,
+          vendor: credential.vendor,
+          nickname: credential.nickname || null,
+        }));
+
+      return {
+        checked: true,
+        totalCount: credentials.length,
+        failedCount: failedCredentials.length,
+        failedCredentials,
+      };
+    } catch (error) {
+      // Don't let a DB/service hiccup make the whole security status
+      // endpoint fail - report "couldn't check" distinctly from "checked
+      // and found a mismatch".
+      return {
+        checked: false,
+        totalCount: 0,
+        failedCount: 0,
+        failedCredentials: [],
+        error: error.message,
+      };
+    }
   }
 
   /**
@@ -219,6 +282,8 @@ class SecurityStatusManager {
     const authOk = !authRequired || status.authentication.isActive;
     const keychainRequired = status.platform.os !== 'linux';
     const keychainOk = keychainRequired ? status.keychain.status === 'connected' : true;
+    const credentialsVerified = !status.credentialEncryption?.checked
+      || status.credentialEncryption.failedCount === 0;
 
     return {
       level: this.calculateSecurityLevel(status),
@@ -227,6 +292,7 @@ class SecurityStatusManager {
         keychainConnected: keychainOk,
         authenticated: authOk,
         biometricAvailable: status.biometric.available,
+        credentialsVerified,
       },
       warnings: this.generateWarnings(status),
     };
@@ -240,17 +306,20 @@ class SecurityStatusManager {
     const authOk = !authRequired || status.authentication.isActive;
     const keychainRequired = status.platform.os !== 'linux';
     const keychainOk = keychainRequired ? status.keychain.status === 'connected' : true;
+    const credentialsOk = !status.credentialEncryption?.checked
+      || status.credentialEncryption.failedCount === 0;
 
     const checks = {
       encryption: status.encryption.status === 'active',
       keychain: keychainOk,
       authenticated: authOk,
+      credentials: credentialsOk,
     };
 
     const passed = Object.values(checks).filter(Boolean).length;
 
-    if (passed === 3) return 'secure';      // Green
-    if (passed === 2) return 'warning';     // Yellow
+    if (passed === 4) return 'secure';      // Green
+    if (passed === 3) return 'warning';     // Yellow
     return 'error';                          // Red
   }
 
@@ -290,6 +359,17 @@ class SecurityStatusManager {
         type: 'session',
         severity: 'medium',
         message: 'Your session has expired. Please re-authenticate.',
+      });
+    }
+
+    if (status.credentialEncryption?.checked && status.credentialEncryption.failedCount > 0) {
+      const names = status.credentialEncryption.failedCredentials
+        .map((credential) => credential.nickname || credential.vendor)
+        .join(', ');
+      warnings.push({
+        type: 'credential_encryption',
+        severity: 'high',
+        message: `${status.credentialEncryption.failedCount} of ${status.credentialEncryption.totalCount} saved credential(s) could not be decrypted with the current encryption key and need to be re-entered: ${names}.`,
       });
     }
 
