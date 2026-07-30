@@ -204,6 +204,72 @@ describe('Shared /api/scrape routes', () => {
     expect(mockRunScrape).not.toHaveBeenCalled();
   });
 
+  it('returns 409 with a clear message when the saved credential could not be decrypted', async () => {
+    credentialsService.listCredentials.mockResolvedValue([
+      {
+        id: 2,
+        vendor: 'visaCal',
+        username: null,
+        password: null,
+        decryptFailed: true,
+        decryptFailedFields: ['username', 'password'],
+      },
+    ]);
+
+    const res = await request(app)
+      .post('/api/scrape')
+      .send({
+        options: { companyId: 'visaCal' },
+        credentials: { dbId: 2, fromSavedCredential: true },
+      })
+      .expect(409);
+
+    expect(res.body.reason).toBe('credential_decrypt_failed');
+    expect(mockRunScrape).not.toHaveBeenCalled();
+  });
+
+  it('does not fail a non-saved-credential scrape just because a matched row could not be decrypted', async () => {
+    mockRunScrape.mockResolvedValue({ success: true, accounts: [] });
+    mockWasScrapedRecently.mockResolvedValue(false);
+    credentialsService.listCredentials.mockResolvedValue([
+      {
+        id: 2,
+        vendor: 'visaCal',
+        username: null,
+        password: null,
+        decryptFailed: true,
+        decryptFailedFields: ['username', 'password'],
+      },
+    ]);
+
+    // Not fromSavedCredential: the caller supplied its own credentials directly,
+    // so a sibling row's decrypt failure shouldn't block this request.
+    await request(app)
+      .post('/api/scrape')
+      .send({
+        options: { companyId: 'visaCal' },
+        credentials: { dbId: 2, username: 'user@example.com', password: 'secret' },
+      })
+      .expect(200);
+
+    expect(mockRunScrape).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns 409 with a clear message when hydration throws for a saved-credential scrape', async () => {
+    credentialsService.listCredentials.mockRejectedValue(new Error('decrypt blew up'));
+
+    const res = await request(app)
+      .post('/api/scrape')
+      .send({
+        options: { companyId: 'visaCal' },
+        credentials: { dbId: 2, fromSavedCredential: true },
+      })
+      .expect(409);
+
+    expect(res.body.reason).toBe('credential_hydrate_failed');
+    expect(mockRunScrape).not.toHaveBeenCalled();
+  });
+
   it('returns 429 when account is rate-limited and force is not enabled', async () => {
     mockWasScrapedRecently.mockResolvedValue(true);
 

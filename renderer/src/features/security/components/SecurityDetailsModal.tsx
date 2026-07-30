@@ -17,11 +17,14 @@ import {
   alpha,
   useTheme,
 } from '@mui/material';
+import Button from '@mui/material/Button';
 import CloseIcon from '@mui/icons-material/Close';
 import SecurityIcon from '@mui/icons-material/Security';
 import LockIcon from '@mui/icons-material/Lock';
 import KeyIcon from '@mui/icons-material/VpnKey';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckIcon from '@mui/icons-material/CheckCircle';
 import WarningIcon from '@mui/icons-material/Warning';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -60,12 +63,20 @@ interface SecurityStatus {
     os: string;
     osName: string;
   };
+  credentialEncryption?: {
+    checked: boolean;
+    totalCount: number;
+    failedCount: number;
+    failedCredentials: Array<{ id: number; vendor: string; nickname: string | null }>;
+    error?: string;
+  };
 }
 
 const SecurityDetailsModal: React.FC<SecurityDetailsModalProps> = ({ open, onClose }) => {
   const theme = useTheme();
   const [status, setStatus] = useState<SecurityStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -73,9 +84,13 @@ const SecurityDetailsModal: React.FC<SecurityDetailsModalProps> = ({ open, onClo
     }
   }, [open]);
 
-  const fetchSecurityStatus = async () => {
+  const fetchSecurityStatus = async (options: { silent?: boolean } = {}) => {
     try {
-      setLoading(true);
+      if (options.silent) {
+        setVerifying(true);
+      } else {
+        setLoading(true);
+      }
       const response = await apiClient.get('/api/security/status');
 
       if (response.ok && response.data) {
@@ -85,7 +100,11 @@ const SecurityDetailsModal: React.FC<SecurityDetailsModalProps> = ({ open, onClo
     } catch (err) {
       console.error('[SecurityDetailsModal] Error fetching status:', err);
     } finally {
-      setLoading(false);
+      if (options.silent) {
+        setVerifying(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
 
@@ -249,6 +268,76 @@ const SecurityDetailsModal: React.FC<SecurityDetailsModalProps> = ({ open, onClo
                   </Typography>
                 </Box>
               )}
+            </Paper>
+
+            {/* Stored Credentials Section */}
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 2,
+                borderRadius: 2,
+                backgroundColor: alpha(theme.palette.background.paper, 0.5),
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <VerifiedUserIcon color="primary" fontSize="small" />
+                  <Typography variant="subtitle1" sx={{
+                    fontWeight: 600
+                  }}>
+                    Stored Credentials
+                  </Typography>
+                </Box>
+                <Button
+                  size="small"
+                  onClick={() => fetchSecurityStatus({ silent: true })}
+                  disabled={verifying}
+                  startIcon={verifying ? <CircularProgress size={14} /> : <RefreshIcon fontSize="small" />}
+                >
+                  Verify Now
+                </Button>
+              </Box>
+              <List dense disablePadding>
+                {status.credentialEncryption?.checked ? (
+                  status.credentialEncryption.failedCount === 0 ? (
+                    <ListItem disablePadding>
+                      <ListItemIcon sx={{ minWidth: 36 }}>
+                        <CheckIcon sx={{ color: theme.palette.success.main }} />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={
+                          status.credentialEncryption.totalCount > 0
+                            ? `All ${status.credentialEncryption.totalCount} saved credential${status.credentialEncryption.totalCount === 1 ? '' : 's'} verified`
+                            : 'No saved credentials yet'
+                        }
+                        secondary="The current encryption key can decrypt everything stored"
+                      />
+                    </ListItem>
+                  ) : (
+                    <ListItem disablePadding>
+                      <ListItemIcon sx={{ minWidth: 36 }}>
+                        <ErrorIcon sx={{ color: theme.palette.error.main }} />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={`${status.credentialEncryption.failedCount} of ${status.credentialEncryption.totalCount} saved credentials can't be decrypted`}
+                        secondary={`Re-enter the password for: ${status.credentialEncryption.failedCredentials
+                          .map((credential) => credential.nickname || credential.vendor)
+                          .join(', ')}`}
+                      />
+                    </ListItem>
+                  )
+                ) : (
+                  <ListItem disablePadding>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <InfoIcon sx={{ color: theme.palette.info.main }} />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary="Could not verify stored credentials"
+                      secondary={status.credentialEncryption?.error || 'Try again in a moment'}
+                    />
+                  </ListItem>
+                )}
+              </List>
             </Paper>
 
             {/* Biometric Authentication Section */}

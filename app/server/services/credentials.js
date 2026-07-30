@@ -10,7 +10,7 @@ let institutionsModuleRef = institutionsModule;
 let buildInstitutionFromRowRef = institutionsModule.buildInstitutionFromRow;
 let toUTCISOStringRef = timeUtils.toUTCISOString;
 
-function safeDecrypt(value) {
+function safeDecrypt(value, fieldName, failedFields) {
   if (!value) {
     return value;
   }
@@ -18,10 +18,13 @@ function safeDecrypt(value) {
   try {
     return decryptRef(value);
   } catch (error) {
-    // SECURITY: Never return raw encrypted values
-    // If decryption fails, it means the key changed or data is corrupted
-    console.error('[credentials] SECURITY: Failed to decrypt credential field');
-    throw new Error('Failed to decrypt credential. The encryption key may have changed.');
+    // SECURITY: Never return raw encrypted values.
+    // Decryption failure means the key changed or this field is corrupted.
+    // Isolate the failure to this field/row instead of throwing, so one bad
+    // row can't take down every other credential's lookup for the vendor.
+    console.error(`[credentials] SECURITY: Failed to decrypt credential field${fieldName ? ` (${fieldName})` : ''}`);
+    failedFields?.push(fieldName || 'unknown');
+    return null;
   }
 }
 
@@ -61,10 +64,15 @@ function mapCommonFields(row) {
 
 function mapCredentialRow(row) {
   const credential = mapCommonFields(row);
-  credential.username = safeDecrypt(row.username);
-  credential.password = safeDecrypt(row.password);
-  credential.id_number = safeDecrypt(row.id_number);
-  credential.identification_code = safeDecrypt(row.identification_code);
+  const failedFields = [];
+  credential.username = safeDecrypt(row.username, 'username', failedFields);
+  credential.password = safeDecrypt(row.password, 'password', failedFields);
+  credential.id_number = safeDecrypt(row.id_number, 'id_number', failedFields);
+  credential.identification_code = safeDecrypt(row.identification_code, 'identification_code', failedFields);
+  if (failedFields.length > 0) {
+    credential.decryptFailed = true;
+    credential.decryptFailedFields = failedFields;
+  }
   return credential;
 }
 

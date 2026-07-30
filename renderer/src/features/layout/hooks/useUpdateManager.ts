@@ -194,7 +194,7 @@ export const useUpdateManager = (): UpdateManagerReturn => {
   }, [safeElectronCall, isSameVersion, applyRuntimeUpdateInfo]);
 
   const openManualUpdatePage = useCallback(async () => {
-    if (updateState.status !== 'available') {
+    if (updateState.status !== 'available' && updateState.status !== 'error') {
       return;
     }
 
@@ -395,18 +395,25 @@ export const useUpdateManager = (): UpdateManagerReturn => {
 
     // Update error
     if (eventsApi.onUpdateError) {
-      const unsubscribe = eventsApi.onUpdateError((errorInfo: { message: string; updateMode?: UpdateMode }) => {
+      const unsubscribe = eventsApi.onUpdateError((errorInfo: { message: string; updateMode?: UpdateMode; manualInstallUrl?: string | null }) => {
         if (errorInfo.updateMode) {
           updateModeRef.current = errorInfo.updateMode;
+        }
+        if (typeof errorInfo.manualInstallUrl !== 'undefined') {
+          manualInstallUrlRef.current = errorInfo.manualInstallUrl ?? null;
         }
         setUpdateState(prev => ({
           ...prev,
           status: 'error',
           updateMode: errorInfo.updateMode ?? prev.updateMode,
+          manualInstallUrl:
+            typeof errorInfo.manualInstallUrl !== 'undefined'
+              ? errorInfo.manualInstallUrl ?? null
+              : prev.manualInstallUrl,
           error: errorInfo.message,
         }));
         showNotification(
-          `Update check failed: ${errorInfo.message}`,
+          "Couldn't check for updates automatically. Open the update menu to get the latest version.",
           'error'
         );
       });

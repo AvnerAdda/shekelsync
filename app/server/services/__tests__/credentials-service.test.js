@@ -183,16 +183,38 @@ describe('credentials service', () => {
     expect(warnSpy).toHaveBeenCalled();
   });
 
-  it('throws sanitized decrypt error when encrypted value cannot be decrypted', async () => {
+  it('marks a credential decryptFailed instead of throwing when a field cannot be decrypted', async () => {
     queryMock.mockResolvedValueOnce({
       rows: [createCredentialRow({ username: 'bad-encrypted' })],
     });
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(credentialsService.listCredentials()).rejects.toThrow(
-      'Failed to decrypt credential. The encryption key may have changed.',
-    );
+    const result = await credentialsService.listCredentials();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].decryptFailed).toBe(true);
+    expect(result[0].decryptFailedFields).toEqual(['username']);
+    expect(result[0].username).toBeNull();
+    // Other fields on the same row still decrypt normally.
+    expect(result[0].password).toBe('dec(enc(secret))');
     expect(consoleErrorSpy).toHaveBeenCalled();
+  });
+
+  it('does not let one undecryptable row abort decryption of sibling rows for the same vendor', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [
+        createCredentialRow({ id: 3, username: 'bad-encrypted' }),
+        createCredentialRow({ id: 4 }),
+      ],
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await credentialsService.listCredentials({ vendor: 'hapoalim' });
+
+    expect(result).toHaveLength(2);
+    expect(result[0].decryptFailed).toBe(true);
+    expect(result[1].decryptFailed).toBeUndefined();
+    expect(result[1].username).toBe('dec(enc(user))');
   });
 
   it('validates update payload requirements', async () => {
