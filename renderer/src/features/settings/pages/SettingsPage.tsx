@@ -30,7 +30,6 @@ import { useThemeMode } from '@renderer/contexts/ThemeContext';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useChatbotPermissions, MODEL_TIERS } from '@app/contexts/ChatbotPermissionsContext';
 import type { ModelTier } from '@app/contexts/ChatbotPermissionsContext';
-import { useTelemetry } from '@app/contexts/TelemetryContext';
 import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
 import type { SupportedLocale } from '@renderer/i18n';
 import { useTranslation } from 'react-i18next';
@@ -101,13 +100,6 @@ const SettingsPage: React.FC = () => {
     chatModelTier,
     setChatModelTier,
   } = useChatbotPermissions();
-  const {
-    telemetryEnabled,
-    loading: telemetryLoading,
-    supported: telemetrySupported,
-    error: telemetryError,
-    setTelemetryEnabled,
-  } = useTelemetry();
   const [appVersion, setAppVersion] = React.useState('unknown');
 
   const activeTabId = resolveSettingsTabIdFromHash(location.hash) ?? DEFAULT_SETTINGS_TAB_ID;
@@ -825,51 +817,6 @@ const SettingsPage: React.FC = () => {
                 }}>
                 {tSettings('diagnostics.description')}
               </Typography>
-
-              {!telemetryLoading && !telemetrySupported && (
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  {tSettings('diagnostics.notSupported')}
-                </Alert>
-              )}
-
-              {telemetryError && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                  {telemetryError}
-                </Alert>
-              )}
-
-              {telemetrySupported && (
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={telemetryEnabled}
-                      onChange={(event) => {
-                        setTelemetryEnabled(event.target.checked).catch(() => {
-                          /* errors are surfaced via telemetryError */
-                        });
-                      }}
-                      disabled={telemetryLoading}
-                      color="primary"
-                    />
-                  }
-                  label={
-                    <Box>
-                      <Typography variant="body2" sx={{
-                        fontWeight: "bold"
-                      }}>
-                        {tSettings('diagnostics.toggleLabel')}
-                      </Typography>
-                      <Typography variant="caption" sx={{
-                        color: "text.secondary"
-                      }}>
-                        {telemetryEnabled
-                          ? tSettings('diagnostics.toggleOn')
-                          : tSettings('diagnostics.toggleOff')}
-                      </Typography>
-                    </Box>
-                  }
-                />
-              )}
 
               <Typography
                 variant="caption"

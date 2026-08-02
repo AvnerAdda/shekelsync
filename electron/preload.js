@@ -44,17 +44,6 @@ const diagnosticsBridge = Object.freeze({
   copyDiagnostics: () => ipcRenderer.invoke('diagnostics:copy'),
 });
 
-const telemetryBridge = Object.freeze({
-  getConfig: () => ipcRenderer.invoke('telemetry:getConfig'),
-  triggerMainSmoke: () => ipcRenderer.invoke('telemetry:triggerMainSmoke'),
-  triggerRendererSmoke: () => {
-    setTimeout(() => {
-      throw new Error('Telemetry smoke test (renderer process)');
-    }, 0);
-    return Promise.resolve({ success: true });
-  },
-});
-
 const settingsBridge = Object.freeze({
   get: () => ipcRenderer.invoke('settings:get'),
   update: (patch) => ipcRenderer.invoke('settings:update', patch),
@@ -102,30 +91,6 @@ const eventsBridge = Object.freeze({
     ipcRenderer.on('scrape:progress', wrappedCallback);
 
     return () => ipcRenderer.removeListener('scrape:progress', wrappedCallback);
-  },
-  onScrapeComplete: (callback) => {
-    const wrappedCallback = (event, ...args) => callback(...args);
-    ipcRenderer.on('scrape:complete', wrappedCallback);
-
-    return () => ipcRenderer.removeListener('scrape:complete', wrappedCallback);
-  },
-  onScrapeError: (callback) => {
-    const wrappedCallback = (event, ...args) => callback(...args);
-    ipcRenderer.on('scrape:error', wrappedCallback);
-
-    return () => ipcRenderer.removeListener('scrape:error', wrappedCallback);
-  },
-  onDataRefresh: (callback) => {
-    const wrappedCallback = (event, ...args) => callback(...args);
-    ipcRenderer.on('data:refresh', wrappedCallback);
-
-    return () => ipcRenderer.removeListener('data:refresh', wrappedCallback);
-  },
-  onNotification: (callback) => {
-    const wrappedCallback = (event, ...args) => callback(...args);
-    ipcRenderer.on('notification:show', wrappedCallback);
-
-    return () => ipcRenderer.removeListener('notification:show', wrappedCallback);
   },
   onAuthSessionChanged: (callback) => {
     const wrappedCallback = (event, ...args) => callback(...args);
@@ -188,52 +153,13 @@ const electronAPI = {
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
     zoomIn: () => ipcRenderer.invoke('window:zoomIn'),
     zoomOut: () => ipcRenderer.invoke('window:zoomOut'),
-    zoomReset: () => ipcRenderer.invoke('window:zoomReset'),
-    getZoomLevel: () => ipcRenderer.invoke('window:getZoomLevel')
+    zoomReset: () => ipcRenderer.invoke('window:zoomReset')
   },
 
-  // Core API operations (native IPC)
+  // Generic API proxy
   api: {
-    // Core endpoints using direct IPC (faster)
-    ping: () => ipcRenderer.invoke('api:ping'),
-    credentials: () => ipcRenderer.invoke('api:credentials'),
-    categories: () => ipcRenderer.invoke('api:categories'),
-
-    // Generic API proxy (for other endpoints)
     request: (method, endpoint, data, headers) =>
-      ipcRenderer.invoke('api:request', { method, endpoint, data, headers }),
-
-    // Convenience methods
-    get: (endpoint, headers) =>
-      ipcRenderer.invoke('api:request', { method: 'GET', endpoint, headers }),
-
-    post: (endpoint, data, headers) =>
-      ipcRenderer.invoke('api:request', { method: 'POST', endpoint, data, headers }),
-
-    put: (endpoint, data, headers) =>
-      ipcRenderer.invoke('api:request', { method: 'PUT', endpoint, data, headers }),
-
-    delete: (endpoint, headers) =>
-      ipcRenderer.invoke('api:request', { method: 'DELETE', endpoint, headers }),
-
-    patch: (endpoint, data, headers) =>
-      ipcRenderer.invoke('api:request', { method: 'PATCH', endpoint, data, headers })
-  },
-
-  // Scraping operations
-  scraper: {
-    start: (options, credentials) => ipcRenderer.invoke('scrape:start', options, credentials),
-    events: (limit) => ipcRenderer.invoke('scrape:events', limit),
-    test: (companyId) => ipcRenderer.invoke('scrape:test', companyId),
-
-    // Listen for progress updates
-    onProgress: (callback) => {
-      const handleProgress = (event, data) => callback(data);
-      ipcRenderer.on('scrape:progress', handleProgress);
-
-      // Return cleanup function
-      return () => ipcRenderer.removeListener('scrape:progress', handleProgress);
-    }
+      ipcRenderer.invoke('api:request', { method, endpoint, data, headers })
   },
 
   // File system operations
@@ -249,26 +175,12 @@ const electronAPI = {
   biometricAuth: biometricAuthBridge,
   log: logBridge,
   diagnostics: diagnosticsBridge,
-  telemetry: telemetryBridge,
   settings: settingsBridge,
   telegram: telegramBridge,
-
-  // License management
-  license: {
-    getStatus: () => ipcRenderer.invoke('license:getStatus'),
-    register: (email) => ipcRenderer.invoke('license:register', email),
-    validateEmail: (email) => ipcRenderer.invoke('license:validateEmail', email),
-    activatePro: (paymentRef) => ipcRenderer.invoke('license:activatePro', paymentRef),
-    canWrite: () => ipcRenderer.invoke('license:canWrite'),
-    validateOnline: () => ipcRenderer.invoke('license:validateOnline'),
-    getInfo: () => ipcRenderer.invoke('license:getInfo'),
-  },
 
   // App information
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
-    getName: () => ipcRenderer.invoke('app:getName'),
-    isPackaged: () => ipcRenderer.invoke('app:isPackaged'),
     relaunch: () => ipcRenderer.invoke('app:relaunch'),
   },
 

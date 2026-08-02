@@ -39,7 +39,7 @@ describe('electron diagnostics', () => {
     });
   });
 
-  it('sanitizes analytics metrics and telemetry details in diagnostics payload', async () => {
+  it('sanitizes analytics metrics in diagnostics payload', async () => {
     getMetricsSnapshotMock.mockReturnValue({
       breakdown: [
         {
@@ -51,14 +51,7 @@ describe('electron diagnostics', () => {
       ],
     });
 
-    const telemetry = {
-      enabled: true,
-      dsnHost: 'sentry.io',
-      initialized: true,
-      debug: false,
-    };
-
-    const payload = await diagnostics.buildDiagnosticsPayload({ appVersion: '1.2.3', telemetry });
+    const payload = await diagnostics.buildDiagnosticsPayload({ appVersion: '1.2.3' });
 
     expect(payload.analyticsMetrics).toEqual({
       breakdown: [
@@ -70,12 +63,6 @@ describe('electron diagnostics', () => {
       ],
     });
     expect(payload.analyticsMetrics.breakdown[0].vendor).toBeUndefined();
-    expect(payload.telemetrySummary).toEqual({
-      status: 'opted-in',
-      destination: 'sentry.io',
-      initialized: true,
-      debug: false,
-    });
     expect(payload.logTail).toEqual([{ name: 'main.log', tail: 'tail-content' }]);
   });
 });

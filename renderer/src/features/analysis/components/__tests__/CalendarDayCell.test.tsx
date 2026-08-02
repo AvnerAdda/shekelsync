@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import i18n, { initializeI18n } from '@renderer/i18n';
+import i18n, { loadI18nLanguage } from '@renderer/i18n';
 
 import CalendarDayCell from '../CalendarDayCell';
 
@@ -13,8 +13,8 @@ vi.mock('@app/contexts/FinancePrivacyContext', () => ({
 }));
 
 describe('CalendarDayCell', () => {
-  beforeAll(() => {
-    initializeI18n('he');
+  beforeAll(async () => {
+    await loadI18nLanguage('he');
   });
 
   beforeEach(async () => {

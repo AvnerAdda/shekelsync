@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { getAuthorizationHeader } from '@/lib/session-store';
-import { apiClient } from '../api-client';
+import { apiClient, invalidateApiCache } from '../api-client';
 
 vi.mock('@/lib/session-store', () => ({
   getAuthorizationHeader: vi.fn(),
@@ -20,6 +20,7 @@ describe('api-client', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    invalidateApiCache();
     getAuthorizationHeaderMock.mockResolvedValue({});
     (global as any).document = undefined;
   });
@@ -322,5 +323,82 @@ describe('api-client', () => {
     expect(initial.data).toEqual({ forecastId: 'stale' });
     expect(forced.data).toEqual({ forecastId: 'fresh' });
     expect(cachedAfterForced.data).toEqual({ forecastId: 'fresh' });
+  });
+
+  it('shares short-lived analytics responses across consumers and invalidates after writes', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ score: 71 }))
+      .mockResolvedValueOnce(jsonResponse({ updated: true }))
+      .mockResolvedValueOnce(jsonResponse({ score: 72 }));
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    const first = await apiClient.get('/api/analytics/personal-intelligence?days=60');
+    const cached = await apiClient.get('/api/analytics/personal-intelligence?days=60');
+    await apiClient.put('/api/profile', { monthlyIncome: 20_000 });
+    const refreshed = await apiClient.get('/api/analytics/personal-intelligence?days=60');
+
+    expect(first.data).toEqual({ score: 71 });
+    expect(cached.data).toEqual({ score: 71 });
+    expect(refreshed.data).toEqual({ score: 72 });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('supports reload and no-store modes without polluting shared responses', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ score: 70 }))
+      .mockResolvedValueOnce(jsonResponse({ score: 71 }))
+      .mockResolvedValueOnce(jsonResponse({ score: 99 }));
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    await apiClient.get('/api/analytics/personal-intelligence');
+    const reloaded = await apiClient.get('/api/analytics/personal-intelligence', { cacheMode: 'reload' });
+    const privateRead = await apiClient.get('/api/analytics/personal-intelligence', { cacheMode: 'no-store' });
+    const cachedAfterPrivateRead = await apiClient.get('/api/analytics/personal-intelligence');
+
+    expect(reloaded.data).toEqual({ score: 71 });
+    expect(privateRead.data).toEqual({ score: 99 });
+    expect(cachedAfterPrivateRead.data).toEqual({ score: 71 });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('times out stalled requests and aborts the fetch transport', async () => {
+    let requestSignal: AbortSignal | undefined;
+    global.fetch = vi.fn((_url, options) => {
+      requestSignal = options?.signal as AbortSignal;
+      return new Promise(() => {});
+    }) as any;
+    (global as any).window = {};
+
+    await expect(apiClient.get('/api/stalled', { timeoutMs: 5 })).rejects.toMatchObject({
+      name: 'TimeoutError',
+    });
+    expect(requestSignal?.aborted).toBe(true);
+  });
+
+  it('supports caller cancellation', async () => {
+    const controller = new AbortController();
+    global.fetch = vi.fn(() => new Promise(() => {})) as any;
+    (global as any).window = {};
+
+    const request = apiClient.get('/api/cancelled', { signal: controller.signal });
+    controller.abort();
+
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('rejects a pre-cancelled request even when a response is cached', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ score: 71 }));
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+    await apiClient.get('/api/analytics/personal-intelligence');
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(apiClient.get('/api/analytics/personal-intelligence', {
+      signal: controller.signal,
+    })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -7,7 +7,7 @@ describe('analytics metrics store', () => {
     metricsStore.setMetricReporter(null);
   });
 
-  it('sanitizes samples before reporting to telemetry', () => {
+  it('sanitizes samples before reporting metrics', () => {
     const reporter = vi.fn();
     metricsStore.setMetricReporter(reporter);
 
@@ -70,7 +70,7 @@ describe('analytics metrics store', () => {
 
   it('swallows reporter failures while still recording the metric', () => {
     metricsStore.setMetricReporter(() => {
-      throw new Error('telemetry sink unavailable');
+      throw new Error('metric sink unavailable');
     });
 
     expect(() => {

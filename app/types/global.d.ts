@@ -50,11 +50,6 @@ declare global {
     error?: string;
   }
 
-  interface ElectronTelemetryPreferences {
-    crashReportsEnabled?: boolean;
-    lastUpdatedAt?: string | null;
-  }
-
   interface BackgroundSyncSettings {
     enabled?: boolean;
     intervalHours?: 48 | 168 | 720;
@@ -91,7 +86,6 @@ declare global {
 
   interface ElectronAppSettings {
     appLocale?: 'he' | 'en' | 'fr';
-    telemetry?: ElectronTelemetryPreferences;
     backgroundSync?: BackgroundSyncSettings;
     telegram?: TelegramSettings;
     [key: string]: unknown;
@@ -105,7 +99,6 @@ declare global {
     zoomIn?: () => Promise<number>;
     zoomOut?: () => Promise<number>;
     zoomReset?: () => Promise<number>;
-    getZoomLevel?: () => Promise<number>;
   }
 
   interface ElectronDbApi {
@@ -121,11 +114,6 @@ declare global {
       data?: any,
       headers?: Record<string, string>,
     ) => Promise<ElectronApiResponse>;
-    get?: (endpoint: string, headers?: Record<string, string>) => Promise<unknown>;
-    post?: (endpoint: string, data?: any, headers?: Record<string, string>) => Promise<unknown>;
-    put?: (endpoint: string, data?: any, headers?: Record<string, string>) => Promise<unknown>;
-    delete?: (endpoint: string, headers?: Record<string, string>) => Promise<unknown>;
-    patch?: (endpoint: string, data?: any, headers?: Record<string, string>) => Promise<unknown>;
   }
 
   interface ElectronAuthBridge {
@@ -154,13 +142,6 @@ declare global {
     }>;
   }
 
-  interface ElectronScraperApi {
-    start?: (options: unknown, credentials: unknown) => Promise<unknown>;
-    events?: (limit?: number) => Promise<unknown>;
-    test?: (companyId: string) => Promise<unknown>;
-    onProgress?: (callback: (event: ElectronScrapeProgressEvent) => void) => ElectronEventUnsubscribe | void;
-  }
-
   interface ElectronFileApi {
     showSaveDialog?: (
       options: Record<string, unknown>,
@@ -177,8 +158,6 @@ declare global {
 
   interface ElectronAppApi {
     getVersion?: () => Promise<string>;
-    getName?: () => Promise<string>;
-    isPackaged?: () => Promise<boolean>;
     relaunch?: () => Promise<{ success: boolean; error?: string }>;
   }
 
@@ -186,10 +165,6 @@ declare global {
     onScrapeProgress?: (
       callback: (event: ElectronScrapeProgressEvent) => void,
     ) => ElectronEventUnsubscribe | void;
-    onScrapeComplete?: (callback: (...args: unknown[]) => void) => ElectronEventUnsubscribe | void;
-    onScrapeError?: (callback: (...args: unknown[]) => void) => ElectronEventUnsubscribe | void;
-    onDataRefresh?: (callback: (...args: unknown[]) => void) => ElectronEventUnsubscribe | void;
-    onNotification?: (callback: (...args: unknown[]) => void) => ElectronEventUnsubscribe | void;
     onAuthSessionChanged?: (
       callback: (session: AuthSession | null) => void,
     ) => ElectronEventUnsubscribe | void;
@@ -271,20 +246,6 @@ declare global {
       logFile?: string;
       appVersion?: string;
       platform?: NodeJS.Platform;
-      telemetry?: {
-        enabled?: boolean;
-        initialized?: boolean;
-        dsnConfigured?: boolean;
-        dsnHost?: string | null;
-        dsnProjectId?: string | null;
-        debug?: boolean;
-      } | null;
-      telemetrySummary?: {
-        status: 'opted-in' | 'opted-out';
-        destination: string | null;
-        initialized: boolean;
-        debug: boolean;
-      } | null;
       analyticsMetrics?: AnalyticsMetricsSnapshot | null;
       configHealth?: {
         warnings?: Array<{
@@ -330,35 +291,6 @@ declare global {
       updateMode?: 'automatic' | 'manual' | 'disabled';
       reason?: string | null;
     }>;
-  }
-
-  interface ElectronLicenseStatus {
-    registered: boolean;
-    licenseType: 'trial' | 'pro' | 'expired' | 'none';
-    trialDaysRemaining?: number;
-    isReadOnly: boolean;
-    canWrite: boolean;
-    offlineMode: boolean;
-    offlineGraceDaysRemaining?: number | null;
-    syncedToCloud: boolean;
-    lastValidated?: string;
-    email?: string;
-    error?: string;
-  }
-
-  interface ElectronEmailValidation {
-    valid: boolean;
-    error?: string;
-  }
-
-  interface ElectronLicenseApi {
-    getStatus?: () => Promise<{ success: boolean; data?: ElectronLicenseStatus; error?: string }>;
-    register?: (email: string) => Promise<{ success: boolean; license?: unknown; error?: string }>;
-    validateEmail?: (email: string) => Promise<{ success: boolean; data?: ElectronEmailValidation; error?: string }>;
-    activatePro?: (paymentRef?: string) => Promise<{ success: boolean; error?: string }>;
-    canWrite?: () => Promise<{ success: boolean; canWrite: boolean; error?: string }>;
-    validateOnline?: () => Promise<{ success: boolean; status?: ElectronLicenseStatus; error?: string }>;
-    getInfo?: () => Promise<{ success: boolean; data?: unknown; error?: string }>;
   }
 
   interface ElectronBiometricAuthApi {
@@ -417,23 +349,10 @@ declare global {
     sendTestMessage?: () => Promise<{ success: boolean; status?: ElectronTelegramStatus; error?: string }>;
   }
 
-  interface ElectronTelemetryApi {
-    getConfig?: () => Promise<{
-      dsn?: string | null;
-      environment?: string;
-      release?: string;
-      debug?: boolean;
-      enabled?: boolean;
-    }>;
-    triggerMainSmoke?: () => Promise<{ success: boolean; error?: string }>;
-    triggerRendererSmoke?: () => Promise<{ success: boolean; error?: string }>;
-  }
-
   interface ElectronAPI {
     window?: ElectronWindowControls;
     db?: ElectronDbApi;
     api?: ElectronCoreApi;
-    scraper?: ElectronScraperApi;
     file?: ElectronFileApi;
     auth?: ElectronAuthBridge;
     chatbotSecrets?: ElectronChatbotSecretsBridge;
@@ -445,9 +364,7 @@ declare global {
     diagnostics?: ElectronDiagnosticsApi;
     settings?: ElectronSettingsApi;
     telegram?: ElectronTelegramApi;
-    telemetry?: ElectronTelemetryApi;
     updater?: ElectronUpdaterApi;
-    license?: ElectronLicenseApi;
     database?: ElectronDatabaseMaintenanceApi;
     biometricAuth?: ElectronBiometricAuthApi;
   }

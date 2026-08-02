@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { I18nextProvider } from 'react-i18next';
-import i18n, { SUPPORTED_LOCALES, SupportedLocale, initializeI18n } from './index';
+import i18n, {
+  SUPPORTED_LOCALES,
+  SupportedLocale,
+  initializeI18n,
+  loadI18nLanguage,
+} from './index';
 
 interface LocaleContextValue {
   locale: SupportedLocale;
@@ -44,11 +49,35 @@ export const I18nProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const { initialLocale, systemLocale } = detectInitialLocale();
   const [locale, setLocaleState] = useState<SupportedLocale>(initialLocale);
   const [detectedLocale] = useState<SupportedLocale>(systemLocale);
+  // Resource-store helpers are attached by i18next during init, so do not
+  // inspect them while React is still performing its first render.
+  const [loadedLocale, setLoadedLocale] = useState<SupportedLocale | null>(() => {
+    const activeLanguage = normalizeLocale(i18n.resolvedLanguage || i18n.language);
+    return i18n.isInitialized && activeLanguage === initialLocale ? initialLocale : null;
+  });
 
   // Keep application layout LTR for all locales to avoid mirroring charts and numeric content.
   const direction = 'ltr' as const;
 
-  const i18nInstance = useMemo(() => initializeI18n(locale), [locale]);
+  const i18nInstance = useMemo(() => initializeI18n('he'), []);
+
+  useEffect(() => {
+    let active = true;
+    void loadI18nLanguage(locale).then(() => {
+      if (active) setLoadedLocale(locale);
+    }).catch((error) => {
+      // Keep the Hebrew fallback usable when a deferred locale chunk fails.
+      // eslint-disable-next-line no-console
+      console.error(`Failed to load locale ${locale}`, error);
+      if (active) {
+        setLoadedLocale('he');
+        setLocaleState('he');
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [locale]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -61,9 +90,6 @@ export const I18nProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     }
     document.documentElement.lang = locale;
     document.documentElement.dir = direction;
-    if (i18n.language !== locale) {
-      void i18n.changeLanguage(locale);
-    }
   }, [direction, locale]);
 
   const handleSetLocale = (newLocale: SupportedLocale) => {
@@ -80,7 +106,7 @@ export const I18nProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   return (
     <I18nextProvider i18n={i18nInstance}>
       <LocaleContext.Provider value={value}>
-        {children}
+        {loadedLocale === locale ? children : null}
       </LocaleContext.Provider>
     </I18nextProvider>
   );

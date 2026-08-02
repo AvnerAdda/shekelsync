@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import i18n, { initializeI18n } from '@renderer/i18n';
+import i18n, { loadI18nLanguage } from '@renderer/i18n';
 
 import CalendarDayDetail from '../CalendarDayDetail';
 
@@ -52,8 +52,8 @@ vi.mock('@mui/icons-material', () => ({
 }));
 
 describe('CalendarDayDetail', () => {
-  beforeAll(() => {
-    initializeI18n('fr');
+  beforeAll(async () => {
+    await loadI18nLanguage('fr');
   });
 
   beforeEach(async () => {

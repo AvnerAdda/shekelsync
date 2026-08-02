@@ -14,7 +14,7 @@ import { useAuth } from '@app/contexts/AuthContext';
 import TransactionDetailModal, {
   type TransactionForModal,
 } from '@renderer/shared/modals/TransactionDetailModal';
-import { apiClient } from '@renderer/lib/api-client';
+import { apiClient, invalidateApiCache } from '@renderer/lib/api-client';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import { useTranslation } from 'react-i18next';
 
@@ -158,6 +158,7 @@ export interface AppLayoutContext {
 interface NavigateToDetail {
   path?: string;
   search?: string;
+  hash?: string;
 }
 
 interface TransactionDetailRequest {
@@ -201,6 +202,7 @@ const AppLayout: React.FC = () => {
   }, [donationStatus, donationStatusLoading]);
 
   const dispatchDataRefresh = useCallback(() => {
+    invalidateApiCache();
     window.dispatchEvent(new Event('dataRefresh'));
   }, []);
 
@@ -372,7 +374,7 @@ const AppLayout: React.FC = () => {
     }
   }, [showNotification, t]);
 
-  const navigateToDetail = useCallback(({ path, search }: NavigateToDetail) => {
+  const navigateToDetail = useCallback(({ path, search, hash }: NavigateToDetail) => {
     const targetPath = path?.trim();
     if (!targetPath) {
       return;
@@ -384,7 +386,8 @@ const AppLayout: React.FC = () => {
     }
 
     const query = search ? (search.startsWith('?') ? search : `?${search}`) : '';
-    navigate(`${targetPath}${query}`);
+    const fragment = hash ? (hash.startsWith('#') ? hash : `#${hash}`) : '';
+    navigate(`${targetPath}${query}${fragment}`);
   }, [navigate]);
 
   useEffect(() => {

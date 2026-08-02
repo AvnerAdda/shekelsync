@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Box,
@@ -65,10 +65,6 @@ import QuestsPanel from '../components/QuestsPanel';
 import SpendingCategoriesChart from '../components/SpendingCategoriesChart';
 import SpendingCategoryTargetsMinimal from '../components/SpendingCategoryTargetsMinimal';
 import FinancialHealthScore, { type FinancialHealthSnapshot } from '../components/FinancialHealthScore';
-import FinancialRhythmModal from '../components/FinancialRhythmModal';
-import MoneyPersonalityModal from '../components/MoneyPersonalityModal';
-import PersonalizedFutureModal from '../components/PersonalizedFutureModal';
-import MakeItRealModal from '../components/MakeItRealModal';
 import DashboardInsightsSectionToggle from '../components/DashboardInsightsSectionToggle';
 import SubscriptionsTab from '../components/SubscriptionsTab';
 import ProfilingTab from '../components/ProfilingTab';
@@ -94,6 +90,11 @@ import {
   buildPersonalityHighlightDescriptors,
   buildRhythmHighlightDescriptors,
 } from '../utils/dashboard-card-highlights';
+
+const FinancialRhythmModal = lazy(() => import('../components/FinancialRhythmModal'));
+const MoneyPersonalityModal = lazy(() => import('../components/MoneyPersonalityModal'));
+const PersonalizedFutureModal = lazy(() => import('../components/PersonalizedFutureModal'));
+const MakeItRealModal = lazy(() => import('../components/MakeItRealModal'));
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -3461,10 +3462,20 @@ const AnalysisPageNew: React.FC = () => {
         </DialogActions>
       </Dialog>
       {/* Detail Modals */}
-      <FinancialRhythmModal open={rhythmModalOpen} onClose={() => setRhythmModalOpen(false)} />
-      <MoneyPersonalityModal open={personalityModalOpen} onClose={() => setPersonalityModalOpen(false)} />
-      <PersonalizedFutureModal open={futureModalOpen} onClose={() => setFutureModalOpen(false)} />
-      <MakeItRealModal open={realityModalOpen} onClose={() => setRealityModalOpen(false)} />
+      <Suspense fallback={null}>
+        {rhythmModalOpen && (
+          <FinancialRhythmModal open onClose={() => setRhythmModalOpen(false)} />
+        )}
+        {personalityModalOpen && (
+          <MoneyPersonalityModal open onClose={() => setPersonalityModalOpen(false)} />
+        )}
+        {futureModalOpen && (
+          <PersonalizedFutureModal open onClose={() => setFutureModalOpen(false)} />
+        )}
+        {realityModalOpen && (
+          <MakeItRealModal open onClose={() => setRealityModalOpen(false)} />
+        )}
+      </Suspense>
     </Box>
   );
 };

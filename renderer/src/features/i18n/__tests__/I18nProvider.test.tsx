@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider, useLocaleSettings } from '@renderer/i18n/I18nProvider';
-import i18n, { initializeI18n } from '@renderer/i18n';
+import i18n, { initializeI18n, loadI18nLanguage } from '@renderer/i18n';
 
 const LocaleConsumer: React.FC = () => {
   const { locale, direction, detectedLocale, setLocale } = useLocaleSettings();
@@ -31,8 +31,8 @@ describe('I18nProvider', () => {
   const originalLang = document.documentElement.lang;
   const originalDir = document.documentElement.dir;
 
-  beforeAll(() => {
-    initializeI18n('he');
+  beforeAll(async () => {
+    await loadI18nLanguage('he');
   });
 
   beforeEach(async () => {
@@ -52,7 +52,7 @@ describe('I18nProvider', () => {
       </I18nProvider>,
     );
 
-    expect(screen.getByTestId('locale').textContent).toBe('fr');
+    expect((await screen.findByTestId('locale')).textContent).toBe('fr');
     expect(screen.getByTestId('direction').textContent).toBe('ltr');
     expect(screen.getByTestId('detected-locale').textContent).toBe('en');
 
@@ -149,5 +149,14 @@ describe('initializeI18n', () => {
     await waitFor(() => {
       expect(changeLanguageSpy).toHaveBeenCalledWith('fr');
     });
+  });
+
+  it('keeps the most recently requested language during concurrent loads', async () => {
+    await Promise.all([
+      loadI18nLanguage('en'),
+      loadI18nLanguage('fr'),
+    ]);
+
+    expect(i18n.language).toBe('fr');
   });
 });

@@ -267,6 +267,46 @@ describe('optimizer service', () => {
     expect(status.latestRun.id).toBe(4);
   });
 
+  it('returns bounded optimizer history with estimated and realized outcomes', async () => {
+    const client = buildClient(async (sql, params = []) => {
+      if (sql.includes('FROM optimizer_runs runs')) {
+        expect(params).toEqual([50]);
+        return {
+          rows: [{
+            id: 8,
+            run_uuid: 'run-8',
+            status: 'complete',
+            prompt_version: 'optimizer-v1',
+            openai_model: 'gpt-4o-mini',
+            generated_at: '2026-08-02 10:00:00',
+            error_message: null,
+            recommendation_count: '3',
+            active_count: '1',
+            done_count: '2',
+            dismissed_count: '0',
+            estimated_monthly_impact: '320',
+            realized_monthly_savings: '185',
+          }],
+        };
+      }
+      return { rows: [] };
+    });
+    setClient(client);
+
+    const result = await optimizerService.getOptimizerHistory({ limit: '500' });
+
+    expect(result.runs).toEqual([expect.objectContaining({
+      id: 8,
+      runUuid: 'run-8',
+      recommendationCount: 3,
+      activeCount: 1,
+      doneCount: 2,
+      estimatedMonthlyImpact: 320,
+      realizedMonthlySavings: 185,
+    })]);
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+
   it('detects total spending without mislabeling it as variable and filters bank cash', async () => {
     const client = buildClient(async (sql) => {
       if (sql.includes('FROM user_profile')) return { rows: [] };
@@ -527,6 +567,10 @@ describe('optimizer service', () => {
             next_action: 'Review the list.',
             caveat: null,
             status: params[1],
+            user_note: params[2],
+            realized_monthly_savings: params[3],
+            snoozed_until: params[4] === 'snoozed' ? '2026-08-09 10:00:00' : null,
+            completed_at: params[1] === 'done' ? '2026-08-02 10:00:00' : null,
           }],
         };
       }
@@ -540,21 +584,52 @@ describe('optimizer service', () => {
     await expect(optimizerService.updateRecommendationStatus(20, { status: 'invalid' }))
       .rejects.toThrow(/invalid recommendation status/i);
 
-    const done = await optimizerService.updateRecommendationStatus('20', { status: 'done' });
+    await expect(optimizerService.updateRecommendationStatus(20, {
+      status: 'done',
+      realizedMonthlySavings: -1,
+    })).rejects.toThrow(/between 0 and 1000000/i);
+
+    const done = await optimizerService.updateRecommendationStatus('20', {
+      status: 'done',
+      userNote: 'Cancelled one unused service',
+      realizedMonthlySavings: 85,
+    });
     const dismissed = await optimizerService.updateRecommendationStatus(21, { status: 'dismissed' });
     const active = await optimizerService.updateRecommendationStatus(22, { status: 'active' });
+    const snoozed = await optimizerService.updateRecommendationStatus(23, {
+      status: 'snoozed',
+      userNote: 'Revisit after renewal',
+    });
 
-    expect(done.recommendation).toMatchObject({ id: 20, status: 'done', smartActionItemId: 30 });
+    expect(done.recommendation).toMatchObject({
+      id: 20,
+      status: 'done',
+      smartActionItemId: 30,
+      userNote: 'Cancelled one unused service',
+      realizedMonthlySavings: 85,
+      completedAt: '2026-08-02 10:00:00',
+    });
     expect(dismissed.recommendation).toMatchObject({ id: 21, status: 'dismissed' });
     expect(active.recommendation).toMatchObject({ id: 22, status: 'active' });
+    expect(snoozed.recommendation).toMatchObject({
+      id: 23,
+      status: 'active',
+      userNote: 'Revisit after renewal',
+      snoozedUntil: '2026-08-09 10:00:00',
+    });
     expect(client.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE smart_action_items'), [30, 'resolved']);
     expect(client.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE smart_action_items'), [30, 'dismissed']);
     expect(client.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE smart_action_items'), [30, 'active']);
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE smart_action_items'), [30, 'snoozed']);
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO action_item_history'),
+      [30, 'resolved', 'resolved', 'Cancelled one unused service'],
+    );
 
     await expect(optimizerService.updateRecommendationStatus(404, { status: 'done' }))
       .rejects.toThrow(/not found/i);
     expect(client.query).toHaveBeenCalledWith('ROLLBACK');
-    expect(client.release).toHaveBeenCalledTimes(4);
+    expect(client.release).toHaveBeenCalledTimes(5);
   });
 
   it('stores generated recommendations and links them to Smart Actions', async () => {

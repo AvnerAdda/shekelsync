@@ -97,7 +97,7 @@ function recordMetric(bucket, sample) {
     try {
       reporter(bucket, sanitizeMetricSample(enrichedSample));
     } catch {
-      // Silent failure; telemetry reporters must not break analytics flows
+      // Silent failure; metric reporters must not break analytics flows
     }
   }
 }

@@ -17,7 +17,6 @@ let mockUncategorizedCount = 0;
 let mockPingOk = true;
 let mockPairingGap: any = null;
 let mockScrapeEvent: any = null;
-let mockLicenseCheck = { isReadOnly: false, reason: undefined as string | undefined };
 
 const translations: Record<string, string> = {
   'menu.overview': 'Overview',
@@ -117,13 +116,6 @@ vi.mock('@renderer/shared/modals/CategoryHierarchyModal', () => ({
     ) : null,
 }));
 
-vi.mock('@renderer/shared/components/LicenseReadOnlyAlert', () => ({
-  __esModule: true,
-  default: ({ open, reason }: { open: boolean; reason?: string }) =>
-    open ? <div>{`license-alert:${reason || ''}`}</div> : null,
-  isLicenseReadOnlyError: () => mockLicenseCheck,
-}));
-
 function setupDefaultApiMocks() {
   mockGet.mockImplementation((endpoint: string) => {
     if (endpoint === '/api/credentials') {
@@ -177,7 +169,6 @@ describe('Sidebar component', () => {
 
     mockScrapeEvent = null;
     mockOnboardingStatus = {};
-    mockLicenseCheck = { isReadOnly: false, reason: undefined };
     mockPingOk = true;
     mockUncategorizedCount = 0;
     mockInvestmentSuggestions = [];
@@ -330,7 +321,7 @@ describe('Sidebar component', () => {
     }, { timeout: 10_000 });
   }, 10_000);
 
-  it('opens read-only license alert when bulk refresh is blocked', async () => {
+  it('shows the standard error notification when bulk refresh fails', async () => {
     const onPageChange = vi.fn();
 
     mockCredentials = [
@@ -344,7 +335,6 @@ describe('Sidebar component', () => {
       },
     ];
 
-    mockLicenseCheck = { isReadOnly: true, reason: 'License is read-only' };
     mockPost.mockResolvedValue({
       ok: false,
       statusText: 'Forbidden',
@@ -360,7 +350,7 @@ describe('Sidebar component', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Click to sync accounts' }));
 
     await waitFor(() => {
-      expect(screen.getByText('license-alert:License is read-only')).toBeInTheDocument();
+      expect(showNotification).toHaveBeenCalledWith('Bulk sync failed', 'error');
     });
   });
 

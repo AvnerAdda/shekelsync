@@ -84,7 +84,6 @@ import { calculateSimilarity } from '@app/utils/account-matcher';
 import { apiClient } from '@/lib/api-client';
 import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from '@renderer/shared/components/InstitutionBadge';
 import { useTranslation } from 'react-i18next';
-import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '../components/LicenseReadOnlyAlert';
 
 const CREDIT_CARD_VENDOR_LABELS: Record<string, string> = {
   isracard: 'Isracard',
@@ -585,8 +584,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
   }, [institutions]);
   const [, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
-  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>(undefined);
   const [isAdding, setIsAdding] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
@@ -1240,13 +1237,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
       const response = await apiClient.post('/api/credentials', accountPayload);
 
       if (!response.ok) {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          return;
-        }
         throw new Error('Failed to add account');
       }
 
@@ -1527,13 +1517,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         setIsAdding(false);
         window.dispatchEvent(new CustomEvent('dataRefresh'));
       } else {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          return;
-        }
         throw new Error('Failed to add investment account');
       }
     } catch (err) {
@@ -1563,13 +1546,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         setAccounts(accounts.filter((account) => account.id !== accountID));
         showNotification('Banking account deleted successfully', 'success');
       } else {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          return;
-        }
         throw new Error('Failed to delete account');
       }
     } catch (err) {
@@ -1584,13 +1560,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         setInvestmentAccounts(investmentAccounts.filter((account) => account.id !== accountID));
         showNotification('Investment account deleted successfully', 'success');
       } else {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          return;
-        }
         throw new Error('Failed to delete investment account');
       }
     } catch (err) {
@@ -1786,13 +1755,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
       const response = await apiClient.put(`/api/credentials/${credentialsUpdateAccount.id}`, patch);
       if (!response.ok) {
         const errorData = response.data as any;
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(errorData);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          return;
-        }
         throw new Error(errorData?.error || errorData?.message || response.statusText || 'Failed to update credentials');
       }
 
@@ -1939,13 +1901,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         window.dispatchEvent(new CustomEvent('dataRefresh'));
       } else {
         const errorData = (response.data as any) || {};
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(errorData);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          return;
-        }
         setError(errorData.error || 'Failed to add value update');
       }
     } catch (error) {
@@ -1984,13 +1939,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         fetchAssets();
       } else {
         const errorData = (response.data as any) || {};
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(errorData);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          return;
-        }
         setError(errorData.error || 'Failed to add asset');
       }
     } catch (error) {
@@ -4341,12 +4289,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         account={selectedRealEstateDialogAccount}
         onClose={() => setSelectedRealEstateAccount(null)}
         onSaved={fetchInvestmentAccounts}
-      />
-      {/* License Read-Only Alert */}
-      <LicenseReadOnlyAlert
-        open={licenseAlertOpen}
-        onClose={() => setLicenseAlertOpen(false)}
-        reason={licenseAlertReason}
       />
     </>
   );

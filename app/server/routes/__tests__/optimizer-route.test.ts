@@ -35,6 +35,16 @@ describe('Shared /api/optimizer routes', () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
+  it('returns bounded optimizer plan history', async () => {
+    const payload = { runs: [{ id: 8, recommendationCount: 3 }] };
+    const spy = vi.spyOn(optimizerService, 'getOptimizerHistory').mockResolvedValue(payload);
+
+    const res = await request(app).get('/api/optimizer/history?limit=20').expect(200);
+
+    expect(res.body).toEqual(payload);
+    expect(spy).toHaveBeenCalledWith({ limit: '20' });
+  });
+
   it('saves optimizer facts', async () => {
     const payload = { facts: [{ factKey: 'start.location', value: 'Tel Aviv' }] };
     const response = { facts: [{ factKey: 'start.location', status: 'confirmed' }] };

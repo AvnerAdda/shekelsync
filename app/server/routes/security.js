@@ -46,25 +46,4 @@ router.get('/summary', async (req, res) => {
   }
 });
 
-/**
- * POST /api/security/authenticate
- * Trigger biometric authentication (future use)
- */
-router.post('/authenticate', async (req, res) => {
-  try {
-    // This will be implemented when we add the biometric auth manager
-    res.json({
-      success: false,
-      message: 'Biometric authentication not yet implemented',
-    });
-  } catch (error) {
-    console.error('[Security API] Authentication error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Authentication failed',
-      message: error.message,
-    });
-  }
-});
-
 module.exports = router;

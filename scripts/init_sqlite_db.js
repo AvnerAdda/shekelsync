@@ -465,6 +465,10 @@ const TABLE_DEFINITIONS = [
       next_action TEXT,
       caveat TEXT,
       status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'done', 'dismissed')),
+      user_note TEXT,
+      realized_monthly_savings REAL,
+      snoozed_until TEXT,
+      completed_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (run_id) REFERENCES optimizer_runs(id) ON DELETE CASCADE

@@ -5,7 +5,6 @@ const path = require('path');
 
 const optimizerService = require('../optimizer.js');
 const profileService = require('../profile.js');
-const smartActionsService = require('../analytics/smart-actions.js');
 const createSqlitePool = require('../../../lib/sqlite-pool.js');
 const { initializeSqliteDatabase } = require('../../../../scripts/init_sqlite_db.js');
 
@@ -43,14 +42,12 @@ async function withDatabase(run) {
     console.log = originalLog;
     pool = createSqlitePool({ databasePath });
     optimizerService.__setDatabase({ getClient: () => pool.connect() });
-    smartActionsService.__setDatabase({ getClient: () => pool.connect() });
     await run(pool);
   } finally {
     console.log = originalLog;
     optimizerService.__resetDatabase();
     optimizerService.__resetOpenAI();
     optimizerService.__resetGenerationState();
-    smartActionsService.__resetDatabase();
     pool?.close();
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -142,6 +139,39 @@ async function runLifecycle() {
     const chatContext = await optimizerService.getOptimizerContextForChat(client);
     assert.deepEqual(chatContext.recommendations.map((item) => item.title), ['Current plan']);
 
+    const currentRecommendation = status.recommendations[0];
+    const snoozed = await optimizerService.updateRecommendationStatus(currentRecommendation.id, {
+      status: 'snoozed',
+      userNote: 'Review after renewal',
+    });
+    assert.equal(snoozed.recommendation.status, 'active');
+    assert.ok(snoozed.recommendation.snoozedUntil);
+    const snoozedAction = (await pool.query(`
+      SELECT user_status, snoozed_until
+      FROM smart_action_items
+      WHERE id = $1
+    `, [currentRecommendation.smartActionItemId])).rows[0];
+    assert.equal(snoozedAction.user_status, 'snoozed');
+    assert.ok(snoozedAction.snoozed_until);
+
+    const completed = await optimizerService.updateRecommendationStatus(currentRecommendation.id, {
+      status: 'done',
+      userNote: 'Cancelled after checking usage',
+      realizedMonthlySavings: 95,
+    });
+    assert.equal(completed.recommendation.status, 'done');
+    assert.equal(completed.recommendation.realizedMonthlySavings, 95);
+    assert.equal(completed.recommendation.userNote, 'Cancelled after checking usage');
+    assert.ok(completed.recommendation.completedAt);
+
+    const completedStatus = await optimizerService.getOptimizerStatus();
+    assert.equal(completedStatus.recommendations[0].status, 'done');
+    assert.equal(completedStatus.recommendations[0].realizedMonthlySavings, 95);
+    const history = await optimizerService.getOptimizerHistory({ limit: 20 });
+    const currentRunHistory = history.runs.find((run) => run.id === second.latestRun.id);
+    assert.equal(currentRunHistory.doneCount, 1);
+    assert.equal(currentRunHistory.realizedMonthlySavings, 95);
+
     await pool.query(`
       UPDATE vendor_credentials
       SET current_balance = 10000,
@@ -159,15 +189,6 @@ async function runLifecycle() {
     assert.deepEqual(driftedChatContext.recommendations, []);
     assert.ok(!driftedChatContext.facts.some((fact) => fact.factKey === 'banking.cash_balance'));
 
-    await smartActionsService.updateSmartActionStatus(actionRows[1].id, 'resolved');
-    const syncedRecommendation = (await pool.query(`
-      SELECT status
-      FROM optimizer_recommendations
-      WHERE smart_action_item_id = $1
-    `, [actionRows[1].id])).rows[0];
-    assert.equal(syncedRecommendation.status, 'done');
-    const updatedContext = await optimizerService.getOptimizerContextForChat(client);
-    assert.deepEqual(updatedContext.recommendations, []);
   });
 }
 
@@ -438,6 +459,48 @@ async function runNearCurrentSmartActionUpgrade() {
   }
 }
 
+async function runLegacyOptimizerFollowThroughUpgrade() {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shekelsync-optimizer-follow-through-'));
+  const databasePath = path.join(tempDir, 'optimizer.sqlite');
+  let pool;
+  const originalLog = console.log;
+  try {
+    console.log = () => {};
+    initializeSqliteDatabase({ output: databasePath, force: true, withDemo: false });
+    console.log = originalLog;
+
+    const Database = require(path.join(__dirname, '../../../node_modules/better-sqlite3'));
+    const legacyDb = new Database(databasePath);
+    try {
+      for (const column of ['completed_at', 'snoozed_until', 'realized_monthly_savings', 'user_note']) {
+        legacyDb.exec(`ALTER TABLE optimizer_recommendations DROP COLUMN ${column}`);
+      }
+      const legacyColumns = legacyDb.prepare("PRAGMA table_info('optimizer_recommendations')").all();
+      assert.ok(!legacyColumns.some((column) => column.name === 'user_note'));
+    } finally {
+      legacyDb.close();
+    }
+
+    const assertFollowThroughColumns = async (activePool) => {
+      const columns = (await activePool.query("PRAGMA table_info('optimizer_recommendations')")).rows;
+      const columnNames = new Set(columns.map((column) => column.name));
+      for (const column of ['user_note', 'realized_monthly_savings', 'snoozed_until', 'completed_at']) {
+        assert.ok(columnNames.has(column));
+      }
+    };
+
+    pool = createSqlitePool({ databasePath });
+    await assertFollowThroughColumns(pool);
+    pool.close();
+    pool = createSqlitePool({ databasePath });
+    await assertFollowThroughColumns(pool);
+  } finally {
+    console.log = originalLog;
+    pool?.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   const scenario = process.argv[2];
   if (scenario === 'lifecycle') {
@@ -450,6 +513,8 @@ async function main() {
     await runLegacySmartActionUpgrade();
   } else if (scenario === 'near-current-smart-action-upgrade') {
     await runNearCurrentSmartActionUpgrade();
+  } else if (scenario === 'legacy-optimizer-follow-through-upgrade') {
+    await runLegacyOptimizerFollowThroughUpgrade();
   } else {
     throw new Error(`Unknown optimizer integration scenario: ${scenario}`);
   }

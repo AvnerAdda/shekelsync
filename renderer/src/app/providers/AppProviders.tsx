@@ -4,7 +4,6 @@ import { FinancePrivacyProvider } from '@app/contexts/FinancePrivacyContext';
 import { ChatbotPermissionsProvider } from '@app/contexts/ChatbotPermissionsContext';
 import { NotificationProvider } from '@renderer/features/notifications/NotificationContext';
 import { OnboardingProvider } from '@app/contexts/OnboardingContext';
-import { TelemetryProvider } from '@app/contexts/TelemetryContext';
 import { SecurityProvider } from '@renderer/features/security/contexts/SecurityContext';
 import { DonationStatusProvider } from '@renderer/features/support/contexts/DonationStatusContext';
 import type { PropsWithChildren } from 'react';
@@ -19,13 +18,11 @@ const ConnectedProviders: React.FC<PropsWithChildren> = ({ children }) => {
         <FinancePrivacyProvider locale={locale}>
           <ChatbotPermissionsProvider>
             <NotificationProvider>
-              <TelemetryProvider>
-                <SecurityProvider>
-                  <DonationStatusProvider>
-                    <OnboardingProvider>{children}</OnboardingProvider>
-                  </DonationStatusProvider>
-                </SecurityProvider>
-              </TelemetryProvider>
+              <SecurityProvider>
+                <DonationStatusProvider>
+                  <OnboardingProvider>{children}</OnboardingProvider>
+                </DonationStatusProvider>
+              </SecurityProvider>
             </NotificationProvider>
           </ChatbotPermissionsProvider>
         </FinancePrivacyProvider>

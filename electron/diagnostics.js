@@ -29,18 +29,6 @@ try {
 }
 let analyticsMetricsStore = require(resolveAppPath('server', 'services', 'analytics', 'metrics-store.js'));
 
-function summarizeTelemetry(telemetry = null) {
-  if (!telemetry) {
-    return null;
-  }
-  return {
-    status: telemetry.enabled ? 'opted-in' : 'opted-out',
-    destination: telemetry.dsnHost || null,
-    initialized: Boolean(telemetry.initialized),
-    debug: Boolean(telemetry.debug),
-  };
-}
-
 function getSanitizedMetricsSnapshot() {
   if (!analyticsMetricsStore?.getMetricsSnapshot) {
     return null;
@@ -220,16 +208,14 @@ function getConfigHealthSummary() {
   };
 }
 
-function getDiagnosticsInfo({ appVersion, telemetry, telegram } = {}) {
+function getDiagnosticsInfo({ appVersion, telegram } = {}) {
   return {
     success: true,
     logDirectory: logger.getLogDirectory(),
     logFile: logger.getLogFilePath(),
     appVersion,
     platform: process.platform,
-    telemetry,
     telegram: telegram || null,
-    telemetrySummary: summarizeTelemetry(telemetry),
     analyticsMetrics: getSanitizedMetricsSnapshot(),
     configHealth: getConfigHealthSummary(),
   };
@@ -249,7 +235,7 @@ async function openDiagnosticsLogDirectory() {
   }
 }
 
-async function buildDiagnosticsPayload({ appVersion, telemetry, telegram } = {}) {
+async function buildDiagnosticsPayload({ appVersion, telegram } = {}) {
   const rawLogTail = await logger.readRecentLogs();
   return {
     generatedAt: new Date().toISOString(),
@@ -260,9 +246,7 @@ async function buildDiagnosticsPayload({ appVersion, telemetry, telegram } = {})
     versions: process.versions,
     logDirectory: logger.getLogDirectory(),
     logTail: redactLogPayload(rawLogTail),
-    telemetry,
     telegram: telegram || null,
-    telemetrySummary: summarizeTelemetry(telemetry),
     analyticsMetrics: getSanitizedMetricsSnapshot(),
     configHealth: getConfigHealthSummary(),
   };

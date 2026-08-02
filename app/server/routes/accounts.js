@@ -1,14 +1,10 @@
 const express = require('express');
 
-const settlementService = require('../services/accounts/settlement.js');
 const lastUpdateService = require('../services/accounts/last-update.js');
 const pairingsService = require('../services/accounts/pairings.js');
-const unpairedService = require('../services/accounts/unpaired.js');
 const lastTransactionDateService = require('../services/accounts/last-transaction-date.js');
-const smartMatchService = require('../services/accounts/smart-match.js');
 const creditCardDetectorService = require('../services/accounts/credit-card-detector.js');
 const autoPairingService = require('../services/accounts/auto-pairing.js');
-const discrepancyService = require('../services/accounts/discrepancy.js');
 const pairingMatchDetailsService = require('../services/accounts/pairing-match-details.js');
 const currentMonthPairingGapService = require('../services/accounts/current-month-pairing-gap.js');
 
@@ -32,16 +28,6 @@ function parseStrictPositiveInteger(value) {
 
 function createAccountsRouter() {
   const router = express.Router();
-
-  router.get('/find-settlement-candidates', async (req, res) => {
-    try {
-      const result = await settlementService.findSettlementCandidates(req.query || {});
-      res.json(result);
-    } catch (error) {
-      console.error('Settlement candidates error:', error);
-      handleServiceError(res, error, 'Failed to find settlement candidates');
-    }
-  });
 
   router.get('/last-update', async (req, res) => {
     try {
@@ -97,26 +83,6 @@ function createAccountsRouter() {
     }
   });
 
-  router.get('/truly-unpaired-transactions', async (req, res) => {
-    try {
-      const result = await unpairedService.getTrulyUnpairedTransactions(req.query || {});
-      res.json(result);
-    } catch (error) {
-      console.error('Truly unpaired error:', error);
-      handleServiceError(res, error, 'Failed to fetch unpaired transactions');
-    }
-  });
-
-  router.get('/unpaired-transactions-count', async (req, res) => {
-    try {
-      const count = await unpairedService.getUnpairedTransactionCount();
-      res.json({ count });
-    } catch (error) {
-      console.error('Unpaired count error:', error);
-      handleServiceError(res, error, 'Failed to count unpaired transactions');
-    }
-  });
-
   router.get('/last-transaction-date', async (req, res) => {
     try {
       const result = await lastTransactionDateService.getLastTransactionDate(req.query || {});
@@ -124,16 +90,6 @@ function createAccountsRouter() {
     } catch (error) {
       console.error('Last transaction date error:', error);
       handleServiceError(res, error, 'Failed to fetch last transaction date');
-    }
-  });
-
-  router.post('/smart-match', async (req, res) => {
-    try {
-      const result = await smartMatchService.findSmartMatches(req.body || {});
-      res.json(result);
-    } catch (error) {
-      console.error('Smart match error:', error);
-      handleServiceError(res, error, 'Failed to perform smart match');
     }
   });
 
@@ -159,28 +115,6 @@ function createAccountsRouter() {
     } catch (error) {
       console.error('Auto-pair error:', error);
       handleServiceError(res, error, 'Failed to auto-pair credit card');
-    }
-  });
-
-  // Find best bank account for a credit card (without creating pairing)
-  router.post('/find-bank-account', async (req, res) => {
-    try {
-      const result = await autoPairingService.findBestBankAccount(req.body || {});
-      res.json(result);
-    } catch (error) {
-      console.error('Find bank account error:', error);
-      handleServiceError(res, error, 'Failed to find bank account');
-    }
-  });
-
-  // Calculate discrepancy for a pairing
-  router.post('/calculate-discrepancy', async (req, res) => {
-    try {
-      const result = await autoPairingService.calculateDiscrepancy(req.body || {});
-      res.json(result || { exists: false });
-    } catch (error) {
-      console.error('Calculate discrepancy error:', error);
-      handleServiceError(res, error, 'Failed to calculate discrepancy');
     }
   });
 
@@ -249,33 +183,6 @@ function createAccountsRouter() {
     } catch (error) {
       console.error('Pairing match details error:', error);
       handleServiceError(res, error, 'Failed to fetch pairing match details');
-    }
-  });
-
-  // Resolve a discrepancy for a pairing
-  router.post('/pairing/:id/resolve-discrepancy', async (req, res) => {
-    try {
-      const pairingId = parseInt(req.params.id, 10);
-      const result = await discrepancyService.resolveDiscrepancy({
-        pairingId,
-        ...req.body,
-      });
-      res.json(result);
-    } catch (error) {
-      console.error('Resolve discrepancy error:', error);
-      handleServiceError(res, error, 'Failed to resolve discrepancy');
-    }
-  });
-
-  // Get discrepancy status for a pairing
-  router.get('/pairing/:id/discrepancy-status', async (req, res) => {
-    try {
-      const pairingId = parseInt(req.params.id, 10);
-      const result = await discrepancyService.getDiscrepancyStatus(pairingId);
-      res.json(result || { acknowledged: false });
-    } catch (error) {
-      console.error('Get discrepancy status error:', error);
-      handleServiceError(res, error, 'Failed to get discrepancy status');
     }
   });
 

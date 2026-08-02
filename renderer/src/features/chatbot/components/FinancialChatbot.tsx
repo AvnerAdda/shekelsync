@@ -41,7 +41,6 @@ import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';
 import { useChatbotPermissions, MODEL_TIERS } from '@app/contexts/ChatbotPermissionsContext';
 import { useAuth } from '@app/contexts/AuthContext';
-import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 
 // Styled markdown container for assistant messages
 const MarkdownContent = styled(Box)(({ theme }) => ({
@@ -167,8 +166,6 @@ const FinancialChatbot: React.FC = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(false);
-  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
-  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
   const [drawerWidth, setDrawerWidth] = useState(420);
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
 
@@ -354,16 +351,7 @@ const FinancialChatbot: React.FC = () => {
   const deleteConversation = async (convId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const response = await apiClient.delete(`/api/chat/conversations/${convId}`);
-      if (!response.ok) {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          return;
-        }
-      }
+      await apiClient.delete(`/api/chat/conversations/${convId}`);
       setConversations((prev) => prev.filter((c) => c.externalId !== convId));
       if (conversationId === convId) {
         startNewChat();
@@ -491,13 +479,6 @@ const FinancialChatbot: React.FC = () => {
       const response = await apiClient.post('/api/chat', requestBody);
 
       if (!response.ok) {
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          setIsLoading(false);
-          return;
-        }
         const errorData = response.data as { error?: string };
         throw new Error(errorData?.error || 'Failed to get response');
       }
@@ -1096,7 +1077,6 @@ const FinancialChatbot: React.FC = () => {
           </Typography>
         </Box>
       </Drawer>
-      <LicenseReadOnlyAlert open={licenseAlertOpen} onClose={() => setLicenseAlertOpen(false)} reason={licenseAlertReason} />
     </>
   );
 };
