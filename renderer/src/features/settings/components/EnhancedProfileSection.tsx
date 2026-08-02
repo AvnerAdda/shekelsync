@@ -49,7 +49,6 @@ import {
 import { apiClient } from '@/lib/api-client';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
 import { useTranslation } from 'react-i18next';
-import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 import {
   buildChildProfileDelete,
   buildChildProfileUpdate,
@@ -174,8 +173,6 @@ const EnhancedProfileSection: React.FC = () => {
   const [saveError, setSaveError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
-  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>(undefined);
   const [incomeSuggestion, setIncomeSuggestion] = useState<IncomeSuggestion | null>(null);
   const [childDialogOpen, setChildDialogOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<ChildProfile | null>(null);
@@ -250,13 +247,6 @@ const EnhancedProfileSection: React.FC = () => {
     try {
       const response = await apiClient.put('/api/profile', profileData);
       if (!response.ok) {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          return;
-        }
         throw new Error(response.statusText || 'Failed to save profile');
       }
 
@@ -1004,12 +994,6 @@ const EnhancedProfileSection: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-      {/* License Read-Only Alert */}
-      <LicenseReadOnlyAlert
-        open={licenseAlertOpen}
-        onClose={() => setLicenseAlertOpen(false)}
-        reason={licenseAlertReason}
-      />
     </Paper>
   );
 };

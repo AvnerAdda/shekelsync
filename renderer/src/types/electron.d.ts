@@ -40,10 +40,6 @@ interface UpdaterApi {
 
 interface ElectronEventsApi {
   onScrapeProgress: (callback: (data: any) => void) => () => void;
-  onScrapeComplete: (callback: (data: any) => void) => () => void;
-  onScrapeError: (callback: (data: any) => void) => () => void;
-  onDataRefresh: (callback: (data: any) => void) => () => void;
-  onNotification: (callback: (data: any) => void) => () => void;
   onAuthSessionChanged: (callback: (data: any) => void) => () => void;
   onWindowStateChanged: (callback: (data: { maximized: boolean }) => void) => () => void;
   onUpdateCheckingForUpdate: (callback: () => void) => () => void;
@@ -62,7 +58,6 @@ interface WindowApi {
   zoomIn: () => Promise<number>;
   zoomOut: () => Promise<number>;
   zoomReset: () => Promise<number>;
-  getZoomLevel: () => Promise<number>;
 }
 
 interface DatabaseApi {
@@ -72,27 +67,12 @@ interface DatabaseApi {
 }
 
 interface ApiClientApi {
-  ping: () => Promise<{ success: boolean; data?: any; error?: string }>;
-  credentials: () => Promise<{ success: boolean; data?: any; error?: string }>;
-  categories: () => Promise<{ success: boolean; data?: any; error?: string }>;
   request: (method: string, endpoint: string, data?: any, headers?: any) => Promise<{
     status: number;
     statusText: string;
     data: any;
     ok: boolean;
   }>;
-  get: (endpoint: string, headers?: any) => Promise<any>;
-  post: (endpoint: string, data?: any, headers?: any) => Promise<any>;
-  put: (endpoint: string, data?: any, headers?: any) => Promise<any>;
-  delete: (endpoint: string, headers?: any) => Promise<any>;
-  patch: (endpoint: string, data?: any, headers?: any) => Promise<any>;
-}
-
-interface ScraperApi {
-  start: (options: any, credentials: any) => Promise<{ success: boolean; data?: any; error?: string }>;
-  events: (limit?: number) => Promise<{ success: boolean; data?: any; error?: string }>;
-  test: (companyId: string) => Promise<{ success: boolean; data?: any; error?: string }>;
-  onProgress: (callback: (data: any) => void) => () => void;
 }
 
 interface FileApi {
@@ -127,12 +107,6 @@ interface DiagnosticsApi {
   copyDiagnostics: () => Promise<{ success: boolean; error?: string }>;
 }
 
-interface TelemetryApi {
-  getConfig: () => Promise<any>;
-  triggerMainSmoke: () => Promise<{ success: boolean; error?: string }>;
-  triggerRendererSmoke: () => Promise<{ success: boolean }>;
-}
-
 interface BackgroundSyncSettings {
   enabled: boolean;
   intervalHours: 48 | 168 | 720;
@@ -153,13 +127,7 @@ interface BackgroundSyncSettings {
   };
 }
 
-interface ElectronTelemetryPreferences {
-  crashReportsEnabled?: boolean;
-  lastUpdatedAt?: string | null;
-}
-
 interface ElectronAppSettings {
-  telemetry?: ElectronTelemetryPreferences;
   backgroundSync?: BackgroundSyncSettings;
   [key: string]: unknown;
 }
@@ -172,8 +140,6 @@ interface SettingsApi {
 
 interface AppApi {
   getVersion: () => Promise<string>;
-  getName: () => Promise<string>;
-  isPackaged: () => Promise<boolean>;
   relaunch: () => Promise<{ success: boolean; error?: string }>;
 }
 
@@ -195,47 +161,15 @@ interface DevApi {
   log: (...args: any[]) => void;
 }
 
-interface LicenseStatus {
-  registered: boolean;
-  licenseType: 'trial' | 'pro' | 'expired' | 'none';
-  trialDaysRemaining?: number;
-  isReadOnly: boolean;
-  canWrite: boolean;
-  offlineMode: boolean;
-  offlineGraceDaysRemaining?: number | null;
-  syncedToCloud: boolean;
-  lastValidated?: string;
-  email?: string;
-  error?: string;
-}
-
-interface EmailValidation {
-  valid: boolean;
-  error?: string;
-}
-
-interface LicenseApi {
-  getStatus: () => Promise<{ success: boolean; data?: LicenseStatus; error?: string }>;
-  register: (email: string) => Promise<{ success: boolean; license?: any; error?: string }>;
-  validateEmail: (email: string) => Promise<{ success: boolean; data?: EmailValidation; error?: string }>;
-  activatePro: (paymentRef?: string) => Promise<{ success: boolean; error?: string }>;
-  canWrite: () => Promise<{ success: boolean; canWrite: boolean; error?: string }>;
-  validateOnline: () => Promise<{ success: boolean; status?: LicenseStatus; error?: string }>;
-  getInfo: () => Promise<{ success: boolean; data?: any; error?: string }>;
-}
-
 interface ElectronAPI {
   window: WindowApi;
   db?: DatabaseApi;
   api: ApiClientApi;
-  scraper: ScraperApi;
   file: FileApi;
   auth: AuthApi;
   chatbotSecrets?: ChatbotSecretsApi;
-  license: LicenseApi;
   log: LogApi;
   diagnostics: DiagnosticsApi;
-  telemetry: TelemetryApi;
   settings: SettingsApi;
   app: AppApi;
   database: DatabaseMaintenanceApi;

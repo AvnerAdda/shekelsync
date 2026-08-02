@@ -40,7 +40,6 @@ import { useOnboarding } from '@app/contexts/OnboardingContext';
 import { STALE_SYNC_THRESHOLD_MS } from '@app/utils/constants';
 import { apiClient } from '@/lib/api-client';
 import { useScrapeProgress } from '@/hooks/useScrapeProgress';
-import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 import { useCurrentMonthPairingGap } from '@renderer/shared/hooks/useCurrentMonthPairingGap';
 import {
   formatSidebarAccountLastSync,
@@ -108,8 +107,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const [uncategorizedCount, setUncategorizedCount] = useState<number>(0);
   const [isBulkSyncing, setIsBulkSyncing] = useState(false);
   const [syncPopoverAnchor, setSyncPopoverAnchor] = useState<HTMLElement | null>(null);
-  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
-  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
   const { showNotification } = useNotification();
   const { getPageAccessStatus, status: onboardingStatus } = useOnboarding();
   const { t } = useTranslation('translation', { keyPrefix: 'sidebar' });
@@ -286,14 +283,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     try {
       const response = await apiClient.post('/api/scrape/bulk', {});
       if (!response.ok) {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          setIsBulkSyncing(false);
-          return;
-        }
         throw new Error(response.statusText || 'Bulk sync failed');
       }
       const result = (response.data as any) ?? {};
@@ -1189,11 +1178,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
           />
         </React.Suspense>
       )}
-      <LicenseReadOnlyAlert
-        open={licenseAlertOpen}
-        onClose={() => setLicenseAlertOpen(false)}
-        reason={licenseAlertReason}
-      />
     </>
   );
 };

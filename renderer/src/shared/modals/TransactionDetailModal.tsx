@@ -24,7 +24,6 @@ import CategoryIcon from '@mui/icons-material/Category';
 import { useTranslation } from 'react-i18next';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
-import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '../components/LicenseReadOnlyAlert';
 
 export interface TransactionForModal {
   identifier: string;
@@ -66,9 +65,6 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   const [allTags, setAllTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [licenseError, setLicenseError] = useState<{ open: boolean; reason?: string }>({
-    open: false,
-  });
 
   // Load transaction data and all tags when modal opens
   useEffect(() => {
@@ -125,12 +121,6 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
       onClose();
     } catch (error: unknown) {
       console.error('Failed to save transaction:', error);
-      // Check if this is a license read-only error
-      const errorData = (error as { response?: { data?: unknown } })?.response?.data;
-      const licenseCheck = isLicenseReadOnlyError(errorData);
-      if (licenseCheck.isReadOnly) {
-        setLicenseError({ open: true, reason: licenseCheck.reason });
-      }
     } finally {
       setSaving(false);
     }
@@ -403,11 +393,6 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
-      <LicenseReadOnlyAlert
-        open={licenseError.open}
-        onClose={() => setLicenseError({ open: false })}
-        reason={licenseError.reason}
-      />
     </>
   );
 };

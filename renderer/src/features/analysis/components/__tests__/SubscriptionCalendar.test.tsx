@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import i18n, { initializeI18n } from '@renderer/i18n';
+import i18n, { loadI18nLanguage } from '@renderer/i18n';
 
 import SubscriptionCalendar from '../SubscriptionCalendar';
 import {
@@ -59,8 +59,8 @@ vi.mock('../CalendarDayDetail', () => ({
 }));
 
 describe('SubscriptionCalendar', () => {
-  beforeAll(() => {
-    initializeI18n('he');
+  beforeAll(async () => {
+    await Promise.all([loadI18nLanguage('he'), loadI18nLanguage('fr')]);
   });
 
   afterEach(() => {

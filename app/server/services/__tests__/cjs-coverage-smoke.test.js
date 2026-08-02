@@ -4,14 +4,12 @@ const checkExistingService = require('../investments/check-existing.js');
 const bankSummaryService = require('../investments/bank-summary.js');
 const patternsService = require('../investments/patterns.js');
 const transactionsAdminService = require('../transactions/admin.js');
-const settlementService = require('../accounts/settlement.js');
 
 afterEach(() => {
   checkExistingService.__resetDatabase?.();
   bankSummaryService.__resetDatabase?.();
   patternsService.__resetDatabase?.();
   transactionsAdminService.__resetDatabase?.();
-  settlementService.__resetDependencies?.();
   vi.restoreAllMocks();
 });
 
@@ -212,64 +210,4 @@ describe('cjs coverage smoke', () => {
     );
   });
 
-  it('covers settlement matching and active-pairing filtering', async () => {
-    const query = vi.fn().mockResolvedValue({
-      rows: [
-        {
-          identifier: 'tx-hide',
-          vendor: 'hapoalim',
-          date: '2026-01-01',
-          name: 'isracard transfer',
-          price: -120,
-          category_definition_id: 1,
-          category_name: 'Credit Card Repayment',
-          category_name_en: 'Credit Card Repayment',
-          account_number: '1111',
-          match_reason: 'keyword_match',
-          institution_id: null,
-        },
-        {
-          identifier: 'tx-keep',
-          vendor: 'hapoalim',
-          date: '2026-01-02',
-          name: 'other transfer',
-          price: 80,
-          category_definition_id: 1,
-          category_name: 'Credit Card Repayment',
-          category_name_en: 'Credit Card Repayment',
-          account_number: '2222',
-          match_reason: 'account_number_match',
-          institution_id: null,
-        },
-      ],
-    });
-    const release = vi.fn();
-    const getClient = vi.fn().mockResolvedValue({ query, release });
-
-    settlementService.__setDatabase({ getClient });
-    settlementService.__setPairingsService({
-      getActivePairings: vi.fn().mockResolvedValue([
-        {
-          bankVendor: 'hapoalim',
-          bankAccountNumber: '1111',
-          matchPatterns: ['isracard'],
-        },
-      ]),
-    });
-    settlementService.__setRepaymentCategoryResolver(() => "cd.name = 'Credit Card Repayment'");
-
-    const result = await settlementService.findSettlementCandidates({
-      credit_card_account_number: '1234',
-      bank_vendor: 'hapoalim',
-    });
-
-    expect(result.candidates).toHaveLength(1);
-    expect(result.candidates[0].identifier).toBe('tx-keep');
-    expect(result.stats).toMatchObject({
-      total: 1,
-      totalNegative: 0,
-      totalPositive: 1,
-    });
-    expect(release).toHaveBeenCalledTimes(1);
-  });
 });

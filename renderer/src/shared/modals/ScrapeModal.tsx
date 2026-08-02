@@ -26,7 +26,6 @@ import { useScrapeProgress } from '@/hooks/useScrapeProgress';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
 import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from '@renderer/shared/components/InstitutionBadge';
-import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '../components/LicenseReadOnlyAlert';
 
 interface ScraperConfig {
   options: {
@@ -258,8 +257,6 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [rateLimitState, setRateLimitState] = useState<SyncRateLimitState | null>(null);
-  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
-  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>(undefined);
   const { showNotification } = useNotification();
   const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'scrapeModal' });
@@ -545,14 +542,6 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
         const errorRateLimit = resolveRateLimitState(errorData);
         if (errorRateLimit) {
           setRateLimitState(errorRateLimit);
-        }
-
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(errorData);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          return;
         }
 
         if (response.status === 429) {
@@ -952,12 +941,6 @@ export default function SyncModal({ isOpen, onClose, onSuccess, onStart, onCompl
           </Button>
         </DialogActions>
       </Dialog>
-      {/* License Read-Only Alert */}
-      <LicenseReadOnlyAlert
-        open={licenseAlertOpen}
-        onClose={() => setLicenseAlertOpen(false)}
-        reason={licenseAlertReason}
-      />
     </>
   );
 } 

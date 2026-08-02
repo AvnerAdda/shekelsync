@@ -18,7 +18,6 @@ const {
   revokeToken,
 } = require('./api-security');
 const { createErrorHandler } = require(resolveAppPath('lib', 'server', 'error-sanitizer.js'));
-const { licenseGuardMiddleware } = require(resolveAppPath('server', 'middleware', 'license-guard.js'));
 
 // Import our core API routes
 const coreRoutes = require('./api-routes/core');
@@ -86,9 +85,6 @@ async function setupAPIServer(mainWindow, options = {}) {
 
   // Rate limiting middleware (must come after authentication)
   app.use(rateLimitMiddleware);
-
-  // Enforce the app's read-only license mode for write endpoints.
-  app.use(licenseGuardMiddleware);
 
   // Request locale resolution
   app.use((req, _res, next) => {
@@ -203,12 +199,6 @@ async function setupAPIServer(mainWindow, options = {}) {
     lazyRouter(() => require(resolveAppPath('server', 'routes', 'optimizer.js')).createOptimizerRouter()),
   );
 
-  // Smart Actions, including actions created by Optimizator
-  app.use(
-    '/api/smart-actions',
-    lazyRouter(() => require(resolveAppPath('server', 'routes', 'smart-actions.js'))()),
-  );
-
   app.put('/api/transactions/:id', (req, res) => transactionHandlers.updateTransaction(req, res));
   app.put('/api/transactions', (req, res) => transactionHandlers.updateTransaction(req, res));
   app.delete('/api/transactions/:id', (req, res) => transactionHandlers.deleteTransaction(req, res));
@@ -245,20 +235,6 @@ async function setupAPIServer(mainWindow, options = {}) {
   app.use(
     '/api/data',
     lazyRouter(() => require(resolveAppPath('server', 'routes', 'data-export.js')).createDataExportRouter()),
-  );
-
-  // Budget alerts routes – lazy load
-  app.use(
-    '/api/budget-alerts',
-    lazyRouter(() => {
-      const budgetAlertsHandlers = require(resolveAppPath('server', 'routes', 'budget-alerts.js'));
-      const router = express.Router();
-      
-      router.get('/', budgetAlertsHandlers.getBudgetAlerts);
-      router.post('/check', budgetAlertsHandlers.checkAndStoreAlerts);
-      
-      return router;
-    }),
   );
 
   // Guide tips (post-onboarding checklist) – lazy load

@@ -1,7 +1,5 @@
 const express = require('express');
 
-// Dynamic imports for ES modules
-let suggestionAnalyzer;
 let autoLinker;
 const {
   buildPikadonCandidate,
@@ -156,25 +154,18 @@ async function getQueryClient(databaseService) {
 }
 
 async function loadESModules() {
-  if (!suggestionAnalyzer) {
-    suggestionAnalyzer = await import('../services/investments/suggestion-analyzer.js');
-  }
   if (!autoLinker) {
     autoLinker = await import('../services/investments/auto-linker.js');
   }
 }
 
 function __setESModulesForTests(modules = {}) {
-  if (modules.suggestionAnalyzer) {
-    suggestionAnalyzer = modules.suggestionAnalyzer;
-  }
   if (modules.autoLinker) {
     autoLinker = modules.autoLinker;
   }
 }
 
 function __resetESModulesForTests() {
-  suggestionAnalyzer = null;
   autoLinker = null;
 }
 
@@ -641,73 +632,6 @@ function createInvestmentsRouter({ services = {} } = {}) {
       res.status(error?.status || 500).json({
         success: false,
         error: error?.message || 'Failed to fetch bank balance summary',
-        details: error?.stack,
-      });
-    }
-  });
-
-  // New intelligent suggestion endpoints
-
-  /**
-   * POST /api/investments/analyze-transactions
-   * Analyzes uncategorized investment transactions and returns smart account suggestions
-   * Query params: thresholdDays (default: 90)
-   */
-  router.post('/analyze-transactions', async (req, res) => {
-    try {
-      await loadESModules();
-      const { thresholdDays = 90 } = req.body;
-      const suggestions = await suggestionAnalyzer.analyzeInvestmentTransactions(thresholdDays);
-
-      res.json({
-        success: true,
-        count: suggestions.length,
-        suggestions
-      });
-    } catch (error) {
-      console.error('Investments analyze-transactions error:', error);
-      res.status(error?.statusCode || 500).json({
-        error: error?.message || 'Failed to analyze investment transactions',
-        details: error?.stack,
-      });
-    }
-  });
-
-  /**
-   * GET /api/investments/suggestions/pending
-   * Returns active account suggestions above dismissal threshold
-   * Query params: thresholdDays (default: 90), dismissalThreshold (default: 3)
-   */
-  router.get('/suggestions/pending', async (req, res) => {
-    try {
-      console.log('[Suggestions API] Loading ES modules...');
-      await loadESModules();
-      console.log('[Suggestions API] ES modules loaded successfully');
-
-      const { thresholdDays = 90, dismissalThreshold = 3 } = req.query;
-      console.log('[Suggestions API] Query params:', { thresholdDays, dismissalThreshold });
-
-      // Get all suggestions
-      console.log('[Suggestions API] Analyzing investment transactions...');
-      const allSuggestions = await suggestionAnalyzer.analyzeInvestmentTransactions(parseInt(thresholdDays));
-      console.log('[Suggestions API] Found', allSuggestions.length, 'suggestions');
-
-      // Filter based on dismissal threshold
-      // Note: This would require fetching existing pending_transaction_suggestions to check dismiss_count
-      // For now, return all suggestions (can be enhanced with dismissal tracking)
-
-      res.json({
-        success: true,
-        count: allSuggestions.length,
-        suggestions: allSuggestions,
-        threshold: parseInt(dismissalThreshold)
-      });
-    } catch (error) {
-      console.error('[Suggestions API] Error:', error);
-      console.error('[Suggestions API] Stack:', error?.stack);
-      res.status(error?.statusCode || 500).json({
-        success: false,
-        error: error?.message || 'Failed to fetch pending suggestions',
         details: error?.stack,
       });
     }

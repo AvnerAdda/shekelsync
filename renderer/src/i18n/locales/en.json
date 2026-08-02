@@ -67,19 +67,6 @@
     "save": "Save",
     "cancel": "Cancel"
   },
-  "registration": {
-    "title": "Welcome to ShekelSync",
-    "description": "Enter your email to start your free 30-day trial. One device per email.",
-    "email": "Email",
-    "emailPlaceholder": "you@example.com",
-    "invalidEmail": "Invalid email address",
-    "validationError": "Could not validate email",
-    "startTrial": "Start 30-Day Free Trial",
-    "registrationFailed": "Registration failed. Please try again.",
-    "electronRequired": "Desktop app required for registration",
-    "privacyNotice": "Your email is stored securely on your device and used only for license verification. We never share your personal data.",
-    "trialInfo": "30 days free, then ₪500 for lifetime Pro access"
-  },
   "onboarding": {
     "gettingStarted": "Getting Started",
     "completeSteps": "Complete these steps to unlock all features",
@@ -115,28 +102,6 @@
         "description": "View analytics, set budgets, and track spending"
       }
     }
-  },
-  "license": {
-    "email": "Email",
-    "trialActive": "Free Trial Active",
-    "trialExpiring": "Trial Ending Soon",
-    "trialExpired": "Trial Expired",
-    "daysRemaining": "{{days}} days remaining",
-    "readOnlyMode": "Your app is in read-only mode. Upgrade to Pro to continue adding transactions and syncing accounts.",
-    "upgradeToPro": "Upgrade to Pro",
-    "purchasePro": "Get Pro License",
-    "offlineMode": "Offline Mode",
-    "offlineGraceRemaining": "{{days}} days offline grace remaining. Connect to the internet to validate your license.",
-    "trialProgress": "Trial Progress",
-    "days": "days"
-  },
-  "licenseAlert": {
-    "readOnlyTitle": "Read-Only Mode",
-    "operationBlocked": "This operation cannot be completed because your license is in read-only mode.",
-    "trialExpiredMessage": "Your 30-day free trial has ended. Upgrade to Pro to continue adding transactions, creating rules, and syncing your accounts.",
-    "offlineGraceExpiredMessage": "Your offline grace period has expired. Please connect to the internet to validate your license and restore full functionality.",
-    "notRegisteredTitle": "Registration Required",
-    "notRegisteredMessage": "Please register with your email to start your free 30-day trial and enable all features."
   },
   "support": {
     "tiers": {
@@ -407,51 +372,9 @@
         "readOnly": "Sync is disabled in read-only mode."
       }
     },
-    "ibkr": {
-      "title": "Interactive Brokers",
-      "description": "Sync your IBKR portfolio via Flex Query. Automatically imports positions, cash balances, and portfolio value.",
-      "form": {
-        "setupCredentials": "Set up Flex Query credentials",
-        "updateCredentials": "Update Flex Query credentials",
-        "tokenLabel": "Flex Query Token",
-        "tokenPlaceholder": "Enter your Flex Web Service token",
-        "queryIdLabel": "Flex Query ID",
-        "queryIdPlaceholder": "Enter your Flex Query ID",
-        "save": "Save Credentials",
-        "update": "Update Credentials",
-        "saving": "Saving..."
-      },
-      "actions": {
-        "syncNow": "Sync IBKR Portfolio"
-      },
-      "status": {
-        "configured": "Flex Query credentials configured",
-        "notConfigured": "Not configured yet",
-        "active": "Connected",
-        "setup": "Setup Required",
-        "syncing": "Syncing...",
-        "syncSuccess": "Synced {{positions}} positions (total: ${{value}})",
-        "lastSync": "Last synced {{timeAgo}}",
-        "balance": "Portfolio value: ${{value}}",
-        "credentialsSaved": "IBKR credentials saved successfully"
-      },
-      "help": {
-        "howTo": "Create a Flex Query in IBKR Account Management under Reports > Flex Queries. Include Open Positions, Cash Report, and NAV sections.",
-        "learnMore": "IBKR Docs"
-      },
-      "errors": {
-        "credentialsRequired": "Both token and query ID are required",
-        "saveFailed": "Failed to save IBKR credentials",
-        "syncFailed": "IBKR sync failed. Check your credentials and try again."
-      }
-    },
     "diagnostics": {
-      "title": "Diagnostics & Crash Reports",
-      "description": "Review local diagnostics and export logs for support. Crash reporting availability depends on the current build.",
-      "notSupported": "Crash reporting has been removed from this build.",
-      "toggleLabel": "Send crash reports automatically",
-      "toggleOn": "Crash details will be securely uploaded to our monitoring service.",
-      "toggleOff": "Crash details remain on your device until you opt in.",
+      "title": "Diagnostics & Logs",
+      "description": "Review local diagnostics and export logs for support.",
       "exportHint": "You can always export logs manually from the Diagnostics panel below."
     },
     "chatbot": {
@@ -786,13 +709,6 @@
         "restoreFailed": "Database restore failed."
       },
       "saveDialogLabel": "Diagnostics Bundle",
-      "telemetry": {
-        "status": "Crash reporting status",
-        "optedIn": "Opted in",
-        "optedOut": "Opted out",
-        "noDsn": "SENTRY_DSN is not configured. Crash reports stay local even if you opt in.",
-        "destination": "Destination: {{host}}"
-      },
       "metrics": {
         "title": "Recent analytics runs",
         "runs": "Runs: {{count}}",
@@ -973,73 +889,6 @@
       "refresh": "Refresh",
       "refreshing": "Refreshing...",
       "retry": "Retry"
-    },
-    "smartActions": {
-      "title": "Smart Actions",
-      "subtitle": "Practical follow-ups from spending patterns and optimizer plans",
-      "actions": {
-        "generate": "Generate",
-        "generating": "Generating..."
-      },
-      "summary": {
-        "totalActions": "Total actions",
-        "criticalHigh": "High priority",
-        "potentialImpact": "Potential impact"
-      },
-      "empty": {
-        "title": "No active actions",
-        "description": "Generate actions or wait for new patterns to appear."
-      },
-      "severities": {
-        "low": "Low",
-        "medium": "Medium",
-        "high": "High",
-        "critical": "Critical"
-      },
-      "types": {
-        "anomaly": "Anomaly",
-        "budget_overrun": "Budget overrun",
-        "optimization": "Optimization",
-        "fixed_variation": "Fixed cost shift",
-        "unusual_purchase": "Unusual purchase",
-        "seasonal_alert": "Seasonal pattern",
-        "fixed_recurring_change": "Payment change",
-        "fixed_recurring_missing": "Missing payment",
-        "fixed_recurring_duplicate": "Duplicate payment",
-        "optimization_reallocate": "Savings opportunity",
-        "optimization_add_budget": "Budget suggestion",
-        "optimization_low_confidence": "Irregular pattern"
-      },
-      "labels": {
-        "costIncrease": "Cost increase",
-        "potentialSavings": "Potential savings"
-      },
-      "tooltips": {
-        "resolve": "Mark resolved",
-        "dismiss": "Dismiss",
-        "snooze": "Snooze for {{days}} days"
-      },
-      "details": {
-        "title": "Details",
-        "detected": "Detected",
-        "confidence": "Confidence",
-        "additionalInfo": "Additional info"
-      },
-      "dialog": {
-        "resolve": {
-          "title": "Resolve action"
-        },
-        "dismiss": {
-          "title": "Dismiss action"
-        },
-        "snooze": {
-          "title": "Snooze action"
-        },
-        "noteLabel": "Note",
-        "notePlaceholder": "Optional context",
-        "cancel": "Cancel",
-        "confirm": "Confirm"
-      }
     },
     "tabs": {
       "ariaLabel": "analysis tabs",
@@ -2463,29 +2312,6 @@
       "create": "Create"
     }
   },
-  "unpairedTransactions": {
-    "title": "Transactions Needing Pairing",
-    "alerts": {
-      "allMatched": "All transactions with category 25 (Credit Card Repayment) or 75 (Refunds) are matched to active pairings. No action needed!",
-      "unmatchedInfo": "These {{count}} bank transactions are in category \"Credit Card Repayment\" (25) or \"Refunds\" (75) but don't match any active account pairing. Consider creating pairings to avoid double-counting expenses."
-    },
-    "labels": {
-      "transactionCount": "{{count}} transactions"
-    },
-    "table": {
-      "date": "Date",
-      "name": "Transaction Name",
-      "account": "Account",
-      "amount": "Amount",
-      "category": "Category",
-      "idLabel": "ID {{id}}",
-      "notAvailable": "N/A"
-    },
-    "errors": {
-      "loadFailed": "Failed to load unpaired transactions",
-      "generic": "Error loading transactions"
-    }
-  },
   "optimizer": {
     "title": "Optimizator",
     "subtitle": "Confirm profile facts and generate practical savings actions.",
@@ -2494,6 +2320,8 @@
     "answer": "Answer",
     "hassle": "Hassle",
     "nextAction": "Next",
+    "note": "Note",
+    "realizedSavings": "Realized",
     "reviewIntro": "Review detected facts first. Confirm what is right, edit what is wrong, or mark unknown.",
     "quizIntro": "Short first-run quiz. Every question can be skipped or marked unknown.",
     "quizComplete": "All essential questions are resolved.",
@@ -2503,11 +2331,20 @@
     "stale": "Your profile answers changed after the latest plan. Generate a fresh plan.",
     "privacyNotice": "Generating sends the reviewed profile facts to OpenAI using your configured API key.",
     "activeCount": "{{count}} active actions",
+    "estimatedMonthlyImpact": "Active estimated monthly impact",
+    "progress": {
+      "label": "Profile readiness",
+      "value": "{{resolved}} of {{total}} answered",
+      "remaining": "{{count}} unanswered questions remaining",
+      "ready": "Ready to generate a tailored plan",
+      "planWarning": "{{count}} unanswered questions remain. More answers can improve your plan."
+    },
     "tabs": {
       "ariaLabel": "Optimizator views",
       "review": "Review",
       "quiz": "Questions",
-      "plan": "Plan"
+      "plan": "Plan",
+      "history": "History"
     },
     "actions": {
       "close": "Close",
@@ -2516,6 +2353,13 @@
       "save": "Save",
       "unknown": "Unknown",
       "skip": "Skip",
+      "answerQuestions": "Answer",
+      "openArea": "Open area",
+      "snooze": "Snooze",
+      "reactivate": "Reactivate",
+      "cancel": "Cancel",
+      "saveOutcome": "Save outcome",
+      "refreshHistory": "Refresh history",
       "goToQuestions": "Answer missing questions",
       "goToPlan": "Go to action plan",
       "generate": "Generate action plan",
@@ -2523,6 +2367,27 @@
       "done": "Done",
       "dismiss": "Dismiss",
       "refresh": "Refresh"
+    },
+    "followThrough": {
+      "completeTitle": "Complete action",
+      "snoozeTitle": "Snooze for 7 days",
+      "realizedSavings": "Actual monthly savings",
+      "realizedSavingsHelp": "Optional. Use the amount you actually saved each month.",
+      "note": "Note"
+    },
+    "history": {
+      "title": "Plan history",
+      "subtitle": "Compare estimated and realized impact across generated plans.",
+      "empty": "No generated plans yet.",
+      "unknownModel": "Unknown model",
+      "complete": "Complete",
+      "failed": "Failed",
+      "failedMessage": "Plan generation failed.",
+      "actionsCount": "{{count}} actions",
+      "doneCount": "{{count}} done",
+      "estimated": "Estimated / month",
+      "realized": "Realized / month",
+      "changeFromPrevious": "Estimated change from previous plan"
     },
     "errors": {
       "status": "Failed to load Optimizator",
@@ -2532,6 +2397,8 @@
       "missingApiKey": "Add an OpenAI API key in Settings before generating a plan.",
       "emptyAnswer": "Enter an answer, skip it, or mark it unknown.",
       "invalidNumber": "Enter a valid number.",
+      "invalidSavings": "Enter a savings amount between 0 and 1,000,000.",
+      "history": "Failed to load plan history",
       "generic": "Something went wrong"
     },
     "sections": {
@@ -2555,7 +2422,8 @@
       "skipped": "Skipped",
       "active": "Active",
       "done": "Done",
-      "dismissed": "Dismissed"
+      "dismissed": "Dismissed",
+      "snoozed": "Snoozed"
     },
     "hassleLevels": {
       "low": "Low",
@@ -3382,29 +3250,6 @@
       "warning": "This action cannot be undone. All associated data will be permanently removed.",
       "cta": "Delete Account"
     }
-  },
-  "discrepancy": {
-    "title": "Amount Discrepancy Detected",
-    "overpaidMessage": "Bank repayments exceed credit card expenses by {{amount}}. This may be due to CC fees, interest, or untracked expenses.",
-    "underpaidMessage": "Credit card expenses exceed bank repayments by {{amount}}. This may indicate missing transactions or pending payments.",
-    "noDiscrepancyCycles": "No discrepancy detected across {{cycles}} matched repayment cycle(s).",
-    "missingCyclesNote": "Some repayment dates have no matching credit card billing cycle (missing processed_date coverage).",
-    "cycleMatched": "Matched cycle",
-    "cycleMissing": "Missing CC cycle",
-    "repaymentsInCycle": "Repayments in this cycle",
-    "moreRepayments": "+{{count}} more",
-    "createPairingFirst": "Create the pairing first to resolve.",
-    "feeNameHint": "Used when adding a fee",
-    "bankRepayments": "Bank repayments",
-    "ccExpenses": "CC expenses",
-    "difference": "Difference",
-    "period": "Analysis period: {{months}} months",
-    "howToResolve": "How would you like to resolve this?",
-    "ignore": "Ignore",
-    "addAsFee": "Add as CC Fee",
-    "feeNamePlaceholder": "Fee description",
-    "defaultFeeName": "{{vendor}} - CC Fees",
-    "genericFeeName": "Credit Card Fees"
   },
   "autoPairing": {
     "title": "Auto-Pair Credit Card",

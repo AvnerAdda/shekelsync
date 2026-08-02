@@ -88,6 +88,28 @@ const statusPayload = {
   isStale: false,
 };
 
+const recommendation = {
+  id: 12,
+  runId: 4,
+  smartActionItemId: 31,
+  title: 'Review streaming subscriptions',
+  section: 'subscriptions',
+  rationale: 'One service appears underused.',
+  evidence: ['Subscriptions: ₪240'],
+  estimatedMonthlyImpact: 120,
+  hassleLevel: 'low',
+  confidence: 0.82,
+  nextAction: 'Cancel one unused service.',
+  caveat: null,
+  status: 'active',
+  userNote: null,
+  realizedMonthlySavings: null,
+  snoozedUntil: null,
+  completedAt: null,
+  createdAt: '2026-08-02 09:00:00',
+  updatedAt: '2026-08-02 09:00:00',
+};
+
 describe('FinancialOptimizer', { timeout: 20_000 }, () => {
   beforeEach(() => {
     mockGet.mockReset();
@@ -101,13 +123,27 @@ describe('FinancialOptimizer', { timeout: 20_000 }, () => {
 
   it('opens from the Optimizator FAB and confirms a detected fact', async () => {
     const user = userEvent.setup();
+    mockPut.mockResolvedValue({
+      ok: true,
+      data: {
+        facts: [{
+          ...statusPayload.facts[0],
+          status: 'confirmed',
+          persisted: true,
+        }],
+      },
+    });
     render(<FinancialOptimizer />);
 
-    await user.click(screen.getByLabelText('Optimizator'));
+    const launcher = screen.getByLabelText('Optimizator');
+    expect(launcher).toHaveClass('MuiFab-circular');
+    expect(launcher).not.toHaveClass('MuiFab-extended');
+    await user.click(launcher);
 
     await waitFor(() => {
       expect(mockGet).toHaveBeenCalledWith('/api/optimizer/status');
     });
+    expect(screen.getByRole('progressbar', { name: 'Profile readiness' })).toHaveAttribute('aria-valuenow', '0');
     expect(await screen.findByText('Bills location')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /confirm/i }));
@@ -123,10 +159,25 @@ describe('FinancialOptimizer', { timeout: 20_000 }, () => {
         ],
       });
     });
+    expect(mockGet).toHaveBeenCalledTimes(1);
   });
 
   it('skips a quiz question', async () => {
     const user = userEvent.setup();
+    mockPut.mockResolvedValue({
+      ok: true,
+      data: {
+        facts: [{
+          ...statusPayload.questions[0],
+          value: null,
+          valueText: null,
+          status: 'skipped',
+          source: 'user',
+          confidence: 1,
+          persisted: true,
+        }],
+      },
+    });
     render(<FinancialOptimizer />);
 
     await user.click(screen.getByLabelText('Optimizator'));
@@ -147,6 +198,8 @@ describe('FinancialOptimizer', { timeout: 20_000 }, () => {
         ],
       });
     });
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('All essential questions are resolved.')).toBeInTheDocument();
   });
 
   it('does not save an empty quiz answer as resolved', async () => {
@@ -236,5 +289,85 @@ describe('FinancialOptimizer', { timeout: 20_000 }, () => {
 
     expect(await screen.findByText('₪***')).toBeInTheDocument();
     expect(screen.queryByText('₪22,000')).not.toBeInTheDocument();
+  });
+
+  it('records the realized result when an action is completed', async () => {
+    const user = userEvent.setup();
+    mockGet.mockResolvedValue({
+      ok: true,
+      data: { ...statusPayload, recommendations: [recommendation] },
+    });
+    mockPut.mockResolvedValue({
+      ok: true,
+      data: {
+        recommendation: {
+          ...recommendation,
+          status: 'done',
+          userNote: 'Cancelled after checking usage',
+          realizedMonthlySavings: 95,
+          completedAt: '2026-08-02 10:00:00',
+        },
+      },
+    });
+    render(<FinancialOptimizer />);
+
+    await user.click(screen.getByLabelText('Optimizator'));
+    await user.click(await screen.findByRole('tab', { name: /^plan$/i }));
+    await screen.findByText('Review streaming subscriptions');
+    await user.click(screen.getByRole('button', { name: /^done$/i }));
+    await user.type(screen.getByRole('spinbutton', { name: /actual monthly savings/i }), '95');
+    await user.type(screen.getByRole('textbox', { name: /^note$/i }), 'Cancelled after checking usage');
+    await user.click(screen.getByRole('button', { name: /save outcome/i }));
+
+    await waitFor(() => {
+      expect(mockPut).toHaveBeenCalledWith('/api/optimizer/recommendations/12/status', {
+        status: 'done',
+        userNote: 'Cancelled after checking usage',
+        realizedMonthlySavings: 95,
+      });
+    });
+    expect(await screen.findByText('Realized: ₪95')).toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads plan history only when its tab is opened', async () => {
+    const user = userEvent.setup();
+    mockGet.mockImplementation(async (url: string) => {
+      if (url === '/api/optimizer/history?limit=20') {
+        return {
+          ok: true,
+          data: {
+            runs: [{
+              id: 8,
+              runUuid: 'run-8',
+              status: 'complete',
+              promptVersion: 'optimizer-v1',
+              model: 'gpt-4o-mini',
+              generatedAt: '2026-08-02T10:00:00.000Z',
+              errorMessage: null,
+              recommendationCount: 3,
+              activeCount: 1,
+              doneCount: 2,
+              dismissedCount: 0,
+              estimatedMonthlyImpact: 320,
+              realizedMonthlySavings: 185,
+            }],
+          },
+        };
+      }
+      return { ok: true, data: statusPayload };
+    });
+    render(<FinancialOptimizer />);
+
+    await user.click(screen.getByLabelText('Optimizator'));
+    await screen.findByText('Bills location');
+    expect(mockGet).not.toHaveBeenCalledWith('/api/optimizer/history?limit=20');
+
+    await user.click(screen.getByRole('tab', { name: /^history$/i }));
+
+    expect(await screen.findByText('gpt-4o-mini')).toBeInTheDocument();
+    expect(screen.getByText('3 actions')).toBeInTheDocument();
+    expect(screen.getByText('+₪185')).toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalledWith('/api/optimizer/history?limit=20');
   });
 });

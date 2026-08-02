@@ -33,15 +33,6 @@ type AnalyticsMetricsSnapshot = {
   categoryOpportunities?: AnalyticsMetricSample[];
 } | null;
 
-type TelemetryDiagnosticsInfo = {
-  enabled?: boolean;
-  initialized?: boolean;
-  dsnConfigured?: boolean;
-  dsnHost?: string | null;
-  dsnProjectId?: string | null;
-  debug?: boolean;
-};
-
 type ConfigWarning = {
   code?: string;
   severity?: 'info' | 'warning' | 'error';
@@ -63,7 +54,6 @@ type DiagnosticsInfo = {
   logFile?: string;
   appVersion?: string;
   platform?: string;
-  telemetry?: TelemetryDiagnosticsInfo | null;
   analyticsMetrics?: AnalyticsMetricsSnapshot;
   configHealth?: ConfigHealth | null;
 };
@@ -75,7 +65,6 @@ const defaultInfo: DiagnosticsInfo = {
   logDirectory: undefined,
   logFile: undefined,
   platform: undefined,
-  telemetry: null,
   analyticsMetrics: null,
   configHealth: null,
 };
@@ -137,7 +126,6 @@ export const DiagnosticsPanel: React.FC = () => {
             logDirectory: result.logDirectory,
             logFile: result.logFile,
             platform: result.platform,
-            telemetry: result.telemetry ?? null,
             analyticsMetrics: result.analyticsMetrics ?? null,
             configHealth: result.configHealth ?? null,
           });
@@ -513,52 +501,6 @@ export const DiagnosticsPanel: React.FC = () => {
           </Typography>
         )}
       </Stack>
-      {info.telemetry && (
-        <Box
-          sx={{
-            mt: 3,
-            p: 2,
-            borderRadius: 2,
-            bgcolor: (theme) => theme.palette.action.hover
-          }}>
-          <Typography
-            variant="caption"
-            gutterBottom
-            sx={{
-              color: "text.secondary",
-              display: "block"
-            }}>
-            {t('telemetry.status')}
-          </Typography>
-          <Typography variant="body2" sx={{
-            fontWeight: "bold"
-          }}>
-            {info.telemetry.enabled ? t('telemetry.optedIn') : t('telemetry.optedOut')}
-          </Typography>
-          {!info.telemetry.dsnConfigured && (
-            <Typography
-              variant="caption"
-              sx={{
-                color: "text.secondary",
-                display: "block",
-                mt: 0.5
-              }}>
-              {t('telemetry.noDsn')}
-            </Typography>
-          )}
-          {info.telemetry.dsnConfigured && info.telemetry.dsnHost && (
-            <Typography
-              variant="caption"
-              sx={{
-                color: "text.secondary",
-                display: "block",
-                mt: 0.5
-              }}>
-              {t('telemetry.destination', { host: info.telemetry.dsnHost })}
-            </Typography>
-          )}
-        </Box>
-      )}
       {metricsSummary.length > 0 && (
         <Box sx={{
           mt: 3

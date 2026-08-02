@@ -9,12 +9,6 @@ import type {
   VerifyQuestResponse,
 } from '@renderer/types/quests';
 import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
-import { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
-
-interface LicenseError {
-  isReadOnly: boolean;
-  reason?: string;
-}
 
 interface UseQuestsOptions {
   autoLoad?: boolean;
@@ -29,11 +23,6 @@ export function useQuests(options: UseQuestsOptions = {}) {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [licenseError, setLicenseError] = useState<LicenseError | null>(null);
-
-  const clearLicenseError = useCallback(() => {
-    setLicenseError(null);
-  }, []);
 
   const fetchQuests = useCallback(async () => {
     setLoading(true);
@@ -79,12 +68,6 @@ export function useQuests(options: UseQuestsOptions = {}) {
       const response = await apiClient.post('/api/analytics/quests/generate', { force });
 
       if (!response.ok) {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseError({ isReadOnly: true, reason: licenseCheck.reason });
-          return null;
-        }
         throw new Error('Failed to generate quests');
       }
 
@@ -110,12 +93,6 @@ export function useQuests(options: UseQuestsOptions = {}) {
       const response = await apiClient.post(`/api/analytics/quests/${questId}/accept`);
 
       if (!response.ok) {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseError({ isReadOnly: true, reason: licenseCheck.reason });
-          return null;
-        }
         throw new Error('Failed to accept quest');
       }
 
@@ -150,12 +127,6 @@ export function useQuests(options: UseQuestsOptions = {}) {
       const response = await apiClient.post(`/api/analytics/quests/${questId}/decline`);
 
       if (!response.ok) {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseError({ isReadOnly: true, reason: licenseCheck.reason });
-          return;
-        }
         throw new Error('Failed to decline quest');
       }
 
@@ -180,12 +151,6 @@ export function useQuests(options: UseQuestsOptions = {}) {
       });
 
       if (!response.ok) {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseError({ isReadOnly: true, reason: licenseCheck.reason });
-          return null;
-        }
         throw new Error('Failed to verify quest');
       }
 
@@ -210,12 +175,6 @@ export function useQuests(options: UseQuestsOptions = {}) {
       const response = await apiClient.post('/api/analytics/quests/check-deadlines');
 
       if (!response.ok) {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseError({ isReadOnly: true, reason: licenseCheck.reason });
-          return null;
-        }
         throw new Error('Failed to check deadlines');
       }
 
@@ -249,8 +208,6 @@ export function useQuests(options: UseQuestsOptions = {}) {
     loading,
     generating,
     error,
-    licenseError,
-    clearLicenseError,
     fetchQuests,
     fetchStats,
     generateQuests,

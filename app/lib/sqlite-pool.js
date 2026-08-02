@@ -481,6 +481,10 @@ function ensureOptimizerTables(db) {
       next_action TEXT,
       caveat TEXT,
       status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'done', 'dismissed')),
+      user_note TEXT,
+      realized_monthly_savings REAL,
+      snoozed_until TEXT,
+      completed_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (run_id) REFERENCES optimizer_runs(id) ON DELETE CASCADE
@@ -491,6 +495,20 @@ function ensureOptimizerTables(db) {
     CREATE INDEX IF NOT EXISTS idx_optimizer_recommendations_status ON optimizer_recommendations(status);
     CREATE INDEX IF NOT EXISTS idx_optimizer_recommendations_run ON optimizer_recommendations(run_id);
   `);
+
+  const recommendationColumns = db.prepare("PRAGMA table_info('optimizer_recommendations')").all();
+  const columnNames = new Set(recommendationColumns.map((column) => column.name));
+  const followThroughColumns = [
+    ['user_note', 'TEXT'],
+    ['realized_monthly_savings', 'REAL'],
+    ['snoozed_until', 'TEXT'],
+    ['completed_at', 'TEXT'],
+  ];
+  followThroughColumns.forEach(([name, definition]) => {
+    if (!columnNames.has(name)) {
+      db.exec(`ALTER TABLE optimizer_recommendations ADD COLUMN ${name} ${definition}`);
+    }
+  });
 }
 
 /**

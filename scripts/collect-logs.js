@@ -3,7 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const envPaths = require('env-paths');
-const { describeTelemetryState } = require('../electron/telemetry-utils');
 
 const pkg = require('../app/package.json');
 
@@ -83,17 +82,6 @@ async function readLogTail(filePath) {
   }
 }
 
-async function readTelemetryPreference(userDataDir) {
-  try {
-    const settingsPath = path.join(userDataDir, 'secure-store', 'settings.json');
-    const raw = await fs.promises.readFile(settingsPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    return Boolean(parsed?.telemetry?.crashReportsEnabled);
-  } catch (error) {
-    return false;
-  }
-}
-
 async function main() {
   const { output } = parseArgs();
   const userDataDir = resolveUserDataDir();
@@ -107,9 +95,6 @@ async function main() {
     logs = [{ error: error.message, directory: logDirectory }];
   }
 
-  const telemetryEnabled = await readTelemetryPreference(userDataDir);
-  const telemetry = describeTelemetryState({ enabled: telemetryEnabled, initialized: false });
-
   const bundle = {
     generatedAt: new Date().toISOString(),
     host: os.hostname(),
@@ -118,15 +103,6 @@ async function main() {
     appVersion: pkg.version,
     userDataDir,
     logDirectory,
-    telemetry,
-    telemetrySummary: telemetry
-      ? {
-          status: telemetry.enabled ? 'opted-in' : 'opted-out',
-          destination: telemetry.dsnHost || null,
-          initialized: Boolean(telemetry.initialized),
-          debug: Boolean(telemetry.debug),
-        }
-      : null,
     logs,
   };
 

@@ -51,6 +51,16 @@ function createOptimizerRouter() {
     }
   });
 
+  router.get('/history', async (req, res) => {
+    try {
+      const result = await optimizerService.getOptimizerHistory({ limit: req.query.limit });
+      res.json(result);
+    } catch (error) {
+      console.error('Optimizer history error:', error);
+      sendError(res, error, 'Failed to fetch optimizer history');
+    }
+  });
+
   router.put('/facts', async (req, res) => {
     try {
       const result = await optimizerService.saveOptimizerFacts(req.body || {});

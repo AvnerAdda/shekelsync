@@ -17,7 +17,6 @@ import ModalHeader from './ModalHeader';
 import PairingMatchDetailsModal from './PairingMatchDetailsModal';
 import { apiClient } from '@/lib/api-client';
 import type { PairingMatchDetailsResponse, PairingMatchSummary } from '@renderer/types/accounts';
-import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 
 interface Account {
   id: number;
@@ -172,8 +171,6 @@ export default function AccountPairingModal({
   const [selectedPairingForDetails, setSelectedPairingForDetails] = useState<PairingForDetails | null>(null);
   const [pairingStatsById, setPairingStatsById] = useState<Record<number, PairingStatsState>>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
-  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
 
   useEffect(() => {
     pairingStatsByIdRef.current = pairingStatsById;
@@ -279,18 +276,6 @@ export default function AccountPairingModal({
         });
 
         if (!response.ok || !response.data) {
-          // Check for license read-only error
-          const licenseCheck = isLicenseReadOnlyError(response.data);
-          if (licenseCheck.isReadOnly) {
-            setLicenseAlertReason(licenseCheck.reason);
-            setLicenseAlertOpen(true);
-            return {
-              key: `${account.vendor}::${accountNumber || 'all'}`,
-              account,
-              status: 'error',
-              reason: 'License is in read-only mode',
-            } satisfies AutoPairingBatchResult;
-          }
           return {
             key: `${account.vendor}::${accountNumber || 'all'}`,
             account,
@@ -602,11 +587,6 @@ export default function AccountPairingModal({
       <DialogActions>
         <Button onClick={handleClose}>Close</Button>
       </DialogActions>
-      <LicenseReadOnlyAlert
-        open={licenseAlertOpen}
-        onClose={() => setLicenseAlertOpen(false)}
-        reason={licenseAlertReason}
-      />
       <PairingMatchDetailsModal
         isOpen={Boolean(selectedPairingForDetails)}
         onClose={() => setSelectedPairingForDetails(null)}

@@ -67,19 +67,6 @@
     "save": "שמירה",
     "cancel": "ביטול"
   },
-  "registration": {
-    "title": "ברוכים הבאים ל-ShekelSync",
-    "description": "הזינו את כתובת האימייל שלכם כדי להתחיל תקופת ניסיון חינם של 30 יום. מכשיר אחד לכל אימייל.",
-    "email": "אימייל",
-    "emailPlaceholder": "you@example.com",
-    "invalidEmail": "כתובת אימייל לא תקינה",
-    "validationError": "לא ניתן לאמת את כתובת האימייל",
-    "startTrial": "התחל ניסיון חינם ל-30 יום",
-    "registrationFailed": "ההרשמה נכשלה. נסו שוב.",
-    "electronRequired": "נדרשת גרסת שולחן העבודה להרשמה",
-    "privacyNotice": "כתובת האימייל שלכם נשמרת באופן מאובטח במכשיר שלכם ומשמשת רק לאימות רישיון. איננו משתפים את המידע האישי שלכם.",
-    "trialInfo": "30 יום חינם, לאחר מכן ₪500 לגישת Pro לכל החיים"
-  },
   "onboarding": {
     "gettingStarted": "תחילת העבודה",
     "completeSteps": "השלימו את השלבים הבאים כדי לפתוח את כל התכונות",
@@ -115,28 +102,6 @@
         "description": "צפו באנליטיקה, הגדירו תקציבים ועקבו אחר הוצאות"
       }
     }
-  },
-  "license": {
-    "email": "אימייל",
-    "trialActive": "תקופת ניסיון פעילה",
-    "trialExpiring": "תקופת הניסיון עומדת להסתיים",
-    "trialExpired": "תקופת הניסיון הסתיימה",
-    "daysRemaining": "נותרו {{days}} ימים",
-    "readOnlyMode": "האפליקציה במצב קריאה בלבד. שדרגו ל-Pro כדי להמשיך להוסיף עסקאות ולסנכרן חשבונות.",
-    "upgradeToPro": "שדרג ל-Pro",
-    "purchasePro": "רכוש רישיון Pro",
-    "offlineMode": "מצב לא מקוון",
-    "offlineGraceRemaining": "נותרו {{days}} ימי חסד במצב לא מקוון. התחברו לאינטרנט לאימות הרישיון.",
-    "trialProgress": "התקדמות תקופת ניסיון",
-    "days": "ימים"
-  },
-  "licenseAlert": {
-    "readOnlyTitle": "מצב קריאה בלבד",
-    "operationBlocked": "לא ניתן לבצע פעולה זו כי הרישיון שלך במצב קריאה בלבד.",
-    "trialExpiredMessage": "תקופת הניסיון החינמית של 30 יום הסתיימה. שדרגו ל-Pro כדי להמשיך להוסיף עסקאות, ליצור כללים ולסנכרן את החשבונות שלכם.",
-    "offlineGraceExpiredMessage": "תקופת החסד במצב לא מקוון הסתיימה. התחברו לאינטרנט כדי לאמת את הרישיון ולהחזיר את כל הפונקציונליות.",
-    "notRegisteredTitle": "נדרשת הרשמה",
-    "notRegisteredMessage": "נא להירשם עם כתובת האימייל שלכם כדי להתחיל את תקופת הניסיון החינמית של 30 יום ולהפעיל את כל התכונות."
   },
   "support": {
     "tiers": {
@@ -408,51 +373,9 @@
         "readOnly": "הסנכרון מושבת במצב קריאה בלבד."
       }
     },
-    "ibkr": {
-      "title": "אינטראקטיב ברוקרס",
-      "description": "סנכרנו את תיק ההשקעות שלכם מ-IBKR באמצעות Flex Query. ייבוא אוטומטי של פוזיציות, יתרות מזומן וערך התיק.",
-      "form": {
-        "setupCredentials": "הגדרת פרטי Flex Query",
-        "updateCredentials": "עדכון פרטי Flex Query",
-        "tokenLabel": "טוקן Flex Query",
-        "tokenPlaceholder": "הכניסו את טוקן ה-Flex Web Service",
-        "queryIdLabel": "מזהה Flex Query",
-        "queryIdPlaceholder": "הכניסו את מזהה ה-Flex Query",
-        "save": "שמור פרטים",
-        "update": "עדכן פרטים",
-        "saving": "שומר..."
-      },
-      "actions": {
-        "syncNow": "סנכרן תיק IBKR"
-      },
-      "status": {
-        "configured": "פרטי Flex Query הוגדרו",
-        "notConfigured": "עדיין לא הוגדר",
-        "active": "מחובר",
-        "setup": "נדרשת הגדרה",
-        "syncing": "מסנכרן...",
-        "syncSuccess": "סונכרנו {{positions}} פוזיציות (סה\"כ: ${{value}})",
-        "lastSync": "סנכרון אחרון {{timeAgo}}",
-        "balance": "ערך תיק: ${{value}}",
-        "credentialsSaved": "פרטי IBKR נשמרו בהצלחה"
-      },
-      "help": {
-        "howTo": "צרו Flex Query בניהול חשבון IBKR תחת Reports > Flex Queries. כללו Open Positions, Cash Report ו-NAV.",
-        "learnMore": "מדריך IBKR"
-      },
-      "errors": {
-        "credentialsRequired": "נדרשים גם טוקן וגם מזהה Query",
-        "saveFailed": "שמירת פרטי IBKR נכשלה",
-        "syncFailed": "סנכרון IBKR נכשל. בדקו את הפרטים ונסו שוב."
-      }
-    },
     "diagnostics": {
-      "title": "דיאגנוסטיקה ודיווח קריסות",
-      "description": "צפו בנתוני דיאגנוסטיקה מקומיים וייצאו לוגים לצורך תמיכה. זמינות דיווח הקריסות תלויה בבילד הנוכחי.",
-      "notSupported": "דיווח קריסות הוסר מהבילד הזה.",
-      "toggleLabel": "שליחת דוחות קריסה אוטומטית",
-      "toggleOn": "פרטי הקריסה יועלו בצורה מאובטחת לשירות המעקב שלנו.",
-      "toggleOff": "פרטי הקריסה נשארים במכשיר עד שתבחרו להצטרף.",
+      "title": "דיאגנוסטיקה ולוגים",
+      "description": "צפו בנתוני דיאגנוסטיקה מקומיים וייצאו לוגים לצורך תמיכה.",
       "exportHint": "תמיד ניתן לייצא לוגים ידנית מלוח הדיאגנוסטיקה למטה."
     },
     "chatbot": {
@@ -788,13 +711,6 @@
         "restoreFailed": "שחזור מסד הנתונים נכשל."
       },
       "saveDialogLabel": "חבילת דיאגנוסטיקה",
-      "telemetry": {
-        "status": "מצב דיווח קריסות",
-        "optedIn": "משתתף",
-        "optedOut": "לא משתתף",
-        "noDsn": "SENTRY_DSN לא מוגדר. דוחות הקריסה נשארים מקומית גם אם תבחרו להשתתף.",
-        "destination": "יעד: {{host}}"
-      },
       "metrics": {
         "title": "הרצות אנליטיקה אחרונות",
         "runs": "הרצות: {{count}}",
@@ -976,73 +892,6 @@
       "refresh": "רענן",
       "refreshing": "מרענן...",
       "retry": "נסה שוב"
-    },
-    "smartActions": {
-      "title": "פעולות חכמות",
-      "subtitle": "צעדים מעשיים מדפוסי הוצאות ומתוכניות Optimizator",
-      "actions": {
-        "generate": "צור",
-        "generating": "יוצר..."
-      },
-      "summary": {
-        "totalActions": "סה\"כ פעולות",
-        "criticalHigh": "עדיפות גבוהה",
-        "potentialImpact": "השפעה פוטנציאלית"
-      },
-      "empty": {
-        "title": "אין פעולות פעילות",
-        "description": "צרו פעולות או המתינו לזיהוי דפוסים חדשים."
-      },
-      "severities": {
-        "low": "נמוכה",
-        "medium": "בינונית",
-        "high": "גבוהה",
-        "critical": "קריטית"
-      },
-      "types": {
-        "anomaly": "חריגה",
-        "budget_overrun": "חריגה מתקציב",
-        "optimization": "אופטימיזציה",
-        "fixed_variation": "שינוי בעלות קבועה",
-        "unusual_purchase": "רכישה חריגה",
-        "seasonal_alert": "דפוס עונתי",
-        "fixed_recurring_change": "שינוי בתשלום",
-        "fixed_recurring_missing": "תשלום חסר",
-        "fixed_recurring_duplicate": "תשלום כפול",
-        "optimization_reallocate": "הזדמנות לחיסכון",
-        "optimization_add_budget": "הצעת תקציב",
-        "optimization_low_confidence": "דפוס לא סדיר"
-      },
-      "labels": {
-        "costIncrease": "עלייה בעלות",
-        "potentialSavings": "חיסכון פוטנציאלי"
-      },
-      "tooltips": {
-        "resolve": "סמן כטופל",
-        "dismiss": "דחה",
-        "snooze": "השהה ל-{{days}} ימים"
-      },
-      "details": {
-        "title": "פרטים",
-        "detected": "זוהה",
-        "confidence": "ביטחון",
-        "additionalInfo": "מידע נוסף"
-      },
-      "dialog": {
-        "resolve": {
-          "title": "סימון פעולה כטופלה"
-        },
-        "dismiss": {
-          "title": "דחיית פעולה"
-        },
-        "snooze": {
-          "title": "השהיית פעולה"
-        },
-        "noteLabel": "הערה",
-        "notePlaceholder": "הקשר אופציונלי",
-        "cancel": "ביטול",
-        "confirm": "אישור"
-      }
     },
     "tabs": {
       "ariaLabel": "לשוניות ניתוח",
@@ -2465,29 +2314,6 @@
       "create": "יצירה"
     }
   },
-  "unpairedTransactions": {
-    "title": "עסקאות שמחכות לשיוך",
-    "alerts": {
-      "allMatched": "כל העסקאות בקטגוריה 25 (החזר כרטיס אשראי) או 75 (החזרים) כבר משויכות לזיווגים פעילים. אין צורך בפעולה!",
-      "unmatchedInfo": "יש {{count}} עסקאות בנקאיות בקטגוריה \"החזר כרטיס אשראי\" (25) או \"החזרים\" (75) שלא משויכות לזיווגי חשבונות פעילים. שקלו ליצור זיווגים כדי להימנע מספירה כפולה של הוצאות."
-    },
-    "labels": {
-      "transactionCount": "{{count}} עסקאות"
-    },
-    "table": {
-      "date": "תאריך",
-      "name": "שם העסקה",
-      "account": "חשבון",
-      "amount": "סכום",
-      "category": "קטגוריה",
-      "idLabel": "מזהה {{id}}",
-      "notAvailable": "לא זמין"
-    },
-    "errors": {
-      "loadFailed": "הטענת עסקאות לא משויכות נכשלה",
-      "generic": "שגיאה בטעינת עסקאות"
-    }
-  },
   "optimizer": {
     "title": "Optimizator",
     "subtitle": "אשרו פרטי פרופיל וצרו פעולות חיסכון מעשיות.",
@@ -2496,6 +2322,8 @@
     "answer": "תשובה",
     "hassle": "טרחה",
     "nextAction": "השלב הבא",
+    "note": "הערה",
+    "realizedSavings": "חיסכון בפועל",
     "reviewIntro": "בדקו קודם את הנתונים שזוהו. אשרו, ערכו או סמנו כלא ידוע.",
     "quizIntro": "שאלון קצר לפעם הראשונה. אפשר לדלג או לסמן לא ידוע בכל שאלה.",
     "quizComplete": "כל השאלות החיוניות טופלו.",
@@ -2505,11 +2333,20 @@
     "stale": "התשובות השתנו מאז התוכנית האחרונה. צרו תוכנית חדשה.",
     "privacyNotice": "יצירת התוכנית שולחת ל-OpenAI את פרטי הפרופיל שנבדקו, באמצעות מפתח ה-API שהגדרתם.",
     "activeCount": "{{count}} פעולות פעילות",
+    "estimatedMonthlyImpact": "השפעה חודשית משוערת של הפעולות הפעילות",
+    "progress": {
+      "label": "מוכנות הפרופיל",
+      "value": "{{resolved}} מתוך {{total}} נענו",
+      "remaining": "נותרו {{count}} שאלות ללא מענה",
+      "ready": "הפרופיל מוכן ליצירת תוכנית מותאמת",
+      "planWarning": "נותרו {{count}} שאלות ללא מענה. תשובות נוספות יכולות לשפר את התוכנית."
+    },
     "tabs": {
       "ariaLabel": "תצוגות Optimizator",
       "review": "בדיקה",
       "quiz": "שאלות",
-      "plan": "תוכנית"
+      "plan": "תוכנית",
+      "history": "היסטוריה"
     },
     "actions": {
       "close": "סגירה",
@@ -2518,6 +2355,13 @@
       "save": "שמירה",
       "unknown": "לא ידוע",
       "skip": "דילוג",
+      "answerQuestions": "מענה",
+      "openArea": "פתיחת האזור",
+      "snooze": "דחייה לשבוע",
+      "reactivate": "הפעלה מחדש",
+      "cancel": "ביטול",
+      "saveOutcome": "שמירת התוצאה",
+      "refreshHistory": "רענון ההיסטוריה",
       "goToQuestions": "מענה לשאלות חסרות",
       "goToPlan": "מעבר לתוכנית פעולה",
       "generate": "יצירת תוכנית פעולה",
@@ -2525,6 +2369,27 @@
       "done": "בוצע",
       "dismiss": "דחייה",
       "refresh": "רענון"
+    },
+    "followThrough": {
+      "completeTitle": "השלמת פעולה",
+      "snoozeTitle": "דחייה ל-7 ימים",
+      "realizedSavings": "חיסכון חודשי בפועל",
+      "realizedSavingsHelp": "אופציונלי. הזינו את הסכום שנחסך בפועל בכל חודש.",
+      "note": "הערה"
+    },
+    "history": {
+      "title": "היסטוריית תוכניות",
+      "subtitle": "השוואת ההשפעה המשוערת וההשפעה בפועל בין התוכניות שנוצרו.",
+      "empty": "עדיין לא נוצרו תוכניות.",
+      "unknownModel": "מודל לא ידוע",
+      "complete": "הושלמה",
+      "failed": "נכשלה",
+      "failedMessage": "יצירת התוכנית נכשלה.",
+      "actionsCount": "{{count}} פעולות",
+      "doneCount": "{{count}} הושלמו",
+      "estimated": "משוער לחודש",
+      "realized": "בפועל לחודש",
+      "changeFromPrevious": "שינוי משוער מהתוכנית הקודמת"
     },
     "errors": {
       "status": "טעינת Optimizator נכשלה",
@@ -2534,6 +2399,8 @@
       "missingApiKey": "הוסיפו מפתח API של OpenAI בהגדרות לפני יצירת תוכנית.",
       "emptyAnswer": "הזינו תשובה, דלגו או סמנו כלא ידוע.",
       "invalidNumber": "הזינו מספר תקין.",
+      "invalidSavings": "הזינו סכום חיסכון בין 0 ל-1,000,000.",
+      "history": "טעינת היסטוריית התוכניות נכשלה",
       "generic": "משהו השתבש"
     },
     "sections": {
@@ -2557,7 +2424,8 @@
       "skipped": "דולג",
       "active": "פעיל",
       "done": "בוצע",
-      "dismissed": "נדחה"
+      "dismissed": "נדחה",
+      "snoozed": "נדחה לשבוע"
     },
     "hassleLevels": {
       "low": "נמוכה",
@@ -3395,29 +3263,6 @@
       "warning": "לא ניתן לבטל פעולה זו. כל הנתונים המשויכים יימחקו לצמיתות.",
       "cta": "מחק חשבון"
     }
-  },
-  "discrepancy": {
-    "title": "זוהה פער בסכומים",
-    "overpaidMessage": "תשלומי הבנק עולים על הוצאות הכרטיס ב-{{amount}}. ייתכן שמדובר בעמלות, ריבית או הוצאות שלא נרשמו.",
-    "underpaidMessage": "הוצאות הכרטיס עולות על תשלומי הבנק ב-{{amount}}. ייתכן שחסרות עסקאות או תשלומים ממתינים.",
-    "noDiscrepancyCycles": "לא זוהה פער לאורך {{cycles}} מחזור(ים) תואם(ים).",
-    "missingCyclesNote": "בחלק מתאריכי הפרעון אין מחזור חיוב תואם בכרטיס (חסר processed_date).",
-    "cycleMatched": "מחזור תואם",
-    "cycleMissing": "חסר מחזור כרטיס",
-    "repaymentsInCycle": "פרעונות במחזור",
-    "moreRepayments": "+עוד {{count}}",
-    "createPairingFirst": "יש ליצור צימוד לפני פתרון.",
-    "feeNameHint": "בשימוש בעת הוספת עמלה",
-    "bankRepayments": "תשלומי בנק",
-    "ccExpenses": "הוצאות כרטיס",
-    "difference": "פער",
-    "period": "תקופת ניתוח: {{months}} חודשים",
-    "howToResolve": "איך לטפל בפער?",
-    "ignore": "התעלם",
-    "addAsFee": "הוסף כעמלה",
-    "feeNamePlaceholder": "תיאור העמלה",
-    "defaultFeeName": "{{vendor}} - עמלות כרטיס",
-    "genericFeeName": "עמלות כרטיס אשראי"
   },
   "autoPairing": {
     "title": "צימוד אוטומטי של כרטיס אשראי",

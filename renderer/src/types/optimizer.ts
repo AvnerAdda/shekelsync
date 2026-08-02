@@ -54,8 +54,25 @@ export interface OptimizerRecommendation {
   nextAction: string | null;
   caveat: string | null;
   status: OptimizerRecommendationStatus;
+  userNote: string | null;
+  realizedMonthlySavings: number | null;
+  snoozedUntil: string | null;
+  completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface OptimizerHistoryRun extends OptimizerRun {
+  recommendationCount: number;
+  activeCount: number;
+  doneCount: number;
+  dismissedCount: number;
+  estimatedMonthlyImpact: number;
+  realizedMonthlySavings: number;
+}
+
+export interface OptimizerHistoryResponse {
+  runs: OptimizerHistoryRun[];
 }
 
 export interface OptimizerStatusResponse {

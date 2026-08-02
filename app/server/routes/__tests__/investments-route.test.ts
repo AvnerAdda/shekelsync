@@ -3,7 +3,6 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const esModuleMocks = vi.hoisted(() => ({
-  analyzeInvestmentTransactions: vi.fn(),
   linkMultipleTransactions: vi.fn(),
 }));
 
@@ -155,9 +154,6 @@ describe('Shared /api/investments routes', () => {
     });
 
     __setESModulesForTests({
-      suggestionAnalyzer: {
-        analyzeInvestmentTransactions: esModuleMocks.analyzeInvestmentTransactions,
-      },
       autoLinker: {
         linkMultipleTransactions: esModuleMocks.linkMultipleTransactions,
       },
@@ -174,7 +170,6 @@ describe('Shared /api/investments routes', () => {
   afterEach(() => {
     __resetESModulesForTests();
     vi.restoreAllMocks();
-    esModuleMocks.analyzeInvestmentTransactions.mockReset();
     esModuleMocks.linkMultipleTransactions.mockReset();
   });
 
@@ -482,28 +477,9 @@ describe('Shared /api/investments routes', () => {
     expect(spy).toHaveBeenCalledWith(120);
   });
 
-  it('loads ES-module analyzers for analyze-transactions and suggestions/pending routes', async () => {
-    esModuleMocks.analyzeInvestmentTransactions
-      .mockResolvedValueOnce([{ id: 'es-1' }])
-      .mockResolvedValueOnce([{ id: 'es-2' }, { id: 'es-3' }]);
-
-    const analyzed = await request(app)
-      .post('/api/investments/analyze-transactions')
-      .send({ thresholdDays: 45 })
-      .expect(200);
-
-    expect(analyzed.body.success).toBe(true);
-    expect(analyzed.body.count).toBe(1);
-
-    const pending = await request(app)
-      .get('/api/investments/suggestions/pending?thresholdDays=60&dismissalThreshold=4')
-      .expect(200);
-
-    expect(pending.body.success).toBe(true);
-    expect(pending.body.count).toBe(2);
-    expect(pending.body.threshold).toBe(4);
-    expect(esModuleMocks.analyzeInvestmentTransactions).toHaveBeenNthCalledWith(1, 45);
-    expect(esModuleMocks.analyzeInvestmentTransactions).toHaveBeenNthCalledWith(2, 60);
+  it('does not expose retired investment analyzer endpoints', async () => {
+    await request(app).post('/api/investments/analyze-transactions').send({}).expect(404);
+    await request(app).get('/api/investments/suggestions/pending').expect(404);
   });
 
   it('dismisses suggestions and writes one row per transaction identifier', async () => {

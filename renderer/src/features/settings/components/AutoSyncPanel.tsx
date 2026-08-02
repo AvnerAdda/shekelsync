@@ -23,7 +23,6 @@ import { addHours, formatDistanceToNow } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import { apiClient } from '@/lib/api-client';
-import { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 
 type IntervalHours = 48 | 168 | 720;
 
@@ -158,12 +157,6 @@ const AutoSyncPanel: React.FC = () => {
         showBrowser: Boolean(backgroundSync.showBrowserOnSync),
       });
       if (!response.ok) {
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          showNotification(licenseCheck.reason || t('errors.readOnly'), 'warning');
-          setSyncing(false);
-          return;
-        }
         throw new Error(response.statusText || t('errors.syncFailed'));
       }
       const result = response.data as any;

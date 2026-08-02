@@ -601,98 +601,7 @@ const sessionStore = require('./session-store');
 const chatbotSecretStore = require('./chatbot-secret-store');
 const { createScrapeAnchorRepairStateProvider } = require('./scrape-anchor-repair-state');
 const secureKeyManager = require('./secure-key-manager');
-const licenseService = require('./license-service');
-const { clearCache: clearLicenseGuardCache } = require(resolveAppPath('server', 'middleware', 'license-guard.js'));
 const { createSyncScheduler, normalizeBackgroundSettings } = require('./sync-scheduler');
-
-async function runLicenseSmokeTest(email) {
-  if (!email) return;
-
-  try {
-    const validation = licenseService.validateEmail(email);
-    logger.info('[LicenseSmokeTest] Validation result', {
-      email,
-      valid: validation.valid,
-      error: validation.error,
-    });
-
-    if (!validation.valid) {
-      return;
-    }
-
-    const status = await licenseService.checkLicenseStatus();
-    if (status.registered) {
-      logger.info('[LicenseSmokeTest] Skipping registration, already registered', {
-        licenseType: status.licenseType,
-      });
-      return;
-    }
-
-    const result = await licenseService.registerLicense(email);
-    clearLicenseGuardCache();
-    logger.info('[LicenseSmokeTest] Registration result', {
-      success: result.success,
-      error: result.error,
-    });
-  } catch (error) {
-    logger.error('[LicenseSmokeTest] Failed', { error: error.message });
-  }
-}
-
-async function runLicenseIpcSmokeTest(email) {
-  if (!email) return;
-
-  const testWindow = new BrowserWindow({
-    width: 400,
-    height: 300,
-    show: false,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      enableRemoteModule: false,
-      sandbox: true,
-      preload: path.join(__dirname, 'preload.js'),
-      webSecurity: true,
-    },
-  });
-
-  try {
-    await testWindow.loadURL('about:blank');
-    const emailLiteral = JSON.stringify(email);
-    const validation = await testWindow.webContents.executeJavaScript(
-      `window.electronAPI.license.validateEmail(${emailLiteral})`,
-    );
-    logger.info('[LicenseIpcSmokeTest] Validation result', {
-      email,
-      valid: validation?.data?.valid ?? validation?.valid,
-      error: validation?.data?.error ?? validation?.error,
-    });
-
-    const registration = await testWindow.webContents.executeJavaScript(
-      `window.electronAPI.license.register(${emailLiteral})`,
-    );
-    logger.info('[LicenseIpcSmokeTest] Registration result', {
-      success: registration?.success,
-      error: registration?.error,
-    });
-
-    const status = await testWindow.webContents.executeJavaScript(
-      'window.electronAPI.license.getStatus()',
-    );
-    logger.info('[LicenseIpcSmokeTest] Status result', {
-      registered: status?.data?.registered,
-      licenseType: status?.data?.licenseType,
-      error: status?.error,
-    });
-  } catch (error) {
-    logger.error('[LicenseIpcSmokeTest] Failed', { error: error.message });
-  } finally {
-    if (!testWindow.isDestroyed()) {
-      testWindow.destroy();
-    }
-  }
-}
-
 
 function getEnvKeyRemovalInstructions() {
   if (process.platform === 'win32') {
@@ -853,10 +762,6 @@ async function updateAppSettings(patch = {}) {
   const merged = {
     ...current,
     ...patch,
-    telemetry: {
-      ...(current?.telemetry || {}),
-      ...(patch?.telemetry || {}),
-    },
     backgroundSync: {
       ...(current?.backgroundSync || {}),
       ...(patch?.backgroundSync || {}),
@@ -889,13 +794,7 @@ function shouldKeepRunningInTray() {
   return keepRunning !== false;
 }
 
-function getTelemetryDiagnostics() {
-  return { enabled: false, initialized: false };
-}
-
 // Lazy-loaded services (to avoid loading better-sqlite3 in dev mode)
-let healthService = null;
-let scrapingService = null;
 let setupAPIServer = null;
 let backendInitializationPromise = null;
 let backendPrerequisitesReady = false;
@@ -1106,21 +1005,6 @@ async function waitForBackendInitialization() {
   ) {
     await ensureEmbeddedApiServerStarted();
   }
-}
-
-// Helper to lazy-load services only when needed (and not in SQLite dev mode)
-function getHealthService() {
-  if (!healthService) {
-    healthService = require(resolveAppPath('server', 'services', 'health.js'));
-  }
-  return healthService;
-}
-
-function getScrapingService() {
-  if (!scrapingService) {
-    scrapingService = require(resolveAppPath('server', 'services', 'scraping', 'run.js'));
-  }
-  return scrapingService;
 }
 
 // Keep a global reference of the window object
@@ -1495,16 +1379,6 @@ function emitSessionChanged(session) {
   }
 }
 
-function createScrapeLogger(vendor) {
-  const prefix = vendor ? `[Scrape:${vendor}]` : '[Scrape]';
-  return {
-    log: (...args) => console.log(prefix, ...args),
-    info: (...args) => console.info(prefix, ...args),
-    warn: (...args) => console.warn(prefix, ...args),
-    error: (...args) => console.error(prefix, ...args),
-  };
-}
-
 function formatDiagnosticsFilename() {
   return `shekelsync-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
 }
@@ -1807,29 +1681,12 @@ const primaryInstanceReady = hasSingleInstanceLock ? app.whenReady() : null;
 primaryInstanceReady?.then(async () => {
   await loadInitialSettings();
 
-  const isIpcSmokeTest = process.env.LICENSE_IPC_SMOKE_TEST === 'true';
-  if (isIpcSmokeTest) {
-    try {
-      await initializeBackendServices({ skipEmbeddedApi: true, skipDbInit: false });
-      await runLicenseIpcSmokeTest(process.env.LICENSE_SMOKE_TEST_EMAIL);
-    } finally {
-      app.quit();
-    }
-    return;
-  }
-
   await createWindow();
   setupTray();
   if (isMac) {
     setTimeout(() => {
       void authenticateMacBiometricsIfAvailable();
     }, 250);
-  }
-
-  if (process.env.LICENSE_SMOKE_TEST_EMAIL) {
-    setTimeout(() => {
-      runLicenseSmokeTest(process.env.LICENSE_SMOKE_TEST_EMAIL);
-    }, 2000);
   }
 
   const updateAvailability = getAutoUpdateAvailability();
@@ -1990,7 +1847,6 @@ ipcMain.on('log:report', (event, payload) => {
 ipcMain.handle('diagnostics:getInfo', async () => {
   return getDiagnosticsInfo({
     appVersion: app.getVersion(),
-    telemetry: getTelemetryDiagnostics(),
     telegram: await getTelegramBotService().getDiagnostics(),
   });
 });
@@ -2011,7 +1867,6 @@ ipcMain.handle('diagnostics:export', async (event, outputPath) => {
   }
   return exportDiagnosticsToFile(outputPath, {
     appVersion: app.getVersion(),
-    telemetry: getTelemetryDiagnostics(),
     telegram: await getTelegramBotService().getDiagnostics(),
   });
 });
@@ -2023,7 +1878,6 @@ ipcMain.handle('diagnostics:copy', async (event) => {
   try {
     const payload = await buildDiagnosticsPayload({
       appVersion: app.getVersion(),
-      telemetry: getTelemetryDiagnostics(),
       telegram: await getTelegramBotService().getDiagnostics(),
     });
     clipboard.writeText(JSON.stringify(payload, null, 2));
@@ -2148,220 +2002,6 @@ ipcMain.handle('db:stats', async (event) => {
   }
 });
 
-// Core API operations
-ipcMain.handle('api:ping', async () => {
-  try {
-    const startTime = Date.now();
-    const health = await getHealthService().ping();
-    const dbTest = await dbManager.testConnection();
-    const responseTime = Date.now() - startTime;
-
-    if (!health.ok) {
-      return {
-        success: false,
-        error: health.error,
-        data: {
-          status: health.status,
-          database: 'disconnected',
-          environment: process.env.NODE_ENV || 'development',
-          version: '0.1.0'
-        }
-      };
-    }
-
-    return {
-      success: true,
-      data: {
-        status: 'ok',
-        message: 'ShekelSync Electron API is running',
-        timestamp: new Date().toISOString(),
-        responseTime: `${responseTime}ms`,
-        database: dbTest.success ? 'connected' : 'disconnected',
-        environment: process.env.NODE_ENV || 'development',
-        version: '0.1.0'
-      }
-    };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('api:credentials', async () => {
-  try {
-    const query = `
-      SELECT
-        id,
-        vendor,
-        nickname,
-        credential_type,
-        created_at,
-        updated_at,
-        is_active
-      FROM vendor_credentials
-      WHERE is_active = true
-      ORDER BY created_at DESC
-    `;
-
-    const result = await dbManager.query(query);
-    return {
-      success: true,
-      data: {
-        credentials: result.rows,
-        count: result.rows.length
-      }
-    };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('api:categories', async () => {
-  try {
-    const query = `
-      SELECT
-        COALESCE(parent.id, cd.id) AS category_definition_id,
-        COALESCE(parent.name, cd.name) AS category,
-        parent.name AS parent_category,
-        COUNT(*) as transaction_count,
-        SUM(CASE WHEN t.price < 0 THEN ABS(t.price) ELSE 0 END) as total_spent
-      FROM transactions t
-      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN category_definitions parent ON parent.id = cd.parent_id
-      WHERE t.category_definition_id IS NOT NULL
-      GROUP BY
-        COALESCE(parent.id, cd.id),
-        COALESCE(parent.name, cd.name),
-        parent.name
-      ORDER BY total_spent DESC
-    `;
-
-    const result = await dbManager.query(query);
-    const categories = result.rows.map(row => ({
-      ...row,
-      total_spent: parseFloat(row.total_spent) || 0,
-      transaction_count: parseInt(row.transaction_count) || 0
-    }));
-
-    return {
-      success: true,
-      data: {
-        categories: categories,
-        count: categories.length
-      }
-    };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-});
-
-// Scraping handlers
-ipcMain.handle('scrape:start', async (event, options, credentials) => {
-  const vendor = options?.companyId;
-
-  try {
-    if (isQuitting) {
-      throw new Error('Application is shutting down');
-    }
-    if (!vendor || !options?.startDate || !credentials) {
-      throw new Error('Missing required fields: companyId, startDate, or credentials');
-    }
-
-    sendScrapeProgress({
-      vendor,
-      status: 'starting',
-      progress: 5,
-      message: 'Preparing scraper...',
-    });
-
-    const logger = createScrapeLogger(vendor);
-    const result = await runTrackedBackendOperation(() => getScrapingService().runScrape({
-      options,
-      credentials,
-      logger,
-      repairStateProvider: scrapeAnchorRepairStateProvider,
-    }));
-
-    const transactionCount = Array.isArray(result.accounts)
-      ? result.accounts.reduce(
-          (sum, account) => sum + (Array.isArray(account.txns) ? account.txns.length : 0),
-          0,
-        )
-      : 0;
-
-    sendScrapeProgress({
-      vendor,
-      status: 'completed',
-      progress: 100,
-      message: `Scraping completed (${transactionCount} transactions)`,
-      transactions: transactionCount,
-      scrapeAnchor: result.scrapeAnchor || null,
-    });
-
-    return { success: true, data: { ...result, transactionCount } };
-  } catch (error) {
-    console.error('Scrape operation failed:', error);
-
-    if (vendor) {
-      sendScrapeProgress({
-        vendor,
-        status: 'failed',
-        progress: 100,
-        message: error?.message || 'Scraping failed',
-        error: error?.message,
-      });
-    }
-
-    return { success: false, error: error?.message || 'Scraping failed' };
-  }
-});
-
-ipcMain.handle('scrape:events', async (event, limit = 100) => {
-  try {
-    const result = await dbManager.query(
-      `SELECT id, triggered_by, vendor, start_date, status, message, created_at
-       FROM scrape_events
-       ORDER BY created_at DESC
-       LIMIT $1`,
-      [Math.min(parseInt(limit), 500)]
-    );
-
-    return { success: true, data: result.rows };
-  } catch (error) {
-    console.error('Failed to fetch scrape events:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('scrape:test', async (event, companyId) => {
-  try {
-    const path = require('path');
-    let CompanyTypes;
-    try {
-      const scraperModule = requireFromApp('israeli-bank-scrapers-core');
-      CompanyTypes = scraperModule.CompanyTypes;
-    } catch (error) {
-      const scraperModule = require('israeli-bank-scrapers-core');
-      CompanyTypes = scraperModule.CompanyTypes;
-    }
-    const companyType = CompanyTypes[companyId];
-
-    if (!companyType) {
-      return { success: false, error: `Invalid company ID: ${companyId}` };
-    }
-
-    return {
-      success: true,
-      data: {
-        companyId,
-        companyType,
-        isSupported: true
-      }
-    };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-});
-
 // Window controls
 ipcMain.handle('window:minimize', () => {
   if (mainWindow) {
@@ -2410,10 +2050,6 @@ ipcMain.handle('window:zoomReset', () => {
   if (!mainWindow) return;
   mainWindow.webContents.setZoomLevel(0);
   return 0;
-});
-
-ipcMain.handle('window:getZoomLevel', () => {
-  return mainWindow ? mainWindow.webContents.getZoomLevel() : 0;
 });
 
 // API proxy handler
@@ -2518,18 +2154,6 @@ ipcMain.handle('telegram:sendTestMessage', async (event) => {
   }
 });
 
-ipcMain.handle('telemetry:getConfig', () => ({
-  dsn: null,
-  environment: process.env.NODE_ENV || 'production',
-  release: app.getVersion(),
-  debug: false,
-  enabled: false,
-}));
-
-ipcMain.handle('telemetry:triggerMainSmoke', async () => {
-  return { success: false, error: 'Crash reporting has been removed.' };
-});
-
 ipcMain.handle('auth:getSession', async (event) => {
   if (!requireTrustedIpcSender(event, 'auth:getSession')) {
     return { success: false, error: 'Untrusted IPC sender' };
@@ -2623,80 +2247,6 @@ ipcMain.handle('chatbot:clearOpenAiApiKey', async (event) => {
   }
 });
 
-// License operations
-ipcMain.handle('license:getStatus', async () => {
-  try {
-    const status = await licenseService.checkLicenseStatus();
-    return { success: true, data: status };
-  } catch (error) {
-    console.error('Failed to get license status:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('license:register', async (event, email) => {
-  try {
-    const result = await licenseService.registerLicense(email);
-    clearLicenseGuardCache();
-    return result;
-  } catch (error) {
-    console.error('Failed to register license:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('license:validateEmail', async (event, email) => {
-  try {
-    const result = licenseService.validateEmail(email);
-    return { success: true, data: result };
-  } catch (error) {
-    console.error('Failed to validate email:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('license:activatePro', async (event, paymentRef) => {
-  try {
-    const result = await licenseService.activateProLicense(paymentRef);
-    clearLicenseGuardCache();
-    return result;
-  } catch (error) {
-    console.error('Failed to activate Pro license:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('license:canWrite', async () => {
-  try {
-    const canWrite = await licenseService.isWriteOperationAllowed();
-    return { success: true, canWrite };
-  } catch (error) {
-    console.error('Failed to check write permission:', error);
-    return { success: true, canWrite: true }; // Fail-open to not block users
-  }
-});
-
-ipcMain.handle('license:validateOnline', async () => {
-  try {
-    const result = await licenseService.validateOnline();
-    clearLicenseGuardCache();
-    return result;
-  } catch (error) {
-    console.error('Failed to validate license online:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('license:getInfo', async () => {
-  try {
-    const info = await licenseService.getLicenseInfo();
-    return { success: true, data: info };
-  } catch (error) {
-    console.error('Failed to get license info:', error);
-    return { success: false, error: error.message };
-  }
-});
-
 // File system operations
 ipcMain.handle('file:showSaveDialog', async (event, options) => {
   try {
@@ -2753,14 +2303,6 @@ ipcMain.handle('file:write', async (event, filePath, data, options = {}) => {
 // App info
 ipcMain.handle('app:getVersion', () => {
   return app.getVersion();
-});
-
-ipcMain.handle('app:getName', () => {
-  return app.getName();
-});
-
-ipcMain.handle('app:isPackaged', () => {
-  return app.isPackaged;
 });
 
 ipcMain.handle('app:relaunch', (event) => {

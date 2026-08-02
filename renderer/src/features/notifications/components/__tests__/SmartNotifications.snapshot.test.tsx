@@ -135,12 +135,6 @@ vi.mock('../SnapshotProgressModal', () => ({
   },
 }));
 
-vi.mock('@renderer/shared/components/LicenseReadOnlyAlert', () => ({
-  __esModule: true,
-  default: () => null,
-  isLicenseReadOnlyError: () => ({ isReadOnly: false }),
-}));
-
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) => {

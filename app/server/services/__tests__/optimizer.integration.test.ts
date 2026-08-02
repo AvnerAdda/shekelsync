@@ -50,4 +50,10 @@ describe('optimizer SQLite lifecycle integration', () => {
     expect(result.status, result.stderr || result.stdout).toBe(0);
     expect(result.stdout).toContain('optimizer-integration:near-current-smart-action-upgrade:ok');
   });
+
+  it('adds follow-through columns to legacy optimizer schemas at startup', () => {
+    const result = runScenario('legacy-optimizer-follow-through-upgrade');
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('optimizer-integration:legacy-optimizer-follow-through-upgrade:ok');
+  });
 });
