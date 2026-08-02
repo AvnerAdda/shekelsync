@@ -40,7 +40,6 @@ import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
 import { useNotification } from '../NotificationContext';
 import { apiClient } from '@/lib/api-client';
 import InsightsPanel from './InsightsPanel';
-import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 import SnapshotProgressModal, { SnapshotProgressData } from './SnapshotProgressModal';
 import { useTranslation } from 'react-i18next';
 
@@ -169,8 +168,6 @@ const SmartNotifications: React.FC = () => {
   const [insights, setInsights] = useState<any>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsCacheTime, setInsightsCacheTime] = useState<Date | null>(null);
-  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
-  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
   const [snapshotModalOpen, setSnapshotModalOpen] = useState(false);
   const [snapshotData, setSnapshotData] = useState<SnapshotProgressData | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
@@ -384,17 +381,6 @@ const SmartNotifications: React.FC = () => {
         try {
           const response = await apiClient.post('/api/scrape/bulk', { payload: {} });
           const result = response.data as any;
-
-          if (!response.ok) {
-            // Check for license read-only error
-            const licenseCheck = isLicenseReadOnlyError(response.data);
-            if (licenseCheck.isReadOnly) {
-              setLicenseAlertReason(licenseCheck.reason);
-              setLicenseAlertOpen(true);
-              setIsBulkSyncing(false);
-              return;
-            }
-          }
 
           if (response.ok && result.success) {
             const message = result.totalProcessed === 0
@@ -789,11 +775,6 @@ const SmartNotifications: React.FC = () => {
         data={snapshotData}
         loading={snapshotLoading}
         error={snapshotError}
-      />
-      <LicenseReadOnlyAlert
-        open={licenseAlertOpen}
-        onClose={() => setLicenseAlertOpen(false)}
-        reason={licenseAlertReason}
       />
     </>
   );

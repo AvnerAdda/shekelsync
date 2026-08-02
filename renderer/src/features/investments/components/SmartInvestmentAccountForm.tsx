@@ -25,7 +25,6 @@ import {
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from '@renderer/shared/components/InstitutionBadge';
 import { apiClient } from '@/lib/api-client';
-import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 import type {
   PendingPikadonSetup,
   PikadonDetailsInput,
@@ -101,8 +100,6 @@ export default function SmartInvestmentAccountForm({
   const [institutions, setInstitutions] = useState<InstitutionMetadata[]>([]);
   const [institutionId, setInstitutionId] = useState<number | null>(null);
   const [institutionsLoading, setInstitutionsLoading] = useState(false);
-  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
-  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
   const [pendingPikadonItems, setPendingPikadonItems] = useState<PendingPikadonSetup[]>([]);
 
   // Step 1: Account Details
@@ -257,13 +254,6 @@ useEffect(() => {
       const response = await apiClient.post('/api/investments/accounts', accountDetails);
 
       if (!response.ok) {
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          setLoading(false);
-          return;
-        }
         throw new Error(`HTTP ${response.status}: ${response.statusText || 'Failed to create account'}`);
       }
 
@@ -310,12 +300,6 @@ useEffect(() => {
           pikadon_details: detailsByKey[key],
         });
         if (!linkResponse.ok) {
-          const licenseCheck = isLicenseReadOnlyError(linkResponse.data);
-          if (licenseCheck.isReadOnly) {
-            setLicenseAlertReason(licenseCheck.reason);
-            setLicenseAlertOpen(true);
-            return;
-          }
           throw new Error(linkResponse.statusText || 'Failed to link suggested transactions');
         }
         successCount += 1;
@@ -703,11 +687,6 @@ useEffect(() => {
         onSubmit={async (detailsByKey) => {
           await submitAccountAndLinks(detailsByKey);
         }}
-      />
-      <LicenseReadOnlyAlert
-        open={licenseAlertOpen}
-        onClose={() => setLicenseAlertOpen(false)}
-        reason={licenseAlertReason}
       />
     </Dialog>
   );

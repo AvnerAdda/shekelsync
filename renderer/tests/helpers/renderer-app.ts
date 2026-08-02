@@ -359,54 +359,6 @@ const budgetOutlook = [
   },
 ];
 
-const smartActionsResponse = {
-  actions: [
-    {
-      id: 1,
-      action_type: 'anomaly',
-      severity: 'high',
-      title: 'Unusual fuel spike',
-      description: 'Fuel spend jumped above the monthly average.',
-      detected_at: '2025-09-18T00:00:00.000Z',
-      user_status: 'active',
-      detection_confidence: 0.84,
-      is_recurring: false,
-      created_at: '2025-09-18T00:00:00.000Z',
-      updated_at: '2025-09-18T00:00:00.000Z',
-      category_name: 'Fuel',
-      category_name_en: 'Fuel',
-      metadata: { amount: 600 },
-    },
-    {
-      id: 2,
-      action_type: 'budget_overrun',
-      severity: 'critical',
-      title: 'Budget overrun risk',
-      description: 'Projected spend exceeds the budget limit.',
-      detected_at: '2025-09-19T00:00:00.000Z',
-      user_status: 'active',
-      detection_confidence: 0.92,
-      is_recurring: false,
-      created_at: '2025-09-19T00:00:00.000Z',
-      updated_at: '2025-09-19T00:00:00.000Z',
-      category_name: 'Groceries',
-      category_name_en: 'Groceries',
-      metadata: { projected_overage: 200 },
-    },
-  ],
-  summary: {
-    total: 2,
-    by_severity: { critical: 1, high: 1, medium: 0, low: 0 },
-    by_type: {
-      anomaly: 1,
-      budget_overrun: 1,
-      fixed_variation: 0,
-      unusual_purchase: 0,
-    },
-    total_potential_impact: -800,
-  },
-};
-
 const waterfallFlow = {
   summary: {
     totalIncome: 2000,
@@ -1375,10 +1327,7 @@ const defaultHandlers: Record<string, Handler> = {
   'GET /api/credentials': respondWith(credentials),
   'POST /api/credentials': respondOK,
   'GET /api/accounts/last-update': respondWith(accountsLastUpdate),
-  'GET /api/accounts/unpaired-transactions-count': respondWith({ count: 0 }),
   'GET /api/accounts/pairing': respondWith({ pairings: [] }),
-  'GET /api/accounts/find-settlement-candidates': respondWith({ candidates: [], stats: {} }),
-  'GET /api/accounts/truly-unpaired-transactions': respondWith({ transactions: [] }),
   'GET /api/scrape_events': respondWith(scrapeEvents),
   'POST /api/scrape': respondOK,
   'POST /api/scrape/bulk': respondOK,
@@ -1406,20 +1355,6 @@ const defaultHandlers: Record<string, Handler> = {
   'GET /api/analytics/waterfall-flow': respondWith(waterfallFlow),
   'GET /api/analytics/unified-category': respondWith({ categories: [] }),
   'GET /api/analytics/investments': respondWith(analyticsInvestments),
-  'GET /api/smart-actions': respondWith(smartActionsResponse),
-  'POST /api/smart-actions/generate': respondWith({
-    success: true,
-    total_detected: smartActionsResponse.actions.length,
-    created: smartActionsResponse.actions.length,
-    skipped: 0,
-    breakdown: {
-      anomalies: 1,
-      fixed_variations: 0,
-      unusual_purchases: 0,
-      budget_overruns: 1,
-      optimization_opportunities: 0,
-    },
-  }),
   'GET /api/analytics/quests/active': respondWith({ quests: [], count: 0 }),
   'GET /api/analytics/quests/stats': respondWith(questStats),
   'POST /api/analytics/quests/generate': respondWith({

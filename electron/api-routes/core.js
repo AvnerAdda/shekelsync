@@ -1,7 +1,6 @@
 const path = require('path');
 const { dbManager } = require('../database');
 const { resolveAppPath } = require('../paths');
-const healthService = require(resolveAppPath('server', 'services', 'health.js'));
 const transactionsMetrics = require(resolveAppPath(
   'server',
   'services',
@@ -21,19 +20,16 @@ class CoreAPIRoutes {
   async ping(req, res) {
     try {
       const startTime = Date.now();
-
-      const health = await healthService.ping();
+      const dbTest = await dbManager.testConnection();
       const responseTime = Date.now() - startTime;
 
-      if (!health.ok) {
+      if (!dbTest?.success) {
         return res.status(500).json({
-          status: health.status,
+          status: 'degraded',
           message: 'Database connectivity check failed',
-          error: health.error,
+          error: dbTest?.error || 'Unknown database error',
         });
       }
-
-      const dbTest = await dbManager.testConnection();
 
       res.json({
         status: 'ok',
@@ -57,16 +53,6 @@ class CoreAPIRoutes {
   async healthz(req, res) {
     const startedAt = Date.now();
     try {
-      const dbHealth = await healthService.ping();
-      if (!dbHealth.ok) {
-        return res.status(500).json({
-          status: dbHealth.status || 'degraded',
-          message: 'Database connectivity check failed',
-          error: dbHealth.error,
-          responseTimeMs: Date.now() - startedAt,
-        });
-      }
-
       let dbTest = { success: false, error: 'Database not initialized' };
       try {
         dbTest = await dbManager.testConnection();
@@ -111,12 +97,8 @@ class CoreAPIRoutes {
         environment: process.env.NODE_ENV || 'development',
         database: {
           mode: dbManager.mode,
-          connected: Boolean(dbTest?.success && dbHealth.ok),
+          connected: Boolean(dbTest?.success),
           sqlitePath: sqlitePath ? path.basename(sqlitePath) : null,
-        },
-        telemetry: {
-          enabled: false,
-          dsnConfigured: false,
         },
         metrics,
       });

@@ -71,6 +71,7 @@ vi.mock('@renderer/lib/api-client', () => ({
   apiClient: {
     get: (...args: unknown[]) => mockGet(...args),
   },
+  invalidateApiCache: vi.fn(),
 }));
 
 vi.mock('@renderer/features/search/components/GlobalTransactionSearch', () => ({
@@ -100,7 +101,7 @@ vi.mock('react-i18next', () => ({
 
 function LocationIndicator() {
   const location = useLocation();
-  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
+  return <div data-testid="location">{`${location.pathname}${location.search}${location.hash}`}</div>;
 }
 
 function renderAppLayout(initialEntries: string[] = ['/']) {
@@ -115,6 +116,10 @@ function renderAppLayout(initialEntries: string[] = ['/']) {
         },
         {
           path: 'analysis',
+          element: <LocationIndicator />,
+        },
+        {
+          path: 'settings',
           element: <LocationIndicator />,
         },
       ],
@@ -145,6 +150,23 @@ describe('AppLayout', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('location')).toHaveTextContent('/analysis?tab=budget');
+    });
+  });
+
+  it('preserves search and hash targets from navigation events', async () => {
+    renderAppLayout();
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('navigateTo', {
+        detail: {
+          path: '/settings',
+          hash: 'sync',
+        },
+      }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent('/settings#sync');
     });
   });
 

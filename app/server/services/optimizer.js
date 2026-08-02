@@ -13,6 +13,7 @@ const ALLOWED_MODELS = new Set(['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.
 const VALID_FACT_STATUSES = new Set(['detected', 'confirmed', 'edited', 'unknown', 'skipped']);
 const RESOLVED_FACT_STATUSES = new Set(['confirmed', 'edited', 'unknown', 'skipped']);
 const VALID_RECOMMENDATION_STATUSES = new Set(['active', 'done', 'dismissed']);
+const VALID_RECOMMENDATION_UPDATE_STATUSES = new Set([...VALID_RECOMMENDATION_STATUSES, 'snoozed']);
 const VALID_HASSLE_LEVELS = new Set(['low', 'medium', 'high']);
 const VALID_RECOMMENDATION_SECTIONS = new Set([
   'subscriptions',
@@ -335,66 +336,6 @@ function normalizeEvidence(value) {
   return value;
 }
 
-async function ensureOptimizerSchema(client) {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS optimizer_facts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      fact_key TEXT NOT NULL UNIQUE,
-      section TEXT NOT NULL,
-      label TEXT NOT NULL,
-      value_json TEXT,
-      value_text TEXT,
-      status TEXT NOT NULL DEFAULT 'detected' CHECK(status IN ('detected', 'confirmed', 'edited', 'unknown', 'skipped')),
-      source TEXT NOT NULL DEFAULT 'detected',
-      confidence REAL DEFAULT 0.5 CHECK(confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
-      evidence_json TEXT,
-      confirmed_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS optimizer_runs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      run_uuid TEXT NOT NULL UNIQUE,
-      status TEXT NOT NULL DEFAULT 'complete' CHECK(status IN ('complete', 'failed')),
-      prompt_version TEXT NOT NULL,
-      openai_model TEXT,
-      input_snapshot_json TEXT,
-      result_json TEXT,
-      error_message TEXT,
-      generated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS optimizer_recommendations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      run_id INTEGER NOT NULL,
-      smart_action_item_id INTEGER,
-      title TEXT NOT NULL,
-      section TEXT NOT NULL,
-      rationale TEXT,
-      evidence_json TEXT,
-      estimated_monthly_impact REAL DEFAULT 0,
-      hassle_level TEXT NOT NULL DEFAULT 'medium' CHECK(hassle_level IN ('low', 'medium', 'high')),
-      confidence REAL DEFAULT 0.5 CHECK(confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
-      next_action TEXT,
-      caveat TEXT,
-      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'done', 'dismissed')),
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (run_id) REFERENCES optimizer_runs(id) ON DELETE CASCADE
-    )
-  `);
-  await client.query('CREATE INDEX IF NOT EXISTS idx_optimizer_facts_status ON optimizer_facts(status)');
-  await client.query('CREATE INDEX IF NOT EXISTS idx_optimizer_facts_section ON optimizer_facts(section)');
-  await client.query('CREATE INDEX IF NOT EXISTS idx_optimizer_runs_generated ON optimizer_runs(generated_at DESC)');
-  await client.query('CREATE INDEX IF NOT EXISTS idx_optimizer_recommendations_status ON optimizer_recommendations(status)');
-  await client.query('CREATE INDEX IF NOT EXISTS idx_optimizer_recommendations_run ON optimizer_recommendations(run_id)');
-}
-
 async function optionalQuery(client, sql, params = [], fallbackRows = []) {
   try {
     const result = await client.query(sql, params);
@@ -695,7 +636,8 @@ async function getLatestRunAndRecommendations(client) {
         WHEN actions.user_status = 'resolved' THEN 'done'
         WHEN actions.user_status = 'dismissed' THEN 'dismissed'
         ELSE recommendations.status
-      END AS status
+      END AS status,
+      COALESCE(actions.snoozed_until, recommendations.snoozed_until) AS snoozed_until
     FROM optimizer_recommendations recommendations
     LEFT JOIN smart_action_items actions ON actions.id = recommendations.smart_action_item_id
     WHERE recommendations.run_id = $1
@@ -739,6 +681,10 @@ function normalizeRecommendationRow(row) {
     nextAction: row.next_action,
     caveat: row.caveat,
     status: row.status,
+    userNote: row.user_note || null,
+    realizedMonthlySavings: normalizeNumber(row.realized_monthly_savings),
+    snoozedUntil: row.snoozed_until || null,
+    completedAt: row.completed_at || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -862,8 +808,6 @@ function mergeOptimizerFacts(detectedFacts = [], storedFacts = []) {
 }
 
 async function buildStatus(client) {
-  await ensureOptimizerSchema(client);
-
   const [detectedFacts, storedFacts] = await Promise.all([
     buildDetectedFacts(client),
     getStoredFacts(client),
@@ -911,6 +855,56 @@ async function getOptimizerStatus() {
   const client = await databaseAdapter.getClient();
   try {
     return await buildStatus(client);
+  } finally {
+    client.release();
+  }
+}
+
+function normalizeOptimizerHistoryRow(row) {
+  return {
+    id: row.id,
+    runUuid: row.run_uuid,
+    status: row.status,
+    promptVersion: row.prompt_version,
+    model: row.openai_model,
+    generatedAt: row.generated_at,
+    errorMessage: row.error_message || null,
+    recommendationCount: normalizeInt(row.recommendation_count) || 0,
+    activeCount: normalizeInt(row.active_count) || 0,
+    doneCount: normalizeInt(row.done_count) || 0,
+    dismissedCount: normalizeInt(row.dismissed_count) || 0,
+    estimatedMonthlyImpact: normalizeNumber(row.estimated_monthly_impact) || 0,
+    realizedMonthlySavings: normalizeNumber(row.realized_monthly_savings) || 0,
+  };
+}
+
+async function getOptimizerHistory(payload = {}) {
+  const requestedLimit = normalizeInt(payload.limit);
+  const limit = Math.max(1, Math.min(50, requestedLimit || 10));
+  const client = await databaseAdapter.getClient();
+  try {
+    const result = await client.query(`
+      SELECT
+        runs.id,
+        runs.run_uuid,
+        runs.status,
+        runs.prompt_version,
+        runs.openai_model,
+        runs.generated_at,
+        runs.error_message,
+        COUNT(recommendations.id) AS recommendation_count,
+        SUM(CASE WHEN recommendations.status = 'active' THEN 1 ELSE 0 END) AS active_count,
+        SUM(CASE WHEN recommendations.status = 'done' THEN 1 ELSE 0 END) AS done_count,
+        SUM(CASE WHEN recommendations.status = 'dismissed' THEN 1 ELSE 0 END) AS dismissed_count,
+        SUM(COALESCE(recommendations.estimated_monthly_impact, 0)) AS estimated_monthly_impact,
+        SUM(COALESCE(recommendations.realized_monthly_savings, 0)) AS realized_monthly_savings
+      FROM optimizer_runs runs
+      LEFT JOIN optimizer_recommendations recommendations ON recommendations.run_id = runs.id
+      GROUP BY runs.id
+      ORDER BY runs.generated_at DESC, runs.id DESC
+      LIMIT $1
+    `, [limit]);
+    return { runs: (result.rows || []).map(normalizeOptimizerHistoryRow) };
   } finally {
     client.release();
   }
@@ -1023,7 +1017,6 @@ async function saveOptimizerFacts(payload = {}) {
 
   const client = await databaseAdapter.getClient();
   try {
-    await ensureOptimizerSchema(client);
     await client.query('BEGIN');
 
     const saved = [];
@@ -1504,21 +1497,56 @@ async function updateRecommendationStatus(id, payload = {}) {
   }
 
   const status = normalizeText(payload.status, 20);
-  if (!VALID_RECOMMENDATION_STATUSES.has(status)) {
+  if (!VALID_RECOMMENDATION_UPDATE_STATUSES.has(status)) {
     throw serviceError(400, 'Invalid recommendation status');
   }
+  const userNote = normalizeText(payload.userNote, 1000);
+  const rawRealizedMonthlySavings = typeof payload.realizedMonthlySavings === 'string'
+    ? payload.realizedMonthlySavings.trim()
+    : payload.realizedMonthlySavings;
+  const hasRealizedMonthlySavings = rawRealizedMonthlySavings !== undefined
+    && rawRealizedMonthlySavings !== null
+    && rawRealizedMonthlySavings !== '';
+  const realizedMonthlySavings = !hasRealizedMonthlySavings
+    ? null
+    : normalizeStrictNumber(rawRealizedMonthlySavings);
+  if (
+    hasRealizedMonthlySavings
+    && (
+      realizedMonthlySavings === null
+      || realizedMonthlySavings < 0
+      || realizedMonthlySavings > MAX_RECOMMENDATION_IMPACT
+    )
+  ) {
+    throw serviceError(400, 'realizedMonthlySavings must be between 0 and 1000000');
+  }
+  const persistedStatus = status === 'snoozed' ? 'active' : status;
 
   const client = await databaseAdapter.getClient();
   try {
-    await ensureOptimizerSchema(client);
     await client.query('BEGIN');
     const result = await client.query(`
       UPDATE optimizer_recommendations
       SET status = $2,
+          user_note = CASE WHEN $3 IS NULL THEN user_note ELSE $3 END,
+          realized_monthly_savings = CASE
+            WHEN $2 = 'done' AND $4 IS NOT NULL THEN $4
+            ELSE realized_monthly_savings
+          END,
+          snoozed_until = CASE
+            WHEN $5 = 'snoozed' THEN datetime('now', '+7 days')
+            WHEN $5 = 'active' OR $5 = 'done' OR $5 = 'dismissed' THEN NULL
+            ELSE snoozed_until
+          END,
+          completed_at = CASE
+            WHEN $2 = 'done' THEN COALESCE(completed_at, datetime('now'))
+            WHEN $2 = 'active' THEN NULL
+            ELSE completed_at
+          END,
           updated_at = datetime('now')
       WHERE id = $1
       RETURNING *
-    `, [recommendationId, status]);
+    `, [recommendationId, persistedStatus, userNote, realizedMonthlySavings, status]);
 
     if (result.rows.length === 0) {
       throw serviceError(404, 'Optimizer recommendation not found');
@@ -1526,16 +1554,35 @@ async function updateRecommendationStatus(id, payload = {}) {
 
     const row = result.rows[0];
     if (row.smart_action_item_id) {
-      const smartActionStatus = status === 'done' ? 'resolved' : status === 'dismissed' ? 'dismissed' : 'active';
+      const smartActionStatus = status === 'done'
+        ? 'resolved'
+        : status === 'dismissed'
+          ? 'dismissed'
+          : status === 'snoozed'
+            ? 'snoozed'
+            : 'active';
       await client.query(`
         UPDATE smart_action_items
         SET user_status = $2,
             resolved_at = CASE WHEN $2 = 'resolved' THEN datetime('now') ELSE NULL END,
             dismissed_at = CASE WHEN $2 = 'dismissed' THEN datetime('now') ELSE NULL END,
-            snoozed_until = NULL,
+            snoozed_until = CASE WHEN $2 = 'snoozed' THEN datetime('now', '+7 days') ELSE NULL END,
             updated_at = datetime('now')
         WHERE id = $1
       `, [row.smart_action_item_id, smartActionStatus]);
+      await client.query(`
+        INSERT INTO action_item_history (
+          smart_action_item_id,
+          action,
+          new_status,
+          user_note
+        ) VALUES ($1, $2, $3, $4)
+      `, [
+        row.smart_action_item_id,
+        status === 'done' ? 'resolved' : status === 'active' ? 'reactivated' : status,
+        smartActionStatus,
+        userNote,
+      ]);
     }
     await client.query('COMMIT');
 
@@ -1591,6 +1638,7 @@ async function getOptimizerContextForChat(client) {
 
 module.exports = {
   getOptimizerStatus,
+  getOptimizerHistory,
   saveOptimizerFacts,
   generateOptimizerPlan,
   updateRecommendationStatus,

@@ -26,12 +26,6 @@ vi.mock('../PairingMatchDetailsModal', () => ({
   }) => (isOpen ? <div>{`pairing-details-open:${pairing?.id ?? ''}`}</div> : null),
 }));
 
-vi.mock('@renderer/shared/components/LicenseReadOnlyAlert', () => ({
-  __esModule: true,
-  default: () => null,
-  isLicenseReadOnlyError: () => ({ isReadOnly: false }),
-}));
-
 const detailsPayload = {
   pairing: {
     id: 11,

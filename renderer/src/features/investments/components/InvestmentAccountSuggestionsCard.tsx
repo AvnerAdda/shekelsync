@@ -26,7 +26,6 @@ import LinkIcon from '@mui/icons-material/Link';
 import AddIcon from '@mui/icons-material/Add';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import { apiClient } from '@/lib/api-client';
-import LicenseReadOnlyAlert, { isLicenseReadOnlyError } from '@renderer/shared/components/LicenseReadOnlyAlert';
 import type {
   PendingPikadonSetup,
   PikadonDetailsInput,
@@ -132,8 +131,6 @@ export default function InvestmentAccountSuggestionsCard({
   const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([]);
   const [linkMenuAnchor, setLinkMenuAnchor] = useState<{ element: HTMLElement; suggestionKey: string } | null>(null);
   const [linkingInProgress, setLinkingInProgress] = useState(false);
-  const [licenseAlertOpen, setLicenseAlertOpen] = useState(false);
-  const [licenseAlertReason, setLicenseAlertReason] = useState<string | undefined>();
   const [pendingLinkBatch, setPendingLinkBatch] = useState<PendingLinkBatch | null>(null);
 
   useEffect(() => {
@@ -204,13 +201,6 @@ export default function InvestmentAccountSuggestionsCard({
       const response = await apiClient.post('/api/investments/suggestions/dismiss', { transactionIdentifiers });
 
       if (!response.ok) {
-        // Check for license read-only error
-        const licenseCheck = isLicenseReadOnlyError(response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          return;
-        }
         const data = response.data as any;
         throw new Error(data?.error || 'Failed to dismiss suggestion');
       }
@@ -261,13 +251,6 @@ export default function InvestmentAccountSuggestionsCard({
       });
 
       if (!batchResult.ok) {
-        const licenseCheck = isLicenseReadOnlyError(batchResult.response.data);
-        if (licenseCheck.isReadOnly) {
-          setLicenseAlertReason(licenseCheck.reason);
-          setLicenseAlertOpen(true);
-          return;
-        }
-
         const errorMessage =
           (batchResult.response.data as { error?: string } | null)?.error
           || 'Failed to link transactions';
@@ -591,11 +574,6 @@ export default function InvestmentAccountSuggestionsCard({
           ));
         })()}
       </Menu>
-      <LicenseReadOnlyAlert
-        open={licenseAlertOpen}
-        onClose={() => setLicenseAlertOpen(false)}
-        reason={licenseAlertReason}
-      />
     </>
   );
 }

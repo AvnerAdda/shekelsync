@@ -8,7 +8,6 @@ const electronRoot = path.join(repoRoot, 'electron');
 
 const coreRoutesPath = path.join(electronRoot, 'api-routes', 'core.js');
 const databaseModulePath = path.join(electronRoot, 'database.js');
-const healthModulePath = path.join(repoRoot, 'app', 'server', 'services', 'health.js');
 const metricsStorePath = path.join(
   repoRoot,
   'app',
@@ -34,10 +33,6 @@ const dbManagerMock = {
   getStats: vi.fn(),
   isConnected: true,
   mode: 'sqlite',
-};
-
-const healthServiceMock = {
-  ping: vi.fn(),
 };
 
 const transactionsMetricsMock = {
@@ -73,9 +68,6 @@ function loadCoreRoutes() {
 
     if (resolved === databaseModulePath) {
       return { dbManager: dbManagerMock };
-    }
-    if (resolved === healthModulePath) {
-      return healthServiceMock;
     }
     if (resolved === transactionsMetricsModulePath) {
       return transactionsMetricsMock;
@@ -123,13 +115,11 @@ describe('electron core routes', () => {
   });
 
   it('returns ok status from ping when dependencies are healthy', async () => {
-    healthServiceMock.ping.mockResolvedValue({ ok: true, status: 'ok' });
     dbManagerMock.testConnection.mockResolvedValue({ success: true });
 
     const res = createMockRes();
     await coreRoutes.ping({} as any, res as any);
 
-    expect(healthServiceMock.ping).toHaveBeenCalledTimes(1);
     expect(dbManagerMock.testConnection).toHaveBeenCalledTimes(1);
     expect(res.result.statusCode).toBe(200);
     expect(res.result.body).toMatchObject({
@@ -139,10 +129,9 @@ describe('electron core routes', () => {
     });
   });
 
-  it('propagates errors when the health check fails', async () => {
-    healthServiceMock.ping.mockResolvedValue({
-      ok: false,
-      status: 'degraded',
+  it('propagates errors when the database health check fails', async () => {
+    dbManagerMock.testConnection.mockResolvedValue({
+      success: false,
       error: 'db failed',
     });
 
@@ -155,19 +144,14 @@ describe('electron core routes', () => {
       message: 'Database connectivity check failed',
       error: 'db failed',
     });
-    expect(dbManagerMock.testConnection).not.toHaveBeenCalled();
+    expect(dbManagerMock.testConnection).toHaveBeenCalledTimes(1);
   });
 
-  it('returns healthz payload with sanitized metrics and telemetry flags', async () => {
-    const prevDsn = process.env.SENTRY_DSN;
-    const prevCrash = process.env.CRASH_REPORTS_ENABLED;
+  it('returns healthz payload with sanitized metrics', async () => {
     const prevSqlitePath = process.env.SQLITE_DB_PATH;
 
-    process.env.SENTRY_DSN = 'https://example.ingest.sentry.io/123';
-    process.env.CRASH_REPORTS_ENABLED = 'true';
     process.env.SQLITE_DB_PATH = '/tmp/shekelsync.sqlite';
 
-    healthServiceMock.ping.mockResolvedValue({ ok: true, status: 'ok' });
     dbManagerMock.testConnection.mockResolvedValue({ success: true });
     metricsStoreMock.getMetricsSnapshot.mockReturnValue({
       breakdown: [{ durationMs: 12.3, recordedAt: '2025-01-01T00:00:00.000Z' }],
@@ -180,10 +164,6 @@ describe('electron core routes', () => {
     expect(res.result.statusCode).toBe(200);
     expect(res.result.body.status).toBe('ok');
     expect(res.result.body.responseTimeMs).toBeGreaterThanOrEqual(0);
-    expect(res.result.body.telemetry).toMatchObject({
-      enabled: false,
-      dsnConfigured: false,
-    });
     expect(res.result.body.database).toMatchObject({
       mode: expect.any(String),
       connected: true,
@@ -202,13 +182,10 @@ describe('electron core routes', () => {
       },
     });
 
-    process.env.SENTRY_DSN = prevDsn;
-    process.env.CRASH_REPORTS_ENABLED = prevCrash;
     process.env.SQLITE_DB_PATH = prevSqlitePath;
   });
 
-  it('does not leak raw metrics fields or DSN values in healthz payload', async () => {
-    process.env.SENTRY_DSN = 'https://public@example.ingest.sentry.io/abc123';
+  it('does not leak raw metrics fields in healthz payload', async () => {
     metricsStoreMock.getMetricsSnapshot.mockReturnValue({
       breakdown: [
         {
@@ -220,17 +197,12 @@ describe('electron core routes', () => {
       ],
     });
 
-    healthServiceMock.ping.mockResolvedValue({ ok: true, status: 'ok' });
     dbManagerMock.testConnection.mockResolvedValue({ success: true });
 
     const res = createMockRes();
     await coreRoutes.healthz({} as any, res as any);
 
     expect(res.result.statusCode).toBe(200);
-    expect(res.result.body.telemetry).toEqual({
-      enabled: false,
-      dsnConfigured: false,
-    });
     expect(res.result.body.metrics).toMatchObject({
       breakdown: {
         count: 1,
@@ -240,11 +212,10 @@ describe('electron core routes', () => {
     });
     expect(res.result.body.metrics?.dashboard).toBeUndefined();
     expect(JSON.stringify(res.result.body)).not.toContain('sensitive-bank');
-    expect(JSON.stringify(res.result.body)).not.toContain('example.ingest.sentry.io');
   });
 
   it('surfaces database errors in healthz response', async () => {
-    healthServiceMock.ping.mockResolvedValue({ ok: false, status: 'degraded', error: 'db failed' });
+    dbManagerMock.testConnection.mockResolvedValue({ success: false, error: 'db failed' });
 
     const res = createMockRes();
     await coreRoutes.healthz({} as any, res as any);
@@ -254,7 +225,7 @@ describe('electron core routes', () => {
       status: 'degraded',
       error: 'db failed',
     });
-    expect(dbManagerMock.testConnection).not.toHaveBeenCalled();
+    expect(dbManagerMock.testConnection).toHaveBeenCalledTimes(1);
   });
 
   it('normalizes numeric strings returned in transaction stats', async () => {
