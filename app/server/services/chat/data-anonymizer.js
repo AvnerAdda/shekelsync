@@ -281,6 +281,10 @@ function anonymizeContext(context, anonymizer) {
     analytics: context.analytics,
     investments: context.investments,
     optimizer: anonymizeOptimizerContext(context.optimizer),
+    smartActions: context.smartActions,
+    subscriptions: context.subscriptions,
+    spendingTargets: context.spendingTargets,
+    dataFreshness: context.dataFreshness,
     // Anonymize transactions
     recentTransactions: anonymizer.anonymizeTransactions(context.recentTransactions),
     // Anonymize merchants

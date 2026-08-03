@@ -136,6 +136,15 @@ interface Conversation {
   messageCount: number;
 }
 
+interface ChatSuggestion {
+  text: string;
+  category: string;
+  priority?: number;
+  source?: string;
+  estimatedImpactMonthly?: number | null;
+  requiresPermission?: string[];
+}
+
 const MIN_DRAWER_WIDTH = 320;
 const MAX_DRAWER_WIDTH_VW = 0.8; // 80vw
 
@@ -167,7 +176,7 @@ const FinancialChatbot: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [drawerWidth, setDrawerWidth] = useState(420);
-  const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>([]);
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<ChatSuggestion[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
@@ -297,17 +306,29 @@ const FinancialChatbot: React.FC = () => {
       .then((response) => {
         if (response.ok && response.data) {
           const data = response.data as {
-            suggestions: Array<{ text: string; category: string }>;
+            suggestions: ChatSuggestion[];
           };
           if (data.suggestions?.length > 0) {
-            setDynamicSuggestions(data.suggestions.map((s) => s.text));
+            setDynamicSuggestions(data.suggestions);
+            setMessages((prev) => {
+              if (prev.length !== 1 || prev[0].id !== 'greeting') {
+                return prev;
+              }
+              const intro = t('suggestions.proactiveIntro', {
+                count: data.suggestions.length,
+              });
+              if (prev[0].content.includes(intro)) {
+                return prev;
+              }
+              return [{ ...prev[0], content: `${prev[0].content}\n\n${intro}` }];
+            });
           }
         }
       })
       .catch(() => {
         // Silently fall back to static suggestions
       });
-  }, [isOpen, messages.length, canUseChatbot, allowTransactionAccess, allowCategoryAccess, allowAnalyticsAccess, i18n.language]);
+  }, [isOpen, messages.length, canUseChatbot, allowTransactionAccess, allowCategoryAccess, allowAnalyticsAccess, i18n.language, t]);
 
   // Load a specific conversation
   const loadConversation = async (convId: string) => {
@@ -548,7 +569,9 @@ const FinancialChatbot: React.FC = () => {
   const staticSuggestions = t('suggestions.items', {
     returnObjects: true,
   }) as string[];
-  const suggestedQuestions = dynamicSuggestions.length > 0 ? dynamicSuggestions : staticSuggestions;
+  const suggestedQuestions: ChatSuggestion[] = dynamicSuggestions.length > 0
+    ? dynamicSuggestions
+    : staticSuggestions.map((text) => ({ text, category: 'static' }));
 
   // Don't render if chatbot is disabled
   if (!chatbotEnabled) {
@@ -835,8 +858,8 @@ const FinancialChatbot: React.FC = () => {
                     {message.content}
                   </Typography>
                 )}
-                {/* Show tool executions if any */}
-                {message.metadata?.toolExecutions && message.metadata.toolExecutions.length > 0 && (
+                {/* Show user-facing tool explanations if any */}
+                {message.metadata?.toolExecutions?.some((tool) => typeof tool.explanation === 'string' && tool.explanation.trim().length > 0) && (
                   <Box
                     sx={{
                       mt: 1,
@@ -845,9 +868,12 @@ const FinancialChatbot: React.FC = () => {
                       borderColor: 'divider',
                     }}
                   >
-                    {message.metadata.toolExecutions.map((tool, idx) => (
-                      <Chip key={idx} size="small" label={tool.explanation} color={tool.success ? 'success' : 'error'} variant="outlined" sx={{ mr: 0.5, mb: 0.5, fontSize: '0.65rem' }} />
-                    ))}
+                    {message.metadata.toolExecutions
+                      .filter((tool) => typeof tool.explanation === 'string' && tool.explanation.trim().length > 0)
+                      .slice(0, 3)
+                      .map((tool, idx) => (
+                        <Chip key={idx} size="small" label={tool.explanation} color={tool.success ? 'success' : 'error'} variant="outlined" sx={{ mr: 0.5, mb: 0.5, fontSize: '0.65rem' }} />
+                      ))}
                   </Box>
                 )}
                 <Typography
@@ -975,20 +1001,30 @@ const FinancialChatbot: React.FC = () => {
               {suggestedQuestions.map((question, idx) => (
                 <Chip
                   key={idx}
-                  label={question}
+                  label={question.text}
                   size="small"
-                  onClick={() => setInputValue(question)}
+                  onClick={() => setInputValue(question.text)}
                   sx={{
                     cursor: 'pointer',
-                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
-                    color: 'primary.main',
+                    bgcolor: (theme) => alpha(
+                      dynamicSuggestions.length > 0 && idx === 0
+                        ? theme.palette.secondary.main
+                        : theme.palette.primary.main,
+                      0.1,
+                    ),
+                    color: dynamicSuggestions.length > 0 && idx === 0 ? 'secondary.main' : 'primary.main',
                     fontWeight: 500,
                     border: '1px solid',
                     borderColor: 'transparent',
                     transition: 'all 0.2s',
                     '&:hover': {
-                      bgcolor: (theme) => alpha(theme.palette.primary.main, 0.2),
-                      borderColor: 'primary.main',
+                      bgcolor: (theme) => alpha(
+                        dynamicSuggestions.length > 0 && idx === 0
+                          ? theme.palette.secondary.main
+                          : theme.palette.primary.main,
+                        0.2,
+                      ),
+                      borderColor: dynamicSuggestions.length > 0 && idx === 0 ? 'secondary.main' : 'primary.main',
                       transform: 'translateY(-1px)',
                     },
                   }}

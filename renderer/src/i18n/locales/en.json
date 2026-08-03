@@ -2477,6 +2477,7 @@
     "suggestions": {
       "title": "Suggested questions:",
       "dynamicTitle": "Based on your data:",
+      "proactiveIntro": "I found {{count}} timely opportunities worth reviewing.",
       "items": [
         "How much did I spend this month?",
         "What category did I spend the most on?",

@@ -74,6 +74,38 @@ describe('Shared /api/chat routes', () => {
     expect(res.body.retryAfter).toBe(60);
   });
 
+  it('returns ranked chat suggestions with backward-compatible fields', async () => {
+    const suggestions = [
+      {
+        text: 'Review active actions',
+        category: 'smart_action',
+        priority: 100,
+        source: 'smart_action_items',
+        estimatedImpactMonthly: 1200,
+        requiresPermission: ['analytics'],
+      },
+    ];
+    const spy = vi.spyOn(chatService, 'getSuggestions').mockResolvedValue(suggestions);
+
+    const res = await request(app)
+      .get('/api/chat/suggestions?transactions=true&categories=true&analytics=true&locale=en')
+      .expect(200);
+
+    expect(spy).toHaveBeenCalledWith({
+      permissions: {
+        allowTransactionAccess: true,
+        allowCategoryAccess: true,
+        allowAnalyticsAccess: true,
+      },
+      locale: 'en',
+    });
+    expect(res.body.suggestions).toEqual(suggestions);
+    expect(res.body.suggestions[0]).toMatchObject({
+      text: 'Review active actions',
+      category: 'smart_action',
+    });
+  });
+
   it('lists conversations with parsed query options', async () => {
     const listSpy = vi.spyOn(chatService, 'listConversations').mockResolvedValue([{ id: 'conv-1' }]);
 
