@@ -427,6 +427,207 @@ describe('forecast service internals', () => {
     expect(incomePattern.confidence).toBeGreaterThan(0.5);
   });
 
+  it('keeps near-monthly income as monthly when one month is missing or renamed', () => {
+    const { analyzeCategoryPatterns } = forecastModule._internal;
+    const makeTxn = (
+      date: string,
+      name: string,
+      price: number,
+    ) => ({
+      date,
+      name,
+      price,
+      category_type: 'income',
+      category_definition_id: 90,
+      category_name: 'Salary',
+      parent_category_name: 'Income',
+      day_of_week: String(new Date(date).getDay()),
+      day_of_month: Number(date.slice(8, 10)),
+      month: date.slice(0, 7),
+    });
+
+    const patterns = analyzeCategoryPatterns([
+      makeTxn('2026-01-08', 'Bank Payroll', 7000),
+      makeTxn('2026-02-08', 'Bank Payroll', 7000),
+      makeTxn('2026-03-08', 'Bank Payroll', 7000),
+      makeTxn('2026-05-08', 'Bank Payroll', 7000),
+      makeTxn('2026-06-08', 'Bank Payroll', 7000),
+    ]);
+
+    const incomePattern = Object.values(patterns).find((p: any) => p.transactionName === 'Bank Payroll') as any;
+    expect(incomePattern.avgOccurrencesPerMonth).toBeCloseTo(5 / 6, 6);
+    expect(incomePattern.patternType).toBe('monthly');
+    expect(incomePattern.insufficientData).toBeFalsy();
+  });
+
+  it('classifies operating income/expenses separately from transfers and irregular income', () => {
+    const {
+      isOperatingIncomePattern,
+      isNonOperatingIncomePattern,
+      isOperatingExpensePattern,
+      isNonOperatingExpensePattern,
+    } = forecastModule._internal;
+
+    expect(isOperatingIncomePattern({
+      categoryType: 'income',
+      category: 'משכורת',
+      categoryNameEn: 'Salary',
+      transactionName: 'Bank Payroll',
+    })).toBe(true);
+    expect(isOperatingIncomePattern({
+      categoryType: 'income',
+      category: 'קצבאות ממשלתיות',
+      categoryNameEn: 'Government Benefits',
+      transactionName: 'ביטוח לאומי ילדים',
+    })).toBe(true);
+    expect(isNonOperatingIncomePattern({
+      categoryType: 'income',
+      category: 'החזרים וזיכויים',
+      categoryNameEn: 'Refunds & Credits',
+      transactionName: 'Tax Refund',
+    })).toBe(true);
+    expect(isNonOperatingIncomePattern({
+      categoryType: 'income',
+      category: 'החזר קרן',
+      categoryNameEn: 'Capital Return',
+      isCountedAsIncome: 0,
+    })).toBe(true);
+    expect(isOperatingExpensePattern({
+      categoryType: 'expense',
+      category: 'סופרמרקט',
+      categoryNameEn: 'Groceries',
+    })).toBe(true);
+    expect(isNonOperatingExpensePattern({
+      categoryType: 'expense',
+      category: 'פרעון כרטיס אשראי',
+      categoryNameEn: 'Credit Card Repayment',
+    })).toBe(true);
+    expect(isNonOperatingExpensePattern({
+      categoryType: 'expense',
+      category: 'מס על השקעות',
+      categoryNameEn: 'Investment Tax Withholding',
+    })).toBe(true);
+  });
+
+  it('allows early trusted payroll patterns before three months of history', () => {
+    const { analyzeCategoryPatterns } = forecastModule._internal;
+    const makeTxn = (
+      date: string,
+      price: number,
+    ) => ({
+      date,
+      name: 'Deloitte Payroll',
+      price,
+      category_type: 'income',
+      category_definition_id: 90,
+      category_name: 'משכורת',
+      category_name_en: 'Salary',
+      parent_category_name: 'Income',
+      day_of_week: String(new Date(date).getDay()),
+      day_of_month: Number(date.slice(8, 10)),
+      month: date.slice(0, 7),
+    });
+
+    const patterns = analyzeCategoryPatterns([
+      makeTxn('2025-12-07', 16791),
+      makeTxn('2025-12-29', 19785),
+      makeTxn('2026-02-08', 17402),
+    ]);
+
+    const payrollPattern = Object.values(patterns).find((p: any) => p.transactionName === 'Deloitte Payroll') as any;
+    expect(payrollPattern.monthsOfHistory).toBe(2);
+    expect(payrollPattern.totalCount).toBe(3);
+    expect(payrollPattern.insufficientData).toBeFalsy();
+    expect(payrollPattern.patternType).not.toBe('insufficient_data');
+  });
+
+  it('splits forecast-day income and cashflow into operating and non-operating totals', () => {
+    const { buildPatternCaches, forecastDay } = forecastModule._internal;
+    const date = new Date(2026, 0, 5);
+    const dayOfWeek = date.getDay();
+    const patterns = {
+      salary: {
+        patternKey: 'salary',
+        category: 'משכורת',
+        categoryNameEn: 'Salary',
+        transactionName: 'Bank Payroll',
+        categoryType: 'income',
+        patternType: 'monthly',
+        avgAmount: 10000,
+        stdDev: 0,
+        avgOccurrencesPerMonth: 1,
+        coefficientOfVariation: 0,
+        dayOfWeekProb: { [dayOfWeek]: 1 },
+        dayOfMonthProb: { 5: 1 },
+        mostLikelyDaysOfMonth: [{ day: 5, probability: 1 }],
+      },
+      refund: {
+        patternKey: 'refund',
+        category: 'החזרים וזיכויים',
+        categoryNameEn: 'Refunds & Credits',
+        transactionName: 'Refund',
+        categoryType: 'income',
+        patternType: 'monthly',
+        avgAmount: 500,
+        stdDev: 0,
+        avgOccurrencesPerMonth: 1,
+        coefficientOfVariation: 0,
+        dayOfWeekProb: { [dayOfWeek]: 1 },
+        dayOfMonthProb: { 5: 1 },
+        mostLikelyDaysOfMonth: [{ day: 5, probability: 1 }],
+      },
+      rent: {
+        patternKey: 'rent',
+        category: 'Rent',
+        transactionName: 'Rent',
+        categoryType: 'expense',
+        patternType: 'monthly',
+        avgAmount: 4000,
+        stdDev: 0,
+        avgOccurrencesPerMonth: 1,
+        coefficientOfVariation: 0,
+        dayOfWeekProb: { [dayOfWeek]: 1 },
+        dayOfMonthProb: { 5: 1 },
+        mostLikelyDaysOfMonth: [{ day: 5, probability: 1 }],
+      },
+      card: {
+        patternKey: 'card',
+        category: 'פרעון כרטיס אשראי',
+        categoryNameEn: 'Credit Card Repayment',
+        transactionName: 'Visa Repayment',
+        categoryType: 'expense',
+        patternType: 'monthly',
+        avgAmount: 1000,
+        stdDev: 0,
+        avgOccurrencesPerMonth: 1,
+        coefficientOfVariation: 0,
+        dayOfWeekProb: { [dayOfWeek]: 1 },
+        dayOfMonthProb: { 5: 1 },
+        mostLikelyDaysOfMonth: [{ day: 5, probability: 1 }],
+      },
+    };
+    const entries = buildPatternCaches(patterns);
+
+    const simulationEntries: any[] = [];
+    const forecast = forecastDay(date, patterns, {}, entries, simulationEntries);
+
+    expect(forecast.expectedIncome).toBe(9975);
+    expect(forecast.expectedOperatingIncome).toBe(9500);
+    expect(forecast.expectedNonOperatingIncome).toBe(475);
+    expect(forecast.expectedExpenses).toBe(4750);
+    expect(forecast.expectedOperatingExpenses).toBe(3800);
+    expect(forecast.expectedNonOperatingExpenses).toBe(950);
+    expect(forecast.expectedCashFlow).toBe(5225);
+    expect(forecast.expectedOperatingCashFlow).toBe(5700);
+    expect(forecast.expectedNonOperatingCashFlow).toBe(-475);
+    expect(simulationEntries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ categoryType: 'income', incomeType: 'operating' }),
+      expect.objectContaining({ categoryType: 'income', incomeType: 'non_operating' }),
+      expect.objectContaining({ categoryType: 'expense', expenseType: 'operating' }),
+      expect.objectContaining({ categoryType: 'expense', expenseType: 'non_operating' }),
+    ]));
+  });
+
   it('marks low-history income as insufficient so one-off deposits are not forecast', () => {
     const { analyzeCategoryPatterns, buildPatternCaches, forecastDay } = forecastModule._internal;
     const makeTxn = (

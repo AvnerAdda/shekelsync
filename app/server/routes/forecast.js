@@ -218,14 +218,26 @@ function createForecastRouter({ sqliteDb = null, generateForecast = forecastServ
       const dailyMinimal = (result.dailyForecasts || []).map(d => ({
         date: d.date,
         income: d.expectedIncome,
+        operatingIncome: d.expectedOperatingIncome ?? d.expectedIncome,
+        nonOperatingIncome: d.expectedNonOperatingIncome ?? 0,
         expenses: d.expectedExpenses,
+        operatingExpenses: d.expectedOperatingExpenses ?? d.expectedExpenses,
+        nonOperatingExpenses: d.expectedNonOperatingExpenses ?? 0,
         cashFlow: d.expectedCashFlow,
+        operatingCashFlow: d.expectedOperatingCashFlow ?? d.expectedCashFlow,
+        nonOperatingCashFlow: d.expectedNonOperatingCashFlow ?? 0,
         cumulativeCashFlow: d.cumulativeCashFlow,
+        cumulativeOperatingCashFlow: d.cumulativeOperatingCashFlow ?? d.cumulativeCashFlow,
+        cumulativeNonOperatingCashFlow: d.cumulativeNonOperatingCashFlow ?? 0,
+        cumulativeOperatingExpenses: d.cumulativeOperatingExpenses ?? 0,
+        cumulativeNonOperatingExpenses: d.cumulativeNonOperatingExpenses ?? 0,
         topCategory: d.topPredictions?.[0]?.category || null,
         topProbability: d.topPredictions?.[0]?.probability || null,
         topPredictions: (d.topPredictions || []).map(p => ({
           category: p.category,
           categoryDefinitionId: p.categoryDefinitionId || null,
+          incomeType: p.incomeType || null,
+          expenseType: p.expenseType || null,
           amount: p.expectedAmount,
           probability: p.probability
         }))
@@ -233,32 +245,63 @@ function createForecastRouter({ sqliteDb = null, generateForecast = forecastServ
 
       const mapScenario = s => ({
         totalIncome: s.totalIncome,
+        totalOperatingIncome: s.totalOperatingIncome ?? s.totalIncome,
+        totalNonOperatingIncome: s.totalNonOperatingIncome ?? 0,
         totalExpenses: s.totalExpenses,
+        totalOperatingExpenses: s.totalOperatingExpenses ?? s.totalExpenses,
+        totalNonOperatingExpenses: s.totalNonOperatingExpenses ?? 0,
         totalCashFlow: s.totalCashFlow,
+        totalOperatingCashFlow: s.totalOperatingCashFlow ?? s.totalCashFlow,
+        totalNonOperatingCashFlow: s.totalNonOperatingCashFlow ?? 0,
         daily: (s.dailyResults || []).map(dr => ({
           date: dr.date,
           income: dr.income,
+          operatingIncome: dr.operatingIncome ?? dr.income,
+          nonOperatingIncome: dr.nonOperatingIncome ?? 0,
           expenses: dr.expenses,
+          operatingExpenses: dr.operatingExpenses ?? dr.expenses,
+          nonOperatingExpenses: dr.nonOperatingExpenses ?? 0,
           cashFlow: dr.cashFlow,
-          cumulativeCashFlow: dr.cumulativeCashFlow
+          operatingCashFlow: dr.operatingCashFlow ?? dr.cashFlow,
+          nonOperatingCashFlow: dr.nonOperatingCashFlow ?? 0,
+          cumulativeCashFlow: dr.cumulativeCashFlow,
+          cumulativeOperatingCashFlow: dr.cumulativeOperatingCashFlow ?? dr.cumulativeCashFlow,
+          cumulativeNonOperatingCashFlow: dr.cumulativeNonOperatingCashFlow ?? 0,
+          cumulativeOperatingExpenses: dr.cumulativeOperatingExpenses ?? 0,
+          cumulativeNonOperatingExpenses: dr.cumulativeNonOperatingExpenses ?? 0
         }))
       });
 
       const summaries = {
         pessimistic: {
           netCashFlow: Math.round(result.scenarios?.p10?.totalCashFlow || 0),
+          operatingNetCashFlow: Math.round(result.scenarios?.p10?.totalOperatingCashFlow ?? result.scenarios?.p10?.totalCashFlow ?? 0),
           income: Math.round(result.scenarios?.p10?.totalIncome || 0),
-          expenses: Math.round(result.scenarios?.p10?.totalExpenses || 0)
+          operatingIncome: Math.round(result.scenarios?.p10?.totalOperatingIncome ?? result.scenarios?.p10?.totalIncome ?? 0),
+          nonOperatingIncome: Math.round(result.scenarios?.p10?.totalNonOperatingIncome ?? 0),
+          expenses: Math.round(result.scenarios?.p10?.totalExpenses || 0),
+          operatingExpenses: Math.round(result.scenarios?.p10?.totalOperatingExpenses ?? result.scenarios?.p10?.totalExpenses ?? 0),
+          nonOperatingExpenses: Math.round(result.scenarios?.p10?.totalNonOperatingExpenses ?? 0)
         },
         base: {
           netCashFlow: Math.round(result.scenarios?.p50?.totalCashFlow || 0),
+          operatingNetCashFlow: Math.round(result.scenarios?.p50?.totalOperatingCashFlow ?? result.scenarios?.p50?.totalCashFlow ?? 0),
           income: Math.round(result.scenarios?.p50?.totalIncome || 0),
-          expenses: Math.round(result.scenarios?.p50?.totalExpenses || 0)
+          operatingIncome: Math.round(result.scenarios?.p50?.totalOperatingIncome ?? result.scenarios?.p50?.totalIncome ?? 0),
+          nonOperatingIncome: Math.round(result.scenarios?.p50?.totalNonOperatingIncome ?? 0),
+          expenses: Math.round(result.scenarios?.p50?.totalExpenses || 0),
+          operatingExpenses: Math.round(result.scenarios?.p50?.totalOperatingExpenses ?? result.scenarios?.p50?.totalExpenses ?? 0),
+          nonOperatingExpenses: Math.round(result.scenarios?.p50?.totalNonOperatingExpenses ?? 0)
         },
         optimistic: {
           netCashFlow: Math.round(result.scenarios?.p90?.totalCashFlow || 0),
+          operatingNetCashFlow: Math.round(result.scenarios?.p90?.totalOperatingCashFlow ?? result.scenarios?.p90?.totalCashFlow ?? 0),
           income: Math.round(result.scenarios?.p90?.totalIncome || 0),
-          expenses: Math.round(result.scenarios?.p90?.totalExpenses || 0)
+          operatingIncome: Math.round(result.scenarios?.p90?.totalOperatingIncome ?? result.scenarios?.p90?.totalIncome ?? 0),
+          nonOperatingIncome: Math.round(result.scenarios?.p90?.totalNonOperatingIncome ?? 0),
+          expenses: Math.round(result.scenarios?.p90?.totalExpenses || 0),
+          operatingExpenses: Math.round(result.scenarios?.p90?.totalOperatingExpenses ?? result.scenarios?.p90?.totalExpenses ?? 0),
+          nonOperatingExpenses: Math.round(result.scenarios?.p90?.totalNonOperatingExpenses ?? 0)
         }
       };
 
