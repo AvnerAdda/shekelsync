@@ -61,6 +61,27 @@ interface TransactionHistorySectionProps {
   refreshForecast?: () => void;
 }
 
+function getOperatingIncomeForCashFlow(item: any): number {
+  if (item?.operatingIncome !== undefined && item?.operatingIncome !== null) {
+    const value = Number(item.operatingIncome);
+    return Number.isFinite(value) ? value : 0;
+  }
+  return Number(item?.income || 0);
+}
+
+function getOperatingCashFlowForForecast(item: any): number {
+  const value = Number(item?.operatingCashFlow ?? item?.cashFlow ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function getOperatingExpensesForCashFlow(item: any): number {
+  if (item?.operatingExpenses !== undefined && item?.operatingExpenses !== null) {
+    const value = Number(item.operatingExpenses);
+    return Number.isFinite(value) ? value : 0;
+  }
+  return Number(item?.expenses || 0);
+}
+
 const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   data,
   yAxisScale,
@@ -275,7 +296,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     
     let cumulative = 0;
     return filteredHistory.map((item: any) => {
-      const netFlow = (item.income || 0) - (item.expenses || 0);
+      const netFlow = getOperatingIncomeForCashFlow(item) - getOperatingExpensesForCashFlow(item);
       cumulative += netFlow;
       return {
         date: item.date,
@@ -523,16 +544,17 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     const forecastEntries = forecastData.dailyForecasts
       .filter((d: any) => d.date > lastHistoricalDate && d.date <= chartEndDate)
       .map((d: any, idx: number) => {
-        expectedCumulative += d.cashFlow;
+        const expectedCashFlow = getOperatingCashFlowForForecast(d);
+        expectedCumulative += expectedCashFlow;
 
         // Find matching scenario data for this date
         const p10Day = p10Daily.find((s: any) => s.date === d.date);
         const p50Day = p50Daily.find((s: any) => s.date === d.date);
         const p90Day = p90Daily.find((s: any) => s.date === d.date);
 
-        p10Cumulative += p10Day?.cashFlow || d.cashFlow;
-        p50Cumulative += p50Day?.cashFlow || d.cashFlow;
-        p90Cumulative += p90Day?.cashFlow || d.cashFlow;
+        p10Cumulative += getOperatingCashFlowForForecast(p10Day || d);
+        p50Cumulative += getOperatingCashFlowForForecast(p50Day || d);
+        p90Cumulative += getOperatingCashFlowForForecast(p90Day || d);
 
         return {
           date: d.date,
