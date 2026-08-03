@@ -33,7 +33,7 @@ describe('useDashboardData', () => {
           totalAccounts: 3,
         },
         history: [
-          { date: '2024-03-01', income: 100, expenses: 40 },
+          { date: '2024-03-01', income: 100, operatingIncome: 80, expenses: 40, operatingExpenses: 30 },
           { date: '2024-03-02', income: 50, expenses: 60 },
         ],
         breakdowns: {
@@ -54,8 +54,8 @@ describe('useDashboardData', () => {
 
     expect(result.current.cumulativeData).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ date: '2024-03-01', cumulative: 60, netFlow: 60 }),
-        expect.objectContaining({ date: '2024-03-02', cumulative: 50, netFlow: -10 }),
+        expect.objectContaining({ date: '2024-03-01', cumulative: 50, netFlow: 50 }),
+        expect.objectContaining({ date: '2024-03-02', cumulative: 40, netFlow: -10 }),
       ]),
     );
 

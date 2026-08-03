@@ -159,14 +159,30 @@ describe('Shared /api/forecast routes', () => {
   it('combines populated actuals, budgets, and category forecasts', async () => {
     const scenario = (totalExpenses: number) => ({
       totalIncome: 2000,
+      totalOperatingIncome: 1500,
+      totalNonOperatingIncome: 500,
       totalExpenses,
+      totalOperatingExpenses: totalExpenses - 50,
+      totalNonOperatingExpenses: 50,
       totalCashFlow: 2000 - totalExpenses,
+      totalOperatingCashFlow: 1500 - (totalExpenses - 50),
+      totalNonOperatingCashFlow: 450,
       dailyResults: [{
         date: '2026-07-10',
         income: 2000,
+        operatingIncome: 1500,
+        nonOperatingIncome: 500,
         expenses: totalExpenses,
+        operatingExpenses: totalExpenses - 50,
+        nonOperatingExpenses: 50,
         cashFlow: 2000 - totalExpenses,
+        operatingCashFlow: 1500 - (totalExpenses - 50),
+        nonOperatingCashFlow: 450,
         cumulativeCashFlow: 2000 - totalExpenses,
+        cumulativeOperatingCashFlow: 1500 - (totalExpenses - 50),
+        cumulativeNonOperatingCashFlow: 450,
+        cumulativeOperatingExpenses: totalExpenses - 50,
+        cumulativeNonOperatingExpenses: 50,
       }],
     });
     const generateForecast = vi.fn().mockResolvedValue({
@@ -174,9 +190,19 @@ describe('Shared /api/forecast routes', () => {
       dailyForecasts: [{
         date: '2026-07-10',
         expectedIncome: 2000,
+        expectedOperatingIncome: 1500,
+        expectedNonOperatingIncome: 500,
         expectedExpenses: 250,
+        expectedOperatingExpenses: 200,
+        expectedNonOperatingExpenses: 50,
         expectedCashFlow: 1750,
+        expectedOperatingCashFlow: 1300,
+        expectedNonOperatingCashFlow: 450,
         cumulativeCashFlow: 1750,
+        cumulativeOperatingCashFlow: 1300,
+        cumulativeNonOperatingCashFlow: 450,
+        cumulativeOperatingExpenses: 200,
+        cumulativeNonOperatingExpenses: 50,
         topPredictions: [{
           category: 'Food',
           categoryDefinitionId: 1,
@@ -256,6 +282,33 @@ describe('Shared /api/forecast routes', () => {
       .expect(200);
 
     expect(response.body.dailyForecasts[0].topCategory).toBe('Food');
+    expect(response.body.dailyForecasts[0]).toMatchObject({
+      operatingIncome: 1500,
+      nonOperatingIncome: 500,
+      operatingExpenses: 200,
+      nonOperatingExpenses: 50,
+      operatingCashFlow: 1300,
+      nonOperatingCashFlow: 450,
+      cumulativeOperatingCashFlow: 1300,
+      cumulativeNonOperatingCashFlow: 450,
+      cumulativeOperatingExpenses: 200,
+      cumulativeNonOperatingExpenses: 50,
+    });
+    expect(response.body.scenarios.p50).toMatchObject({
+      totalOperatingIncome: 1500,
+      totalNonOperatingIncome: 500,
+      totalOperatingExpenses: 150,
+      totalNonOperatingExpenses: 50,
+      totalOperatingCashFlow: 1350,
+      totalNonOperatingCashFlow: 450,
+    });
+    expect(response.body.summaries.base).toMatchObject({
+      operatingNetCashFlow: 1350,
+      operatingIncome: 1500,
+      nonOperatingIncome: 500,
+      operatingExpenses: 150,
+      nonOperatingExpenses: 50,
+    });
     expect(response.body.budgetSummary).toMatchObject({
       totalBudgets: 2,
       highRisk: 1,

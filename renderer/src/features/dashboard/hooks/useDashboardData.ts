@@ -56,7 +56,11 @@ function fillMissingDates(
       filled.push({
         date: dateStr,
         income: null,
+        operatingIncome: 0,
+        nonOperatingIncome: 0,
         expenses: null,
+        operatingExpenses: 0,
+        nonOperatingExpenses: 0,
         capitalReturns: 0,
         cardRepayments: 0,
         pairedCardExpenses: 0,
@@ -66,7 +70,11 @@ function fillMissingDates(
       filled.push({
         date: dateStr,
         income: 0,
+        operatingIncome: 0,
+        nonOperatingIncome: 0,
         expenses: 0,
+        operatingExpenses: 0,
+        nonOperatingExpenses: 0,
         capitalReturns: 0,
         cardRepayments: 0,
         pairedCardExpenses: 0,
@@ -78,6 +86,14 @@ function fillMissingDates(
   }
 
   return filled;
+}
+
+function getCashFlowIncome(day: DashboardHistoryEntry): number {
+  return typeof day.operatingIncome === 'number' ? day.operatingIncome : (day.income || 0);
+}
+
+function getCashFlowExpenses(day: DashboardHistoryEntry): number {
+  return typeof day.operatingExpenses === 'number' ? day.operatingExpenses : (day.expenses || 0);
 }
 
 function calculateCumulativeData(
@@ -98,7 +114,7 @@ function calculateCumulativeData(
   const cumulative: CumulativePoint[] = [];
 
   actualHistory.forEach((day) => {
-    const netFlow = (day.income || 0) - (day.expenses || 0);
+    const netFlow = getCashFlowIncome(day) - getCashFlowExpenses(day);
     runningTotal += netFlow;
     cumulative.push({
       date: day.date,
@@ -120,7 +136,7 @@ function calculateCumulativeData(
     lastMonthHistory.forEach((day) => {
       const date = new Date(day.date);
       const dayOfMonth = date.getDate();
-      lastMonthMap.set(dayOfMonth, (day.income || 0) - (day.expenses || 0));
+      lastMonthMap.set(dayOfMonth, getCashFlowIncome(day) - getCashFlowExpenses(day));
     });
 
     while (predictionDate <= endOfMonthDate) {
