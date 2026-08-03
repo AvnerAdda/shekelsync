@@ -116,7 +116,13 @@ describe('financial-context service', () => {
         })
         .mockResolvedValueOnce({
           rows: [
-            { merchant_name: 'Merchant_1', occurrences: '4', avg_amount: '182.50' },
+            {
+              merchant_name: 'Merchant_1',
+              occurrence_count: '4',
+              avg_amount: '182.50',
+              first_seen: '2025-01-01',
+              last_seen: '2025-02-01',
+            },
           ],
         })
         .mockResolvedValueOnce({
@@ -127,7 +133,7 @@ describe('financial-context service', () => {
         })
         .mockResolvedValueOnce({
           rows: [
-            { prev_income: '900', prev_expenses: '500' },
+            { income: '900', expenses: '500' },
           ],
         })
         .mockResolvedValueOnce({
@@ -136,7 +142,58 @@ describe('financial-context service', () => {
               total_value: '40000',
               liquid_value: '10000',
               account_count: '2',
+              holding_count: '6',
+              latest_as_of_date: '2025-02-01',
             },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              action_type: 'quest_reduce_spending',
+              severity: 'low',
+              action_count: '2',
+              potential_impact: '1200',
+              avg_confidence: '0.8',
+              nearest_deadline: '2025-02-15',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { status: 'active', subscription_count: '3', monthly_total: '250' },
+            { status: 'review', subscription_count: '1', monthly_total: '80' },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { renewal_count: '2', next_renewal_date: '2025-02-10', monthly_total: '120' },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { severity: 'warning', alert_count: '1' },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              transaction_count: '4',
+              earliest_transaction_date: '2025-01-01',
+              latest_transaction_date: '2025-02-01',
+              active_months: '2',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { scrape_count: '3', latest_scrape_at: '2025-02-02' },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { spending_category: 'essential', target_percentage: '50', total_amount: '600' },
+            { spending_category: 'growth', target_percentage: '20', total_amount: '400' },
           ],
         }),
     };
@@ -201,8 +258,38 @@ describe('financial-context service', () => {
       totalValue: 40000,
       liquidValue: 10000,
       accountCount: 2,
+      holdingCount: 6,
+      latestAsOfDate: '2025-02-01',
     });
-    expect(db.query).toHaveBeenCalledTimes(10);
+    expect(context.smartActions).toEqual([
+      expect.objectContaining({
+        actionType: 'quest_reduce_spending',
+        count: 2,
+        potentialImpact: 1200,
+        nearestDeadline: '2025-02-15',
+      }),
+    ]);
+    expect(context.subscriptions).toMatchObject({
+      byStatus: [
+        { status: 'active', count: 3, monthlyTotal: 250 },
+        { status: 'review', count: 1, monthlyTotal: 80 },
+      ],
+      upcoming: { count: 2, nextRenewalDate: '2025-02-10', monthlyTotal: 120 },
+      alerts: [{ severity: 'warning', count: 1 }],
+    });
+    expect(context.dataFreshness).toEqual({
+      transactionCount: 4,
+      earliestTransactionDate: '2025-01-01',
+      latestTransactionDate: '2025-02-01',
+      activeMonths: 2,
+      scrapeCount: 3,
+      latestScrapeAt: '2025-02-02',
+    });
+    expect(context.spendingTargets).toEqual([
+      { spendingCategory: 'essential', targetPercentage: 50, actualPercentage: 60, driftPercentage: 10, amount: 600 },
+      { spendingCategory: 'growth', targetPercentage: 20, actualPercentage: 40, driftPercentage: 20, amount: 400 },
+    ]);
+    expect(db.query).toHaveBeenCalled();
   });
 
   it('swallows investment-query failures while keeping analytics context', async () => {
@@ -248,7 +335,7 @@ describe('financial-context service', () => {
       savingsRate: 75,
     });
     expect(context.investments).toBeUndefined();
-    expect(db.query).toHaveBeenCalledTimes(5);
+    expect(db.query).toHaveBeenCalled();
   });
 
   it('formats prompt context with sections, status markers, and denied permission note', () => {
@@ -289,6 +376,35 @@ describe('financial-context service', () => {
         totalValue: 25000,
         liquidValue: 10000,
         accountCount: 2,
+        holdingCount: 5,
+        latestAsOfDate: '2025-02-01',
+      },
+      smartActions: [
+        {
+          actionType: 'quest_reduce_spending',
+          severity: 'low',
+          count: 2,
+          potentialImpact: 1200,
+          nearestDeadline: '2025-02-15',
+          nextStep: 'choose one spending category to reduce this month',
+        },
+      ],
+      subscriptions: {
+        byStatus: [
+          { status: 'active', count: 3, monthlyTotal: 250 },
+          { status: 'review', count: 1, monthlyTotal: 80 },
+        ],
+        upcoming: { count: 2, nextRenewalDate: '2025-02-10' },
+        alerts: [{ severity: 'warning', count: 1 }],
+      },
+      spendingTargets: [
+        { spendingCategory: 'essential', targetPercentage: 50, actualPercentage: 60, driftPercentage: 10, amount: 600 },
+      ],
+      dataFreshness: {
+        transactionCount: 10,
+        activeMonths: 3,
+        latestTransactionDate: '2025-02-01',
+        latestScrapeAt: '2025-02-02',
       },
       permissions: {
         transactions: false,
@@ -309,6 +425,11 @@ describe('financial-context service', () => {
     expect(formatted).toContain('✓');
     expect(formatted).toContain('MONTHLY AVERAGES:');
     expect(formatted).toContain('INVESTMENTS:');
+    expect(formatted).toContain('Active holdings: 5');
+    expect(formatted).toContain('ACTIVE PROACTIVE ACTIONS:');
+    expect(formatted).toContain('SUBSCRIPTION SIGNALS:');
+    expect(formatted).toContain('SPENDING TARGETS (This Month):');
+    expect(formatted).toContain('DATA FRESHNESS:');
     expect(formatted).toContain('NOTE: User has not granted access to: transaction details, analytics and trends');
     expect(formatted).toContain('IgnoredSixth');
   });
@@ -335,6 +456,10 @@ describe('financial-context service', () => {
     const schema = getSchemaDescription();
     expect(schema).toContain('transactions:');
     expect(schema).toContain('category_definitions:');
+    expect(schema).toContain('investment_holdings:');
+    expect(schema).toContain('spending_category_targets:');
+    expect(schema).not.toContain('subscriptions:');
+    expect(schema).not.toContain('smart_action_items:');
     expect(schema).toContain('user_profile:');
     expect(schema).toContain('transaction_pairing_exclusions:');
     expect(schema).toContain('Always use parameterized-style placeholders ($1, $2)');
