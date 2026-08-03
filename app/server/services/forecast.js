@@ -19,6 +19,8 @@ const DEFAULT_HISTORY_MONTHS = parsePositiveInt(process.env.FORECAST_HISTORY_MON
 const DEFAULT_FORECAST_CACHE_TTL_MS = parsePositiveInt(process.env.FORECAST_CACHE_TTL_MS, 5 * 60 * 1000);
 const MIN_EXPENSE_MONTHLY_MONTHS = parsePositiveInt(process.env.FORECAST_MIN_EXPENSE_MONTHLY_MONTHS, 3);
 const MIN_EXPENSE_MONTHLY_OCCURRENCES = parsePositiveInt(process.env.FORECAST_MIN_EXPENSE_MONTHLY_OCCURRENCES, 3);
+const VARIABLE_EXPENSE_BASELINE_MONTHS = parsePositiveInt(process.env.FORECAST_VARIABLE_EXPENSE_BASELINE_MONTHS, 6);
+const MIN_VARIABLE_EXPENSE_BASELINE_ACTIVE_MONTHS = parsePositiveInt(process.env.FORECAST_MIN_VARIABLE_EXPENSE_BASELINE_ACTIVE_MONTHS, 2);
 
 const forecastResultCache = new Map();
 
@@ -162,6 +164,20 @@ function parseLocalDate(dateStr) {
   if (parts.length !== 3 || parts.some(Number.isNaN)) return new Date(dateStr);
   const [year, month, day] = parts;
   return new Date(year, month - 1, day);
+}
+
+function getMonthKeyFromDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getTransactionMonthKey(txn) {
+  if (typeof txn?.month === 'string' && /^\d{4}-\d{2}$/.test(txn.month)) return txn.month;
+  if (typeof txn?.date === 'string' && txn.date.length >= 7) return txn.date.slice(0, 7);
+  return null;
+}
+
+function sameMonth(date, otherDate) {
+  return date.getFullYear() === otherDate.getFullYear() && date.getMonth() === otherDate.getMonth();
 }
 
 function resolveForecastWindow(now, { includeToday, forecastDays, forecastMonths }) {
@@ -761,6 +777,250 @@ function buildPatternCaches(patterns) {
   return patternEntries;
 }
 
+function resolvePatternKeyForTransaction(patterns, txn) {
+  const transactionName = typeof txn?.name === 'string' ? txn.name.trim() : '';
+  const categoryName = getTransactionCategoryName(txn);
+  const categoryPatternKey = getCategoryPatternKey(txn);
+  const namePatternKey = transactionName ? getTransactionNamePatternKey(txn, transactionName) : null;
+  const legacyPatternKey = (transactionName && patterns[transactionName])
+    ? transactionName
+    : (patterns[categoryName] ? categoryName : null);
+
+  if (namePatternKey && patterns[namePatternKey]) return namePatternKey;
+  if (patterns[categoryPatternKey]) return categoryPatternKey;
+  return legacyPatternKey || categoryPatternKey;
+}
+
+function isVariableExpensePattern(pattern) {
+  if (!pattern || pattern.categoryType !== 'expense') return false;
+  if (pattern.insufficientData && !pattern.tailOnly) return false;
+  if (pattern.patternType === 'monthly' && (pattern.isFixedAmount || pattern.avgOccurrencesPerMonth <= 1.5)) {
+    return false;
+  }
+  if (pattern.patternType === 'bi-monthly' || pattern.patternType === 'sporadic') {
+    return Number(pattern.avgOccurrencesPerMonth || 0) >= 1.5;
+  }
+  return pattern.patternType === 'daily' || pattern.patternType === 'weekly';
+}
+
+function capMonthlyTotals(monthlyTotals) {
+  const positiveTotals = monthlyTotals.filter(total => total > 0);
+  if (positiveTotals.length < 2) return monthlyTotals;
+
+  const center = median(positiveTotals);
+  const deviations = positiveTotals.map(total => Math.abs(total - center));
+  const mad = median(deviations);
+  const cap = center + Math.max(center * 0.75, mad * 3);
+
+  return monthlyTotals.map(total => Math.min(total, cap));
+}
+
+function buildVariableExpenseMonthlyBaselines(transactions, patterns, now = new Date()) {
+  const currentMonth = getMonthKeyFromDate(now);
+  const completedMonths = Array.from(new Set(
+    transactions
+      .map(getTransactionMonthKey)
+      .filter(month => month && month < currentMonth)
+  )).sort();
+
+  const recentMonths = completedMonths.slice(-VARIABLE_EXPENSE_BASELINE_MONTHS);
+  if (recentMonths.length === 0) return {};
+
+  const recentMonthSet = new Set(recentMonths);
+  const totalsByPattern = new Map();
+
+  transactions.forEach((txn) => {
+    if (txn?.category_type !== 'expense') return;
+    const month = getTransactionMonthKey(txn);
+    if (!month || !recentMonthSet.has(month)) return;
+
+    const patternKey = resolvePatternKeyForTransaction(patterns, txn);
+    const pattern = patterns[patternKey];
+    if (!isVariableExpensePattern(pattern)) return;
+
+    const amount = Math.abs(Number(txn.price) || 0);
+    if (amount <= 0) return;
+
+    if (!totalsByPattern.has(patternKey)) totalsByPattern.set(patternKey, new Map());
+    const patternTotals = totalsByPattern.get(patternKey);
+    patternTotals.set(month, (patternTotals.get(month) || 0) + amount);
+  });
+
+  const baselines = {};
+  totalsByPattern.forEach((totalsByMonth, patternKey) => {
+    const activeMonths = Array.from(totalsByMonth.values()).filter(total => total > 0).length;
+    if (activeMonths < MIN_VARIABLE_EXPENSE_BASELINE_ACTIVE_MONTHS) return;
+
+    const monthlyTotals = recentMonths.map(month => totalsByMonth.get(month) || 0);
+    const cappedTotals = capMonthlyTotals(monthlyTotals);
+    const monthlyBaseline = median(cappedTotals);
+    if (!Number.isFinite(monthlyBaseline) || monthlyBaseline <= 0) return;
+
+    const pattern = patterns[patternKey];
+    baselines[patternKey] = {
+      patternKey,
+      category: pattern.category,
+      categoryDefinitionId: pattern.categoryDefinitionId ?? null,
+      categoryType: 'expense',
+      parentCategory: pattern.parentCategory || null,
+      monthlyBaseline,
+      monthlyStdDev: standardDeviation(cappedTotals),
+      monthsAnalyzed: recentMonths.length,
+      activeMonths,
+      sourceMonths: recentMonths,
+    };
+  });
+
+  return baselines;
+}
+
+function getActualSpendForBaseline(monthTransactions, baseline, patterns) {
+  return (monthTransactions || []).reduce((sum, txn) => {
+    if (txn?.category_type !== 'expense') return sum;
+    const patternKey = resolvePatternKeyForTransaction(patterns, txn);
+    if (patternKey !== baseline.patternKey) return sum;
+    return sum + Math.abs(Number(txn.price) || 0);
+  }, 0);
+}
+
+function calculateVariableExpenseBaselineTarget(baseline, monthForecasts, monthTransactions, now, patterns) {
+  if (!baseline || !Array.isArray(monthForecasts) || monthForecasts.length === 0) return 0;
+
+  const firstForecastDate = parseLocalDate(monthForecasts[0].date);
+  if (Number.isNaN(firstForecastDate.getTime())) return 0;
+
+  const daysInMonthForForecast = getDaysInMonth(firstForecastDate.getFullYear(), firstForecastDate.getMonth());
+  const coveredForecastDays = monthForecasts.length;
+  const isCurrentMonth = sameMonth(firstForecastDate, now);
+
+  if (isCurrentMonth) {
+    const actualSpend = getActualSpendForBaseline(monthTransactions, baseline, patterns);
+    const remainingBaseline = Math.max(0, baseline.monthlyBaseline - actualSpend);
+    const remainingDaysFromWindowStart = Math.max(1, daysInMonthForForecast - firstForecastDate.getDate() + 1);
+    const coverageRatio = clamp(coveredForecastDays / remainingDaysFromWindowStart, 0, 1);
+    return remainingBaseline * coverageRatio;
+  }
+
+  return baseline.monthlyBaseline * clamp(coveredForecastDays / daysInMonthForForecast, 0, 1);
+}
+
+function refreshForecastDayPredictions(day) {
+  if (!Array.isArray(day.predictions)) return;
+  day.expectedCashFlow = (Number(day.expectedIncome) || 0) - (Number(day.expectedExpenses) || 0);
+  day.predictions.sort((a, b) => {
+    const probDiff = (Number(b?.probability) || 0) - (Number(a?.probability) || 0);
+    if (probDiff !== 0) return probDiff;
+    return (Number(b?.expectedAmount) || 0) - (Number(a?.expectedAmount) || 0);
+  });
+  day.topPredictions = day.predictions
+    .filter((p) => (Number(p?.probabilityWeightedAmount) || 0) > 0)
+    .slice(0, 5);
+}
+
+function reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntriesByDay, monthlyBaselines, monthTransactions, now, patterns) {
+  if (!Array.isArray(monthForecasts) || monthForecasts.length === 0) return;
+  const baselines = Object.values(monthlyBaselines || {});
+  if (baselines.length === 0) return;
+
+  const simulationByDate = new Map((monthSimulationEntriesByDay || []).map(dayInfo => [dayInfo.date, dayInfo]));
+
+  baselines.forEach((baseline) => {
+    const targetAmount = calculateVariableExpenseBaselineTarget(baseline, monthForecasts, monthTransactions, now, patterns);
+    if (!Number.isFinite(targetAmount) || targetAmount <= 0.01) return;
+
+    const matchingPredictions = [];
+    monthForecasts.forEach((day) => {
+      (day.predictions || []).forEach((prediction) => {
+        if (prediction.categoryType !== 'expense') return;
+        if (prediction.patternKey !== baseline.patternKey) return;
+        matchingPredictions.push({ day, prediction });
+      });
+    });
+
+    const currentForecastedAmount = matchingPredictions.reduce(
+      (sum, item) => sum + (Number(item.prediction.probabilityWeightedAmount) || 0),
+      0
+    );
+
+    if (currentForecastedAmount > 0.01) {
+      const scale = targetAmount / currentForecastedAmount;
+      matchingPredictions.forEach(({ day, prediction }) => {
+        const previousWeightedAmount = Number(prediction.probabilityWeightedAmount) || 0;
+        const nextWeightedAmount = previousWeightedAmount * scale;
+        const amountScale = previousWeightedAmount > 0 && Number(prediction.expectedAmount) > 0
+          ? nextWeightedAmount / previousWeightedAmount
+          : scale;
+
+        prediction.expectedAmount = (Number(prediction.expectedAmount) || 0) * amountScale;
+        prediction.probabilityWeightedAmount = nextWeightedAmount;
+        prediction.amountRange = {
+          low: (Number(prediction.amountRange?.low) || 0) * amountScale,
+          high: (Number(prediction.amountRange?.high) || 0) * amountScale,
+        };
+        prediction.isCalibrated = true;
+        prediction.monthlyBaseline = baseline.monthlyBaseline;
+        prediction.calibrationScale = scale;
+
+        day.expectedExpenses += nextWeightedAmount - previousWeightedAmount;
+      });
+
+      monthSimulationEntriesByDay.forEach((dayInfo) => {
+        (dayInfo.entries || []).forEach((entry) => {
+          if (entry.categoryType !== 'expense' || entry.patternKey !== baseline.patternKey) return;
+          entry.avgAmount = (Number(entry.avgAmount) || 0) * scale;
+          entry.stdDev = (Number(entry.stdDev) || 0) * Math.abs(scale);
+          entry.isCalibrated = true;
+          entry.monthlyBaseline = baseline.monthlyBaseline;
+        });
+      });
+    } else {
+      const amountPerDay = targetAmount / monthForecasts.length;
+      monthForecasts.forEach((day) => {
+        const prediction = {
+          patternKey: baseline.patternKey,
+          category: baseline.category,
+          categoryDefinitionId: baseline.categoryDefinitionId ?? null,
+          transactionName: baseline.category,
+          monthlyKey: `${baseline.patternKey}:monthly-baseline`,
+          categoryType: 'expense',
+          parentCategory: baseline.parentCategory || null,
+          probability: 1,
+          expectedAmount: amountPerDay,
+          amountRange: {
+            low: amountPerDay,
+            high: amountPerDay,
+          },
+          probabilityWeightedAmount: amountPerDay,
+          useDailyTotal: true,
+          isBaselineForecast: true,
+          isCalibrated: true,
+          monthlyBaseline: baseline.monthlyBaseline,
+        };
+        day.predictions.push(prediction);
+        day.expectedExpenses += amountPerDay;
+
+        const simulationDay = simulationByDate.get(day.date);
+        if (simulationDay) {
+          simulationDay.entries.push({
+            patternKey: baseline.patternKey,
+            monthlyKey: prediction.monthlyKey,
+            categoryType: 'expense',
+            patternType: 'daily',
+            probability: 1,
+            avgAmount: amountPerDay,
+            stdDev: 0,
+            isBaselineForecast: true,
+            isCalibrated: true,
+            monthlyBaseline: baseline.monthlyBaseline,
+          });
+        }
+      });
+    }
+  });
+
+  monthForecasts.forEach(refreshForecastDayPredictions);
+}
+
 function getProbabilityThreshold(pattern) {
   const cached = pattern._cache?.probabilityThreshold;
   if (Number.isFinite(cached)) return cached;
@@ -1159,8 +1419,6 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
   let expectedIncome = 0;
   let expectedExpenses = 0;
   let expectedInvestments = 0;
-  const monthlyExpenseFloorByCategory = {};
-  const expectedExpensesByCategory = {};
 
   const entries = patternEntries || Object.entries(patterns);
   entries.forEach(([category, pattern]) => {
@@ -1178,6 +1436,7 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
       const transactionName = pattern.transactionName || pattern.category;
 
       const prediction = {
+        patternKey: category,
         category: pattern.category,
         categoryDefinitionId: pattern.categoryDefinitionId ?? null,
         transactionName,
@@ -1212,28 +1471,9 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
         expectedIncome += prediction.probabilityWeightedAmount;
       } else if (pattern.categoryType === 'expense') {
         expectedExpenses += prediction.probabilityWeightedAmount;
-        expectedExpensesByCategory[prediction.category] = (expectedExpensesByCategory[prediction.category] || 0) + prediction.probabilityWeightedAmount;
-        if (pattern.avgAmount && pattern.avgOccurrencesPerMonth) {
-          const monthlyAvg = pattern.avgAmount * pattern.avgOccurrencesPerMonth;
-          const isHighFrequency = pattern.avgOccurrencesPerMonth >= 8;
-          monthlyExpenseFloorByCategory[pattern.category] = Math.max(
-            monthlyExpenseFloorByCategory[pattern.category] || 0,
-            isHighFrequency ? monthlyAvg : monthlyAvg * 1.0
-          );
-        }
       } else if (pattern.categoryType === 'investment') {
         expectedInvestments += prediction.probabilityWeightedAmount;
       }
-    }
-  });
-
-  const daysInMonthForDate = getDaysInMonth(date.getFullYear(), date.getMonth());
-  Object.entries(monthlyExpenseFloorByCategory).forEach(([cat, monthlyFloor]) => {
-    const floorPerDay = monthlyFloor / daysInMonthForDate;
-    const alreadyExpected = expectedExpensesByCategory[cat] || 0;
-    if (floorPerDay > alreadyExpected) {
-      const delta = floorPerDay - alreadyExpected;
-      expectedExpenses += delta;
     }
   });
 
@@ -1312,20 +1552,10 @@ function adjustMonthlyPatternForecasts(dailyForecasts, patterns, adjustments) {
   }
 
   // Re-sort predictions/topPredictions since monthly normalization changes probabilities.
-  dailyForecasts.forEach((day) => {
-    if (!Array.isArray(day.predictions)) return;
-    day.predictions.sort((a, b) => {
-      const probDiff = (Number(b?.probability) || 0) - (Number(a?.probability) || 0);
-      if (probDiff !== 0) return probDiff;
-      return (Number(b?.expectedAmount) || 0) - (Number(a?.expectedAmount) || 0);
-    });
-    day.topPredictions = day.predictions
-      .filter((p) => (Number(p?.probabilityWeightedAmount) || 0) > 0)
-      .slice(0, 5);
-  });
+  dailyForecasts.forEach(refreshForecastDayPredictions);
 }
 
-function generateForecastAcrossMonths(patterns, patternEntries, db, startDate, endDate, now, currentMonthTransactions) {
+function generateForecastAcrossMonths(patterns, patternEntries, db, startDate, endDate, now, currentMonthTransactions, monthlyBaselines = {}) {
   const dailyForecasts = [];
   const simulationEntriesByDay = [];
   const adjustmentsByMonth = {};
@@ -1350,12 +1580,13 @@ function generateForecastAcrossMonths(patterns, patternEntries, db, startDate, e
     log(`📅 Month ${monthKey}: txns=${monthTransactions.length} days=${formatDate(monthStart)}→${formatDate(monthEnd)}`);
 
     const monthForecasts = [];
+    const monthSimulationEntriesByDay = [];
     let dayCursor = new Date(monthStart);
     while (dayCursor <= monthEnd) {
       const simulationEntries = [];
       const dayForecast = forecastDay(dayCursor, patterns, monthAdjustments, patternEntries, simulationEntries);
       monthForecasts.push(dayForecast);
-      simulationEntriesByDay.push({
+      monthSimulationEntriesByDay.push({
         date: dayForecast.date,
         monthKey,
         entries: simulationEntries,
@@ -1364,9 +1595,11 @@ function generateForecastAcrossMonths(patterns, patternEntries, db, startDate, e
     }
 
     adjustMonthlyPatternForecasts(monthForecasts, patterns, monthAdjustments);
+    reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntriesByDay, monthlyBaselines, monthTransactions, now, patterns);
     log(`  ↳ Adjusted monthly patterns for ${monthKey}: ${monthForecasts.length} day(s)`);
 
     dailyForecasts.push(...monthForecasts);
+    simulationEntriesByDay.push(...monthSimulationEntriesByDay);
     cursor = new Date(year, month + 1, 1);
   }
 
@@ -1445,6 +1678,7 @@ async function generateDailyForecast(options = {}) {
 
     const patterns = analyzeCategoryPatterns(allTransactions);
     const patternEntries = buildPatternCaches(patterns);
+    const variableExpenseBaselines = buildVariableExpenseMonthlyBaselines(allTransactions, patterns, now);
     const currentMonthTransactions = allTransactions.filter(txn => txn.month === currentMonth);
     const categoryCount = Object.keys(patterns).length;
     logPatternSummary(patterns);
@@ -1465,7 +1699,8 @@ async function generateDailyForecast(options = {}) {
       forecastStartDate,
       forecastEndDate,
       now,
-      currentMonthTransactions
+      currentMonthTransactions,
+      variableExpenseBaselines
     );
     const monteCarloResults = runMonteCarloSimulation(dailyForecasts, simulationEntriesByDay, CONFIG.monteCarloRuns);
 
@@ -1482,6 +1717,7 @@ async function generateDailyForecast(options = {}) {
         firstTransaction: allTransactions[0].date,
         lastTransaction: allTransactions[allTransactions.length - 1].date,
         totalCategories: categoryCount,
+        variableExpenseBaselines: Object.keys(variableExpenseBaselines).length,
         currentMonth,
         currentDay,
         currentMonthTransactions: currentMonthTransactions.length,
@@ -1906,7 +2142,10 @@ module.exports = {
     buildBudgetOutlook,
     buildChosenMonthlyOccurrenceDateByMonth,
     buildPatternCaches,
+    buildVariableExpenseMonthlyBaselines,
+    calculateVariableExpenseBaselineTarget,
     calculateDayProbability,
+    capMonthlyTotals,
     formatDate,
     generateForecastAcrossMonths,
     forecastDay,
@@ -1915,15 +2154,21 @@ module.exports = {
     getCurrentMonthTransactions,
     getDayName,
     getDaysInMonth,
+    getMonthKeyFromDate,
     getProbabilityThreshold,
     getTransactionNamePatternKey,
+    getTransactionMonthKey,
     isLastDayOfMonth,
+    isVariableExpensePattern,
     loadCategoryDefinitions,
     logPatternSummary,
     mean,
     openForecastDb,
     parseLocalDate,
     parsePositiveInt,
+    reconcileVariableExpenseForecasts,
+    refreshForecastDayPredictions,
+    resolvePatternKeyForTransaction,
     resolveForecastDbPath,
     resolveForecastWindow,
     runMonteCarloSimulation,

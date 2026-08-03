@@ -855,6 +855,199 @@ describe('forecast service internals', () => {
     expect(expenseMonthlyDaily[1].expectedExpenses).toBe(0);
   });
 
+  it('builds spike-resistant monthly baselines for variable expenses only', () => {
+    const { buildVariableExpenseMonthlyBaselines } = forecastModule._internal;
+    const now = new Date('2026-06-15T12:00:00.000Z');
+    const patterns = {
+      'category:2': {
+        patternKey: 'category:2',
+        category: 'Groceries',
+        categoryDefinitionId: 2,
+        categoryType: 'expense',
+        patternType: 'weekly',
+        avgOccurrencesPerMonth: 8,
+        isFixedAmount: false,
+      },
+      'category:1': {
+        patternKey: 'category:1',
+        category: 'Rent',
+        categoryDefinitionId: 1,
+        categoryType: 'expense',
+        patternType: 'monthly',
+        avgOccurrencesPerMonth: 1,
+        isFixedAmount: true,
+      },
+    };
+
+    const makeTxn = (month: string, categoryDefinitionId: number, categoryName: string, price: number) => ({
+      date: `${month}-05`,
+      month,
+      name: categoryName,
+      price,
+      category_type: 'expense',
+      category_definition_id: categoryDefinitionId,
+      category_name: categoryName,
+      day_of_week: '1',
+      day_of_month: 5,
+    });
+
+    const baselines = buildVariableExpenseMonthlyBaselines([
+      makeTxn('2026-01', 2, 'Groceries', -1000),
+      makeTxn('2026-02', 2, 'Groceries', -1100),
+      makeTxn('2026-03', 2, 'Groceries', -5000),
+      makeTxn('2026-04', 2, 'Groceries', -1050),
+      makeTxn('2026-05', 2, 'Groceries', -1150),
+      makeTxn('2026-06', 2, 'Groceries', -700),
+      makeTxn('2026-01', 1, 'Rent', -4000),
+      makeTxn('2026-02', 1, 'Rent', -4000),
+    ], patterns, now);
+
+    expect(baselines['category:2'].monthlyBaseline).toBe(1100);
+    expect(baselines['category:2'].activeMonths).toBe(5);
+    expect(baselines['category:2'].sourceMonths).not.toContain('2026-06');
+    expect(baselines['category:1']).toBeUndefined();
+  });
+
+  it('reconciles current-month variable expenses to remaining monthly baseline', () => {
+    const { reconcileVariableExpenseForecasts } = forecastModule._internal;
+    const now = new Date('2026-06-15T12:00:00.000Z');
+    const patterns = {
+      'category:2': {
+        patternKey: 'category:2',
+        category: 'Groceries',
+        categoryDefinitionId: 2,
+        categoryType: 'expense',
+        patternType: 'weekly',
+        avgOccurrencesPerMonth: 8,
+      },
+    };
+    const baseline = {
+      'category:2': {
+        patternKey: 'category:2',
+        category: 'Groceries',
+        categoryDefinitionId: 2,
+        categoryType: 'expense',
+        monthlyBaseline: 1200,
+      },
+    };
+
+    const monthForecasts = Array.from({ length: 15 }, (_, idx) => {
+      const day = String(16 + idx).padStart(2, '0');
+      const prediction = idx < 2
+        ? [{
+            patternKey: 'category:2',
+            category: 'Groceries',
+            categoryDefinitionId: 2,
+            categoryType: 'expense',
+            transactionName: 'Groceries',
+            monthlyKey: 'category:2',
+            probability: 0.5,
+            expectedAmount: idx === 0 ? 200 : 400,
+            amountRange: { low: 100, high: idx === 0 ? 300 : 500 },
+            probabilityWeightedAmount: idx === 0 ? 100 : 200,
+          }]
+        : [];
+      const expectedExpenses = prediction.reduce((sum, p) => sum + p.probabilityWeightedAmount, 0);
+      return {
+        date: `2026-06-${day}`,
+        predictions: prediction,
+        expectedIncome: 0,
+        expectedExpenses,
+        expectedCashFlow: -expectedExpenses,
+        topPredictions: prediction,
+      };
+    });
+
+    const simulationEntries = monthForecasts.map(day => ({
+      date: day.date,
+      monthKey: '2026-06',
+      entries: day.predictions.map((prediction: any) => ({
+        patternKey: prediction.patternKey,
+        monthlyKey: prediction.monthlyKey,
+        categoryType: 'expense',
+        patternType: 'weekly',
+        probability: prediction.probability,
+        avgAmount: prediction.expectedAmount,
+        stdDev: 10,
+      })),
+    }));
+
+    const monthTransactions = [{
+      date: '2026-06-02',
+      month: '2026-06',
+      name: 'Groceries',
+      price: -300,
+      category_type: 'expense',
+      category_definition_id: 2,
+      category_name: 'Groceries',
+    }];
+
+    reconcileVariableExpenseForecasts(monthForecasts, simulationEntries, baseline, monthTransactions, now, patterns);
+
+    const totalGroceries = monthForecasts.reduce((sum, day) => (
+      sum + day.predictions.reduce((innerSum: number, p: any) => innerSum + (p.probabilityWeightedAmount || 0), 0)
+    ), 0);
+    expect(totalGroceries).toBe(900);
+    expect(monthForecasts[0].predictions[0].probabilityWeightedAmount).toBe(300);
+    expect(monthForecasts[1].predictions[0].probabilityWeightedAmount).toBe(600);
+    expect(simulationEntries[0].entries[0].avgAmount).toBe(600);
+    expect(monthForecasts[0].expectedCashFlow).toBe(-300);
+  });
+
+  it('creates prorated fallback baseline entries when variable expense timing is absent', () => {
+    const { reconcileVariableExpenseForecasts } = forecastModule._internal;
+    const now = new Date('2026-06-15T12:00:00.000Z');
+    const patterns = {
+      'category:2': {
+        patternKey: 'category:2',
+        category: 'Groceries',
+        categoryDefinitionId: 2,
+        categoryType: 'expense',
+        patternType: 'weekly',
+        avgOccurrencesPerMonth: 8,
+      },
+    };
+    const baseline = {
+      'category:2': {
+        patternKey: 'category:2',
+        category: 'Groceries',
+        categoryDefinitionId: 2,
+        categoryType: 'expense',
+        monthlyBaseline: 930,
+      },
+    };
+    const monthForecasts = Array.from({ length: 10 }, (_, idx) => ({
+      date: `2026-07-${String(idx + 1).padStart(2, '0')}`,
+      predictions: [],
+      expectedIncome: 0,
+      expectedExpenses: 0,
+      expectedCashFlow: 0,
+      topPredictions: [],
+    }));
+    const simulationEntries = monthForecasts.map(day => ({
+      date: day.date,
+      monthKey: '2026-07',
+      entries: [],
+    }));
+
+    reconcileVariableExpenseForecasts(monthForecasts, simulationEntries, baseline, [], now, patterns);
+
+    const target = 930 * (10 / 31);
+    const totalForecasted = monthForecasts.reduce((sum, day) => sum + day.expectedExpenses, 0);
+    expect(totalForecasted).toBeCloseTo(target, 6);
+    expect(monthForecasts[0].predictions[0]).toMatchObject({
+      category: 'Groceries',
+      probability: 1,
+      isBaselineForecast: true,
+      isCalibrated: true,
+    });
+    expect(simulationEntries[0].entries[0]).toMatchObject({
+      categoryType: 'expense',
+      probability: 1,
+      isBaselineForecast: true,
+    });
+  });
+
   it('covers simulation branches for monthly skips, non-monthly entries, and zero Monte Carlo runs', () => {
     const {
       sampleAmount,
