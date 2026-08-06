@@ -130,10 +130,12 @@ describe('bulk scrape service', () => {
 
     expect(result).toEqual({
       success: true,
+      status: 'success',
       message: 'All accounts are up to date',
       totalProcessed: 0,
       successCount: 0,
       failureCount: 0,
+      blockedCount: 0,
       totalTransactions: 0,
       results: [],
     });
@@ -141,7 +143,7 @@ describe('bulk scrape service', () => {
     expect(releaseMock).toHaveBeenCalledTimes(1);
   });
 
-  it('decrypts credential envelopes and falls back to raw values on decrypt errors', async () => {
+  it('decrypts credential envelopes while preserving intentionally plain fields', async () => {
     const originalKey = process.env.SHEKELSYNC_ENCRYPTION_KEY;
     try {
       process.env.SHEKELSYNC_ENCRYPTION_KEY = '1'.repeat(64);
@@ -150,15 +152,17 @@ describe('bulk scrape service', () => {
 
       const encryptedUsername = encryption.encrypt('demo-user');
       const encryptedId = encryption.encrypt('987654321');
+      const encryptedIdentificationCode = encryption.encrypt('secure-code');
+      const encryptedPassword = encryption.encrypt('12345');
 
       configureService({
         staleAccounts: [
           makeAccount({
             username: encryptedUsername,
-            password: 12345, // non-string bypasses decrypt
+            password: encryptedPassword,
             id_number: encryptedId,
             card6_digits: '123456', // no colon bypasses decrypt
-            identification_code: 'bad:blob', // decrypt throws, should fall back
+            identification_code: encryptedIdentificationCode,
             bank_account_number: '11112222',
             institution_id: 77,
           }),
@@ -176,13 +180,13 @@ describe('bulk scrape service', () => {
         username: 'demo-user',
         userCode: 'demo-user',
         email: 'demo-user',
-        password: 12345,
+        password: '12345',
         card6Digits: '123456',
         bankAccountNumber: '11112222',
-        identification_code: 'bad:blob',
-        num: 'bad:blob',
-        nationalID: 'bad:blob',
-        otpToken: 'bad:blob',
+        identification_code: 'secure-code',
+        num: 'secure-code',
+        nationalID: 'secure-code',
+        otpToken: 'secure-code',
         institution_id: 77,
         vendor: 'max',
       });
@@ -193,6 +197,98 @@ describe('bulk scrape service', () => {
         process.env.SHEKELSYNC_ENCRYPTION_KEY = originalKey;
       }
     }
+  });
+
+  it('blocks an account instead of sending ciphertext when credential decryption fails', async () => {
+    const originalKey = process.env.SHEKELSYNC_ENCRYPTION_KEY;
+    try {
+      process.env.SHEKELSYNC_ENCRYPTION_KEY = '6'.repeat(64);
+      const encryptionModule = await import('../../../lib/server/encryption.js');
+      const encryption = (encryptionModule as any).default ?? encryptionModule;
+      const encrypted = encryption.encrypt('sensitive-value');
+      const encryptedWithInvalidTag = `${encrypted.slice(0, -1)}${encrypted.endsWith('0') ? '1' : '0'}`;
+
+      configureService({
+        staleAccounts: [makeAccount({ username: encryptedWithInvalidTag, password: null })],
+      });
+
+      const result = await bulkScrapeService.bulkScrape({ logger: null });
+
+      expect(runScrapeMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        success: false,
+        status: 'blocked',
+        successCount: 0,
+        failureCount: 0,
+        blockedCount: 1,
+      });
+      expect(result.results[0]).toMatchObject({
+        success: false,
+        status: 'blocked',
+        reason: 'credential_decrypt_failed',
+        blocked: true,
+      });
+      expect(JSON.stringify(result)).not.toContain(encryptedWithInvalidTag);
+    } finally {
+      if (typeof originalKey === 'undefined') {
+        delete process.env.SHEKELSYNC_ENCRYPTION_KEY;
+      } else {
+        process.env.SHEKELSYNC_ENCRYPTION_KEY = originalKey;
+      }
+    }
+  });
+
+  it('blocks malformed raw credential values while continuing healthy sibling accounts', async () => {
+    const malformedValue = 'truncated-ciphertext';
+    configureService({
+      staleAccounts: [
+        makeAccount({ id: 1, vendor: 'max', username: malformedValue }),
+        makeAccount({ id: 2, vendor: 'isracard' }),
+      ],
+      runScrapeImpl: async () => ({ success: true, accounts: [] }),
+    });
+
+    const result = await bulkScrapeService.bulkScrape({ logger: null });
+
+    expect(runScrapeMock).toHaveBeenCalledTimes(1);
+    expect(runScrapeMock.mock.calls[0][0].options.companyId).toBe('isracard');
+    expect(result).toMatchObject({
+      success: false,
+      status: 'partial',
+      successCount: 1,
+      failureCount: 0,
+      blockedCount: 1,
+    });
+    expect(result.results[0]).toMatchObject({
+      status: 'blocked',
+      reason: 'credential_decrypt_failed',
+    });
+    expect(JSON.stringify(result)).not.toContain(malformedValue);
+  });
+
+  it('reports failed when every provider attempt fails', async () => {
+    configureService({
+      staleAccounts: [
+        makeAccount({ id: 1, vendor: 'max' }),
+        makeAccount({ id: 2, vendor: 'isracard' }),
+      ],
+      runScrapeImpl: async ({ options }: any) => {
+        if (options.companyId === 'max') {
+          return { success: false, errorMessage: 'provider rejected', accounts: [] };
+        }
+        throw new Error('network down');
+      },
+    });
+
+    const result = await bulkScrapeService.bulkScrape({ logger: null });
+
+    expect(result).toMatchObject({
+      success: false,
+      status: 'failed',
+      successCount: 0,
+      failureCount: 2,
+      blockedCount: 0,
+    });
   });
 
   it('aggregates success, scrape failures, and thrown errors while calling progress hooks', async () => {
@@ -240,10 +336,12 @@ describe('bulk scrape service', () => {
     expect(onAccountStart).toHaveBeenCalledTimes(3);
     expect(onAccountComplete).toHaveBeenCalledTimes(3);
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('partial');
     expect(result.totalProcessed).toBe(3);
     expect(result.successCount).toBe(1);
     expect(result.failureCount).toBe(2);
+    expect(result.blockedCount).toBe(0);
     expect(result.totalTransactions).toBe(3);
     expect(result.results[0]).toMatchObject({
       vendor: 'max',
@@ -322,9 +420,11 @@ describe('bulk scrape service', () => {
 
     expect(result).toMatchObject({
       success: true,
+      status: 'success',
       totalProcessed: 1,
       successCount: 1,
       failureCount: 0,
+      blockedCount: 0,
       totalTransactions: 0,
     });
     expect(enterBulkModeMock).not.toHaveBeenCalled();
