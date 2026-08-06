@@ -6,21 +6,22 @@ const scrapingService = require('./run.js');
 let databaseRef = database;
 let scrapingServiceRef = scrapingService;
 
-function safeDecrypt(value) {
+function decryptCredential(value, fieldName) {
   if (value === null || value === undefined) {
     return null;
   }
-  if (typeof value !== 'string') {
-    return value;
-  }
-  // Only attempt decryption for values that match our encryption envelope format.
-  if (!value.includes(':')) {
-    return value;
-  }
   try {
+    if (typeof value !== 'string' || value.length === 0) {
+      throw new Error('Invalid encrypted credential value');
+    }
     return decrypt(value);
   } catch {
-    return value;
+    const error = new Error(
+      `Saved credential field ${fieldName || 'unknown'} could not be decrypted. ` +
+      'Re-enter this account before syncing.',
+    );
+    error.code = 'credential_decrypt_failed';
+    throw error;
   }
 }
 
@@ -113,10 +114,12 @@ async function bulkScrape(options = {}) {
     if (staleAccounts.length === 0) {
       return {
         success: true,
+        status: 'success',
         message: 'All accounts are up to date',
         totalProcessed: 0,
         successCount: 0,
         failureCount: 0,
+        blockedCount: 0,
         totalTransactions: 0,
         results: [],
       };
@@ -144,14 +147,18 @@ async function bulkScrape(options = {}) {
       onAccountStart?.({ account, index, total: totalAccounts });
 
       try {
-        const decryptedUsername = safeDecrypt(account.username);
-        const decryptedIdentificationCode = safeDecrypt(account.identification_code);
+        const decryptedUsername = decryptCredential(account.username, 'username');
+        const decryptedIdentificationCode = decryptCredential(
+          account.identification_code,
+          'identification_code',
+        );
 
         const decryptedCredentials = {
           dbId: account.id, // Database row ID for scrape event tracking
-          id: safeDecrypt(account.id_number),
-          card6Digits: safeDecrypt(account.card6_digits),
-          password: safeDecrypt(account.password),
+          id: decryptCredential(account.id_number, 'id_number'),
+          // Card/account identifiers are intentionally stored as plain values.
+          card6Digits: account.card6_digits || null,
+          password: decryptCredential(account.password, 'password'),
           username: decryptedUsername,
           userCode: decryptedUsername,
           email: decryptedUsername,
@@ -213,9 +220,11 @@ async function bulkScrape(options = {}) {
           vendor: account.vendor,
           nickname: account.nickname,
           success: false,
-          status: 'failed',
+          status: error.code === 'credential_decrypt_failed' ? 'blocked' : 'failed',
           message: error.message || 'Unknown error',
           transactionCount: 0,
+          reason: error.code || null,
+          blocked: error.code === 'credential_decrypt_failed',
         };
 
         onAccountComplete?.({ account, index, total: totalAccounts, result: failure, error });
@@ -225,7 +234,9 @@ async function bulkScrape(options = {}) {
     }
 
     const successCount = processedResults.filter((entry) => entry.success).length;
-    const failureCount = processedResults.length - successCount;
+    const blockedCount = processedResults.filter((entry) => entry.blocked).length;
+    const failureCount = processedResults.length - successCount - blockedCount;
+    const unsuccessfulCount = failureCount + blockedCount;
     const totalTransactions = processedResults.reduce(
       (sum, entry) => sum + (entry.transactionCount || 0),
       0,
@@ -250,15 +261,30 @@ async function bulkScrape(options = {}) {
     }
 
     log.info?.(
-      `[Bulk Scrape] Completed: ${successCount} successful, ${failureCount} failed, ${totalTransactions} total transactions`,
+      `[Bulk Scrape] Completed: ${successCount} successful, ${failureCount} failed, ${blockedCount} blocked, ${totalTransactions} total transactions`,
     );
 
+    const status = unsuccessfulCount === 0
+      ? 'success'
+      : successCount > 0
+        ? 'partial'
+        : blockedCount === processedResults.length
+          ? 'blocked'
+          : 'failed';
+    const message = status === 'blocked'
+      ? `Sync blocked: ${blockedCount} saved account${blockedCount === 1 ? '' : 's'} could not be decrypted. Re-enter those credentials before syncing.`
+      : status === 'partial' && blockedCount > 0
+        ? `Bulk sync partially completed: ${successCount}/${processedResults.length} accounts synced; ${blockedCount} require credential re-entry.`
+        : `Bulk scrape completed: ${successCount}/${processedResults.length} accounts synced successfully`;
+
     return {
-      success: true,
-      message: `Bulk scrape completed: ${successCount}/${processedResults.length} accounts synced successfully`,
+      success: status === 'success',
+      status,
+      message,
       totalProcessed: processedResults.length,
       successCount,
       failureCount,
+      blockedCount,
       totalTransactions,
       results: processedResults,
     };

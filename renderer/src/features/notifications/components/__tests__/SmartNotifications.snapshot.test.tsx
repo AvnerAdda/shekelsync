@@ -477,6 +477,65 @@ describe('SmartNotifications snapshot flow', () => {
     window.removeEventListener('dataRefresh', refreshEventListener as EventListener);
   });
 
+  it('warns on partial bulk refresh and emits a global data refresh event', async () => {
+    const staleSyncNotification = {
+      id: 'notif-stale-partial',
+      type: 'stale_sync',
+      severity: 'warning',
+      title: 'Stale account sync',
+      message: 'Some accounts are stale',
+      data: {},
+      timestamp: '2025-08-20T10:00:00.000Z',
+      actionable: true,
+      actions: [
+        {
+          label: 'Sync now',
+          action: 'bulk_refresh',
+          params: {},
+        },
+      ],
+    };
+
+    mockGet.mockImplementation((endpoint: string) => {
+      if (endpoint === '/api/notifications?limit=20') {
+        return Promise.resolve(createNotificationsResponse([staleSyncNotification]));
+      }
+      return Promise.resolve({ ok: true, data: { success: true } });
+    });
+    mockPost.mockResolvedValue({
+      ok: true,
+      data: {
+        success: false,
+        status: 'partial',
+        totalProcessed: 2,
+        successCount: 1,
+        failureCount: 1,
+        totalTransactions: 7,
+      },
+    });
+
+    const refreshEventListener = vi.fn();
+    window.addEventListener('dataRefresh', refreshEventListener as EventListener);
+
+    render(<SmartNotifications />);
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith('/api/notifications?limit=20');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Smart Alerts' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sync now' }));
+
+    await waitFor(() => {
+      expect(showNotification).toHaveBeenCalledWith(
+        'Synced 1/2 accounts (7 transactions)',
+        'warning',
+      );
+      expect(refreshEventListener).toHaveBeenCalledOnce();
+    });
+
+    window.removeEventListener('dataRefresh', refreshEventListener as EventListener);
+  });
+
   it('handles bulk refresh API failures with an error notification', async () => {
     const staleSyncNotification = {
       id: 'notif-stale-2',
