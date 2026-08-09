@@ -187,6 +187,21 @@ describe('SecureKeyManager', () => {
       expect(secureKeyManager.isInitialized()).toBe(true);
     });
 
+    test('uses the Linux development environment fallback without retrying disabled keytar', async () => {
+      const envKey = crypto.randomBytes(32).toString('hex');
+      process.env.SHEKELSYNC_ENCRYPTION_KEY = envKey;
+      process.env.ALLOW_INSECURE_ENV_KEY = 'true';
+      process.env.KEYTAR_DISABLE = 'true';
+
+      vi.resetModules();
+      const module = await import('../secure-key-manager.js');
+      secureKeyManager = module.default || module;
+
+      await expect(secureKeyManager.getKey()).resolves.toBe(envKey);
+      expect(mockKeytar.getPassword).not.toHaveBeenCalled();
+      expect(secureKeyManager.isInitialized()).toBe(true);
+    });
+
     test('should cache key from environment', async () => {
       const envKey = crypto.randomBytes(32).toString('hex');
       process.env.SHEKELSYNC_ENCRYPTION_KEY = envKey;
