@@ -172,6 +172,10 @@ describe('data-anonymizer', () => {
         monthlyTrends: [],
         analytics: {},
         investments: {},
+        smartActions: [{ actionType: 'quest_reduce_spending', count: 1 }],
+        subscriptions: { byStatus: [{ status: 'review', count: 2 }] },
+        spendingTargets: [{ spendingCategory: 'essential', actualPercentage: 60 }],
+        dataFreshness: { latestTransactionDate: '2026-01-01' },
         recentTransactions: [{ name: 'SuperMarket', price: -100 }],
         topMerchants: [{ name: 'SuperMarket', visits: 5, total: 500 }],
       };
@@ -184,6 +188,10 @@ describe('data-anonymizer', () => {
         incomeBand: '₪20,000-₪39,999',
       });
       expect(result.summary).toEqual({ income: 5000 });
+      expect(result.smartActions).toEqual([{ actionType: 'quest_reduce_spending', count: 1 }]);
+      expect(result.subscriptions).toEqual({ byStatus: [{ status: 'review', count: 2 }] });
+      expect(result.spendingTargets).toEqual([{ spendingCategory: 'essential', actualPercentage: 60 }]);
+      expect(result.dataFreshness).toEqual({ latestTransactionDate: '2026-01-01' });
       expect(result.recentTransactions[0].name).toBe('Merchant_1');
       expect(result.topMerchants[0].name).toBe('Merchant_1');
     });
