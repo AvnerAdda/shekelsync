@@ -8,6 +8,24 @@ const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const optimizerService = require('../optimizer.js');
 
+const TARGET_SPENDING_CATEGORIES = new Set(['essential', 'growth', 'stability', 'reward']);
+
+// Test seam: vitest module mocks never reach the CJS require() below in this
+// repo's setup, so tests inject a fake loader through the exported setter.
+let spendingBreakdownLoader = null;
+
+function __setSpendingBreakdownLoader(loader) {
+  spendingBreakdownLoader = loader;
+}
+
+async function loadSpendingCategoryBreakdown(params) {
+  if (spendingBreakdownLoader) {
+    return spendingBreakdownLoader(params);
+  }
+  const { getSpendingCategoryBreakdown } = require('../analytics/spending-categories.js');
+  return getSpendingCategoryBreakdown(params);
+}
+
 const PAIRING_EXCLUSION_JOIN = `
   LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
     ON t.identifier = tpe.transaction_identifier
@@ -116,20 +134,24 @@ function smartActionNextStep(actionType) {
 }
 
 async function getSmartActionsContext(db) {
+  // 'accepted' quests are in progress and still actionable (quests.js treats
+  // active+accepted as live); deadlines are only set on acceptance. Positive
+  // impacts alone feed the savings figure so cost warnings don't net it down,
+  // while ordering uses absolute impact so urgent cost increases still rank.
   const rows = await optionalQuery(db, `
     SELECT
       action_type,
       severity,
       COUNT(*) as action_count,
-      SUM(COALESCE(potential_impact, 0)) as potential_impact,
+      SUM(CASE WHEN potential_impact > 0 THEN potential_impact ELSE 0 END) as potential_impact,
       AVG(COALESCE(detection_confidence, 0)) as avg_confidence,
       MIN(deadline) as nearest_deadline
     FROM smart_action_items
-    WHERE user_status = 'active'
+    WHERE user_status IN ('active', 'accepted')
       AND dismissed_at IS NULL
       AND resolved_at IS NULL
     GROUP BY action_type, severity
-    ORDER BY COALESCE(SUM(potential_impact), 0) DESC, action_count DESC
+    ORDER BY SUM(ABS(COALESCE(potential_impact, 0))) DESC, action_count DESC
     LIMIT 8
   `);
 
@@ -159,37 +181,37 @@ function subscriptionMonthlySql(alias = 's') {
 }
 
 async function getSubscriptionContext(db) {
-  const byStatusRows = await optionalQuery(db, `
-    SELECT
-      status,
-      COUNT(*) as subscription_count,
-      SUM(${subscriptionMonthlySql('s')}) as monthly_total
-    FROM subscriptions s
-    GROUP BY status
-    ORDER BY subscription_count DESC
-  `);
-
-  const upcomingRows = await optionalQuery(db, `
-    SELECT
-      COUNT(*) as renewal_count,
-      MIN(next_expected_date) as next_renewal_date,
-      SUM(${subscriptionMonthlySql('s')}) as monthly_total
-    FROM subscriptions s
-    WHERE status = 'active'
-      AND next_expected_date IS NOT NULL
-      AND next_expected_date >= date('now')
-      AND next_expected_date <= date('now', '+30 day')
-  `);
-
-  const alertRows = await optionalQuery(db, `
-    SELECT
-      severity,
-      COUNT(*) as alert_count
-    FROM subscription_alerts
-    WHERE COALESCE(is_dismissed, 0) = 0
-      AND (expires_at IS NULL OR expires_at > datetime('now'))
-    GROUP BY severity
-  `);
+  const [byStatusRows, upcomingRows, alertRows] = await Promise.all([
+    optionalQuery(db, `
+      SELECT
+        status,
+        COUNT(*) as subscription_count,
+        SUM(${subscriptionMonthlySql('s')}) as monthly_total
+      FROM subscriptions s
+      GROUP BY status
+      ORDER BY subscription_count DESC
+    `),
+    optionalQuery(db, `
+      SELECT
+        COUNT(*) as renewal_count,
+        MIN(next_expected_date) as next_renewal_date,
+        SUM(${subscriptionMonthlySql('s')}) as monthly_total
+      FROM subscriptions s
+      WHERE status = 'active'
+        AND next_expected_date IS NOT NULL
+        AND next_expected_date >= date('now', 'localtime')
+        AND next_expected_date <= date('now', 'localtime', '+30 day')
+    `),
+    optionalQuery(db, `
+      SELECT
+        severity,
+        COUNT(*) as alert_count
+      FROM subscription_alerts
+      WHERE COALESCE(is_dismissed, 0) = 0
+        AND (expires_at IS NULL OR expires_at > datetime('now'))
+      GROUP BY severity
+    `),
+  ]);
 
   const byStatus = byStatusRows.map((row) => ({
     status: normalizeText(row.status, 40) || 'active',
@@ -213,68 +235,53 @@ async function getSubscriptionContext(db) {
     : null;
 }
 
-async function getSpendingTargetContext(db) {
-  const targetRows = await optionalQuery(db, `
-    SELECT
-      target.spending_category,
-      target.target_percentage,
-      COALESCE(actual.total_amount, 0) as total_amount
-    FROM spending_category_targets target
-    LEFT JOIN (
-      SELECT
-        COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') as spending_category,
-        SUM(ABS(t.price)) as total_amount
-      FROM transactions t
-      JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN spending_category_mappings scm ON cd.id = scm.category_definition_id
-      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
-        ON t.identifier = tpe.transaction_identifier
-        AND t.vendor = tpe.transaction_vendor
-      WHERE t.date >= date('now', 'start of month')
-        AND t.price < 0
-        AND t.status = 'completed'
-        AND cd.category_type = 'expense'
-        AND tpe.transaction_identifier IS NULL
-        AND ${EXCLUDE_PIKADON}
-      GROUP BY COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated')
-    ) actual ON actual.spending_category = target.spending_category
-    WHERE target.is_active = 1
-      AND target.spending_category IN ('essential', 'growth', 'stability', 'reward')
-    ORDER BY target.spending_category
-  `);
+async function getSpendingTargetContext() {
+  // Reuse the Spending Categories screen's own calculation (capital-return
+  // exclusions, investment-into-growth merge) so the prompt can never quote
+  // drift numbers that contradict the dashboard.
+  let result;
+  try {
+    result = await loadSpendingCategoryBreakdown({ currentMonthOnly: true });
+  } catch {
+    return [];
+  }
 
-  const totalAssigned = targetRows.reduce((sum, row) => sum + (normalizeNumber(row.total_amount) || 0), 0);
-  return targetRows.map((row) => {
-    const amount = normalizeNumber(row.total_amount) || 0;
-    const targetPercentage = normalizeNumber(row.target_percentage) || 0;
-    const actualPercentage = totalAssigned > 0 ? (amount / totalAssigned) * 100 : 0;
-    return {
-      spendingCategory: normalizeText(row.spending_category, 40) || 'unallocated',
-      targetPercentage: Math.round(targetPercentage),
-      actualPercentage: Math.round(actualPercentage),
-      driftPercentage: Math.round(actualPercentage - targetPercentage),
-      amount,
-    };
-  }).filter((row) => row.targetPercentage > 0 || row.amount > 0);
+  const rows = Array.isArray(result?.breakdown) ? result.breakdown : [];
+  return rows
+    .filter((row) => TARGET_SPENDING_CATEGORIES.has(row.spending_category))
+    .map((row) => {
+      const amount = normalizeNumber(row.total_amount) || 0;
+      const targetPercentage = Math.round(normalizeNumber(row.target_percentage) || 0);
+      const actualPercentage = Math.round(normalizeNumber(row.actual_percentage) || 0);
+      return {
+        spendingCategory: normalizeText(row.spending_category, 40) || 'unallocated',
+        targetPercentage,
+        actualPercentage,
+        driftPercentage: actualPercentage - targetPercentage,
+        amount,
+      };
+    })
+    .filter((row) => row.targetPercentage > 0 || row.amount > 0);
 }
 
 async function getDataFreshnessContext(db) {
-  const transactionRows = await optionalQuery(db, `
-    SELECT
-      COUNT(*) as transaction_count,
-      MIN(date) as earliest_transaction_date,
-      MAX(date) as latest_transaction_date,
-      COUNT(DISTINCT substr(date, 1, 7)) as active_months
-    FROM transactions
-    WHERE status = 'completed'
-  `);
-
-  const scrapeRows = await optionalQuery(db, `
-    SELECT
-      COUNT(*) as scrape_count,
-      MAX(created_at) as latest_scrape_at
-    FROM scrape_events
-  `);
+  const [transactionRows, scrapeRows] = await Promise.all([
+    optionalQuery(db, `
+      SELECT
+        COUNT(*) as transaction_count,
+        MIN(date) as earliest_transaction_date,
+        MAX(date) as latest_transaction_date,
+        COUNT(DISTINCT substr(date, 1, 7)) as active_months
+      FROM transactions
+      WHERE status = 'completed'
+    `),
+    optionalQuery(db, `
+      SELECT
+        COUNT(*) as scrape_count,
+        MAX(created_at) as latest_scrape_at
+      FROM scrape_events
+    `),
+  ]);
 
   const transaction = transactionRows[0] || {};
   const scrape = scrapeRows[0] || {};
@@ -303,12 +310,16 @@ async function getInvestmentContext(db) {
   `);
 
   const holdingRow = holdingRows[0] || {};
-  const holdingTotal = normalizeNumber(holdingRow.total_value);
+  const holdingTotal = normalizeNumber(holdingRow.total_value) || 0;
   const holdingCount = normalizeInt(holdingRow.holding_count) || 0;
   const accountCount = normalizeInt(holdingRow.account_count) || 0;
-  if (holdingTotal !== null || holdingCount > 0 || accountCount > 0) {
+  // SUM(COALESCE(...)) yields 0 (not NULL) whenever any active account row
+  // exists, so only synced holdings with real value may claim the section —
+  // otherwise the prompt would assert a ₪0 portfolio for accounts whose
+  // holdings simply haven't synced yet.
+  if (holdingCount > 0 && holdingTotal > 0) {
     return {
-      totalValue: holdingTotal || 0,
+      totalValue: holdingTotal,
       liquidValue: normalizeNumber(holdingRow.liquid_value) || 0,
       accountCount,
       holdingCount,
@@ -316,6 +327,9 @@ async function getInvestmentContext(db) {
     };
   }
 
+  // Legacy DBs stored per-account values on investment_accounts.current_value
+  // (absent from the current schema — there the query fails and we omit the
+  // section rather than reporting zero).
   const legacyRows = await optionalQuery(db, `
     SELECT
       SUM(current_value) as total_value,
@@ -325,8 +339,8 @@ async function getInvestmentContext(db) {
     WHERE is_active = 1
   `);
   const legacyRow = legacyRows[0] || {};
-  const legacyTotal = normalizeNumber(legacyRow.total_value);
-  if (legacyTotal !== null) {
+  const legacyTotal = normalizeNumber(legacyRow.total_value) || 0;
+  if (legacyTotal > 0) {
     return {
       totalValue: legacyTotal,
       liquidValue: normalizeNumber(legacyRow.liquid_value) || 0,
@@ -710,12 +724,13 @@ async function buildContext(db, permissions, options = {}) {
       // Previous year data might not exist
     }
 
-    const investments = await getInvestmentContext(db);
+    const [investments, smartActions] = await Promise.all([
+      getInvestmentContext(db),
+      getSmartActionsContext(db),
+    ]);
     if (investments) {
       context.investments = investments;
     }
-
-    const smartActions = await getSmartActionsContext(db);
     if (smartActions.length > 0) {
       context.smartActions = smartActions;
     }
@@ -733,19 +748,20 @@ async function buildContext(db, permissions, options = {}) {
   }
 
   if (permissions.allowAnalyticsAccess || permissions.allowTransactionAccess) {
-    const subscriptions = await getSubscriptionContext(db);
+    const [subscriptions, dataFreshness] = await Promise.all([
+      getSubscriptionContext(db),
+      getDataFreshnessContext(db),
+    ]);
     if (subscriptions) {
       context.subscriptions = subscriptions;
     }
-
-    const dataFreshness = await getDataFreshnessContext(db);
     if (dataFreshness.transactionCount > 0 || dataFreshness.scrapeCount > 0) {
       context.dataFreshness = dataFreshness;
     }
   }
 
   if (permissions.allowAnalyticsAccess || permissions.allowCategoryAccess) {
-    const spendingTargets = await getSpendingTargetContext(db);
+    const spendingTargets = await getSpendingTargetContext();
     if (spendingTargets.length > 0) {
       context.spendingTargets = spendingTargets;
     }
@@ -772,7 +788,11 @@ function formatSubscriptionsSection(subscriptions) {
   const parts = ['\nSUBSCRIPTION SIGNALS:'];
   if (subscriptions.byStatus && subscriptions.byStatus.length > 0) {
     subscriptions.byStatus.forEach((status) => {
-      parts.push(`- ${status.status}: ${status.count} subscriptions, approx ₪${Math.round(status.monthlyTotal).toLocaleString()}/mo`);
+      // Cancelled/paused subscriptions are not an ongoing cost — quoting a
+      // monthly figure for them misleads the model into counting them.
+      const isOngoingCost = !['cancelled', 'paused'].includes(status.status);
+      const cost = isOngoingCost ? `, approx ₪${Math.round(status.monthlyTotal).toLocaleString()}/mo` : '';
+      parts.push(`- ${status.status}: ${status.count} subscriptions${cost}`);
     });
   }
   if (subscriptions.upcoming?.count > 0) {
@@ -1069,4 +1089,5 @@ module.exports = {
   buildContext,
   formatContextForPrompt,
   getSchemaDescription,
+  __setSpendingBreakdownLoader,
 };

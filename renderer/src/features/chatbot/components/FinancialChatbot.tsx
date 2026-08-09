@@ -180,6 +180,7 @@ const FinancialChatbot: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
+  const suggestionsRequestedRef = useRef(false);
 
   // Resize handlers for draggable left edge
   const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
@@ -289,9 +290,13 @@ const FinancialChatbot: React.FC = () => {
     }
   }, [isOpen, showHistory, loadConversations]);
 
-  // Fetch smart suggestions when drawer opens on a fresh chat
+  // Fetch smart suggestions when drawer opens on a fresh chat. The ref makes
+  // this a single fetch per mount: without it the effect refires when the
+  // greeting lands (length 0 -> 1), on every reopen, and on language switch —
+  // each response appending another intro line to the greeting bubble.
   useEffect(() => {
-    if (!isOpen || messages.length > 1 || !canUseChatbot) return;
+    if (!isOpen || messages.length > 1 || !canUseChatbot || suggestionsRequestedRef.current) return;
+    suggestionsRequestedRef.current = true;
 
     const locale = i18n.language.substring(0, 2);
     const params = new URLSearchParams({
@@ -858,8 +863,10 @@ const FinancialChatbot: React.FC = () => {
                     {message.content}
                   </Typography>
                 )}
-                {/* Show user-facing tool explanations if any */}
-                {message.metadata?.toolExecutions?.some((tool) => typeof tool.explanation === 'string' && tool.explanation.trim().length > 0) && (
+                {/* Show user-facing tool explanations. Failed executions must
+                    stay visible even without an explanation — the user needs
+                    to know an answer was built on a failed query. */}
+                {message.metadata?.toolExecutions?.some((tool) => !tool.success || (typeof tool.explanation === 'string' && tool.explanation.trim().length > 0)) && (
                   <Box
                     sx={{
                       mt: 1,
@@ -869,10 +876,11 @@ const FinancialChatbot: React.FC = () => {
                     }}
                   >
                     {message.metadata.toolExecutions
-                      .filter((tool) => typeof tool.explanation === 'string' && tool.explanation.trim().length > 0)
+                      .filter((tool) => !tool.success || (typeof tool.explanation === 'string' && tool.explanation.trim().length > 0))
+                      .sort((a, b) => Number(a.success) - Number(b.success))
                       .slice(0, 3)
                       .map((tool, idx) => (
-                        <Chip key={idx} size="small" label={tool.explanation} color={tool.success ? 'success' : 'error'} variant="outlined" sx={{ mr: 0.5, mb: 0.5, fontSize: '0.65rem' }} />
+                        <Chip key={idx} size="small" label={(typeof tool.explanation === 'string' && tool.explanation.trim()) || tool.tool} color={tool.success ? 'success' : 'error'} variant="outlined" sx={{ mr: 0.5, mb: 0.5, fontSize: '0.65rem' }} />
                       ))}
                   </Box>
                 )}
