@@ -127,21 +127,48 @@ function isRunningAsRoot() {
   return typeof process.getuid === 'function' && process.getuid() === 0;
 }
 
-function runElectronDev(injectedKey) {
-  const env = { ...process.env };
+function buildElectronDevEnvironment({
+  injectedKey = null,
+  keytarUnavailable = false,
+  sourceEnv = process.env,
+  runningAsRoot = isRunningAsRoot(),
+} = {}) {
+  const env = { ...sourceEnv };
   if (injectedKey) {
     env.SHEKELSYNC_ENCRYPTION_KEY = injectedKey;
   }
-  if (isRunningAsRoot()) {
+
+  // keytarIsUsable() has already established that this development session
+  // cannot reach a Linux Secret Service. Tell every Electron module to skip
+  // keytar so the validated environment fallback is not rejected as a
+  // second, ambiguous keychain read failure.
+  if (keytarUnavailable) {
+    env.KEYTAR_DISABLE = 'true';
+  }
+
+  if (runningAsRoot) {
     // Electron/Chromium refuse to launch as root unless sandboxing is explicitly disabled.
     env.ELECTRON_DISABLE_SANDBOX = env.ELECTRON_DISABLE_SANDBOX || '1';
     env.PUPPETEER_DISABLE_SANDBOX = env.PUPPETEER_DISABLE_SANDBOX || '1';
+  }
+  // Some tooling shells export ELECTRON_RUN_AS_NODE, which breaks Electron app launch.
+  delete env.ELECTRON_RUN_AS_NODE;
+
+  return env;
+}
+
+function runElectronDev(injectedKey, keytarUnavailable = false) {
+  const runningAsRoot = isRunningAsRoot();
+  const env = buildElectronDevEnvironment({
+    injectedKey,
+    keytarUnavailable,
+    runningAsRoot,
+  });
+  if (runningAsRoot) {
     console.warn(
       '[dev-electron] Running as root. Enabling Electron/Puppeteer sandbox overrides for this dev session.',
     );
   }
-  // Some tooling shells export ELECTRON_RUN_AS_NODE, which breaks Electron app launch.
-  delete env.ELECTRON_RUN_AS_NODE;
 
   const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const child = spawn(npmCommand, ['--prefix', 'app', 'run', 'electron-dev'], {
@@ -182,11 +209,13 @@ function runElectronDev(injectedKey) {
 
 async function main() {
   let injectedKey = null;
+  let keytarUnavailable = false;
   const isLinux = process.platform === 'linux';
 
   if (isLinux) {
     const usable = await keytarIsUsable();
     if (!usable) {
+      keytarUnavailable = true;
       injectedKey = ensureEnvKeyForLinuxDev();
       console.log(
         `[dev-electron] Keychain unavailable on Linux. Using SHEKELSYNC_ENCRYPTION_KEY from app/.env.local.`,
@@ -194,10 +223,16 @@ async function main() {
     }
   }
 
-  runElectronDev(injectedKey);
+  runElectronDev(injectedKey, keytarUnavailable);
 }
 
-main().catch((error) => {
-  console.error(`[dev-electron] ${error.message}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(`[dev-electron] ${error.message}`);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  buildElectronDevEnvironment,
+};
