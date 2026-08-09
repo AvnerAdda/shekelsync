@@ -229,23 +229,38 @@ function getPatternCategoryTexts(pattern) {
   ].map(normalizeText);
 }
 
+function getPatternCategoryNameTexts(pattern) {
+  return [
+    pattern?.category,
+    pattern?.categoryNameEn,
+    pattern?.parentCategory,
+  ].map(normalizeText);
+}
+
 function isNonOperatingIncomePattern(pattern) {
   if (!pattern || pattern.categoryType !== 'income') return false;
-  if (Number(pattern.isCountedAsIncome) === 0) return true;
+  // NULL is unknown, not "not counted": uncategorized income must keep the
+  // COALESCE(is_counted_as_income, 1) convention the SQL side uses.
+  if (pattern.isCountedAsIncome != null && Number(pattern.isCountedAsIncome) === 0) return true;
 
   const texts = getPatternCategoryTexts(pattern);
-  return texts.some(text => (
+  const strongMatch = texts.some(text => (
     text.includes('capital return') ||
     text.includes('gift') ||
     text.includes('windfall') ||
-    text.includes('refund') ||
-    text.includes('credit') ||
     text.includes('investment interest') ||
     text.includes('החזר קרן') ||
     text.includes('מתנות') ||
     text.includes('החזרים') ||
     text.includes('זיכויים') ||
     text.includes('ריבית מהשקעות')
+  ));
+  if (strongMatch) return true;
+
+  // 'refund'/'credit' are too weak for bank free text ("SALARY CREDIT",
+  // "DIRECT CREDIT PAYROLL") — match them against category names only.
+  return getPatternCategoryNameTexts(pattern).some(text => (
+    text.includes('refund') || text.includes('credit')
   ));
 }
 
@@ -259,9 +274,9 @@ function isOperatingIncomePattern(pattern) {
     text.includes('salaire') ||
     text.includes('freelance') ||
     text.includes('side hustle') ||
-    text.includes('benefit') ||
+    text.includes('government benefit') ||
     text.includes('prestation') ||
-    text.includes('government') ||
+    text.includes('gouvernement') ||
     text.includes('משכורת') ||
     text.includes('שכר') ||
     text.includes('פרילנס') ||
@@ -276,12 +291,15 @@ function isNonOperatingExpensePattern(pattern) {
   const texts = getPatternCategoryTexts(pattern);
   return texts.some(text => (
     text.includes('credit card repayment') ||
+    text.includes('card repayment') ||
     text.includes('bank settlement') ||
     text.includes('transfer to investment') ||
     text.includes('investment tax') ||
     text.includes('tax withholding') ||
+    text.includes('remboursement de carte') ||
     text.includes('פרעון כרטיס אשראי') ||
     text.includes('פירעון כרטיס אשראי') ||
+    text.includes('החזר כרטיס אשראי') ||
     text.includes('תשלומי בנק') ||
     text.includes('העברות להשקעות') ||
     text.includes('מס על השקעות')
@@ -639,11 +657,15 @@ function analyzeCategoryPatterns(transactions) {
       isHighlyVariable && 
       (hasLimitedHistory || hasLowOccurrences);
 
+    // Catches salary feeds that miss a month (~0.75-1/month). Capped at 1.5:
+    // collapsing a genuinely ~1.7x/month stream to one occurrence would
+    // under-forecast it by the extra occurrences (the >1.5 band stays
+    // bi-monthly as before).
     const isNearMonthlyIncome = p.categoryType === 'income' &&
       p.monthsOfHistory >= MIN_INCOME_NEAR_MONTHLY_MONTHS &&
       p.totalCount >= MIN_INCOME_NEAR_MONTHLY_OCCURRENCES &&
       p.avgOccurrencesPerMonth >= INCOME_NEAR_MONTHLY_FREQUENCY_FLOOR &&
-      p.avgOccurrencesPerMonth < 1.8;
+      p.avgOccurrencesPerMonth <= 1.5;
 
     if (p.insufficientData) {
       p.patternType = 'insufficient_data';
@@ -869,6 +891,15 @@ function buildPatternCaches(patterns) {
       cache.probabilityThreshold = 0.05 * (1 + Math.min(cov, 1));
     }
 
+    // Operating/non-operating classification is static per pattern — cache it
+    // instead of re-running the string matchers per forecast day.
+    cache.incomeType = pattern.categoryType === 'income'
+      ? (isOperatingIncomePattern(pattern) ? 'operating' : 'non_operating')
+      : null;
+    cache.expenseType = pattern.categoryType === 'expense'
+      ? (isOperatingExpensePattern(pattern) ? 'operating' : 'non_operating')
+      : null;
+
     if (pattern.lastOccurrence) {
       const lastDate = parseLocalDate(pattern.lastOccurrence);
       const lastTime = lastDate ? lastDate.getTime() : Number.NaN;
@@ -951,8 +982,11 @@ function buildVariableExpenseMonthlyBaselines(transactions, patterns, now = new 
     const pattern = patterns[patternKey];
     if (!isVariableExpensePattern(pattern)) return;
 
-    const amount = Math.abs(Number(txn.price) || 0);
-    if (amount <= 0) return;
+    // Net refunds (positive price on an expense category) against spend
+    // instead of adding their absolute value as more spending.
+    const price = Number(txn.price) || 0;
+    if (price === 0) return;
+    const amount = -price;
 
     if (!totalsByPattern.has(patternKey)) totalsByPattern.set(patternKey, new Map());
     const patternTotals = totalsByPattern.get(patternKey);
@@ -964,12 +998,23 @@ function buildVariableExpenseMonthlyBaselines(transactions, patterns, now = new 
     const activeMonths = Array.from(totalsByMonth.values()).filter(total => total > 0).length;
     if (activeMonths < MIN_VARIABLE_EXPENSE_BASELINE_ACTIVE_MONTHS) return;
 
-    const monthlyTotals = recentMonths.map(month => totalsByMonth.get(month) || 0);
+    const pattern = patterns[patternKey];
+    // Only median over months the category existed — zero-filling months
+    // before its first transaction halves or zeroes the baseline for
+    // categories younger than the window.
+    const firstMonth = typeof pattern?.firstTransactionDate === 'string'
+      ? pattern.firstTransactionDate.slice(0, 7)
+      : null;
+    const monthsForPattern = firstMonth
+      ? recentMonths.filter(month => month >= firstMonth)
+      : recentMonths;
+    if (monthsForPattern.length === 0) return;
+
+    const monthlyTotals = monthsForPattern.map(month => totalsByMonth.get(month) || 0);
     const cappedTotals = capMonthlyTotals(monthlyTotals);
     const monthlyBaseline = median(cappedTotals);
     if (!Number.isFinite(monthlyBaseline) || monthlyBaseline <= 0) return;
 
-    const pattern = patterns[patternKey];
     baselines[patternKey] = {
       patternKey,
       category: pattern.category,
@@ -978,9 +1023,9 @@ function buildVariableExpenseMonthlyBaselines(transactions, patterns, now = new 
       parentCategory: pattern.parentCategory || null,
       monthlyBaseline,
       monthlyStdDev: standardDeviation(cappedTotals),
-      monthsAnalyzed: recentMonths.length,
+      monthsAnalyzed: monthsForPattern.length,
       activeMonths,
-      sourceMonths: recentMonths,
+      sourceMonths: monthsForPattern,
     };
   });
 
@@ -988,12 +1033,14 @@ function buildVariableExpenseMonthlyBaselines(transactions, patterns, now = new 
 }
 
 function getActualSpendForBaseline(monthTransactions, baseline, patterns) {
-  return (monthTransactions || []).reduce((sum, txn) => {
+  const netSpend = (monthTransactions || []).reduce((sum, txn) => {
     if (txn?.category_type !== 'expense') return sum;
     const patternKey = resolvePatternKeyForTransaction(patterns, txn);
     if (patternKey !== baseline.patternKey) return sum;
-    return sum + Math.abs(Number(txn.price) || 0);
+    // Refunds (positive price) net against spend rather than inflating it.
+    return sum + (-(Number(txn.price) || 0));
   }, 0);
+  return Math.max(0, netSpend);
 }
 
 function calculateVariableExpenseBaselineTarget(baseline, monthForecasts, monthTransactions, now, patterns) {
@@ -1063,7 +1110,7 @@ function reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntrie
 
   baselines.forEach((baseline) => {
     const targetAmount = calculateVariableExpenseBaselineTarget(baseline, monthForecasts, monthTransactions, now, patterns);
-    if (!Number.isFinite(targetAmount) || targetAmount <= 0.01) return;
+    if (!Number.isFinite(targetAmount)) return;
 
     const matchingPredictions = [];
     monthForecasts.forEach((day) => {
@@ -1080,19 +1127,20 @@ function reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntrie
     );
 
     if (currentForecastedAmount > 0.01) {
-      const scale = targetAmount / currentForecastedAmount;
+      // Scale toward the target even when it is ~0 (baseline already consumed
+      // by actual spend) — an early return here would snap the remaining
+      // month back to its full uncalibrated forecast the moment the user
+      // overspends the baseline.
+      const scale = Math.max(0, targetAmount) / currentForecastedAmount;
       matchingPredictions.forEach(({ day, prediction }) => {
         const previousWeightedAmount = Number(prediction.probabilityWeightedAmount) || 0;
         const nextWeightedAmount = previousWeightedAmount * scale;
-        const amountScale = previousWeightedAmount > 0 && Number(prediction.expectedAmount) > 0
-          ? nextWeightedAmount / previousWeightedAmount
-          : scale;
 
-        prediction.expectedAmount = (Number(prediction.expectedAmount) || 0) * amountScale;
+        prediction.expectedAmount = (Number(prediction.expectedAmount) || 0) * scale;
         prediction.probabilityWeightedAmount = nextWeightedAmount;
         prediction.amountRange = {
-          low: (Number(prediction.amountRange?.low) || 0) * amountScale,
-          high: (Number(prediction.amountRange?.high) || 0) * amountScale,
+          low: (Number(prediction.amountRange?.low) || 0) * scale,
+          high: (Number(prediction.amountRange?.high) || 0) * scale,
         };
         prediction.isCalibrated = true;
         prediction.monthlyBaseline = baseline.monthlyBaseline;
@@ -1110,8 +1158,27 @@ function reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntrie
           entry.monthlyBaseline = baseline.monthlyBaseline;
         });
       });
-    } else {
-      const amountPerDay = targetAmount / monthForecasts.length;
+    } else if (targetAmount > 0.01) {
+      // No live predictions for this baseline (tail-only/sporadic patterns
+      // never emit any). Inject the baseline spend with honest uncertainty:
+      // probability from the pattern's real frequency and a non-zero spread —
+      // not probability-1/stdDev-0, which would present the least certain
+      // categories with maximum displayed confidence.
+      const pattern = patterns?.[baseline.patternKey];
+      const expenseType = pattern
+        ? (isOperatingExpensePattern(pattern) ? 'operating' : 'non_operating')
+        : 'operating';
+      const daysCovered = monthForecasts.length;
+      const amountPerDay = targetAmount / daysCovered;
+      const dailyProbability = clamp(
+        (Number(pattern?.avgOccurrencesPerMonth) || 1) / Math.max(daysCovered, 1),
+        0.02,
+        1
+      );
+      const expectedAmount = amountPerDay / dailyProbability;
+      const dailyStdDev = Number(pattern?.stdDev)
+        || (Number(baseline.monthlyStdDev) || 0) / Math.max(daysCovered, 1);
+
       monthForecasts.forEach((day) => {
         const prediction = {
           patternKey: baseline.patternKey,
@@ -1120,13 +1187,13 @@ function reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntrie
           transactionName: baseline.category,
           monthlyKey: `${baseline.patternKey}:monthly-baseline`,
           categoryType: 'expense',
-          expenseType: 'operating',
+          expenseType,
           parentCategory: baseline.parentCategory || null,
-          probability: 1,
-          expectedAmount: amountPerDay,
+          probability: dailyProbability,
+          expectedAmount,
           amountRange: {
-            low: amountPerDay,
-            high: amountPerDay,
+            low: Math.max(0, expectedAmount - dailyStdDev),
+            high: expectedAmount + dailyStdDev,
           },
           probabilityWeightedAmount: amountPerDay,
           useDailyTotal: true,
@@ -1143,11 +1210,11 @@ function reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntrie
             patternKey: baseline.patternKey,
             monthlyKey: prediction.monthlyKey,
             categoryType: 'expense',
-            expenseType: 'operating',
+            expenseType,
             patternType: 'daily',
-            probability: 1,
-            avgAmount: amountPerDay,
-            stdDev: 0,
+            probability: dailyProbability,
+            avgAmount: expectedAmount,
+            stdDev: dailyStdDev,
             isBaselineForecast: true,
             isCalibrated: true,
             monthlyBaseline: baseline.monthlyBaseline,
@@ -1610,10 +1677,10 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
       const monthlyKey = pattern._cache?.monthlyKey || pattern.patternKey || pattern.transactionName || pattern.category;
       const transactionName = pattern.transactionName || pattern.category;
       const incomeType = pattern.categoryType === 'income'
-        ? (isOperatingIncomePattern(pattern) ? 'operating' : 'non_operating')
+        ? (pattern._cache?.incomeType ?? (isOperatingIncomePattern(pattern) ? 'operating' : 'non_operating'))
         : null;
       const expenseType = pattern.categoryType === 'expense'
-        ? (isOperatingExpensePattern(pattern) ? 'operating' : 'non_operating')
+        ? (pattern._cache?.expenseType ?? (isOperatingExpensePattern(pattern) ? 'operating' : 'non_operating'))
         : null;
 
       const prediction = {
@@ -1957,10 +2024,10 @@ async function generateDailyForecast(options = {}) {
         transactionName: p.transactionName,
         categoryType: p.categoryType,
         incomeType: p.categoryType === 'income'
-          ? (isOperatingIncomePattern(p) ? 'operating' : 'non_operating')
+          ? (p._cache?.incomeType ?? (isOperatingIncomePattern(p) ? 'operating' : 'non_operating'))
           : null,
         expenseType: p.categoryType === 'expense'
-          ? (isOperatingExpensePattern(p) ? 'operating' : 'non_operating')
+          ? (p._cache?.expenseType ?? (isOperatingExpensePattern(p) ? 'operating' : 'non_operating'))
           : null,
         isCountedAsIncome: p.isCountedAsIncome,
         patternType: p.patternType,

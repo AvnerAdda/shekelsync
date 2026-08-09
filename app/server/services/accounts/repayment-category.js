@@ -13,15 +13,19 @@ function buildSqlInList(values) {
 }
 
 function getCreditCardRepaymentCategoryCondition(alias = 'cd') {
+  // COALESCE keeps the predicate NULL-safe: a NULL column (LEFT JOIN miss or
+  // untranslated category) must evaluate to false, not SQL NULL — otherwise
+  // NOT <condition> is also NULL and the row drops out of BOTH branches of an
+  // operating/non-operating split.
   const predicates = [];
   if (CREDIT_CARD_REPAYMENT_CATEGORY_MATCH.name.length > 0) {
-    predicates.push(`${alias}.name IN (${buildSqlInList(CREDIT_CARD_REPAYMENT_CATEGORY_MATCH.name)})`);
+    predicates.push(`COALESCE(${alias}.name, '') IN (${buildSqlInList(CREDIT_CARD_REPAYMENT_CATEGORY_MATCH.name)})`);
   }
   if (CREDIT_CARD_REPAYMENT_CATEGORY_MATCH.name_en.length > 0) {
-    predicates.push(`${alias}.name_en IN (${buildSqlInList(CREDIT_CARD_REPAYMENT_CATEGORY_MATCH.name_en)})`);
+    predicates.push(`COALESCE(${alias}.name_en, '') IN (${buildSqlInList(CREDIT_CARD_REPAYMENT_CATEGORY_MATCH.name_en)})`);
   }
   if (CREDIT_CARD_REPAYMENT_CATEGORY_MATCH.name_fr.length > 0) {
-    predicates.push(`${alias}.name_fr IN (${buildSqlInList(CREDIT_CARD_REPAYMENT_CATEGORY_MATCH.name_fr)})`);
+    predicates.push(`COALESCE(${alias}.name_fr, '') IN (${buildSqlInList(CREDIT_CARD_REPAYMENT_CATEGORY_MATCH.name_fr)})`);
   }
   return predicates.length > 0 ? `(${predicates.join(' OR ')})` : '(0)';
 }

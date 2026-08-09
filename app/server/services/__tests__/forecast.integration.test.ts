@@ -311,6 +311,10 @@ async function loadForecastModule(dataset: Dataset): Promise<ForecastModule> {
 }
 
 afterEach(() => {
+  // Restore real timers unconditionally: a test that throws between
+  // vi.useFakeTimers() and its own finally-based restore would otherwise leak
+  // frozen time into every later test in the file.
+  vi.useRealTimers();
   if (cachedForecastModule && typeof (cachedForecastModule as any).__resetDatabaseCtor === 'function') {
     (cachedForecastModule as any).__resetDatabaseCtor();
   }
