@@ -84,17 +84,15 @@ describe('session-store', () => {
     expect((window as any)[MEMORY_SESSION_KEY]).toEqual(session);
   });
 
-  it('falls back to memory when bridge getSession returns error', async () => {
+  it('surfaces bridge getSession errors instead of reporting a false logout', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     (window as any).electronAPI = {
       auth: { getSession: vi.fn().mockResolvedValue({ success: false, error: 'nope' }) },
     };
     (window as any)[BOOTSTRAP_SESSION_KEY] = session;
 
-    const result = await getSession();
-
-    expect(result).toEqual(session);
-    expect(warnSpy).toHaveBeenCalledWith('[session-store] getSession failed:', 'nope');
+    await expect(getSession()).rejects.toThrow('nope');
+    expect(warnSpy).toHaveBeenCalledWith('[session-store] getSession threw:', expect.any(Error));
   });
 
   it('uses electron auth bridge when available and clears legacy storage', async () => {
@@ -111,32 +109,30 @@ describe('session-store', () => {
     expect(window.localStorage.setItem).not.toHaveBeenCalled();
   });
 
-  it('setSession emits update and stores in memory when bridge fails', async () => {
+  it('setSession surfaces bridge failures without pretending to persist', async () => {
     const setSessionMock = vi.fn().mockRejectedValue(new Error('no bridge'));
     (window as any).electronAPI = { auth: { setSession: setSessionMock } };
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
 
-    const result = await setSession(session);
+    await expect(setSession(session)).rejects.toThrow('no bridge');
 
-    expect(dispatchSpy).toHaveBeenCalled();
-    expect((window as any)[MEMORY_SESSION_KEY]).toEqual(session);
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect((window as any)[MEMORY_SESSION_KEY]).toBeUndefined();
     expect(window.localStorage.setItem).not.toHaveBeenCalled();
-    expect(result).toEqual(session);
   });
 
-  it('setSession falls back to memory when bridge returns unsuccessful result', async () => {
+  it('setSession surfaces unsuccessful bridge results', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const setSessionMock = vi.fn().mockResolvedValue({ success: false, error: 'denied' });
     (window as any).electronAPI = { auth: { setSession: setSessionMock } };
 
-    const result = await setSession(session);
+    await expect(setSession(session)).rejects.toThrow('denied');
 
     expect(setSessionMock).toHaveBeenCalledWith(session);
-    expect((window as any)[MEMORY_SESSION_KEY]).toEqual(session);
+    expect((window as any)[MEMORY_SESSION_KEY]).toBeUndefined();
     expect(window.localStorage.setItem).not.toHaveBeenCalled();
-    expect(result).toEqual(session);
     expect(warnSpy).toHaveBeenCalledWith(
-      '[session-store] setSession failed, falling back to memory:',
+      '[session-store] setSession failed:',
       expect.any(Error),
     );
   });
@@ -181,31 +177,31 @@ describe('session-store', () => {
     expect(window.removeEventListener).toHaveBeenCalled();
   });
 
-  it('clearSession falls back when bridge throws', async () => {
+  it('clearSession surfaces bridge failures and preserves local state', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     (window as any).electronAPI = {
       auth: { clearSession: vi.fn().mockRejectedValue(new Error('fail')) },
     };
     (window as any)[MEMORY_SESSION_KEY] = session;
 
-    await clearSession();
+    await expect(clearSession()).rejects.toThrow('fail');
 
-    expect((window as any)[MEMORY_SESSION_KEY]).toBeNull();
+    expect((window as any)[MEMORY_SESSION_KEY]).toEqual(session);
     expect(warnSpy).toHaveBeenCalled();
   });
 
-  it('clearSession falls back when bridge returns unsuccessful result', async () => {
+  it('clearSession surfaces unsuccessful bridge results', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const clearMock = vi.fn().mockResolvedValue({ success: false, error: 'denied' });
     (window as any).electronAPI = { auth: { clearSession: clearMock } };
     (window as any)[MEMORY_SESSION_KEY] = session;
 
-    await clearSession();
+    await expect(clearSession()).rejects.toThrow('denied');
 
     expect(clearMock).toHaveBeenCalled();
-    expect((window as any)[MEMORY_SESSION_KEY]).toBeNull();
+    expect((window as any)[MEMORY_SESSION_KEY]).toEqual(session);
     expect(warnSpy).toHaveBeenCalledWith(
-      '[session-store] clearSession failed, falling back to memory:',
+      '[session-store] clearSession failed:',
       expect.any(Error),
     );
   });
