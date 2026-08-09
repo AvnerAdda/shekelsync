@@ -78,6 +78,14 @@ function getEncryptionKeyAccount(scope = getKeyScope()) {
   return `${ENCRYPTION_KEY_ACCOUNT_PREFIX}:${scope}`;
 }
 
+// The scoped stores and the legacy safeStorage file all live under this app
+// identity (scoped keychain accounts, files in this identity's userData
+// directory). Only the shared legacy Keychain account can belong to another
+// scope, so it is never identity-local.
+function isIdentityLocalOrigin(origin) {
+  return origin.startsWith('scoped-') || origin === 'legacy-safe-storage';
+}
+
 function getSafeStorageFilename(scope = getKeyScope()) {
   return `.encryption-key.${scope}.enc`;
 }
@@ -459,10 +467,9 @@ class SecureKeyManager {
         );
       }
       if (emptyCandidates.length === 1) {
-        const scopedEmpty = emptyCandidates[0].origins.some((origin) =>
-          origin.startsWith('scoped-'));
-        if (scopedEmpty && evaluated.length === 1) {
-          console.log('[SecureKeyManager] Loaded existing scoped key read-only for empty credential store');
+        const identityLocalEmpty = emptyCandidates[0].origins.some(isIdentityLocalOrigin);
+        if (identityLocalEmpty && evaluated.length === 1) {
+          console.log('[SecureKeyManager] Loaded existing identity-local key read-only for empty credential store');
           this.cachedKey = emptyCandidates[0].key;
           return emptyCandidates[0].key;
         }
@@ -470,27 +477,31 @@ class SecureKeyManager {
 
       const resumableFresh = evaluated.filter((candidate) =>
         candidate.validation.status === 'fresh' &&
-        candidate.origins.some((origin) => origin.startsWith('scoped-')));
+        candidate.origins.some(isIdentityLocalOrigin));
       if (resumableFresh.length > 1 || (resumableFresh.length === 1 && evaluated.length > 1)) {
         throw new Error('Encryption stores disagree during interrupted first-run recovery. Refusing all writes.');
       }
       if (resumableFresh.length === 1) {
-        console.log('[SecureKeyManager] Resuming first-run initialization with existing scoped key');
+        console.log('[SecureKeyManager] Resuming first-run initialization with existing identity-local key');
         this.cachedKey = resumableFresh[0].key;
         return resumableFresh[0].key;
       }
 
       // An external (Postgres) store cannot be checked before configuration is
       // loaded. An already-scoped key may be used, but it cannot authorize any
-      // migration or repair write.
+      // migration or repair write. A legacy safeStorage key additionally needs
+      // the config to decrypt under it (candidate-bound), because unlike the
+      // scoped stores nothing else vouches for that file's key.
       const configMatches = evaluated.filter((candidate) =>
         candidate.validation.status === 'config_match' &&
-        candidate.origins.some((origin) => origin.startsWith('scoped-')));
+        (candidate.origins.some((origin) => origin.startsWith('scoped-')) ||
+          (candidate.origins.includes('legacy-safe-storage') &&
+            candidate.validation.configStatus === 'candidate')));
       if (configMatches.length > 1) {
         throw new Error('Scoped encryption stores disagree for the configured external database.');
       }
       if (configMatches.length === 1) {
-        console.log('[SecureKeyManager] Loaded existing scoped key for external database configuration');
+        console.log('[SecureKeyManager] Loaded existing identity-local key for external database configuration');
         this.cachedKey = configMatches[0].key;
         return configMatches[0].key;
       }
@@ -570,6 +581,18 @@ class SecureKeyManager {
             legacyEvaluation,
             '[SecureKeyManager] Migrated database-verified legacy Keychain key',
           );
+        }
+        // Mirror the environment-key rule: a config that decrypts only under
+        // this candidate binds the key to this store's external database, so
+        // the key may be used read-only even though the shared legacy account
+        // cannot authorize scoped writes.
+        if (
+          legacyEvaluation.validation.status === 'config_match' &&
+          legacyEvaluation.validation.configStatus === 'candidate'
+        ) {
+          console.log('[SecureKeyManager] Loaded legacy Keychain key read-only for candidate-bound external database configuration');
+          this.cachedKey = legacyKeychain.key;
+          return legacyKeychain.key;
         }
       }
     }
