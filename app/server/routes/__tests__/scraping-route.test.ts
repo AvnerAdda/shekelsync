@@ -409,6 +409,7 @@ describe('Shared /api/scrape routes', () => {
       });
       return {
         success: true,
+        status: 'success',
         message: 'Bulk complete',
         successCount: 1,
         failureCount: 0,
@@ -419,6 +420,38 @@ describe('Shared /api/scrape routes', () => {
     const res = await request(app).post('/api/scrape/bulk').send({}).expect(200);
     expect(res.body.message).toBe('Bulk complete');
     expect(mockWindow.webContents.send).toHaveBeenCalled();
+  });
+
+  it('surfaces a blocked bulk result and skips auto-detection', async () => {
+    mockBulkScrape.mockImplementation(async (options: any) => {
+      options.onAccountComplete({
+        account: { vendor: 'isracard' },
+        index: 0,
+        total: 1,
+        result: {
+          success: false,
+          status: 'blocked',
+          message: 'Saved credential could not be decrypted',
+          transactionCount: 0,
+        },
+      });
+      return {
+        success: false,
+        status: 'blocked',
+        message: '0/1 accounts synced',
+        successCount: 0,
+        failureCount: 0,
+        blockedCount: 1,
+        totalTransactions: 0,
+      };
+    });
+
+    const res = await request(app).post('/api/scrape/bulk').send({}).expect(200);
+
+    expect(res.body).toMatchObject({ success: false, status: 'blocked', blockedCount: 1 });
+    expect(mockMaybeRunAutoDetection).not.toHaveBeenCalled();
+    expect(mockWindow.webContents.send.mock.calls.some((call: any[]) =>
+      call.some((value) => value?.vendor === 'bulk' && value?.status === 'blocked'))).toBe(true);
   });
 
   it('returns scrape status for an event', async () => {

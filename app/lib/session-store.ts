@@ -124,11 +124,11 @@ export async function getSession(): Promise<AuthSession | null> {
         writeFallbackSession(session);
         return session;
       }
-      console.warn('[session-store] getSession failed:', result.error);
+      throw new Error(result.error || 'Failed to get session');
     } catch (error) {
       console.warn('[session-store] getSession threw:', error);
+      throw error;
     }
-    // fall through to in-memory fallback
   }
   return readFallbackSession();
 }
@@ -146,7 +146,8 @@ export async function setSession(session: AuthSession | null): Promise<AuthSessi
       emitLocalSessionChange(hydrated);
       return hydrated;
     } catch (error) {
-      console.warn('[session-store] setSession failed, falling back to memory:', error);
+      console.warn('[session-store] setSession failed:', error);
+      throw error;
     }
   }
 
@@ -167,7 +168,8 @@ export async function clearSession(): Promise<void> {
       emitLocalSessionChange(null);
       return;
     } catch (error) {
-      console.warn('[session-store] clearSession failed, falling back to memory:', error);
+      console.warn('[session-store] clearSession failed:', error);
+      throw error;
     }
   }
 
