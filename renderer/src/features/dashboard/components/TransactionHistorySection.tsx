@@ -34,6 +34,7 @@ import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
 import TransactionDetailModal, { TransactionForModal } from '@renderer/shared/modals/TransactionDetailModal';
 import type { DashboardForecastData } from '@renderer/features/dashboard/hooks/useDashboardInsights';
+import { grossNumber, hasPairedCardData, preferOperatingNumber } from '../utils/cashflow';
 
 interface TransactionHistorySectionProps {
   data: any;
@@ -59,6 +60,21 @@ interface TransactionHistorySectionProps {
   forecastLoading?: boolean;
   forecastError?: string | null;
   refreshForecast?: () => void;
+}
+
+function getNetFlowForHistory(item: any, useOperatingBasis: boolean): number {
+  if (!useOperatingBasis) {
+    return grossNumber(item?.income) - grossNumber(item?.expenses);
+  }
+  return preferOperatingNumber(item?.operatingIncome, item?.income)
+    - preferOperatingNumber(item?.operatingExpenses, item?.expenses);
+}
+
+function getCashFlowForForecast(item: any, useOperatingBasis: boolean): number {
+  if (!useOperatingBasis) {
+    return grossNumber(item?.cashFlow);
+  }
+  return preferOperatingNumber(item?.operatingCashFlow, item?.cashFlow);
 }
 
 const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
@@ -261,21 +277,30 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   };
 
   // Calculate cumulative net position data (historical only, filtered by periodDays)
+  // The operating basis strips paired credit-card repayments to avoid double
+  // counting. Without any paired card data those repayments ARE the visible
+  // spending, so the chart must stay on the gross basis (history and forecast
+  // alike) or it would show fictitious savings for bank-feed-only users.
+  const useOperatingBasis = React.useMemo(
+    () => hasPairedCardData(data.history),
+    [data.history],
+  );
+
   const getNetPositionData = useCallback(() => {
     if (!data.history || data.history.length === 0) return [];
-    
+
     // Filter to last X days based on periodDays
     const today = new Date();
     const todayStr = format(today, 'yyyy-MM-dd');
     const periodStartDate = format(subDays(today, periodDays), 'yyyy-MM-dd');
-    
-    const filteredHistory = (data.history || []).filter((item: any) => 
+
+    const filteredHistory = (data.history || []).filter((item: any) =>
       item.date >= periodStartDate && item.date <= todayStr
     );
-    
+
     let cumulative = 0;
     return filteredHistory.map((item: any) => {
-      const netFlow = (item.income || 0) - (item.expenses || 0);
+      const netFlow = getNetFlowForHistory(item, useOperatingBasis);
       cumulative += netFlow;
       return {
         date: item.date,
@@ -286,7 +311,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         isForecast: false,
       };
     });
-  }, [data.history, periodDays]);
+  }, [data.history, periodDays, useOperatingBasis]);
 
   // Detect gap period (no data zone) - from last scraped data to today
   const gapPeriodInfo = React.useMemo(() => {
@@ -523,16 +548,17 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     const forecastEntries = forecastData.dailyForecasts
       .filter((d: any) => d.date > lastHistoricalDate && d.date <= chartEndDate)
       .map((d: any, idx: number) => {
-        expectedCumulative += d.cashFlow;
+        const expectedCashFlow = getCashFlowForForecast(d, useOperatingBasis);
+        expectedCumulative += expectedCashFlow;
 
         // Find matching scenario data for this date
         const p10Day = p10Daily.find((s: any) => s.date === d.date);
         const p50Day = p50Daily.find((s: any) => s.date === d.date);
         const p90Day = p90Daily.find((s: any) => s.date === d.date);
 
-        p10Cumulative += p10Day?.cashFlow || d.cashFlow;
-        p50Cumulative += p50Day?.cashFlow || d.cashFlow;
-        p90Cumulative += p90Day?.cashFlow || d.cashFlow;
+        p10Cumulative += getCashFlowForForecast(p10Day || d, useOperatingBasis);
+        p50Cumulative += getCashFlowForForecast(p50Day || d, useOperatingBasis);
+        p90Cumulative += getCashFlowForForecast(p90Day || d, useOperatingBasis);
 
         return {
           date: d.date,
@@ -548,7 +574,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       });
 
     return [...historicalData, ...forecastEntries];
-  }, [getNetPositionData, forecastData, aggregationPeriod, gapPeriodInfo]);
+  }, [getNetPositionData, forecastData, aggregationPeriod, gapPeriodInfo, useOperatingBasis]);
 
   return (
     <Paper

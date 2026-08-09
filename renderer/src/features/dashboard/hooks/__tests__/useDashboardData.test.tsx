@@ -33,8 +33,54 @@ describe('useDashboardData', () => {
           totalAccounts: 3,
         },
         history: [
-          { date: '2024-03-01', income: 100, expenses: 40 },
+          { date: '2024-03-01', income: 100, operatingIncome: 80, expenses: 40, operatingExpenses: 30, pairedCardRepayments: 25 },
           { date: '2024-03-02', income: 50, expenses: 60 },
+        ],
+        breakdowns: {
+          byCategory: [],
+          byVendor: [],
+          byMonth: [],
+        },
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useDashboardData({ startDate: START, endDate: END, aggregation: 'daily' }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.data?.summary.totalIncome).toBe(500);
+    });
+
+    expect(result.current.cumulativeData).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ date: '2024-03-01', cumulative: 50, netFlow: 50 }),
+        expect.objectContaining({ date: '2024-03-02', cumulative: 40, netFlow: -10 }),
+      ]),
+    );
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays on the gross basis when the history has no paired card data', async () => {
+    mockGet.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        dateRange: { start: START, end: END },
+        summary: {
+          totalIncome: 500,
+          totalExpenses: 300,
+          netBalance: 200,
+          investmentOutflow: 50,
+          investmentInflow: 10,
+          netInvestments: 40,
+          totalAccounts: 3,
+        },
+        history: [
+          // Repayment debits classified non-operating, but nothing is paired:
+          // operating basis would show fictitious savings for this user.
+          { date: '2024-03-01', income: 100, operatingIncome: 100, expenses: 40, operatingExpenses: 5 },
+          { date: '2024-03-02', income: 50, operatingIncome: 50, expenses: 60, operatingExpenses: 10 },
         ],
         breakdowns: {
           byCategory: [],
@@ -58,8 +104,6 @@ describe('useDashboardData', () => {
         expect.objectContaining({ date: '2024-03-02', cumulative: 50, netFlow: -10 }),
       ]),
     );
-
-    expect(mockGet).toHaveBeenCalledTimes(1);
   });
 
   it('sets error state when request fails', async () => {

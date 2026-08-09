@@ -311,6 +311,10 @@ async function loadForecastModule(dataset: Dataset): Promise<ForecastModule> {
 }
 
 afterEach(() => {
+  // Restore real timers unconditionally: a test that throws between
+  // vi.useFakeTimers() and its own finally-based restore would otherwise leak
+  // frozen time into every later test in the file.
+  vi.useRealTimers();
   if (cachedForecastModule && typeof (cachedForecastModule as any).__resetDatabaseCtor === 'function') {
     (cachedForecastModule as any).__resetDatabaseCtor();
   }
@@ -336,6 +340,69 @@ describe('forecast service integration', () => {
     expect(result.categoryPatterns.some((p: any) => p.category === 'Rent')).toBe(true);
     expect(result.categoryPatterns.some((p: any) => p.category === 'Groceries')).toBe(true);
     expect(Object.keys(result.monthlyAdjustments).length).toBeGreaterThan(0);
+  });
+
+  it('calibrates variable expense forecasts to recent monthly category baselines', async () => {
+    vi.useFakeTimers();
+    const now = new Date('2026-06-15T12:00:00.000Z');
+    vi.setSystemTime(now);
+
+    const categories: Category[] = [
+      { id: 2, name: 'Groceries', name_en: 'Groceries', name_fr: 'Courses', icon: 'cart', color: '#2E7D32', parent_id: null, category_type: 'expense' },
+    ];
+    const transactions: Tx[] = [];
+    const addExpense = (date: string, amount: number, id: string) => {
+      transactions.push({
+        date,
+        name: 'Grocery Basket',
+        price: -amount,
+        category_type: 'expense',
+        category_definition_id: 2,
+        status: 'completed',
+        identifier: id,
+        vendor: 'supermarket',
+      });
+    };
+
+    ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05'].forEach((month) => {
+      addExpense(`${month}-03`, 250, `${month}-a`);
+      addExpense(`${month}-10`, 250, `${month}-b`);
+      addExpense(`${month}-17`, 250, `${month}-c`);
+      addExpense(`${month}-24`, 250, `${month}-d`);
+    });
+    addExpense('2026-06-02', 150, '2026-06-a');
+    addExpense('2026-06-10', 150, '2026-06-b');
+
+    const forecast = await loadForecastModule({
+      categories,
+      budgets: [],
+      transactions,
+      exclusions: [],
+    });
+
+    try {
+      const result = await forecast.generateDailyForecast({
+        includeToday: false,
+        forecastDays: 15,
+        historyMonths: 24,
+        monteCarloRuns: 4,
+        noCache: true,
+      });
+
+      const groceryForecast = result.dailyForecasts.reduce((sum: number, day: any) => (
+        sum + (day.predictions || [])
+          .filter((prediction: any) => prediction.category === 'Groceries')
+          .reduce((innerSum: number, prediction: any) => innerSum + (prediction.probabilityWeightedAmount || 0), 0)
+      ), 0);
+
+      expect(result.analysisInfo.variableExpenseBaselines).toBe(1);
+      expect(groceryForecast).toBeCloseTo(700, 6);
+      expect(result.dailyForecasts.some((day: any) => (
+        (day.predictions || []).some((prediction: any) => prediction.category === 'Groceries' && prediction.isCalibrated)
+      ))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('uses cached forecasts when cache is enabled and bypasses with noCache', async () => {

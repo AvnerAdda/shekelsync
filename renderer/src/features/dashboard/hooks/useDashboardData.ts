@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns';
 import { apiClient } from '@/lib/api-client';
+import { grossNumber, hasPairedCardData, preferOperatingNumber } from '../utils/cashflow';
 import {
   AggregationPeriod,
   CumulativePoint,
@@ -56,7 +57,11 @@ function fillMissingDates(
       filled.push({
         date: dateStr,
         income: null,
+        operatingIncome: 0,
+        nonOperatingIncome: 0,
         expenses: null,
+        operatingExpenses: 0,
+        nonOperatingExpenses: 0,
         capitalReturns: 0,
         cardRepayments: 0,
         pairedCardExpenses: 0,
@@ -66,7 +71,11 @@ function fillMissingDates(
       filled.push({
         date: dateStr,
         income: 0,
+        operatingIncome: 0,
+        nonOperatingIncome: 0,
         expenses: 0,
+        operatingExpenses: 0,
+        nonOperatingExpenses: 0,
         capitalReturns: 0,
         cardRepayments: 0,
         pairedCardExpenses: 0,
@@ -78,6 +87,18 @@ function fillMissingDates(
   }
 
   return filled;
+}
+
+function getCashFlowIncome(day: DashboardHistoryEntry, useOperatingBasis: boolean): number {
+  return useOperatingBasis
+    ? preferOperatingNumber(day.operatingIncome, day.income)
+    : grossNumber(day.income);
+}
+
+function getCashFlowExpenses(day: DashboardHistoryEntry, useOperatingBasis: boolean): number {
+  return useOperatingBasis
+    ? preferOperatingNumber(day.operatingExpenses, day.expenses)
+    : grossNumber(day.expenses);
 }
 
 function calculateCumulativeData(
@@ -93,12 +114,13 @@ function calculateCumulativeData(
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const endOfMonthDate = endOfMonth(startDate);
   const actualHistory = isCurrentMonth ? history.filter((day) => day.date <= todayStr) : history;
+  const useOperatingBasis = hasPairedCardData(history) || hasPairedCardData(lastMonthHistory);
 
   let runningTotal = 0;
   const cumulative: CumulativePoint[] = [];
 
   actualHistory.forEach((day) => {
-    const netFlow = (day.income || 0) - (day.expenses || 0);
+    const netFlow = getCashFlowIncome(day, useOperatingBasis) - getCashFlowExpenses(day, useOperatingBasis);
     runningTotal += netFlow;
     cumulative.push({
       date: day.date,
@@ -120,7 +142,7 @@ function calculateCumulativeData(
     lastMonthHistory.forEach((day) => {
       const date = new Date(day.date);
       const dayOfMonth = date.getDate();
-      lastMonthMap.set(dayOfMonth, (day.income || 0) - (day.expenses || 0));
+      lastMonthMap.set(dayOfMonth, getCashFlowIncome(day, useOperatingBasis) - getCashFlowExpenses(day, useOperatingBasis));
     });
 
     while (predictionDate <= endOfMonthDate) {

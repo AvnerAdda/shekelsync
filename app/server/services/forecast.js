@@ -19,6 +19,15 @@ const DEFAULT_HISTORY_MONTHS = parsePositiveInt(process.env.FORECAST_HISTORY_MON
 const DEFAULT_FORECAST_CACHE_TTL_MS = parsePositiveInt(process.env.FORECAST_CACHE_TTL_MS, 5 * 60 * 1000);
 const MIN_EXPENSE_MONTHLY_MONTHS = parsePositiveInt(process.env.FORECAST_MIN_EXPENSE_MONTHLY_MONTHS, 3);
 const MIN_EXPENSE_MONTHLY_OCCURRENCES = parsePositiveInt(process.env.FORECAST_MIN_EXPENSE_MONTHLY_OCCURRENCES, 3);
+const VARIABLE_EXPENSE_BASELINE_MONTHS = parsePositiveInt(process.env.FORECAST_VARIABLE_EXPENSE_BASELINE_MONTHS, 6);
+const MIN_VARIABLE_EXPENSE_BASELINE_ACTIVE_MONTHS = parsePositiveInt(process.env.FORECAST_MIN_VARIABLE_EXPENSE_BASELINE_ACTIVE_MONTHS, 2);
+const MIN_OPERATING_INCOME_EARLY_MONTHS = parsePositiveInt(process.env.FORECAST_MIN_OPERATING_INCOME_EARLY_MONTHS, 2);
+const MIN_OPERATING_INCOME_EARLY_OCCURRENCES = parsePositiveInt(process.env.FORECAST_MIN_OPERATING_INCOME_EARLY_OCCURRENCES, 3);
+const MIN_INCOME_NEAR_MONTHLY_MONTHS = parsePositiveInt(process.env.FORECAST_MIN_INCOME_NEAR_MONTHLY_MONTHS, 4);
+const MIN_INCOME_NEAR_MONTHLY_OCCURRENCES = parsePositiveInt(process.env.FORECAST_MIN_INCOME_NEAR_MONTHLY_OCCURRENCES, 4);
+const INCOME_NEAR_MONTHLY_FREQUENCY_FLOOR = Number.isFinite(Number.parseFloat(process.env.FORECAST_INCOME_NEAR_MONTHLY_FREQUENCY_FLOOR || ''))
+  ? Number.parseFloat(process.env.FORECAST_INCOME_NEAR_MONTHLY_FREQUENCY_FLOOR)
+  : 0.75;
 
 const forecastResultCache = new Map();
 
@@ -70,6 +79,8 @@ function getAllTransactions(db, sinceDate = null) {
       t.category_type,
       t.category_definition_id,
       cd.name as category_name,
+      cd.name_en as category_name_en,
+      cd.is_counted_as_income,
       parent_cd.name as parent_category_name,
       strftime('%w', t.date) as day_of_week,
       CAST(strftime('%d', t.date) AS INTEGER) as day_of_month,
@@ -98,6 +109,8 @@ function getCurrentMonthTransactions(db, currentMonth) {
       t.category_type,
       t.category_definition_id,
       cd.name as category_name,
+      cd.name_en as category_name_en,
+      cd.is_counted_as_income,
       strftime('%w', t.date) as day_of_week,
       CAST(strftime('%d', t.date) AS INTEGER) as day_of_month
     FROM transactions t
@@ -164,6 +177,20 @@ function parseLocalDate(dateStr) {
   return new Date(year, month - 1, day);
 }
 
+function getMonthKeyFromDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getTransactionMonthKey(txn) {
+  if (typeof txn?.month === 'string' && /^\d{4}-\d{2}$/.test(txn.month)) return txn.month;
+  if (typeof txn?.date === 'string' && txn.date.length >= 7) return txn.date.slice(0, 7);
+  return null;
+}
+
+function sameMonth(date, otherDate) {
+  return date.getFullYear() === otherDate.getFullYear() && date.getMonth() === otherDate.getMonth();
+}
+
 function resolveForecastWindow(now, { includeToday, forecastDays, forecastMonths }) {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startDate = includeToday
@@ -187,6 +214,101 @@ function getDayName(dayOfWeek) {
 
 function getTransactionCategoryName(txn) {
   return txn.category_name || 'Uncategorized';
+}
+
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getPatternCategoryTexts(pattern) {
+  return [
+    pattern?.category,
+    pattern?.categoryNameEn,
+    pattern?.parentCategory,
+    pattern?.transactionName,
+  ].map(normalizeText);
+}
+
+function getPatternCategoryNameTexts(pattern) {
+  return [
+    pattern?.category,
+    pattern?.categoryNameEn,
+    pattern?.parentCategory,
+  ].map(normalizeText);
+}
+
+function isNonOperatingIncomePattern(pattern) {
+  if (!pattern || pattern.categoryType !== 'income') return false;
+  // NULL is unknown, not "not counted": uncategorized income must keep the
+  // COALESCE(is_counted_as_income, 1) convention the SQL side uses.
+  if (pattern.isCountedAsIncome != null && Number(pattern.isCountedAsIncome) === 0) return true;
+
+  const texts = getPatternCategoryTexts(pattern);
+  const strongMatch = texts.some(text => (
+    text.includes('capital return') ||
+    text.includes('gift') ||
+    text.includes('windfall') ||
+    text.includes('investment interest') ||
+    text.includes('החזר קרן') ||
+    text.includes('מתנות') ||
+    text.includes('החזרים') ||
+    text.includes('זיכויים') ||
+    text.includes('ריבית מהשקעות')
+  ));
+  if (strongMatch) return true;
+
+  // 'refund'/'credit' are too weak for bank free text ("SALARY CREDIT",
+  // "DIRECT CREDIT PAYROLL") — match them against category names only.
+  return getPatternCategoryNameTexts(pattern).some(text => (
+    text.includes('refund') || text.includes('credit')
+  ));
+}
+
+function isOperatingIncomePattern(pattern) {
+  if (!pattern || pattern.categoryType !== 'income') return false;
+  if (isNonOperatingIncomePattern(pattern)) return false;
+
+  const texts = getPatternCategoryTexts(pattern);
+  return texts.some(text => (
+    text.includes('salary') ||
+    text.includes('salaire') ||
+    text.includes('freelance') ||
+    text.includes('side hustle') ||
+    text.includes('government benefit') ||
+    text.includes('prestation') ||
+    text.includes('gouvernement') ||
+    text.includes('משכורת') ||
+    text.includes('שכר') ||
+    text.includes('פרילנס') ||
+    text.includes('קצבאות') ||
+    text.includes('ביטוח לאומי')
+  ));
+}
+
+function isNonOperatingExpensePattern(pattern) {
+  if (!pattern || pattern.categoryType !== 'expense') return false;
+
+  const texts = getPatternCategoryTexts(pattern);
+  return texts.some(text => (
+    text.includes('credit card repayment') ||
+    text.includes('card repayment') ||
+    text.includes('bank settlement') ||
+    text.includes('transfer to investment') ||
+    text.includes('investment tax') ||
+    text.includes('tax withholding') ||
+    text.includes('remboursement de carte') ||
+    text.includes('פרעון כרטיס אשראי') ||
+    text.includes('פירעון כרטיס אשראי') ||
+    text.includes('החזר כרטיס אשראי') ||
+    text.includes('תשלומי בנק') ||
+    text.includes('העברות להשקעות') ||
+    text.includes('מס על השקעות')
+  ));
+}
+
+function isOperatingExpensePattern(pattern) {
+  if (!pattern || pattern.categoryType !== 'expense') return false;
+  return !isNonOperatingExpensePattern(pattern);
 }
 
 function getCategoryPatternKey(txn) {
@@ -340,9 +462,11 @@ function analyzeCategoryPatterns(transactions) {
         patterns[patternKey] = {
           patternKey,
           category: categoryName,
+          categoryNameEn: txn.category_name_en || null,
           categoryDefinitionId: txn.category_definition_id ?? null,
           transactionName: txn.name || null,
           categoryType: txn.category_type,
+          isCountedAsIncome: txn.is_counted_as_income,
           parentCategory: txn.parent_category_name,
           transactions: [],
           transactionNames: {},
@@ -476,6 +600,19 @@ function analyzeCategoryPatterns(transactions) {
     p.avgOccurrencesPerMonth = p.totalCount / Math.max(actualMonthSpan, 1);
     p.avgOccurrencesPerWeek = p.totalCount / Math.max(actualMonthSpan * 4.33, 1);
 
+    const hasTrustedEarlyOperatingIncome =
+      p.categoryType === 'income' &&
+      p.insufficientData &&
+      p.skipReason === 'insufficient_income_history' &&
+      isOperatingIncomePattern(p) &&
+      p.monthsOfHistory >= MIN_OPERATING_INCOME_EARLY_MONTHS &&
+      p.totalCount >= MIN_OPERATING_INCOME_EARLY_OCCURRENCES &&
+      p.avgOccurrencesPerMonth >= INCOME_NEAR_MONTHLY_FREQUENCY_FLOOR;
+    if (hasTrustedEarlyOperatingIncome) {
+      p.insufficientData = false;
+      p.skipReason = null;
+    }
+
     // For high-frequency categories, use daily totals instead of individual transaction amounts
     // This provides more accurate forecasting for categories like supermarket, restaurants
     if (
@@ -520,6 +657,16 @@ function analyzeCategoryPatterns(transactions) {
       isHighlyVariable && 
       (hasLimitedHistory || hasLowOccurrences);
 
+    // Catches salary feeds that miss a month (~0.75-1/month). Capped at 1.5:
+    // collapsing a genuinely ~1.7x/month stream to one occurrence would
+    // under-forecast it by the extra occurrences (the >1.5 band stays
+    // bi-monthly as before).
+    const isNearMonthlyIncome = p.categoryType === 'income' &&
+      p.monthsOfHistory >= MIN_INCOME_NEAR_MONTHLY_MONTHS &&
+      p.totalCount >= MIN_INCOME_NEAR_MONTHLY_OCCURRENCES &&
+      p.avgOccurrencesPerMonth >= INCOME_NEAR_MONTHLY_FREQUENCY_FLOOR &&
+      p.avgOccurrencesPerMonth <= 1.5;
+
     if (p.insufficientData) {
       p.patternType = 'insufficient_data';
     } else if (shouldTreatAsSporadic) {
@@ -527,6 +674,10 @@ function analyzeCategoryPatterns(transactions) {
       // Mark as tailOnly to use minimal baseline predictions
       p.patternType = 'sporadic';
       p.tailOnly = true;
+    } else if (isNearMonthlyIncome) {
+      // Salary/benefit feeds can miss one month or arrive under a slightly different label.
+      // Keep them monthly once there is enough history instead of downgrading to bi-monthly.
+      p.patternType = 'monthly';
     } else if (p.avgOccurrencesPerMonth >= 10) {
       // High-frequency patterns (10+ per month) - treat as daily occurrence patterns
       p.patternType = 'daily';
@@ -740,6 +891,15 @@ function buildPatternCaches(patterns) {
       cache.probabilityThreshold = 0.05 * (1 + Math.min(cov, 1));
     }
 
+    // Operating/non-operating classification is static per pattern — cache it
+    // instead of re-running the string matchers per forecast day.
+    cache.incomeType = pattern.categoryType === 'income'
+      ? (isOperatingIncomePattern(pattern) ? 'operating' : 'non_operating')
+      : null;
+    cache.expenseType = pattern.categoryType === 'expense'
+      ? (isOperatingExpensePattern(pattern) ? 'operating' : 'non_operating')
+      : null;
+
     if (pattern.lastOccurrence) {
       const lastDate = parseLocalDate(pattern.lastOccurrence);
       const lastTime = lastDate ? lastDate.getTime() : Number.NaN;
@@ -759,6 +919,312 @@ function buildPatternCaches(patterns) {
   });
 
   return patternEntries;
+}
+
+function resolvePatternKeyForTransaction(patterns, txn) {
+  const transactionName = typeof txn?.name === 'string' ? txn.name.trim() : '';
+  const categoryName = getTransactionCategoryName(txn);
+  const categoryPatternKey = getCategoryPatternKey(txn);
+  const namePatternKey = transactionName ? getTransactionNamePatternKey(txn, transactionName) : null;
+  const legacyPatternKey = (transactionName && patterns[transactionName])
+    ? transactionName
+    : (patterns[categoryName] ? categoryName : null);
+
+  if (namePatternKey && patterns[namePatternKey]) return namePatternKey;
+  if (patterns[categoryPatternKey]) return categoryPatternKey;
+  return legacyPatternKey || categoryPatternKey;
+}
+
+function isVariableExpensePattern(pattern) {
+  if (!pattern || pattern.categoryType !== 'expense') return false;
+  if (pattern.insufficientData && !pattern.tailOnly) return false;
+  if (pattern.patternType === 'monthly' && (pattern.isFixedAmount || pattern.avgOccurrencesPerMonth <= 1.5)) {
+    return false;
+  }
+  if (pattern.patternType === 'bi-monthly' || pattern.patternType === 'sporadic') {
+    return Number(pattern.avgOccurrencesPerMonth || 0) >= 1.5;
+  }
+  return pattern.patternType === 'daily' || pattern.patternType === 'weekly';
+}
+
+function capMonthlyTotals(monthlyTotals) {
+  const positiveTotals = monthlyTotals.filter(total => total > 0);
+  if (positiveTotals.length < 2) return monthlyTotals;
+
+  const center = median(positiveTotals);
+  const deviations = positiveTotals.map(total => Math.abs(total - center));
+  const mad = median(deviations);
+  const cap = center + Math.max(center * 0.75, mad * 3);
+
+  return monthlyTotals.map(total => Math.min(total, cap));
+}
+
+function buildVariableExpenseMonthlyBaselines(transactions, patterns, now = new Date()) {
+  const currentMonth = getMonthKeyFromDate(now);
+  const completedMonths = Array.from(new Set(
+    transactions
+      .map(getTransactionMonthKey)
+      .filter(month => month && month < currentMonth)
+  )).sort();
+
+  const recentMonths = completedMonths.slice(-VARIABLE_EXPENSE_BASELINE_MONTHS);
+  if (recentMonths.length === 0) return {};
+
+  const recentMonthSet = new Set(recentMonths);
+  const totalsByPattern = new Map();
+
+  transactions.forEach((txn) => {
+    if (txn?.category_type !== 'expense') return;
+    const month = getTransactionMonthKey(txn);
+    if (!month || !recentMonthSet.has(month)) return;
+
+    const patternKey = resolvePatternKeyForTransaction(patterns, txn);
+    const pattern = patterns[patternKey];
+    if (!isVariableExpensePattern(pattern)) return;
+
+    // Net refunds (positive price on an expense category) against spend
+    // instead of adding their absolute value as more spending.
+    const price = Number(txn.price) || 0;
+    if (price === 0) return;
+    const amount = -price;
+
+    if (!totalsByPattern.has(patternKey)) totalsByPattern.set(patternKey, new Map());
+    const patternTotals = totalsByPattern.get(patternKey);
+    patternTotals.set(month, (patternTotals.get(month) || 0) + amount);
+  });
+
+  const baselines = {};
+  totalsByPattern.forEach((totalsByMonth, patternKey) => {
+    const activeMonths = Array.from(totalsByMonth.values()).filter(total => total > 0).length;
+    if (activeMonths < MIN_VARIABLE_EXPENSE_BASELINE_ACTIVE_MONTHS) return;
+
+    const pattern = patterns[patternKey];
+    // Only median over months the category existed — zero-filling months
+    // before its first transaction halves or zeroes the baseline for
+    // categories younger than the window.
+    const firstMonth = typeof pattern?.firstTransactionDate === 'string'
+      ? pattern.firstTransactionDate.slice(0, 7)
+      : null;
+    const monthsForPattern = firstMonth
+      ? recentMonths.filter(month => month >= firstMonth)
+      : recentMonths;
+    if (monthsForPattern.length === 0) return;
+
+    const monthlyTotals = monthsForPattern.map(month => totalsByMonth.get(month) || 0);
+    const cappedTotals = capMonthlyTotals(monthlyTotals);
+    const monthlyBaseline = median(cappedTotals);
+    if (!Number.isFinite(monthlyBaseline) || monthlyBaseline <= 0) return;
+
+    baselines[patternKey] = {
+      patternKey,
+      category: pattern.category,
+      categoryDefinitionId: pattern.categoryDefinitionId ?? null,
+      categoryType: 'expense',
+      parentCategory: pattern.parentCategory || null,
+      monthlyBaseline,
+      monthlyStdDev: standardDeviation(cappedTotals),
+      monthsAnalyzed: monthsForPattern.length,
+      activeMonths,
+      sourceMonths: monthsForPattern,
+    };
+  });
+
+  return baselines;
+}
+
+function getActualSpendForBaseline(monthTransactions, baseline, patterns) {
+  const netSpend = (monthTransactions || []).reduce((sum, txn) => {
+    if (txn?.category_type !== 'expense') return sum;
+    const patternKey = resolvePatternKeyForTransaction(patterns, txn);
+    if (patternKey !== baseline.patternKey) return sum;
+    // Refunds (positive price) net against spend rather than inflating it.
+    return sum + (-(Number(txn.price) || 0));
+  }, 0);
+  return Math.max(0, netSpend);
+}
+
+function calculateVariableExpenseBaselineTarget(baseline, monthForecasts, monthTransactions, now, patterns) {
+  if (!baseline || !Array.isArray(monthForecasts) || monthForecasts.length === 0) return 0;
+
+  const firstForecastDate = parseLocalDate(monthForecasts[0].date);
+  if (Number.isNaN(firstForecastDate.getTime())) return 0;
+
+  const daysInMonthForForecast = getDaysInMonth(firstForecastDate.getFullYear(), firstForecastDate.getMonth());
+  const coveredForecastDays = monthForecasts.length;
+  const isCurrentMonth = sameMonth(firstForecastDate, now);
+
+  if (isCurrentMonth) {
+    const actualSpend = getActualSpendForBaseline(monthTransactions, baseline, patterns);
+    const remainingBaseline = Math.max(0, baseline.monthlyBaseline - actualSpend);
+    const remainingDaysFromWindowStart = Math.max(1, daysInMonthForForecast - firstForecastDate.getDate() + 1);
+    const coverageRatio = clamp(coveredForecastDays / remainingDaysFromWindowStart, 0, 1);
+    return remainingBaseline * coverageRatio;
+  }
+
+  return baseline.monthlyBaseline * clamp(coveredForecastDays / daysInMonthForForecast, 0, 1);
+}
+
+function refreshForecastDayPredictions(day) {
+  if (!Array.isArray(day.predictions)) return;
+  let expectedOperatingIncome = 0;
+  let expectedNonOperatingIncome = 0;
+  let expectedOperatingExpenses = 0;
+  let expectedNonOperatingExpenses = 0;
+  let hasIncomePrediction = false;
+  day.predictions.forEach((prediction) => {
+    const amount = Number(prediction.probabilityWeightedAmount) || 0;
+    if (prediction?.categoryType === 'income') {
+      hasIncomePrediction = true;
+      if (prediction.incomeType === 'operating') expectedOperatingIncome += amount;
+      else expectedNonOperatingIncome += amount;
+    } else if (prediction?.categoryType === 'expense') {
+      if (prediction.expenseType === 'non_operating') expectedNonOperatingExpenses += amount;
+      else expectedOperatingExpenses += amount;
+    }
+  });
+  if (hasIncomePrediction) {
+    day.expectedOperatingIncome = expectedOperatingIncome;
+    day.expectedNonOperatingIncome = expectedNonOperatingIncome;
+  }
+  day.expectedOperatingExpenses = expectedOperatingExpenses;
+  day.expectedNonOperatingExpenses = expectedNonOperatingExpenses;
+  day.expectedCashFlow = (Number(day.expectedIncome) || 0) - (Number(day.expectedExpenses) || 0);
+  day.expectedOperatingCashFlow = (Number(day.expectedOperatingIncome) || 0) - (Number(day.expectedOperatingExpenses) || 0);
+  day.expectedNonOperatingCashFlow = (Number(day.expectedNonOperatingIncome) || 0) - (Number(day.expectedNonOperatingExpenses) || 0);
+  day.predictions.sort((a, b) => {
+    const probDiff = (Number(b?.probability) || 0) - (Number(a?.probability) || 0);
+    if (probDiff !== 0) return probDiff;
+    return (Number(b?.expectedAmount) || 0) - (Number(a?.expectedAmount) || 0);
+  });
+  day.topPredictions = day.predictions
+    .filter((p) => (Number(p?.probabilityWeightedAmount) || 0) > 0)
+    .slice(0, 5);
+}
+
+function reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntriesByDay, monthlyBaselines, monthTransactions, now, patterns) {
+  if (!Array.isArray(monthForecasts) || monthForecasts.length === 0) return;
+  const baselines = Object.values(monthlyBaselines || {});
+  if (baselines.length === 0) return;
+
+  const simulationByDate = new Map((monthSimulationEntriesByDay || []).map(dayInfo => [dayInfo.date, dayInfo]));
+
+  baselines.forEach((baseline) => {
+    const targetAmount = calculateVariableExpenseBaselineTarget(baseline, monthForecasts, monthTransactions, now, patterns);
+    if (!Number.isFinite(targetAmount)) return;
+
+    const matchingPredictions = [];
+    monthForecasts.forEach((day) => {
+      (day.predictions || []).forEach((prediction) => {
+        if (prediction.categoryType !== 'expense') return;
+        if (prediction.patternKey !== baseline.patternKey) return;
+        matchingPredictions.push({ day, prediction });
+      });
+    });
+
+    const currentForecastedAmount = matchingPredictions.reduce(
+      (sum, item) => sum + (Number(item.prediction.probabilityWeightedAmount) || 0),
+      0
+    );
+
+    if (currentForecastedAmount > 0.01) {
+      // Scale toward the target even when it is ~0 (baseline already consumed
+      // by actual spend) — an early return here would snap the remaining
+      // month back to its full uncalibrated forecast the moment the user
+      // overspends the baseline.
+      const scale = Math.max(0, targetAmount) / currentForecastedAmount;
+      matchingPredictions.forEach(({ day, prediction }) => {
+        const previousWeightedAmount = Number(prediction.probabilityWeightedAmount) || 0;
+        const nextWeightedAmount = previousWeightedAmount * scale;
+
+        prediction.expectedAmount = (Number(prediction.expectedAmount) || 0) * scale;
+        prediction.probabilityWeightedAmount = nextWeightedAmount;
+        prediction.amountRange = {
+          low: (Number(prediction.amountRange?.low) || 0) * scale,
+          high: (Number(prediction.amountRange?.high) || 0) * scale,
+        };
+        prediction.isCalibrated = true;
+        prediction.monthlyBaseline = baseline.monthlyBaseline;
+        prediction.calibrationScale = scale;
+
+        day.expectedExpenses += nextWeightedAmount - previousWeightedAmount;
+      });
+
+      monthSimulationEntriesByDay.forEach((dayInfo) => {
+        (dayInfo.entries || []).forEach((entry) => {
+          if (entry.categoryType !== 'expense' || entry.patternKey !== baseline.patternKey) return;
+          entry.avgAmount = (Number(entry.avgAmount) || 0) * scale;
+          entry.stdDev = (Number(entry.stdDev) || 0) * Math.abs(scale);
+          entry.isCalibrated = true;
+          entry.monthlyBaseline = baseline.monthlyBaseline;
+        });
+      });
+    } else if (targetAmount > 0.01) {
+      // No live predictions for this baseline (tail-only/sporadic patterns
+      // never emit any). Inject the baseline spend with honest uncertainty:
+      // probability from the pattern's real frequency and a non-zero spread —
+      // not probability-1/stdDev-0, which would present the least certain
+      // categories with maximum displayed confidence.
+      const pattern = patterns?.[baseline.patternKey];
+      const expenseType = pattern
+        ? (isOperatingExpensePattern(pattern) ? 'operating' : 'non_operating')
+        : 'operating';
+      const daysCovered = monthForecasts.length;
+      const amountPerDay = targetAmount / daysCovered;
+      const dailyProbability = clamp(
+        (Number(pattern?.avgOccurrencesPerMonth) || 1) / Math.max(daysCovered, 1),
+        0.02,
+        1
+      );
+      const expectedAmount = amountPerDay / dailyProbability;
+      const dailyStdDev = Number(pattern?.stdDev)
+        || (Number(baseline.monthlyStdDev) || 0) / Math.max(daysCovered, 1);
+
+      monthForecasts.forEach((day) => {
+        const prediction = {
+          patternKey: baseline.patternKey,
+          category: baseline.category,
+          categoryDefinitionId: baseline.categoryDefinitionId ?? null,
+          transactionName: baseline.category,
+          monthlyKey: `${baseline.patternKey}:monthly-baseline`,
+          categoryType: 'expense',
+          expenseType,
+          parentCategory: baseline.parentCategory || null,
+          probability: dailyProbability,
+          expectedAmount,
+          amountRange: {
+            low: Math.max(0, expectedAmount - dailyStdDev),
+            high: expectedAmount + dailyStdDev,
+          },
+          probabilityWeightedAmount: amountPerDay,
+          useDailyTotal: true,
+          isBaselineForecast: true,
+          isCalibrated: true,
+          monthlyBaseline: baseline.monthlyBaseline,
+        };
+        day.predictions.push(prediction);
+        day.expectedExpenses += amountPerDay;
+
+        const simulationDay = simulationByDate.get(day.date);
+        if (simulationDay) {
+          simulationDay.entries.push({
+            patternKey: baseline.patternKey,
+            monthlyKey: prediction.monthlyKey,
+            categoryType: 'expense',
+            expenseType,
+            patternType: 'daily',
+            probability: dailyProbability,
+            avgAmount: expectedAmount,
+            stdDev: dailyStdDev,
+            isBaselineForecast: true,
+            isCalibrated: true,
+            monthlyBaseline: baseline.monthlyBaseline,
+          });
+        }
+      });
+    }
+  });
+
+  monthForecasts.forEach(refreshForecastDayPredictions);
 }
 
 function getProbabilityThreshold(pattern) {
@@ -1069,6 +1535,8 @@ function buildChosenMonthlyOccurrenceDateByMonth(dailyForecasts) {
 function simulateScenario(simulationEntriesByDay, chosenMonthlyOccurrenceDateByMonth) {
   const scenario = {
     totalIncome: 0,
+    totalOperatingIncome: 0,
+    totalNonOperatingIncome: 0,
     totalExpenses: 0,
     totalInvestments: 0,
     dailyResults: [],
@@ -1083,7 +1551,11 @@ function simulateScenario(simulationEntriesByDay, chosenMonthlyOccurrenceDateByM
     }
 
     let dayIncome = 0;
+    let dayOperatingIncome = 0;
+    let dayNonOperatingIncome = 0;
     let dayExpenses = 0;
+    let dayOperatingExpenses = 0;
+    let dayNonOperatingExpenses = 0;
     let dayInvestments = 0;
 
     dayInfo.entries.forEach(entry => {
@@ -1101,15 +1573,29 @@ function simulateScenario(simulationEntriesByDay, chosenMonthlyOccurrenceDateByM
         if (chosenDate ? true : willOccur(effectiveProb)) {
           monthSet.add(monthlyKey);
           const amount = sampleAmount(entry.avgAmount, entry.stdDev);
-          if (entry.categoryType === 'income') dayIncome += amount;
-          else if (entry.categoryType === 'expense') dayExpenses += amount;
+          if (entry.categoryType === 'income') {
+            dayIncome += amount;
+            if (entry.incomeType === 'non_operating') dayNonOperatingIncome += amount;
+            else dayOperatingIncome += amount;
+          } else if (entry.categoryType === 'expense') {
+            dayExpenses += amount;
+            if (entry.expenseType === 'non_operating') dayNonOperatingExpenses += amount;
+            else dayOperatingExpenses += amount;
+          }
           else if (entry.categoryType === 'investment') dayInvestments += amount;
         }
       } else {
         if (willOccur(effectiveProb)) {
           const amount = sampleAmount(entry.avgAmount, entry.stdDev);
-          if (entry.categoryType === 'income') dayIncome += amount;
-          else if (entry.categoryType === 'expense') dayExpenses += amount;
+          if (entry.categoryType === 'income') {
+            dayIncome += amount;
+            if (entry.incomeType === 'non_operating') dayNonOperatingIncome += amount;
+            else dayOperatingIncome += amount;
+          } else if (entry.categoryType === 'expense') {
+            dayExpenses += amount;
+            if (entry.expenseType === 'non_operating') dayNonOperatingExpenses += amount;
+            else dayOperatingExpenses += amount;
+          }
           else if (entry.categoryType === 'investment') dayInvestments += amount;
         }
       }
@@ -1118,17 +1604,29 @@ function simulateScenario(simulationEntriesByDay, chosenMonthlyOccurrenceDateByM
     scenario.dailyResults.push({
       date: dayInfo.date,
       income: dayIncome,
+      operatingIncome: dayOperatingIncome,
+      nonOperatingIncome: dayNonOperatingIncome,
       expenses: dayExpenses,
+      operatingExpenses: dayOperatingExpenses,
+      nonOperatingExpenses: dayNonOperatingExpenses,
       investments: dayInvestments,
       cashFlow: dayIncome - dayExpenses,
+      operatingCashFlow: dayOperatingIncome - dayOperatingExpenses,
+      nonOperatingCashFlow: dayNonOperatingIncome - dayNonOperatingExpenses,
     });
 
     scenario.totalIncome += dayIncome;
+    scenario.totalOperatingIncome += dayOperatingIncome;
+    scenario.totalNonOperatingIncome += dayNonOperatingIncome;
     scenario.totalExpenses += dayExpenses;
     scenario.totalInvestments += dayInvestments;
   });
 
   scenario.totalCashFlow = scenario.totalIncome - scenario.totalExpenses;
+  scenario.totalOperatingExpenses = scenario.dailyResults.reduce((sum, day) => sum + (Number(day.operatingExpenses) || 0), 0);
+  scenario.totalNonOperatingExpenses = scenario.dailyResults.reduce((sum, day) => sum + (Number(day.nonOperatingExpenses) || 0), 0);
+  scenario.totalOperatingCashFlow = scenario.totalOperatingIncome - scenario.totalOperatingExpenses;
+  scenario.totalNonOperatingCashFlow = scenario.totalNonOperatingIncome - scenario.totalNonOperatingExpenses;
   return scenario;
 }
 
@@ -1157,10 +1655,12 @@ function runMonteCarloSimulation(dailyForecasts, simulationEntriesByDay, numSimu
 function forecastDay(date, patterns, adjustments, patternEntries, simulationEntries) {
   const predictions = [];
   let expectedIncome = 0;
+  let expectedOperatingIncome = 0;
+  let expectedNonOperatingIncome = 0;
   let expectedExpenses = 0;
+  let expectedOperatingExpenses = 0;
+  let expectedNonOperatingExpenses = 0;
   let expectedInvestments = 0;
-  const monthlyExpenseFloorByCategory = {};
-  const expectedExpensesByCategory = {};
 
   const entries = patternEntries || Object.entries(patterns);
   entries.forEach(([category, pattern]) => {
@@ -1176,13 +1676,22 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
       const stdDev = pattern.useDailyTotal ? pattern.stdDevDailyTotal : pattern.stdDev;
       const monthlyKey = pattern._cache?.monthlyKey || pattern.patternKey || pattern.transactionName || pattern.category;
       const transactionName = pattern.transactionName || pattern.category;
+      const incomeType = pattern.categoryType === 'income'
+        ? (pattern._cache?.incomeType ?? (isOperatingIncomePattern(pattern) ? 'operating' : 'non_operating'))
+        : null;
+      const expenseType = pattern.categoryType === 'expense'
+        ? (pattern._cache?.expenseType ?? (isOperatingExpensePattern(pattern) ? 'operating' : 'non_operating'))
+        : null;
 
       const prediction = {
+        patternKey: category,
         category: pattern.category,
         categoryDefinitionId: pattern.categoryDefinitionId ?? null,
         transactionName,
         monthlyKey,
         categoryType: pattern.categoryType,
+        incomeType,
+        expenseType,
         parentCategory: pattern.parentCategory,
         probability: effectiveProb,
         expectedAmount: expectedAmount,
@@ -1205,35 +1714,28 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
           probability: effectiveProb,
           avgAmount: expectedAmount,
           stdDev,
+          incomeType,
+          expenseType,
         });
       }
 
       if (pattern.categoryType === 'income') {
         expectedIncome += prediction.probabilityWeightedAmount;
+        if (incomeType === 'operating') {
+          expectedOperatingIncome += prediction.probabilityWeightedAmount;
+        } else {
+          expectedNonOperatingIncome += prediction.probabilityWeightedAmount;
+        }
       } else if (pattern.categoryType === 'expense') {
         expectedExpenses += prediction.probabilityWeightedAmount;
-        expectedExpensesByCategory[prediction.category] = (expectedExpensesByCategory[prediction.category] || 0) + prediction.probabilityWeightedAmount;
-        if (pattern.avgAmount && pattern.avgOccurrencesPerMonth) {
-          const monthlyAvg = pattern.avgAmount * pattern.avgOccurrencesPerMonth;
-          const isHighFrequency = pattern.avgOccurrencesPerMonth >= 8;
-          monthlyExpenseFloorByCategory[pattern.category] = Math.max(
-            monthlyExpenseFloorByCategory[pattern.category] || 0,
-            isHighFrequency ? monthlyAvg : monthlyAvg * 1.0
-          );
+        if (expenseType === 'operating') {
+          expectedOperatingExpenses += prediction.probabilityWeightedAmount;
+        } else {
+          expectedNonOperatingExpenses += prediction.probabilityWeightedAmount;
         }
       } else if (pattern.categoryType === 'investment') {
         expectedInvestments += prediction.probabilityWeightedAmount;
       }
-    }
-  });
-
-  const daysInMonthForDate = getDaysInMonth(date.getFullYear(), date.getMonth());
-  Object.entries(monthlyExpenseFloorByCategory).forEach(([cat, monthlyFloor]) => {
-    const floorPerDay = monthlyFloor / daysInMonthForDate;
-    const alreadyExpected = expectedExpensesByCategory[cat] || 0;
-    if (floorPerDay > alreadyExpected) {
-      const delta = floorPerDay - alreadyExpected;
-      expectedExpenses += delta;
     }
   });
 
@@ -1247,8 +1749,14 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
     predictions,
     expectedIncome,
     expectedExpenses,
+    expectedOperatingExpenses,
+    expectedNonOperatingExpenses,
     expectedInvestments,
     expectedCashFlow: expectedIncome - expectedExpenses,
+    expectedOperatingIncome,
+    expectedNonOperatingIncome,
+    expectedOperatingCashFlow: expectedOperatingIncome - expectedOperatingExpenses,
+    expectedNonOperatingCashFlow: expectedNonOperatingIncome - expectedNonOperatingExpenses,
     topPredictions: predictions.slice(0, 5),
   };
 }
@@ -1312,20 +1820,10 @@ function adjustMonthlyPatternForecasts(dailyForecasts, patterns, adjustments) {
   }
 
   // Re-sort predictions/topPredictions since monthly normalization changes probabilities.
-  dailyForecasts.forEach((day) => {
-    if (!Array.isArray(day.predictions)) return;
-    day.predictions.sort((a, b) => {
-      const probDiff = (Number(b?.probability) || 0) - (Number(a?.probability) || 0);
-      if (probDiff !== 0) return probDiff;
-      return (Number(b?.expectedAmount) || 0) - (Number(a?.expectedAmount) || 0);
-    });
-    day.topPredictions = day.predictions
-      .filter((p) => (Number(p?.probabilityWeightedAmount) || 0) > 0)
-      .slice(0, 5);
-  });
+  dailyForecasts.forEach(refreshForecastDayPredictions);
 }
 
-function generateForecastAcrossMonths(patterns, patternEntries, db, startDate, endDate, now, currentMonthTransactions) {
+function generateForecastAcrossMonths(patterns, patternEntries, db, startDate, endDate, now, currentMonthTransactions, monthlyBaselines = {}) {
   const dailyForecasts = [];
   const simulationEntriesByDay = [];
   const adjustmentsByMonth = {};
@@ -1350,12 +1848,13 @@ function generateForecastAcrossMonths(patterns, patternEntries, db, startDate, e
     log(`📅 Month ${monthKey}: txns=${monthTransactions.length} days=${formatDate(monthStart)}→${formatDate(monthEnd)}`);
 
     const monthForecasts = [];
+    const monthSimulationEntriesByDay = [];
     let dayCursor = new Date(monthStart);
     while (dayCursor <= monthEnd) {
       const simulationEntries = [];
       const dayForecast = forecastDay(dayCursor, patterns, monthAdjustments, patternEntries, simulationEntries);
       monthForecasts.push(dayForecast);
-      simulationEntriesByDay.push({
+      monthSimulationEntriesByDay.push({
         date: dayForecast.date,
         monthKey,
         entries: simulationEntries,
@@ -1364,9 +1863,11 @@ function generateForecastAcrossMonths(patterns, patternEntries, db, startDate, e
     }
 
     adjustMonthlyPatternForecasts(monthForecasts, patterns, monthAdjustments);
+    reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntriesByDay, monthlyBaselines, monthTransactions, now, patterns);
     log(`  ↳ Adjusted monthly patterns for ${monthKey}: ${monthForecasts.length} day(s)`);
 
     dailyForecasts.push(...monthForecasts);
+    simulationEntriesByDay.push(...monthSimulationEntriesByDay);
     cursor = new Date(year, month + 1, 1);
   }
 
@@ -1445,6 +1946,7 @@ async function generateDailyForecast(options = {}) {
 
     const patterns = analyzeCategoryPatterns(allTransactions);
     const patternEntries = buildPatternCaches(patterns);
+    const variableExpenseBaselines = buildVariableExpenseMonthlyBaselines(allTransactions, patterns, now);
     const currentMonthTransactions = allTransactions.filter(txn => txn.month === currentMonth);
     const categoryCount = Object.keys(patterns).length;
     logPatternSummary(patterns);
@@ -1465,14 +1967,27 @@ async function generateDailyForecast(options = {}) {
       forecastStartDate,
       forecastEndDate,
       now,
-      currentMonthTransactions
+      currentMonthTransactions,
+      variableExpenseBaselines
     );
     const monteCarloResults = runMonteCarloSimulation(dailyForecasts, simulationEntriesByDay, CONFIG.monteCarloRuns);
 
     let cumulativeCashFlow = 0;
+    let cumulativeOperatingCashFlow = 0;
+    let cumulativeNonOperatingCashFlow = 0;
+    let cumulativeOperatingExpenses = 0;
+    let cumulativeNonOperatingExpenses = 0;
     dailyForecasts.forEach(day => {
-      cumulativeCashFlow += day.expectedCashFlow;
+      cumulativeCashFlow += Number(day.expectedCashFlow) || 0;
+      cumulativeOperatingCashFlow += Number(day.expectedOperatingCashFlow) || 0;
+      cumulativeNonOperatingCashFlow += Number(day.expectedNonOperatingCashFlow) || 0;
+      cumulativeOperatingExpenses += Number(day.expectedOperatingExpenses) || 0;
+      cumulativeNonOperatingExpenses += Number(day.expectedNonOperatingExpenses) || 0;
       day.cumulativeCashFlow = cumulativeCashFlow;
+      day.cumulativeOperatingCashFlow = cumulativeOperatingCashFlow;
+      day.cumulativeNonOperatingCashFlow = cumulativeNonOperatingCashFlow;
+      day.cumulativeOperatingExpenses = cumulativeOperatingExpenses;
+      day.cumulativeNonOperatingExpenses = cumulativeNonOperatingExpenses;
     });
 
     const results = {
@@ -1482,6 +1997,7 @@ async function generateDailyForecast(options = {}) {
         firstTransaction: allTransactions[0].date,
         lastTransaction: allTransactions[allTransactions.length - 1].date,
         totalCategories: categoryCount,
+        variableExpenseBaselines: Object.keys(variableExpenseBaselines).length,
         currentMonth,
         currentDay,
         currentMonthTransactions: currentMonthTransactions.length,
@@ -1503,9 +2019,17 @@ async function generateDailyForecast(options = {}) {
       categoryPatterns: Object.values(patterns).map(p => ({
         patternKey: p.patternKey,
         category: p.category,
+        categoryNameEn: p.categoryNameEn || null,
         categoryDefinitionId: p.categoryDefinitionId ?? null,
         transactionName: p.transactionName,
         categoryType: p.categoryType,
+        incomeType: p.categoryType === 'income'
+          ? (p._cache?.incomeType ?? (isOperatingIncomePattern(p) ? 'operating' : 'non_operating'))
+          : null,
+        expenseType: p.categoryType === 'expense'
+          ? (p._cache?.expenseType ?? (isOperatingExpensePattern(p) ? 'operating' : 'non_operating'))
+          : null,
+        isCountedAsIncome: p.isCountedAsIncome,
         patternType: p.patternType,
         avgAmount: p.avgAmount,
         stdDev: p.stdDev,
@@ -1533,9 +2057,24 @@ async function generateDailyForecast(options = {}) {
   // Derive scenarios with cumulative cash flow (p10/p50/p90) for frontend consumers
 function withCumulative(scenario) {
   let cum = 0;
+  let operatingCum = 0;
+  let nonOperatingCum = 0;
+  let operatingExpensesCum = 0;
+  let nonOperatingExpensesCum = 0;
   const dailyWithCum = (scenario.dailyResults || []).map(d => {
-    cum += (d.cashFlow || 0);
-    return { ...d, cumulativeCashFlow: cum };
+    cum += Number(d.cashFlow) || 0;
+    operatingCum += Number(d.operatingCashFlow) || 0;
+    nonOperatingCum += Number(d.nonOperatingCashFlow) || 0;
+    operatingExpensesCum += Number(d.operatingExpenses) || 0;
+    nonOperatingExpensesCum += Number(d.nonOperatingExpenses) || 0;
+    return {
+      ...d,
+      cumulativeCashFlow: cum,
+      cumulativeOperatingCashFlow: operatingCum,
+      cumulativeNonOperatingCashFlow: nonOperatingCum,
+      cumulativeOperatingExpenses: operatingExpensesCum,
+      cumulativeNonOperatingExpenses: nonOperatingExpensesCum,
+    };
   });
   return { ...scenario, dailyResults: dailyWithCum };
 }
@@ -1906,7 +2445,10 @@ module.exports = {
     buildBudgetOutlook,
     buildChosenMonthlyOccurrenceDateByMonth,
     buildPatternCaches,
+    buildVariableExpenseMonthlyBaselines,
+    calculateVariableExpenseBaselineTarget,
     calculateDayProbability,
+    capMonthlyTotals,
     formatDate,
     generateForecastAcrossMonths,
     forecastDay,
@@ -1915,15 +2457,25 @@ module.exports = {
     getCurrentMonthTransactions,
     getDayName,
     getDaysInMonth,
+    getMonthKeyFromDate,
     getProbabilityThreshold,
     getTransactionNamePatternKey,
+    getTransactionMonthKey,
     isLastDayOfMonth,
+    isNonOperatingIncomePattern,
+    isNonOperatingExpensePattern,
+    isOperatingIncomePattern,
+    isOperatingExpensePattern,
+    isVariableExpensePattern,
     loadCategoryDefinitions,
     logPatternSummary,
     mean,
     openForecastDb,
     parseLocalDate,
     parsePositiveInt,
+    reconcileVariableExpenseForecasts,
+    refreshForecastDayPredictions,
+    resolvePatternKeyForTransaction,
     resolveForecastDbPath,
     resolveForecastWindow,
     runMonteCarloSimulation,
