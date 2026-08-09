@@ -137,4 +137,65 @@ describe('chat suggestions', () => {
     expect(review.text).not.toContain('₪');
     expect(review.estimatedImpactMonthly).toBeNull();
   });
+
+  it('suggests investing materially unallocated monthly income', async () => {
+    const db = {
+      query: vi.fn(async (sql) => {
+        const text = String(sql);
+        if (text.includes('as income') && text.includes('as expenses')) {
+          return { rows: [{ income: '10000', expenses: '7000' }] };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    const suggestions = await generateSuggestions(db, {
+      allowTransactionAccess: false,
+      allowCategoryAccess: false,
+      allowAnalyticsAccess: true,
+    }, 'en');
+
+    const savings = suggestions.find((suggestion) => suggestion.source === 'monthly_cashflow');
+    expect(savings).toMatchObject({
+      category: 'savings',
+      priority: 54,
+      estimatedImpactMonthly: 3000,
+      requiresPermission: ['analytics'],
+    });
+    expect(savings.text).toContain('₪3,000');
+  });
+
+  it('surfaces a spending spike and newly visited merchants', async () => {
+    const db = {
+      query: vi.fn(async (sql) => {
+        const text = String(sql);
+        if (text.includes('as this_month') && text.includes('as last_month')) {
+          return { rows: [{ this_month: '1500', last_month: '1000' }] };
+        }
+        if (text.includes('as new_count')) {
+          return { rows: [{ new_count: '3' }] };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    const suggestions = await generateSuggestions(db, {
+      allowTransactionAccess: true,
+      allowCategoryAccess: false,
+      allowAnalyticsAccess: false,
+    }, 'en');
+
+    expect(suggestions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        category: 'spike',
+        source: 'monthly_spending_change',
+        priority: 72,
+      }),
+      expect.objectContaining({
+        category: 'merchant',
+        source: 'new_merchant_count',
+        priority: 58,
+      }),
+    ]));
+  });
 });
