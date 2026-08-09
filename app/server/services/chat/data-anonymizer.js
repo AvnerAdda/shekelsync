@@ -281,10 +281,23 @@ function anonymizeContext(context, anonymizer) {
     analytics: context.analytics,
     investments: context.investments,
     optimizer: anonymizeOptimizerContext(context.optimizer),
+    smartActions: context.smartActions,
+    subscriptions: context.subscriptions,
+    spendingTargets: context.spendingTargets,
+    dataFreshness: context.dataFreshness,
+    // Aggregates only — safe to pass through
+    yearOverYear: context.yearOverYear,
     // Anonymize transactions
     recentTransactions: anonymizer.anonymizeTransactions(context.recentTransactions),
     // Anonymize merchants
     topMerchants: anonymizer.anonymizeMerchants(context.topMerchants),
+    // Recurring entries carry merchant names — map them like other merchants
+    recurringTransactions: Array.isArray(context.recurringTransactions)
+      ? context.recurringTransactions.map((r) => ({
+        ...r,
+        name: anonymizer.anonymizeMerchant(r.name) || r.name,
+      }))
+      : context.recurringTransactions,
   };
 }
 
