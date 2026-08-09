@@ -6,6 +6,22 @@
 const { dialect } = require('../../../lib/sql-dialect.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 
+// Test seam: vitest module mocks never reach the CJS require() below in this
+// repo's setup, so tests inject a fake loader through the exported setter.
+let spendingBreakdownLoader = null;
+
+function __setSpendingBreakdownLoader(loader) {
+  spendingBreakdownLoader = loader;
+}
+
+async function loadSpendingCategoryBreakdown(params) {
+  if (spendingBreakdownLoader) {
+    return spendingBreakdownLoader(params);
+  }
+  const { getSpendingCategoryBreakdown } = require('../analytics/spending-categories.js');
+  return getSpendingCategoryBreakdown(params);
+}
+
 const PAIRING_EXCLUSION_JOIN = `
   LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
     ON t.identifier = tpe.transaction_identifier
@@ -21,6 +37,8 @@ const EXCLUDE_PIKADON_T1 = dialect.excludePikadon('t1');
 
 const cache = new Map();
 const CACHE_TTL_MS = 60 * 60 * 1000;
+const MAX_CACHE_ENTRIES = 32;
+const TARGET_SPENDING_CATEGORIES = new Set(['essential', 'growth', 'stability', 'reward']);
 
 function normalizeNumber(value) {
   const parsed = Number.parseFloat(value);
@@ -46,20 +64,33 @@ async function optionalQuery(db, sql, params = []) {
 }
 
 async function getDataVersion(db) {
-  const transactionRows = await optionalQuery(db, `
-    SELECT COUNT(*) as transaction_count, MAX(date) as latest_transaction_date
-    FROM transactions
-  `);
-  const scrapeRows = await optionalQuery(db, `
-    SELECT MAX(created_at) as latest_scrape_at
-    FROM scrape_events
-  `);
+  // Per-table queries stay isolated (a missing table must not blank the whole
+  // version) and include the mutable tables behind the top-ranked suggestions,
+  // so dismissing a quest or editing a target invalidates the cache.
+  const [transactionRows, scrapeRows, actionRows, subscriptionRows, targetRows, budgetRows] = await Promise.all([
+    optionalQuery(db, `
+      SELECT COUNT(*) as transaction_count, MAX(date) as latest_transaction_date
+      FROM transactions
+    `),
+    optionalQuery(db, `
+      SELECT MAX(created_at) as latest_scrape_at
+      FROM scrape_events
+    `),
+    optionalQuery(db, 'SELECT MAX(updated_at) as latest_change_at FROM smart_action_items'),
+    optionalQuery(db, 'SELECT MAX(updated_at) as latest_change_at FROM subscriptions'),
+    optionalQuery(db, 'SELECT MAX(updated_at) as latest_change_at FROM spending_category_targets'),
+    optionalQuery(db, 'SELECT MAX(updated_at) as latest_change_at FROM category_budgets'),
+  ]);
   const tx = transactionRows[0] || {};
   const scrape = scrapeRows[0] || {};
   return [
     normalizeInt(tx.transaction_count) || 0,
     tx.latest_transaction_date || '',
     scrape.latest_scrape_at || '',
+    actionRows[0]?.latest_change_at || '',
+    subscriptionRows[0]?.latest_change_at || '',
+    targetRows[0]?.latest_change_at || '',
+    budgetRows[0]?.latest_change_at || '',
   ].join(':');
 }
 
@@ -83,7 +114,19 @@ function getCached(key) {
 }
 
 function setCache(key, suggestions) {
-  cache.set(key, { suggestions, expiresAt: Date.now() + CACHE_TTL_MS });
+  // Data-versioned keys are never looked up again once superseded, so prune
+  // here — otherwise the map grows for the life of the process.
+  const now = Date.now();
+  for (const [existingKey, entry] of cache) {
+    if (entry.expiresAt <= now) {
+      cache.delete(existingKey);
+    }
+  }
+  while (cache.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = cache.keys().next().value;
+    cache.delete(oldestKey);
+  }
+  cache.set(key, { suggestions, expiresAt: now + CACHE_TTL_MS });
 }
 
 function makeSuggestion({
@@ -130,7 +173,9 @@ const TEMPLATES = {
     smartAction: (count, amount) => amount > 0
       ? `You have ${count} active money actions worth about ₪${formatCurrency(amount)}/mo — want the highest-impact one?`
       : `You have ${count} active money actions — want the best next step?`,
-    subscriptionReview: (count, amount) => `You have ${count} subscriptions marked for review worth about ₪${formatCurrency(amount)}/mo — should we prioritize them?`,
+    subscriptionReview: (count, amount) => amount > 0
+      ? `You have ${count} subscriptions marked for review worth about ₪${formatCurrency(amount)}/mo — should we prioritize them?`
+      : `You have ${count} subscriptions marked for review — should we prioritize them?`,
     upcomingRenewals: (count) => `${count} subscriptions renew soon — want to review what is coming up?`,
     targetDrift: (category, drift) => `${category} spending is ${drift} pts above target this month — want a practical reset plan?`,
     staleData: (date) => `Your latest transaction is from ${date} — want to check whether your insights are stale?`,
@@ -144,7 +189,9 @@ const TEMPLATES = {
     smartAction: (count, amount) => amount > 0
       ? `יש לך ${count} פעולות כסף פעילות בשווי כ-₪${formatCurrency(amount)} לחודש — רוצה להתחיל מההשפעה הגבוהה ביותר?`
       : `יש לך ${count} פעולות כסף פעילות — רוצה את הצעד הבא הכי טוב?`,
-    subscriptionReview: (count, amount) => `יש לך ${count} מנויים לסקירה בשווי כ-₪${formatCurrency(amount)} לחודש — לתעדף אותם?`,
+    subscriptionReview: (count, amount) => amount > 0
+      ? `יש לך ${count} מנויים לסקירה בשווי כ-₪${formatCurrency(amount)} לחודש — לתעדף אותם?`
+      : `יש לך ${count} מנויים לסקירה — לתעדף אותם?`,
     upcomingRenewals: (count) => `${count} מנויים מתחדשים בקרוב — רוצה לבדוק מה מגיע?`,
     targetDrift: (category, drift) => `הוצאות ${category} גבוהות ב-${drift} נקודות מהיעד החודש — רוצה תוכנית איפוס מעשית?`,
     staleData: (date) => `העסקה האחרונה שלך היא מ-${date} — לבדוק אם התובנות התיישנו?`,
@@ -158,7 +205,9 @@ const TEMPLATES = {
     smartAction: (count, amount) => amount > 0
       ? `Vous avez ${count} actions financières actives d'environ ₪${formatCurrency(amount)}/mois — voir la plus utile ?`
       : `Vous avez ${count} actions financières actives — voir la meilleure prochaine étape ?`,
-    subscriptionReview: (count, amount) => `Vous avez ${count} abonnements à revoir pour environ ₪${formatCurrency(amount)}/mois — les prioriser ?`,
+    subscriptionReview: (count, amount) => amount > 0
+      ? `Vous avez ${count} abonnements à revoir pour environ ₪${formatCurrency(amount)}/mois — les prioriser ?`
+      : `Vous avez ${count} abonnements à revoir — les prioriser ?`,
     upcomingRenewals: (count) => `${count} abonnements se renouvellent bientôt — voulez-vous les passer en revue ?`,
     targetDrift: (category, drift) => `Les dépenses ${category} sont ${drift} pts au-dessus de l'objectif ce mois-ci — faire un plan ?`,
     staleData: (date) => `Votre dernière transaction date du ${date} — vérifier si les insights sont à jour ?`,
@@ -233,12 +282,15 @@ async function generateSuggestions(db, permissions, locale = 'en') {
 }
 
 async function checkSmartActions(db, templates) {
+  // 'accepted' quests are in progress and still actionable (quests.js treats
+  // active+accepted as live). Only positive impacts count toward the savings
+  // claim — negative values are cost warnings and must not net against it.
   const rows = await optionalQuery(db, `
     SELECT
       COUNT(*) as action_count,
-      SUM(COALESCE(potential_impact, 0)) as potential_impact
+      SUM(CASE WHEN potential_impact > 0 THEN potential_impact ELSE 0 END) as potential_impact
     FROM smart_action_items
-    WHERE user_status = 'active'
+    WHERE user_status IN ('active', 'accepted')
       AND dismissed_at IS NULL
       AND resolved_at IS NULL
   `);
@@ -274,7 +326,7 @@ async function checkSubscriptionReview(db, templates) {
     priority: 92,
     source: 'subscriptions_review',
     estimatedImpactMonthly: amount > 0 ? Math.round(amount) : null,
-    requiresPermission: ['analytics'],
+    requiresPermission: ['analytics', 'transactions'],
   });
 }
 
@@ -284,8 +336,8 @@ async function checkUpcomingRenewals(db, templates) {
     FROM subscriptions
     WHERE status = 'active'
       AND next_expected_date IS NOT NULL
-      AND next_expected_date >= date('now')
-      AND next_expected_date <= date('now', '+30 day')
+      AND next_expected_date >= date('now', 'localtime')
+      AND next_expected_date <= date('now', 'localtime', '+30 day')
   `);
 
   const count = normalizeInt(rows[0]?.renewal_count) || 0;
@@ -295,50 +347,27 @@ async function checkUpcomingRenewals(db, templates) {
     category: 'subscription',
     priority: 84,
     source: 'subscriptions_upcoming',
-    requiresPermission: ['analytics'],
+    requiresPermission: ['analytics', 'transactions'],
   });
 }
 
 async function checkSpendingTargetDrift(db, templates, locale) {
-  const rows = await optionalQuery(db, `
-    SELECT
-      target.spending_category,
-      target.target_percentage,
-      COALESCE(actual.total_amount, 0) as total_amount
-    FROM spending_category_targets target
-    LEFT JOIN (
-      SELECT
-        COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated') as spending_category,
-        SUM(ABS(t.price)) as total_amount
-      FROM transactions t
-      JOIN category_definitions cd ON t.category_definition_id = cd.id
-      LEFT JOIN spending_category_mappings scm ON cd.id = scm.category_definition_id
-      ${PAIRING_EXCLUSION_JOIN}
-      WHERE t.date >= date('now', 'start of month')
-        AND t.price < 0
-        AND t.status = 'completed'
-        AND cd.category_type = 'expense'
-        AND tpe.transaction_identifier IS NULL
-        AND ${EXCLUDE_PIKADON}
-      GROUP BY COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated')
-    ) actual ON actual.spending_category = target.spending_category
-    WHERE target.is_active = 1
-      AND target.spending_category IN ('essential', 'growth', 'stability', 'reward')
-  `);
+  // Reuse the Spending Categories screen's own calculation so the coach can
+  // never quote a drift number that contradicts the dashboard.
+  let breakdown;
+  try {
+    ({ breakdown } = await loadSpendingCategoryBreakdown({ currentMonthOnly: true }) || {});
+  } catch {
+    return null;
+  }
 
-  const totalAssigned = rows.reduce((sum, row) => sum + (normalizeNumber(row.total_amount) || 0), 0);
-  if (totalAssigned <= 0) return null;
-
-  const ranked = rows
-    .map((row) => {
-      const amount = normalizeNumber(row.total_amount) || 0;
-      const target = normalizeNumber(row.target_percentage) || 0;
-      const actual = (amount / totalAssigned) * 100;
-      return {
-        category: row.spending_category,
-        drift: Math.round(actual - target),
-      };
-    })
+  const ranked = (Array.isArray(breakdown) ? breakdown : [])
+    .filter((row) => TARGET_SPENDING_CATEGORIES.has(row.spending_category)
+      && (normalizeNumber(row.target_percentage) || 0) > 0)
+    .map((row) => ({
+      category: row.spending_category,
+      drift: Math.round(normalizeNumber(row.variance) || 0),
+    }))
     .filter((row) => row.drift >= 8)
     .sort((a, b) => b.drift - a.drift);
 
@@ -350,7 +379,7 @@ async function checkSpendingTargetDrift(db, templates, locale) {
     category: 'spending_target',
     priority: 88,
     source: 'spending_category_targets',
-    requiresPermission: ['category'],
+    requiresPermission: ['analytics', 'category'],
   });
 }
 
@@ -358,7 +387,7 @@ async function checkDataFreshness(db, templates) {
   const rows = await optionalQuery(db, `
     SELECT
       MAX(date) as latest_transaction_date,
-      CAST(julianday('now') - julianday(MAX(date)) AS INTEGER) as days_since_latest
+      CAST(julianday('now', 'localtime') - julianday(MAX(date)) AS INTEGER) as days_since_latest
     FROM transactions
     WHERE status = 'completed'
   `);
@@ -371,7 +400,7 @@ async function checkDataFreshness(db, templates) {
       category: 'freshness',
       priority: 75,
       source: 'transactions_freshness',
-      requiresPermission: ['transactions'],
+      requiresPermission: ['analytics', 'transactions'],
     });
   }
   return null;
@@ -387,12 +416,12 @@ async function checkBudgetOverruns(db, templates) {
     FROM category_budgets cb
     JOIN category_definitions cd ON cb.category_definition_id = cd.id
     LEFT JOIN transactions t ON t.category_definition_id = cd.id
-      AND t.date >= date('now', 'start of month')
+      AND t.date >= date('now', 'localtime', 'start of month')
       AND t.price < 0
     LEFT JOIN transaction_pairing_exclusions tpe
       ON t.identifier = tpe.transaction_identifier
       AND t.vendor = tpe.transaction_vendor
-    WHERE cb.is_active = 1 AND cb.period_type = 'monthly'
+    WHERE cb.is_active = 1 AND cb.period_type = 'monthly' AND cb.budget_limit > 0
     GROUP BY cd.id, cd.name, cb.budget_limit
     HAVING spent > budget * 0.9
     ORDER BY (spent / budget) DESC
@@ -416,13 +445,13 @@ async function checkBudgetOverruns(db, templates) {
 async function checkSpendingChange(db, templates) {
   const result = await optionalQuery(db, `
     SELECT
-      SUM(CASE WHEN t.date >= date('now', 'start of month') THEN ABS(t.price) ELSE 0 END) as this_month,
-      SUM(CASE WHEN t.date >= date('now', '-1 month', 'start of month')
-                AND t.date < date('now', 'start of month') THEN ABS(t.price) ELSE 0 END) as last_month
+      SUM(CASE WHEN t.date >= date('now', 'localtime', 'start of month') THEN ABS(t.price) ELSE 0 END) as this_month,
+      SUM(CASE WHEN t.date >= date('now', 'localtime', '-1 month', 'start of month')
+                AND t.date < date('now', 'localtime', 'start of month') THEN ABS(t.price) ELSE 0 END) as last_month
     FROM transactions t
     ${PAIRING_EXCLUSION_JOIN}
     WHERE t.price < 0
-      AND t.date >= date('now', '-1 month', 'start of month')
+      AND t.date >= date('now', 'localtime', '-1 month', 'start of month')
       AND tpe.transaction_identifier IS NULL
       AND ${EXCLUDE_PIKADON}
   `);
@@ -439,7 +468,7 @@ async function checkSpendingChange(db, templates) {
           category: 'spike',
           priority: 72,
           source: 'monthly_spending_change',
-          requiresPermission: ['analytics'],
+          requiresPermission: ['analytics', 'transactions'],
         });
       }
       if (changePct < -20) {
@@ -448,7 +477,7 @@ async function checkSpendingChange(db, templates) {
           category: 'spike',
           priority: 64,
           source: 'monthly_spending_change',
-          requiresPermission: ['analytics'],
+          requiresPermission: ['analytics', 'transactions'],
         });
       }
     }
@@ -461,7 +490,7 @@ async function checkNewMerchants(db, templates) {
     SELECT COUNT(DISTINCT t1.merchant_name) as new_count
     FROM transactions t1
     ${PAIRING_EXCLUSION_JOIN_T1}
-    WHERE t1.date >= date('now', 'start of month')
+    WHERE t1.date >= date('now', 'localtime', 'start of month')
       AND t1.price < 0
       AND t1.merchant_name IS NOT NULL
       AND tpe.transaction_identifier IS NULL
@@ -469,8 +498,8 @@ async function checkNewMerchants(db, templates) {
       AND t1.merchant_name NOT IN (
         SELECT DISTINCT t2.merchant_name
         FROM transactions t2
-        WHERE t2.date >= date('now', '-3 months')
-          AND t2.date < date('now', 'start of month')
+        WHERE t2.date >= date('now', 'localtime', '-3 months')
+          AND t2.date < date('now', 'localtime', 'start of month')
           AND t2.merchant_name IS NOT NULL
       )
   `);
@@ -506,7 +535,7 @@ async function checkSavingsOpportunity(db, templates) {
     FROM transactions t
     LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
     ${PAIRING_EXCLUSION_JOIN}
-    WHERE t.date >= date('now', 'start of month')
+    WHERE t.date >= date('now', 'localtime', 'start of month')
       AND tpe.transaction_identifier IS NULL
       AND ${EXCLUDE_PIKADON}
   `, [BANK_CATEGORY_NAME]);
@@ -552,4 +581,5 @@ function __clearCache() {
 module.exports = {
   generateSuggestions,
   __clearCache,
+  __setSpendingBreakdownLoader,
 };

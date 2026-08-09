@@ -1,10 +1,21 @@
-const {
-  buildContext,
-  formatContextForPrompt,
-  getSchemaDescription,
-} = require('../financial-context.js');
+const getSpendingCategoryBreakdown = vi.fn();
+
+let buildContext;
+let formatContextForPrompt;
+let getSchemaDescription;
+
+beforeAll(async () => {
+  const mod = await import('../financial-context.js');
+  const api = mod.default ?? mod;
+  ({ buildContext, formatContextForPrompt, getSchemaDescription } = api);
+  api.__setSpendingBreakdownLoader(getSpendingCategoryBreakdown);
+});
 
 describe('financial-context service', () => {
+  beforeEach(() => {
+    getSpendingCategoryBreakdown.mockReset();
+  });
+
   it('builds summary-only context when all permissions are disabled', async () => {
     const db = {
       query: vi.fn().mockResolvedValue({
@@ -189,14 +200,16 @@ describe('financial-context service', () => {
           rows: [
             { scrape_count: '3', latest_scrape_at: '2025-02-02' },
           ],
-        })
-        .mockResolvedValueOnce({
-          rows: [
-            { spending_category: 'essential', target_percentage: '50', total_amount: '600' },
-            { spending_category: 'growth', target_percentage: '20', total_amount: '400' },
-          ],
         }),
     };
+
+    getSpendingCategoryBreakdown.mockResolvedValue({
+      breakdown: [
+        { spending_category: 'essential', target_percentage: 50, actual_percentage: 60, variance: 10, total_amount: 600 },
+        { spending_category: 'growth', target_percentage: 20, actual_percentage: 40, variance: 20, total_amount: 400 },
+        { spending_category: 'unallocated', target_percentage: 0, actual_percentage: 0, variance: 0, total_amount: 300 },
+      ],
+    });
 
     const context = await buildContext(
       db,
@@ -285,11 +298,12 @@ describe('financial-context service', () => {
       scrapeCount: 3,
       latestScrapeAt: '2025-02-02',
     });
+    expect(getSpendingCategoryBreakdown).toHaveBeenCalledWith({ currentMonthOnly: true });
     expect(context.spendingTargets).toEqual([
       { spendingCategory: 'essential', targetPercentage: 50, actualPercentage: 60, driftPercentage: 10, amount: 600 },
       { spendingCategory: 'growth', targetPercentage: 20, actualPercentage: 40, driftPercentage: 20, amount: 400 },
     ]);
-    expect(db.query).toHaveBeenCalled();
+    expect(db.query).toHaveBeenCalledTimes(16);
   });
 
   it('swallows investment-query failures while keeping analytics context', async () => {
@@ -335,7 +349,7 @@ describe('financial-context service', () => {
       savingsRate: 75,
     });
     expect(context.investments).toBeUndefined();
-    expect(db.query).toHaveBeenCalled();
+    expect(db.query).toHaveBeenCalledTimes(12);
   });
 
   it('formats prompt context with sections, status markers, and denied permission note', () => {

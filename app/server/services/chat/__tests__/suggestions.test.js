@@ -1,11 +1,19 @@
-const {
-  generateSuggestions,
-  __clearCache,
-} = require('../suggestions.js');
+const getSpendingCategoryBreakdown = vi.fn();
+
+let generateSuggestions;
+let __clearCache;
+
+beforeAll(async () => {
+  const mod = await import('../suggestions.js');
+  const api = mod.default ?? mod;
+  ({ generateSuggestions, __clearCache } = api);
+  api.__setSpendingBreakdownLoader(getSpendingCategoryBreakdown);
+});
 
 describe('chat suggestions', () => {
   afterEach(() => {
     __clearCache();
+    getSpendingCategoryBreakdown.mockReset();
   });
 
   it('returns no suggestions without data permissions', async () => {
@@ -40,17 +48,16 @@ describe('chat suggestions', () => {
         if (text.includes('FROM subscriptions') && text.includes('next_expected_date')) {
           return { rows: [{ renewal_count: '1' }] };
         }
-        if (text.includes('FROM spending_category_targets target')) {
-          return {
-            rows: [
-              { spending_category: 'essential', target_percentage: '50', total_amount: '700' },
-              { spending_category: 'growth', target_percentage: '20', total_amount: '300' },
-            ],
-          };
-        }
         return { rows: [] };
       }),
     };
+
+    getSpendingCategoryBreakdown.mockResolvedValue({
+      breakdown: [
+        { spending_category: 'essential', target_percentage: 50, actual_percentage: 70, variance: 20, total_amount: 700 },
+        { spending_category: 'growth', target_percentage: 20, actual_percentage: 30, variance: 10, total_amount: 300 },
+      ],
+    });
 
     const suggestions = await generateSuggestions(db, {
       allowTransactionAccess: true,
@@ -105,5 +112,29 @@ describe('chat suggestions', () => {
     expect(first[0].text).toContain('1 active');
     expect(cached[0].text).toContain('1 active');
     expect(refreshed[0].text).toContain('3 active');
+  });
+
+  it('omits the monthly amount when review subscriptions have no known cost', async () => {
+    const db = {
+      query: vi.fn(async (sql) => {
+        const text = String(sql);
+        if (text.includes('FROM subscriptions s') && text.includes("WHERE status = 'review'")) {
+          return { rows: [{ review_count: '2', monthly_total: null }] };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    const suggestions = await generateSuggestions(db, {
+      allowTransactionAccess: true,
+      allowCategoryAccess: false,
+      allowAnalyticsAccess: false,
+    }, 'en');
+
+    const review = suggestions.find((s) => s.source === 'subscriptions_review');
+    expect(review).toBeDefined();
+    expect(review.text).toContain('2 subscriptions marked for review');
+    expect(review.text).not.toContain('₪');
+    expect(review.estimatedImpactMonthly).toBeNull();
   });
 });
