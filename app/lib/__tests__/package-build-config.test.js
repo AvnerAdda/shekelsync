@@ -41,4 +41,13 @@ describe('electron-builder mac target configuration', () => {
 
     expect(appPackage.scripts?.release).toBe('npm run dist');
   });
+
+  it('provides an explicit non-publishing unsigned release build', () => {
+    const script = appPackage.scripts?.['dist:unsigned'];
+
+    expect(script).toContain('--publish=never');
+    expect(script).toContain('--config.mac.forceCodeSigning=false');
+    expect(script).toContain('--config.mac.hardenedRuntime=false');
+    expect(script).toContain('--config.mac.notarize=false');
+  });
 });

@@ -62,7 +62,9 @@ npm --prefix app run dist
 
 - Cross-platform packaging is manual via workflow dispatch (`.github/workflows/package.yml`).
 - The package workflow builds distributables for Linux, macOS, and Windows.
-- When signing/notarization secrets are configured, the workflow applies platform signing.
+- Tag releases use Developer ID signing and notarization when the complete macOS credential set is configured.
+- With no macOS signing credentials, tag releases publish explicit unsigned artifacts. macOS users must approve the app in Privacy & Security, and updates are manual because in-app macOS auto-update remains disabled.
+- A partially configured macOS credential set fails closed instead of silently publishing an ambiguous build.
 - Build artifacts are uploaded for each workflow run (unsigned when signing secrets are not provided).
 - Before tagging a release, run migration review: `npm run release:migrations:check`.
 - Published releases: https://github.com/AvnerAdda/shekelsync/releases

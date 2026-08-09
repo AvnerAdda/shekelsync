@@ -12,7 +12,7 @@ const macReleaseValidator = fs.readFileSync(
 );
 
 describe('production package workflow', () => {
-  it('requires every mac signing and notarization credential for pushed tags', () => {
+  it('uses a complete mac signing setup or an explicit unsigned release', () => {
     expect(packageWorkflow).toContain(
       "if: matrix.os == 'macos-latest' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
     );
@@ -28,18 +28,25 @@ describe('production package workflow', () => {
     }
 
     expect(packageWorkflow).toContain(
-      'Refusing macOS tag release because required credentials are missing',
+      'No macOS signing credentials configured; publishing unsigned macOS artifacts',
     );
+    expect(packageWorkflow).toContain('Partially configured macOS signing credentials');
+    expect(packageWorkflow).toContain('MACOS_RELEASE_SIGNING_MODE=unsigned');
+    expect(packageWorkflow).toContain('MACOS_RELEASE_SIGNING_MODE=signed');
   });
 
-  it('publishes only pushed-tag artifacts after mac release validation', () => {
-    const validationStep = packageWorkflow.indexOf(
+  it('publishes only pushed-tag artifacts after the selected mac release validation', () => {
+    const signedValidationStep = packageWorkflow.indexOf(
       'name: Validate signed and notarized macOS release artifacts',
     );
-    const uploadStep = packageWorkflow.indexOf('name: Upload validated release artifacts');
+    const unsignedValidationStep = packageWorkflow.indexOf(
+      'name: Validate unsigned macOS release artifacts',
+    );
+    const uploadStep = packageWorkflow.indexOf('name: Upload release artifacts');
 
-    expect(validationStep).toBeGreaterThan(-1);
-    expect(uploadStep).toBeGreaterThan(validationStep);
+    expect(signedValidationStep).toBeGreaterThan(-1);
+    expect(unsignedValidationStep).toBeGreaterThan(signedValidationStep);
+    expect(uploadStep).toBeGreaterThan(unsignedValidationStep);
     expect(packageWorkflow).toContain(
       "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && success()",
     );
@@ -47,6 +54,13 @@ describe('production package workflow', () => {
       'Mode: diagnostic only; no artifacts will be uploaded or published',
     );
     expect(packageWorkflow).not.toContain('if: always()\n        uses: actions/upload-artifact');
+  });
+
+  it('requires fresh unsigned mac artifacts before upload', () => {
+    expect(packageWorkflow).toContain('npm --prefix app run dist:unsigned');
+    expect(packageWorkflow).toContain('Expected unsigned macOS release output is missing');
+    expect(packageWorkflow).toContain('Refusing stale unsigned macOS release output');
+    expect(packageWorkflow).toContain('they are not Apple-notarized');
   });
 
   it('checks fresh packaged apps for signature, identity, runtime, and notarization', () => {
