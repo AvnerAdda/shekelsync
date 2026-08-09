@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { resolveAppPath } = require('./paths');
+const { atomicWriteFile } = require('./durable-file');
 
 let app;
 try {
@@ -12,7 +13,7 @@ try {
 }
 
 const { encrypt, decrypt } = require(resolveAppPath('lib', 'server', 'encryption.js'));
-const { mkdir, readFile, unlink, writeFile } = fs.promises;
+const { mkdir, readFile, unlink } = fs.promises;
 
 class ChatbotSecretStore {
   constructor() {
@@ -51,14 +52,24 @@ class ChatbotSecretStore {
       const encrypted = await readFile(this.getFilePath(), 'utf8');
       const decrypted = decrypt(encrypted);
       const parsed = JSON.parse(decrypted);
-      this.cache = parsed || {};
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Stored chatbot secrets are not a JSON object');
+      }
+      this.cache = parsed;
       return { ...this.cache };
     } catch (error) {
-      if (error.code && error.code !== 'ENOENT') {
-        console.warn('[ChatbotSecretStore] Failed to load chatbot secrets:', error.message);
+      if (error.code === 'ENOENT') {
+        this.cache = {};
+        return {};
       }
-      this.cache = {};
-      return {};
+
+      console.warn('[ChatbotSecretStore] Failed to load chatbot secrets:', error.message);
+      const recoveryError = new Error(
+        'Existing chatbot secrets could not be read or decrypted. Refusing to treat them as absent.',
+      );
+      recoveryError.code = 'chatbot_secret_store_unreadable';
+      recoveryError.cause = error;
+      throw recoveryError;
     }
   }
 
@@ -66,7 +77,7 @@ class ChatbotSecretStore {
     await this.ensureDirectoryExists();
     const serialized = JSON.stringify(nextState);
     const encrypted = encrypt(serialized);
-    await writeFile(this.getFilePath(), encrypted, 'utf8');
+    await atomicWriteFile(this.getFilePath(), encrypted);
     this.cache = { ...nextState };
     return { ...this.cache };
   }

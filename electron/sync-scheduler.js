@@ -180,7 +180,7 @@ function createSyncScheduler({
         onAccountComplete: ({ account, index, total, result: summary }) => {
           emit({
             vendor: account.vendor,
-            status: summary.success ? 'completed' : 'failed',
+            status: summary.success ? 'completed' : (summary.status || 'failed'),
             progress: Math.round(((index + 1) / Math.max(total, 1)) * 100),
             message: summary.message,
             transactions: summary.transactionCount,
@@ -193,30 +193,37 @@ function createSyncScheduler({
         totalProcessed: bulkResult.totalProcessed || 0,
         successCount: bulkResult.successCount || 0,
         failureCount: bulkResult.failureCount || 0,
+        blockedCount: bulkResult.blockedCount || 0,
         totalTransactions: bulkResult.totalTransactions || 0,
       };
 
+      const bulkStatus = bulkResult.status || (totals.failureCount > 0 ? 'failed' : 'success');
+      const bulkSucceeded = bulkResult.success !== false && bulkStatus === 'success';
+
       emit({
         vendor: 'bulk',
-        status: 'completed',
+        status: bulkSucceeded ? 'completed' : bulkStatus,
         progress: 100,
         message: bulkResult.message || 'Bulk sync completed',
         totals,
       });
 
       await recordResult({
-        status: 'success',
+        status: bulkStatus,
         message: bulkResult.message,
         totals,
       });
 
-      await runAutoDetection({ defaultStatus: 'review' });
+      if (totals.successCount > 0) {
+        await runAutoDetection({ defaultStatus: 'review' });
+      }
 
       if (reason === 'scheduled' && typeof onScheduledResult === 'function') {
         try {
           await onScheduledResult({
             reason,
-            success: true,
+            success: bulkSucceeded,
+            status: bulkStatus,
             message: bulkResult.message || 'Bulk sync completed',
             totals,
           });
@@ -225,7 +232,7 @@ function createSyncScheduler({
         }
       }
 
-      return { success: true, ...bulkResult };
+      return { ...bulkResult, success: bulkSucceeded, status: bulkStatus };
     } catch (error) {
       emit({
         vendor: 'bulk',

@@ -71,8 +71,11 @@ interface CategoryModalEventDetail {
   };
 }
 
+type CredentialsLoadStatus = 'loading' | 'ready' | 'error';
+
 const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefresh }) => {
   const onPageChangeRef = useRef(onPageChange);
+  const credentialsRequestIdRef = useRef(0);
   const [open, setOpen] = useState(true);
   const [accountsModalOpen, setAccountsModalOpen] = useState(false);
   const [accountsModalRequest, setAccountsModalRequest] = useState<AccountsModalOpenRequest | null>(null);
@@ -98,6 +101,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     dbStatus: 'checking' as 'connected' | 'disconnected' | 'checking',
   });
   const [accountSyncStatuses, setAccountSyncStatuses] = useState<AccountSyncStatus[]>([]);
+  const [credentialsStatus, setCredentialsStatus] = useState<CredentialsLoadStatus>('loading');
   const [accountAlerts, setAccountAlerts] = useState({
     noBank: false,
     noCredit: false,
@@ -141,10 +145,23 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   );
 
   const fetchStats = useCallback(async () => {
+    const requestId = ++credentialsRequestIdRef.current;
+    setCredentialsStatus('loading');
     try {
       const accountsRes = await apiClient.get('/api/credentials');
-      const accountsData = accountsRes.ok ? (accountsRes.data as any) : [];
-      const accounts = Array.isArray(accountsData) ? accountsData : accountsData?.items ?? [];
+      if (!accountsRes.ok) {
+        throw new Error(accountsRes.statusText || 'Failed to load credentials');
+      }
+
+      const accountsData = accountsRes.data as any;
+      const accounts = Array.isArray(accountsData)
+        ? accountsData
+        : Array.isArray(accountsData?.items)
+          ? accountsData.items
+          : null;
+      if (!accounts) {
+        throw new Error('Invalid credentials response');
+      }
 
       // Process accounts with sync status
       const accountStatuses: AccountSyncStatus[] = accounts.map((account: any) => {
@@ -165,14 +182,39 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         return oldest;
       }, null);
 
-      setAccountSyncStatuses(accountStatuses);
-      setStats(prev => ({
-        ...prev,
-        totalAccounts: accounts.length || 0,
-        lastSync: oldestSync,
-      }));
+      if (requestId === credentialsRequestIdRef.current) {
+        const hasBank = accounts.some(
+          (credential: any) => credential?.institution?.institution_type === 'bank',
+        );
+        const hasCredit = accounts.some(
+          (credential: any) => credential?.institution?.institution_type === 'credit_card',
+        );
+        const missingInstitution = accounts.filter((credential: any) => !credential.institution_id);
+        if (missingInstitution.length > 0) {
+          console.warn(
+            `[Sidebar] ${missingInstitution.length} credential(s) missing institution_id. Vendors:`,
+            missingInstitution.map((credential: any) => credential.vendor),
+          );
+        }
+
+        setAccountSyncStatuses(accountStatuses);
+        setStats(prev => ({
+          ...prev,
+          totalAccounts: accounts.length,
+          lastSync: oldestSync,
+        }));
+        setAccountAlerts(prev => ({
+          ...prev,
+          noBank: !hasBank,
+          noCredit: !hasCredit,
+        }));
+        setCredentialsStatus('ready');
+      }
     } catch (error) {
       console.error('Error fetching stats:', error);
+      if (requestId === credentialsRequestIdRef.current) {
+        setCredentialsStatus('error');
+      }
     }
   }, []);
 
@@ -190,25 +232,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
 
   const fetchAccountStatus = useCallback(async () => {
     try {
-      const [credsResponse, investResponse, suggestionsResponse] = await Promise.all([
-        apiClient.get('/api/credentials'),
+      const [investResponse, suggestionsResponse] = await Promise.all([
         apiClient.get('/api/investments/accounts'),
         apiClient.get('/api/investments/smart-suggestions?thresholdDays=90'),
       ]);
-
-      const credentialsData = credsResponse.ok ? (credsResponse.data as any) : [];
-      const credentials = Array.isArray(credentialsData) ? credentialsData : credentialsData?.items ?? [];
-
-      const hasBank = credentials.some((cred: any) => cred?.institution?.institution_type === 'bank');
-      const hasCredit = credentials.some((cred: any) => cred?.institution?.institution_type === 'credit_card');
-
-      const missingInstitution = credentials.filter((cred: any) => !cred.institution_id);
-      if (missingInstitution.length > 0) {
-        console.warn(
-          `[Sidebar] ${missingInstitution.length} credential(s) missing institution_id. Vendors:`,
-          missingInstitution.map((cred: any) => cred.vendor),
-        );
-      }
 
       const investData = investResponse.ok ? (investResponse.data as any) : { accounts: [] };
       const investAccounts = Array.isArray(investData?.accounts) ? investData.accounts : [];
@@ -220,12 +247,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       const PENSION_TYPES = new Set(['pension', 'provident', 'study_fund']);
       const hasPension = investAccounts.some((acc: any) => PENSION_TYPES.has(acc.account_type));
 
-      setAccountAlerts({
-        noBank: !hasBank,
-        noCredit: !hasCredit,
+      setAccountAlerts(prev => ({
+        ...prev,
         noPension: !hasPension,
         hasInvestmentSuggestions: investmentSuggestions.length > 0,
-      });
+      }));
 
     } catch (error) {
       console.error('Error fetching account status:', error);
@@ -264,13 +290,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
       return;
     }
 
-    if (scrapeEvent.status === 'completed') {
+    if (scrapeEvent.status === 'completed' || scrapeEvent.status === 'partial') {
       setIsBulkSyncing(false);
       handleScrapeComplete();
       return;
     }
 
-    if (scrapeEvent.status === 'failed') {
+    if (scrapeEvent.status === 'blocked' || scrapeEvent.status === 'failed') {
       setIsBulkSyncing(false);
     }
   }, [scrapeEvent, handleScrapeComplete]);
@@ -286,18 +312,25 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         throw new Error(response.statusText || 'Bulk sync failed');
       }
       const result = (response.data as any) ?? {};
+      const successCount = Number(result.successCount) || 0;
+      const isPartial = result.status === 'partial' || (!result.success && successCount > 0);
 
-      if (result.success) {
-        const message = result.totalProcessed === 0
-          ? 'All accounts are up to date'
-          : `Synced ${result.successCount}/${result.totalProcessed} accounts (${result.totalTransactions || 0} transactions)`;
+      if (result.success || isPartial) {
+        let message: string;
+        if (isPartial) {
+          message = result.message || `Synced ${successCount}/${result.totalProcessed || 0} accounts (${result.totalTransactions || 0} transactions)`;
+        } else if (result.totalProcessed === 0) {
+          message = 'All accounts are up to date';
+        } else {
+          message = `Synced ${successCount}/${result.totalProcessed} accounts (${result.totalTransactions || 0} transactions)`;
+        }
 
         showNotification(
           message,
-          result.successCount === result.totalProcessed ? 'success' : 'warning'
+          isPartial || result.successCount !== result.totalProcessed ? 'warning' : 'success'
         );
 
-        if (!hasScrapeBridge) {
+        if (!hasScrapeBridge && (result.success || successCount > 0)) {
           handleScrapeComplete();
         }
       } else {
@@ -423,6 +456,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSyncIconClick = () => {
+    if (credentialsStatus !== 'ready') {
+      if (credentialsStatus === 'error') {
+        void fetchStats();
+      }
+      return;
+    }
+
     const isSyncStale = stats.lastSync && (Date.now() - stats.lastSync.getTime()) > STALE_SYNC_THRESHOLD_MS;
     
     if (isSyncStale && !isBulkSyncing) {
@@ -439,6 +479,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   };
 
   const formatLastSync = () => {
+    if (credentialsStatus === 'loading') {
+      return t('credentials.loading');
+    }
+    if (credentialsStatus === 'error') {
+      return t('credentials.unavailable');
+    }
+
     return formatSidebarLastSync(stats.lastSync, new Date(), {
       never: t('sync.never'),
       daysAgo: (count) => t('sync.daysAgo', { count }),
@@ -485,16 +532,19 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
     handleBulkRefresh();
   };
 
-  const staleAccounts = accountSyncStatuses.filter(
-    (account) => account.status === 'orange' || account.status === 'red'
-  );
+  const staleAccounts = credentialsStatus === 'ready'
+    ? accountSyncStatuses.filter(
+      (account) => account.status === 'orange' || account.status === 'red'
+    )
+    : [];
   const hasPairingGapWarning = !pairingGapLoading && Number(pairingGapData?.totals?.missingAmount || 0) > 2;
-  const hasAddAccountWarning =
+  const hasAddAccountWarning = credentialsStatus === 'ready' && (
     accountAlerts.noBank
-    || accountAlerts.noCredit
-    || accountAlerts.noPension
-    || accountAlerts.hasInvestmentSuggestions
-    || hasPairingGapWarning;
+      || accountAlerts.noCredit
+      || accountAlerts.noPension
+      || accountAlerts.hasInvestmentSuggestions
+      || hasPairingGapWarning
+  );
   const addAccountTooltip = hasPairingGapWarning
     ? t(
       'tooltips.addAccountPairingGap',
@@ -775,7 +825,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     backgroundColor: alpha(theme.palette.text.primary, 0.05),
                     display: 'flex'
                   }}>
-                    <AccountIcon fontSize="small" color="action" />
+                    {credentialsStatus === 'loading' ? (
+                      <CircularProgress size={20} />
+                    ) : credentialsStatus === 'error' ? (
+                      <ErrorIcon fontSize="small" color="error" />
+                    ) : (
+                      <AccountIcon fontSize="small" color="action" />
+                    )}
                   </Box>
                   <Box>
                     <Typography
@@ -787,10 +843,16 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                       }}>
                       {t('stats.accounts', 'Accounts')}
                     </Typography>
-                    <Typography variant="body2" sx={{
-                      fontWeight: 600
-                    }}>
-                      {stats.totalAccounts} {t('stats.connected', 'Connected')}
+                    <Typography
+                      variant="body2"
+                      color={credentialsStatus === 'error' ? 'error.main' : 'text.primary'}
+                      sx={{ fontWeight: 600 }}
+                    >
+                      {credentialsStatus === 'ready'
+                        ? `${stats.totalAccounts} ${t('stats.connected', 'Connected')}`
+                        : credentialsStatus === 'loading'
+                          ? t('credentials.loading')
+                          : t('credentials.unavailable')}
                     </Typography>
                   </Box>
                 </Box>
@@ -800,15 +862,18 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                 <Box
                   role="button"
                   tabIndex={0}
-                  aria-label={isBulkSyncing 
-                    ? t('sync.syncing', 'Syncing...') 
-                    : t('sync.clickToSync', 'Click to sync accounts')
-                  }
+                  aria-label={credentialsStatus === 'error'
+                    ? t('credentials.retry')
+                    : credentialsStatus === 'loading'
+                      ? t('credentials.loading')
+                      : isBulkSyncing
+                        ? t('sync.syncing', 'Syncing...')
+                        : t('sync.clickToSync', 'Click to sync accounts')}
                   sx={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1.5,
-                    cursor: isBulkSyncing ? 'wait' : 'pointer',
+                    cursor: credentialsStatus === 'loading' || isBulkSyncing ? 'wait' : 'pointer',
                     '&:hover': {
                       '& .sync-icon-bg': {
                         backgroundColor: alpha(theme.palette.primary.main, 0.1),
@@ -837,8 +902,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     display: 'flex',
                     transition: 'background-color 0.2s'
                   }}>
-                    {isBulkSyncing ? (
+                    {credentialsStatus === 'loading' || isBulkSyncing ? (
                       <CircularProgress size={16} />
+                    ) : credentialsStatus === 'error' ? (
+                      <ErrorIcon fontSize="small" color="error" />
                     ) : (
                       <SyncIcon
                         fontSize="small"
@@ -910,13 +977,23 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     {t('popover.title')}
                   </Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
-                    {accountSyncStatuses.length === 0 ? (
+                    {credentialsStatus === 'loading' && (
+                      <Typography variant="caption" color="text.secondary">
+                        {t('credentials.loading')}
+                      </Typography>
+                    )}
+                    {credentialsStatus === 'error' && (
+                      <Typography variant="caption" color="error.main">
+                        {t('credentials.loadFailed')}
+                      </Typography>
+                    )}
+                    {credentialsStatus === 'ready' && accountSyncStatuses.length === 0 ? (
                       <Typography variant="caption" sx={{
                         color: "text.secondary"
                       }}>
                         {t('popover.noAccounts')}
                       </Typography>
-                    ) : (
+                    ) : accountSyncStatuses.length > 0 ? (
                       accountSyncStatuses.map((account) => (
                         <Box
                           key={account.id}
@@ -961,8 +1038,22 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                           </Typography>
                         </Box>
                       ))
-                    )}
+                    ) : null}
                   </Box>
+                  {credentialsStatus === 'error' && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      fullWidth
+                      startIcon={<SyncIcon />}
+                      onClick={() => {
+                        void fetchStats();
+                      }}
+                      sx={{ mb: staleAccounts.length > 0 ? 1 : 0, borderRadius: 2 }}
+                    >
+                      {t('credentials.retry')}
+                    </Button>
+                  )}
                   {staleAccounts.length > 0 && (
                     <>
                       <Divider sx={{ my: 1 }} />
@@ -1028,7 +1119,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             <Divider sx={{ width: '100%', mb: 1 }} />
 
             {/* Account count indicator */}
-            <Tooltip title={`${stats.totalAccounts} ${t('stats.accountsConnected')}`} placement="right">
+            <Tooltip
+              title={credentialsStatus === 'ready'
+                ? `${stats.totalAccounts} ${t('stats.accountsConnected')}`
+                : credentialsStatus === 'loading'
+                  ? t('credentials.loading')
+                  : t('credentials.unavailable')}
+              placement="right"
+            >
               <Box sx={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1038,14 +1136,20 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                 borderRadius: '50%',
                 backgroundColor: alpha(theme.palette.text.primary, 0.05),
               }}>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    fontWeight: 600,
-                    color: "text.secondary"
-                  }}>
-                  {stats.totalAccounts}
-                </Typography>
+                {credentialsStatus === 'loading' ? (
+                  <CircularProgress size={16} />
+                ) : credentialsStatus === 'error' ? (
+                  <ErrorIcon fontSize="small" color="error" />
+                ) : (
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 600,
+                      color: "text.secondary"
+                    }}>
+                    {stats.totalAccounts}
+                  </Typography>
+                )}
               </Box>
             </Tooltip>
 
@@ -1085,15 +1189,24 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             <Tooltip title={formatLastSync()} placement="right">
               <IconButton
                 size="small"
-                onClick={handleBulkRefresh}
-                disabled={isBulkSyncing}
+                onClick={credentialsStatus === 'ready'
+                  ? handleBulkRefresh
+                  : () => {
+                    void fetchStats();
+                  }}
+                disabled={credentialsStatus === 'loading' || isBulkSyncing}
+                aria-label={credentialsStatus === 'error'
+                  ? t('credentials.retry')
+                  : t('sync.clickToSync', 'Click to sync accounts')}
                 sx={{
                   backgroundColor: alpha(theme.palette.text.primary, 0.05),
                   '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.1) }
                 }}
               >
-                {isBulkSyncing ? (
+                {credentialsStatus === 'loading' || isBulkSyncing ? (
                   <CircularProgress size={18} />
+                ) : credentialsStatus === 'error' ? (
+                  <ErrorIcon fontSize="small" color="error" />
                 ) : (
                   <SyncIcon
                     fontSize="small"
