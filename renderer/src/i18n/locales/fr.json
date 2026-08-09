@@ -2479,6 +2479,7 @@
     "suggestions": {
       "title": "Questions suggérées :",
       "dynamicTitle": "Basé sur vos données :",
+      "proactiveIntro": "J'ai trouvé {{count}} opportunités pertinentes à examiner.",
       "items": [
         "Combien ai-je dépensé ce mois-ci ?",
         "Sur quelle catégorie ai-je le plus dépensé ?",

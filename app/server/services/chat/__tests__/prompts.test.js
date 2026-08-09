@@ -52,6 +52,24 @@ describe('chat prompts', () => {
     expect(prompt).toContain('address the user by their name');
   });
 
+  it('includes proactive coaching and privacy guidance', () => {
+    const prompt = getSystemPrompt(
+      'en',
+      'ACTIVE PROACTIVE ACTIONS:\n1. quest_reduce_spending',
+      'SCHEMA BLOCK',
+      {
+        allowTransactionAccess: true,
+        allowCategoryAccess: true,
+        allowAnalyticsAccess: true,
+      },
+    );
+
+    expect(prompt).toContain('lead with the best next action');
+    expect(prompt).toContain('Ground proactive recommendations');
+    expect(prompt).toContain('Proactive signals are aggregate/anonymized');
+    expect(prompt).toContain('Do not infer or ask for real merchant/provider names');
+  });
+
   it('adds permission note when all permissions are disabled (en/he/fr)', () => {
     const perms = {
       allowTransactionAccess: false,
