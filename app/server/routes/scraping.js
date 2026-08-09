@@ -552,7 +552,7 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
         onAccountComplete: ({ account, index, total, result: summary }) => {
           sendProgress({
             vendor: account.vendor,
-            status: summary.success ? 'completed' : 'failed',
+            status: summary.success ? 'completed' : (summary.status || 'failed'),
             progress: Math.round(((index + 1) / Math.max(total, 1)) * 100),
             message: summary.message,
             transactions: summary.transactionCount,
@@ -562,20 +562,23 @@ function createScrapingRouter({ mainWindow, onProgress, services = {} } = {}) {
 
       sendProgress({
         vendor: 'bulk',
-        status: 'completed',
+        status: result.success ? 'completed' : (result.status || 'failed'),
         progress: 100,
         message: result.message,
         totals: {
           success: result.successCount,
           failure: result.failureCount,
+          blocked: result.blockedCount || 0,
           transactions: result.totalTransactions,
         },
       });
 
-      try {
-        await maybeRunAutoDetectionFn({ locale: req.locale });
-      } catch (detectError) {
-        routeLogger.warn('Auto-detection failed:', detectError?.message || detectError);
+      if (result.successCount > 0) {
+        try {
+          await maybeRunAutoDetectionFn({ locale: req.locale });
+        } catch (detectError) {
+          routeLogger.warn('Auto-detection failed:', detectError?.message || detectError);
+        }
       }
 
       res.status(200).json(result);

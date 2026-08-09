@@ -2,8 +2,14 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
+  Button,
+  CircularProgress,
+  Paper,
+  Typography,
   useTheme,
 } from '@mui/material';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import Sidebar from '@renderer/features/layout/components/Sidebar';
 import TitleBar from '@renderer/features/layout/components/TitleBar';
 import GlobalTransactionSearch, {
@@ -166,11 +172,15 @@ interface TransactionDetailRequest {
   vendor?: string;
 }
 
-const AppLayout: React.FC = () => {
+interface AppLayoutContentProps {
+  authLoading: boolean;
+  sessionDisplayName: string | null;
+}
+
+const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessionDisplayName }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const theme = useTheme();
-  const { session, loading: authLoading } = useAuth();
   const { showNotification } = useNotification();
   const { t } = useTranslation('translation');
   const [currentPage, setCurrentPage] = useState<string>(() => pathToPage(location.pathname));
@@ -181,7 +191,6 @@ const AppLayout: React.FC = () => {
   const [donationReminderOpen, setDonationReminderOpen] = useState(false);
   const [donationReminderBusy, setDonationReminderBusy] = useState(false);
   const pendingDataRefreshRef = useRef(false);
-  const sessionDisplayName = session?.user?.name || session?.user?.email || null;
   const { status: donationStatus, loading: donationStatusLoading, markReminderShown } = useDonationStatus();
 
   useEffect(() => {
@@ -523,6 +532,76 @@ const AppLayout: React.FC = () => {
         onDismissForMonth={handleDismissDonationReminder}
       />
     </Box>
+  );
+};
+
+const AppLayout: React.FC = () => {
+  const {
+    session,
+    loading: authLoading,
+    sessionLoadError,
+    refreshSession,
+  } = useAuth();
+  const { t } = useTranslation('translation', { keyPrefix: 'sessionRecovery' });
+
+  if (sessionLoadError) {
+    return (
+      <Box
+        role="alert"
+        aria-live="assertive"
+        sx={{
+          minHeight: '100vh',
+          boxSizing: 'border-box',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          p: 3,
+          bgcolor: 'background.default',
+        }}
+      >
+        <Paper
+          elevation={4}
+          sx={{
+            width: '100%',
+            maxWidth: 560,
+            p: { xs: 3, sm: 5 },
+            textAlign: 'center',
+          }}
+        >
+          <ErrorOutlineIcon sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
+          <Typography variant="h4" component="h1" gutterBottom color="error.main">
+            {t('title', { defaultValue: 'Your saved session could not be unlocked' })}
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            {t('message', {
+              defaultValue:
+                'ShekelSync could not read the protected session on this Mac. Your data has not been cleared. Try again before signing in again.',
+            })}
+          </Typography>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={authLoading ? <CircularProgress size={18} color="inherit" /> : <RefreshIcon />}
+            disabled={authLoading}
+            onClick={() => {
+              void refreshSession();
+            }}
+          >
+            {authLoading
+              ? t('retrying', { defaultValue: 'Trying again...' })
+              : t('retry', { defaultValue: 'Try again' })}
+          </Button>
+        </Paper>
+      </Box>
+    );
+  }
+
+  const sessionDisplayName = session?.user?.name || session?.user?.email || null;
+  return (
+    <AppLayoutContent
+      authLoading={authLoading}
+      sessionDisplayName={sessionDisplayName}
+    />
   );
 };
 

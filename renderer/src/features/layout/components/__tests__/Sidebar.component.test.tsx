@@ -17,6 +17,7 @@ let mockUncategorizedCount = 0;
 let mockPingOk = true;
 let mockPairingGap: any = null;
 let mockScrapeEvent: any = null;
+let mockCredentialsOk = true;
 
 const translations: Record<string, string> = {
   'menu.overview': 'Overview',
@@ -42,7 +43,12 @@ const translations: Record<string, string> = {
   'dbStatus.checking': 'Checking DB',
   'popover.title': 'Account sync status',
   'popover.noAccounts': 'No accounts',
+  'stats.connected': 'Connected',
   'stats.accountsConnected': 'accounts connected',
+  'credentials.loading': 'Loading account data...',
+  'credentials.unavailable': 'Account data unavailable',
+  'credentials.loadFailed': 'Account data could not be refreshed. Existing account details were kept.',
+  'credentials.retry': 'Retry loading accounts',
   'uncategorized': 'uncategorized',
 };
 
@@ -119,7 +125,11 @@ vi.mock('@renderer/shared/modals/CategoryHierarchyModal', () => ({
 function setupDefaultApiMocks() {
   mockGet.mockImplementation((endpoint: string) => {
     if (endpoint === '/api/credentials') {
-      return Promise.resolve({ ok: true, data: mockCredentials });
+      return Promise.resolve({
+        ok: mockCredentialsOk,
+        statusText: mockCredentialsOk ? 'OK' : 'Protected data unavailable',
+        data: mockCredentialsOk ? mockCredentials : { error: 'Protected data unavailable' },
+      });
     }
     if (endpoint === '/api/ping') {
       return Promise.resolve({ ok: mockPingOk, data: {} });
@@ -168,6 +178,7 @@ describe('Sidebar component', () => {
     mockPost.mockReset();
 
     mockScrapeEvent = null;
+    mockCredentialsOk = true;
     mockOnboardingStatus = {};
     mockPingOk = true;
     mockUncategorizedCount = 0;
@@ -254,6 +265,62 @@ describe('Sidebar component', () => {
     expect(container.querySelector('[data-testid="LockIcon"]')).toBeNull();
   });
 
+  it('renders credential fetch failures as errors rather than empty account state', async () => {
+    mockCredentialsOk = false;
+    mockCredentials = [];
+
+    const { container } = await renderSidebar({ currentPage: 'home', onPageChange: vi.fn() });
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Account data unavailable').length).toBeGreaterThan(0);
+    });
+
+    expect(screen.queryByText('0 Connected')).not.toBeInTheDocument();
+    expect(screen.queryByText('No accounts')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-testid="WarningAmberIcon"]')).toBeNull();
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: 'Retry loading accounts' }));
+    await waitFor(() => {
+      expect(screen.getByText(
+        'Account data could not be refreshed. Existing account details were kept.',
+      )).toBeInTheDocument();
+    });
+    expect(screen.queryByText('No accounts')).not.toBeInTheDocument();
+  });
+
+  it('preserves the last successful account details when a refresh fails', async () => {
+    mockCredentials = [
+      {
+        id: 'cred-preserved',
+        vendor: 'hapoalim',
+        nickname: 'Preserved Bank',
+        lastUpdate: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        institution_id: 10,
+        institution: { institution_type: 'bank' },
+      },
+    ];
+
+    await renderSidebar({ currentPage: 'home', onPageChange: vi.fn() });
+    await waitFor(() => {
+      expect(screen.getByText('1 Connected')).toBeInTheDocument();
+    });
+
+    mockCredentialsOk = false;
+    act(() => {
+      window.dispatchEvent(new Event('dataRefresh'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Account data unavailable').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: 'Retry loading accounts' }));
+    await waitFor(() => {
+      expect(screen.getByText('Preserved Bank')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('No accounts')).not.toBeInTheDocument();
+  });
+
   it('opens the categories modal from the global event with vendor and transaction context', async () => {
     const onPageChange = vi.fn();
 
@@ -320,6 +387,47 @@ describe('Sidebar component', () => {
       expect(onDataRefresh).toHaveBeenCalled();
     }, { timeout: 10_000 });
   }, 10_000);
+
+  it('surfaces partial bulk refresh as a warning and refreshes successful data', async () => {
+    const onPageChange = vi.fn();
+    const onDataRefresh = vi.fn();
+    mockCredentials = [
+      {
+        id: 'cred-partial',
+        vendor: 'discount',
+        nickname: 'Partial Account',
+        lastUpdate: new Date(Date.now() - 80 * 60 * 60 * 1000).toISOString(),
+        institution_id: 21,
+        institution: { institution_type: 'bank' },
+      },
+    ];
+    mockPost.mockResolvedValue({
+      ok: true,
+      data: {
+        success: false,
+        status: 'partial',
+        totalProcessed: 2,
+        successCount: 1,
+        failureCount: 1,
+        totalTransactions: 7,
+      },
+    });
+
+    await renderSidebar({ currentPage: 'home', onPageChange, onDataRefresh });
+    await waitFor(() => {
+      expect(screen.getByText(/days ago/)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Click to sync accounts' }));
+
+    await waitFor(() => {
+      expect(showNotification).toHaveBeenCalledWith(
+        'Synced 1/2 accounts (7 transactions)',
+        'warning',
+      );
+      expect(onDataRefresh).toHaveBeenCalledOnce();
+    });
+  });
 
   it('shows the standard error notification when bulk refresh fails', async () => {
     const onPageChange = vi.fn();
@@ -416,6 +524,31 @@ describe('Sidebar component', () => {
 
     await waitFor(() => {
       expect(onDataRefresh).toHaveBeenCalled();
+    });
+  });
+
+  it('ends bridge-backed syncing and refreshes data on partial progress', async () => {
+    const onPageChange = vi.fn();
+    const onDataRefresh = vi.fn();
+    (window as any).electronAPI = { events: { onScrapeProgress: vi.fn() } };
+
+    const view = await renderSidebar({ currentPage: 'home', onPageChange, onDataRefresh });
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('guideTriggerBulkSync'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Syncing...' })).toBeInTheDocument();
+    });
+    expect(onDataRefresh).not.toHaveBeenCalled();
+
+    mockScrapeEvent = { status: 'partial' };
+    view.rerender(<Sidebar currentPage="home" onPageChange={onPageChange} onDataRefresh={onDataRefresh} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Click to sync accounts' })).toBeInTheDocument();
+      expect(onDataRefresh).toHaveBeenCalledOnce();
     });
   });
 

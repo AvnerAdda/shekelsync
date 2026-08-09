@@ -1,6 +1,6 @@
 {
   "name": "shekelsync",
-  "version": "0.1.30",
+  "version": "0.1.31",
   "description": "Personal finance tracker for Israeli banks and credit cards",
   "author": "ShekelSync",
   "license": "AGPL-3.0-or-later",
@@ -26,8 +26,9 @@
     "electron": "electron ../electron/main.js",
     "electron-dev": "USE_VITE_RENDERER=true RENDERER_DEV_URL=http://localhost:5173 concurrently \"npm --prefix ../renderer run dev\" \"wait-on http://localhost:5173 && electron ../electron/main.js\"",
     "dist": "npm run build:renderer:electron && electron-builder --publish=never",
-    "pack": "npm run build:renderer:electron && electron-builder --dir",
-    "release": "npm run build:renderer:electron && electron-builder --publish=always",
+    "dist:diagnostic": "npm run build:renderer:electron && electron-builder --publish=never --config.mac.forceCodeSigning=false --config.mac.hardenedRuntime=false --config.mac.notarize=false",
+    "pack": "npm run build:renderer:electron && electron-builder --dir --config.mac.forceCodeSigning=false --config.mac.hardenedRuntime=false --config.mac.notarize=false",
+    "release": "npm run dist",
     "clean": "rm -rf out build dist",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
@@ -190,6 +191,10 @@
     "mac": {
       "category": "public.app-category.finance",
       "icon": "../build-resources/logo.icns",
+      "type": "distribution",
+      "forceCodeSigning": true,
+      "hardenedRuntime": true,
+      "notarize": true,
       "x64ArchFiles": "**/*darwin-arm64*/**",
       "mergeASARs": true,
       "target": [

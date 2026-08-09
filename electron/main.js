@@ -18,6 +18,13 @@ const {
 } = require('electron');
 
 const path = require('path');
+const { configureUserDataScope } = require('./user-data-scope');
+
+// Keep development data, encrypted fallbacks, and SQLite files physically
+// separate from the packaged production identity before any dependent module
+// resolves app.getPath('userData').
+configureUserDataScope(app);
+
 const fs = require('fs');
 const crypto = require('crypto');
 const https = require('https');
@@ -633,8 +640,11 @@ WHY: In production, ShekelSync stores encryption keys in macOS Keychain.`;
 }
 
 async function ensureEncryptionKey(config) {
-  // If key exists but was set by US (not at script start), we're done
-  if (process.env.SHEKELSYNC_ENCRYPTION_KEY && !hadKeyAtStart) {
+  // Only a completed SecureKeyManager resolution may authorize the fast path.
+  // A key that merely appeared in the environment after module load is still
+  // untrusted and must pass the manager's store/conflict validation below.
+  if (secureKeyManager.isInitialized()) {
+    process.env.SHEKELSYNC_ENCRYPTION_KEY = await secureKeyManager.getKey();
     return;
   }
 
@@ -685,7 +695,8 @@ Click "Exit" to close the app and manually remove the variable.${instructions}`,
       } else if (isLinux) {
         logger.warn('Using encryption key from environment variable on Linux');
       }
-      return;
+      // Continue through SecureKeyManager so explicit environment keys are
+      // validated against the configured credential store before use.
     }
   }
 
@@ -797,6 +808,7 @@ function shouldKeepRunningInTray() {
 // Lazy-loaded services (to avoid loading better-sqlite3 in dev mode)
 let setupAPIServer = null;
 let backendInitializationPromise = null;
+let encryptionReadyPromise = null;
 let backendPrerequisitesReady = false;
 let embeddedApiStartupPromise = null;
 let deferredServiceStartHandle = null;
@@ -877,7 +889,7 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
 
     console.log('Initializing application configuration...');
     logger.info('Initializing configuration');
-    await ensureEncryptionKey();
+    await ensureEncryptionReady();
     const config = await configManager.initializeConfig();
     logger.info('Configuration initialised', {
       databaseMode: config?.database?.mode,
@@ -972,6 +984,22 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
       `Failed to initialize application: ${error.message}`
     );
   }
+}
+
+function ensureEncryptionReady() {
+  if (!encryptionReadyPromise) {
+    // Never cache a rejection: a transient failure (e.g. a denied Keychain
+    // prompt) would otherwise wedge every auth/chatbot/api IPC call until the
+    // app restarts. Clear the slot so the next caller retries.
+    const readyPromise = Promise.resolve().then(() => ensureEncryptionKey());
+    encryptionReadyPromise = readyPromise;
+    readyPromise.catch(() => {
+      if (encryptionReadyPromise === readyPromise) {
+        encryptionReadyPromise = null;
+      }
+    });
+  }
+  return encryptionReadyPromise;
 }
 
 function ensureBackendInitialization(options = {}) {
@@ -1245,14 +1273,29 @@ function shouldAttachChatbotApiKey(endpoint = '') {
 async function buildTrustedProxyHeaders(endpoint, rendererHeaders = {}) {
   const trustedHeaders = normalizeRendererHeaders(rendererHeaders);
   trustedHeaders['X-Forwarded-By-Electron'] = '1';
-  const session = await sessionStore.load();
+
+  // Store failures here must degrade to "no credential attached" rather than
+  // reject the api:request call carrying an unrelated feature's traffic; the
+  // auth/chatbot IPC handlers own surfacing those failures to the renderer.
+  let session = null;
+  try {
+    await ensureEncryptionReady();
+    session = await sessionStore.load();
+  } catch (error) {
+    logger.warn('Proxying request without session credentials', { error: error.message });
+  }
   if (session?.accessToken) {
     trustedHeaders['X-Auth-Access-Token'] = session.accessToken;
   }
 
   if (shouldAttachChatbotApiKey(endpoint)) {
-    const secrets = await chatbotSecretStore.load();
-    const openAiApiKey = typeof secrets.openAiApiKey === 'string' ? secrets.openAiApiKey.trim() : '';
+    let secrets = {};
+    try {
+      secrets = await chatbotSecretStore.load();
+    } catch (error) {
+      logger.warn('Proxying request without chatbot API key', { error: error.message });
+    }
+    const openAiApiKey = typeof secrets?.openAiApiKey === 'string' ? secrets.openAiApiKey.trim() : '';
     if (openAiApiKey) {
       trustedHeaders['X-OpenAI-API-Key'] = openAiApiKey;
     }
@@ -2159,6 +2202,7 @@ ipcMain.handle('auth:getSession', async (event) => {
     return { success: false, error: 'Untrusted IPC sender' };
   }
   try {
+    await ensureEncryptionReady();
     const session = await sessionStore.load();
     return { success: true, session: sanitizeSession(session) };
   } catch (error) {
@@ -2172,6 +2216,7 @@ ipcMain.handle('auth:setSession', async (event, session) => {
     return { success: false, error: 'Untrusted IPC sender' };
   }
   try {
+    await ensureEncryptionReady();
     if (session && typeof session !== 'object') {
       throw new Error('Session payload must be an object or null');
     }
@@ -2189,6 +2234,7 @@ ipcMain.handle('auth:clearSession', async (event) => {
     return { success: false, error: 'Untrusted IPC sender' };
   }
   try {
+    await ensureEncryptionReady();
     await sessionStore.clear();
     emitSessionChanged(null);
     return { success: true };
@@ -2203,6 +2249,7 @@ ipcMain.handle('chatbot:getStatus', async (event) => {
     return { success: false, error: 'Untrusted IPC sender' };
   }
   try {
+    await ensureEncryptionReady();
     const secrets = await chatbotSecretStore.load();
     const openAiApiKey = typeof secrets.openAiApiKey === 'string' ? secrets.openAiApiKey.trim() : '';
     return {
@@ -2220,6 +2267,7 @@ ipcMain.handle('chatbot:setOpenAiApiKey', async (event, apiKey) => {
     return { success: false, error: 'Untrusted IPC sender' };
   }
   try {
+    await ensureEncryptionReady();
     const normalizedApiKey = typeof apiKey === 'string' ? apiKey.trim() : '';
     if (!normalizedApiKey) {
       await chatbotSecretStore.clear();
@@ -2239,6 +2287,7 @@ ipcMain.handle('chatbot:clearOpenAiApiKey', async (event) => {
     return { success: false, error: 'Untrusted IPC sender' };
   }
   try {
+    await ensureEncryptionReady();
     await chatbotSecretStore.clear();
     return { success: true, hasOpenAiApiKey: false };
   } catch (error) {
