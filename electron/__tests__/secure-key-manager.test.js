@@ -442,7 +442,7 @@ describe('SecureKeyManager', () => {
       expect(mockKeytar.setPassword).not.toHaveBeenCalled();
     });
 
-    test('does not assign an identity-local legacy key to an empty credential store', async () => {
+    test('uses an identity-local legacy key read-only for an empty credential store', async () => {
       const legacySafeKey = crypto.randomBytes(32).toString('hex');
       const legacyPath = path.join(testUserDataPath, '.encryption-key.enc');
       const scopedPath = path.join(testUserDataPath, '.encryption-key.production.enc');
@@ -457,11 +457,107 @@ describe('SecureKeyManager', () => {
         validateCandidate: () => ({ status: 'empty' }),
         safeStorage: mockSafeStorage,
         userDataPath: testUserDataPath,
+      })).resolves.toBe(legacySafeKey);
+
+      // Read-only adoption: nothing may be persisted until credential data
+      // authenticates the key on a later run.
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+      expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
+      expect(mockKeytar.getPassword).not.toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key',
+      );
+      expect(fs.readFileSync(legacyPath, 'utf8')).toBe('legacy-wrapper');
+      expect(fs.existsSync(scopedPath)).toBe(false);
+    });
+
+    test('resumes an interrupted first run from an identity-local legacy key', async () => {
+      const legacySafeKey = crypto.randomBytes(32).toString('hex');
+      fs.mkdirSync(testUserDataPath, { recursive: true });
+      fs.writeFileSync(path.join(testUserDataPath, '.encryption-key.enc'), 'legacy-wrapper');
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
+      mockSafeStorage.decryptString.mockReturnValue(legacySafeKey);
+      mockKeytar.getPassword.mockResolvedValue(null);
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'fresh' }),
+        safeStorage: mockSafeStorage,
+        userDataPath: testUserDataPath,
+      })).resolves.toBe(legacySafeKey);
+
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+      expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
+    });
+
+    test('uses an identity-local legacy key read-only for a candidate-bound external configuration', async () => {
+      const legacySafeKey = crypto.randomBytes(32).toString('hex');
+      fs.mkdirSync(testUserDataPath, { recursive: true });
+      fs.writeFileSync(path.join(testUserDataPath, '.encryption-key.enc'), 'legacy-wrapper');
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
+      mockSafeStorage.decryptString.mockReturnValue(legacySafeKey);
+      mockKeytar.getPassword.mockResolvedValue(null);
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'config_match', configStatus: 'candidate' }),
+        safeStorage: mockSafeStorage,
+        userDataPath: testUserDataPath,
+      })).resolves.toBe(legacySafeKey);
+
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+      expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
+    });
+
+    test('refuses an identity-local legacy key whose external config does not decrypt under it', async () => {
+      const legacySafeKey = crypto.randomBytes(32).toString('hex');
+      fs.mkdirSync(testUserDataPath, { recursive: true });
+      fs.writeFileSync(path.join(testUserDataPath, '.encryption-key.enc'), 'legacy-wrapper');
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
+      mockSafeStorage.decryptString.mockReturnValue(legacySafeKey);
+      mockKeytar.getPassword.mockResolvedValue(null);
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'config_match', configStatus: 'legacy' }),
+        safeStorage: mockSafeStorage,
+        userDataPath: testUserDataPath,
+      })).rejects.toThrow('identity-local legacy key');
+
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+      expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
+    });
+
+    test('still refuses an identity-local legacy key that fails credential authentication', async () => {
+      const legacySafeKey = crypto.randomBytes(32).toString('hex');
+      const legacyPath = path.join(testUserDataPath, '.encryption-key.enc');
+      fs.mkdirSync(testUserDataPath, { recursive: true });
+      fs.writeFileSync(legacyPath, 'legacy-wrapper');
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
+      mockSafeStorage.decryptString.mockReturnValue(legacySafeKey);
+      mockKeytar.getPassword.mockResolvedValue(null);
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'mismatch' }),
+        safeStorage: mockSafeStorage,
+        userDataPath: testUserDataPath,
       })).rejects.toThrow('identity-local legacy key');
 
       expect(mockKeytar.setPassword).not.toHaveBeenCalled();
       expect(fs.readFileSync(legacyPath, 'utf8')).toBe('legacy-wrapper');
-      expect(fs.existsSync(scopedPath)).toBe(false);
+      expect(fs.existsSync(path.join(testUserDataPath, '.encryption-key.production.enc'))).toBe(false);
+    });
+
+    test('uses a legacy Keychain key read-only for a candidate-bound external configuration', async () => {
+      const legacyKey = crypto.randomBytes(32).toString('hex');
+      mockKeytar.getPassword.mockImplementation(async (_service, account) =>
+        account === 'master-encryption-key' ? legacyKey : null);
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: (candidate) => (candidate === legacyKey
+          ? { status: 'config_match', configStatus: 'candidate' }
+          : { status: 'config_mismatch', configStatus: 'mismatch' }),
+      })).resolves.toBe(legacyKey);
+
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+      expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
     });
 
     test('repairs the scoped keychain only after a scoped safeStorage key is verified', async () => {
