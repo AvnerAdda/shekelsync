@@ -28,6 +28,12 @@
       "reloadApp": "Reload app"
     }
   },
+  "sessionRecovery": {
+    "title": "Your saved session could not be unlocked",
+    "message": "ShekelSync could not read the protected session on this Mac. Your data has not been cleared. Try again before signing in again.",
+    "retry": "Try again",
+    "retrying": "Trying again..."
+  },
   "smartNotifications": {
     "dismiss": "Dismiss",
     "dismissAll": "Dismiss all",
@@ -362,7 +368,8 @@
       "headlessHint": "Sync runs without opening browser windows",
       "results": {
         "success": "{{count}} succeeded",
-        "failed": "{{count}} failed"
+        "failed": "{{count}} failed",
+        "blocked": "{{count}} blocked"
       },
       "errors": {
         "notSupported": "Settings are only available in the desktop app.",
@@ -2864,6 +2871,12 @@
     },
     "accountSync": {
       "neverSynced": "Never synced"
+    },
+    "credentials": {
+      "loading": "Loading account data...",
+      "unavailable": "Account data unavailable",
+      "loadFailed": "Account data could not be refreshed. Existing account details were kept.",
+      "retry": "Retry loading accounts"
     }
   },
   "titleBar": {

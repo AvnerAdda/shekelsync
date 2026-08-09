@@ -3,14 +3,51 @@
  * Tests encryption key storage and management
  */
 
-import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import crypto from 'crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const testUserDataPath = '/tmp/shekelsync-secure-key-manager-test';
+
+function encryptCredential(value, keyHex) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(keyHex, 'hex'), iv);
+  const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+  return `${iv.toString('hex')}:${encrypted.toString('hex')}:${cipher.getAuthTag().toString('hex')}`;
+}
+
+function encryptLegacyConfig(config) {
+  const iv = crypto.randomBytes(16);
+  const legacyKey = crypto.scryptSync('electron-app-key', 'salt', 32);
+  try {
+    const cipher = crypto.createCipheriv('aes-256-ctr', legacyKey, iv);
+    const encrypted = Buffer.concat([
+      cipher.update(JSON.stringify(config), 'utf8'),
+      cipher.final(),
+    ]);
+    return `${iv.toString('hex')}:${encrypted.toString('hex')}`;
+  } finally {
+    legacyKey.fill(0);
+  }
+}
 
 // Mock keytar
 const mockKeytar = {
   getPassword: vi.fn(),
   setPassword: vi.fn(),
   deletePassword: vi.fn(),
+};
+
+const mockApp = {
+  getPath: vi.fn(() => testUserDataPath),
+  isPackaged: true,
+};
+
+const mockSafeStorage = {
+  isEncryptionAvailable: vi.fn(() => false),
+  decryptString: vi.fn(),
+  encryptString: vi.fn(),
 };
 
 vi.mock('keytar', () => ({
@@ -20,9 +57,8 @@ vi.mock('keytar', () => ({
 
 // Mock electron app
 vi.mock('electron', () => ({
-  app: {
-    getPath: vi.fn(() => '/tmp/test-app'),
-  },
+  app: mockApp,
+  safeStorage: mockSafeStorage,
 }));
 
 // Mock paths module
@@ -40,10 +76,22 @@ describe('SecureKeyManager', () => {
   beforeEach(async () => {
     // Clear all mocks
     vi.clearAllMocks();
+    mockKeytar.getPassword.mockReset();
+    mockKeytar.setPassword.mockReset();
+    mockKeytar.deletePassword.mockReset();
     delete process.env.SHEKELSYNC_ENCRYPTION_KEY;
     delete process.env.KEYTAR_DISABLE;
     delete process.env.ALLOW_INSECURE_ENV_KEY;
+    globalThis.__SHEKELSYNC_CREDENTIAL_KEY_VALIDATOR__ = vi.fn(() => ({ status: 'fresh' }));
+    delete globalThis.__SHEKELSYNC_KEY_SCOPE__;
+    delete globalThis.__SHEKELSYNC_SAFE_STORAGE__;
     globalThis.__SHEKELSYNC_KEYTAR__ = mockKeytar;
+    mockApp.isPackaged = true;
+    mockApp.getPath.mockReset();
+    mockApp.getPath.mockReturnValue(testUserDataPath);
+    mockSafeStorage.isEncryptionAvailable.mockReturnValue(false);
+    mockSafeStorage.decryptString.mockReset();
+    mockSafeStorage.encryptString.mockReset();
 
     // Reset module cache to get fresh instance
     vi.resetModules();
@@ -51,6 +99,13 @@ describe('SecureKeyManager', () => {
     // Dynamically import the module
     const module = await import('../secure-key-manager.js');
     secureKeyManager = module.default || module;
+  });
+
+  afterEach(() => {
+    fs.rmSync(testUserDataPath, { recursive: true, force: true });
+    delete globalThis.__SHEKELSYNC_CREDENTIAL_KEY_VALIDATOR__;
+    delete globalThis.__SHEKELSYNC_KEY_SCOPE__;
+    delete globalThis.__SHEKELSYNC_SAFE_STORAGE__;
   });
 
   describe('Key Generation', () => {
@@ -100,6 +155,7 @@ describe('SecureKeyManager', () => {
     test('should reject non-hex keys', () => {
       const invalidKey = 'not-a-hex-string-but-64-characters-long-xxxxxxxxxxxxxxxxxxxxxx';
       expect(secureKeyManager.validateKey(invalidKey)).toBe(false);
+      expect(secureKeyManager.validateKey(`${'a'.repeat(64)}junk`)).toBe(false);
     });
 
     test('should reject null/undefined keys', () => {
@@ -124,7 +180,11 @@ describe('SecureKeyManager', () => {
       const key = await secureKeyManager.getKey();
 
       expect(key).toBe(envKey);
-      expect(mockKeytar.getPassword).not.toHaveBeenCalled();
+      expect(mockKeytar.getPassword).toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key:production',
+      );
+      expect(secureKeyManager.isInitialized()).toBe(true);
     });
 
     test('should cache key from environment', async () => {
@@ -139,7 +199,7 @@ describe('SecureKeyManager', () => {
 
       expect(key1).toBe(envKey);
       expect(key2).toBe(envKey);
-      expect(mockKeytar.getPassword).not.toHaveBeenCalled();
+      expect(mockKeytar.getPassword).toHaveBeenCalledTimes(1);
     });
 
     test('should reject invalid environment key', async () => {
@@ -152,20 +212,91 @@ describe('SecureKeyManager', () => {
       await expect(secureKeyManager.getKey()).rejects.toThrow(
         'SHEKELSYNC_ENCRYPTION_KEY environment variable is invalid'
       );
+      expect(secureKeyManager.isInitialized()).toBe(false);
+    });
+
+    test('rejects an environment key that conflicts with existing scoped material', async () => {
+      const envKey = crypto.randomBytes(32).toString('hex');
+      const scopedKey = crypto.randomBytes(32).toString('hex');
+      process.env.SHEKELSYNC_ENCRYPTION_KEY = envKey;
+      mockKeytar.getPassword.mockImplementation(async (_service, account) =>
+        account === 'master-encryption-key:production' ? scopedKey : null);
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'fresh' }),
+      })).rejects.toThrow('conflicts with existing scoped key material');
+
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+      expect(secureKeyManager.isInitialized()).toBe(false);
+    });
+
+    test.each(['mismatch', 'missing', 'unavailable', 'ambiguous', 'partial', 'config_mismatch'])(
+      'rejects an environment key when credential validation is %s',
+      async (status) => {
+        process.env.SHEKELSYNC_ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
+        mockKeytar.getPassword.mockResolvedValue(null);
+
+        await expect(secureKeyManager.getKey({
+          validateCandidate: () => ({ status }),
+        })).rejects.toThrow('does not match existing credential data');
+
+        expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+        expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
+      },
+    );
+
+    test('rejects candidate-unbound external config evidence', async () => {
+      process.env.SHEKELSYNC_ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'config_match', configStatus: 'base64' }),
+      })).rejects.toThrow('does not match existing credential data');
+      expect(secureKeyManager.isInitialized()).toBe(false);
+    });
+
+    test('accepts candidate-readable external config only after checking scoped stores', async () => {
+      const envKey = crypto.randomBytes(32).toString('hex');
+      process.env.SHEKELSYNC_ENCRYPTION_KEY = envKey;
+      mockKeytar.getPassword.mockResolvedValue(null);
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'config_match', configStatus: 'candidate' }),
+      })).resolves.toBe(envKey);
+
+      expect(mockKeytar.getPassword).toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key:production',
+      );
+      expect(secureKeyManager.isInitialized()).toBe(true);
+    });
+
+    test('clearing the cache clears the explicit initialization state', async () => {
+      process.env.SHEKELSYNC_ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
+      mockKeytar.getPassword.mockResolvedValue(null);
+
+      await secureKeyManager.getKey();
+      expect(secureKeyManager.isInitialized()).toBe(true);
+
+      secureKeyManager.clearCache();
+      expect(secureKeyManager.isInitialized()).toBe(false);
     });
   });
 
   describe('Key Retrieval - Keychain', () => {
     test('should load key from keychain if available', async () => {
       const storedKey = crypto.randomBytes(32).toString('hex');
-      mockKeytar.getPassword.mockResolvedValue(storedKey);
+      mockKeytar.getPassword.mockImplementation(async (_service, account) =>
+        account === 'master-encryption-key:production' ? storedKey : null);
 
       const module = await import('../secure-key-manager.js');
       secureKeyManager = module.default || module;
       const key = await secureKeyManager.getKey();
 
       expect(key).toBe(storedKey);
-      expect(mockKeytar.getPassword).toHaveBeenCalledWith('ShekelSync', 'master-encryption-key');
+      expect(mockKeytar.getPassword).toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key:production',
+      );
     });
 
     test('should generate and store new key if keychain is empty', async () => {
@@ -180,14 +311,15 @@ describe('SecureKeyManager', () => {
       expect(secureKeyManager.validateKey(key)).toBe(true);
       expect(mockKeytar.setPassword).toHaveBeenCalledWith(
         'ShekelSync',
-        'master-encryption-key',
+        'master-encryption-key:production',
         key
       );
     });
 
     test('should cache key after loading from keychain', async () => {
       const storedKey = crypto.randomBytes(32).toString('hex');
-      mockKeytar.getPassword.mockResolvedValue(storedKey);
+      mockKeytar.getPassword.mockImplementation(async (_service, account) =>
+        account === 'master-encryption-key:production' ? storedKey : null);
 
       const module = await import('../secure-key-manager.js');
       secureKeyManager = module.default || module;
@@ -196,7 +328,352 @@ describe('SecureKeyManager', () => {
 
       expect(key1).toBe(storedKey);
       expect(key2).toBe(storedKey);
-      expect(mockKeytar.getPassword).toHaveBeenCalledTimes(1); // Only called once
+      expect(mockKeytar.getPassword).toHaveBeenCalledTimes(1); // Scoped only; legacy stays untouched
+    });
+
+    test('uses a separate development keychain account for unpackaged Electron', async () => {
+      globalThis.__SHEKELSYNC_KEY_SCOPE__ = 'development';
+      mockKeytar.getPassword.mockResolvedValue(null);
+
+      const key = await secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'empty' }),
+      });
+
+      expect(mockKeytar.setPassword).toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key:development',
+        key,
+      );
+      expect(mockKeytar.setPassword).not.toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key',
+        expect.anything(),
+      );
+    });
+
+    test('migrates a legacy key only after it authenticates all credential data', async () => {
+      const legacyKey = crypto.randomBytes(32).toString('hex');
+      mockKeytar.getPassword.mockImplementation(async (_service, account) =>
+        account === 'master-encryption-key' ? legacyKey : null);
+      const validateCandidate = vi.fn((candidate) => ({
+        status: candidate === legacyKey ? 'match' : 'mismatch',
+      }));
+
+      const key = await secureKeyManager.getKey({ validateCandidate });
+
+      expect(key).toBe(legacyKey);
+      expect(mockKeytar.setPassword).toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key:production',
+        legacyKey,
+      );
+      expect(mockKeytar.setPassword).not.toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key',
+        expect.anything(),
+      );
+      expect(validateCandidate.mock.invocationCallOrder[0])
+        .toBeLessThan(mockKeytar.setPassword.mock.invocationCallOrder[0]);
+    });
+
+    test('migrates through a legacy-key config only after authenticating its custom database', async () => {
+      const legacyKey = crypto.randomBytes(32).toString('hex');
+      const customDatabasePath = path.join(testUserDataPath, 'custom.sqlite');
+      fs.mkdirSync(testUserDataPath, { recursive: true });
+      fs.writeFileSync(customDatabasePath, 'sqlite-placeholder');
+      fs.writeFileSync(
+        path.join(testUserDataPath, 'config.enc'),
+        encryptLegacyConfig({ database: { mode: 'sqlite', path: customDatabasePath } }),
+      );
+
+      const openedPaths = [];
+      class FakeDatabase {
+        constructor(databasePath, options) {
+          openedPaths.push({ databasePath, options });
+        }
+
+        pragma() {}
+
+        prepare(sql) {
+          if (sql.includes('sqlite_master')) return { get: () => ({ present: 1 }) };
+          return {
+            all: () => [{
+              username: encryptCredential('user', legacyKey),
+              password: encryptCredential('secret', legacyKey),
+              id_number: null,
+              identification_code: null,
+            }],
+          };
+        }
+
+        close() {}
+      }
+
+      const validatorModule = await import('../credential-key-validator.js');
+      const { validateCredentialKey } = validatorModule.default || validatorModule;
+      mockKeytar.getPassword.mockImplementation(async (_service, account) =>
+        account === 'master-encryption-key' ? legacyKey : null);
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: (candidate) => validateCredentialKey(candidate, {
+          userDataPath: testUserDataPath,
+          databaseCtor: FakeDatabase,
+        }),
+      })).resolves.toBe(legacyKey);
+
+      expect(openedPaths.length).toBeGreaterThanOrEqual(2);
+      expect(openedPaths.every(({ databasePath }) => databasePath === customDatabasePath)).toBe(true);
+      expect(mockKeytar.setPassword).toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key:production',
+        legacyKey,
+      );
+    });
+
+    test('does not persist a legacy key that fails credential authentication', async () => {
+      const legacyKey = crypto.randomBytes(32).toString('hex');
+      mockKeytar.getPassword.mockImplementation(async (_service, account) =>
+        account === 'master-encryption-key' ? legacyKey : null);
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'mismatch' }),
+      })).rejects.toThrow('shared legacy encryption key exists');
+
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+    });
+
+    test('does not assign an identity-local legacy key to an empty credential store', async () => {
+      const legacySafeKey = crypto.randomBytes(32).toString('hex');
+      const legacyPath = path.join(testUserDataPath, '.encryption-key.enc');
+      const scopedPath = path.join(testUserDataPath, '.encryption-key.production.enc');
+      fs.mkdirSync(testUserDataPath, { recursive: true });
+      fs.writeFileSync(legacyPath, 'legacy-wrapper');
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
+      mockSafeStorage.decryptString.mockReturnValue(legacySafeKey);
+      mockSafeStorage.encryptString.mockReturnValue(Buffer.from('scoped-wrapper'));
+      mockKeytar.getPassword.mockResolvedValue(null);
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'empty' }),
+        safeStorage: mockSafeStorage,
+        userDataPath: testUserDataPath,
+      })).rejects.toThrow('identity-local legacy key');
+
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+      expect(fs.readFileSync(legacyPath, 'utf8')).toBe('legacy-wrapper');
+      expect(fs.existsSync(scopedPath)).toBe(false);
+    });
+
+    test('repairs the scoped keychain only after a scoped safeStorage key is verified', async () => {
+      const wrongKey = crypto.randomBytes(32).toString('hex');
+      const safeKey = crypto.randomBytes(32).toString('hex');
+      fs.mkdirSync(testUserDataPath, { recursive: true });
+      fs.writeFileSync(path.join(testUserDataPath, '.encryption-key.production.enc'), 'safe-wrapper');
+      globalThis.__SHEKELSYNC_SAFE_STORAGE__ = mockSafeStorage;
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
+      mockSafeStorage.decryptString.mockReturnValue(safeKey);
+      mockKeytar.getPassword.mockImplementation(async (_service, account) =>
+        account === 'master-encryption-key:production' ? wrongKey : null);
+      const validateCandidate = vi.fn((candidate) => ({
+        status: candidate === safeKey ? 'match' : 'mismatch',
+      }));
+
+      const key = await secureKeyManager.getKey({
+        validateCandidate,
+        safeStorage: mockSafeStorage,
+        userDataPath: testUserDataPath,
+      });
+
+      expect(key).toBe(safeKey);
+      expect(mockKeytar.setPassword).toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key:production',
+        safeKey,
+      );
+      expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
+      const lastValidationOrder = Math.max(...validateCandidate.mock.invocationCallOrder);
+      expect(lastValidationOrder).toBeLessThan(mockKeytar.setPassword.mock.invocationCallOrder[0]);
+    });
+
+    test('refreshes a stale scoped safeStorage copy only after keychain validation', async () => {
+      const keychainKey = crypto.randomBytes(32).toString('hex');
+      const staleKey = crypto.randomBytes(32).toString('hex');
+      const safePath = path.join(testUserDataPath, '.encryption-key.production.enc');
+      fs.mkdirSync(testUserDataPath, { recursive: true });
+      fs.writeFileSync(safePath, 'stale-wrapper');
+      globalThis.__SHEKELSYNC_SAFE_STORAGE__ = mockSafeStorage;
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
+      mockSafeStorage.decryptString.mockReturnValue(staleKey);
+      mockSafeStorage.encryptString.mockReturnValue(Buffer.from('verified-wrapper'));
+      mockKeytar.getPassword.mockImplementation(async (_service, account) =>
+        account === 'master-encryption-key:production' ? keychainKey : null);
+      const validateCandidate = vi.fn((candidate) => ({
+        status: candidate === keychainKey ? 'match' : 'mismatch',
+      }));
+
+      await secureKeyManager.getKey({
+        validateCandidate,
+        safeStorage: mockSafeStorage,
+        userDataPath: testUserDataPath,
+      });
+
+      expect(fs.readFileSync(safePath, 'utf8')).toBe('verified-wrapper');
+      expect(validateCandidate.mock.invocationCallOrder[0])
+        .toBeLessThan(mockSafeStorage.encryptString.mock.invocationCallOrder[0]);
+    });
+
+    test('does not consult legacy stores after a scoped key authenticates', async () => {
+      const scopedKey = crypto.randomBytes(32).toString('hex');
+      mockKeytar.getPassword.mockImplementation(async (_service, account) =>
+        account === 'master-encryption-key:production' ? scopedKey : null);
+
+      expect(await secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'match' }),
+      })).toBe(scopedKey);
+
+      expect(mockKeytar.getPassword).toHaveBeenCalledTimes(1);
+      expect(mockKeytar.getPassword).not.toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key',
+      );
+    });
+
+    test('uses a verified scoped safeStorage key without overwriting a failed keychain read', async () => {
+      const safeKey = crypto.randomBytes(32).toString('hex');
+      fs.mkdirSync(testUserDataPath, { recursive: true });
+      fs.writeFileSync(path.join(testUserDataPath, '.encryption-key.production.enc'), 'safe-wrapper');
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
+      mockSafeStorage.decryptString.mockReturnValue(safeKey);
+      mockKeytar.getPassword.mockRejectedValue(new Error('access denied'));
+
+      expect(await secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'match' }),
+        safeStorage: mockSafeStorage,
+        userDataPath: testUserDataPath,
+      })).toBe(safeKey);
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+    });
+
+    test('migrates a database-verified identity-local legacy file without reading shared keychain', async () => {
+      const legacyKey = crypto.randomBytes(32).toString('hex');
+      fs.mkdirSync(testUserDataPath, { recursive: true });
+      fs.writeFileSync(path.join(testUserDataPath, '.encryption-key.enc'), 'legacy-wrapper');
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
+      mockSafeStorage.decryptString.mockReturnValue(legacyKey);
+      mockSafeStorage.encryptString.mockReturnValue(Buffer.from('scoped-wrapper'));
+      mockKeytar.getPassword.mockResolvedValue(null);
+
+      expect(await secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'match' }),
+        safeStorage: mockSafeStorage,
+        userDataPath: testUserDataPath,
+      })).toBe(legacyKey);
+      expect(mockKeytar.getPassword).toHaveBeenCalledTimes(1);
+      expect(mockKeytar.setPassword).toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key:production',
+        legacyKey,
+      );
+    });
+
+    test('never lets a legacy key replace existing scoped material', async () => {
+      const scopedKey = crypto.randomBytes(32).toString('hex');
+      const legacyKey = crypto.randomBytes(32).toString('hex');
+      mockKeytar.getPassword.mockImplementation(async (_service, account) => {
+        if (account === 'master-encryption-key:production') return scopedKey;
+        if (account === 'master-encryption-key') return legacyKey;
+        return null;
+      });
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: (candidate) => ({
+          status: candidate === legacyKey ? 'match' : 'mismatch',
+        }),
+      })).rejects.toThrow('Refusing to replace them from a legacy store');
+
+      expect(mockKeytar.getPassword).toHaveBeenCalledTimes(1);
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+    });
+
+    test('uses a unique scoped key read-only for an empty store', async () => {
+      const scopedKey = crypto.randomBytes(32).toString('hex');
+      mockKeytar.getPassword.mockImplementation(async (_service, account) =>
+        account === 'master-encryption-key:production' ? scopedKey : null);
+
+      expect(await secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'empty' }),
+      })).toBe(scopedKey);
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+      expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
+    });
+
+    test('serializes concurrent first-run key creation', async () => {
+      mockKeytar.getPassword.mockResolvedValue(null);
+      mockKeytar.setPassword.mockResolvedValue(undefined);
+
+      const [first, second] = await Promise.all([
+        secureKeyManager.getKey(),
+        secureKeyManager.getKey(),
+      ]);
+
+      expect(first).toBe(second);
+      expect(mockKeytar.getPassword).toHaveBeenCalledTimes(1);
+      expect(mockKeytar.setPassword).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not write or generate through a missing configured database', async () => {
+      mockKeytar.getPassword.mockResolvedValue(null);
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'missing' }),
+      })).rejects.toThrow('Refusing to overwrite key material');
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+      expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
+    });
+
+    test('does not generate a key after an interrupted authoritative-session file write', async () => {
+      const secureStorePath = path.join(testUserDataPath, 'secure-store');
+      fs.mkdirSync(secureStorePath, { recursive: true });
+      fs.writeFileSync(
+        path.join(secureStorePath, '.session-file-authoritative'),
+        '1',
+        { mode: 0o600 },
+      );
+      mockKeytar.getPassword.mockResolvedValue(null);
+      mockKeytar.setPassword.mockResolvedValue(undefined);
+      const validatorModule = await import('../credential-key-validator.js');
+      const { validateCredentialKey } = validatorModule.default || validatorModule;
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: (candidate) => validateCredentialKey(candidate, {
+          userDataPath: testUserDataPath,
+        }),
+      })).rejects.toThrow('Refusing to overwrite key material');
+
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+      expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
+      expect(fs.existsSync(
+        path.join(testUserDataPath, '.encryption-key.production.enc'),
+      )).toBe(false);
+    });
+
+    test('makes no key writes when both default databases make ownership ambiguous', async () => {
+      fs.mkdirSync(testUserDataPath, { recursive: true });
+      fs.writeFileSync(path.join(testUserDataPath, 'shekelsync.sqlite'), 'preferred');
+      fs.writeFileSync(path.join(testUserDataPath, 'clarify.sqlite'), 'legacy');
+      mockKeytar.getPassword.mockResolvedValue(null);
+      const validatorModule = await import('../credential-key-validator.js');
+      const { validateCredentialKey } = validatorModule.default || validatorModule;
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: (candidate) => validateCredentialKey(candidate, {
+          userDataPath: testUserDataPath,
+        }),
+      })).rejects.toThrow('Refusing to overwrite key material');
+
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+      expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
+      expect(fs.existsSync(path.join(testUserDataPath, '.encryption-key.production.enc'))).toBe(false);
     });
   });
 
@@ -212,7 +689,7 @@ describe('SecureKeyManager', () => {
       // unreadable, so this must refuse to silently generate a replacement
       // key rather than fall through to "Cannot securely store...".
       await expect(secureKeyManager.getKey()).rejects.toThrow(
-        'Refusing to generate a replacement key'
+        'Refusing legacy migration and all replacement writes'
       );
     });
 
@@ -238,9 +715,25 @@ describe('SecureKeyManager', () => {
       secureKeyManager = module.default || module;
 
       await expect(secureKeyManager.getKey()).rejects.toThrow(
-        'Refusing to generate a replacement key'
+        'Refusing legacy migration and all replacement writes'
       );
       expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+    });
+
+    test('should refuse replacement when the scoped safeStorage path is not a readable file', async () => {
+      const safePath = path.join(testUserDataPath, '.encryption-key.production.enc');
+      fs.mkdirSync(safePath, { recursive: true });
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
+      mockKeytar.getPassword.mockResolvedValue(null);
+
+      await expect(secureKeyManager.getKey({
+        validateCandidate: () => ({ status: 'fresh' }),
+        safeStorage: mockSafeStorage,
+        userDataPath: testUserDataPath,
+      })).rejects.toThrow('Refusing legacy migration and all replacement writes');
+
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
+      expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
     });
 
     test('should still generate a new key on a genuine fresh install (no keytar or safeStorage data at all)', async () => {
@@ -255,42 +748,21 @@ describe('SecureKeyManager', () => {
       expect(secureKeyManager.validateKey(key)).toBe(true);
       expect(mockKeytar.setPassword).toHaveBeenCalledWith(
         'ShekelSync',
-        'master-encryption-key',
+        'master-encryption-key:production',
         key,
+      );
+      expect(mockKeytar.getPassword).toHaveBeenCalledTimes(1);
+      expect(mockKeytar.getPassword).not.toHaveBeenCalledWith(
+        'ShekelSync',
+        'master-encryption-key',
       );
     });
   });
 
   describe('Key Rotation', () => {
-    test('should generate new key and store in keychain', async () => {
-      const oldKey = crypto.randomBytes(32).toString('hex');
-      mockKeytar.getPassword.mockResolvedValue(oldKey);
-      mockKeytar.setPassword.mockResolvedValue(undefined);
-
-      const module = await import('../secure-key-manager.js');
-      secureKeyManager = module.default || module;
-      await secureKeyManager.getKey(); // Load old key
-
-      const newKey = await secureKeyManager.rotateKey();
-
-      expect(newKey).not.toBe(oldKey);
-      expect(secureKeyManager.validateKey(newKey)).toBe(true);
-      expect(mockKeytar.setPassword).toHaveBeenCalledWith(
-        'ShekelSync',
-        'master-encryption-key',
-        newKey
-      );
-    });
-
-    test('should fail rotation if keychain not available', async () => {
-      process.env.KEYTAR_DISABLE = 'true';
-      vi.resetModules();
-      const module = await import('../secure-key-manager.js');
-      secureKeyManager = module.default || module;
-
-      await expect(secureKeyManager.rotateKey()).rejects.toThrow(
-        'Key rotation failed: could not store in keychain or safeStorage'
-      );
+    test('should refuse rotation until data can be re-encrypted transactionally', async () => {
+      await expect(secureKeyManager.rotateKey()).rejects.toThrow('rotation is disabled');
+      expect(mockKeytar.setPassword).not.toHaveBeenCalled();
     });
   });
 
@@ -304,7 +776,7 @@ describe('SecureKeyManager', () => {
 
       expect(mockKeytar.deletePassword).toHaveBeenCalledWith(
         'ShekelSync',
-        'master-encryption-key'
+        'master-encryption-key:production'
       );
     });
 

@@ -28,6 +28,12 @@
       "reloadApp": "טעינה מחדש של האפליקציה"
     }
   },
+  "sessionRecovery": {
+    "title": "לא ניתן לפתוח את ההפעלה השמורה",
+    "message": "ShekelSync לא הצליחה לקרוא את ההפעלה המוגנת ב-Mac הזה. הנתונים לא נמחקו. נסו שוב לפני התחברות מחדש.",
+    "retry": "נסו שוב",
+    "retrying": "מנסה שוב..."
+  },
   "smartNotifications": {
     "dismiss": "הסתר",
     "dismissAll": "הסתר הכל",
@@ -363,7 +369,8 @@
       "headlessHint": "הסנכרון רץ ללא פתיחת חלונות דפדפן",
       "results": {
         "success": "{{count}} הצליחו",
-        "failed": "{{count}} נכשלו"
+        "failed": "{{count}} נכשלו",
+        "blocked": "{{count}} חסומים"
       },
       "errors": {
         "notSupported": "ההגדרות זמינות רק באפליקציית הדסקטופ.",
@@ -2875,6 +2882,12 @@
     },
     "accountSync": {
       "neverSynced": "טרם סונכרן"
+    },
+    "credentials": {
+      "loading": "טוען את נתוני החשבונות...",
+      "unavailable": "נתוני החשבונות אינם זמינים",
+      "loadFailed": "לא ניתן לרענן את נתוני החשבונות. פרטי החשבונות הקיימים נשמרו.",
+      "retry": "נסו לטעון את החשבונות שוב"
     }
   },
   "titleBar": {

@@ -116,12 +116,13 @@ interface BackgroundSyncSettings {
   showBrowserOnSync?: boolean;
   lastRunAt?: string;
   lastResult?: {
-    status: 'success' | 'failed' | 'skipped' | 'blocked';
+    status: 'success' | 'partial' | 'failed' | 'skipped' | 'blocked';
     message?: string;
     totals?: {
       totalProcessed: number;
       successCount: number;
       failureCount: number;
+      blockedCount?: number;
       totalTransactions: number;
     };
   };

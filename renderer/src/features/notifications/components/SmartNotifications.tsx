@@ -381,22 +381,30 @@ const SmartNotifications: React.FC = () => {
         try {
           const response = await apiClient.post('/api/scrape/bulk', { payload: {} });
           const result = response.data as any;
+          const successCount = Number(result?.successCount) || 0;
+          const isPartial = result?.status === 'partial' || (!result?.success && successCount > 0);
 
-          if (response.ok && result.success) {
-            const message = result.totalProcessed === 0
-              ? 'All accounts are up to date'
-              : `Synced ${result.successCount}/${result.totalProcessed} accounts (${result.totalTransactions || 0} transactions)`;
+          if (response.ok && (result?.success || isPartial)) {
+            let message: string;
+            if (isPartial) {
+              message = result.message || `Synced ${successCount}/${result.totalProcessed || 0} accounts (${result.totalTransactions || 0} transactions)`;
+            } else if (result.totalProcessed === 0) {
+              message = 'All accounts are up to date';
+            } else {
+              message = `Synced ${successCount}/${result.totalProcessed} accounts (${result.totalTransactions || 0} transactions)`;
+            }
 
             showNotification(
               message,
-              result.successCount === result.totalProcessed ? 'success' : 'warning'
+              isPartial || result.successCount !== result.totalProcessed ? 'warning' : 'success'
             );
 
-            // Refresh notifications to clear the stale sync alert
-            await fetchNotifications();
+            if (result.success || successCount > 0) {
+              // Refresh notifications to clear the stale sync alert.
+              await fetchNotifications();
 
-            // Trigger global data refresh
-            window.dispatchEvent(new CustomEvent('dataRefresh'));
+              window.dispatchEvent(new CustomEvent('dataRefresh'));
+            }
           } else {
             showNotification(result.message || 'Bulk sync failed', 'error');
           }

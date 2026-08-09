@@ -1,13 +1,20 @@
 import React from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AppLayout from '@renderer/routes/AppLayout';
 
 const mockGet = vi.fn();
 const showNotification = vi.fn();
+const refreshSession = vi.fn();
 
 let latestSearchProps: any = null;
+let mockAuthState: {
+  session: { user: { email: string; name: string } } | null;
+  loading: boolean;
+  sessionLoadError: Error | null;
+  refreshSession: () => Promise<void>;
+};
 
 vi.mock('@renderer/features/layout/components/Sidebar', () => ({
   default: () => <div data-testid="sidebar" />,
@@ -57,10 +64,7 @@ vi.mock('@renderer/features/support', () => ({
 }));
 
 vi.mock('@app/contexts/AuthContext', () => ({
-  useAuth: () => ({
-    session: { user: { email: 'user@example.com', name: 'Test User' } },
-    loading: false,
-  }),
+  useAuth: () => mockAuthState,
 }));
 
 vi.mock('@renderer/features/notifications/NotificationContext', () => ({
@@ -134,7 +138,34 @@ describe('AppLayout', () => {
   beforeEach(() => {
     mockGet.mockReset();
     showNotification.mockReset();
+    refreshSession.mockReset();
+    refreshSession.mockResolvedValue(undefined);
     latestSearchProps = null;
+    mockAuthState = {
+      session: { user: { email: 'user@example.com', name: 'Test User' } },
+      loading: false,
+      sessionLoadError: null,
+      refreshSession,
+    };
+  });
+
+  it('blocks the application and retries when the persisted session cannot be loaded', () => {
+    mockAuthState = {
+      session: null,
+      loading: false,
+      sessionLoadError: new Error('Keychain session decrypt failed'),
+      refreshSession,
+    };
+
+    renderAppLayout();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Your saved session could not be unlocked');
+    expect(screen.queryByTestId('title-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('location')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(refreshSession).toHaveBeenCalledOnce();
   });
 
   it('remaps /budgets navigation events to the analysis budget tab', async () => {
