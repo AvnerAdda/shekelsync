@@ -8,6 +8,24 @@ const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const optimizerService = require('../optimizer.js');
 
+const TARGET_SPENDING_CATEGORIES = new Set(['essential', 'growth', 'stability', 'reward']);
+
+// Test seam: vitest module mocks never reach the CJS require() below in this
+// repo's setup, so tests inject a fake loader through the exported setter.
+let spendingBreakdownLoader = null;
+
+function __setSpendingBreakdownLoader(loader) {
+  spendingBreakdownLoader = loader;
+}
+
+async function loadSpendingCategoryBreakdown(params) {
+  if (spendingBreakdownLoader) {
+    return spendingBreakdownLoader(params);
+  }
+  const { getSpendingCategoryBreakdown } = require('../analytics/spending-categories.js');
+  return getSpendingCategoryBreakdown(params);
+}
+
 const PAIRING_EXCLUSION_JOIN = `
   LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
     ON t.identifier = tpe.transaction_identifier
@@ -54,6 +72,22 @@ function hasValue(value) {
   return value !== null && value !== undefined && value !== '';
 }
 
+async function optionalQuery(db, sql, params = [], fallbackRows = []) {
+  try {
+    const result = await db.query(sql, params);
+    return result.rows || fallbackRows;
+  } catch {
+    return fallbackRows;
+  }
+}
+
+function normalizeDateString(value) {
+  if (!value) {
+    return null;
+  }
+  return String(value).slice(0, 10);
+}
+
 function hasProfileData(profile = null) {
   if (!profile || typeof profile !== 'object') {
     return false;
@@ -77,6 +111,246 @@ function hasProfileData(profile = null) {
     || hasValue(profile.childrenCount)
     || hasValue(profile.householdSize)
   );
+}
+
+function smartActionNextStep(actionType) {
+  const normalized = normalizeText(actionType, 80);
+  if (!normalized) {
+    return 'review this active action item';
+  }
+  if (normalized.includes('subscription')) {
+    return 'review the subscription and decide whether to keep, renegotiate, or cancel';
+  }
+  if (normalized.includes('fixed_cost')) {
+    return 'compare the fixed cost and identify one lower-friction reduction';
+  }
+  if (normalized.includes('weekend')) {
+    return 'set a weekend guardrail before the next high-spend period';
+  }
+  if (normalized.includes('reduce_spending')) {
+    return 'choose one spending category to reduce this month';
+  }
+  return 'review this active action item';
+}
+
+async function getSmartActionsContext(db) {
+  // 'accepted' quests are in progress and still actionable (quests.js treats
+  // active+accepted as live); deadlines are only set on acceptance. Positive
+  // impacts alone feed the savings figure so cost warnings don't net it down,
+  // while ordering uses absolute impact so urgent cost increases still rank.
+  const rows = await optionalQuery(db, `
+    SELECT
+      action_type,
+      severity,
+      COUNT(*) as action_count,
+      SUM(CASE WHEN potential_impact > 0 THEN potential_impact ELSE 0 END) as potential_impact,
+      AVG(COALESCE(detection_confidence, 0)) as avg_confidence,
+      MIN(deadline) as nearest_deadline
+    FROM smart_action_items
+    WHERE user_status IN ('active', 'accepted')
+      AND dismissed_at IS NULL
+      AND resolved_at IS NULL
+    GROUP BY action_type, severity
+    ORDER BY SUM(ABS(COALESCE(potential_impact, 0))) DESC, action_count DESC
+    LIMIT 8
+  `);
+
+  return rows.map((row) => ({
+    actionType: normalizeText(row.action_type, 80) || 'action',
+    severity: normalizeText(row.severity, 40) || 'medium',
+    count: normalizeInt(row.action_count) || 0,
+    potentialImpact: normalizeNumber(row.potential_impact) || 0,
+    confidence: normalizeNumber(row.avg_confidence),
+    nearestDeadline: normalizeDateString(row.nearest_deadline),
+    nextStep: smartActionNextStep(row.action_type),
+  })).filter((item) => item.count > 0);
+}
+
+function subscriptionMonthlySql(alias = 's') {
+  return `
+    CASE COALESCE(${alias}.user_frequency, ${alias}.detected_frequency, 'monthly')
+      WHEN 'daily' THEN COALESCE(${alias}.user_amount, ${alias}.detected_amount, 0) * 30
+      WHEN 'weekly' THEN COALESCE(${alias}.user_amount, ${alias}.detected_amount, 0) * 4.33
+      WHEN 'biweekly' THEN COALESCE(${alias}.user_amount, ${alias}.detected_amount, 0) * 2.17
+      WHEN 'bimonthly' THEN COALESCE(${alias}.user_amount, ${alias}.detected_amount, 0) / 2
+      WHEN 'quarterly' THEN COALESCE(${alias}.user_amount, ${alias}.detected_amount, 0) / 3
+      WHEN 'yearly' THEN COALESCE(${alias}.user_amount, ${alias}.detected_amount, 0) / 12
+      ELSE COALESCE(${alias}.user_amount, ${alias}.detected_amount, 0)
+    END
+  `;
+}
+
+async function getSubscriptionContext(db) {
+  const [byStatusRows, upcomingRows, alertRows] = await Promise.all([
+    optionalQuery(db, `
+      SELECT
+        status,
+        COUNT(*) as subscription_count,
+        SUM(${subscriptionMonthlySql('s')}) as monthly_total
+      FROM subscriptions s
+      GROUP BY status
+      ORDER BY subscription_count DESC
+    `),
+    optionalQuery(db, `
+      SELECT
+        COUNT(*) as renewal_count,
+        MIN(next_expected_date) as next_renewal_date,
+        SUM(${subscriptionMonthlySql('s')}) as monthly_total
+      FROM subscriptions s
+      WHERE status = 'active'
+        AND next_expected_date IS NOT NULL
+        AND next_expected_date >= date('now', 'localtime')
+        AND next_expected_date <= date('now', 'localtime', '+30 day')
+    `),
+    optionalQuery(db, `
+      SELECT
+        severity,
+        COUNT(*) as alert_count
+      FROM subscription_alerts
+      WHERE COALESCE(is_dismissed, 0) = 0
+        AND (expires_at IS NULL OR expires_at > datetime('now'))
+      GROUP BY severity
+    `),
+  ]);
+
+  const byStatus = byStatusRows.map((row) => ({
+    status: normalizeText(row.status, 40) || 'active',
+    count: normalizeInt(row.subscription_count) || 0,
+    monthlyTotal: normalizeNumber(row.monthly_total) || 0,
+  })).filter((row) => row.count > 0);
+
+  const upcoming = upcomingRows[0] ? {
+    count: normalizeInt(upcomingRows[0].renewal_count) || 0,
+    nextRenewalDate: normalizeDateString(upcomingRows[0].next_renewal_date),
+    monthlyTotal: normalizeNumber(upcomingRows[0].monthly_total) || 0,
+  } : { count: 0, nextRenewalDate: null, monthlyTotal: 0 };
+
+  const alerts = alertRows.map((row) => ({
+    severity: normalizeText(row.severity, 40) || 'info',
+    count: normalizeInt(row.alert_count) || 0,
+  })).filter((row) => row.count > 0);
+
+  return byStatus.length > 0 || upcoming.count > 0 || alerts.length > 0
+    ? { byStatus, upcoming, alerts }
+    : null;
+}
+
+async function getSpendingTargetContext() {
+  // Reuse the Spending Categories screen's own calculation (capital-return
+  // exclusions, investment-into-growth merge) so the prompt can never quote
+  // drift numbers that contradict the dashboard.
+  let result;
+  try {
+    result = await loadSpendingCategoryBreakdown({ currentMonthOnly: true });
+  } catch {
+    return [];
+  }
+
+  const rows = Array.isArray(result?.breakdown) ? result.breakdown : [];
+  return rows
+    .filter((row) => TARGET_SPENDING_CATEGORIES.has(row.spending_category))
+    .map((row) => {
+      const amount = normalizeNumber(row.total_amount) || 0;
+      const targetPercentage = Math.round(normalizeNumber(row.target_percentage) || 0);
+      const actualPercentage = Math.round(normalizeNumber(row.actual_percentage) || 0);
+      return {
+        spendingCategory: normalizeText(row.spending_category, 40) || 'unallocated',
+        targetPercentage,
+        actualPercentage,
+        driftPercentage: actualPercentage - targetPercentage,
+        amount,
+      };
+    })
+    .filter((row) => row.targetPercentage > 0 || row.amount > 0);
+}
+
+async function getDataFreshnessContext(db) {
+  const [transactionRows, scrapeRows] = await Promise.all([
+    optionalQuery(db, `
+      SELECT
+        COUNT(*) as transaction_count,
+        MIN(date) as earliest_transaction_date,
+        MAX(date) as latest_transaction_date,
+        COUNT(DISTINCT substr(date, 1, 7)) as active_months
+      FROM transactions
+      WHERE status = 'completed'
+    `),
+    optionalQuery(db, `
+      SELECT
+        COUNT(*) as scrape_count,
+        MAX(created_at) as latest_scrape_at
+      FROM scrape_events
+    `),
+  ]);
+
+  const transaction = transactionRows[0] || {};
+  const scrape = scrapeRows[0] || {};
+  return {
+    transactionCount: normalizeInt(transaction.transaction_count) || 0,
+    earliestTransactionDate: normalizeDateString(transaction.earliest_transaction_date),
+    latestTransactionDate: normalizeDateString(transaction.latest_transaction_date),
+    activeMonths: normalizeInt(transaction.active_months) || 0,
+    scrapeCount: normalizeInt(scrape.scrape_count) || 0,
+    latestScrapeAt: normalizeDateString(scrape.latest_scrape_at),
+  };
+}
+
+async function getInvestmentContext(db) {
+  const holdingRows = await optionalQuery(db, `
+    SELECT
+      COUNT(DISTINCT ia.id) as account_count,
+      COUNT(ih.id) as holding_count,
+      SUM(COALESCE(ih.current_value, 0)) as total_value,
+      SUM(CASE WHEN ia.is_liquid = 1 THEN COALESCE(ih.current_value, 0) ELSE 0 END) as liquid_value,
+      MAX(ih.as_of_date) as latest_as_of_date
+    FROM investment_accounts ia
+    LEFT JOIN investment_holdings ih ON ih.account_id = ia.id
+      AND COALESCE(ih.status, 'active') = 'active'
+    WHERE ia.is_active = 1
+  `);
+
+  const holdingRow = holdingRows[0] || {};
+  const holdingTotal = normalizeNumber(holdingRow.total_value) || 0;
+  const holdingCount = normalizeInt(holdingRow.holding_count) || 0;
+  const accountCount = normalizeInt(holdingRow.account_count) || 0;
+  // SUM(COALESCE(...)) yields 0 (not NULL) whenever any active account row
+  // exists, so only synced holdings with real value may claim the section —
+  // otherwise the prompt would assert a ₪0 portfolio for accounts whose
+  // holdings simply haven't synced yet.
+  if (holdingCount > 0 && holdingTotal > 0) {
+    return {
+      totalValue: holdingTotal,
+      liquidValue: normalizeNumber(holdingRow.liquid_value) || 0,
+      accountCount,
+      holdingCount,
+      latestAsOfDate: normalizeDateString(holdingRow.latest_as_of_date),
+    };
+  }
+
+  // Legacy DBs stored per-account values on investment_accounts.current_value
+  // (absent from the current schema — there the query fails and we omit the
+  // section rather than reporting zero).
+  const legacyRows = await optionalQuery(db, `
+    SELECT
+      SUM(current_value) as total_value,
+      SUM(CASE WHEN is_liquid = 1 THEN current_value ELSE 0 END) as liquid_value,
+      COUNT(DISTINCT id) as account_count
+    FROM investment_accounts
+    WHERE is_active = 1
+  `);
+  const legacyRow = legacyRows[0] || {};
+  const legacyTotal = normalizeNumber(legacyRow.total_value) || 0;
+  if (legacyTotal > 0) {
+    return {
+      totalValue: legacyTotal,
+      liquidValue: normalizeNumber(legacyRow.liquid_value) || 0,
+      accountCount: normalizeInt(legacyRow.account_count) || 0,
+      holdingCount: null,
+      latestAsOfDate: null,
+    };
+  }
+
+  return null;
 }
 
 async function getProfileContext(db) {
@@ -450,26 +724,15 @@ async function buildContext(db, permissions, options = {}) {
       // Previous year data might not exist
     }
 
-    // Investment summary (if available)
-    try {
-      const investmentResult = await db.query(`
-        SELECT
-          SUM(current_value) as total_value,
-          SUM(CASE WHEN is_liquid = 1 THEN current_value ELSE 0 END) as liquid_value,
-          COUNT(DISTINCT id) as account_count
-        FROM investment_accounts
-        WHERE is_active = 1
-      `);
-
-      if (investmentResult.rows.length > 0 && investmentResult.rows[0].total_value) {
-        context.investments = {
-          totalValue: parseFloat(investmentResult.rows[0].total_value || 0),
-          liquidValue: parseFloat(investmentResult.rows[0].liquid_value || 0),
-          accountCount: parseInt(investmentResult.rows[0].account_count || 0, 10),
-        };
-      }
-    } catch {
-      // Investment tables might not exist
+    const [investments, smartActions] = await Promise.all([
+      getInvestmentContext(db),
+      getSmartActionsContext(db),
+    ]);
+    if (investments) {
+      context.investments = investments;
+    }
+    if (smartActions.length > 0) {
+      context.smartActions = smartActions;
     }
 
     if (options.includeOptimizer === true) {
@@ -484,7 +747,89 @@ async function buildContext(db, permissions, options = {}) {
     }
   }
 
+  if (permissions.allowAnalyticsAccess || permissions.allowTransactionAccess) {
+    const [subscriptions, dataFreshness] = await Promise.all([
+      getSubscriptionContext(db),
+      getDataFreshnessContext(db),
+    ]);
+    if (subscriptions) {
+      context.subscriptions = subscriptions;
+    }
+    if (dataFreshness.transactionCount > 0 || dataFreshness.scrapeCount > 0) {
+      context.dataFreshness = dataFreshness;
+    }
+  }
+
+  if (permissions.allowAnalyticsAccess || permissions.allowCategoryAccess) {
+    const spendingTargets = await getSpendingTargetContext();
+    if (spendingTargets.length > 0) {
+      context.spendingTargets = spendingTargets;
+    }
+  }
+
   return context;
+}
+
+function formatSmartActionsSection(smartActions) {
+  if (!smartActions || smartActions.length === 0) return [];
+  const parts = ['\nACTIVE PROACTIVE ACTIONS:'];
+  smartActions.forEach((action, index) => {
+    const impact = action.potentialImpact > 0
+      ? `, potential impact ₪${Math.round(action.potentialImpact).toLocaleString()}`
+      : '';
+    const deadline = action.nearestDeadline ? `, nearest deadline ${action.nearestDeadline}` : '';
+    parts.push(`${index + 1}. ${action.actionType}: ${action.count} active, severity ${action.severity}${impact}${deadline}. Next: ${action.nextStep}`);
+  });
+  return parts;
+}
+
+function formatSubscriptionsSection(subscriptions) {
+  if (!subscriptions) return [];
+  const parts = ['\nSUBSCRIPTION SIGNALS:'];
+  if (subscriptions.byStatus && subscriptions.byStatus.length > 0) {
+    subscriptions.byStatus.forEach((status) => {
+      // Cancelled/paused subscriptions are not an ongoing cost — quoting a
+      // monthly figure for them misleads the model into counting them.
+      const isOngoingCost = !['cancelled', 'paused'].includes(status.status);
+      const cost = isOngoingCost ? `, approx ₪${Math.round(status.monthlyTotal).toLocaleString()}/mo` : '';
+      parts.push(`- ${status.status}: ${status.count} subscriptions${cost}`);
+    });
+  }
+  if (subscriptions.upcoming?.count > 0) {
+    const next = subscriptions.upcoming.nextRenewalDate ? `, next renewal ${subscriptions.upcoming.nextRenewalDate}` : '';
+    parts.push(`- Upcoming renewals: ${subscriptions.upcoming.count} in the next 30 days${next}`);
+  }
+  if (subscriptions.alerts && subscriptions.alerts.length > 0) {
+    subscriptions.alerts.forEach((alert) => {
+      parts.push(`- ${alert.severity} subscription alerts: ${alert.count}`);
+    });
+  }
+  return parts.length > 1 ? parts : [];
+}
+
+function formatSpendingTargetsSection(spendingTargets) {
+  if (!spendingTargets || spendingTargets.length === 0) return [];
+  const parts = ['\nSPENDING TARGETS (This Month):'];
+  spendingTargets.forEach((target) => {
+    const drift = target.driftPercentage >= 0 ? `+${target.driftPercentage}` : String(target.driftPercentage);
+    parts.push(`- ${target.spendingCategory}: actual ${target.actualPercentage}% vs target ${target.targetPercentage}% (${drift} pts), ₪${Math.round(target.amount).toLocaleString()}`);
+  });
+  return parts;
+}
+
+function formatDataFreshnessSection(dataFreshness) {
+  if (!dataFreshness) return [];
+  const parts = ['\nDATA FRESHNESS:'];
+  if (dataFreshness.transactionCount > 0) {
+    parts.push(`- ${dataFreshness.transactionCount} completed transactions across ${dataFreshness.activeMonths} active months`);
+  }
+  if (dataFreshness.latestTransactionDate) {
+    parts.push(`- Latest transaction date: ${dataFreshness.latestTransactionDate}`);
+  }
+  if (dataFreshness.latestScrapeAt) {
+    parts.push(`- Latest sync event: ${dataFreshness.latestScrapeAt}`);
+  }
+  return parts.length > 1 ? parts : [];
 }
 
 function formatOptimizerSections(optimizer) {
@@ -517,9 +862,21 @@ function formatOptimizerSections(optimizer) {
 function formatContextForPrompt(context) {
   if (!context.hasData) {
     const profileLines = formatProfileSection(context?.profile);
+    const smartActionLines = formatSmartActionsSection(context?.smartActions);
+    const subscriptionLines = formatSubscriptionsSection(context?.subscriptions);
+    const spendingTargetLines = formatSpendingTargetsSection(context?.spendingTargets);
+    const dataFreshnessLines = formatDataFreshnessSection(context?.dataFreshness);
     const optimizerLines = formatOptimizerSections(context?.optimizer);
-    if (profileLines.length > 0 || optimizerLines.length > 0) {
-      return `${[...profileLines, ...optimizerLines].join('\n')}\n\nNo financial data available yet.`;
+    const contextLines = [
+      ...profileLines,
+      ...smartActionLines,
+      ...subscriptionLines,
+      ...spendingTargetLines,
+      ...dataFreshnessLines,
+      ...optimizerLines,
+    ];
+    if (contextLines.length > 0) {
+      return `${contextLines.join('\n')}\n\nNo financial data available yet.`;
     }
     return 'No financial data available yet. The user needs to connect their accounts first.';
   }
@@ -569,6 +926,12 @@ function formatContextForPrompt(context) {
     parts.push(`- Total portfolio value: ₪${Math.round(context.investments.totalValue).toLocaleString()}`);
     parts.push(`- Liquid investments: ₪${Math.round(context.investments.liquidValue).toLocaleString()}`);
     parts.push(`- Number of accounts: ${context.investments.accountCount}`);
+    if (hasValue(context.investments.holdingCount)) {
+      parts.push(`- Active holdings: ${context.investments.holdingCount}`);
+    }
+    if (context.investments.latestAsOfDate) {
+      parts.push(`- Latest holding date: ${context.investments.latestAsOfDate}`);
+    }
   }
 
   // Recurring transactions
@@ -593,6 +956,10 @@ function formatContextForPrompt(context) {
   }
 
   parts.push(...formatOptimizerSections(context.optimizer));
+  parts.push(...formatSmartActionsSection(context.smartActions));
+  parts.push(...formatSubscriptionsSection(context.subscriptions));
+  parts.push(...formatSpendingTargetsSection(context.spendingTargets));
+  parts.push(...formatDataFreshnessSection(context.dataFreshness));
 
   // Permission notices
   const denied = [];
@@ -662,11 +1029,20 @@ category_budgets:
 
 investment_accounts:
   - id (INTEGER PRIMARY KEY)
-  - name (TEXT) - account name
+  - account_name/name (TEXT) - account name
   - account_type (TEXT) - type of investment
-  - current_value (REAL) - current value
   - is_liquid (INTEGER) - 1 if liquid
   - is_active (INTEGER) - 1 if active
+
+investment_holdings:
+  - id (INTEGER PRIMARY KEY)
+  - account_id (INTEGER) - FK to investment_accounts
+  - asset_name (TEXT)
+  - asset_type (TEXT)
+  - current_value (REAL) - current holding value
+  - cost_basis (REAL)
+  - as_of_date (TEXT)
+  - status (TEXT)
 
 user_profile:
   - id (INTEGER PRIMARY KEY)
@@ -699,6 +1075,11 @@ transaction_pairing_exclusions:
   - created_at (TEXT)
   - updated_at (TEXT)
 
+spending_category_targets:
+  - spending_category (TEXT) - essential, growth, stability, reward
+  - target_percentage (REAL)
+  - is_active (INTEGER)
+
 Use these tables for SQL queries. Always use parameterized-style placeholders ($1, $2) even though we'll inject values directly.
 Always use SQLite syntax (datetime(), strftime(), etc.).
 `;
@@ -708,4 +1089,5 @@ module.exports = {
   buildContext,
   formatContextForPrompt,
   getSchemaDescription,
+  __setSpendingBreakdownLoader,
 };
