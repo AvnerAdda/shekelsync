@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns';
 import { apiClient } from '@/lib/api-client';
+import { grossNumber, hasPairedCardData, preferOperatingNumber } from '../utils/cashflow';
 import {
   AggregationPeriod,
   CumulativePoint,
@@ -88,12 +89,16 @@ function fillMissingDates(
   return filled;
 }
 
-function getCashFlowIncome(day: DashboardHistoryEntry): number {
-  return typeof day.operatingIncome === 'number' ? day.operatingIncome : (day.income || 0);
+function getCashFlowIncome(day: DashboardHistoryEntry, useOperatingBasis: boolean): number {
+  return useOperatingBasis
+    ? preferOperatingNumber(day.operatingIncome, day.income)
+    : grossNumber(day.income);
 }
 
-function getCashFlowExpenses(day: DashboardHistoryEntry): number {
-  return typeof day.operatingExpenses === 'number' ? day.operatingExpenses : (day.expenses || 0);
+function getCashFlowExpenses(day: DashboardHistoryEntry, useOperatingBasis: boolean): number {
+  return useOperatingBasis
+    ? preferOperatingNumber(day.operatingExpenses, day.expenses)
+    : grossNumber(day.expenses);
 }
 
 function calculateCumulativeData(
@@ -109,12 +114,13 @@ function calculateCumulativeData(
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const endOfMonthDate = endOfMonth(startDate);
   const actualHistory = isCurrentMonth ? history.filter((day) => day.date <= todayStr) : history;
+  const useOperatingBasis = hasPairedCardData(history) || hasPairedCardData(lastMonthHistory);
 
   let runningTotal = 0;
   const cumulative: CumulativePoint[] = [];
 
   actualHistory.forEach((day) => {
-    const netFlow = getCashFlowIncome(day) - getCashFlowExpenses(day);
+    const netFlow = getCashFlowIncome(day, useOperatingBasis) - getCashFlowExpenses(day, useOperatingBasis);
     runningTotal += netFlow;
     cumulative.push({
       date: day.date,
@@ -136,7 +142,7 @@ function calculateCumulativeData(
     lastMonthHistory.forEach((day) => {
       const date = new Date(day.date);
       const dayOfMonth = date.getDate();
-      lastMonthMap.set(dayOfMonth, getCashFlowIncome(day) - getCashFlowExpenses(day));
+      lastMonthMap.set(dayOfMonth, getCashFlowIncome(day, useOperatingBasis) - getCashFlowExpenses(day, useOperatingBasis));
     });
 
     while (predictionDate <= endOfMonthDate) {

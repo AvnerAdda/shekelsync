@@ -1236,15 +1236,19 @@ describe('forecast service internals', () => {
     const target = 930 * (10 / 31);
     const totalForecasted = monthForecasts.reduce((sum, day) => sum + day.expectedExpenses, 0);
     expect(totalForecasted).toBeCloseTo(target, 6);
-    expect(monthForecasts[0].predictions[0]).toMatchObject({
+    // Injected baselines carry the pattern's real frequency as probability
+    // (8 occurrences/month over 10 covered days = 0.8), never a fabricated 1.
+    const injected = monthForecasts[0].predictions[0];
+    expect(injected).toMatchObject({
       category: 'Groceries',
-      probability: 1,
+      probability: 0.8,
       isBaselineForecast: true,
       isCalibrated: true,
     });
+    expect(injected.probability * injected.expectedAmount).toBeCloseTo(target / 10, 6);
     expect(simulationEntries[0].entries[0]).toMatchObject({
       categoryType: 'expense',
-      probability: 1,
+      probability: 0.8,
       isBaselineForecast: true,
     });
   });
