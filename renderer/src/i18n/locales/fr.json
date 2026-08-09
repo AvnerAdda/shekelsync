@@ -28,6 +28,12 @@
       "reloadApp": "Recharger l'application"
     }
   },
+  "sessionRecovery": {
+    "title": "Impossible de déverrouiller votre session enregistrée",
+    "message": "ShekelSync n'a pas pu lire la session protégée sur ce Mac. Vos données n'ont pas été effacées. Réessayez avant de vous reconnecter.",
+    "retry": "Réessayer",
+    "retrying": "Nouvelle tentative..."
+  },
   "smartNotifications": {
     "dismiss": "Masquer",
     "dismissAll": "Tout masquer",
@@ -357,7 +363,8 @@
       "headlessHint": "La synchronisation s'exécute sans ouvrir de fenêtre navigateur",
       "results": {
         "success": "{{count}} réussis",
-        "failed": "{{count}} échoués"
+        "failed": "{{count}} échoués",
+        "blocked": "{{count}} bloqués"
       },
       "errors": {
         "notSupported": "Les paramètres sont disponibles uniquement dans l'application desktop.",
@@ -2859,6 +2866,12 @@
     },
     "accountSync": {
       "neverSynced": "Jamais synchronisé"
+    },
+    "credentials": {
+      "loading": "Chargement des données des comptes...",
+      "unavailable": "Données des comptes indisponibles",
+      "loadFailed": "Impossible d'actualiser les données des comptes. Les informations existantes ont été conservées.",
+      "retry": "Réessayer de charger les comptes"
     }
   },
   "titleBar": {

@@ -1,6 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 
-export type ScrapeProgressStatus = 'starting' | 'in_progress' | 'completed' | 'failed';
+export type ScrapeProgressStatus =
+  | 'starting'
+  | 'in_progress'
+  | 'completed'
+  | 'partial'
+  | 'blocked'
+  | 'failed';
+
+const ALLOWED_STATUSES: ScrapeProgressStatus[] = [
+  'starting',
+  'in_progress',
+  'completed',
+  'partial',
+  'blocked',
+  'failed',
+];
+
+const TERMINAL_STATUSES: ScrapeProgressStatus[] = [
+  'completed',
+  'partial',
+  'blocked',
+  'failed',
+];
 
 export interface ScrapeProgressEvent {
   vendor?: string;
@@ -29,8 +51,7 @@ function subscribeToElectronScrapeProgress(
   const eventsApi = window.electronAPI?.events;
   if (eventsApi?.onScrapeProgress) {
     const unsubscribe = eventsApi.onScrapeProgress(rawEvent => {
-      const allowedStatuses: ScrapeProgressStatus[] = ['starting', 'in_progress', 'completed', 'failed'];
-      const status = allowedStatuses.includes(rawEvent.status as ScrapeProgressStatus)
+      const status = ALLOWED_STATUSES.includes(rawEvent.status as ScrapeProgressStatus)
         ? (rawEvent.status as ScrapeProgressStatus)
         : 'in_progress';
 
@@ -63,8 +84,7 @@ function subscribeToFallbackScrapeEvent(
       return;
     }
 
-    const allowedStatuses: ScrapeProgressStatus[] = ['starting', 'in_progress', 'completed', 'failed'];
-    const status = allowedStatuses.includes(detail.status as ScrapeProgressStatus)
+    const status = ALLOWED_STATUSES.includes(detail.status as ScrapeProgressStatus)
       ? (detail.status as ScrapeProgressStatus)
       : 'in_progress';
 
@@ -99,10 +119,10 @@ export function useScrapeProgress(onEvent?: (event: ScrapeProgressEvent) => void
     const listener = (payload: ScrapeProgressEvent) => {
       setLatestEvent(payload);
 
-      if (payload.status === 'completed') {
+      if (payload.status === 'completed' || payload.status === 'partial') {
         setIsRunning(false);
         setLastCompletedAt(new Date());
-      } else if (payload.status === 'failed') {
+      } else if (TERMINAL_STATUSES.includes(payload.status)) {
         setIsRunning(false);
       } else {
         setIsRunning(true);

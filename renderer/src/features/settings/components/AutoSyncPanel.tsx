@@ -35,12 +35,13 @@ interface BackgroundSyncSettings {
   showBrowserOnSync: boolean;
   lastRunAt?: string;
   lastResult?: {
-    status: 'success' | 'failed' | 'skipped' | 'blocked';
+    status: 'success' | 'partial' | 'failed' | 'skipped' | 'blocked';
     message?: string;
     totals?: {
       totalProcessed: number;
       successCount: number;
       failureCount: number;
+      blockedCount?: number;
       totalTransactions: number;
     };
   };
@@ -160,10 +161,17 @@ const AutoSyncPanel: React.FC = () => {
         throw new Error(response.statusText || t('errors.syncFailed'));
       }
       const result = response.data as any;
+      const successCount = Number(result?.successCount) || 0;
+      const isPartial = result?.status === 'partial' || (!result?.success && successCount > 0);
       if (result?.success) {
         showNotification(result.message || t('status.syncStarted'), 'success');
+      } else if (isPartial) {
+        showNotification(result.message || t('errors.syncFailed'), 'warning');
       } else {
         showNotification(result.message || t('errors.syncFailed'), 'error');
+      }
+      if (successCount > 0) {
+        window.dispatchEvent(new CustomEvent('dataRefresh'));
       }
     } catch (syncError) {
       showNotification(
@@ -203,7 +211,7 @@ const AutoSyncPanel: React.FC = () => {
     ? theme.palette.success
     : lastResult?.status === 'failed'
       ? theme.palette.error
-      : lastResult?.status === 'blocked'
+      : lastResult?.status === 'blocked' || lastResult?.status === 'partial'
         ? theme.palette.warning
         : theme.palette.info;
 
@@ -600,6 +608,21 @@ const AutoSyncPanel: React.FC = () => {
                   }}
                 >
                   {t('results.failed', { count: lastResult.totals.failureCount })}
+                </Typography>
+              )}
+              {(lastResult.totals.blockedCount || 0) > 0 && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    px: 1,
+                    py: 0.25,
+                    borderRadius: 1,
+                    bgcolor: alpha(theme.palette.warning.main, 0.1),
+                    color: theme.palette.warning.main,
+                    fontWeight: 600,
+                  }}
+                >
+                  {t('results.blocked', { count: lastResult.totals.blockedCount })}
                 </Typography>
               )}
             </Stack>

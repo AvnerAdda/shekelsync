@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -19,7 +19,6 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     env:
-      ALLOW_DEV_NO_ENCRYPTION: "true"
       USE_VITE_RENDERER: "true"
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
@@ -43,7 +42,7 @@ jobs:
         run: npm --prefix renderer ci
 
       - name: Validate tag matches app version
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
           TAG_VERSION="${GITHUB_REF#refs/tags/v}"
@@ -69,8 +68,8 @@ jobs:
           echo "WIN_CSC_LINK=$(pwd)/windows-cert.pfx" >> $GITHUB_ENV
           echo "WIN_CSC_KEY_PASSWORD=$WINDOWS_CERT_PASSWORD" >> $GITHUB_ENV
 
-      - name: Prepare macOS signing and notarization
-        if: matrix.os == 'macos-latest'
+      - name: Require macOS release signing and notarization
+        if: matrix.os == 'macos-latest' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         shell: bash
         env:
           MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
@@ -79,22 +78,56 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [ -z "$MACOS_CERT_P12" ] || [ -z "$MACOS_CERT_PASSWORD" ]; then
-            echo "::warning::macOS signing secrets are not fully configured; building unsigned macOS artifacts."
-            exit 0
+          missing=()
+          required=(
+            MACOS_CERT_P12
+            MACOS_CERT_PASSWORD
+            APPLE_ID
+            APPLE_APP_SPECIFIC_PASSWORD
+            APPLE_TEAM_ID
+          )
+
+          for secret_name in "${required[@]}"; do
+            if [ -z "${!secret_name:-}" ]; then
+              missing+=("$secret_name")
+            fi
+          done
+
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Refusing macOS tag release because required credentials are missing: ${missing[*]}"
+            exit 1
           fi
 
-          node -e "require('fs').writeFileSync('macos-cert.p12', Buffer.from(process.env.MACOS_CERT_P12, 'base64'))"
-          echo "CSC_LINK=$(pwd)/macos-cert.p12" >> $GITHUB_ENV
-          echo "CSC_KEY_PASSWORD=$MACOS_CERT_PASSWORD" >> $GITHUB_ENV
-
-          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
-            echo "APPLE_ID=$APPLE_ID" >> $GITHUB_ENV
-            echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD" >> $GITHUB_ENV
-            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> $GITHUB_ENV
-          else
-            echo "::warning::macOS notarization secrets are not fully configured; skipping notarization."
+          if [[ ! "$APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]; then
+            echo "::error::APPLE_TEAM_ID must be the expected 10-character Apple Developer Team ID."
+            exit 1
           fi
+
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const encoded = process.env.MACOS_CERT_P12.replace(/\s+/g, '');
+          if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 !== 0) {
+            throw new Error('MACOS_CERT_P12 is not valid base64');
+          }
+
+          const certificate = Buffer.from(encoded, 'base64');
+          const roundTrip = certificate.toString('base64').replace(/=+$/, '');
+          if (certificate.length === 0 || roundTrip !== encoded.replace(/=+$/, '')) {
+            throw new Error('MACOS_CERT_P12 could not be decoded losslessly');
+          }
+
+          fs.writeFileSync('macos-cert.p12', certificate, { mode: 0o600 });
+          NODE
+
+          {
+            echo "CSC_LINK=$GITHUB_WORKSPACE/macos-cert.p12"
+            echo "CSC_KEY_PASSWORD=$MACOS_CERT_PASSWORD"
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=true"
+            echo "APPLE_ID=$APPLE_ID"
+            echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+          } >> "$GITHUB_ENV"
 
       - name: Prepare Linux signing
         if: matrix.os == 'ubuntu-latest'
@@ -117,6 +150,11 @@ jobs:
         shell: bash
         run: |
           echo "Signing summary:"
+          if [ "$GITHUB_EVENT_NAME" != "push" ] || [[ "$GITHUB_REF" != refs/tags/v* ]]; then
+            echo "  Mode: diagnostic only; no artifacts will be uploaded or published"
+          else
+            echo "  Mode: tag release"
+          fi
           if [ -n "$WIN_CSC_LINK" ]; then
             echo "  Windows signing: configured"
           else
@@ -135,10 +173,36 @@ jobs:
 
       - name: Build Electron distributable
         shell: bash
-        run: npm --prefix app run dist
+        run: |
+          node -e "require('node:fs').rmSync('dist', { recursive: true, force: true })"
 
-      - name: Upload artifacts
-        if: always()
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            if [ "${{ matrix.os }}" = "macos-latest" ]; then
+              marker="$RUNNER_TEMP/shekelsync-macos-release-build-start"
+              touch "$marker"
+              echo "MACOS_BUILD_MARKER=$marker" >> "$GITHUB_ENV"
+            fi
+            npm --prefix app run dist
+          else
+            echo "Building a local diagnostic only. This workflow will not upload or publish it."
+            npm --prefix app run dist:diagnostic
+          fi
+
+      - name: Validate signed and notarized macOS release artifacts
+        if: matrix.os == 'macos-latest' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          EXPECTED_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash .github/scripts/validate-macos-release.sh
+
+      - name: Remove temporary macOS signing certificate
+        if: matrix.os == 'macos-latest' && always()
+        shell: bash
+        run: |
+          node -e "require('node:fs').rmSync('macos-cert.p12', { force: true })"
+
+      - name: Upload validated release artifacts
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && success()
         uses: actions/upload-artifact@v4
         with:
           name: electron-dist-${{ matrix.os }}
@@ -151,13 +215,15 @@ jobs:
             dist/*.zip
             dist/*.zip.blockmap
             dist/latest*.yml
-          if-no-files-found: ignore
+          if-no-files-found: error
 
   finalize-release:
     name: Finalize Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download packaged artifacts
         uses: actions/download-artifact@v4
@@ -174,9 +240,14 @@ jobs:
         shell: bash
         run: |
           VERSION="${TAG_NAME#v}"
-          for required_asset in "ShekelSync-${VERSION}-universal.dmg"; do
+          required_mac_assets=(
+            "ShekelSync-${VERSION}-universal.dmg"
+            "ShekelSync-${VERSION}-universal-mac.zip"
+            "latest-mac.yml"
+          )
+          for required_asset in "${required_mac_assets[@]}"; do
             if [ ! -f "release-artifacts/$required_asset" ]; then
-              echo "::error::Missing required macOS DMG artifact: $required_asset"
+              echo "::error::Missing required validated macOS artifact: $required_asset"
               find release-artifacts -maxdepth 2 -type f -print
               exit 1
             fi
