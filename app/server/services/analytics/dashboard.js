@@ -64,6 +64,34 @@ const SALARY_MATCH_SQL = `
   )
 `;
 
+const OPERATING_INCOME_MATCH_SQL = `
+  (
+    ${SALARY_MATCH_SQL}
+    OR LOWER(COALESCE(cd.name, '')) LIKE '%freelance%'
+    OR LOWER(COALESCE(cd.name_en, '')) LIKE '%freelance%'
+    OR LOWER(COALESCE(cd.name_fr, '')) LIKE '%freelance%'
+    OR LOWER(COALESCE(cd.name_en, '')) LIKE '%side hustle%'
+    OR LOWER(COALESCE(cd.name, '')) LIKE '%government benefit%'
+    OR LOWER(COALESCE(cd.name_en, '')) LIKE '%government benefit%'
+    OR LOWER(COALESCE(cd.name_fr, '')) LIKE '%prestation%'
+    OR LOWER(COALESCE(cd.name_fr, '')) LIKE '%gouvernement%'
+    OR LOWER(COALESCE(cd.name, '')) LIKE '%פרילנס%'
+    OR LOWER(COALESCE(cd.name, '')) LIKE '%קצבאות%'
+    OR LOWER(COALESCE(cd.name, '')) LIKE '%ביטוח לאומי%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%freelance%'
+    OR LOWER(COALESCE(parent_cd.name_en, '')) LIKE '%freelance%'
+    OR LOWER(COALESCE(parent_cd.name_fr, '')) LIKE '%freelance%'
+    OR LOWER(COALESCE(parent_cd.name_en, '')) LIKE '%side hustle%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%government benefit%'
+    OR LOWER(COALESCE(parent_cd.name_en, '')) LIKE '%government benefit%'
+    OR LOWER(COALESCE(parent_cd.name_fr, '')) LIKE '%prestation%'
+    OR LOWER(COALESCE(parent_cd.name_fr, '')) LIKE '%gouvernement%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%פרילנס%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%קצבאות%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%ביטוח לאומי%'
+  )
+`;
+
 const PIKADON_MATCH_SQL = `
   (
     t.is_pikadon_related = 1
@@ -87,6 +115,31 @@ const EXPENSE_SQL = `
   (
     (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0))
     AND t.price < 0
+  )
+`;
+
+const NON_OPERATING_EXPENSE_CATEGORY_SQL = `
+  (
+    LOWER(COALESCE(cd.name, '')) LIKE '%פרעון כרטיס אשראי%'
+    OR LOWER(COALESCE(cd.name, '')) LIKE '%פירעון כרטיס אשראי%'
+    OR LOWER(COALESCE(cd.name, '')) LIKE '%תשלומי בנק%'
+    OR LOWER(COALESCE(cd.name, '')) LIKE '%העברות להשקעות%'
+    OR LOWER(COALESCE(cd.name, '')) LIKE '%מס על השקעות%'
+    OR LOWER(COALESCE(cd.name_en, '')) LIKE '%credit card repayment%'
+    OR LOWER(COALESCE(cd.name_en, '')) LIKE '%bank settlement%'
+    OR LOWER(COALESCE(cd.name_en, '')) LIKE '%transfer to investment%'
+    OR LOWER(COALESCE(cd.name_en, '')) LIKE '%investment tax%'
+    OR LOWER(COALESCE(cd.name_en, '')) LIKE '%tax withholding%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%פרעון כרטיס אשראי%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%פירעון כרטיס אשראי%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%תשלומי בנק%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%העברות להשקעות%'
+    OR LOWER(COALESCE(parent_cd.name, '')) LIKE '%מס על השקעות%'
+    OR LOWER(COALESCE(parent_cd.name_en, '')) LIKE '%credit card repayment%'
+    OR LOWER(COALESCE(parent_cd.name_en, '')) LIKE '%bank settlement%'
+    OR LOWER(COALESCE(parent_cd.name_en, '')) LIKE '%transfer to investment%'
+    OR LOWER(COALESCE(parent_cd.name_en, '')) LIKE '%investment tax%'
+    OR LOWER(COALESCE(parent_cd.name_en, '')) LIKE '%tax withholding%'
   )
 `;
 
@@ -182,6 +235,12 @@ async function getDashboardAnalytics(query = {}) {
     }
   }
   const creditCardRepaymentCondition = getCreditCardRepaymentCategoryCondition('cd');
+  const nonOperatingExpenseCondition = `
+    (
+      (${creditCardRepaymentCondition})
+      OR ${NON_OPERATING_EXPENSE_CATEGORY_SQL}
+    )
+  `;
 
   const { groupBy: dateGroupBy, select: dateSelect } = resolveDateAggregation('t.date', aggregation);
   const pendingProcessedAtExpr = 'COALESCE(t.processed_datetime, t.processed_date)';
@@ -203,6 +262,18 @@ async function getDashboardAnalytics(query = {}) {
           ELSE 0
         END) as expenses,
         SUM(CASE
+          WHEN ${EXPENSE_SQL}
+            AND NOT ${nonOperatingExpenseCondition}
+          THEN ABS(t.price)
+          ELSE 0
+        END) as operating_expenses,
+        SUM(CASE
+          WHEN ${EXPENSE_SQL}
+            AND ${nonOperatingExpenseCondition}
+          THEN ABS(t.price)
+          ELSE 0
+        END) as non_operating_expenses,
+        SUM(CASE
           WHEN ${CAPITAL_RETURNS_SQL} THEN t.price
           ELSE 0
         END) as capital_returns,
@@ -212,6 +283,18 @@ async function getDashboardAnalytics(query = {}) {
           THEN t.price
           ELSE 0
         END) as salary_income,
+        SUM(CASE
+          WHEN ${COUNTED_INCOME_SQL}
+            AND ${OPERATING_INCOME_MATCH_SQL}
+          THEN t.price
+          ELSE 0
+        END) as operating_income,
+        SUM(CASE
+          WHEN ${COUNTED_INCOME_SQL}
+            AND NOT ${OPERATING_INCOME_MATCH_SQL}
+          THEN t.price
+          ELSE 0
+        END) as non_operating_income,
         SUM(CASE
           WHEN (${creditCardRepaymentCondition}) AND t.price < 0
           THEN ABS(t.price)
@@ -272,8 +355,12 @@ async function getDashboardAnalytics(query = {}) {
       hd.date as date,
       COALESCE(bh.income, 0) as income,
       COALESCE(bh.expenses, 0) as expenses,
+      COALESCE(bh.operating_expenses, 0) as operating_expenses,
+      COALESCE(bh.non_operating_expenses, 0) as non_operating_expenses,
       COALESCE(bh.capital_returns, 0) as capital_returns,
       COALESCE(bh.salary_income, 0) as salary_income,
+      COALESCE(bh.operating_income, 0) as operating_income,
+      COALESCE(bh.non_operating_income, 0) as non_operating_income,
       COALESCE(bh.card_repayments, 0) as card_repayments,
       COALESCE(bh.paired_card_expenses, 0) as paired_card_expenses,
       COALESCE(prh.paired_card_repayments, 0) as paired_card_repayments
@@ -370,12 +457,17 @@ async function getDashboardAnalytics(query = {}) {
   }
 
   let totalIncome = 0;
+  let totalOperatingIncome = 0;
+  let totalNonOperatingIncome = 0;
   let totalCapitalReturns = 0;
   let totalExpenses = 0;
+  let totalOperatingExpenses = 0;
+  let totalNonOperatingExpenses = 0;
   let investmentOutflow = 0;
   let investmentInflow = 0;
   let netInvestments = 0;
   let netBalance = 0;
+  let operatingNetBalance = 0;
   let totalAccounts = 0;
   let pendingExpenses = 0;
   let pendingCount = 0;
@@ -399,6 +491,18 @@ async function getDashboardAnalytics(query = {}) {
             ELSE 0
           END) as total_income,
           SUM(CASE
+            WHEN ${COUNTED_INCOME_SQL}
+              AND ${OPERATING_INCOME_MATCH_SQL}
+            THEN t.price
+            ELSE 0
+          END) as total_operating_income,
+          SUM(CASE
+            WHEN ${COUNTED_INCOME_SQL}
+              AND NOT ${OPERATING_INCOME_MATCH_SQL}
+            THEN t.price
+            ELSE 0
+          END) as total_non_operating_income,
+          SUM(CASE
             WHEN ${CAPITAL_RETURNS_SQL} THEN t.price
             ELSE 0
           END) as total_capital_returns,
@@ -406,6 +510,18 @@ async function getDashboardAnalytics(query = {}) {
             WHEN ${EXPENSE_SQL} THEN ABS(t.price)
             ELSE 0
           END) as total_expenses,
+          SUM(CASE
+            WHEN ${EXPENSE_SQL}
+              AND NOT ${nonOperatingExpenseCondition}
+            THEN ABS(t.price)
+            ELSE 0
+          END) as total_operating_expenses,
+          SUM(CASE
+            WHEN ${EXPENSE_SQL}
+              AND ${nonOperatingExpenseCondition}
+            THEN ABS(t.price)
+            ELSE 0
+          END) as total_non_operating_expenses,
           SUM(CASE
             WHEN ${INVESTMENT_OUTFLOW_SQL} THEN ABS(t.price)
             ELSE 0
@@ -417,6 +533,7 @@ async function getDashboardAnalytics(query = {}) {
           COUNT(DISTINCT t.vendor) as total_accounts
         FROM transactions t
         LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+        LEFT JOIN category_definitions parent_cd ON parent_cd.id = cd.parent_id
         LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
           ON t.identifier = tpe.transaction_identifier
           AND t.vendor = tpe.transaction_vendor
@@ -460,12 +577,17 @@ async function getDashboardAnalytics(query = {}) {
 
     const summary = summaryResult.rows[0] || {};
     totalIncome = Number.parseFloat(summary.total_income || 0);
+    totalOperatingIncome = Number.parseFloat(summary.total_operating_income || 0);
+    totalNonOperatingIncome = Number.parseFloat(summary.total_non_operating_income || 0);
     totalCapitalReturns = Number.parseFloat(summary.total_capital_returns || 0);
     totalExpenses = Number.parseFloat(summary.total_expenses || 0);
+    totalOperatingExpenses = Number.parseFloat(summary.total_operating_expenses || 0);
+    totalNonOperatingExpenses = Number.parseFloat(summary.total_non_operating_expenses || 0);
     investmentOutflow = Number.parseFloat(summary.investment_outflow || 0);
     investmentInflow = Number.parseFloat(summary.investment_inflow || 0);
     netInvestments = investmentOutflow - investmentInflow;
     netBalance = totalIncome - totalExpenses;
+    operatingNetBalance = totalOperatingIncome - totalOperatingExpenses;
     totalAccounts = Number.parseInt(summary.total_accounts || 0, 10) || 0;
 
     pendingByProcessedDate = pendingExpensesResult.rows.map((row) => ({
@@ -622,9 +744,14 @@ async function getDashboardAnalytics(query = {}) {
     dateRange: { start, end },
     summary: {
       totalIncome,
+      totalOperatingIncome,
+      totalNonOperatingIncome,
       totalCapitalReturns,
       totalExpenses,
+      totalOperatingExpenses,
+      totalNonOperatingExpenses,
       netBalance,
+      operatingNetBalance,
       investmentOutflow,
       investmentInflow,
       netInvestments,
@@ -647,11 +774,15 @@ async function getDashboardAnalytics(query = {}) {
       date: row.date,
       income: Number.parseFloat(row.income || 0),
       expenses: Number.parseFloat(row.expenses || 0),
+      operatingExpenses: Number.parseFloat(row.operating_expenses || 0),
+      nonOperatingExpenses: Number.parseFloat(row.non_operating_expenses || 0),
       capitalReturns: Number.parseFloat(row.capital_returns || 0),
       cardRepayments: Number.parseFloat(row.card_repayments || 0),
       pairedCardExpenses: Number.parseFloat(row.paired_card_expenses || 0),
       pairedCardRepayments: Number.parseFloat(row.paired_card_repayments || 0),
       salaryIncome: Number.parseFloat(row.salary_income || 0),
+      operatingIncome: Number.parseFloat(row.operating_income || 0),
+      nonOperatingIncome: Number.parseFloat(row.non_operating_income || 0),
       // NEW: Add bank balance to history
       ...(includeSummary ? { bankBalance: balanceHistoryMap.get(row.date) || 0 } : {}),
     })),

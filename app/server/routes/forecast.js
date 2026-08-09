@@ -214,52 +214,109 @@ function createForecastRouter({ sqliteDb = null, generateForecast = forecastServ
         console.warn('[Forecast] Could not load category definitions:', err.message);
       }
 
-      // Format minimal daily fields for response
-      const dailyMinimal = (result.dailyForecasts || []).map(d => ({
-        date: d.date,
-        income: d.expectedIncome,
-        expenses: d.expectedExpenses,
-        cashFlow: d.expectedCashFlow,
-        cumulativeCashFlow: d.cumulativeCashFlow,
-        topCategory: d.topPredictions?.[0]?.category || null,
-        topProbability: d.topPredictions?.[0]?.probability || null,
-        topPredictions: (d.topPredictions || []).map(p => ({
-          category: p.category,
-          categoryDefinitionId: p.categoryDefinitionId || null,
-          amount: p.expectedAmount,
-          probability: p.probability
-        }))
-      }));
+      // Format minimal daily fields for response. When a generator doesn't
+      // emit the operating split, the cumulative fallbacks accumulate the
+      // same per-day fallback values so each cumulative series is always the
+      // running sum of the daily series it accompanies.
+      let fallbackCumOperatingExpenses = 0;
+      let fallbackCumNonOperatingExpenses = 0;
+      const dailyMinimal = (result.dailyForecasts || []).map(d => {
+        const operatingExpenses = d.expectedOperatingExpenses ?? d.expectedExpenses;
+        const nonOperatingExpenses = d.expectedNonOperatingExpenses ?? 0;
+        fallbackCumOperatingExpenses += Number(operatingExpenses) || 0;
+        fallbackCumNonOperatingExpenses += Number(nonOperatingExpenses) || 0;
+        return {
+          date: d.date,
+          income: d.expectedIncome,
+          operatingIncome: d.expectedOperatingIncome ?? d.expectedIncome,
+          nonOperatingIncome: d.expectedNonOperatingIncome ?? 0,
+          expenses: d.expectedExpenses,
+          operatingExpenses,
+          nonOperatingExpenses,
+          cashFlow: d.expectedCashFlow,
+          operatingCashFlow: d.expectedOperatingCashFlow ?? d.expectedCashFlow,
+          nonOperatingCashFlow: d.expectedNonOperatingCashFlow ?? 0,
+          cumulativeCashFlow: d.cumulativeCashFlow,
+          cumulativeOperatingCashFlow: d.cumulativeOperatingCashFlow ?? d.cumulativeCashFlow,
+          cumulativeNonOperatingCashFlow: d.cumulativeNonOperatingCashFlow ?? 0,
+          cumulativeOperatingExpenses: d.cumulativeOperatingExpenses ?? fallbackCumOperatingExpenses,
+          cumulativeNonOperatingExpenses: d.cumulativeNonOperatingExpenses ?? fallbackCumNonOperatingExpenses,
+          topCategory: d.topPredictions?.[0]?.category || null,
+          topProbability: d.topPredictions?.[0]?.probability || null,
+          topPredictions: (d.topPredictions || []).map(p => ({
+            category: p.category,
+            categoryDefinitionId: p.categoryDefinitionId || null,
+            incomeType: p.incomeType || null,
+            expenseType: p.expenseType || null,
+            amount: p.expectedAmount,
+            probability: p.probability
+          }))
+        };
+      });
 
       const mapScenario = s => ({
         totalIncome: s.totalIncome,
+        totalOperatingIncome: s.totalOperatingIncome ?? s.totalIncome,
+        totalNonOperatingIncome: s.totalNonOperatingIncome ?? 0,
         totalExpenses: s.totalExpenses,
+        totalOperatingExpenses: s.totalOperatingExpenses ?? s.totalExpenses,
+        totalNonOperatingExpenses: s.totalNonOperatingExpenses ?? 0,
         totalCashFlow: s.totalCashFlow,
-        daily: (s.dailyResults || []).map(dr => ({
-          date: dr.date,
-          income: dr.income,
-          expenses: dr.expenses,
-          cashFlow: dr.cashFlow,
-          cumulativeCashFlow: dr.cumulativeCashFlow
-        }))
+        totalOperatingCashFlow: s.totalOperatingCashFlow ?? s.totalCashFlow,
+        totalNonOperatingCashFlow: s.totalNonOperatingCashFlow ?? 0,
+        daily: (() => {
+          let cumOperatingExpensesFallback = 0;
+          let cumNonOperatingExpensesFallback = 0;
+          return (s.dailyResults || []).map(dr => {
+            const operatingExpenses = dr.operatingExpenses ?? dr.expenses;
+            const nonOperatingExpenses = dr.nonOperatingExpenses ?? 0;
+            cumOperatingExpensesFallback += Number(operatingExpenses) || 0;
+            cumNonOperatingExpensesFallback += Number(nonOperatingExpenses) || 0;
+            return {
+              date: dr.date,
+              income: dr.income,
+              operatingIncome: dr.operatingIncome ?? dr.income,
+              nonOperatingIncome: dr.nonOperatingIncome ?? 0,
+              expenses: dr.expenses,
+              operatingExpenses,
+              nonOperatingExpenses,
+              cashFlow: dr.cashFlow,
+              operatingCashFlow: dr.operatingCashFlow ?? dr.cashFlow,
+              nonOperatingCashFlow: dr.nonOperatingCashFlow ?? 0,
+              cumulativeCashFlow: dr.cumulativeCashFlow,
+              cumulativeOperatingCashFlow: dr.cumulativeOperatingCashFlow ?? dr.cumulativeCashFlow,
+              cumulativeNonOperatingCashFlow: dr.cumulativeNonOperatingCashFlow ?? 0,
+              cumulativeOperatingExpenses: dr.cumulativeOperatingExpenses ?? cumOperatingExpensesFallback,
+              cumulativeNonOperatingExpenses: dr.cumulativeNonOperatingExpenses ?? cumNonOperatingExpensesFallback
+            };
+          });
+        })()
       });
 
+      // Round the operating component and derive the non-operating side by
+      // subtraction so operating + non-operating always equals the rounded
+      // total (independent rounding can drift by 1).
+      const buildScenarioSummary = (s) => {
+        const income = Math.round(s?.totalIncome || 0);
+        const operatingIncome = Math.round(s?.totalOperatingIncome ?? s?.totalIncome ?? 0);
+        const expenses = Math.round(s?.totalExpenses || 0);
+        const operatingExpenses = Math.round(s?.totalOperatingExpenses ?? s?.totalExpenses ?? 0);
+        return {
+          netCashFlow: Math.round(s?.totalCashFlow || 0),
+          operatingNetCashFlow: Math.round(s?.totalOperatingCashFlow ?? s?.totalCashFlow ?? 0),
+          income,
+          operatingIncome,
+          nonOperatingIncome: income - operatingIncome,
+          expenses,
+          operatingExpenses,
+          nonOperatingExpenses: expenses - operatingExpenses
+        };
+      };
+
       const summaries = {
-        pessimistic: {
-          netCashFlow: Math.round(result.scenarios?.p10?.totalCashFlow || 0),
-          income: Math.round(result.scenarios?.p10?.totalIncome || 0),
-          expenses: Math.round(result.scenarios?.p10?.totalExpenses || 0)
-        },
-        base: {
-          netCashFlow: Math.round(result.scenarios?.p50?.totalCashFlow || 0),
-          income: Math.round(result.scenarios?.p50?.totalIncome || 0),
-          expenses: Math.round(result.scenarios?.p50?.totalExpenses || 0)
-        },
-        optimistic: {
-          netCashFlow: Math.round(result.scenarios?.p90?.totalCashFlow || 0),
-          income: Math.round(result.scenarios?.p90?.totalIncome || 0),
-          expenses: Math.round(result.scenarios?.p90?.totalExpenses || 0)
-        }
+        pessimistic: buildScenarioSummary(result.scenarios?.p10),
+        base: buildScenarioSummary(result.scenarios?.p50),
+        optimistic: buildScenarioSummary(result.scenarios?.p90)
       };
 
       // Calculate actual end date (day before forecast starts)

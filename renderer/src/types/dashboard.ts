@@ -3,7 +3,12 @@ export type AggregationPeriod = 'daily' | 'weekly' | 'monthly';
 export interface DashboardHistoryEntry {
   date: string;
   income: number | null;
+  operatingIncome?: number;
+  nonOperatingIncome?: number;
+  salaryIncome?: number;
   expenses: number | null;
+  operatingExpenses?: number;
+  nonOperatingExpenses?: number;
   capitalReturns?: number;
   cardRepayments?: number;
   pairedCardExpenses?: number;
@@ -36,9 +41,14 @@ export interface DashboardData {
   dateRange: { start: Date; end: Date };
   summary: {
     totalIncome: number;
+    totalOperatingIncome?: number;
+    totalNonOperatingIncome?: number;
     totalCapitalReturns?: number;
     totalExpenses: number;
+    totalOperatingExpenses?: number;
+    totalNonOperatingExpenses?: number;
     netBalance: number;
+    operatingNetBalance?: number;
     investmentOutflow: number;
     investmentInflow: number;
     netInvestments: number;
