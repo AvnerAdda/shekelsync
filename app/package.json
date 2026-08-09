@@ -26,6 +26,7 @@
     "electron": "electron ../electron/main.js",
     "electron-dev": "USE_VITE_RENDERER=true RENDERER_DEV_URL=http://localhost:5173 concurrently \"npm --prefix ../renderer run dev\" \"wait-on http://localhost:5173 && electron ../electron/main.js\"",
     "dist": "npm run build:renderer:electron && electron-builder --publish=never",
+    "dist:unsigned": "npm run build:renderer:electron && electron-builder --publish=never --config.mac.forceCodeSigning=false --config.mac.hardenedRuntime=false --config.mac.notarize=false",
     "dist:diagnostic": "npm run build:renderer:electron && electron-builder --publish=never --config.mac.forceCodeSigning=false --config.mac.hardenedRuntime=false --config.mac.notarize=false",
     "pack": "npm run build:renderer:electron && electron-builder --dir --config.mac.forceCodeSigning=false --config.mac.hardenedRuntime=false --config.mac.notarize=false",
     "release": "npm run dist",

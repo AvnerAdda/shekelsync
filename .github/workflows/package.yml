@@ -68,7 +68,7 @@ jobs:
           echo "WIN_CSC_LINK=$(pwd)/windows-cert.pfx" >> $GITHUB_ENV
           echo "WIN_CSC_KEY_PASSWORD=$WINDOWS_CERT_PASSWORD" >> $GITHUB_ENV
 
-      - name: Require macOS release signing and notarization
+      - name: Configure optional macOS release signing and notarization
         if: matrix.os == 'macos-latest' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         shell: bash
         env:
@@ -79,6 +79,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           missing=()
+          present=()
           required=(
             MACOS_CERT_P12
             MACOS_CERT_PASSWORD
@@ -90,11 +91,19 @@ jobs:
           for secret_name in "${required[@]}"; do
             if [ -z "${!secret_name:-}" ]; then
               missing+=("$secret_name")
+            else
+              present+=("$secret_name")
             fi
           done
 
+          if [ ${#present[@]} -eq 0 ]; then
+            echo "::warning::No macOS signing credentials configured; publishing unsigned macOS artifacts. Gatekeeper will require manual user approval and in-app auto-update will remain disabled."
+            echo "MACOS_RELEASE_SIGNING_MODE=unsigned" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
           if [ ${#missing[@]} -ne 0 ]; then
-            echo "::error::Refusing macOS tag release because required credentials are missing: ${missing[*]}"
+            echo "::error::Partially configured macOS signing credentials; refusing ambiguous release. Missing: ${missing[*]}"
             exit 1
           fi
 
@@ -121,6 +130,7 @@ jobs:
           NODE
 
           {
+            echo "MACOS_RELEASE_SIGNING_MODE=signed"
             echo "CSC_LINK=$GITHUB_WORKSPACE/macos-cert.p12"
             echo "CSC_KEY_PASSWORD=$MACOS_CERT_PASSWORD"
             echo "CSC_IDENTITY_AUTO_DISCOVERY=true"
@@ -155,6 +165,11 @@ jobs:
           else
             echo "  Mode: tag release"
           fi
+          if [ "${MACOS_RELEASE_SIGNING_MODE:-not-applicable}" = "unsigned" ]; then
+            echo "  macOS release: unsigned (manual Gatekeeper approval and updates required)"
+          elif [ "${MACOS_RELEASE_SIGNING_MODE:-not-applicable}" = "signed" ]; then
+            echo "  macOS release: Developer ID signed and notarized"
+          fi
           if [ -n "$WIN_CSC_LINK" ]; then
             echo "  Windows signing: configured"
           else
@@ -181,6 +196,10 @@ jobs:
               marker="$RUNNER_TEMP/shekelsync-macos-release-build-start"
               touch "$marker"
               echo "MACOS_BUILD_MARKER=$marker" >> "$GITHUB_ENV"
+              if [ "${MACOS_RELEASE_SIGNING_MODE:-}" = "unsigned" ]; then
+                npm --prefix app run dist:unsigned
+                exit 0
+              fi
             fi
             npm --prefix app run dist
           else
@@ -189,11 +208,36 @@ jobs:
           fi
 
       - name: Validate signed and notarized macOS release artifacts
-        if: matrix.os == 'macos-latest' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        if: matrix.os == 'macos-latest' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && env.MACOS_RELEASE_SIGNING_MODE == 'signed'
         shell: bash
         env:
           EXPECTED_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: bash .github/scripts/validate-macos-release.sh
+
+      - name: Validate unsigned macOS release artifacts
+        if: matrix.os == 'macos-latest' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && env.MACOS_RELEASE_SIGNING_MODE == 'unsigned'
+        shell: bash
+        run: |
+          app_version="$(node -p "require('./app/package.json').version")"
+          required_outputs=(
+            "dist/mac-universal/ShekelSync.app"
+            "dist/ShekelSync-${app_version}-universal.dmg"
+            "dist/ShekelSync-${app_version}-universal-mac.zip"
+            "dist/latest-mac.yml"
+          )
+
+          for output_path in "${required_outputs[@]}"; do
+            if [ ! -e "$output_path" ]; then
+              echo "::error::Expected unsigned macOS release output is missing: $output_path"
+              exit 1
+            fi
+            if [ ! "$output_path" -nt "$MACOS_BUILD_MARKER" ]; then
+              echo "::error::Refusing stale unsigned macOS release output: $output_path"
+              exit 1
+            fi
+          done
+
+          echo "::warning::Unsigned macOS release artifacts validated for packaging only; they are not Apple-notarized."
 
       - name: Remove temporary macOS signing certificate
         if: matrix.os == 'macos-latest' && always()
@@ -201,7 +245,7 @@ jobs:
         run: |
           node -e "require('node:fs').rmSync('macos-cert.p12', { force: true })"
 
-      - name: Upload validated release artifacts
+      - name: Upload release artifacts
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && success()
         uses: actions/upload-artifact@v4
         with:
