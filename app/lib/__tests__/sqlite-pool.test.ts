@@ -98,7 +98,14 @@ describe('sqlite-pool', () => {
     await loadPool();
     expect(latestDb?.path).toBe(dbPath);
     expect(latestDb?.options).toEqual({ fileMustExist: true });
-    expect(latestDb?.pragmaCalls).toEqual(['foreign_keys = ON', 'journal_mode = WAL']);
+    // Connection pragmas are set first, in order, before any migration runs.
+    expect(latestDb?.pragmaCalls.slice(0, 3)).toEqual([
+      'foreign_keys = ON',
+      'journal_mode = WAL',
+      'busy_timeout = 5000',
+    ]);
+    // The versioned migration runner stamps user_version (baseline v1).
+    expect(latestDb?.pragmaCalls).toContain('user_version = 1');
   });
 
   it('converts positional placeholders and normalises params for SELECT', async () => {

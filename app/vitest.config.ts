@@ -17,6 +17,27 @@ export default defineConfig({
       reporter: ['text', 'html', 'json', 'json-summary'],
       // Avoid intermittent ENOENT reads from coverage/.tmp during large runs.
       cleanOnRerun: false,
+      // Measure ALL source files, not only those a test happens to import.
+      // Without `all: true` + `include`, untested modules are invisible and the
+      // coverage percentage is inflated.
+      all: true,
+      include: [
+        'server/**/*.{js,ts}',
+        'lib/**/*.{js,ts}',
+        'config/**/*.{js,ts}',
+        'contexts/**/*.{ts,tsx}',
+        'hooks/**/*.{ts,tsx}',
+        'utils/**/*.{js,ts}',
+      ],
+      exclude: [
+        '**/__tests__/**',
+        '**/__mocks__/**',
+        '**/*.{test,spec}.*',
+        '**/*.runner.cjs',
+        '**/*.d.ts',
+        'coverage/**',
+        'logs/**',
+      ],
     },
     // Enable mocking for server-side modules
     deps: {

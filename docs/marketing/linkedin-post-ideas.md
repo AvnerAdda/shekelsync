@@ -18,8 +18,8 @@ Post angle:
 > The goal was simple: useful financial insights without casually leaking personal financial identity.
 
 Relevant files:
-- [data-anonymizer.js](/home/addavner/shekelsync/app/server/services/chat/data-anonymizer.js)
-- [financial-context.js](/home/addavner/shekelsync/app/server/services/chat/financial-context.js)
+- [data-anonymizer.js](app/server/services/chat/data-anonymizer.js)
+- [financial-context.js](app/server/services/chat/financial-context.js)
 
 **2. Israeli banking scraper orchestration inside Electron**
 
@@ -40,9 +40,9 @@ Post angle:
 > Most of the work was not scraping itself. It was making scraping feel boring and reliable for the user.
 
 Relevant files:
-- [scraper.js](/home/addavner/shekelsync/electron/scraper.js)
-- [sync-scheduler.js](/home/addavner/shekelsync/electron/sync-scheduler.js)
-- [bulk.js](/home/addavner/shekelsync/app/server/services/scraping/bulk.js)
+- [scraper.js](electron/scraper.js)
+- [sync-scheduler.js](electron/sync-scheduler.js)
+- [bulk.js](app/server/services/scraping/bulk.js)
 
 **3. Financial health score built from real behavioral signals**
 
@@ -63,7 +63,7 @@ Post angle:
 > A good score should explain itself. Otherwise users cannot trust it.
 
 Relevant file:
-- [health-score-enhanced.js](/home/addavner/shekelsync/app/server/services/analytics/health-score-enhanced.js)
+- [health-score-enhanced.js](app/server/services/analytics/health-score-enhanced.js)
 
 **4. Smart matching between credit card payments and bank transactions**
 
@@ -84,7 +84,7 @@ Post angle:
 > It is not flashy ML. It is practical product intelligence.
 
 Relevant file:
-- [smart-match.js](/home/addavner/shekelsync/app/server/services/accounts/smart-match.js)
+- [smart-match.js](app/server/services/accounts/smart-match.js)
 
 **5. Subscription detection from recurring transaction patterns**
 
@@ -104,7 +104,7 @@ Post angle:
 > The product lesson: automate discovery, but let the user stay in control.
 
 Relevant file:
-- [subscriptions.js](/home/addavner/shekelsync/app/server/services/analytics/subscriptions.js)
+- [subscriptions.js](app/server/services/analytics/subscriptions.js)
 
 **6. Forecasting without an external ML service**
 
@@ -124,7 +124,7 @@ Post angle:
 > For personal finance, local-first forecasting is a strong default: faster, cheaper, and more private.
 
 Relevant file:
-- [forecast.js](/home/addavner/shekelsync/app/server/services/forecast.js)
+- [forecast.js](app/server/services/forecast.js)
 
 **7. SQLite/Postgres portability as a product strategy**
 
@@ -146,7 +146,7 @@ Post angle:
 > Small abstraction, big leverage.
 
 Relevant file:
-- [sql-dialect.js](/home/addavner/shekelsync/app/lib/sql-dialect.js)
+- [sql-dialect.js](app/lib/sql-dialect.js)
 
 **8. Security posture as a visible product feature**
 
@@ -168,7 +168,7 @@ Post angle:
 > Security should be inspectable, not just promised.
 
 Relevant file:
-- [security-status.js](/home/addavner/shekelsync/electron/security/security-status.js)
+- [security-status.js](electron/security/security-status.js)
 
 My top 3 for LinkedIn would be: privacy-first AI, Israeli bank scraper orchestration, and the explainable financial health score. Those are the most distinctive and easiest to explain to both engineers and product people.
 
@@ -474,7 +474,7 @@ Caption:
 > Financial notifications should be contextual, not noisy
 
 Relevant file:
-- [notifications.js](/home/addavner/shekelsync/app/server/services/notifications.js)
+- [notifications.js](app/server/services/notifications.js)
 
 ### 10. Investment account suggestions from transaction text
 
@@ -514,8 +514,8 @@ Caption:
 > Turning hidden investment signals into user-reviewable structure
 
 Relevant files:
-- [suggestion-analyzer.js](/home/addavner/shekelsync/app/server/services/investments/suggestion-analyzer.js)
-- [auto-linker.js](/home/addavner/shekelsync/app/server/services/investments/auto-linker.js)
+- [suggestion-analyzer.js](app/server/services/investments/suggestion-analyzer.js)
+- [auto-linker.js](app/server/services/investments/auto-linker.js)
 
 ### 11. Rule-based categorization that improves over time
 
@@ -555,7 +555,7 @@ Caption:
 > Explainable categorization beats mysterious automation
 
 Relevant file:
-- [categorize-transaction.js](/home/addavner/shekelsync/app/server/services/categorization/categorize-transaction.js)
+- [categorize-transaction.js](app/server/services/categorization/categorize-transaction.js)
 
 ### 12. User-owned financial data export
 
@@ -598,4 +598,4 @@ Caption:
 > Data ownership means export has to be boring and reliable
 
 Relevant file:
-- [export.js](/home/addavner/shekelsync/app/server/services/data/export.js)
+- [export.js](app/server/services/data/export.js)

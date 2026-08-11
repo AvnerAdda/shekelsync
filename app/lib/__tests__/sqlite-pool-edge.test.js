@@ -20,6 +20,7 @@ describe('sqlite-pool edge cases', () => {
           };
         }
         pragma() {}
+        exec() {}
       },
       databasePath: 'dist/shekelsync.sqlite',
     });
@@ -41,6 +42,7 @@ describe('sqlite-pool edge cases', () => {
           return prepareMock(sql);
         }
         pragma() {}
+        exec() {}
       },
       databasePath: 'dist/shekelsync.sqlite',
     });

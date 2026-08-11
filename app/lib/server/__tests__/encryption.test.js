@@ -21,9 +21,10 @@ describe('server encryption helpers', () => {
     delete require.cache[encryptionPath];
   });
 
-  it('falls back to dev key when allowed', () => {
+  it('falls back to dev key when allowed in development', () => {
     process.env.SHEKELSYNC_ENCRYPTION_KEY = '';
     process.env.ALLOW_DEV_NO_ENCRYPTION = 'true';
+    process.env.NODE_ENV = 'development';
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const { encrypt, decrypt } = reloadEncryption();
@@ -31,6 +32,15 @@ describe('server encryption helpers', () => {
     expect(typeof cipher).toBe('string');
     expect(decrypt(cipher)).toBe('hello-dev');
     expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it('refuses the all-zero dev key outside development', () => {
+    process.env.SHEKELSYNC_ENCRYPTION_KEY = '';
+    process.env.ALLOW_DEV_NO_ENCRYPTION = 'true';
+    process.env.NODE_ENV = 'production';
+
+    const { encrypt } = reloadEncryption();
+    expect(() => encrypt('should-not-encrypt')).toThrow(/only permitted when NODE_ENV=development/);
   });
 
   it('throws for invalid key length', () => {
@@ -52,6 +62,7 @@ describe('server encryption helpers', () => {
 
   it('handles nulls and non-strings gracefully', () => {
     process.env.ALLOW_DEV_NO_ENCRYPTION = 'true';
+    process.env.NODE_ENV = 'development';
     const { encrypt, decrypt } = reloadEncryption();
 
     expect(decrypt(null)).toBeNull();

@@ -341,6 +341,7 @@ class DatabaseManager {
         this.sqlitePath = dbPath;
         this.sqliteDb.pragma('foreign_keys = ON');
         this.sqliteDb.pragma('journal_mode = WAL');
+        this.sqliteDb.pragma('busy_timeout = 5000');
 
         // Simple sanity check
         this.sqliteDb.prepare('SELECT 1').get();

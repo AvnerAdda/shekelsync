@@ -4,7 +4,7 @@ Follow-up: a newer audit on 2026-06-25 found that the current SQLite database no
 
 ## Summary
 
-- Source of truth: `/home/addavner/shekelsync/dist/shekelsync.sqlite`
+- Source of truth: the local `dist/shekelsync.sqlite`
 - Assumed UI context: the currently running dev Electron app, showing the March 2026 current-month window
 - Dashboard summary logic source: `app/server/services/analytics/dashboard.js`
 - Current Month card formula source: `renderer/src/features/dashboard/components/summary-cards-helpers.ts`

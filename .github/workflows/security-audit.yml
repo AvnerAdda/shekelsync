@@ -10,7 +10,6 @@ on:
 jobs:
   security-tests:
     name: Security Tests
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
     runs-on: ubuntu-latest
 
     strategy:
@@ -52,7 +51,6 @@ jobs:
 
   dependency-audit:
     name: Dependency Security Audit
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -95,7 +93,6 @@ jobs:
 
   security-linting:
     name: Security Linting
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -174,7 +171,6 @@ jobs:
 
   security-headers-check:
     name: Security Headers Check
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -213,7 +209,6 @@ jobs:
 
   authentication-check:
     name: Authentication Implementation Check
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -262,7 +257,6 @@ jobs:
 
   encryption-check:
     name: Encryption Implementation Check
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -311,7 +305,6 @@ jobs:
 
   input-validation-check:
     name: Input Validation Check
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -357,7 +350,6 @@ jobs:
 
   error-sanitization-check:
     name: Error Sanitization Check
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -404,7 +396,6 @@ jobs:
 
   security-report:
     name: Generate Security Report
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
     runs-on: ubuntu-latest
     needs: [
       security-tests,

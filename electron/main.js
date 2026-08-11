@@ -54,12 +54,18 @@ const {
   normalizeTelegramSettings,
 } = require('./telegram-bot');
 const { enforceSingleInstance } = require('./single-instance');
+const { isSafeExternalUrl } = require('./safe-external-url');
 const { createAppLifecycleController } = require('./app-lifecycle');
 const isPackaged = app.isPackaged;
 const isDev = process.env.NODE_ENV === 'development' || !isPackaged;
 const isMac = process.platform === 'darwin';
 const isLinux = process.platform === 'linux';
-const allowUnsafeIpc = process.env.ALLOW_UNSAFE_IPC === 'true';
+// Raw-SQL IPC is a development-only escape hatch. Hard-disable it in packaged
+// builds so a compromised renderer can never reach it, regardless of env vars.
+const allowUnsafeIpc = !isPackaged && process.env.ALLOW_UNSAFE_IPC === 'true';
+if (isPackaged && process.env.ALLOW_UNSAFE_IPC === 'true') {
+  console.warn('[security] ALLOW_UNSAFE_IPC is ignored in packaged builds.');
+}
 const allowInsecureEnvKey = process.env.ALLOW_INSECURE_ENV_KEY === 'true';
 const reduceVisualEffectsEnv = (process.env.SHEKELSYNC_REDUCE_VISUAL_EFFECTS || '').trim().toLowerCase();
 const keytarDisabledByEnv =
@@ -1689,9 +1695,14 @@ async function createWindow() {
     mainWindow = null;
   });
 
-  // Handle external links
+  // Handle external links. Only web/mailto URLs may leave the app; other
+  // protocols could launch arbitrary local handlers from a hijacked renderer.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (isSafeExternalUrl(url)) {
+      shell.openExternal(url);
+    } else {
+      console.warn('[security] Blocked openExternal for untrusted URL protocol:', url);
+    }
     return { action: 'deny' };
   });
 
@@ -1869,7 +1880,11 @@ app.on('before-quit', appLifecycle.handleBeforeQuit);
 app.on('web-contents-created', (event, contents) => {
   contents.on('new-window', (event, navigationUrl) => {
     event.preventDefault();
-    shell.openExternal(navigationUrl);
+    if (isSafeExternalUrl(navigationUrl)) {
+      shell.openExternal(navigationUrl);
+    } else {
+      console.warn('[security] Blocked openExternal for untrusted URL protocol:', navigationUrl);
+    }
   });
 });
 
