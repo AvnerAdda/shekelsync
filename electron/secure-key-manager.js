@@ -63,6 +63,13 @@ const KEY_SIZE_BYTES = 32; // 256 bits for AES-256
 const LEGACY_SAFE_STORAGE_FILENAME = '.encryption-key.enc';
 
 function getKeyScope() {
+  // Explicit operator override. Lets an unpackaged/dev run adopt the
+  // 'production' key scope so it shares the installed app's real credential
+  // key instead of a separate, empty 'development' scope. Highest precedence.
+  const envScope = process.env.SHEKELSYNC_KEY_SCOPE;
+  if (['production', 'development'].includes(envScope)) {
+    return envScope;
+  }
   if (['production', 'development'].includes(globalThis.__SHEKELSYNC_KEY_SCOPE__)) {
     return globalThis.__SHEKELSYNC_KEY_SCOPE__;
   }
@@ -693,3 +700,5 @@ class SecureKeyManager {
 
 // Export singleton instance
 module.exports = new SecureKeyManager();
+// Exposed for tests and callers that need to resolve the active key scope.
+module.exports.getKeyScope = getKeyScope;
