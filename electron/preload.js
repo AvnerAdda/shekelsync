@@ -12,7 +12,11 @@ const sendLog = (level, message, data) => {
   }
 };
 
-const allowUnsafeIpc = process.env.ALLOW_UNSAFE_IPC === 'true';
+// Only expose the raw-SQL bridge in genuine development. Packaged builds do
+// not set NODE_ENV=development, so this stays false in production even if the
+// env var leaks in. The main-process handler is gated independently.
+const allowUnsafeIpc =
+  process.env.NODE_ENV === 'development' && process.env.ALLOW_UNSAFE_IPC === 'true';
 const reduceVisualEffectsEnv = (process.env.SHEKELSYNC_REDUCE_VISUAL_EFFECTS || '').trim().toLowerCase();
 
 function shouldReduceVisualEffects() {

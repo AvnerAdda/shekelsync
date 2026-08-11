@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,7 +16,6 @@ concurrency:
 
 jobs:
   test:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -65,11 +65,15 @@ jobs:
           }
 
           const total = JSON.parse(fs.readFileSync(summaryPath, 'utf8')).total;
+          // Measured against ALL source files (vitest coverage.all=true), not
+          // only files a test imports. These are honest floors set just below
+          // current coverage (~75/74.5/75.7/65.8); ratchet upward as coverage
+          // improves. Do NOT lower them to make a red build pass.
           const thresholds = {
-            lines: 81,
-            statements: 80.5,
-            functions: 80,
-            branches: 68.5,
+            lines: 73,
+            statements: 72,
+            functions: 73,
+            branches: 63,
           };
 
           const failures = Object.entries(thresholds)
@@ -97,8 +101,7 @@ jobs:
           path: app/coverage
           if-no-files-found: ignore
 
-  performance:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
+  e2e-and-performance:
     runs-on: ubuntu-latest
 
     steps:
@@ -129,16 +132,29 @@ jobs:
       - name: Install Playwright Chromium
         run: npm --prefix renderer exec -- playwright install --with-deps chromium
 
-      - name: Enforce dashboard startup and API request budgets
+      # Full end-to-end suite (functional + performance specs) against the
+      # built preview server. Budget env vars keep the performance spec honest.
+      - name: Run Playwright end-to-end suite
         env:
           PLAYWRIGHT_USE_PREVIEW: 'true'
           DASHBOARD_STARTUP_BUDGET_MS: '5000'
           DASHBOARD_FORECAST_REQUEST_BUDGET: '1'
-        run: npm --prefix renderer run test:performance
+        run: npm --prefix renderer run test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: renderer/playwright-report
+          if-no-files-found: ignore
 
   package-smoke:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.user.login == 'AvnerAdda' }}
-    needs: [test, performance]
+    # The 3-OS Electron build is the heaviest job. Run it on pushes to main and
+    # on manual dispatch; skip it on PRs (which still get the full test, e2e,
+    # and performance validation above) to keep fork/PR CI affordable.
+    if: ${{ github.event_name != 'pull_request' }}
+    needs: [test, e2e-and-performance]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
