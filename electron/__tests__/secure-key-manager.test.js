@@ -82,6 +82,7 @@ describe('SecureKeyManager', () => {
     delete process.env.SHEKELSYNC_ENCRYPTION_KEY;
     delete process.env.KEYTAR_DISABLE;
     delete process.env.ALLOW_INSECURE_ENV_KEY;
+    delete process.env.SHEKELSYNC_KEY_SCOPE;
     globalThis.__SHEKELSYNC_CREDENTIAL_KEY_VALIDATOR__ = vi.fn(() => ({ status: 'fresh' }));
     delete globalThis.__SHEKELSYNC_KEY_SCOPE__;
     delete globalThis.__SHEKELSYNC_SAFE_STORAGE__;
@@ -106,6 +107,7 @@ describe('SecureKeyManager', () => {
     delete globalThis.__SHEKELSYNC_CREDENTIAL_KEY_VALIDATOR__;
     delete globalThis.__SHEKELSYNC_KEY_SCOPE__;
     delete globalThis.__SHEKELSYNC_SAFE_STORAGE__;
+    delete process.env.SHEKELSYNC_KEY_SCOPE;
   });
 
   describe('Key Generation', () => {
@@ -364,6 +366,35 @@ describe('SecureKeyManager', () => {
         'master-encryption-key',
         expect.anything(),
       );
+    });
+
+    test('SHEKELSYNC_KEY_SCOPE=production overrides the unpackaged development scope', async () => {
+      // Unpackaged Electron would normally resolve to the development scope; the
+      // env override pins it to production so a dev run shares the installed
+      // app's real credential key.
+      mockApp.isPackaged = false;
+      process.env.SHEKELSYNC_KEY_SCOPE = 'production';
+      const scopedKey = crypto.randomBytes(32).toString('hex');
+      mockKeytar.getPassword.mockImplementation(async (_service, account) =>
+        account === 'master-encryption-key:production' ? scopedKey : null);
+
+      const key = await secureKeyManager.getKey({
+        validateCandidate: (candidate) => ({
+          status: candidate === scopedKey ? 'match' : 'mismatch',
+        }),
+      });
+
+      expect(key).toBe(scopedKey);
+      expect(secureKeyManager.getKeyScope()).toBe('production');
+    });
+
+    test('getKeyScope prefers the env override over the global test hook', () => {
+      globalThis.__SHEKELSYNC_KEY_SCOPE__ = 'development';
+      process.env.SHEKELSYNC_KEY_SCOPE = 'production';
+      expect(secureKeyManager.getKeyScope()).toBe('production');
+
+      process.env.SHEKELSYNC_KEY_SCOPE = 'bogus';
+      expect(secureKeyManager.getKeyScope()).toBe('development');
     });
 
     test('migrates a legacy key only after it authenticates all credential data', async () => {
