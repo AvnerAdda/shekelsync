@@ -88,6 +88,44 @@ describe('investment accounts service', () => {
       expect(result.accounts[0].institution).toMatchObject({ vendor_code: 'brokerage' });
     });
 
+    it('preserves a custom institution name when no registered institution or type fallback exists', async () => {
+      queryMock.mockImplementation(async (sql: string) => {
+        if (sql.includes('FROM investment_accounts ia')) {
+          return {
+            rows: [{
+              id: 13,
+              account_name: 'Independent Portfolio',
+              account_type: 'other',
+              institution: 'Independent Family Office',
+              institution_id: null,
+              investment_category: 'other',
+              is_liquid: false,
+              holdings_count: '0',
+              total_invested: null,
+            }],
+          };
+        }
+        if (isStandardSnapshotQuery(sql) || isActivePikadonSnapshotQuery(sql)) {
+          return { rows: [] };
+        }
+        if (sql.includes('FROM institution_nodes')) {
+          return { rows: [] };
+        }
+        if (sql.includes('FROM transaction_account_links tal')) {
+          return { rows: [] };
+        }
+        throw new Error(`Unexpected query in custom institution list test: ${sql.slice(0, 120)}`);
+      });
+
+      const result = await accountsService.listAccounts();
+
+      expect(result.accounts[0]).toMatchObject({
+        account_type: 'other',
+        institution_id: null,
+        institution: 'Independent Family Office',
+      });
+    });
+
     it('supports includeInactive and category filters and preserves explicit value', async () => {
       queryMock
         .mockResolvedValueOnce({
@@ -437,19 +475,63 @@ describe('investment accounts service', () => {
           institution_id: 1,
         }),
       ).rejects.toMatchObject({ status: 400 });
-    });
-
-    it('fails when institution cannot be resolved', async () => {
-      queryMock.mockResolvedValue({ rows: [] });
 
       await expect(
         accountsService.createAccount({
-          account_name: 'No Institution',
-          account_type: 'insurance',
+          account_name: 'Bad currency',
+          account_type: 'brokerage',
+          institution_id: 1,
+          currency: 'US',
         }),
-      ).rejects.toMatchObject({
-        status: 400,
-        message: expect.stringContaining('institution_id is required'),
+      ).rejects.toMatchObject({ status: 400 });
+    });
+
+    it('creates a custom account when institution cannot be resolved', async () => {
+      queryMock.mockImplementation(async (sql: string) => {
+        if (sql.includes('FROM institution_nodes')) {
+          return { rows: [] };
+        }
+        if (sql.includes('INSERT INTO investment_accounts')) {
+          return { rows: [{ id: 73 }] };
+        }
+        if (sql.includes('FROM investment_accounts ia') && sql.includes('WHERE ia.id = $1')) {
+          return {
+            rows: [{
+              id: 73,
+              account_name: 'Independent Portfolio',
+              account_type: 'other',
+              institution: 'Independent Family Office',
+              institution_id: null,
+            }],
+          };
+        }
+        throw new Error(`Unexpected query in custom account create test: ${sql.slice(0, 120)}`);
+      });
+
+      const result = await accountsService.createAccount({
+        account_name: 'Independent Portfolio',
+        account_type: 'other',
+        institution: 'Independent Family Office',
+      });
+
+      const insertCall = queryMock.mock.calls.find(([sql]) =>
+        String(sql).includes('INSERT INTO investment_accounts'),
+      );
+      expect(insertCall?.[1]).toEqual([
+        'Independent Portfolio',
+        'other',
+        'Independent Family Office',
+        null,
+        'ILS',
+        null,
+        false,
+        'other',
+        null,
+      ]);
+      expect(result.account).toMatchObject({
+        account_type: 'other',
+        institution_id: null,
+        institution: 'Independent Family Office',
       });
     });
 
@@ -488,6 +570,7 @@ describe('investment accounts service', () => {
       const insertParams = insertCall![1];
       expect(insertParams[0]).toBe('Brokerage');
       expect(insertParams[1]).toBe('brokerage');
+      expect(insertParams[4]).toBe('ILS');
       expect(insertParams[6]).toBe(true);
       expect(insertParams[7]).toBe('liquid');
       expect(insertParams[8]).toBe(99);
@@ -562,12 +645,47 @@ describe('investment accounts service', () => {
       ).rejects.toMatchObject({ status: 400 });
 
       await expect(
-        accountsService.updateAccount({ id: 1, institution_id: null }),
+        accountsService.updateAccount({ id: 1, currency: 'dollar' }),
       ).rejects.toMatchObject({ status: 400 });
     });
 
     it('rejects empty updates', async () => {
       await expect(accountsService.updateAccount({ id: 77 })).rejects.toMatchObject({ status: 400 });
+    });
+
+    it('allows a registered institution link to be cleared for a custom account', async () => {
+      queryMock.mockImplementation(async (sql: string) => {
+        if (sql.includes('UPDATE investment_accounts')) {
+          return { rows: [{ id: 58 }] };
+        }
+        if (sql.includes('FROM investment_accounts ia')) {
+          return {
+            rows: [{
+              id: 58,
+              account_name: 'Independent Portfolio',
+              account_type: 'other',
+              institution: 'Independent Family Office',
+              institution_id: null,
+            }],
+          };
+        }
+        if (sql.includes('FROM institution_nodes')) {
+          return { rows: [] };
+        }
+        throw new Error(`Unexpected query in custom account update test: ${sql.slice(0, 120)}`);
+      });
+
+      const result = await accountsService.updateAccount({ id: 58, institution_id: null });
+
+      const updateCall = queryMock.mock.calls.find(([sql]) =>
+        String(sql).includes('UPDATE investment_accounts'),
+      );
+      expect(updateCall?.[1]).toEqual([null, 58]);
+      expect(result.account).toMatchObject({
+        account_type: 'other',
+        institution_id: null,
+        institution: 'Independent Family Office',
+      });
     });
 
     it('updates account_type metadata and normalizes boolean is_active', async () => {
@@ -624,7 +742,7 @@ describe('investment accounts service', () => {
         institution: 'My Bank',
         institution_id: 9,
         account_number: '1234',
-        currency: 'USD',
+        currency: 'usd',
         is_active: 'true',
         notes: 'updated notes',
       });

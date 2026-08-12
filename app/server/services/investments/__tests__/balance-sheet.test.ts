@@ -232,6 +232,211 @@ describe('investment balance sheet service', () => {
     expect(result.netWorthStatus).toBe('partial');
   });
 
+  it('keeps native valuation coverage separate from a missing FX rate', async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM investment_accounts ia')) {
+        return {
+          rows: [
+            {
+              id: 12,
+              account_name: 'US Brokerage',
+              account_type: 'brokerage',
+              investment_category: 'liquid',
+              currency: 'USD',
+              current_value: '100',
+              as_of_date: '2026-02-06',
+            },
+            {
+              id: 14,
+              account_name: 'ILS Brokerage',
+              account_type: 'brokerage',
+              investment_category: 'liquid',
+              currency: 'ILS',
+              current_value: '50',
+              as_of_date: '2026-02-06',
+            },
+          ],
+        };
+      }
+      if (sql.includes('SELECT DISTINCT credit_card_vendor as vendor')) return { rows: [] };
+      if (sql.includes('SELECT base_currency FROM investment_fx_preferences')) {
+        return { rows: [{ base_currency: 'ILS' }] };
+      }
+      if (sql.includes('FROM investment_fx_rates') && sql.includes('rate_date <= $3')) {
+        return { rows: [] };
+      }
+      return { rows: [] };
+    });
+
+    const result = await getInvestmentBalanceSheet({
+      includeAccounts: 'true',
+      normalizeCurrencies: 'true',
+    });
+
+    expect(result.assets.total).toBeNull();
+    expect(result.assets.convertedSubtotal).toBe(50);
+    expect(result.assets.nativeTotals).toEqual([
+      { currency: 'ILS', total: 50, count: 1 },
+      { currency: 'USD', total: 100, count: 1 },
+    ]);
+    expect(result.assets.buckets.liquid).toMatchObject({
+      totalValue: null,
+      convertedSubtotal: 50,
+      fxComplete: false,
+      accountsCount: 2,
+      accountsWithValue: 2,
+      missingValueCount: 0,
+      missingFxCount: 1,
+    });
+    expect(result.assets.buckets.liquid.accounts[0]).toMatchObject({
+      nativeCurrentValue: 100,
+      currentValue: null,
+    });
+    expect(result.missingValuationsCount).toBe(0);
+    expect(result.fx).toMatchObject({
+      complete: false,
+      missingCount: 1,
+      convertedSubtotal: 50,
+      assets: {
+        complete: false,
+        missingCount: 1,
+        convertedSubtotal: 50,
+        nativeTotals: [
+          { currency: 'ILS', total: 50, count: 1 },
+          { currency: 'USD', total: 100, count: 1 },
+        ],
+      },
+    });
+    expect(result.netWorth).toBeNull();
+  });
+
+  it('preserves genuine zero totals when normalized FX coverage is complete', async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM investment_accounts ia')) {
+        return {
+          rows: [{
+            id: 13,
+            account_name: 'Empty ILS Brokerage',
+            account_type: 'brokerage',
+            investment_category: 'liquid',
+            currency: 'ILS',
+            current_value: '0',
+            as_of_date: '2026-02-06',
+          }],
+        };
+      }
+      if (sql.includes('SELECT DISTINCT credit_card_vendor as vendor')) {
+        return { rows: [{ vendor: 'max' }] };
+      }
+      if (sql.includes('SELECT MAX(t.date) as last_date')) {
+        return { rows: [{ last_date: '2026-02-05' }] };
+      }
+      if (sql.includes('SELECT COALESCE(SUM(ABS(price)), 0) as pending_debt')) {
+        return { rows: [{ pending_debt: '0' }] };
+      }
+      if (sql.includes('SELECT base_currency FROM investment_fx_preferences')) {
+        return { rows: [{ base_currency: 'ILS' }] };
+      }
+      return { rows: [] };
+    });
+
+    const result = await getInvestmentBalanceSheet({
+      includeAccounts: 'true',
+      normalizeCurrencies: 'true',
+    });
+
+    expect(result.assets).toMatchObject({
+      total: 0,
+      convertedSubtotal: 0,
+    });
+    expect(result.assets.buckets.liquid).toMatchObject({
+      totalValue: 0,
+      convertedSubtotal: 0,
+      fxComplete: true,
+      missingFxCount: 0,
+    });
+    expect(result.liabilities).toMatchObject({
+      total: 0,
+      convertedSubtotal: 0,
+    });
+    expect(result.netWorth).toBe(0);
+    expect(result.netWorthStatus).toBe('ok');
+    expect(result.fx).toMatchObject({ complete: true, missingCount: 0 });
+  });
+
+  it('marks liability totals unavailable when a manual liability lacks FX', async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM investment_accounts ia')) {
+        return {
+          rows: [{
+            id: 15,
+            account_name: 'ILS Brokerage',
+            account_type: 'brokerage',
+            investment_category: 'liquid',
+            currency: 'ILS',
+            current_value: '100',
+            as_of_date: '2026-02-06',
+          }],
+        };
+      }
+      if (sql.includes('FROM investment_liabilities')) {
+        return {
+          rows: [{
+            id: '5',
+            liability_name: 'USD Loan',
+            liability_type: 'loan',
+            balance: '40',
+            currency: 'USD',
+            as_of_date: '2026-02-06',
+            included_in_net_worth: 1,
+            is_active: 1,
+          }],
+        };
+      }
+      if (sql.includes('SELECT DISTINCT credit_card_vendor as vendor')) {
+        return { rows: [{ vendor: 'max' }] };
+      }
+      if (sql.includes('SELECT MAX(t.date) as last_date')) {
+        return { rows: [{ last_date: '2026-02-05' }] };
+      }
+      if (sql.includes('SELECT COALESCE(SUM(ABS(price)), 0) as pending_debt')) {
+        return { rows: [{ pending_debt: '0' }] };
+      }
+      if (sql.includes('SELECT base_currency FROM investment_fx_preferences')) {
+        return { rows: [{ base_currency: 'ILS' }] };
+      }
+      if (sql.includes('FROM investment_fx_rates') && sql.includes('rate_date <= $3')) {
+        return { rows: [] };
+      }
+      return { rows: [] };
+    });
+
+    const result = await getInvestmentBalanceSheet({
+      includeLiabilities: 'true',
+      normalizeCurrencies: 'true',
+    });
+
+    expect(result.assets.total).toBe(100);
+    expect(result.liabilities).toMatchObject({
+      manualTotal: null,
+      total: null,
+      convertedSubtotal: 0,
+      nativeTotals: [{ currency: 'USD', total: 40, count: 1 }],
+    });
+    expect(result.fx).toMatchObject({
+      complete: false,
+      missingCount: 1,
+      liabilities: {
+        complete: false,
+        missingCount: 1,
+        convertedSubtotal: 0,
+        nativeTotals: [{ currency: 'USD', total: 40, count: 1 }],
+      },
+    });
+    expect(result.netWorth).toBeNull();
+    expect(result.netWorthStatus).toBe('partial');
+  });
+
   it('reduces cash totals when an active Pikadon overlaps a bank balance account', async () => {
     queryMock.mockImplementation(async (sql: string) => {
       if (sql.includes('FROM investment_accounts ia')) {

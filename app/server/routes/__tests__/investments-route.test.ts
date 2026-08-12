@@ -63,13 +63,42 @@ const routeServices = {
   },
   positionsService: {
     listPositions: vi.fn(),
+    createPosition: vi.fn(),
+    updatePosition: vi.fn(),
+    deactivatePosition: vi.fn(),
+    listPositionEvents: vi.fn(),
     createPositionEvent: vi.fn(),
+  },
+  allocationTargetsService: {
+    listTargets: vi.fn(),
+    replaceTargets: vi.fn(),
+    clearTargets: vi.fn(),
+  },
+  liabilitiesService: {
+    listLiabilities: vi.fn(),
+    createLiability: vi.fn(),
+    updateLiability: vi.fn(),
+    deactivateLiability: vi.fn(),
+  },
+  fxService: {
+    getBaseCurrency: vi.fn(),
+    listRates: vi.fn(),
+    setBaseCurrency: vi.fn(),
+    upsertRate: vi.fn(),
+    syncBoiRates: vi.fn(),
+  },
+  benchmarksService: {
+    listBenchmarks: vi.fn(),
+    getBenchmarkComparison: vi.fn(),
+    importBenchmark: vi.fn(),
+    removeBenchmark: vi.fn(),
   },
   bankSummaryService: {
     getBankBalanceSummary: vi.fn(),
   },
   suggestionAnalyzerCJS: {
     analyzeInvestmentTransactions: vi.fn(),
+    countUnlinkedInvestmentTransactions: vi.fn(),
   },
   databaseService: {
     query: vi.fn(),
@@ -123,6 +152,10 @@ const holdingsService = routeServices.holdingsService;
 const summaryService = routeServices.summaryService;
 const balanceSheetService = routeServices.balanceSheetService;
 const positionsService = routeServices.positionsService;
+const allocationTargetsService = routeServices.allocationTargetsService;
+const liabilitiesService = routeServices.liabilitiesService;
+const fxService = routeServices.fxService;
+const benchmarksService = routeServices.benchmarksService;
 const bankSummaryService = routeServices.bankSummaryService;
 const suggestionAnalyzerCJS = routeServices.suggestionAnalyzerCJS;
 const database = routeServices.databaseService;
@@ -323,6 +356,22 @@ describe('Shared /api/investments routes', () => {
     expect(performance.body).toEqual({ valueChange: 200, marketMove: 150 });
   });
 
+  it('returns lightweight investment coverage counts', async () => {
+    vi.spyOn(suggestionAnalyzerCJS, 'countUnlinkedInvestmentTransactions').mockResolvedValue({
+      count: 4,
+      thresholdDays: 120,
+    });
+
+    const response = await request(app)
+      .get('/api/investments/coverage?thresholdDays=120')
+      .expect(200);
+
+    expect(response.body).toEqual({
+      unlinkedTransactions: { count: 4, thresholdDays: 120 },
+    });
+    expect(suggestionAnalyzerCJS.countUnlinkedInvestmentTransactions).toHaveBeenCalledWith('120');
+  });
+
   it('lists positions and records lifecycle events', async () => {
     vi.spyOn(positionsService, 'listPositions').mockResolvedValue({
       positions: [{ id: 1 }],
@@ -348,6 +397,240 @@ describe('Shared /api/investments routes', () => {
       })
       .expect(201);
     expect(event.body.event.id).toBe(10);
+  });
+
+  it('forwards position create, update, close, and event-list contracts', async () => {
+    const createdPosition = { position: { id: 7, symbol: 'VT' } };
+    const updatedPosition = { position: { id: 7, units: 12 } };
+    const closedPosition = { position: { id: 7, status: 'closed' } };
+    const listedEvents = { events: [{ id: 11, position_id: 7, event_type: 'buy' }] };
+
+    vi.spyOn(positionsService, 'createPosition').mockResolvedValue(createdPosition);
+    vi.spyOn(positionsService, 'updatePosition').mockResolvedValue(updatedPosition);
+    vi.spyOn(positionsService, 'deactivatePosition').mockResolvedValue(closedPosition);
+    vi.spyOn(positionsService, 'listPositionEvents').mockResolvedValue(listedEvents);
+
+    const createPayload = {
+      account_id: 3,
+      position_name: 'Global equity ETF',
+      symbol: 'VT',
+      units: 10,
+      average_cost: 100,
+    };
+    const created = await request(app)
+      .post('/api/investments/positions')
+      .send(createPayload)
+      .expect(201);
+    expect(created.body).toEqual(createdPosition);
+    expect(positionsService.createPosition).toHaveBeenCalledWith(createPayload);
+
+    const updatePayload = { id: 7, units: 12, current_price: 105 };
+    const updated = await request(app)
+      .put('/api/investments/positions')
+      .send(updatePayload)
+      .expect(200);
+    expect(updated.body).toEqual(updatedPosition);
+    expect(positionsService.updatePosition).toHaveBeenCalledWith(updatePayload);
+
+    const closed = await request(app)
+      .delete('/api/investments/positions?id=7&effective_date=2026-08-12')
+      .expect(200);
+    expect(closed.body).toEqual(closedPosition);
+    expect(positionsService.deactivatePosition).toHaveBeenCalledWith({
+      id: '7',
+      effective_date: '2026-08-12',
+    });
+
+    const events = await request(app)
+      .get('/api/investments/position-events?position_id=7&event_type=buy')
+      .expect(200);
+    expect(events.body).toEqual(listedEvents);
+    expect(positionsService.listPositionEvents).toHaveBeenCalledWith({
+      position_id: '7',
+      event_type: 'buy',
+    });
+  });
+
+  it('forwards allocation-target list, replace, and clear contracts', async () => {
+    const listedTargets = { targets: [{ asset_class: 'equity', target_percentage: 70 }] };
+    const replacedTargets = { targets: [{ asset_class: 'equity', target_percentage: 80 }] };
+    const clearedTargets = { deleted: 1 };
+
+    vi.spyOn(allocationTargetsService, 'listTargets').mockResolvedValue(listedTargets);
+    vi.spyOn(allocationTargetsService, 'replaceTargets').mockResolvedValue(replacedTargets);
+    vi.spyOn(allocationTargetsService, 'clearTargets').mockResolvedValue(clearedTargets);
+
+    const listed = await request(app)
+      .get('/api/investments/allocation-targets?account_id=3')
+      .expect(200);
+    expect(listed.body).toEqual(listedTargets);
+    expect(allocationTargetsService.listTargets).toHaveBeenCalledWith({ account_id: '3' });
+
+    const replacePayload = {
+      account_id: 3,
+      targets: [
+        { asset_class: 'equity', target_percentage: 80 },
+        { asset_class: 'cash', target_percentage: 20 },
+      ],
+    };
+    const replaced = await request(app)
+      .put('/api/investments/allocation-targets')
+      .send(replacePayload)
+      .expect(200);
+    expect(replaced.body).toEqual(replacedTargets);
+    expect(allocationTargetsService.replaceTargets).toHaveBeenCalledWith(replacePayload);
+
+    const cleared = await request(app)
+      .delete('/api/investments/allocation-targets?account_id=3')
+      .expect(200);
+    expect(cleared.body).toEqual(clearedTargets);
+    expect(allocationTargetsService.clearTargets).toHaveBeenCalledWith({ account_id: '3' });
+  });
+
+  it('forwards liability CRUD contracts', async () => {
+    const listedLiabilities = { liabilities: [{ id: 5, name: 'Margin loan' }] };
+    const createdLiability = { liability: { id: 5, name: 'Margin loan' } };
+    const updatedLiability = { liability: { id: 5, current_balance: 4500 } };
+    const closedLiability = { liability: { id: 5, is_active: 0 } };
+
+    vi.spyOn(liabilitiesService, 'listLiabilities').mockResolvedValue(listedLiabilities);
+    vi.spyOn(liabilitiesService, 'createLiability').mockResolvedValue(createdLiability);
+    vi.spyOn(liabilitiesService, 'updateLiability').mockResolvedValue(updatedLiability);
+    vi.spyOn(liabilitiesService, 'deactivateLiability').mockResolvedValue(closedLiability);
+
+    const listed = await request(app)
+      .get('/api/investments/liabilities?account_id=3&include_inactive=true')
+      .expect(200);
+    expect(listed.body).toEqual(listedLiabilities);
+    expect(liabilitiesService.listLiabilities).toHaveBeenCalledWith({
+      account_id: '3',
+      include_inactive: 'true',
+    });
+
+    const createPayload = {
+      account_id: 3,
+      name: 'Margin loan',
+      currency: 'USD',
+      current_balance: 5000,
+    };
+    const created = await request(app)
+      .post('/api/investments/liabilities')
+      .send(createPayload)
+      .expect(201);
+    expect(created.body).toEqual(createdLiability);
+    expect(liabilitiesService.createLiability).toHaveBeenCalledWith(createPayload);
+
+    const updatePayload = { id: 5, current_balance: 4500 };
+    const updated = await request(app)
+      .put('/api/investments/liabilities')
+      .send(updatePayload)
+      .expect(200);
+    expect(updated.body).toEqual(updatedLiability);
+    expect(liabilitiesService.updateLiability).toHaveBeenCalledWith(updatePayload);
+
+    const closed = await request(app)
+      .delete('/api/investments/liabilities?id=5')
+      .expect(200);
+    expect(closed.body).toEqual(closedLiability);
+    expect(liabilitiesService.deactivateLiability).toHaveBeenCalledWith({ id: '5' });
+  });
+
+  it('forwards FX list, base-currency, rate, and sync contracts', async () => {
+    const rates = [{ from_currency: 'USD', to_currency: 'ILS', rate: 3.75 }];
+    const savedRate = { from_currency: 'EUR', to_currency: 'ILS', rate: 4.1 };
+    const syncResult = { imported: 2, source: 'boi' };
+
+    vi.spyOn(fxService, 'getBaseCurrency').mockResolvedValue('ILS');
+    vi.spyOn(fxService, 'listRates').mockResolvedValue(rates);
+    vi.spyOn(fxService, 'setBaseCurrency').mockResolvedValue('USD');
+    vi.spyOn(fxService, 'upsertRate').mockResolvedValue(savedRate);
+    vi.spyOn(fxService, 'syncBoiRates').mockResolvedValue(syncResult);
+
+    const listed = await request(app)
+      .get('/api/investments/fx?as_of_date=2026-08-12')
+      .expect(200);
+    expect(listed.body).toEqual({ baseCurrency: 'ILS', rates });
+    expect(fxService.getBaseCurrency).toHaveBeenCalledWith();
+    expect(fxService.listRates).toHaveBeenCalledWith({ as_of_date: '2026-08-12' });
+
+    const base = await request(app)
+      .put('/api/investments/fx/base-currency')
+      .send({ base_currency: 'USD' })
+      .expect(200);
+    expect(base.body).toEqual({ baseCurrency: 'USD' });
+    expect(fxService.setBaseCurrency).toHaveBeenCalledWith('USD');
+
+    const ratePayload = {
+      from_currency: 'EUR',
+      to_currency: 'ILS',
+      rate: 4.1,
+      as_of_date: '2026-08-12',
+    };
+    const rate = await request(app)
+      .post('/api/investments/fx/rates')
+      .send(ratePayload)
+      .expect(201);
+    expect(rate.body).toEqual({ rate: savedRate });
+    expect(fxService.upsertRate).toHaveBeenCalledWith(ratePayload);
+
+    const syncPayload = { currencies: ['USD', 'EUR'], date: '2026-08-12' };
+    const synced = await request(app)
+      .post('/api/investments/fx/sync')
+      .send(syncPayload)
+      .expect(200);
+    expect(synced.body).toEqual(syncResult);
+    expect(fxService.syncBoiRates).toHaveBeenCalledWith(syncPayload);
+  });
+
+  it('forwards benchmark list, comparison, import, and delete contracts', async () => {
+    const listedBenchmarks = { benchmarks: [{ id: 4, symbol: 'SPY' }] };
+    const comparison = { benchmarkId: 4, portfolioReturn: 8, benchmarkReturn: 7 };
+    const imported = { benchmark: { id: 4, symbol: 'SPY' }, pointsImported: 3 };
+    const removed = { deleted: true, id: 4 };
+
+    vi.spyOn(benchmarksService, 'listBenchmarks').mockResolvedValue(listedBenchmarks);
+    vi.spyOn(benchmarksService, 'getBenchmarkComparison').mockResolvedValue(comparison);
+    vi.spyOn(benchmarksService, 'importBenchmark').mockResolvedValue(imported);
+    vi.spyOn(benchmarksService, 'removeBenchmark').mockResolvedValue(removed);
+
+    const listed = await request(app)
+      .get('/api/investments/benchmarks?include_points=true')
+      .expect(200);
+    expect(listed.body).toEqual(listedBenchmarks);
+    expect(benchmarksService.listBenchmarks).toHaveBeenCalledWith({ include_points: 'true' });
+
+    const compared = await request(app)
+      .get(
+        '/api/investments/benchmarks/comparison?start_date=2026-01-01&end_date=2026-08-12&benchmark_id=4&base_currency=ILS',
+      )
+      .expect(200);
+    expect(compared.body).toEqual(comparison);
+    expect(benchmarksService.getBenchmarkComparison).toHaveBeenCalledWith({
+      startDate: '2026-01-01',
+      endDate: '2026-08-12',
+      benchmarkId: '4',
+      baseCurrency: 'ILS',
+    });
+
+    const importPayload = {
+      symbol: 'SPY',
+      points: [
+        { date: '2026-08-11', close: 635 },
+        { date: '2026-08-12', close: 638 },
+      ],
+    };
+    const importedResponse = await request(app)
+      .post('/api/investments/benchmarks/import')
+      .send(importPayload)
+      .expect(201);
+    expect(importedResponse.body).toEqual(imported);
+    expect(benchmarksService.importBenchmark).toHaveBeenCalledWith(importPayload);
+
+    const deleted = await request(app)
+      .delete('/api/investments/benchmarks?id=4')
+      .expect(200);
+    expect(deleted.body).toEqual(removed);
+    expect(benchmarksService.removeBenchmark).toHaveBeenCalledWith({ id: '4' });
   });
 
   it('estimates, saves, fetches, and applies real estate simulator profiles', async () => {

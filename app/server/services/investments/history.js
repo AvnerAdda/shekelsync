@@ -14,6 +14,11 @@ const {
 const {
   toNumber,
 } = require('./account-holdings-rollup.js');
+const fxService = require('./fx.js');
+
+function coerceBoolean(value) {
+  return value === true || value === 1 || value === '1' || String(value || '').toLowerCase() === 'true';
+}
 
 // Helper to normalize date to UTC YYYY-MM-DD string
 const toDateStr = (date) => {
@@ -73,6 +78,7 @@ function forwardFillHistory(history, startDate = null, endDate = null) {
       filled.push({
         ...lastKnownPoint,
         date: dateKey,
+        isActualValuation: false,
       });
     }
     
@@ -140,6 +146,7 @@ function forwardFillAggregatedHistory(history, startDate = null, endDate = null)
         accountCount: lastKnownPoint.accountCount,
         accounts: lastKnownPoint.accounts,
         institution: lastKnownPoint.institution,
+        isActualValuation: false,
       });
     }
     
@@ -231,6 +238,7 @@ async function fetchHistoryRows({
       ih.status,
       ia.account_name,
       ia.account_type,
+      ia.currency,
       rt.date AS return_date,
       ${INSTITUTION_SELECT_FIELDS}
     FROM investment_holdings ih
@@ -282,6 +290,7 @@ async function fetchHistoryRows({
             ih.status,
             ia.account_name,
             ia.account_type,
+            ia.currency,
             rt.date AS return_date,
             ${INSTITUTION_SELECT_FIELDS},
             ROW_NUMBER() OVER (
@@ -306,6 +315,7 @@ async function fetchHistoryRows({
           status,
           account_name,
           account_type,
+          currency,
           return_date,
           institution_id,
           institution_vendor_code,
@@ -382,6 +392,8 @@ function buildHistoryPoint(point, accountMeta) {
     accountName: accountMeta.accountName,
     accountType: accountMeta.accountType,
     institution: accountMeta.institution,
+    currency: accountMeta.currency,
+    isActualValuation: true,
   };
 }
 
@@ -401,6 +413,7 @@ function buildAccountHistoryPoints(rows, institutionByVendorCode) {
     accountName: firstRow.account_name,
     accountType: firstRow.account_type,
     institution: institution || null,
+    currency: firstRow.currency || 'ILS',
   };
 
   const eventsByDate = new Map();
@@ -498,12 +511,14 @@ function aggregateAccountHistories(filledPerAccount) {
           currentValue: 0,
           costBasis: 0,
           accounts: [],
+          isActualValuation: true,
         });
       }
 
       const entry = aggregatedMap.get(dateKey);
       entry.currentValue += point.currentValue;
       entry.costBasis += point.costBasis;
+      entry.isActualValuation = entry.isActualValuation && point.isActualValuation === true;
       entry.accounts.push({
         account_id: point.accountId,
         account_name: point.accountName,
@@ -511,6 +526,7 @@ function aggregateAccountHistories(filledPerAccount) {
         current_value: point.currentValue,
         cost_basis: point.costBasis,
         institution: point.institution,
+        currency: point.currency,
       });
     });
   });
@@ -535,6 +551,7 @@ function formatAggregatedHistory(aggregatedMap) {
         accountCount: entry.accounts.length,
         accounts: entry.accounts,
         institution: null,
+        isActualValuation: entry.isActualValuation,
       };
     });
 }
@@ -545,6 +562,7 @@ async function getInvestmentHistory(params = {}) {
     includeAccounts === true ||
     includeAccounts === 'true' ||
     includeAccounts === '1';
+  const normalizeCurrencies = coerceBoolean(params.normalizeCurrencies);
   const startDate = calculateStartDate(timeRange);
   const startDateStr = startDate ? startDate.toISOString().split('T')[0] : null;
 
@@ -615,16 +633,78 @@ async function getInvestmentHistory(params = {}) {
   });
 
   // Forward-fill each account individually
-  const filledPerAccount = new Map();
+  let filledPerAccount = new Map();
   for (const [id, points] of accountHistories.entries()) {
-    const augmentedPoints = appendContributionHistory(
-      points,
-      linkedTransactionsByAccount.get(id) || [],
-      {
-        excludePikadonTransactions: true,
-      },
-    );
+    // Contribution roll-forward uses the linked bank transaction amount. That
+    // amount can be denominated differently from the investment account, so it
+    // cannot safely be added before FX normalization. Currency-normalized
+    // history therefore remains snapshot-based; performance converts the
+    // linked flows independently on their transaction dates.
+    const augmentedPoints = normalizeCurrencies
+      ? points
+      : appendContributionHistory(
+        points,
+        linkedTransactionsByAccount.get(id) || [],
+        {
+          excludePikadonTransactions: true,
+        },
+      );
     filledPerAccount.set(id, forwardFillHistory(augmentedPoints, startDate, today));
+  }
+
+  let fx = null;
+  if (normalizeCurrencies) {
+    const baseCurrency = await fxService.getBaseCurrency();
+    const rateCache = new Map();
+    const normalizedHistories = new Map();
+    const missing = [];
+
+    for (const [id, points] of filledPerAccount.entries()) {
+      const normalizedPoints = [];
+      for (const point of points) {
+        const currency = point.currency || 'ILS';
+        const cacheKey = `${currency}|${baseCurrency}|${point.date}`;
+        let rate = rateCache.get(cacheKey);
+        if (!rate) {
+          rate = await fxService.getRate({
+            fromCurrency: currency,
+            toCurrency: baseCurrency,
+            date: point.date,
+          });
+          rateCache.set(cacheKey, rate);
+        }
+        if (rate.rate === null || rate.status === 'missing' || rate.status === 'stale') {
+          missing.push({ accountId: id, date: point.date, currency, status: rate.status });
+          continue;
+        }
+        const currentValue = Number(point.currentValue) * rate.rate;
+        const costBasis = Number(point.costBasis) * rate.rate;
+        const gainLoss = currentValue - costBasis;
+        normalizedPoints.push({
+          ...point,
+          nativeCurrentValue: point.currentValue,
+          nativeCostBasis: point.costBasis,
+          nativeCurrency: currency,
+          currentValue,
+          costBasis,
+          gainLoss,
+          roi: costBasis > 0 ? (gainLoss / costBasis) * 100 : 0,
+          baseCurrency,
+          fxRate: rate.rate,
+          fxRateDate: rate.rateDate,
+          fxStatus: rate.status,
+        });
+      }
+      normalizedHistories.set(id, normalizedPoints);
+    }
+
+    fx = {
+      baseCurrency,
+      complete: missing.length === 0,
+      missingCount: missing.length,
+      missing,
+    };
+    filledPerAccount = missing.length === 0 ? normalizedHistories : new Map();
   }
 
   // If a single account is requested, return its filled history
@@ -636,6 +716,7 @@ async function getInvestmentHistory(params = {}) {
       startDate: startDateStr,
       dataPoints: accountHistory.length,
       history: accountHistory,
+      fx,
     };
   }
 
@@ -650,6 +731,7 @@ async function getInvestmentHistory(params = {}) {
     startDate: startDateStr,
     dataPoints: filledHistory.length,
     history: filledHistory,
+    fx,
   };
   if (includeAccountsFlag) {
     response.accounts = Array.from(filledPerAccount.entries())
@@ -666,9 +748,11 @@ module.exports = {
   getInvestmentHistory,
   __setDatabase(mockDatabase) {
     database = mockDatabase || actualDatabase;
+    fxService.__setDatabase(database);
   },
   __resetDatabase() {
     database = actualDatabase;
+    fxService.__resetDatabase();
   },
 };
 module.exports.default = module.exports;

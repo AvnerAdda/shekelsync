@@ -19,6 +19,7 @@ import CryptoIcon from '@mui/icons-material/CurrencyBitcoin';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import TrendingFlatIcon from '@mui/icons-material/TrendingFlat';
+import { getCurrencyDisplaySymbol } from '../utils/currency-format';
 
 interface InvestmentPerformanceCardProps {
   account: InvestmentAccountSummary;
@@ -51,13 +52,17 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
   const locale = i18n.language;
 
   const formatCurrencyValue = (value: number) =>
-    formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
+    formatCurrency(value, {
+      absolute: true,
+      maximumFractionDigits: 0,
+      currencySymbol: getCurrencyDisplaySymbol(account.base_currency || account.currency),
+    });
 
   // Calculate ROI
-  const roi = account.cost_basis > 0
+  const roi = account.current_value !== null && account.cost_basis !== null && account.cost_basis > 0
     ? ((account.current_value - account.cost_basis) / account.cost_basis) * 100
-    : 0;
-  const isPositive = roi >= 0;
+    : null;
+  const isPositive = roi === null || roi >= 0;
 
   // Prepare sparkline data - use last 30 points or all if less
   const sparklineData = (history || [])
@@ -153,7 +158,11 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
         <Typography variant="h6" sx={{
           fontWeight: 700
         }}>
-          {maskAmounts ? '***' : formatCurrencyValue(account.current_value)}
+          {maskAmounts
+            ? '***'
+            : account.current_value === null
+              ? t('na', 'N/A')
+              : formatCurrencyValue(account.current_value)}
         </Typography>
         {sparklineData.length > 1 && (
           <TrendIcon
@@ -180,7 +189,7 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
             py: 0.25,
             borderRadius: 1
           }}>
-          {isPositive ? '+' : ''}{roi.toFixed(1)}%
+          {roi === null ? t('na', 'N/A') : `${isPositive ? '+' : ''}${roi.toFixed(1)}%`}
         </Typography>
       </Box>
       {/* Period High/Low */}
@@ -210,7 +219,7 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
                 display: "block",
                 fontSize: '0.7rem'
               }}>
-              {maskAmounts ? '***' : `₪${(maxValue / 1000).toFixed(0)}k`}
+              {maskAmounts ? '***' : `${formatCurrencyValue(maxValue / 1000)}k`}
             </Typography>
           </Box>
           <Box sx={{ textAlign: 'right' }}>
@@ -229,7 +238,7 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
                 display: "block",
                 fontSize: '0.7rem'
               }}>
-              {maskAmounts ? '***' : `₪${(minValue / 1000).toFixed(0)}k`}
+              {maskAmounts ? '***' : `${formatCurrencyValue(minValue / 1000)}k`}
             </Typography>
           </Box>
         </Box>
@@ -268,6 +277,7 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
                       active={active}
                       items={items}
                       title={dataPoint.displayDate}
+                      currencySymbol={getCurrencyDisplaySymbol(account.base_currency || account.currency)}
                     />
                   );
                 }}

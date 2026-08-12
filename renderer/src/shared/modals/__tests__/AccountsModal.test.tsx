@@ -3,6 +3,7 @@ import { startOfMonth, subMonths } from 'date-fns';
 import {
   getBankingAccountValidationError,
   buildInitialSyncPayload,
+  extractCurrentInvestmentAssets,
   type Account,
 } from '@renderer/shared/modals/AccountsModal';
 import type { InstitutionMetadata } from '@renderer/shared/components/InstitutionBadge';
@@ -98,5 +99,15 @@ describe('buildInitialSyncPayload', () => {
       dbId: 42,
       fromSavedCredential: true,
     });
+  });
+});
+
+describe('extractCurrentInvestmentAssets', () => {
+  it('uses only the current asset inventory and does not depend on a history payload', () => {
+    const assets = [{ id: 1, symbol: 'VWRA', quantity: 2 }];
+
+    expect(extractCurrentInvestmentAssets({ assets })).toEqual(assets);
+    expect(extractCurrentInvestmentAssets({ assets, history: [{ id: 99 }] })).toEqual(assets);
+    expect(extractCurrentInvestmentAssets({ history: [{ id: 99 }] })).toEqual([]);
   });
 });
