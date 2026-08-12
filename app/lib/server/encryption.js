@@ -20,7 +20,17 @@ function ensureKeyBuffer() {
     return encryptionKeyBuffer;
   }
 
+  // The all-zero development key is a catastrophic downgrade and must never be
+  // reachable in a packaged/production build. It is honored only when the app
+  // is explicitly running in development (NODE_ENV=development), which the
+  // packaged embedded server never sets (it defaults NODE_ENV to 'production').
   if (process.env.ALLOW_DEV_NO_ENCRYPTION === 'true') {
+    if (process.env.NODE_ENV !== 'development') {
+      throw new Error(
+        'ALLOW_DEV_NO_ENCRYPTION is only permitted when NODE_ENV=development. ' +
+        'Refusing to use the insecure all-zero key in a production build.',
+      );
+    }
     console.warn('[encryption] Using insecure development key (ALLOW_DEV_NO_ENCRYPTION=true).');
     encryptionKeyBuffer = Buffer.from('0'.repeat(64), 'hex');
     return encryptionKeyBuffer;

@@ -12,6 +12,59 @@
 
 Personal finance tracker for Israeli banks and credit cards, built as an Electron desktop app with a local API and a Vite-powered renderer.
 
+Your data stays on your own machine: transactions are stored in a local SQLite
+database and bank credentials are encrypted with a key held in your OS keychain.
+See [`PRIVACY.md`](PRIVACY.md) for details on data handling.
+
+## Installing (for users)
+
+1. Download the latest build for your platform from the
+   [Releases page](https://github.com/AvnerAdda/shekelsync/releases):
+   - **macOS** — `.dmg` (universal: Intel + Apple Silicon)
+   - **Windows** — `.exe` installer
+   - **Linux** — `.AppImage`
+2. Install and launch it:
+   - **macOS** — open the `.dmg` and drag ShekelSync to Applications. If the
+     build is unsigned, the first launch may be blocked: open **System Settings →
+     Privacy & Security**, then click **Open Anyway** for ShekelSync. Unsigned
+     builds update manually (download the next release) rather than in-app.
+   - **Windows** — run the installer. If SmartScreen warns about an unknown
+     publisher, choose **More info → Run anyway**.
+   - **Linux** — mark the AppImage executable (`chmod +x ShekelSync*.AppImage`)
+     and run it. A working Secret Service/libsecret keychain is recommended so
+     credentials can be encrypted at rest.
+3. On first run, add a financial institution and enter your credentials to import
+   transactions. Credentials are encrypted locally and never leave your device
+   except to connect directly to that institution.
+
+See the [CHANGELOG](CHANGELOG.md) for what changed between releases.
+
+## Troubleshooting (for users)
+
+- **macOS says the app is "damaged" or from an unidentified developer** — this is
+  the unsigned-build gatekeeper prompt. Use **Privacy & Security → Open Anyway**
+  (see above). Do not run `xattr` workarounds from untrusted sources.
+- **The app won't start after an update, or data looks wrong** — ShekelSync makes
+  a backup of your database before each update and before schema migrations, in a
+  `backups` folder next to the database (in your OS user-data directory). You can
+  restore a backup from **Settings → Data**.
+- **Credentials aren't saved / keychain errors** — ShekelSync requires an OS
+  keychain to encrypt credentials. On headless Linux/WSL this may be unavailable;
+  see the development note below.
+- **Scraping fails for a bank** — financial sites change without notice and can
+  temporarily break scrapers. Retry later; if it persists, report it (below).
+- **Collecting logs for a bug report** — run `npm run logs:bundle`, or use the
+  in-app diagnostics/log export in **Settings**, and attach the output to your
+  report. Logs are stored locally.
+
+## Support
+
+- **Bugs and feature requests:** open an issue at
+  <https://github.com/AvnerAdda/shekelsync/issues>.
+- **Security vulnerabilities:** do **not** open a public issue — follow the
+  private reporting process in [`SECURITY.md`](SECURITY.md).
+- **Privacy questions:** see [`PRIVACY.md`](PRIVACY.md).
+
 ## Repo Layout
 
 - `electron/` Electron main process, preload, and security wiring.
@@ -106,6 +159,8 @@ You are responsible for lawful and compliant use in your jurisdiction.
 
 - Contribution guide: `CONTRIBUTING.md`
 - Code of conduct: `CODE_OF_CONDUCT.md`
+- Privacy policy: `PRIVACY.md`
+- Release history: `CHANGELOG.md`
 
 ## License
 

@@ -27,6 +27,7 @@ describe('sqlite-pool additional coverage', () => {
           };
         }
         pragma() {}
+        exec() {}
       },
     });
 
@@ -48,6 +49,7 @@ describe('sqlite-pool additional coverage', () => {
           };
         }
         pragma() {}
+        exec() {}
       },
     });
 
@@ -91,6 +93,7 @@ describe('sqlite-pool additional coverage', () => {
           };
         }
         pragma() {}
+        exec() {}
       },
     });
 

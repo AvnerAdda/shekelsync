@@ -2,7 +2,7 @@
 
 ## Summary
 
-- Source of truth: `/home/addavner/shekelsync/dist/shekelsync.sqlite`
+- Source of truth: `/dist/shekelsync.sqlite`
 - Audit date: 2026-06-25
 - Dashboard logic source: `app/server/services/analytics/dashboard.js`
 - Summary card formula source: `renderer/src/features/dashboard/components/summary-cards-helpers.ts`
