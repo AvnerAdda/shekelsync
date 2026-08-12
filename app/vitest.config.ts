@@ -17,10 +17,8 @@ export default defineConfig({
       reporter: ['text', 'html', 'json', 'json-summary'],
       // Avoid intermittent ENOENT reads from coverage/.tmp during large runs.
       cleanOnRerun: false,
-      // Measure ALL source files, not only those a test happens to import.
-      // Without `all: true` + `include`, untested modules are invisible and the
-      // coverage percentage is inflated.
-      all: true,
+      // Vitest 4 measures every file matched by `include`, including files no
+      // test imports, so this keeps untested modules visible in the totals.
       include: [
         'server/**/*.{js,ts}',
         'lib/**/*.{js,ts}',
