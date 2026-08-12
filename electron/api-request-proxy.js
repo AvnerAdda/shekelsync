@@ -15,6 +15,45 @@ function buildUnavailableResponse(message) {
   };
 }
 
+function buildRejectedEndpointResponse(endpoint) {
+  return {
+    status: 400,
+    statusText: 'Bad Request',
+    ok: false,
+    data: {
+      error: 'Invalid API endpoint',
+      message: `Endpoint must be a local path on the embedded API server: ${String(endpoint)}`,
+    },
+  };
+}
+
+/**
+ * Resolve the renderer-supplied endpoint against the embedded API base URL
+ * and require the result to stay on that origin. Rejects host-hijack shapes
+ * such as "@evil.com/x", "//evil.com/x", "\\evil.com" and absolute URLs,
+ * which would otherwise receive the Authorization and API-key headers.
+ */
+function resolveLocalApiUrl(baseUrl, endpoint) {
+  if (typeof endpoint !== 'string' || !endpoint.startsWith('/') || endpoint.startsWith('//') || endpoint.startsWith('/\\')) {
+    return null;
+  }
+
+  let base;
+  let resolved;
+  try {
+    base = new URL(baseUrl);
+    resolved = new URL(endpoint, base);
+  } catch (_error) {
+    return null;
+  }
+
+  if (resolved.origin !== base.origin) {
+    return null;
+  }
+
+  return resolved.toString();
+}
+
 function withTimeout(promise, timeoutMs) {
   if (!promise || typeof promise.then !== 'function') {
     return Promise.resolve();
@@ -130,7 +169,10 @@ async function proxyApiRequest({
     return target.error;
   }
 
-  const url = `${target.baseUrl}${endpoint}`;
+  const url = resolveLocalApiUrl(target.baseUrl, endpoint);
+  if (!url) {
+    return buildRejectedEndpointResponse(endpoint);
+  }
   const requestHeaders = {
     'Content-Type': 'application/json',
     ...headers,
@@ -216,6 +258,7 @@ module.exports = {
   buildUnavailableResponse,
   proxyApiRequest,
   resolveApiTarget,
+  resolveLocalApiUrl,
   withRequestTimeout,
   withTimeout,
 };

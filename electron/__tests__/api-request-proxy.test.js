@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { proxyApiRequest } from '../api-request-proxy.js';
+import { proxyApiRequest, resolveLocalApiUrl } from '../api-request-proxy.js';
 
 describe('api request proxy', () => {
   it('waits for embedded API readiness before proxying requests', async () => {
@@ -161,5 +161,90 @@ describe('api request proxy', () => {
     expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBe('Bearer expiring-token');
     expect(fetchImpl.mock.calls[1][1].headers.Authorization).toBe('Bearer replacement-token');
     expect(response).toMatchObject({ status: 200, ok: true, data: { success: true } });
+  });
+
+  it('rejects endpoints that would escape the embedded API origin', async () => {
+    const fetchImpl = vi.fn();
+    const getState = () => ({
+      apiPort: 43111,
+      apiToken: 'secret-token',
+      skipEmbeddedApi: false,
+    });
+
+    const hostileEndpoints = [
+      '@evil.com/x',
+      '//evil.com/x',
+      '/\\evil.com/x',
+      'http://evil.com/x',
+      'https://evil.com/x',
+      42,
+      null,
+      undefined,
+      '',
+    ];
+
+    for (const endpoint of hostileEndpoints) {
+      const response = await proxyApiRequest({
+        method: 'GET',
+        endpoint,
+        fetchImpl,
+        getState,
+        waitForEmbeddedApi: vi.fn(),
+      });
+      expect(response.status, `endpoint: ${String(endpoint)}`).toBe(400);
+      expect(response.ok).toBe(false);
+    }
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('still proxies normal local endpoints after validation', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      ok: true,
+      text: vi.fn().mockResolvedValue('{"success":true}'),
+    });
+
+    const response = await proxyApiRequest({
+      method: 'GET',
+      endpoint: '/api/transactions?limit=50&offset=0',
+      fetchImpl,
+      getState: () => ({
+        apiPort: 43111,
+        apiToken: 'secret-token',
+        skipEmbeddedApi: false,
+      }),
+      waitForEmbeddedApi: vi.fn(),
+    });
+
+    expect(response.status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://localhost:43111/api/transactions?limit=50&offset=0',
+      expect.anything(),
+    );
+  });
+});
+
+describe('resolveLocalApiUrl', () => {
+  it('keeps same-origin paths and rejects host hijacks', () => {
+    const base = 'http://localhost:43111';
+    expect(resolveLocalApiUrl(base, '/api/chat')).toBe('http://localhost:43111/api/chat');
+    expect(resolveLocalApiUrl(base, '/api/data/export?format=csv'))
+      .toBe('http://localhost:43111/api/data/export?format=csv');
+
+    expect(resolveLocalApiUrl(base, '@evil.com/x')).toBeNull();
+    expect(resolveLocalApiUrl(base, '//evil.com/x')).toBeNull();
+    expect(resolveLocalApiUrl(base, '/\\evil.com/x')).toBeNull();
+    expect(resolveLocalApiUrl(base, 'http://evil.com/x')).toBeNull();
+    expect(resolveLocalApiUrl(base, 'file:///etc/passwd')).toBeNull();
+    expect(resolveLocalApiUrl(base, '')).toBeNull();
+    expect(resolveLocalApiUrl(base, undefined)).toBeNull();
+  });
+
+  it('keeps dot-segment tricks pinned to the embedded API origin', () => {
+    const base = 'http://localhost:43111';
+    const resolved = resolveLocalApiUrl(base, '/..//evil.com\\x');
+    expect(resolved === null || resolved.startsWith('http://localhost:43111/')).toBe(true);
   });
 });

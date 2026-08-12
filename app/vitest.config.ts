@@ -17,6 +17,25 @@ export default defineConfig({
       reporter: ['text', 'html', 'json', 'json-summary'],
       // Avoid intermittent ENOENT reads from coverage/.tmp during large runs.
       cleanOnRerun: false,
+      // Vitest 4 measures every file matched by `include`, including files no
+      // test imports, so this keeps untested modules visible in the totals.
+      include: [
+        'server/**/*.{js,ts}',
+        'lib/**/*.{js,ts}',
+        'config/**/*.{js,ts}',
+        'contexts/**/*.{ts,tsx}',
+        'hooks/**/*.{ts,tsx}',
+        'utils/**/*.{js,ts}',
+      ],
+      exclude: [
+        '**/__tests__/**',
+        '**/__mocks__/**',
+        '**/*.{test,spec}.*',
+        '**/*.runner.cjs',
+        '**/*.d.ts',
+        'coverage/**',
+        'logs/**',
+      ],
     },
     // Enable mocking for server-side modules
     deps: {

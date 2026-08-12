@@ -1,4 +1,11 @@
-# Finance-Israel Documentation
+# ShekelSync Internal Documentation
+
+> **Scope:** this directory holds **internal/developer** notes — migration
+> post-mortems, dashboard audits, and product/marketing drafts. It is **not**
+> end-user documentation. For installing, troubleshooting, and support, see the
+> top-level [`README.md`](../README.md); for data handling see
+> [`PRIVACY.md`](../PRIVACY.md); for release history see
+> [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Quick Links
 
@@ -398,7 +405,11 @@ When making changes:
 
 ## License
 
-MIT (see `../LICENSE`)
+This project uses an open + commercial licensing model:
+
+- Open-source license: `AGPL-3.0-or-later` (see [`../LICENSE`](../LICENSE))
+- Commercial license: see [`../LICENSE-COMMERCIAL.md`](../LICENSE-COMMERCIAL.md)
+- Trademarks/branding: see [`../TRADEMARKS.md`](../TRADEMARKS.md)
 
 ---
 

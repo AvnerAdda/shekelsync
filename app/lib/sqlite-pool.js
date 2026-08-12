@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const resolveBetterSqlite = require('./better-sqlite3-wrapper.js');
+const { runSchemaMigrations } = require('./schema-migrations.js');
 
 const PLACEHOLDER_REGEX = /\$(\d+)/g;
 const SELECT_LIKE_REGEX = /^\s*(WITH|SELECT|PRAGMA)/i;
@@ -931,9 +932,15 @@ function createSqlitePool(options = {}) {
   const db = new Database(dbPath, { fileMustExist: true });
   db.pragma('foreign_keys = ON');
   db.pragma('journal_mode = WAL');
+  db.pragma('busy_timeout = 5000');
 
   // Startup-critical schema objects must exist before the pool is exposed.
   runStartupSchemaMigrations(db);
+
+  // Versioned migrations (PRAGMA user_version). Fails closed: a failed
+  // migration rolls back, the pool is never returned, and a pre-migration
+  // backup is left in <db dir>/backups.
+  runSchemaMigrations(db, { dbPath });
 
   let isClosed = false;
 
