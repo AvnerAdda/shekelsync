@@ -233,7 +233,10 @@
           "pendingIncludedNote": "כבר כלול בהוצאות למעלה; מוצג בנפרד לפי תאריך חיוב."
         },
         "portfolio": {
-          "title": "תיק השקעות"
+          "title": "תיק השקעות",
+          "emptyTitle": "עדיין אין השקעות",
+          "emptyDescription": "הוסיפו חשבון השקעות כדי לעקוב כאן אחר התיק שלכם.",
+          "addAccount": "הוספת חשבון השקעות"
         },
         "analysis": {
           "title": "בריאות פיננסית"
@@ -848,6 +851,7 @@
       "historicalData": "היסטורי",
       "forecastData": "תחזית",
       "next30Days": "תחזית ל-30 יום",
+      "basedOnPatterns": "מבוסס על דפוסי הוצאות היסטוריים",
       "scenarioSummary": "תחזית לסוף החודש על בסיס {{simulations}} סימולציות מונטה קרלו",
       "daysRemaining": "{{count}} ימים נותרו בחודש",
       "actualNet": "מצב נטו בפועל",
@@ -892,6 +896,7 @@
       "peakIncome": "יום הכנסה שיא"
     },
     "transactionsOn": "עסקאות ב-{{date}} ({{count}} עסקאות):",
+    "predictedTransactionsOn": "עסקאות צפויות ב-{{date}} ({{count}})",
     "noTransactionsForDate": "לא נמצאו עסקאות לתאריך זה."
   },
   "analysisPage": {
@@ -2932,7 +2937,17 @@
       "maximizeWindow": "הגדל חלון",
       "restoreWindow": "שחזר חלון",
       "closeWindow": "סגור חלון",
-      "sendFeedback": "שלח משוב"
+      "sendFeedback": "שלח משוב",
+      "moreActions": "פעולות נוספות"
+    },
+    "moreActions": {
+      "security": "מצב אבטחה",
+      "securityLevels": {
+        "secure": "מאובטח",
+        "warning": "דורש תשומת לב",
+        "error": "זוהו בעיות",
+        "unknown": "לא ידוע"
+      }
     },
     "update": {
       "tooltip": {

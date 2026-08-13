@@ -232,7 +232,10 @@
           "pendingIncludedNote": "Already included in Expenses above; shown separately by settlement date."
         },
         "portfolio": {
-          "title": "Investment Portfolio"
+          "title": "Investment Portfolio",
+          "emptyTitle": "No investments yet",
+          "emptyDescription": "Add an investment account to track your portfolio here.",
+          "addAccount": "Add investment account"
         },
         "analysis": {
           "title": "Financial Health"
@@ -846,6 +849,7 @@
       "historicalData": "Historical",
       "forecastData": "Forecast",
       "next30Days": "30 day forecast",
+      "basedOnPatterns": "Based on historical spending patterns",
       "scenarioSummary": "End of month projection based on {{simulations}} Monte Carlo simulations",
       "daysRemaining": "{{count}} days remaining in month",
       "actualNet": "Actual Net Position",
@@ -889,6 +893,7 @@
       "peakIncome": "Peak income day"
     },
     "transactionsOn": "Transactions on {{date}} ({{count}} transactions):",
+    "predictedTransactionsOn": "Predicted transactions on {{date}} ({{count}})",
     "noTransactionsForDate": "No transactions found for this date."
   },
   "analysisPage": {
@@ -2921,7 +2926,17 @@
       "maximizeWindow": "Maximize window",
       "restoreWindow": "Restore window",
       "closeWindow": "Close window",
-      "sendFeedback": "Send Feedback"
+      "sendFeedback": "Send Feedback",
+      "moreActions": "More actions"
+    },
+    "moreActions": {
+      "security": "Security status",
+      "securityLevels": {
+        "secure": "Secure",
+        "warning": "Needs attention",
+        "error": "Issues detected",
+        "unknown": "Unknown"
+      }
     },
     "update": {
       "tooltip": {
