@@ -12,7 +12,15 @@ Release binaries are published at
 
 ## [Unreleased]
 
+## [0.1.34] - 2026-08-20
+
 ### Added
+- A redesigned Optimizer v2 flow that confirms database summaries before users
+  choose a scope and generate evidence-backed actions. Recurring categorized
+  income now drives affordability analysis instead of reported profile income.
+- Canonical investment position and event workflows, including allocation
+  targets, liabilities, FX preferences and rates, benchmark comparisons, and
+  expanded portfolio reconciliation.
 - Versioned SQLite schema migrations tracked with `PRAGMA user_version`
   (`app/lib/schema-migrations.js`). Migrations run at startup inside their own
   transaction, take an automatic pre-migration database backup, and fail closed
@@ -24,8 +32,16 @@ Release binaries are published at
 - User-facing installation, troubleshooting, and support sections in `README.md`.
 
 ### Changed
+- Improved dashboard summaries and transaction-history forecast visuals, with
+  adaptive axes and translated labels.
+- Expanded investment account management, analytics, performance breakdowns,
+  and position editing and closing experiences.
 - Set a `busy_timeout` pragma on SQLite connections to avoid transient
   "database is locked" errors under concurrent access.
+
+### Fixed
+- Optimizer review provenance is available on hover, and every “Fix at source”
+  action now routes to its owning ShekelSync area.
 
 ### Security
 - `shell.openExternal` now only opens `http`/`https`/`mailto` URLs; other
@@ -116,7 +132,8 @@ Initial public release series. Highlights across these versions:
 - Numerous scraping-reliability, double-counting, and schema-safety fixes,
   including guarding against unsafe SQLite schema reinitialization.
 
-[Unreleased]: https://github.com/AvnerAdda/shekelsync/compare/v0.1.33...HEAD
+[Unreleased]: https://github.com/AvnerAdda/shekelsync/compare/v0.1.34...HEAD
+[0.1.34]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.34
 [0.1.33]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.33
 [0.1.32]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.32
 [0.1.31]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.31
