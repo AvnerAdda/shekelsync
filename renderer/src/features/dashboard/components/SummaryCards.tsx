@@ -4,9 +4,8 @@ import {
   CardContent,
   Typography,
   Box,
+  Button,
   Divider,
-  LinearProgress,
-  CircularProgress,
   Tooltip,
   Grid,
   Alert,
@@ -16,9 +15,6 @@ import { CurrencyTypography } from '@renderer/components/CurrencyTypography';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import SavingsIcon from '@mui/icons-material/Savings';
-import DiversityIcon from '@mui/icons-material/Diversity3';
-import ImpulseIcon from '@mui/icons-material/ShoppingCart';
-import RunwayIcon from '@mui/icons-material/Schedule';
 import WarningIcon from '@mui/icons-material/Warning';
 import PendingIcon from '@mui/icons-material/HourglassEmpty';
 import InfoIcon from '@mui/icons-material/Info';
@@ -199,6 +195,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     value >= 70 ? 'success' : value >= 40 ? 'warning' : 'error';
 
   const allocationTotal = allocationItems.reduce((sum, item) => sum + item.actual, 0);
+  const hasAllocationData = allocationTotal > 0;
 
   const normalizedAllocation = allocationItems.map((item) => ({
     ...item,
@@ -207,6 +204,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
 
   // Forecast-based budget status counts
   const budgetCategoriesCount = (forecastSummary?.onTrack ?? 0) + (forecastSummary?.atRisk ?? 0) + (forecastSummary?.exceeded ?? 0);
+  const hasBudgetData = budgetCategoriesCount > 0;
 
   const overallHealthScore = clampPercent(healthSnapshot?.overallHealthScore ?? savingsScore);
 
@@ -221,35 +219,41 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
     runway: clampPercent(healthSnapshot?.healthBreakdown?.runwayScore ?? runwayScore),
   };
 
-  const healthMetrics: Array<{ id: string; label: string; value: number; icon: React.ReactNode }> = [
+  const healthMetrics: Array<{ id: string; label: string; value: number }> = [
     {
       id: 'savings',
       label: t('summary.health.savings'),
       value: normalizedHealth.savings,
-      icon: <SavingsIcon sx={{ fontSize: 16, color: 'text.secondary' }} />,
     },
     {
       id: 'diversity',
       label: t('summary.health.diversity'),
       value: normalizedHealth.diversity,
-      icon: <DiversityIcon sx={{ fontSize: 16, color: 'text.secondary' }} />,
     },
     {
       id: 'impulse',
       label: t('summary.health.impulse'),
       value: normalizedHealth.impulse,
-      icon: <ImpulseIcon sx={{ fontSize: 16, color: 'text.secondary' }} />,
     },
     {
       id: 'runway',
       label: t('summary.health.runway'),
       value: normalizedHealth.runway,
-      icon: <RunwayIcon sx={{ fontSize: 16, color: 'text.secondary' }} />,
     },
   ];
 
   const formatCurrencyValue = (amount: number) =>
     formatCurrency(amount, { absolute: true, maximumFractionDigits: 0 });
+  const hasResolvedPortfolioValue = typeof portfolioValue === 'number'
+    && Number.isFinite(portfolioValue);
+
+  const handleAddInvestmentAccount = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('openAccountsModal', {
+        detail: { tab: 'investments', addFlow: true },
+      }));
+    }
+  };
 
   const formatPendingDate = (date: string) => {
     const [year, month, day] = date.split('-').map((part) => Number.parseInt(part, 10));
@@ -338,7 +342,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
       color: netSavings >= 0 ? theme.palette.success.main : theme.palette.error.main,
       details: (
         <>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, mt: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.6, mt: 1 }}>
             <Typography variant="body2" sx={{
               color: "text.secondary"
             }}>
@@ -346,7 +350,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             </Typography>
             <CurrencyTypography variant="body2" color="success.main">+{formatCurrencyValue(totalIncome)}</CurrencyTypography>
           </Box>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.6 }}>
             <Typography variant="body2" sx={{
               color: "text.secondary"
             }}>
@@ -357,7 +361,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             <CurrencyTypography variant="body2" color="error.main">-{formatCurrencyValue(totalExpenses)}</CurrencyTypography>
           </Box>
           {netInvestments > 0 && (
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.6 }}>
               <Typography variant="body2" sx={{
                 color: "text.secondary"
               }}>
@@ -367,7 +371,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             </Box>
           )}
           {totalCapitalReturns > 0 && (
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.6 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <Typography variant="body2" sx={{
                   color: "text.secondary"
@@ -387,14 +391,14 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
           )}
           {hasPendingExpenses && (
             <>
-              <Divider sx={{ my: 1.5 }} />
+              <Divider sx={{ my: 0.8 }} />
               <Tooltip title={pendingBreakdownTooltipTitle} arrow placement="top">
                 <Box
                   sx={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    mb: 1,
+                    mb: 0.5,
                     cursor: 'help',
                   }}
                 >
@@ -418,8 +422,9 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                 sx={{
                   color: "text.secondary",
                   display: 'block',
-                  mt: -0.5,
-                  mb: 1
+                  mt: 0,
+                  mb: 0.5,
+                  lineHeight: 1.35,
                 }}>
                 {t('summary.cards.finance.pendingIncludedNote')}
               </Typography>
@@ -485,19 +490,23 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
       id: 'portfolio',
       title: t('summary.cards.portfolio.title'),
       icon: <TrendingUpIcon />,
-      mainValue: portfolioValue !== undefined && portfolioValue !== null ? formatCurrencyValue(portfolioValue) : '—',
+      mainValue: hasResolvedPortfolioValue ? formatCurrencyValue(portfolioValue) : '—',
       subtitle: portfolioGains !== undefined ? `${portfolioGains >= 0 ? '+' : ''}${formatCurrencyValue(portfolioGains)}` : undefined,
-      color: portfolioGains !== undefined && portfolioGains >= 0 ? theme.palette.success.main : theme.palette.error.main,
+      color: portfolioGains === undefined
+        ? theme.palette.primary.main
+        : portfolioGains >= 0
+          ? theme.palette.success.main
+          : theme.palette.error.main,
       details: assetBreakdown.length > 0 ? (
-        <Box sx={{ height: 200, width: '100%', mt: 1, position: 'relative' }}>
-          <ResponsiveContainer width="100%" height={200}>
+        <Box sx={{ height: 150, width: '100%', mt: 0.5, position: 'relative' }}>
+          <ResponsiveContainer width="100%" height={150}>
             <PieChart>
               <Pie
                 data={assetBreakdown}
                 cx="50%"
                 cy="50%"
-                innerRadius={60}
-                outerRadius={80}
+                innerRadius={44}
+                outerRadius={61}
                 paddingAngle={5}
                 dataKey="value"
                 stroke="none"
@@ -552,6 +561,26 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             </Typography>
           </Box>
         </Box>
+      ) : hasResolvedPortfolioValue && portfolioValue <= 0 ? (
+        <Box
+          sx={{
+            mt: 1,
+            p: 1.5,
+            borderRadius: 2,
+            bgcolor: alpha(theme.palette.primary.main, 0.05),
+            border: `1px dashed ${alpha(theme.palette.primary.main, 0.25)}`,
+          }}
+        >
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.4 }}>
+            {t('summary.cards.portfolio.emptyTitle')}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.4, mb: 1 }}>
+            {t('summary.cards.portfolio.emptyDescription')}
+          </Typography>
+          <Button size="small" variant="outlined" onClick={handleAddInvestmentAccount}>
+            {t('summary.cards.portfolio.addAccount')}
+          </Button>
+        </Box>
       ) : null,
     },
     {
@@ -564,8 +593,8 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
         : overallHealthScore >= 40 ? theme.palette.warning.main
         : theme.palette.error.main,
       details: (
-        <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-          <Box
+        <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {hasBudgetData && <Box
             sx={{
               display: 'flex',
               flexDirection: 'column',
@@ -589,8 +618,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: theme.palette.divider }}>
-              {budgetCategoriesCount > 0 ? (
-                <>
+              <>
                   {forecastSummary && forecastSummary.onTrack > 0 && (
                     <Tooltip title={`${t('summary.budgets.onTrack')}: ${forecastSummary.onTrack}`} placement="top">
                       <Box
@@ -625,13 +653,10 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                     </Tooltip>
                   )}
                 </>
-              ) : (
-                <Box sx={{ width: '100%', bgcolor: theme.palette.divider }} />
-              )}
             </Box>
-          </Box>
+          </Box>}
 
-          <Box
+          {hasAllocationData && <Box
             sx={{
               px: 1.5,
               py: 1,
@@ -639,20 +664,11 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
               bgcolor: alpha(theme.palette.text.primary, 0.02),
             }}
           >
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.6 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.6 }}>
               <Typography variant="body2" sx={{
                 color: "text.secondary"
               }}>
                 {t('summary.allocation.actual')}
-              </Typography>
-              <Typography variant="caption" sx={{
-                color: "text.secondary"
-              }}>
-                {t('summary.allocation.target', {
-                  targets: (['essential', 'growth', 'stability', 'reward'] as SpendingCategory[])
-                  .map((key) => Math.round(allocationTargets[key]))
-                  .join(' / '),
-                })}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: theme.palette.divider }}>
@@ -676,47 +692,91 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                 </Tooltip>
               ))}
             </Box>
-          </Box>
+          </Box>}
 
-          <Divider />
+          {(hasBudgetData || hasAllocationData) && <Divider />}
 
           <Box
+            data-testid="health-summary-row"
             sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 1,
-              flexWrap: 'nowrap',
+              display: 'grid',
+              gridTemplateColumns: hasAllocationData
+                ? 'minmax(96px, 1.8fr) repeat(4, minmax(42px, 1fr))'
+                : 'repeat(4, minmax(42px, 1fr))',
+              alignItems: 'stretch',
+              gap: 0.5,
+              minWidth: 0,
             }}
           >
+            {hasAllocationData && (
+              <Tooltip
+                title={t('summary.allocation.target', {
+                  targets: (['essential', 'growth', 'stability', 'reward'] as SpendingCategory[])
+                    .map((key) => Math.round(allocationTargets[key]))
+                    .join(' / '),
+                })}
+                placement="top"
+              >
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    px: 0.6,
+                    minWidth: 0,
+                    borderRadius: 1.25,
+                    bgcolor: alpha(theme.palette.text.primary, 0.03),
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    noWrap
+                    sx={{ color: 'text.secondary', fontSize: '0.62rem' }}
+                  >
+                    {t('summary.allocation.target', {
+                      targets: (['essential', 'growth', 'stability', 'reward'] as SpendingCategory[])
+                        .map((key) => Math.round(allocationTargets[key]))
+                        .join(' / '),
+                    })}
+                  </Typography>
+                </Box>
+              </Tooltip>
+            )}
             {healthMetrics.map((metric) => (
               <Tooltip key={metric.id} title={`${metric.label}: ${metric.value}`} placement="top">
-                <Box sx={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
-                  <CircularProgress
-                    variant="determinate"
-                    value={metric.value}
-                    size={54}
-                    thickness={5}
-                    color={getMetricColor(metric.value)}
-                  />
-                  <Box
+                <Box
+                  role="group"
+                  aria-label={`${metric.label}: ${metric.value}`}
+                  sx={{
+                    minWidth: 0,
+                    px: 0.35,
+                    py: 0.45,
+                    textAlign: 'center',
+                    borderRadius: 1.25,
+                    bgcolor: alpha(theme.palette.text.primary, 0.03),
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    noWrap
                     sx={{
-                      top: 0,
-                      left: 0,
-                      bottom: 0,
-                      right: 0,
-                      position: 'absolute',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
+                      display: 'block',
+                      color: 'text.secondary',
+                      fontSize: '0.64rem',
+                      lineHeight: 1.15,
                     }}
                   >
-                    <Typography variant="caption" sx={{
-                      fontWeight: 700
-                    }}>
-                      {metric.value}
-                    </Typography>
-                  </Box>
+                    {metric.label}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 700,
+                      lineHeight: 1.2,
+                      color: theme.palette[getMetricColor(metric.value)].main,
+                    }}
+                  >
+                    {metric.value}
+                  </Typography>
                 </Box>
               </Tooltip>
             ))}
@@ -733,7 +793,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
           <strong>Proactive Insight:</strong> You have {forecastSummary.exceeded > 0 ? `${forecastSummary.exceeded} budget(s) currently exceeded` : `${forecastSummary.atRisk} budget(s) trending to exceed`} by end of month based on your current burn rate.
         </Alert>
       )}
-      <Grid container spacing={3}>
+      <Grid container spacing={2}>
         {cards.map((card) => (
         <Grid size={{ xs: 12, md: 4 }} key={card.id}>
           <Card sx={{
@@ -747,19 +807,19 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             boxShadow: card.id === 'finance'
               ? `0 12px 40px ${alpha(theme.palette.primary.main, 0.15)}`
               : `0 8px 32px ${alpha(theme.palette.common.black, 0.05)}`,
-            transform: card.id === 'finance' ? 'scale(1.02)' : 'none',
+            transform: 'none',
             transition: 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': {
-              transform: card.id === 'finance' ? 'translateY(-6px) scale(1.04)' : 'translateY(-6px) scale(1.02)',
+              transform: 'translateY(-3px)',
               boxShadow: `0 16px 40px ${alpha(card.color || theme.palette.common.black, 0.2)}`,
             }
           }}>
-            <CardContent sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2.5 }}>
+            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <Box sx={{ 
                   color: card.color, 
-                  mr: 1.5,
-                  p: 1,
+                  mr: 1,
+                  p: 0.75,
                   borderRadius: 2,
                   backgroundColor: alpha(card.color, 0.1),
                   display: 'flex'
@@ -777,7 +837,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                 </Typography>
               </Box>
 
-              <CurrencyTypography variant="h4" sx={{ 
+              <CurrencyTypography variant="h5" sx={{
                 fontWeight: 700, 
                 color: card.color, 
                 mb: 0.5,
@@ -791,7 +851,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                   variant="body2"
                   sx={{
                     color: "text.secondary",
-                    mb: 2,
+                    mb: 1,
                     fontWeight: 500
                   }}>
                   {card.subtitle}

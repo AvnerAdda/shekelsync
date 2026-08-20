@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   accountMatchesPortfolioScope,
   getPortfolioAccountsForScope,
+  getPortfolioCategoryBucketsForScope,
   getPortfolioScopeTotal,
   INVESTMENT_CATEGORY_ORDER,
   normalizeInvestmentCategory,
@@ -18,6 +19,27 @@ describe('portfolio category utilities', () => {
       'stability',
       'other',
     ]);
+  });
+
+  it('does not turn a missing converted account value into a partial allocation total', () => {
+    const portfolio = {
+      accounts: [
+        { id: 1, account_name: 'Cash', account_type: 'cash', investment_category: 'cash', current_value: 100 },
+        {
+          id: 2,
+          account_name: 'USD brokerage',
+          account_type: 'brokerage',
+          investment_category: 'liquid',
+          native_current_value: 50,
+          current_value: null,
+        },
+      ],
+    } as PortfolioSummary;
+
+    expect(getPortfolioScopeTotal(portfolio, 'all')).toBeNull();
+    const liquid = getPortfolioCategoryBucketsForScope(portfolio, 'all')
+      .find(({ key }) => key === 'liquid');
+    expect(liquid?.bucket.totalValue).toBeNull();
   });
 
   it('normalizes real estate account types to illiquid', () => {

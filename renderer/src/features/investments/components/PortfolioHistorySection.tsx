@@ -32,6 +32,7 @@ import { useTranslation } from 'react-i18next';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
 import { buildStackedPortfolioHistoryData } from '../utils/portfolio-history';
 import { PortfolioScopeKey } from '../utils/portfolio-categories';
+import { getCurrencyDisplaySymbol } from '../utils/currency-format';
 
 interface PortfolioHistorySectionProps {
   overallHistory: PortfolioHistoryPoint[];
@@ -92,7 +93,11 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
   }, [viewMode]);
 
   const formatCurrencyValue = (value: number) =>
-    formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
+    formatCurrency(value, {
+      absolute: true,
+      maximumFractionDigits: 0,
+      currencySymbol: getCurrencyDisplaySymbol(portfolioData?.fx?.baseCurrency),
+    });
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString(undefined, {
@@ -195,6 +200,7 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
                   <CustomTooltip
                     active={active}
                     items={items}
+                    currencySymbol={getCurrencyDisplaySymbol(portfolioData?.fx?.baseCurrency)}
                     title={fullDate ? new Date(fullDate).toLocaleDateString(undefined, {
                       month: 'short',
                       day: 'numeric',

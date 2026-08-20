@@ -232,7 +232,10 @@
           "pendingIncludedNote": "Déjà inclus dans les dépenses ci-dessus ; affiché séparément par date de règlement."
         },
         "portfolio": {
-          "title": "Portefeuille d'investissement"
+          "title": "Portefeuille d'investissement",
+          "emptyTitle": "Aucun investissement pour le moment",
+          "emptyDescription": "Ajoutez un compte d'investissement pour suivre votre portefeuille ici.",
+          "addAccount": "Ajouter un compte d'investissement"
         },
         "analysis": {
           "title": "Santé financière"
@@ -841,6 +844,7 @@
       "historicalData": "Historique",
       "forecastData": "Prévision",
       "next30Days": "Prévision 30 jours",
+      "basedOnPatterns": "Basé sur les habitudes de dépenses historiques",
       "scenarioSummary": "Projection de fin de mois basée sur {{simulations}} simulations Monte Carlo",
       "daysRemaining": "{{count}} jours restants dans le mois",
       "actualNet": "Position nette réelle",
@@ -884,6 +888,7 @@
       "peakIncome": "Jour de revenu record"
     },
     "transactionsOn": "Transactions du {{date}} ({{count}} transactions) :",
+    "predictedTransactionsOn": "Transactions prévues le {{date}} ({{count}})",
     "noTransactionsForDate": "Aucune transaction pour cette date."
   },
   "analysisPage": {
@@ -1852,7 +1857,19 @@
       "ariaLabel": "Sections d'investissement"
     },
     "warnings": {
-      "multiCurrency": "Plusieurs devises sont présentes. Les totaux et graphiques utilisent encore les valeurs brutes, sans normalisation FX."
+      "multiCurrency": "Il manque des taux de change datés. Les totaux et analyses de rendement restent partiels tant que la couverture de change n’est pas complète."
+    },
+    "errors": {
+      "retry": "Réessayer",
+      "loadFailed": "Impossible de charger {{resource}}.",
+      "showingPrevious": "Impossible d’actualiser {{resource}}. Les données précédentes restent affichées.",
+      "resources": {
+        "portfolio": "le portefeuille",
+        "history": "l’historique du portefeuille",
+        "performance": "l’analyse de performance",
+        "positions": "les positions d’investissement",
+        "activity": "l’activité d’investissement"
+      }
     },
     "filters": {
       "rangeLabel": "Plage des transactions",
@@ -1868,18 +1885,38 @@
       "noChartData": "Aucune donnée historique disponible",
       "modes": {
         "value": "Valeur",
-        "performance": "Performance"
+        "performance": "Rendement de l’investissement"
       },
-      "tooltipValue": "Valeur",
-      "tooltipPerformance": "Variation"
+      "balanceChange": "Variation du solde, dépôts et retraits compris",
+      "returnAfterFlows": "Rendement de l’investissement après séparation des flux de trésorerie suivis",
+      "estimatedReturnAfterFlows": "Rendement estimé après séparation des flux de trésorerie suivis",
+      "tooltipValue": "Valeur du portefeuille",
+      "tooltipChange": "Variation depuis le début",
+      "tooltipChangePercent": "Variation depuis le début (%)",
+      "tooltipPerformance": "Rendement de l’investissement"
     },
     "allocation": {
-      "title": "Répartition",
+      "title": "Répartition par compte",
       "total": "Total",
       "viewMore": "Voir plus",
       "tooltipCategory": "Catégorie",
       "tooltipValue": "Valeur",
-      "tooltipPercentage": "Pourcentage"
+      "tooltipPercentage": "Pourcentage",
+      "unavailable": "N/D"
+    },
+    "allocationTargets": {
+      "title": "Objectifs de répartition",
+      "subtitle": "Comparez la répartition actuelle par catégorie à vos objectifs, hors immobilier.",
+      "edit": "Modifier les objectifs",
+      "set": "Définir les objectifs",
+      "fxRequired": "Ajoutez les taux de change manquants avant de calculer les écarts de répartition.",
+      "valuationsRequired": "Valorisez chaque compte suivi avant de calculer les écarts de répartition.",
+      "empty": "Aucun objectif de répartition n’a encore été enregistré.",
+      "actual": "Actuel",
+      "target": "Objectif",
+      "dialogTitle": "Modifier les objectifs de répartition",
+      "total": "Total des objectifs",
+      "clear": "Effacer les objectifs"
     },
     "performance": {
       "title": "Ma performance",
@@ -2056,8 +2093,10 @@
       "updated": "Mis à jour {{date}}",
       "na": "N/D",
       "error": "Échec du chargement du bilan.",
+      "staleError": "Impossible d’actualiser le bilan. Les données précédentes restent affichées.",
+      "retry": "Réessayer",
       "headline": {
-        "netWorth": "PATRIMOINE NET",
+        "netWorth": "PATRIMOINE NET SUIVI",
         "assets": "ACTIFS SUIVIS"
       },
       "buckets": {
@@ -2070,20 +2109,95 @@
       },
       "bucketMeta": "{{withValue}}/{{total}} valorisés",
       "badges": {
-        "partial": "Partiel",
-        "multiCurrency": "Multi-devises",
-        "missingValues": "{{count}} valorisations manquantes"
+      "partial": "Partiel",
+      "multiCurrency": "Multi-devises",
+      "missingFx": "{{count}} taux de change manquants",
+      "missingValues": "{{count}} valorisations manquantes"
       },
       "liabilities": {
         "pendingCcDebt": "Dette de carte de crédit en attente",
+        "totalTracked": "Dettes suivies",
+        "components": "Dettes distinctes : {{manual}} · Dette de carte en attente",
         "unavailable": "Indisponible",
         "noBaseline": "Nécessite un remboursement catégorisé"
       },
-      "hints": {
-        "multiCurrency": "Plusieurs devises détectées ({{currencies}}). Les totaux supposent que les valeurs sont déjà dans la même devise.",
+    "hints": {
+      "missingFx": "Les totaux restent partiels jusqu’à ce que chaque valeur dispose d’un taux de change daté.",
+      "multiCurrency": "Les valeurs suivies couvrent les devises {{currencies}} et sont converties dans la devise de base choisie lorsque des taux datés sont disponibles.",
         "pendingDebt": "La dette de carte de crédit en attente est indisponible tant que vous n'avez pas configuré les appariements et catégorisé au moins un remboursement."
       },
-      "footnote": "Exclut les prêts/hypothèque (non suivis pour l'instant)"
+      "footnote": "Inclut les dettes distinctes suivies. Les hypothèques saisies dans les valorisations immobilières sont déjà reflétées dans la valeur nette et ne doivent pas être ajoutées de nouveau."
+    },
+    "liabilities": {
+      "title": "Dettes suivies séparément",
+      "subtitle": "Suivez les prêts et autres dettes qui ne sont pas déjà compris dans la valeur d’un actif.",
+      "add": "Ajouter une dette",
+      "mortgageNote": "N’ajoutez pas ici l’hypothèque d’un bien si sa valorisation présente déjà les capitaux propres nets : l’hypothèque a déjà été déduite.",
+      "empty": "Aucune dette distincte n’est suivie.",
+      "actions": "Actions",
+      "dialogAdd": "Ajouter une dette distincte",
+      "dialogEdit": "Modifier la dette",
+      "removeTitle": "Arrêter le suivi de cette dette ?",
+      "removeMessage": "Cette action le retire du patrimoine net suivi. Les instantanés historiques des comptes ne sont pas modifiés.",
+      "types": {
+        "loan": "Prêt",
+        "credit_line": "Ligne de crédit",
+        "tax": "Dette fiscale",
+        "other": "Autre"
+      },
+      "fields": {
+        "name": "Nom",
+        "type": "Type",
+        "balance": "Solde",
+        "payment": "Mensualité",
+        "date": "À la date du",
+        "currency": "Devise",
+        "rate": "Taux d’intérêt (%)",
+        "notes": "Notes"
+      }
+    },
+    "fx": {
+      "title": "Conversion des devises",
+      "subtitle": "Des taux de change datés convertissent les totaux du portefeuille dans la devise de base choisie.",
+      "manual": "Ajouter un taux manuel",
+      "sync": "Synchroniser les taux officiels",
+      "sourceNote": "La synchronisation officielle utilise les taux représentatifs de la Banque d’Israël. Ces taux sont indicatifs, stockés localement et ne modifient jamais les montants dans leur devise d’origine.",
+      "baseCurrency": "Devise de base",
+      "empty": "Aucun taux de change n’est encore enregistré.",
+      "pair": "Paire de devises",
+      "date": "Date du taux",
+      "rate": "Taux de change",
+      "source": "Source",
+      "manualTitle": "Ajouter un taux de change daté",
+      "from": "Devise source",
+      "to": "Devise cible",
+      "rule": "Montant dans la devise cible = montant dans la devise source × taux de change.",
+      "missingRatesWarning": "Certains taux de change datés manquent. Les totaux convertis et les analyses de rendement restent indisponibles jusqu’à ce que la couverture soit complète.",
+      "manageRates": "Gérer les taux"
+    },
+    "benchmark": {
+      "title": "Comparaison à un indice de référence",
+      "subtitle": "Comparez le rendement du portefeuille, sur la même période, à une série d’indice importée.",
+      "replace": "Remplacer la série",
+      "import": "Importer une série",
+      "guardrail": "Aucun rendement de marché synthétique n’est affiché. Importez des données datées provenant d’une source fiable ; utilisez un indice de rendement total pour inclure les dividendes.",
+      "empty": "Aucune série de référence n’est configurée.",
+      "portfolio": "TWR du portefeuille",
+      "portfolioEstimated": "Rendement estimé du portefeuille",
+      "totalReturn": "rendement total",
+      "priceReturn": "rendement du cours",
+      "difference": "Écart",
+      "approximation": "Comparaison approximative à partir des observations de l’indice du {{start}} au {{end}} ; les méthodes de rendement du portefeuille et de l’indice peuvent différer.",
+      "noOverlap": "La série importée ne couvre pas les deux dates sélectionnées du portefeuille.",
+      "missingFx": "Ajoutez des taux de change datés pour comparer cet indice dans la devise de base du portefeuille.",
+      "dialogTitle": "Importer une série de référence",
+      "name": "Nom de l’indice de référence",
+      "currency": "Devise",
+      "source": "Source",
+      "version": "Source ou version",
+      "isTotalReturn": "La série comprend les distributions réinvesties",
+      "points": "Points de données CSV (date,valeur)",
+      "needPoints": "Saisissez au moins deux lignes date,valeur valides."
     },
     "history": {
       "title": "Performance du portefeuille",
@@ -2200,8 +2314,25 @@
     },
     "coverage": {
       "title": "Couverture du portefeuille",
-      "subtitle": "Mesure à quel point vos données d'investissement sont complètes et vérifiables.",
+      "subtitle": "Indique les données manquantes et les comptes à vérifier.",
       "empty": "Les métriques de couverture apparaîtront une fois les comptes d'investissement disponibles.",
+      "error": "Impossible de charger la couverture du portefeuille.",
+      "staleError": "Impossible d’actualiser la couverture. Les données précédentes restent affichées.",
+      "complete": "Complet",
+      "issues_one": "{{count}} problème",
+      "issues_other": "{{count}} problèmes",
+      "affected": "Comptes : {{names}}",
+      "affectedCount_one": "{{count}} compte est à vérifier",
+      "affectedCount_other": "{{count}} comptes sont à vérifier",
+      "affectedWithMore_one": "Comptes : {{names}} et {{count}} autre",
+      "affectedWithMore_other": "Comptes : {{names}} et {{count}} autres",
+      "transactionsAffected_one": "{{count}} opération d’investissement doit être liée à un compte",
+      "transactionsAffected_other": "{{count}} opérations d’investissement doivent être liées à des comptes",
+      "actions": {
+        "retry": "Réessayer",
+        "reviewAccounts": "Vérifier les comptes",
+        "reviewTransactions": "Vérifier les opérations"
+      },
       "items": {
         "missingValuations": {
           "label": "Valorisations manquantes",
@@ -2215,9 +2346,9 @@
           "label": "Devise manquante",
           "hint": "Les comptes sans devise de base rendent les totaux moins fiables."
         },
-        "missingHoldings": {
-          "label": "Comptes sans positions détaillées",
-          "hint": "Comptes sans valorisation ni détail de holdings pour l'instant."
+        "unlinkedTransactions": {
+          "label": "Opérations d’investissement non liées",
+          "hint": "Liez les flux récents aux comptes afin de compléter l’attribution du rendement."
         }
       }
     },
@@ -2226,10 +2357,20 @@
       "subtitle": "Sépare les flux de trésorerie du mouvement de marché sur la période sélectionnée.",
       "empty": "Aucun détail de performance disponible pour l'instant.",
       "emptyTimeline": "Aucune donnée de chronologie disponible pour cette plage.",
-      "mixedCurrencyWarning": "Plusieurs devises détectées. Le détail reste utile, mais les totaux ne sont pas encore normalisés FX.",
+      "mixedCurrencyWarning": "Il manque des taux de change datés. Les analyses de rendement sont indisponibles ou partielles tant que la couverture de change n’est pas complète.",
       "na": "N/D",
+      "confidence": "La confiance dans le rendement est limitée. Le calcul utilise {{points}} points historiques ; vérifiez la couverture des valorisations et des taux de change.",
+      "quality": {
+        "observed": "Données observées",
+        "estimated": "Estimé",
+        "unavailable": "Indisponible"
+      },
+      "basis": {
+        "gross": "Avant frais et impôts suivis"
+      },
       "metrics": {
         "twr": "TWR {{value}}",
+        "estimatedReturn": "Rendement estimé {{value}}",
         "mwr": "MWR {{value}}"
       },
       "cards": {
@@ -2239,6 +2380,11 @@
         "capitalReturns": "Retours de capital",
         "distributedIncome": "Revenu distribué",
         "fees": "Frais",
+        "taxes": "Impôts",
+        "realizedGain": "Plus-value réalisée (nette)",
+        "unrealizedGain": "Plus-value latente",
+        "dividends": "Dividendes",
+        "interest": "Intérêts",
         "marketMove": "Mouvement de marché"
       }
     },
@@ -2250,9 +2396,9 @@
       "max": "Max"
     },
     "holdings": {
-      "title": "Holdings / Positions",
-      "subtitle": "Positions ouvertes plus holdings de secours issues des derniers instantanés de compte.",
-      "empty": "Aucune holding ni position ne correspond aux filtres actuels.",
+      "title": "Avoirs et positions",
+      "subtitle": "Positions ouvertes suivies et avoirs issus des derniers instantanés de valorisation des comptes.",
+      "empty": "Aucun avoir ni aucune position ne correspond aux filtres actuels.",
       "filters": {
         "searchLabel": "Recherche",
         "searchPlaceholder": "Rechercher par nom, compte ou institution",
@@ -2261,11 +2407,13 @@
         "rowTypeLabel": "Type de ligne",
         "rowTypeAll": "Toutes les lignes",
         "rowTypePositions": "Positions",
-        "rowTypeHoldings": "Holdings"
+        "rowTypeHoldings": "Avoirs",
+        "rowTypeReconciliation": "Rapprochement"
       },
       "rowKind": {
         "position": "Position",
-        "holding": "Holding"
+        "holding": "Avoir",
+        "reconciliation": "Rapprochement"
       },
       "status": {
         "needsValuation": "Valorisation requise"
@@ -2278,11 +2426,126 @@
         "itemType": "Type",
         "currency": "Devise",
         "currentValue": "Valeur actuelle",
-        "costBasis": "Coût de base",
-        "unrealizedPnL": "P&L latent",
-        "date": "Mis à jour / Ouvert",
-        "notAvailable": "N/D"
+        "costBasis": "Prix de revient",
+        "unrealizedPnL": "Résultat latent",
+        "date": "Mis à jour / ouvert",
+        "notAvailable": "N/D",
+        "actions": "Actions",
+        "unitsValue": "Unités : {{units}}",
+        "priceValue": "{{price}} par unité"
+      },
+      "actions": {
+        "add": "Ajouter une position",
+        "addDisabled": "Créez un compte d’investissement avant d’ajouter une position",
+        "activity": "Ajouter une opération",
+        "edit": "Modifier la position",
+        "close": "Clôturer la position"
+      },
+      "reconciliation": {
+        "remainder": "Valeur du compte non affectée",
+        "unavailable": "Rapprochement indisponible",
+        "help": "Instantané du compte moins les éléments suivis",
+        "currencyMismatch": "Les devises des éléments ne peuvent pas être additionnées directement",
+        "missingValues": "Ajoutez une valeur à un ou plusieurs éléments pour calculer le solde",
+        "itemType": "Valeur d’instantané non affectée"
+      },
+      "positionDialog": {
+        "editTitle": "Modifier la position",
+        "addTitle": "Ajouter une position",
+        "account": "Compte d’investissement",
+        "name": "Nom de la position",
+        "symbol": "Symbole",
+        "assetType": "Type d’actif",
+        "currency": "Devise",
+        "units": "Unités",
+        "averageCost": "Coût moyen par unité",
+      "currentPrice": "Prix actuel par unité",
+      "valuationDate": "Date de valorisation",
+      "notes": "Notes",
+      "snapshotNote": "Cette position est suivie dans son compte. L’instantané de valorisation du compte reste inchangé.",
+      "errors": {
+        "accountRequired": "Sélectionnez un compte d’investissement.",
+        "nameRequired": "Saisissez un nom pour la position.",
+        "currencyInvalid": "Utilisez un code devise à trois lettres.",
+        "unitsNonNegative": "Le nombre d’unités doit être supérieur ou égal à zéro.",
+        "averageCostNonNegative": "Le coût moyen doit être supérieur ou égal à zéro.",
+        "currentPriceNonNegative": "Le prix actuel doit être supérieur ou égal à zéro.",
+        "valuationDateRequired": "Sélectionnez une date de valorisation.",
+        "saveFailed": "Impossible d’enregistrer la position. Réessayez."
       }
+      },
+      "assetTypes": {
+        "stock": "Action",
+        "etf": "ETF",
+        "mutual_fund": "Fonds commun de placement",
+        "bond": "Obligation",
+        "cash": "Liquidités",
+        "crypto": "Cryptoactif",
+        "real_estate": "Immobilier",
+        "pension": "Retraite",
+        "other": "Autre"
+      },
+      "activityTypes": {
+        "buy": "Achat",
+        "sell": "Vente",
+        "dividend": "Dividende",
+        "interest": "Intérêts",
+        "fee": "Frais",
+        "tax": "Impôt",
+        "valuation": "Valorisation"
+      },
+      "activityDialog": {
+        "title": "Enregistrer une opération",
+        "type": "Type d’opération",
+        "date": "Date de l’opération",
+        "investedAmount": "Montant investi",
+        "proceeds": "Produit de la vente",
+        "disposedBasis": "Prix de revient cédé",
+        "income": "Revenu perçu",
+        "fee": "Montant des frais",
+        "tax": "Montant de l’impôt",
+        "units": "Unités (facultatif)",
+        "currentPrice": "Prix par unité (facultatif)",
+        "currentValue": "Valeur de la position après l’opération",
+        "saleFee": "Frais de vente (facultatif)",
+        "saleTax": "Impôt sur la vente (facultatif)",
+        "closeAction": "État de la position après la vente",
+        "estimatedGain": "Résultat réalisé estimé",
+        "reinvested": "Réinvestir ce revenu dans la position",
+        "deducted": "Déduire ce montant de la valeur suivie de la position",
+        "notes": "Notes",
+        "incomeNote": "Le revenu est enregistré sans modifier la valeur de la position, sauf si vous le marquez comme réinvesti ou saisissez une nouvelle valeur.",
+      "deductionNote": "Les frais et impôts ne modifient la valeur de la position que si vous les déduisez explicitement.",
+      "snapshotNote": "L’opération met à jour le registre de cette position sans remplacer l’instantané de valorisation du compte.",
+      "save": "Enregistrer l’opération",
+      "errors": {
+        "numberNonNegative": "Saisissez zéro ou un nombre positif.",
+        "dateRequired": "Sélectionnez une date d’opération.",
+        "dateBeforeOpen": "Une opération ne peut pas précéder la date d’ouverture de la position.",
+        "investedAmountRequired": "Saisissez le montant investi.",
+        "proceedsRequired": "Saisissez le produit de la vente, y compris zéro en cas de perte totale.",
+        "disposedBasisRequired": "Saisissez le prix de revient cédé lors de cette vente.",
+        "disposedBasisExceedsOpen": "Le prix de revient cédé ne peut pas dépasser le prix de revient restant.",
+        "unitsExceedOpen": "Le nombre d’unités cédées ne peut pas dépasser le nombre d’unités ouvertes.",
+        "incomeRequired": "Saisissez le montant du revenu.",
+        "feeRequired": "Saisissez le montant des frais.",
+        "taxRequired": "Saisissez le montant de l’impôt.",
+        "valueRequired": "Saisissez la valeur de la position à cette date.",
+        "recordFailed": "Impossible d’enregistrer l’opération. Réessayez."
+      }
+      },
+      "closeActions": {
+        "keepOpen": "Maintenir ouverte",
+        "partial": "Vente partielle",
+        "full": "Vente totale et clôture"
+      },
+    "closeDialog": {
+      "title": "Clôturer la position ?",
+      "message": "{{name}} ne sera plus suivi comme élément ouvert. Les opérations existantes et les instantanés de valorisation du compte sont conservés.",
+      "errors": {
+        "closeFailed": "Impossible de clôturer la position. Réessayez."
+      }
+    }
     }
   },
   "budgetsPage": {
@@ -2916,7 +3179,17 @@
       "maximizeWindow": "Agrandir la fenêtre",
       "restoreWindow": "Restaurer la fenêtre",
       "closeWindow": "Fermer la fenêtre",
-      "sendFeedback": "Envoyer un commentaire"
+      "sendFeedback": "Envoyer un commentaire",
+      "moreActions": "Plus d'actions"
+    },
+    "moreActions": {
+      "security": "État de sécurité",
+      "securityLevels": {
+        "secure": "Sécurisé",
+        "warning": "Attention requise",
+        "error": "Problèmes détectés",
+        "unknown": "Inconnu"
+      }
     },
     "update": {
       "tooltip": {
@@ -3175,9 +3448,22 @@
       "asOfDate": "À la date du",
       "costBasis": "Coût de revient (optionnel)",
       "costBasisHelper": "Montant total investi",
+      "accountCurrency": "Les valorisations utilisent la devise du compte d’investissement sélectionné.",
       "notes": "Notes (optionnel)",
       "notesPlaceholder": "Toutes notes supplémentaires sur cette mise à jour...",
       "addUpdate": "Ajouter la mise à jour"
+    },
+    "investmentEdit": {
+      "title": "Modifier le compte d’investissement",
+      "currencyHelper": "Utilisez un code à trois lettres, comme ILS, USD ou EUR.",
+      "save": "Enregistrer les modifications",
+      "saving": "Enregistrement...",
+      "updated": "Compte d’investissement mis à jour",
+      "errors": {
+        "nameRequired": "Le nom du compte est requis",
+        "currencyInvalid": "Saisissez un code devise valide à trois lettres",
+        "saveFailed": "Échec de la mise à jour du compte d’investissement"
+      }
     },
     "assets": {
       "title": "Actifs individuels",
@@ -3208,6 +3494,7 @@
     },
     "tooltips": {
       "addValueUpdate": "Ajouter une mise à jour de valeur",
+      "editInvestmentAccount": "Modifier les détails du compte",
       "manageAssets": "Gérer les actifs",
       "updateCredentials": "Mettre à jour les identifiants",
       "deleteAccount": "Supprimer le compte",

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
 import LockedPagePlaceholder from '@renderer/shared/empty-state/LockedPagePlaceholder';
 import LoadingState from '@renderer/components/LoadingState';
@@ -60,6 +60,10 @@ import HoldingsPositionsSection from '../components/HoldingsPositionsSection';
 import PikadonAccountDetailsDialog from '../components/PikadonAccountDetailsDialog';
 import RealEstateSimulatorDialog from '../components/RealEstateSimulatorDialog';
 import RealEstateOverviewSection from '../components/RealEstateOverviewSection';
+import AllocationTargetsPanel from '../components/AllocationTargetsPanel';
+import LiabilitiesManager from '../components/LiabilitiesManager';
+import FxSettingsPanel from '../components/FxSettingsPanel';
+import BenchmarkComparisonPanel from '../components/BenchmarkComparisonPanel';
 import { useInvestmentBalanceSheet } from '../hooks/useBalanceSheet';
 import { type AccountsModalOpenRequest } from '@renderer/shared/modals/AccountsModal';
 import {
@@ -86,6 +90,13 @@ const CHART_SCOPE_OPTIONS: { value: PortfolioChartScopeOption; labelKey: string;
   { value: 'restricted', labelKey: 'chartScope.restricted', fallback: 'Restricted' },
   { value: 'illiquid', labelKey: 'chartScope.illiquid', fallback: 'Illiquid' },
 ];
+
+interface InvestmentCoverageResponse {
+  unlinkedTransactions: {
+    count: number;
+    thresholdDays: number;
+  };
+}
 
 function getPortfolioAccountIds(
   portfolio: PortfolioSummary | null | undefined,
@@ -167,23 +178,37 @@ const InvestmentsPageContent: React.FC = () => {
 
   const [portfolioData, setPortfolioData] = useState<PortfolioSummary | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
+  const [portfolioError, setPortfolioError] = useState<Error | null>(null);
 
   const [overallHistory, setOverallHistory] = useState<PortfolioHistoryPoint[]>([]);
   const [accountHistories, setAccountHistories] = useState<Record<number, PortfolioHistoryPoint[]>>({});
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<Error | null>(null);
 
   const [chartViewMode, setChartViewMode] = useState<'value' | 'performance'>('value');
   const [categoryFilter, setCategoryFilter] = useState<'all' | InvestmentCategoryKey>('all');
   const [activeTab, setActiveTab] = useState(0);
   const [performanceData, setPerformanceData] = useState<InvestmentPerformanceResponse | null>(null);
   const [performanceLoading, setPerformanceLoading] = useState(false);
+  const [performanceError, setPerformanceError] = useState<Error | null>(null);
   const [positions, setPositions] = useState<InvestmentPosition[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
+  const [positionsError, setPositionsError] = useState<Error | null>(null);
   const [investmentActivity, setInvestmentActivity] = useState<InvestmentData | null>(null);
   const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<Error | null>(null);
+  const [coverageData, setCoverageData] = useState<InvestmentCoverageResponse | null>(null);
+  const [coverageLoading, setCoverageLoading] = useState(false);
+  const [coverageError, setCoverageError] = useState<Error | null>(null);
   const [realEstateRefreshKey, setRealEstateRefreshKey] = useState(0);
   const [selectedPikadonAccount, setSelectedPikadonAccount] = useState<InvestmentAccountSummary | null>(null);
   const [selectedRealEstateAccount, setSelectedRealEstateAccount] = useState<InvestmentAccountSummary | null>(null);
+  const portfolioRequestIdRef = useRef(0);
+  const historyRequestIdRef = useRef(0);
+  const performanceRequestIdRef = useRef(0);
+  const positionsRequestIdRef = useRef(0);
+  const activityRequestIdRef = useRef(0);
+  const coverageRequestIdRef = useRef(0);
 
   useEffect(() => {
     const requestedTab = resolveInvestmentTabFromSearch(location.search);
@@ -200,44 +225,69 @@ const InvestmentsPageContent: React.FC = () => {
   } = useInvestmentBalanceSheet({ enabled: isOnboardingResolved && !isLocked });
 
   const fetchPortfolioData = useCallback(async (): Promise<PortfolioSummary | null> => {
-    if (shouldBlockPageData) return null;
+    if (shouldBlockPageData) {
+      portfolioRequestIdRef.current += 1;
+      setPortfolioLoading(false);
+      setPortfolioError(null);
+      return null;
+    }
+    const requestId = ++portfolioRequestIdRef.current;
     setPortfolioLoading(true);
+    setPortfolioError(null);
     try {
-      const response = await apiClient.get<PortfolioSummary>('/api/investments/summary');
+      const response = await apiClient.get<PortfolioSummary>(
+        '/api/investments/summary?normalizeCurrencies=true',
+      );
       if (!response.ok) {
         throw new Error(response.statusText || 'Failed to fetch portfolio data');
       }
       const nextPortfolio = response.data as PortfolioSummary;
+      if (!nextPortfolio?.summary || !Array.isArray(nextPortfolio.accounts)) {
+        throw new Error('Portfolio response is incomplete');
+      }
+      if (requestId !== portfolioRequestIdRef.current) return null;
       setPortfolioData(nextPortfolio);
       return nextPortfolio;
     } catch (error) {
       console.error('Error fetching portfolio data:', error);
-      setPortfolioData(null);
+      if (requestId === portfolioRequestIdRef.current) {
+        setPortfolioError(error instanceof Error ? error : new Error('Failed to fetch portfolio data'));
+      }
       return null;
     } finally {
-      setPortfolioLoading(false);
+      if (requestId === portfolioRequestIdRef.current) {
+        setPortfolioLoading(false);
+      }
     }
   }, [shouldBlockPageData]);
 
   const fetchHistoryData = useCallback(async (portfolioOverride?: PortfolioSummary | null) => {
     const sourcePortfolio = portfolioOverride ?? portfolioData;
-    if (shouldBlockPageData || !sourcePortfolio || sourcePortfolio.summary.totalAccounts === 0) {
+    if (shouldBlockPageData || !sourcePortfolio?.summary || sourcePortfolio.summary.totalAccounts === 0) {
+      historyRequestIdRef.current += 1;
       setOverallHistory([]);
       setAccountHistories({});
+      setHistoryError(null);
+      setHistoryLoading(false);
       return;
     }
 
+    const requestId = ++historyRequestIdRef.current;
     setHistoryLoading(true);
+    setHistoryError(null);
     try {
       const uniqueAccountIds = getPortfolioAccountIds(sourcePortfolio, chartScope);
       if (uniqueAccountIds.length === 0) {
-        setOverallHistory([]);
-        setAccountHistories({});
+        if (requestId === historyRequestIdRef.current) {
+          setOverallHistory([]);
+          setAccountHistories({});
+        }
         return;
       }
 
       const params = new URLSearchParams({ timeRange: historyTimeRange });
       params.append('includeAccounts', '1');
+      params.append('normalizeCurrencies', '1');
       params.append('assetScope', chartScope);
       uniqueAccountIds.forEach((id) => params.append('accountIds', id.toString()));
 
@@ -250,6 +300,7 @@ const InvestmentsPageContent: React.FC = () => {
       }
 
       const historyResult = (response.data as PortfolioHistoryResponse) || {};
+      if (requestId !== historyRequestIdRef.current) return;
       setOverallHistory(Array.isArray(historyResult.history) ? historyResult.history : []);
 
       const histories: Record<number, PortfolioHistoryPoint[]> = {};
@@ -264,21 +315,33 @@ const InvestmentsPageContent: React.FC = () => {
       setAccountHistories(histories);
     } catch (error) {
       console.error('Error fetching history data:', error);
-      setOverallHistory([]);
-      setAccountHistories({});
+      if (requestId === historyRequestIdRef.current) {
+        setHistoryError(error instanceof Error ? error : new Error('Failed to fetch portfolio history'));
+      }
     } finally {
-      setHistoryLoading(false);
+      if (requestId === historyRequestIdRef.current) {
+        setHistoryLoading(false);
+      }
     }
   }, [chartScope, historyTimeRange, portfolioData, shouldBlockPageData]);
 
   const fetchPerformanceData = useCallback(async (portfolioOverride?: PortfolioSummary | null) => {
-    if (shouldBlockPageData) return;
+    if (shouldBlockPageData) {
+      performanceRequestIdRef.current += 1;
+      setPerformanceLoading(false);
+      setPerformanceError(null);
+      return;
+    }
+    const requestId = ++performanceRequestIdRef.current;
     setPerformanceLoading(true);
+    setPerformanceError(null);
     try {
       const sourcePortfolio = portfolioOverride ?? portfolioData;
       const params = new URLSearchParams({
         range: historyTimeRange,
         assetScope: chartScope,
+        normalizeCurrencies: '1',
+        includePositionEvents: '1',
       });
       if (sourcePortfolio) {
         const uniqueAccountIds = getPortfolioAccountIds(sourcePortfolio, chartScope);
@@ -291,18 +354,30 @@ const InvestmentsPageContent: React.FC = () => {
       if (!response.ok) {
         throw new Error(response.statusText || 'Failed to fetch investment performance');
       }
+      if (requestId !== performanceRequestIdRef.current) return;
       setPerformanceData(response.data as InvestmentPerformanceResponse);
     } catch (error) {
       console.error('Error fetching investment performance:', error);
-      setPerformanceData(null);
+      if (requestId === performanceRequestIdRef.current) {
+        setPerformanceError(error instanceof Error ? error : new Error('Failed to fetch investment performance'));
+      }
     } finally {
-      setPerformanceLoading(false);
+      if (requestId === performanceRequestIdRef.current) {
+        setPerformanceLoading(false);
+      }
     }
   }, [chartScope, historyTimeRange, portfolioData, shouldBlockPageData]);
 
   const fetchInvestmentActivity = useCallback(async () => {
-    if (shouldBlockPageData) return;
+    if (shouldBlockPageData) {
+      activityRequestIdRef.current += 1;
+      setActivityLoading(false);
+      setActivityError(null);
+      return;
+    }
+    const requestId = ++activityRequestIdRef.current;
     setActivityLoading(true);
+    setActivityError(null);
     try {
       const rangeDates = getRangeDates(historyTimeRange);
       const response = await apiClient.get<InvestmentData>('/api/analytics/investments', {
@@ -311,22 +386,32 @@ const InvestmentsPageContent: React.FC = () => {
       if (!response.ok) {
         throw new Error(response.statusText || 'Failed to fetch investment activity');
       }
+      if (requestId !== activityRequestIdRef.current) return;
       setInvestmentActivity(response.data as InvestmentData);
     } catch (error) {
       console.error('Error fetching investment activity:', error);
-      setInvestmentActivity(null);
+      if (requestId === activityRequestIdRef.current) {
+        setActivityError(error instanceof Error ? error : new Error('Failed to fetch investment activity'));
+      }
     } finally {
-      setActivityLoading(false);
+      if (requestId === activityRequestIdRef.current) {
+        setActivityLoading(false);
+      }
     }
   }, [historyTimeRange, shouldBlockPageData]);
 
   const fetchPositions = useCallback(async () => {
     if (shouldBlockPageData) {
+      positionsRequestIdRef.current += 1;
       setPositions([]);
+      setPositionsError(null);
+      setPositionsLoading(false);
       return;
     }
 
+    const requestId = ++positionsRequestIdRef.current;
     setPositionsLoading(true);
+    setPositionsError(null);
     try {
       const response = await apiClient.get<InvestmentPositionsResponse>('/api/investments/positions', {
         params: { status: 'open' },
@@ -334,12 +419,44 @@ const InvestmentsPageContent: React.FC = () => {
       if (!response.ok) {
         throw new Error(response.statusText || 'Failed to fetch investment positions');
       }
+      if (requestId !== positionsRequestIdRef.current) return;
       setPositions(Array.isArray(response.data?.positions) ? response.data.positions : []);
     } catch (error) {
       console.error('Error fetching investment positions:', error);
-      setPositions([]);
+      if (requestId === positionsRequestIdRef.current) {
+        setPositionsError(error instanceof Error ? error : new Error('Failed to fetch investment positions'));
+      }
     } finally {
-      setPositionsLoading(false);
+      if (requestId === positionsRequestIdRef.current) {
+        setPositionsLoading(false);
+      }
+    }
+  }, [shouldBlockPageData]);
+
+  const fetchCoverage = useCallback(async () => {
+    if (shouldBlockPageData) {
+      coverageRequestIdRef.current += 1;
+      setCoverageLoading(false);
+      setCoverageError(null);
+      return;
+    }
+    const requestId = ++coverageRequestIdRef.current;
+    setCoverageLoading(true);
+    setCoverageError(null);
+    try {
+      const response = await apiClient.get<InvestmentCoverageResponse>(
+        '/api/investments/coverage?thresholdDays=90',
+        { cacheMode: 'no-store' },
+      );
+      if (!response.ok) throw new Error(response.statusText || 'Failed to fetch investment coverage');
+      if (requestId !== coverageRequestIdRef.current) return;
+      setCoverageData(response.data || null);
+    } catch (error) {
+      if (requestId === coverageRequestIdRef.current) {
+        setCoverageError(error instanceof Error ? error : new Error('Failed to fetch investment coverage'));
+      }
+    } finally {
+      if (requestId === coverageRequestIdRef.current) setCoverageLoading(false);
     }
   }, [shouldBlockPageData]);
 
@@ -352,8 +469,9 @@ const InvestmentsPageContent: React.FC = () => {
       void fetchPerformanceData();
       void fetchInvestmentActivity();
       void fetchPositions();
+      void fetchCoverage();
     }
-  }, [fetchInvestmentActivity, fetchPerformanceData, fetchPositions, refreshTrigger, shouldBlockPageData]);
+  }, [fetchCoverage, fetchInvestmentActivity, fetchPerformanceData, fetchPositions, refreshTrigger, shouldBlockPageData]);
 
   useEffect(() => {
     void fetchHistoryData();
@@ -372,6 +490,7 @@ const InvestmentsPageContent: React.FC = () => {
         fetchPerformanceData(nextPortfolio),
         fetchInvestmentActivity(),
         fetchPositions(),
+        fetchCoverage(),
         refreshBalanceSheet(),
       ]);
       setRealEstateRefreshKey((current) => current + 1);
@@ -383,6 +502,7 @@ const InvestmentsPageContent: React.FC = () => {
   }, [
     fetchHistoryData,
     fetchInvestmentActivity,
+    fetchCoverage,
     fetchPerformanceData,
     fetchPortfolioData,
     fetchPositions,
@@ -421,11 +541,35 @@ const InvestmentsPageContent: React.FC = () => {
     return <LockedPagePlaceholder page="investments" onboardingStatus={onboardingStatus} />;
   }
 
-  const hasPortfolio = Boolean(portfolioData && portfolioData.summary.totalAccounts > 0);
+  const hasPortfolio = Boolean(portfolioData?.summary && portfolioData.summary.totalAccounts > 0);
   const portfolio = hasPortfolio ? (portfolioData as PortfolioSummary) : null;
-  const mixedCurrencies = Boolean(balanceSheetData?.assets.currencies.hasMultiple);
+  const fxIncomplete = portfolioData?.fx?.complete === false || balanceSheetData?.fx?.complete === false;
   const transactions = investmentActivity?.transactions || [];
-  const coverageLoading = portfolioLoading || balanceSheetLoading;
+  const portfolioCoverageLoading = portfolioLoading || balanceSheetLoading || coverageLoading;
+  const renderResourceError = (
+    error: Error | null,
+    hasStaleData: boolean,
+    resource: string,
+    onRetry: () => void,
+  ) => {
+    if (!error) return null;
+
+    return (
+      <Alert
+        severity={hasStaleData ? 'warning' : 'error'}
+        sx={{ borderRadius: 2 }}
+        action={(
+          <Button color="inherit" size="small" onClick={onRetry}>
+            {t('errors.retry')}
+          </Button>
+        )}
+      >
+        {hasStaleData
+          ? t('errors.showingPrevious', { resource })
+          : t('errors.loadFailed', { resource })}
+      </Alert>
+    );
+  };
 
   const investmentTabs = [
     { id: 0, icon: <DashboardIcon sx={{ fontSize: 20 }} />, label: t('tabs.overview', 'Overview') },
@@ -498,9 +642,25 @@ const InvestmentsPageContent: React.FC = () => {
           <Skeleton variant="rounded" height={300} animation="wave" />
           <Skeleton variant="rounded" height={400} animation="wave" />
         </Box>
+      ) : portfolioError && !hasPortfolio ? (
+        <Paper elevation={0} sx={{ p: 4, mt: 4 }}>
+          {renderResourceError(
+            portfolioError,
+            false,
+            t('errors.resources.portfolio'),
+            () => void fetchPortfolioData(),
+          )}
+        </Paper>
       ) : hasPortfolio ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, flexGrow: 1 }}>
-          {mixedCurrencies && (
+          {renderResourceError(
+            portfolioError,
+            true,
+            t('errors.resources.portfolio'),
+            () => void fetchPortfolioData(),
+          )}
+
+          {fxIncomplete && (
             <Alert severity="warning" sx={{ borderRadius: 2 }}>
               {t('warnings.multiCurrency')}
             </Alert>
@@ -750,19 +910,43 @@ const InvestmentsPageContent: React.FC = () => {
             </Box>
           </Box>
 
+          {fxIncomplete && (
+            <Alert
+              severity="warning"
+              sx={{ borderRadius: 2 }}
+              action={(
+                <Button color="inherit" size="small" onClick={() => setActiveTab(1)}>
+                  {t('fx.manageRates')}
+                </Button>
+              )}
+            >
+              {t('fx.missingRatesWarning')}
+            </Alert>
+          )}
+
           {/* Overview Tab */}
           {activeTab === 0 && (
             <Box role="tabpanel" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {renderResourceError(
+                historyError,
+                overallHistory.length > 0 || Object.keys(accountHistories).length > 0,
+                t('errors.resources.history'),
+                () => void fetchHistoryData(),
+              )}
               <Grid container spacing={3} sx={{ flexShrink: 0 }}>
                 <Grid size={{ xs: 12, lg: 8 }}>
                   <Box sx={{ height: { xs: 400, lg: 380 } }}>
                     <PortfolioValuePanel
                       portfolioData={portfolio}
                       overallHistory={overallHistory}
+                      performanceData={performanceData}
                       displayValue={getPortfolioScopeTotal(portfolio, chartScope)}
                       viewMode={chartViewMode}
                       onViewModeChange={setChartViewMode}
-                      loading={portfolioLoading || historyLoading}
+                      loading={
+                        (portfolioLoading && !portfolioData)
+                        || (historyLoading && overallHistory.length === 0)
+                      }
                     />
                   </Box>
                 </Grid>
@@ -791,16 +975,34 @@ const InvestmentsPageContent: React.FC = () => {
           {/* Holdings & Balance Tab */}
           {activeTab === 1 && (
             <Box role="tabpanel" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {renderResourceError(
+                positionsError,
+                positions.length > 0,
+                t('errors.resources.positions'),
+                () => void fetchPositions(),
+              )}
               <HoldingsPositionsSection
                 portfolioData={portfolio}
                 positions={positions}
-                loading={positionsLoading || portfolioLoading}
+                onChanged={handleRefreshAll}
+                loading={
+                  (positionsLoading && positions.length === 0)
+                  || (portfolioLoading && !portfolioData)
+                }
               />
 
               <BalanceSheetSection
                 data={balanceSheetData}
                 loading={balanceSheetLoading}
                 error={balanceSheetError}
+                onRetry={() => void refreshBalanceSheet()}
+              />
+
+              <LiabilitiesManager onChanged={handleRefreshAll} />
+
+              <FxSettingsPanel
+                currencies={balanceSheetData?.assets.currencies.distinct || []}
+                onChanged={handleRefreshAll}
               />
             </Box>
           )}
@@ -815,54 +1017,95 @@ const InvestmentsPageContent: React.FC = () => {
 
           {/* Performance Analytics Tab */}
           {activeTab === 3 && (
-            <Grid role="tabpanel" container spacing={3}>
-              <Grid size={{ xs: 12, lg: 8 }}>
-                <Box sx={{ minHeight: 420 }}>
-                  <PerformanceBreakdownPanel
-                    data={performanceData}
-                    loading={performanceLoading}
-                    multiCurrencyWarning={mixedCurrencies}
-                  />
-                </Box>
+            <Box role="tabpanel" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {renderResourceError(
+                performanceError,
+                Boolean(performanceData),
+                t('errors.resources.performance'),
+                () => void fetchPerformanceData(),
+              )}
+              <Grid container spacing={3}>
+                <Grid size={{ xs: 12, lg: 8 }}>
+                  <Box sx={{ minHeight: 420 }}>
+                    <PerformanceBreakdownPanel
+                      data={performanceData}
+                      loading={performanceLoading && !performanceData}
+                      multiCurrencyWarning={fxIncomplete}
+                    />
+                  </Box>
+                </Grid>
+                <Grid size={{ xs: 12, lg: 4 }}>
+                  <Box sx={{ minHeight: 420 }}>
+                    <PortfolioCoveragePanel
+                      portfolioData={portfolio}
+                      balanceSheet={balanceSheetData}
+                      unlinkedTransactionCount={coverageData?.unlinkedTransactions?.count || 0}
+                      loading={portfolioCoverageLoading}
+                      error={balanceSheetError || coverageError}
+                      onRetry={() => void Promise.all([refreshBalanceSheet(), fetchCoverage()])}
+                      onManageAccounts={(itemId, accountId) => openAccountsManagement({
+                        tab: 'investments',
+                        valuationAccountId: itemId === 'missingValuations' || itemId === 'staleValuations'
+                          ? accountId
+                          : undefined,
+                        editInvestmentAccountId: itemId === 'missingCurrency' ? accountId : undefined,
+                      })}
+                    />
+                  </Box>
+                </Grid>
               </Grid>
-              <Grid size={{ xs: 12, lg: 4 }}>
-                <Box sx={{ minHeight: 420 }}>
-                  <PortfolioCoveragePanel
-                    portfolioData={portfolio}
-                    balanceSheet={balanceSheetData}
-                    loading={coverageLoading}
-                  />
-                </Box>
-              </Grid>
-            </Grid>
+              {portfolio && (
+                <AllocationTargetsPanel
+                  portfolioData={portfolio}
+                  fxComplete={portfolio.fx?.complete !== false && balanceSheetData?.fx?.complete !== false}
+                  valuationsComplete={balanceSheetData?.missingValuationsCount === 0}
+                  baseCurrency={portfolio.fx?.baseCurrency || balanceSheetData?.baseCurrency || 'ILS'}
+                />
+              )}
+              <BenchmarkComparisonPanel performance={performanceData} />
+            </Box>
           )}
 
           {/* History Tab */}
           {activeTab === 4 && (
-            <Grid role="tabpanel" container spacing={3} sx={{ minHeight: 480 }}>
-              <Grid size={{ xs: 12, lg: 8 }}>
-                <Box sx={{ height: { xs: 520, lg: 500 } }}>
-                  <PortfolioHistorySection
-                    overallHistory={overallHistory}
-                    accountHistories={accountHistories}
-                    portfolioData={portfolio as PortfolioSummary}
-                    transactions={transactions}
-                    loadingHistory={historyLoading}
-                    loadingTransactions={activityLoading}
-                    scope={chartScope}
-                  />
-                </Box>
+            <Box role="tabpanel" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {renderResourceError(
+                historyError,
+                overallHistory.length > 0 || Object.keys(accountHistories).length > 0,
+                t('errors.resources.history'),
+                () => void fetchHistoryData(),
+              )}
+              {renderResourceError(
+                activityError,
+                Boolean(investmentActivity),
+                t('errors.resources.activity'),
+                () => void fetchInvestmentActivity(),
+              )}
+              <Grid container spacing={3} sx={{ minHeight: 480 }}>
+                <Grid size={{ xs: 12, lg: 8 }}>
+                  <Box sx={{ height: { xs: 520, lg: 500 } }}>
+                    <PortfolioHistorySection
+                      overallHistory={overallHistory}
+                      accountHistories={accountHistories}
+                      portfolioData={portfolio as PortfolioSummary}
+                      transactions={transactions}
+                      loadingHistory={historyLoading && overallHistory.length === 0}
+                      loadingTransactions={activityLoading && !investmentActivity}
+                      scope={chartScope}
+                    />
+                  </Box>
+                </Grid>
+                <Grid size={{ xs: 12, lg: 4 }}>
+                  <Box sx={{ height: { xs: 420, lg: 500 } }}>
+                    <PortfolioBreakdownSection
+                      portfolioData={portfolio as PortfolioSummary}
+                      onAccountClick={handleAccountClick}
+                      scope={chartScope}
+                    />
+                  </Box>
+                </Grid>
               </Grid>
-              <Grid size={{ xs: 12, lg: 4 }}>
-                <Box sx={{ height: { xs: 420, lg: 500 } }}>
-                  <PortfolioBreakdownSection
-                    portfolioData={portfolio as PortfolioSummary}
-                    onAccountClick={handleAccountClick}
-                    scope={chartScope}
-                  />
-                </Box>
-              </Grid>
-            </Grid>
+            </Box>
           )}
 
           <PikadonAccountDetailsDialog

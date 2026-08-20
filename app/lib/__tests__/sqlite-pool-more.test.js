@@ -26,6 +26,9 @@ describe('sqlite-pool additional coverage', () => {
               captured.params = params;
               return [];
             },
+            get() {
+              return undefined;
+            },
           };
         }
         pragma() {}
@@ -47,6 +50,9 @@ describe('sqlite-pool additional coverage', () => {
           return {
             run(params) {
               return { changes: params.length };
+            },
+            get() {
+              return undefined;
             },
           };
         }
@@ -72,6 +78,9 @@ describe('sqlite-pool additional coverage', () => {
             run() {
               return { changes: 0 };
             },
+            get() {
+              return undefined;
+            },
           };
         }
         pragma() {}
@@ -91,6 +100,9 @@ describe('sqlite-pool additional coverage', () => {
           return {
             all() {
               return [];
+            },
+            get() {
+              return undefined;
             },
           };
         }

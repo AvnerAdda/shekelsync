@@ -110,12 +110,12 @@ async function fetchLinkedInvestmentTransactions(client, accountIds = [], option
 
   if (startDate) {
     params.push(startDate);
-    filters.push(`t.date >= $${params.length}`);
+    filters.push(`substr(t.date, 1, 10) >= $${params.length}`);
   }
 
   if (endDate) {
     params.push(endDate);
-    filters.push(`t.date <= $${params.length}`);
+    filters.push(`substr(t.date, 1, 10) <= $${params.length}`);
   }
 
   const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
@@ -131,6 +131,8 @@ async function fetchLinkedInvestmentTransactions(client, accountIds = [], option
         t.name,
         t.memo,
         t.price,
+        t.original_currency,
+        t.charged_currency,
         t.is_pikadon_related,
         COALESCE(cd.category_type, t.category_type) AS category_type,
         cd.name AS category_name,

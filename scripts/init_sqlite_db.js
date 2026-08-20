@@ -656,6 +656,10 @@ const TABLE_DEFINITIONS = [
       asset_type TEXT,
       units REAL NOT NULL,
       average_cost REAL,
+      current_price REAL,
+      current_value REAL,
+      cost_basis REAL,
+      valuation_date TEXT,
       currency TEXT NOT NULL DEFAULT 'USD',
       notes TEXT,
       is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
@@ -782,11 +786,18 @@ const TABLE_DEFINITIONS = [
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       account_id INTEGER NOT NULL,
       position_name TEXT NOT NULL,
+      asset_symbol TEXT,
       asset_type TEXT,
       currency TEXT NOT NULL DEFAULT 'ILS',
       status TEXT NOT NULL DEFAULT 'open',
       opened_at TEXT NOT NULL,
       closed_at TEXT,
+      units REAL NOT NULL DEFAULT 0,
+      average_cost REAL,
+      current_price REAL,
+      valuation_date TEXT,
+      source TEXT NOT NULL DEFAULT 'manual',
+      legacy_asset_id INTEGER,
       original_cost_basis REAL NOT NULL DEFAULT 0,
       open_cost_basis REAL NOT NULL DEFAULT 0,
       current_value REAL,
@@ -804,8 +815,15 @@ const TABLE_DEFINITIONS = [
       principal_amount REAL,
       income_amount REAL,
       fee_amount REAL,
+      tax_amount REAL,
+      proceeds_amount REAL,
+      disposed_cost_basis REAL,
+      realized_gain_loss REAL,
+      reinvested INTEGER NOT NULL DEFAULT 0 CHECK (reinvested IN (0,1)),
+      deducted_from_position INTEGER NOT NULL DEFAULT 0 CHECK (deducted_from_position IN (0,1)),
       units REAL,
       current_value REAL,
+      current_price REAL,
       close_action TEXT,
       linked_transaction_identifier TEXT,
       linked_transaction_vendor TEXT,
@@ -817,6 +835,63 @@ const TABLE_DEFINITIONS = [
       FOREIGN KEY (linked_transaction_identifier, linked_transaction_vendor)
         REFERENCES transactions(identifier, vendor)
         ON DELETE SET NULL
+    );`,
+  `CREATE TABLE IF NOT EXISTS investment_allocation_targets (
+      scope TEXT NOT NULL,
+      category TEXT NOT NULL,
+      target_percentage REAL NOT NULL CHECK (target_percentage >= 0 AND target_percentage <= 100),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (scope, category)
+    );`,
+  `CREATE TABLE IF NOT EXISTS investment_liabilities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      liability_name TEXT NOT NULL,
+      liability_type TEXT NOT NULL DEFAULT 'other',
+      balance REAL NOT NULL CHECK (balance >= 0),
+      currency TEXT NOT NULL DEFAULT 'ILS',
+      interest_rate REAL,
+      monthly_payment REAL,
+      as_of_date TEXT NOT NULL,
+      included_in_net_worth INTEGER NOT NULL DEFAULT 1 CHECK (included_in_net_worth IN (0,1)),
+      notes TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`,
+  `CREATE TABLE IF NOT EXISTS investment_fx_preferences (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      base_currency TEXT NOT NULL DEFAULT 'ILS',
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`,
+  `CREATE TABLE IF NOT EXISTS investment_fx_rates (
+      rate_date TEXT NOT NULL,
+      from_currency TEXT NOT NULL,
+      to_currency TEXT NOT NULL,
+      rate REAL NOT NULL CHECK (rate > 0),
+      source TEXT NOT NULL DEFAULT 'manual',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (rate_date, from_currency, to_currency)
+    );`,
+  `CREATE TABLE IF NOT EXISTS investment_benchmarks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'ILS',
+      is_total_return INTEGER NOT NULL DEFAULT 0 CHECK (is_total_return IN (0,1)),
+      source TEXT NOT NULL,
+      source_version TEXT,
+      is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0,1)),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`,
+  `CREATE TABLE IF NOT EXISTS investment_benchmark_points (
+      benchmark_id INTEGER NOT NULL,
+      point_date TEXT NOT NULL,
+      point_value REAL NOT NULL CHECK (point_value > 0),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (benchmark_id, point_date),
+      FOREIGN KEY (benchmark_id) REFERENCES investment_benchmarks(id) ON DELETE CASCADE
     );`,
   `CREATE TABLE IF NOT EXISTS account_pairings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1231,7 +1306,44 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_real_estate_properties_city ON real_estate_properties (city);',
   'CREATE INDEX IF NOT EXISTS idx_investment_positions_account ON investment_positions (account_id, status);',
   'CREATE INDEX IF NOT EXISTS idx_investment_positions_status ON investment_positions (status, opened_at DESC);',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_investment_positions_legacy_asset ON investment_positions (legacy_asset_id) WHERE legacy_asset_id IS NOT NULL;',
   'CREATE INDEX IF NOT EXISTS idx_investment_position_events_position ON investment_position_events (position_id, effective_date DESC);',
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_investment_position_events_linked_transaction_unique
+    ON investment_position_events (linked_transaction_identifier, linked_transaction_vendor)
+    WHERE linked_transaction_identifier IS NOT NULL
+      AND linked_transaction_vendor IS NOT NULL;`,
+  `CREATE TRIGGER IF NOT EXISTS trg_position_event_link_unique_insert
+    BEFORE INSERT ON investment_position_events
+    WHEN NEW.linked_transaction_identifier IS NOT NULL
+      AND NEW.linked_transaction_vendor IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM investment_position_events existing_event
+        WHERE existing_event.linked_transaction_identifier = NEW.linked_transaction_identifier
+          AND existing_event.linked_transaction_vendor = NEW.linked_transaction_vendor
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'position event transaction link already exists');
+    END;`,
+  `CREATE TRIGGER IF NOT EXISTS trg_position_event_link_unique_update
+    BEFORE UPDATE OF linked_transaction_identifier, linked_transaction_vendor
+    ON investment_position_events
+    WHEN NEW.linked_transaction_identifier IS NOT NULL
+      AND NEW.linked_transaction_vendor IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM investment_position_events existing_event
+        WHERE existing_event.linked_transaction_identifier = NEW.linked_transaction_identifier
+          AND existing_event.linked_transaction_vendor = NEW.linked_transaction_vendor
+          AND existing_event.id <> OLD.id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'position event transaction link already exists');
+    END;`,
+  'CREATE INDEX IF NOT EXISTS idx_investment_liabilities_active ON investment_liabilities (is_active, as_of_date DESC);',
+  'CREATE INDEX IF NOT EXISTS idx_investment_fx_rates_lookup ON investment_fx_rates (from_currency, to_currency, rate_date DESC);',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_investment_benchmarks_default ON investment_benchmarks (is_default) WHERE is_default = 1;',
+  'CREATE INDEX IF NOT EXISTS idx_investment_benchmark_points_date ON investment_benchmark_points (benchmark_id, point_date ASC);',
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_created_at ON scrape_events (created_at DESC);',
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_vendor ON scrape_events (vendor);',
   'CREATE INDEX IF NOT EXISTS idx_scrape_events_credential_id ON scrape_events (credential_id);',

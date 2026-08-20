@@ -36,7 +36,7 @@ test('investments accordion reveals account details', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /Investments Dashboard/i })).toBeVisible({ timeout: 30000 });
   await expect(page.getByText('Portfolio Value', { exact: true })).toBeVisible({ timeout: 30000 });
   await page.getByRole('tab', { name: 'Holdings & Balance' }).click();
-  await expect(page.getByText('Holdings / Positions', { exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText('Holdings and positions', { exact: true })).toBeVisible({ timeout: 30000 });
   await expect(page.getByText('MSFT Core', { exact: true })).toBeVisible({ timeout: 30000 });
   await expect(page.getByText('Cash Reserve', { exact: true }).first()).toBeVisible({ timeout: 30000 });
   await expect(page.getByText('Cash', { exact: true }).first()).toBeVisible({ timeout: 30000 });

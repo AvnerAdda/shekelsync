@@ -22,6 +22,9 @@ describe('sqlite-pool edge cases', () => {
             all() {
               return [];
             },
+            get() {
+              return undefined;
+            },
           };
         }
         pragma() {}
@@ -39,6 +42,7 @@ describe('sqlite-pool edge cases', () => {
     vi.spyOn(fs, 'existsSync').mockReturnValue(true);
     const prepareMock = vi.fn(() => ({
       all: () => [{ id: 1 }],
+      get: () => undefined,
     }));
 
     const pool = createSqlitePool({

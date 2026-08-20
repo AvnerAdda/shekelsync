@@ -5,6 +5,10 @@ import path from 'path';
 
 const mockMapVendorCodeToInstitutionId = vi.fn();
 const mockGetInstitutionById = vi.fn();
+const mockGetInstitutionByVendorCode = vi.fn();
+const mockBuildInstitutionFromRow = vi.fn((row) => (
+  row?.institution_id ? { id: row.institution_id } : null
+));
 
 const databaseModuleMock = vi.hoisted(() => ({
   query: vi.fn(),
@@ -42,6 +46,8 @@ vi.mock(
 vi.mock('../institutions.js', () => ({
   mapVendorCodeToInstitutionId: mockMapVendorCodeToInstitutionId,
   getInstitutionById: mockGetInstitutionById,
+  getInstitutionByVendorCode: mockGetInstitutionByVendorCode,
+  buildInstitutionFromRow: mockBuildInstitutionFromRow,
   INSTITUTION_JOIN_VENDOR_CRED: '',
   INSTITUTION_SELECT_FIELDS: '',
   INSTITUTION_JOIN_INVESTMENT_ACCOUNT: '',
@@ -84,10 +90,19 @@ afterAll(() => {
 });
 
 describe('institution enforcement', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
-    return loadServices();
+    await loadServices();
+    credentialsService.__setDatabase(databaseModuleMock);
+    credentialsService.__setInstitutionsModule({
+      mapVendorCodeToInstitutionId: mockMapVendorCodeToInstitutionId,
+      getInstitutionById: mockGetInstitutionById,
+      buildInstitutionFromRow: mockBuildInstitutionFromRow,
+      INSTITUTION_JOIN_VENDOR_CRED: '',
+      INSTITUTION_SELECT_FIELDS: '',
+    });
+    investmentAccountsService.__setDatabase(databaseModuleMock);
   });
 
   it('rejects credential creation when institution cannot be resolved', async () => {
@@ -98,15 +113,42 @@ describe('institution enforcement', () => {
     expect(databaseModuleMock.query).not.toHaveBeenCalled();
   });
 
-  it('rejects investment account creation when institution cannot be resolved', async () => {
+  it('allows a custom investment account when institution cannot be resolved', async () => {
     mockMapVendorCodeToInstitutionId.mockResolvedValueOnce(null);
+    mockGetInstitutionByVendorCode.mockResolvedValueOnce(null);
+    databaseModuleMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM institution_nodes')) {
+        return { rows: [] };
+      }
+      if (sql.includes('INSERT INTO investment_accounts')) {
+        return { rows: [{ id: 71 }] };
+      }
+      if (sql.includes('FROM investment_accounts ia')) {
+        return {
+          rows: [{
+            id: 71,
+            account_name: 'My Account',
+            account_type: 'brokerage',
+            institution: 'Independent Broker',
+            institution_id: null,
+          }],
+        };
+      }
+      throw new Error(`Unexpected query in custom institution test: ${sql.slice(0, 120)}`);
+    });
 
-    await expect(
-      investmentAccountsService.createAccount({
-        account_name: 'My Account',
-        account_type: 'brokerage',
-      }),
-    ).rejects.toThrow('institution_id is required');
-    expect(databaseModuleMock.query).not.toHaveBeenCalled();
+    const result = await investmentAccountsService.createAccount({
+      account_name: 'My Account',
+      account_type: 'brokerage',
+      institution: 'Independent Broker',
+    });
+
+    expect(result.account).toMatchObject({
+      id: 71,
+      account_type: 'brokerage',
+      institution_id: null,
+      institution: 'Independent Broker',
+    });
+    expect(databaseModuleMock.query).toHaveBeenCalled();
   });
 });

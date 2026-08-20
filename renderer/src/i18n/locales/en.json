@@ -232,7 +232,10 @@
           "pendingIncludedNote": "Already included in Expenses above; shown separately by settlement date."
         },
         "portfolio": {
-          "title": "Investment Portfolio"
+          "title": "Investment Portfolio",
+          "emptyTitle": "No investments yet",
+          "emptyDescription": "Add an investment account to track your portfolio here.",
+          "addAccount": "Add investment account"
         },
         "analysis": {
           "title": "Financial Health"
@@ -846,6 +849,7 @@
       "historicalData": "Historical",
       "forecastData": "Forecast",
       "next30Days": "30 day forecast",
+      "basedOnPatterns": "Based on historical spending patterns",
       "scenarioSummary": "End of month projection based on {{simulations}} Monte Carlo simulations",
       "daysRemaining": "{{count}} days remaining in month",
       "actualNet": "Actual Net Position",
@@ -889,6 +893,7 @@
       "peakIncome": "Peak income day"
     },
     "transactionsOn": "Transactions on {{date}} ({{count}} transactions):",
+    "predictedTransactionsOn": "Predicted transactions on {{date}} ({{count}})",
     "noTransactionsForDate": "No transactions found for this date."
   },
   "analysisPage": {
@@ -1857,7 +1862,19 @@
       "ariaLabel": "Investment sections"
     },
     "warnings": {
-      "multiCurrency": "Multiple currencies are present. Totals and charts still reflect raw account values, not FX-normalized values."
+      "multiCurrency": "Some dated exchange rates are missing. Totals and return analytics remain partial until FX coverage is complete."
+    },
+    "errors": {
+      "retry": "Retry",
+      "loadFailed": "Could not load {{resource}}.",
+      "showingPrevious": "Could not refresh {{resource}}. Showing previously loaded data.",
+      "resources": {
+        "portfolio": "the portfolio",
+        "history": "portfolio history",
+        "performance": "performance analytics",
+        "positions": "investment positions",
+        "activity": "investment activity"
+      }
     },
     "filters": {
       "rangeLabel": "Transactions range",
@@ -1873,18 +1890,38 @@
       "noChartData": "No history data available",
       "modes": {
         "value": "Value",
-        "performance": "Performance"
+        "performance": "Investment return"
       },
-      "tooltipValue": "Value",
-      "tooltipPerformance": "Change"
+      "balanceChange": "Balance change, including deposits and withdrawals",
+      "returnAfterFlows": "Investment return after separating tracked cash flows",
+      "estimatedReturnAfterFlows": "Estimated investment return after separating tracked cash flows",
+      "tooltipValue": "Portfolio value",
+      "tooltipChange": "Change from start",
+      "tooltipChangePercent": "Change from start (%)",
+      "tooltipPerformance": "Investment return"
     },
     "allocation": {
-      "title": "Allocation",
+      "title": "Account allocation",
       "total": "Total",
       "viewMore": "View more",
       "tooltipCategory": "Category",
       "tooltipValue": "Value",
-      "tooltipPercentage": "Percentage"
+      "tooltipPercentage": "Percentage",
+      "unavailable": "N/A"
+    },
+    "allocationTargets": {
+      "title": "Target allocation",
+      "subtitle": "Compare your current category mix with your targets, excluding real estate.",
+      "edit": "Edit targets",
+      "set": "Set targets",
+      "fxRequired": "Add the missing exchange rates before calculating allocation drift.",
+      "valuationsRequired": "Value every tracked account before calculating allocation drift.",
+      "empty": "No allocation targets have been saved yet.",
+      "actual": "Current",
+      "target": "Target",
+      "dialogTitle": "Edit allocation targets",
+      "total": "Target total",
+      "clear": "Clear targets"
     },
     "performance": {
       "title": "My Performance",
@@ -2061,8 +2098,10 @@
       "updated": "Updated {{date}}",
       "na": "N/A",
       "error": "Failed to load balance sheet snapshot.",
+      "staleError": "Could not refresh the balance sheet. Showing previously loaded data.",
+      "retry": "Retry",
       "headline": {
-        "netWorth": "NET WORTH",
+        "netWorth": "TRACKED NET WORTH",
         "assets": "TRACKED ASSETS"
       },
       "buckets": {
@@ -2075,20 +2114,95 @@
       },
       "bucketMeta": "{{withValue}}/{{total}} valued",
       "badges": {
-        "partial": "Partial",
-        "multiCurrency": "Multi-currency",
-        "missingValues": "{{count}} missing valuations"
+      "partial": "Partial",
+      "multiCurrency": "Multi-currency",
+      "missingFx": "{{count}} missing FX rates",
+      "missingValues": "{{count}} missing valuations"
       },
       "liabilities": {
         "pendingCcDebt": "Pending credit card debt",
+        "totalTracked": "Tracked liabilities",
+        "components": "Standalone liabilities: {{manual}} · Pending card debt",
         "unavailable": "Unavailable",
         "noBaseline": "Need a categorized repayment"
       },
-      "hints": {
-        "multiCurrency": "Multiple currencies detected ({{currencies}}). Totals assume values are already in the same currency.",
+    "hints": {
+      "missingFx": "Totals are partial until every dated FX rate is available.",
+      "multiCurrency": "Tracked values span {{currencies}} and are converted to the selected base currency when dated rates are available.",
         "pendingDebt": "Pending credit card debt is unavailable until you set up card pairings and categorize at least one repayment."
       },
-      "footnote": "Excludes loans/mortgage (not tracked yet)"
+      "footnote": "Includes tracked standalone liabilities. Mortgages entered in property valuations are already reflected in net equity and should not be added again."
+    },
+    "liabilities": {
+      "title": "Standalone liabilities",
+      "subtitle": "Track loans and other debts that are not already included in an asset’s value.",
+      "add": "Add liability",
+      "mortgageNote": "Do not add a property mortgage here if the property valuation already shows net equity—the mortgage has already been deducted.",
+      "empty": "No standalone liabilities are tracked.",
+      "actions": "Actions",
+      "dialogAdd": "Add standalone liability",
+      "dialogEdit": "Edit liability",
+      "removeTitle": "Stop tracking this liability?",
+      "removeMessage": "This removes it from tracked net worth. Historical account snapshots are not changed.",
+      "types": {
+        "loan": "Loan",
+        "credit_line": "Line of credit",
+        "tax": "Tax liability",
+        "other": "Other"
+      },
+      "fields": {
+        "name": "Name",
+        "type": "Type",
+        "balance": "Balance",
+        "payment": "Monthly payment",
+        "date": "As of",
+        "currency": "Currency",
+        "rate": "Interest rate (%)",
+        "notes": "Notes"
+      }
+    },
+    "fx": {
+      "title": "Currency conversion",
+      "subtitle": "Dated exchange rates convert portfolio totals into your selected base currency.",
+      "manual": "Add manual rate",
+      "sync": "Sync official rates",
+      "sourceNote": "Official sync uses Bank of Israel representative rates. Rates are indicative, stored locally, and never alter your original currency amounts.",
+      "baseCurrency": "Base currency",
+      "empty": "No exchange rates are stored yet.",
+      "pair": "Currency pair",
+      "date": "Rate date",
+      "rate": "Exchange rate",
+      "source": "Source",
+      "manualTitle": "Add a dated exchange rate",
+      "from": "From currency",
+      "to": "To currency",
+      "rule": "Amount in the target currency = amount in the source currency × exchange rate.",
+      "missingRatesWarning": "Some dated exchange rates are missing. Converted totals and return analytics stay unavailable until coverage is complete.",
+      "manageRates": "Manage rates"
+    },
+    "benchmark": {
+      "title": "Benchmark comparison",
+      "subtitle": "Compare portfolio return with a real imported index series over aligned boundaries.",
+      "replace": "Replace series",
+      "import": "Import series",
+      "guardrail": "No synthetic market return is shown. Import dated data from a source you trust; use a total-return index to include dividends.",
+      "empty": "No benchmark series is configured.",
+      "portfolio": "Portfolio TWR",
+      "portfolioEstimated": "Portfolio estimated return",
+      "totalReturn": "total return",
+      "priceReturn": "price return",
+      "difference": "Difference",
+      "approximation": "Approximate comparison using benchmark observations from {{start}} to {{end}}; portfolio and benchmark return methods may differ.",
+      "noOverlap": "The imported series does not cover both selected portfolio dates.",
+      "missingFx": "Add dated FX rates to compare this benchmark in the portfolio base currency.",
+      "dialogTitle": "Import benchmark series",
+      "name": "Benchmark name",
+      "currency": "Currency",
+      "source": "Source",
+      "version": "Source or version",
+      "isTotalReturn": "Series includes reinvested distributions",
+      "points": "CSV data points (date,value)",
+      "needPoints": "Enter at least two valid date,value rows."
     },
     "history": {
       "title": "Portfolio Performance",
@@ -2205,8 +2319,25 @@
     },
     "coverage": {
       "title": "Portfolio Coverage",
-      "subtitle": "Measures how complete and reviewable your investment data is.",
+      "subtitle": "Shows what is missing and which accounts need review.",
       "empty": "Coverage metrics will appear once investment accounts are available.",
+      "error": "Could not load portfolio coverage.",
+      "staleError": "Could not refresh coverage. Showing previously loaded data.",
+      "complete": "Complete",
+      "issues_one": "{{count}} issue",
+      "issues_other": "{{count}} issues",
+      "affected": "Accounts: {{names}}",
+      "affectedCount_one": "{{count}} account needs review",
+      "affectedCount_other": "{{count}} accounts need review",
+      "affectedWithMore_one": "Accounts: {{names}} and {{count}} more",
+      "affectedWithMore_other": "Accounts: {{names}} and {{count}} more",
+      "transactionsAffected_one": "{{count}} investment transaction needs an account link",
+      "transactionsAffected_other": "{{count}} investment transactions need account links",
+      "actions": {
+        "retry": "Retry",
+        "reviewAccounts": "Review accounts",
+        "reviewTransactions": "Review transactions"
+      },
       "items": {
         "missingValuations": {
           "label": "Missing valuations",
@@ -2220,9 +2351,9 @@
           "label": "Missing currency metadata",
           "hint": "Accounts without a base currency make totals less trustworthy."
         },
-        "missingHoldings": {
-          "label": "Accounts missing holdings",
-          "hint": "Accounts with no valuation and no holdings detail yet."
+        "unlinkedTransactions": {
+          "label": "Unlinked investment transactions",
+          "hint": "Link recent investment cash flows so return attribution is complete."
         }
       }
     },
@@ -2231,10 +2362,20 @@
       "subtitle": "Separates cash movements from market movement for the selected range.",
       "empty": "No performance breakdown available yet.",
       "emptyTimeline": "No timeline data available for this range.",
-      "mixedCurrencyWarning": "Mixed currencies detected. Breakdown is useful, but totals are not FX-normalized yet.",
+      "mixedCurrencyWarning": "Some dated exchange rates are missing. Return analytics are unavailable or partial until FX coverage is complete.",
       "na": "N/A",
+      "confidence": "Return confidence is limited. The calculation used {{points}} history points; review valuation and FX coverage.",
+      "quality": {
+        "observed": "Observed data",
+        "estimated": "Estimated",
+        "unavailable": "Unavailable"
+      },
+      "basis": {
+        "gross": "Before tracked fees and taxes"
+      },
       "metrics": {
         "twr": "TWR {{value}}",
+        "estimatedReturn": "Estimated return {{value}}",
         "mwr": "MWR {{value}}"
       },
       "cards": {
@@ -2244,6 +2385,11 @@
         "capitalReturns": "Capital Returns",
         "distributedIncome": "Distributed Income",
         "fees": "Fees",
+        "taxes": "Taxes",
+        "realizedGain": "Realized Gain (Net)",
+        "unrealizedGain": "Unrealized Gain",
+        "dividends": "Dividends",
+        "interest": "Interest",
         "marketMove": "Market Move"
       }
     },
@@ -2255,9 +2401,9 @@
       "max": "Max"
     },
     "holdings": {
-      "title": "Holdings / Positions",
-      "subtitle": "Open positions plus fallback holdings from the latest account snapshots.",
-      "empty": "No holdings or positions matched the current filters.",
+      "title": "Holdings and positions",
+      "subtitle": "Tracked open positions plus holdings from the latest account valuation snapshots.",
+      "empty": "No holdings or positions match the current filters.",
       "filters": {
         "searchLabel": "Search",
         "searchPlaceholder": "Search by name, account, or institution",
@@ -2266,11 +2412,13 @@
         "rowTypeLabel": "Row type",
         "rowTypeAll": "All rows",
         "rowTypePositions": "Positions",
-        "rowTypeHoldings": "Holdings"
+        "rowTypeHoldings": "Holdings",
+        "rowTypeReconciliation": "Reconciliation"
       },
       "rowKind": {
         "position": "Position",
-        "holding": "Holding"
+        "holding": "Holding",
+        "reconciliation": "Reconciliation"
       },
       "status": {
         "needsValuation": "Needs valuation"
@@ -2285,9 +2433,124 @@
         "currentValue": "Current value",
         "costBasis": "Cost basis",
         "unrealizedPnL": "Unrealized P&L",
-        "date": "Updated / Opened",
-        "notAvailable": "N/A"
+        "date": "Updated / opened",
+        "notAvailable": "N/A",
+        "actions": "Actions",
+        "unitsValue": "Units: {{units}}",
+        "priceValue": "{{price}} per unit"
+      },
+      "actions": {
+        "add": "Add holding",
+        "addDisabled": "Create an investment account before adding a holding",
+        "activity": "Add activity",
+        "edit": "Edit holding",
+        "close": "Close holding"
+      },
+      "reconciliation": {
+        "remainder": "Unallocated account value",
+        "unavailable": "Reconciliation unavailable",
+        "help": "Account snapshot minus tracked items",
+        "currencyMismatch": "Item currencies cannot be added directly",
+        "missingValues": "Add values to one or more items to calculate the remainder",
+        "itemType": "Unallocated snapshot value"
+      },
+      "positionDialog": {
+        "editTitle": "Edit holding",
+        "addTitle": "Add holding",
+        "account": "Investment account",
+        "name": "Holding name",
+        "symbol": "Symbol",
+        "assetType": "Asset type",
+        "currency": "Currency",
+        "units": "Units",
+        "averageCost": "Average cost per unit",
+      "currentPrice": "Current price per unit",
+      "valuationDate": "Valuation date",
+      "notes": "Notes",
+      "snapshotNote": "This tracks the holding within its account. The account-level valuation snapshot remains unchanged.",
+      "errors": {
+        "accountRequired": "Choose an investment account.",
+        "nameRequired": "Enter a holding name.",
+        "currencyInvalid": "Use a three-letter currency code.",
+        "unitsNonNegative": "Units must be zero or greater.",
+        "averageCostNonNegative": "Average cost must be zero or greater.",
+        "currentPriceNonNegative": "Current price must be zero or greater.",
+        "valuationDateRequired": "Choose a valuation date.",
+        "saveFailed": "Could not save the holding. Try again."
       }
+      },
+      "assetTypes": {
+        "stock": "Stock",
+        "etf": "ETF",
+        "mutual_fund": "Mutual fund",
+        "bond": "Bond",
+        "cash": "Cash",
+        "crypto": "Cryptocurrency",
+        "real_estate": "Real estate",
+        "pension": "Pension",
+        "other": "Other"
+      },
+      "activityTypes": {
+        "buy": "Purchase",
+        "sell": "Sale",
+        "dividend": "Dividend",
+        "interest": "Interest",
+        "fee": "Fee",
+        "tax": "Tax",
+        "valuation": "Valuation"
+      },
+      "activityDialog": {
+        "title": "Record holding activity",
+        "type": "Activity type",
+        "date": "Activity date",
+        "investedAmount": "Amount invested",
+        "proceeds": "Sale proceeds",
+        "disposedBasis": "Cost basis sold",
+        "income": "Income received",
+        "fee": "Fee amount",
+        "tax": "Tax amount",
+        "units": "Units (optional)",
+        "currentPrice": "Price per unit (optional)",
+        "currentValue": "Holding value after activity",
+        "saleFee": "Sale fee (optional)",
+        "saleTax": "Sale tax (optional)",
+        "closeAction": "Holding after sale",
+        "estimatedGain": "Estimated realized gain/loss",
+        "reinvested": "Reinvest this income in the holding",
+        "deducted": "Deduct this amount from the tracked holding value",
+        "notes": "Notes",
+        "incomeNote": "Income is recorded without changing the holding value unless you mark it as reinvested or enter a new value.",
+      "deductionNote": "Fees and taxes change the holding value only when you explicitly deduct them.",
+      "snapshotNote": "Activity updates this holding’s ledger; it does not overwrite the account valuation snapshot.",
+      "save": "Record activity",
+      "errors": {
+        "numberNonNegative": "Enter zero or a positive number.",
+        "dateRequired": "Choose an activity date.",
+        "dateBeforeOpen": "Activity cannot be earlier than the holding open date.",
+        "investedAmountRequired": "Enter the invested amount.",
+        "proceedsRequired": "Enter the sale proceeds, including zero for a total loss.",
+        "disposedBasisRequired": "Enter the cost basis disposed by this sale.",
+        "disposedBasisExceedsOpen": "Disposed basis cannot exceed the open cost basis.",
+        "unitsExceedOpen": "Disposed units cannot exceed the open units.",
+        "incomeRequired": "Enter the income amount.",
+        "feeRequired": "Enter the fee amount.",
+        "taxRequired": "Enter the tax amount.",
+        "valueRequired": "Enter the holding value as of this date.",
+        "recordFailed": "Could not record the activity. Try again."
+      }
+      },
+      "closeActions": {
+        "keepOpen": "Keep open",
+        "partial": "Partial sale",
+        "full": "Full sale and close"
+      },
+    "closeDialog": {
+      "title": "Close holding?",
+      "message": "This stops tracking {{name}} as an open item. Existing activity and account valuation snapshots are kept.",
+      "errors": {
+        "closeFailed": "Could not close the holding. Try again."
+      }
+    }
     }
   },
   "budgetsPage": {
@@ -2921,7 +3184,17 @@
       "maximizeWindow": "Maximize window",
       "restoreWindow": "Restore window",
       "closeWindow": "Close window",
-      "sendFeedback": "Send Feedback"
+      "sendFeedback": "Send Feedback",
+      "moreActions": "More actions"
+    },
+    "moreActions": {
+      "security": "Security status",
+      "securityLevels": {
+        "secure": "Secure",
+        "warning": "Needs attention",
+        "error": "Issues detected",
+        "unknown": "Unknown"
+      }
     },
     "update": {
       "tooltip": {
@@ -3179,9 +3452,22 @@
       "asOfDate": "As of Date",
       "costBasis": "Cost Basis (Optional)",
       "costBasisHelper": "Total amount invested",
+      "accountCurrency": "Valuations use the selected investment account’s currency.",
       "notes": "Notes (Optional)",
       "notesPlaceholder": "Any additional notes about this update...",
       "addUpdate": "Add Update"
+    },
+    "investmentEdit": {
+      "title": "Edit investment account",
+      "currencyHelper": "Use a three-letter code such as ILS, USD, or EUR.",
+      "save": "Save changes",
+      "saving": "Saving...",
+      "updated": "Investment account updated",
+      "errors": {
+        "nameRequired": "Account name is required",
+        "currencyInvalid": "Enter a valid three-letter currency code",
+        "saveFailed": "Failed to update the investment account"
+      }
     },
     "assets": {
       "title": "Individual Assets",
@@ -3212,6 +3498,7 @@
     },
     "tooltips": {
       "addValueUpdate": "Add Value Update",
+      "editInvestmentAccount": "Edit account details",
       "manageAssets": "Manage Assets",
       "updateCredentials": "Update credentials",
       "deleteAccount": "Delete Account",

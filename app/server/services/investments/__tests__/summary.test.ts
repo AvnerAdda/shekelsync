@@ -198,13 +198,13 @@ describe('investment summary service', () => {
       totalCostBasis: 1900,
       unrealizedGainLoss: 100,
       totalAccounts: 3,
-      accountsWithValues: 2,
+      accountsWithValues: 3,
     });
     expect(result.summary.roi).toBeCloseTo((100 / 1900) * 100, 6);
     expect(result.summary.liquid).toMatchObject({
       totalValue: 1200,
       totalCost: 1000,
-      accountsCount: 1,
+      accountsCount: 2,
     });
     expect(result.summary.illiquid).toMatchObject({
       totalValue: 0,
@@ -218,7 +218,7 @@ describe('investment summary service', () => {
     });
     expect(result.categoryBuckets).toMatchObject({
       cash: expect.objectContaining({ totalValue: 0, accountsCount: 0 }),
-      liquid: expect.objectContaining({ totalValue: 1200, totalCost: 1000, accountsCount: 1 }),
+      liquid: expect.objectContaining({ totalValue: 1200, totalCost: 1000, accountsCount: 2 }),
       illiquid: expect.objectContaining({ totalValue: 0, totalCost: 0, accountsCount: 0 }),
       restricted: expect.objectContaining({ totalValue: 800, totalCost: 900, accountsCount: 1 }),
       stability: expect.objectContaining({ totalValue: 0, accountsCount: 0 }),
@@ -872,6 +872,187 @@ describe('investment summary service', () => {
       cost_basis: 8000,
       as_of_date: '2026-03-02',
       linked_contribution_adjustment: 2000,
+    });
+  });
+
+  it('preserves native amounts and null converted values when FX is unavailable', async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM investment_accounts ia')) {
+        return {
+          rows: [
+            {
+              id: 91,
+              account_name: 'US Brokerage',
+              account_type: 'brokerage',
+              investment_category: 'liquid',
+              currency: 'USD',
+              institution_id: null,
+            },
+            {
+              id: 93,
+              account_name: 'ILS Brokerage',
+              account_type: 'brokerage',
+              investment_category: 'liquid',
+              currency: 'ILS',
+              institution_id: null,
+            },
+          ],
+        };
+      }
+      if (isStandardSnapshotQuery(sql)) {
+        return {
+          rows: [
+            {
+              id: 910,
+              account_id: 91,
+              holding_type: 'standard',
+              status: 'active',
+              current_value: '100',
+              cost_basis: '80',
+              as_of_date: '2026-02-10',
+            },
+            {
+              id: 930,
+              account_id: 93,
+              holding_type: 'standard',
+              status: 'active',
+              current_value: '50',
+              cost_basis: '30',
+              as_of_date: '2026-02-10',
+            },
+          ],
+        };
+      }
+      if (isActivePikadonSnapshotQuery(sql)) return { rows: [] };
+      if (sql.includes('FROM investment_assets iasset')) return { rows: [] };
+      if (sql.includes('FROM institution_nodes')) return { rows: [] };
+      if (sql.includes('SELECT base_currency FROM investment_fx_preferences')) {
+        return { rows: [{ base_currency: 'ILS' }] };
+      }
+      if (sql.includes('FROM investment_fx_rates') && sql.includes('rate_date <= $3')) {
+        return { rows: [] };
+      }
+      return { rows: [] };
+    });
+
+    const result = await getInvestmentSummary({ normalizeCurrencies: true });
+
+    expect(result.accounts[0]).toMatchObject({
+      native_currency: 'USD',
+      native_current_value: 100,
+      native_cost_basis: 80,
+      current_value: null,
+      cost_basis: null,
+      fx_status: 'missing',
+    });
+    expect(result.summary).toMatchObject({
+      totalPortfolioValue: null,
+      totalCostBasis: null,
+      unrealizedGainLoss: null,
+      roi: null,
+      accountsWithValues: 2,
+    });
+    expect(result.summary.liquid).toMatchObject({
+      totalValue: null,
+      totalCost: null,
+      unrealizedGainLoss: null,
+      roi: null,
+      valuationComplete: false,
+      costBasisComplete: false,
+    });
+    expect(result.breakdown[0]).toMatchObject({
+      totalValue: null,
+      totalCost: null,
+      percentage: null,
+    });
+    expect(result.totals).toMatchObject({
+      portfolioValue: null,
+      costBasis: null,
+      liquid: { value: null, cost: null },
+    });
+    expect(result.fx).toMatchObject({
+      complete: false,
+      missingCount: 2,
+      convertedSubtotal: 50,
+      nativeTotals: [
+        { currency: 'ILS', total: 50, count: 1 },
+        { currency: 'USD', total: 100, count: 1 },
+      ],
+      costBasisConvertedSubtotal: 30,
+      costBasisNativeTotals: [
+        { currency: 'ILS', total: 30, count: 1 },
+        { currency: 'USD', total: 80, count: 1 },
+      ],
+      valuation: {
+        complete: false,
+        missingCount: 1,
+        convertedSubtotal: 50,
+      },
+      costBasis: {
+        complete: false,
+        missingCount: 1,
+        convertedSubtotal: 30,
+      },
+    });
+  });
+
+  it('preserves a genuine zero when normalized FX coverage is complete', async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM investment_accounts ia')) {
+        return {
+          rows: [{
+            id: 92,
+            account_name: 'Empty ILS Brokerage',
+            account_type: 'brokerage',
+            investment_category: 'liquid',
+            currency: 'ILS',
+            institution_id: null,
+          }],
+        };
+      }
+      if (isStandardSnapshotQuery(sql)) {
+        return {
+          rows: [{
+            id: 920,
+            account_id: 92,
+            holding_type: 'standard',
+            status: 'active',
+            current_value: '0',
+            cost_basis: '0',
+            as_of_date: '2026-02-10',
+          }],
+        };
+      }
+      if (isActivePikadonSnapshotQuery(sql)) return { rows: [] };
+      if (sql.includes('FROM investment_assets iasset')) return { rows: [] };
+      if (sql.includes('FROM institution_nodes')) return { rows: [] };
+      if (sql.includes('SELECT base_currency FROM investment_fx_preferences')) {
+        return { rows: [{ base_currency: 'ILS' }] };
+      }
+      return { rows: [] };
+    });
+
+    const result = await getInvestmentSummary({ normalizeCurrencies: true });
+
+    expect(result.summary).toMatchObject({
+      totalPortfolioValue: 0,
+      totalCostBasis: 0,
+      unrealizedGainLoss: 0,
+      roi: 0,
+      accountsWithValues: 1,
+    });
+    expect(result.summary.liquid).toMatchObject({
+      totalValue: 0,
+      totalCost: 0,
+      unrealizedGainLoss: 0,
+      roi: 0,
+      valuationComplete: true,
+      costBasisComplete: true,
+    });
+    expect(result.fx).toMatchObject({
+      complete: true,
+      convertedSubtotal: 0,
+      costBasisConvertedSubtotal: 0,
     });
   });
 });

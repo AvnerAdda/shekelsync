@@ -68,6 +68,10 @@ class MockStatement {
     return [{ ok: true }];
   }
 
+  get() {
+    return undefined;
+  }
+
   run(params: unknown[]) {
     this.record.runCalls.push(params);
     return { changes: 1 };
