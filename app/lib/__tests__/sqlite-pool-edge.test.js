@@ -1,7 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createSqlitePool = require('../sqlite-pool.js');
 const fs = require('fs');
+
+beforeEach(() => {
+  vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined);
+  vi.spyOn(fs, 'copyFileSync').mockImplementation(() => undefined);
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -16,6 +21,9 @@ describe('sqlite-pool edge cases', () => {
           return {
             all() {
               return [];
+            },
+            get() {
+              return undefined;
             },
           };
         }
@@ -34,6 +42,7 @@ describe('sqlite-pool edge cases', () => {
     vi.spyOn(fs, 'existsSync').mockReturnValue(true);
     const prepareMock = vi.fn(() => ({
       all: () => [{ id: 1 }],
+      get: () => undefined,
     }));
 
     const pool = createSqlitePool({
