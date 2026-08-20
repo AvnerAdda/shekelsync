@@ -38,12 +38,14 @@ const translations: Record<string, string> = {
   'titleBar.tooltips.darkMode': 'Dark mode',
   'titleBar.tooltips.lightMode': 'Light mode',
   'titleBar.tooltips.changeLanguage': 'Change language',
+  'titleBar.tooltips.moreActions': 'More actions',
   'titleBar.tooltips.minimizeWindow': 'Minimize window',
   'titleBar.tooltips.maximizeWindow': 'Maximize window',
   'titleBar.tooltips.restoreWindow': 'Restore window',
   'titleBar.tooltips.closeWindow': 'Close window',
   'titleBar.search.placeholder': 'Search sections...',
   'titleBar.search.options.analysis': 'Analysis',
+  'titleBar.moreActions.security': 'Security status',
   'support.titleBar.buyMeCoffee': 'Buy me a coffee',
   'common.languages.he': 'Hebrew',
   'common.languages.en': 'English',
@@ -168,6 +170,13 @@ vi.mock('@renderer/features/security/components/SecurityIndicator', () => ({
 
 vi.mock('@renderer/features/security/components/SecurityDetailsModal', () => ({
   default: ({ open }: { open: boolean }) => (open ? <div>security-modal-open</div> : null),
+}));
+
+vi.mock('@renderer/features/security/contexts/SecurityContext', () => ({
+  useSecurity: () => ({
+    summary: { level: 'secure' },
+    error: null,
+  }),
 }));
 
 vi.mock('@renderer/features/support', () => ({
@@ -314,7 +323,8 @@ describe('TitleBar component', () => {
     expect(screen.queryByRole('button', { name: 'Maximize window' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Close window' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Buy me a coffee' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Buy me a coffee' }));
     expect(screen.getByText('donation-modal-open')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'close-donation-modal' }));
